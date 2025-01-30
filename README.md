@@ -1,6 +1,15 @@
-# sbomify backend
+# sbomify
 
-Backend for sbomify.com
+sbomify is a Software Bill of Materials (SBOM) management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs, allowing you to share them with stakeholders or make them publicly accessible.
+
+The sbomify backend integrates with our [github actions module](https://github.com/sbomify/github-action) to automatically generate SBOMs from lock files and docker files.
+
+For more information, see [sbomify.com](https://sbomify.com).
+
+## Roadmap and Goals
+
+* Be compatible with both CycloneDX and SPDX SBOM formats
+* Be compatible with Project Koala / [Transparency Exchange API (TEA)](https://github.com/CycloneDX/transparency-exchange-api/)
 
 ## Releases
 
