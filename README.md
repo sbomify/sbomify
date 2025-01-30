@@ -17,31 +17,31 @@ For information about cutting new releases, see [RELEASE.md](RELEASE.md).
 
 ## Local Development
 
-### Prerequisites
+### Development Prerequisites
 
-- Python 3.12+
-- Poetry
-- Docker (for running PostgreSQL and Minio)
-- Bun (for JavaScript development)
+* Python 3.12+
+* Poetry
+* Docker (for running PostgreSQL and Minio)
+* Bun (for JavaScript development)
 
 ### API Documentation
 
 The API documentation is available at:
 
-- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
-- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+* Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
+* OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
 
 These endpoints are available when running the development server.
 
 ### Setup
 
-- Copy `.env.example` to `.env` and adjust values as needed:
+* Copy `.env.example` to `.env` and adjust values as needed:
 
 ```bash
 cp .env.example .env
 ```
 
-- You can run the application in two ways:
+* You can run the application in two ways:
 
 #### Using Docker Compose (recommended)
 
@@ -51,33 +51,33 @@ docker compose up
 
 This will start all required services:
 
-- PostgreSQL database for data storage
-- MinIO S3-compatible storage (accessible at `http://localhost:9001`)
-- Django development server
+* PostgreSQL database for data storage
+* MinIO S3-compatible storage (accessible at `http://localhost:9001`)
+* Django development server
 
 #### Running Locally (without Docker for Django)
 
-- Start required services in Docker:
+* Start required services in Docker:
 
 ```bash
 # Start both PostgreSQL and MinIO
 docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
 ```
 
-- Install dependencies:
+* Install dependencies:
 
 ```bash
 poetry install
 bun install  # for JavaScript dependencies
 ```
 
-- Run migrations:
+* Run migrations:
 
 ```bash
 poetry run python manage.py migrate
 ```
 
-- Start the development servers:
+* Start the development servers:
 
 ```bash
 # In one terminal, start Django
@@ -115,22 +115,22 @@ These settings are preconfigured in the `.env.example` file.
 The application uses S3-compatible storage for storing files and assets. In
 development, we use Minio as a local S3 replacement.
 
-- When running with Docker Compose, everything is configured automatically
-- When running locally (Django outside Docker):
-  1. Make sure Minio is running via Docker:
+* When running with Docker Compose, everything is configured automatically
+* When running locally (Django outside Docker):
+  * Make sure Minio is running via Docker:
      `docker compose up sbomify-minio sbomify-createbuckets -d`
-  2. Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
-  3. The required buckets (`sbomify-media` and `sbomify-sboms`) will be created
+  * Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
+  * The required buckets (`sbomify-media` and `sbomify-sboms`) will be created
      automatically
 
 You can access the Minio console at:
 
-- `http://localhost:9001`
-- Default credentials: minioadmin/minioadmin
+* `http://localhost:9001`
+* Default credentials: minioadmin/minioadmin
 
 ### Running test cases
 
-```shell
+```bash
 poetry run coverage run -m pytest --pdb -x -s
 poetry run coverage report
 ```
@@ -141,13 +141,13 @@ For frontend JS work, setting up JS tooling is required.
 
 #### Bun
 
-```shell
+```bash
 curl -fsSL https://bun.sh/install | bash
 ```
 
 In the project folder at the same level as `package.json`:
 
-```shell
+```bash
 bun install
 ```
 
@@ -155,7 +155,7 @@ bun install
 
 For JavaScript/TypeScript linting:
 
-```shell
+```bash
 # Check for linting issues (used in CI and can be run locally)
 bun lint
 
@@ -165,40 +165,42 @@ bun lint-fix
 
 #### Run vite dev server
 
-```shell
+```bash
 bun run dev
 ```
 
 ## Production Deployment
 
-### Prerequisites
+### Production Prerequisites
 
-- Docker and Docker Compose
-- S3-compatible storage (like MinIO)
-- PostgreSQL database
-- Auth0 account for authentication (Note: Migration to Keycloak is planned)
-- Reverse proxy (e.g., Nginx) for production deployments
+* Docker and Docker Compose
+* S3-compatible storage (like MinIO)
+* PostgreSQL database
+* Auth0 account for authentication (Note: Migration to Keycloak is planned)
+* Reverse proxy (e.g., Nginx) for production deployments
 
 ### Docker Compose Configuration
 
 The application uses two Docker Compose files:
-- `docker-compose.yml`: Base configuration with development defaults
-- `docker-compose.prod.yml`: Production overrides that:
-  - Remove development-specific settings
-  - Add production-specific configurations
-  - Configure proper restart policies
-  - Remove exposed ports except for the web interface
-  - Remove development volume mounts
+
+* `docker-compose.yml`: Base configuration with development defaults
+* `docker-compose.prod.yml`: Production overrides that:
+  * Remove development-specific settings
+  * Add production-specific configurations
+  * Configure proper restart policies
+  * Remove exposed ports except for the web interface
+  * Remove development volume mounts
 
 ### Reverse Proxy Setup
 
 For production deployments, it's strongly recommended to put a reverse proxy (such as Nginx) in front of the application server. This provides:
-- SSL/TLS termination
-- Better security
-- Static file serving
-- Load balancing (if needed)
-- Request buffering
-- Gzip compression
+
+* SSL/TLS termination
+* Better security
+* Static file serving
+* Load balancing (if needed)
+* Request buffering
+* Gzip compression
 
 ### Authentication
 
@@ -242,6 +244,7 @@ APP_BASE_URL=https://[your-domain]
 ### Running in Production
 
 1. Build and start the production stack:
+
 ```bash
 # Build the images
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build
@@ -250,12 +253,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-2. Create a superuser account (first time only):
+1. Create a superuser account (first time only):
+
 ```bash
 docker compose exec sbomify-backend poetry run python manage.py createsuperuser
 ```
 
-3. The application will be available at `http://[your-domain]:8000`
+1. The application will be available at `http://[your-domain]:8000`
 
 ### SBOM Upload via API
 
