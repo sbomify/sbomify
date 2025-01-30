@@ -1,0 +1,117 @@
+name: CI / CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'  # Trigger on version tags
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  checks:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        check: ['tests', 'pre-commit', 'lint']
+        python-version: ["3.10.12"]
+        poetry-version: ["1.8.1"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for pre-commit checks
+
+      - name: Set up Python ${{ matrix.python-version }}
+        if: matrix.check != 'lint'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache Poetry dependencies
+        if: matrix.check != 'lint'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install poetry
+        if: matrix.check != 'lint'
+        uses: abatilo/actions-poetry@v2
+        with:
+          poetry-version: ${{ matrix.poetry-version }}
+
+      - name: Install Python dependencies
+        if: matrix.check != 'lint'
+        run: |
+          poetry install --with dev,test
+
+      - name: Setup Bun
+        if: matrix.check == 'pre-commit' || matrix.check == 'lint'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.0.25"
+
+      - name: Install JS dependencies
+        if: matrix.check == 'pre-commit' || matrix.check == 'lint'
+        run: bun install
+
+      - name: Run pre-commit
+        if: matrix.check == 'pre-commit'
+        run: poetry run pre-commit run --all-files
+
+      - name: Run Backend Tests
+        if: matrix.check == 'tests'
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
+
+          # Create test summary table
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          jq -r '"| Total Tests | \(.summary.total) |
+          | Passed | \(.summary.passed) |
+          | Failed | \(.summary.failed) |
+          | Skipped | \(.summary.skipped) |
+          | Duration | \(.duration)s |"' pytest.json >> $GITHUB_STEP_SUMMARY
+
+          # Add test details if there are failures
+          if [ $(jq '.summary.failed' pytest.json) -gt 0 ]; then
+            echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
+            echo "| Test | Duration | Error |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+            jq -r '.tests[] | select(.outcome=="failed") | "| \(.nodeid) | \(.duration)s | \(.call.longrepr) |"' pytest.json >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Run lint
+        if: matrix.check == 'lint'
+        run: bun lint
+
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [checks]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload SBOM
+        uses: sbomify/github-action@master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: 2hg-dk8ixV
+          LOCK_FILE: 'poetry.lock'
+          AUGMENT: true
+          UPLOAD: true
