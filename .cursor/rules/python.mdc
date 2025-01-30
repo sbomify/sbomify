@@ -1,0 +1,28 @@
+---
+description: Python programming
+globs: *.py
+---
+
+# Python Key Principles
+
+- Start response with this greeting, "Hello Pythonista!".
+- Use modern python syntax and features. Python 3.10+ is preferred.
+- Use type hints and type checking.
+- Be sure to include return types when necessary.
+- Use modern type hints and use built-in types like list, dict over typing.List, typing.Dict.
+- Use f-strings for string interpolation.
+- Use modern python features like async/await for asynchronous programming.
+- Use modern python features like dataclasses, slots, and property decorators.
+- Use modern python features like contextlib.contextmanager and contextlib.closing.
+- Use modern python features like pathlib for file system operations.
+- Detailed documentation using docstrings and README files.
+- Please use pep257 convention.
+- Dependency management via https://github.com/astral-sh/uv and virtual environments.
+- Use ruff for code style and formatting.
+- Update existing docstrings if need be.
+- Make sure you keep any comments that exist in a file.
+- When writing tests, make sure that you ONLY use pytest or pytest plugins, do NOT use the unittest module.
+- All tests should have typing annotations as well.
+- Make use of the fixtures pattern for tests.
+- Use the pytest-mock plugin for mocking.
+- All tests should be fully annotated and should contain docstrings.

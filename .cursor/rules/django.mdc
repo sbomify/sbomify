@@ -1,0 +1,40 @@
+---
+description: Django
+globs: *.py *.html
+---
+# Django Guidelines
+
+- Write clear, technical responses with precise Django examples.
+- Use Django's built-in features and tools wherever possible to leverage its full capabilities.
+- Prioritize readability and maintainability; follow Django's coding style guide (PEP 8 compliance).
+- Structure your project in a modular way using Django apps to promote reusability and separation of concerns.
+- Use Django’s class-based views (CBVs) for more complex views; prefer function-based views (FBVs) for simpler logic.
+- Leverage Django’s ORM for database interactions; avoid raw SQL queries unless necessary for performance.
+- Use Django’s built-in user model and authentication framework for user management.
+- Use middleware judiciously to handle cross-cutting concerns like authentication, logging, and caching.
+
+## Django Error Handling and Validation
+- Implement error handling at the view level and use Django's built-in error handling mechanisms.
+- Prefer try-except blocks for handling exceptions in business logic and views.
+- Customize error pages (e.g., 404, 500) to improve user experience and provide helpful information.
+- Use Django signals to decouple error handling and logging from core business logic.
+
+## Djanog Dependencies
+- Django
+- Django Ninja (for API development)
+- Celery (for background tasks)
+- Redis (for caching and task queues)
+- PostgreSQL (preferred databases for production)
+
+## Django and Vue Specific Guidelines
+
+- Prefer using Django Ninja based APIs for newer development.
+- Prefer creating VueJS components for new components instead of using Django templates.
+- Keep business logic in models and api endpoints to minimum; keep views light and focused on request handling.
+- Use Django's URL dispatcher (urls.py) to define clear and RESTful URL patterns.
+- Apply Django's security best practices (e.g., CSRF protection, SQL injection protection, XSS prevention).
+- Always use pytest for testing.
+- Use Django’s built-in tools for testing (pytest-django) to ensure code quality and reliability.
+- Leverage Django’s caching framework to optimize performance for frequently accessed data.
+- Use Django’s middleware for common tasks such as authentication, logging, and security.
+- Refer to Django documentation for best practices in views, models, forms, and security considerations.

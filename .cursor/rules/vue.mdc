@@ -1,0 +1,15 @@
+---
+description: VueJS
+globs: *.vue *.json *.ts *.js
+---
+# VueJS Guidelines
+
+- Always use the Vue Composition API script setup style.
+- Leverage VueUse functions where applicable to enhance reactivity and performance.
+
+# UI and Styling
+- Use Vuetify components where needed unless there is a more specific library available for a component. For example if sweetalert2 is installed, use it for alerts instead of using vuetify alerts.
+- Implement responsive designS; use a mobile-first approach.
+- Build UI components using atomic design principles, organizing them from smallest to largest (e.g., atoms, molecules, organisms, pages).
+- Wrap asynchronous components in Suspense with a fallback UI.
+- Use dynamic loading for non-critical components.
