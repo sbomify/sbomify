@@ -1,0 +1,159 @@
+{% extends "core/dashboard_base.html" %}
+{% comment %}
+Template context:
+product: Product object
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+has_crud_permissions: Boolean indicating if user has CRUD permissions
+remaining_projects: Queryset of projects that are not part of the product
+{% endcomment %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+
+{% block content %}
+  {% if has_crud_permissions %}
+    <span class="vc-public-status-toggle" data-item-type="product" data-item-id="{{ product.id }}" data-public-url="{{ APP_BASE_URL }}{% url 'sboms:product_details_public' product.id %}"></span>
+  {% endif %}
+
+  <h3 class="page-title">
+  Product:
+  {% if has_crud_permissions %}
+    <span class="vc-editable-single-field" data-item-type="product" data-item-id="{{ product.id }}" data-item-value="{{ product.name }}"></span>
+  {% else %}
+    {{ product.name }}
+  {% endif %}
+  </h3>
+
+
+  <div class="row">
+    <div class="col-12 col-lg-6">
+      <div class="vc-dashboard-stats" data-item-type="product" data-item-id="{{ product.id }}"></div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="row align-items-center">
+
+        <div class="col-12">
+          <div class="card">
+          <h4 class="p-4">Product Projects</h4>
+          <div class="card-body">
+              {% if product.projects.all.count > 0 %}
+              <p>Projects that are part of this product.</p>
+
+              {% if has_crud_permissions %}
+              <form action="{% url 'sboms:product_details' product.id %}?action=remove_projects" method="post" class="row row-cols-md-auto">
+                  <div class="actions-bar">
+                  <button type="submit" class="btn btn-outline-secondary">Remove Selected Projects</button>
+                  </div>
+                  {% csrf_token %}
+              {% endif %}
+                  <table class="table">
+                  <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">Public?</th>
+                  </tr>
+
+                  {% for project in product.projects.all %}
+                      <tr>
+                      <td>
+                          {% if has_crud_permissions %}
+                          <label class="form-check">
+                          <input class="form-check-input" type="checkbox" name="project_{{ project.id }}" value="{{ project.id }}">
+                          <span class="form-check-label">
+                              {{ project.name }}
+                          </span>
+                          </label>
+                          {% else %}
+                          {{ project.name }}
+                          {% endif %}
+                      </td>
+                      <td>
+                          {% if project.is_public %}
+                          <i class="align-middle text-success" data-feather="check"></i>
+                          {% endif %}
+                      </td>
+                      <td>
+                      </td>
+                      </tr>
+                  {% endfor %}
+                  </table>
+              {% if has_crud_permissions %}
+              </form>
+              {% endif %}
+              {% else %}
+              <p class="ps-1">No projects added to the product yet.</p>
+              {% endif %}
+          </div>
+          </div>
+        </div>
+      </div>
+
+      {% if has_crud_permissions %}
+      <div class="row align-items-center">
+        <div class="col-12">
+          <div class="card">
+          <h4 class="p-4">Available Projects</h4>
+
+          <div class="card-body">
+              {% if remaining_projects.count > 0 %}
+              <p>Projects that can be added to the product.</p>
+
+              <form action="{% url 'sboms:product_details' product.id %}?action=add_projects" method="post" class="row row-cols-md-auto">
+              <div class="actions-bar">
+                  <button type="submit" class="btn btn-outline-secondary">Add Selected Projects</button>
+              </div>
+              {% csrf_token %}
+              <table class="table">
+                  <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Public?</th>
+                  </tr>
+
+                  {% for project in remaining_projects %}
+                  <tr>
+                      <td>
+                      <label class="form-check">
+                          <input class="form-check-input" type="checkbox" name="project_{{ project.id }}" value="{{ project.id }}">
+                          <span class="form-check-label">
+                          {{ project.name }}
+                          </span>
+                      </label>
+                      </td>
+                      <td>
+                      {% if project.is_public %}
+                      <i class="align-middle text-success" data-feather="check"></i>
+                      {% endif %}
+                      </td>
+                  </tr>
+                  {% endfor %}
+              </table>
+              </form>
+              {% else %}
+              <p class="ps-1">No projects available to add to the product.</p>
+              {% endif %}
+          </div>
+          </div>
+        </div>
+
+
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row"></div>
+    <div class="col-12">
+      <a class="btn btn-danger" id="del_{{ product.id }}" href="{% url 'sboms:delete_product' product.id %}">Delete Product</a>
+      <span class="vc-confirm-action"
+        data-target-element-id="del_{{ product.id }}"
+        data-confirmation-message="Are you sure you want to delete the product {{ product.name }}?">
+      </span>
+    </div>
+  </div>
+
+
+{% endblock%}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

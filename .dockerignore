@@ -1,0 +1,7 @@
+fly.toml
+.git/
+*.sqlite3
+.venv/
+.env
+poetry.toml
+localstack-volume/

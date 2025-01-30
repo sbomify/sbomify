@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You are invited to join {{team.name}} at sbomify</title>
+</head>
+<body>
+  Hello!
+
+  <p>
+    {% if user.first_name %}
+    {{ user.first_name }} {{ user.last_name}}
+    {% else %}
+    {{user.username}}
+    {% endif %}
+    has invited you to join their team <strong>{{ team.name }}</strong> as <strong>{{ invitation.role }}</strong>.
+    Please click on the link below (or copy and open it in browser) to accept the invitation. <br /><br />
+
+    <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.id %}">Accept Invitation</a>
+  </p>
+
+    Thanks,<br /><br />
+
+    <strong>The sbomify Team</strong>
+
+</body>
+</html>

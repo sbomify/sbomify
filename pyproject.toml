@@ -1,0 +1,146 @@
+[tool.poetry]
+name = "sbomify"
+version = "0.5.1"
+description = "sbomify - the SBOM hub"
+authors = ["sbomify <hello@sbomify.com>"]
+readme = "README.md"
+homepage = "https://sbomify.com"
+repository = "https://github.com/sbomify/backend"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+django = "^5.0.4"
+python-dotenv = "^1.0.1"
+psycopg2 = "^2.9.9"
+social-auth-app-django = "^5.4.0"
+django-extensions = "^3.2.3"
+django-widget-tweaks = "^1.5.0"
+pyjwt = "^2.8.0"
+pydantic = "^2.7.4"
+django-anymail = {extras = ["sendgrid"], version = "^11.0"}
+whitenoise = "^6.7.0"
+sentry-sdk = "^2.12.0"
+django-ninja = "^1.3.0"
+ruid = "^0.1.2"
+boto3 = "^1.35.15"
+dj-database-url = "^2.2.0"
+django-vite = "^3.0.5"
+django-health-check = "^3.18.3"
+email-validator = "^2.2.0"
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.23.0"
+ruff = "^0.4.1"
+bandit = "^1.7.8"
+django-debug-toolbar = "^4.3.0"
+pre-commit = "^3.7.1"
+datamodel-code-generator = {extras = ["http"], version = "^0.26.1"}
+pytest-json-report = "^1.5.0"
+pytest-playwright = "^0.6.2"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.1.1"
+pytest-django = "^4.8.0"
+pytest-env = "^1.1.3"
+pytest-mock = "^3.14.0"
+coverage = "^7.6.1"
+
+[tool.poetry.group.prod.dependencies]
+gunicorn = "^22.0.0"
+poetry-plugin-export = "^1.7.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+DJANGO_SETTINGS_MODULE = "sbomify.test_settings"
+
+env = [
+    "DJANGO_TEST_USER=testuser",
+    "DJANGO_TEST_PASSWORD=test",
+    "DJANGO_TEST_EMAIL=test@example.com",
+    "DEFAULT_FROM_EMAIL=test@example.com",
+    "SENDGRID_API_KEY=invalid-key"
+]
+
+
+addopts = "--nomigrations"
+# -- recommended but optional:
+python_files = ["tests.py", "test_*.py"]
+
+
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore:::ninja.signature.utils"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["sbomify", "core", "access_tokens", "sboms", "teams"]
+omit = [
+    "*apps.py",
+    "*migrations/*",
+    "*settings*",
+    "*/migrations/*",
+    "tests.py",
+    "fixtures.py",
+    "*urls.py",
+    "*wsgi/*",
+    "manage.py",
+    "conftest.py",
+    "asgi.py",
+    "wsgi.py",
+    "sboms/sbom_format_schemas/*",
+    "*/tests/*"
+]
+
+[tool.coverage.report]
+omit = [
+    "*apps.py",
+    "*migrations/*",
+    "*settings*",
+    "*/migrations/*",
+    "tests.py",
+    "fixtures.py",
+    "*urls.py",
+    "*wsgi/*",
+    "manage.py",
+    "conftest.py",
+    "asgi.py",
+    "wsgi.py",
+    "sboms/sbom_format_schemas/*",
+    "*/tests/*"
+]
+fail_under = 80
+
+
+[tool.bandit]
+exclude_dirs = ["./.venv", "tests.py", "sbom_format_schemas"]
+# B101 = ignore assert_used
+# B404 = allow use of sub process module
+# B603 = allow calls to Popen with shell=False
+skips = ["B101", "B404", "B603", "B608"]
+
+
+[tool.ruff]
+line-length = 120
+src = ["."]
+exclude = ["migrations", "sbom_format_schemas", "tests.py", "conftest.py", "manage.py", "asgi.py", "wsgi.py"]
+
+[tool.ruff.lint]
+select = ["F", "E", "I", "Q", "T"]
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"

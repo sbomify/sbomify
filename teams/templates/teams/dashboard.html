@@ -1,0 +1,153 @@
+{% extends "core/dashboard_base.html" %}
+{% load django_vite %}
+{% load widget_tweaks %}
+
+{% load django_vite %}
+
+{% block content %}
+<div class="row align-items-center">
+  <div class="col-12">
+    <div class="card dashboard-card">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5>Teams</h5>
+          <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#addTeamModal">
+            Add Team
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if memberships|length == 0 %}
+          <div class="dashboard-empty">
+            <p class="mb-0">No teams</p>
+          </div>
+        {% else %}
+        <table class="table dashboard-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Members</th>
+              <th>Invitations</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for membership in memberships %}
+              <tr>
+                <td>
+                  <a href="{% url 'teams:team_details' membership.team.key %}" class="text-primary text-decoration-none">
+                    {{ membership.team.name }}
+                  </a>
+                  {% if membership.is_default_team %}
+                    <span class="badge bg-primary-subtle text-primary ms-2">Default</span>
+                  {% endif%}
+                </td>
+                <td>{{ membership.role }}</td>
+                <td>{{ membership.team.member_set.count }}</td>
+                <td>{{ membership.team.invitation_set.count }}</td>
+                <td class="text-center">
+                  <div class="actions">
+                    {% if membership.role == 'owner' %}
+                      <a href="{% url 'teams:delete_team' membership.team.key %}"
+                         id="del_{{ membership.team.key }}"
+                         title="Delete workspace"
+                         class="text-danger">
+                        <i data-feather="trash-2"></i>
+                      </a>
+                      <span class="vc-confirm-action"
+                        data-target-element-id="del_{{ membership.team.key }}"
+                        data-item-name="{{ membership.team.name }}"
+                        data-item-type="workspace"
+                        data-confirmation-message="Are you sure you want to delete this workspace - {{ membership.team.name }}?">
+                      </span>
+                    {% endif %}
+                    {% if membership.role == 'owner' or membership.role == 'admin' %}
+                      <a href="{% url 'teams:set_default_team' membership.id %}"
+                         title="Make default workspace">
+                        <i data-feather="star"></i>
+                      </a>
+                    {% endif %}
+                    {% if membership.role == 'owner' %}
+                      <a href="{% url 'teams:invite_user' membership.team.key %}"
+                         title="Invite user">
+                        <i data-feather="user-plus"></i>
+                      </a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="addTeamModal" data-bs-backdrop="static" data-bs-keyboard="true" tabindex="-1" aria-labelledby="addTeamModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title" id="addTeamModalLabel">Add Team</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form action="{% url 'teams:teams_dashboard' %}" method="post">
+          {% csrf_token %}
+          {% for hidden in add_team_form.hidden_fields %}
+            {{ hidden }}
+          {% endfor %}
+          <div class="form-group">
+            <label for="{{ add_team_form.name.id_for_label }}">{{ add_team_form.name.label }}</label>
+            {{ add_team_form.name|add_class:'form-control mb-3'|attr:"tabindex:1" }}
+            {% for error in add_team_form.email.errors %}
+              <span class="help-block">{{ error }}</span>
+            {% endfor %}
+          </div>
+
+          <div class="col col-12 text-end form-group">
+            <input type="submit" class="btn btn-primary" value="Add Team" tabindex="2" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      {% if add_team_form.errors %}
+        var addTeamModal = new bootstrap.Modal(document.getElementById('addTeamModal'));
+        addTeamModal.show();
+      {% endif %}
+
+      // Handle modal shown event
+      const addTeamModal = document.getElementById('addTeamModal');
+      addTeamModal.addEventListener('shown.bs.modal', function () {
+        // Focus the first input field
+        const firstInput = this.querySelector('input[type="text"]');
+        if (firstInput) {
+          firstInput.focus();
+          firstInput.select();
+        }
+      });
+
+      // Handle form submission on Enter
+      const form = addTeamModal.querySelector('form');
+      form.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.submit();
+        }
+      });
+    });
+  </script>
+{% endblock %}
+
+

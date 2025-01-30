@@ -1,0 +1,106 @@
+{% extends "./dashboard_base.html" %}
+{% load django_vite %}
+{% load widget_tweaks %}
+{% block title %}sbomify Settings{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Settings</h1>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Access Tokens</h5>
+        <form method="post" class="row g-3 align-items-center">
+          {% csrf_token %}
+          {% for field in create_access_token_form %}
+            <div class="form-group col-4 mt-2">
+              <div>
+                <label class="mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field|add_class:'form-control mb-3' }}
+              </div>
+              {% for error in field.errors %}
+                <span class="help-block">{{ error }}</span>
+              {% endfor %}
+            </div>
+          {% endfor %}
+          <div class="col-4">
+            <input type="submit" class="btn btn-primary" value="Generate New Access Token" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if new_encoded_access_token %}
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <p class="mt-4">
+          Your new access token is displayed below. Please copy it and store in a safe place as it will only be displayed once.
+        </p>
+        <div class="row">
+          <div class="token-display" id="new-access-token-display">
+            <div class="token-heading px-3 py-1 d-flex align-items-center justify-content-between">
+              <span>New Access Token</span>
+              <div class="vc-copy-token"></div>
+            </div>
+            <code id="access-token" class="p-3" style="display: block">{{ new_encoded_access_token }}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-12">
+    <div class="card data-table">
+      <div class="card-body">
+        <h5 class="card-title mb-3 px-3 pt-4">Your Access Tokens</h5>
+        {% if access_tokens|length == 0 %}
+          <p class="no-items">No tokens added</p>
+        {% else %}
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Created at</th>
+                <th scope="col" class="text-center actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for access_token in access_tokens %}
+              <tr>
+                <td>{{ access_token.description }}</td>
+                <td>{{ access_token.created_at }}</td>
+                <td class="border-left">
+                  <div class="actions">
+                    <span>
+                      <a id="del_{{ access_token.id }}" href="{% url 'core:delete_access_token' access_token.id %}" title="Delete">
+                        <i class="float-end ms-3 text-danger" data-feather="trash"></i>
+                      </a>
+                      <span class="vc-confirm-action"
+                        data-target-element-id="del_{{ access_token.id }}"
+                        data-confirmation-message="Are you sure you want to delete this token?">
+                      </span>
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+{% endblock %}

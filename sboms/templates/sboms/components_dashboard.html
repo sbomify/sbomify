@@ -1,0 +1,215 @@
+{% extends "core/dashboard_base.html" %}
+{% load widget_tweaks %}
+{% load form_helpers %}
+{% load django_vite %}
+
+{% block title %}sbomify Components{% endblock %}
+
+{% block content %}
+<div class="row align-items-center">
+  <div class="col-12">
+    <div class="card dashboard-card">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5>Components</h5>
+          {% if has_crud_permissions %}
+            <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#addComponentModal">
+              Add Component
+            </button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        {% if components|length == 0 %}
+          <div class="dashboard-empty">
+            <p class="mb-0">No components added</p>
+          </div>
+        {% else %}
+          <table class="table dashboard-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Projects</th>
+                <th class="text-center">Public?</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for component in components %}
+                <tr>
+                  <td>
+                    <a href="{% url 'sboms:component_details' component.id %}" class="text-primary text-decoration-none">
+                      {{ component.name }}
+                    </a>
+                  </td>
+                  <td>
+                    {% for project in component.projects.all %}
+                      <span class="badge bg-secondary-subtle text-secondary me-1 mb-1">{{ project.name }}</span>
+                    {% endfor %}
+                  </td>
+                  <td class="text-center">
+                    {% if component.is_public %}
+                      <span class="badge bg-success-subtle text-success">Public</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if has_crud_permissions %}
+                      <div class="actions">
+                        <a id="del_{{ component.id }}"
+                           href="{% url 'sboms:delete_component' component.id %}"
+                           title="Delete"
+                           class="text-danger">
+                          <i data-feather="trash-2"></i>
+                        </a>
+                        <span class="vc-confirm-action"
+                          data-target-element-id="del_{{ component.id }}"
+                          data-item-name="{{ component.name }}"
+                          data-item-type="component"
+                          data-confirmation-message="Are you sure you want to delete the component {{ component.name }}?">
+                        </span>
+                      </div>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if has_crud_permissions %}
+{# Add Component Modal #}
+<div class="modal fade" id="addComponentModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="addComponentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h4 class="modal-title text-secondary" id="addComponentModalLabel">Add Component</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <form action="{% url 'sboms:components_dashboard' %}"
+              method="post"
+              class="needs-validation"
+              novalidate
+              data-component="component-form">
+          {% csrf_token %}
+          {% for field in new_component_form %}
+            <div class="mb-4">
+              {% if field|is_checkbox %}
+                <div class="form-check">
+                  {{ field|add_class:'form-check-input' }}
+                  <label class="form-check-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                  </label>
+                </div>
+              {% else %}
+                <label class="form-label text-secondary fw-medium" for="{{ field.id_for_label }}">
+                  {{ field.label }}
+                  {% if field.field.required %}
+                    <span class="text-danger">*</span>
+                  {% endif %}
+                </label>
+                {{ field|add_class:'form-control form-control-lg'|attr:"autofocus:autofocus" }}
+                {% if field.help_text %}
+                  <div class="form-text">{{ field.help_text }}</div>
+                {% endif %}
+                {% if field.errors %}
+                  <div class="invalid-feedback d-block">
+                    {{ field.errors|join:", " }}
+                  </div>
+                {% endif %}
+              {% endif %}
+              <div class="invalid-feedback">
+                Please provide a valid {{ field.label|lower }}.
+              </div>
+            </div>
+          {% endfor %}
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-lg btn-primary px-4">Create Component</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Delete Confirmation Modal #}
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0">
+      <div class="modal-header border-bottom-0 pb-0">
+        <h4 class="modal-title text-secondary" id="deleteConfirmModalLabel">Confirm Delete</h4>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <div class="alert alert-danger bg-danger-subtle border-0">
+          <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+            <div>
+              <p class="mb-1">Are you sure you want to delete <strong class="component-name"></strong>?</p>
+              <p class="text-danger small mb-0">This action cannot be undone.</p>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <a href="#" class="btn btn-lg btn-danger px-4 delete-confirm-btn">Delete Component</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      {% if new_component_form.errors %}
+        var addComponentModal = new bootstrap.Modal(document.getElementById('addComponentModal'));
+        addComponentModal.show();
+      {% endif %}
+
+      // Handle modal shown event
+      const addComponentModal = document.getElementById('addComponentModal');
+      addComponentModal.addEventListener('shown.bs.modal', function () {
+        // Focus the first input field
+        const firstInput = this.querySelector('input[type="text"]');
+        if (firstInput) {
+          firstInput.focus();
+        }
+      });
+
+      // Handle form submission on Enter
+      const form = addComponentModal.querySelector('form');
+      form.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.submit();
+        }
+      });
+
+      // Handle delete confirmation
+      const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+      const deleteButtons = document.querySelectorAll('[data-bs-target="#deleteConfirmModal"]');
+      const confirmButton = deleteConfirmModal.querySelector('.delete-confirm-btn');
+      const componentNameElement = deleteConfirmModal.querySelector('.component-name');
+
+      deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const componentName = this.getAttribute('data-component-name');
+          const deleteUrl = this.getAttribute('data-delete-url');
+          componentNameElement.textContent = componentName;
+          confirmButton.href = deleteUrl;
+        });
+      });
+    });
+  </script>
+{% endblock %}

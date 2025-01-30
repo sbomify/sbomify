@@ -1,0 +1,90 @@
+{% load static %}
+
+{# Sidebar navigation component #}
+<nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar" style="width: 16.666667%; min-width: 200px;" data-component="sidebar">
+    <div class="position-sticky pt-3">
+        {# Team selector #}
+        <div class="mb-4 px-3" data-component="team-selector">
+            {% if request.session.user_teams %}
+                <select class="form-select" data-action="switch-team">
+                    {% for team_key, team in request.session.user_teams.items %}
+                        <option value="{{ team_key }}"
+                                {% if request.session.current_team.key == team_key %}selected{% endif %}
+                                data-role="{{ team.role }}">
+                            {{ team.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+        </div>
+
+        {# Main navigation #}
+        <ul class="nav flex-column" data-component="main-nav">
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if request.resolver_match.view_name == 'core:dashboard' %}active{% endif %}"
+                   href="{% url 'core:dashboard' %}"
+                   data-nav-item="dashboard">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if request.resolver_match.view_name == 'teams:teams_dashboard' %}active{% endif %}"
+                   href="{% url 'teams:teams_dashboard' %}"
+                   data-nav-item="workspace">
+                    <i class="bi bi-folder me-2"></i>
+                    <span>Workspace</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if 'products' in request.path %}active{% endif %}"
+                   href="{% url 'sboms:products_dashboard' %}"
+                   data-nav-item="products">
+                    <i class="bi bi-box me-2"></i>
+                    <span>Products</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if 'projects' in request.path %}active{% endif %}"
+                   href="{% url 'sboms:projects_dashboard' %}"
+                   data-nav-item="projects">
+                    <i class="bi bi-kanban me-2"></i>
+                    <span>Projects</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if 'components' in request.path %}active{% endif %}"
+                   href="{% url 'sboms:components_dashboard' %}"
+                   data-nav-item="components">
+                    <i class="bi bi-puzzle me-2"></i>
+                    <span>Components</span>
+                </a>
+            </li>
+        </ul>
+
+        {# Team settings - only show for team owners #}
+        {% if request.session.current_team.role == 'owner' %}
+            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                <span>Team Settings</span>
+            </h6>
+            <ul class="nav flex-column mb-2" data-component="team-settings">
+                <li class="nav-item">
+                    <a class="nav-link sidebar-item d-flex align-items-center {% if 'team/settings' in request.path %}active{% endif %}"
+                       href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
+                       data-nav-item="team-settings">
+                        <i class="bi bi-gear me-2"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-item d-flex align-items-center {% if 'team/members' in request.path %}active{% endif %}"
+                       href="{% url 'teams:team_details' team_key=request.session.current_team.key %}"
+                       data-nav-item="team-members">
+                        <i class="bi bi-people me-2"></i>
+                        <span>Members</span>
+                    </a>
+                </li>
+            </ul>
+        {% endif %}
+    </div>
+</nav>

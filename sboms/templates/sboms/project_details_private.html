@@ -1,0 +1,187 @@
+{% extends "core/dashboard_base.html" %}
+{% comment %}
+Template context:
+project: Project object
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+has_crud_permissions: Boolean indicating if user has CRUD permissions
+remaining_components: Queryset of components that are not part of the product
+{% endcomment %}
+
+{% load widget_tweaks %}
+{% load django_vite %}
+
+{% block content %}
+
+  {% if has_crud_permissions %}
+    <span class="vc-public-status-toggle" data-item-type="project" data-item-id="{{ project.id }}" data-public-url="{{ APP_BASE_URL }}{% url 'sboms:project_details_public' project.id %}"></span>
+  {% endif %}
+
+  <h3 class="page-title">
+  Project:
+  {% if has_crud_permissions %}
+      <span class="vc-editable-single-field" data-item-type="project" data-item-id="{{ project.id }}" data-item-value="{{ project.name }}"></span>
+  {% else %}
+      {{ project.name }}
+  {% endif %}
+  </h3>
+
+  <div class="row">
+    <div class="col-12 col-lg-6">
+      <div class="vc-dashboard-stats" data-item-type="project" data-item-id="{{ project.id }}"></div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="row align-items-center">
+        <div class="col-12">
+          <div class="card">
+          <h4 class="ps-3 pt-4 pb-0 mb-0">Project Components</h4>
+
+          <div class="card-body">
+            {% if project.components.all.count > 0 %}
+              <!-- Warn if any of the components present in this project are not public -->
+              {% if has_private_components %}
+                  <p class="text-danger">Some components in this project are not public. When generating SBOM for the project,
+                  SBOMs from the components below will not be included in the package.</p>
+
+                  <ul class="text-danger">
+                  {% for component in project.components.all %}
+                    {% if not component.is_public %}
+                    <li>{{ component.name }}</li>
+                    {% endif %}
+                  {% endfor %}
+                  </ul>
+
+              {% endif %}
+
+              <p>Components that are part of this project.</p>
+
+              {% if has_crud_permissions %}
+                <form action="{% url 'sboms:project_details' project.id %}?action=remove_components" method="post" class="row row-cols-md-auto">
+                    <div class="actions-bar">
+                    <button type="submit" class="btn btn-outline-secondary">Remove Selected Components</button>
+                    </div>
+                    {% csrf_token %}
+              {% endif %}
+
+              <table class="table">
+              <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Version</th>
+                  <th scope="col">Public?</th>
+              </tr>
+
+              {% for component in project.components.all %}
+                  <tr>
+                  <td>
+                      {% if has_crud_permissions %}
+                      <label class="form-check">
+                      <input class="form-check-input" type="checkbox" name="component_{{ component.id }}" value="{{ component.id }}">
+                      <span class="form-check-label">
+                          {{ component.name }}
+                      </span>
+                      </label>
+                      {% else %}
+                      {{ component.name }}
+                      {% endif %}
+                  </td>
+                  <td>
+                      {{ component.version }}
+                  </td>
+                  <td>
+                      {% if component.is_public %}
+                      <i class="align-middle text-success" data-feather="check"></i>
+                      {% endif %}
+                  </td>
+                  <td>
+                  </td>
+                  </tr>
+              {% endfor %}
+
+              </table>
+
+              {% if has_crud_permissions %}
+                </form>
+              {% endif %}
+            {% else %}
+              <p class="ps-1">No components added to the project yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if has_crud_permissions %}
+      <div class="row align-items-center">
+        <div class="col-12">
+          <div class="card">
+          <h4 class="ps-3 pt-4 pb-0 mb-0">Available Components</h4>
+
+          <div class="card-body">
+              {% if remaining_components.count > 0 %}
+              <p>Components that can be added to the project.</p>
+              <form action="{% url 'sboms:project_details' project.id %}?action=add_components" method="post" class="row row-cols-md-auto">
+              <div class="actions-bar">
+                  <button type="submit" class="btn btn-outline-secondary">Add Selected Components</button>
+              </div>
+              {% csrf_token %}
+              <table class="table">
+                  <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Version</th>
+                  <th scope="col">Public?</th>
+                  </tr>
+
+                  {% for component in remaining_components %}
+                  <tr>
+                      <td>
+                      <label class="form-check">
+                          <input class="form-check-input" type="checkbox" name="component_{{ component.id }}" value="{{ component.id }}">
+                          <span class="form-check-label">
+                          {{ component.name }}
+                          </span>
+                      </label>
+                      </td>
+                      <td>
+                      {{ component.version }}
+                      </td>
+                      <td>
+                      {% if component.is_public %}
+                      <i class="align-middle text-success" data-feather="check"></i>
+                      {% endif %}
+                      </td>
+                  </tr>
+                  {% endfor %}
+              </table>
+              </form>
+              {% else %}
+              <p class="ps-1">No components available to add to the project.</p>
+              {% endif %}
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+      <a class="btn btn-danger w-100" id="del_{{ project.id }}" href="{% url 'sboms:delete_project' project.id %}">Delete Project</a>
+      <span class="vc-confirm-action"
+        data-target-element-id="del_{{ project.id }}"
+        data-confirmation-message="Are you sure you want to delete the project {{ project.name }}?">
+      </span>
+    </div>
+    <div class="col-md-3 offset-md-6 text-end order-sm-first order-md-last mb-sm-2">
+      <a class="btn btn-success w-100" href="{% url 'sboms:sbom_download_project' project.id %}">
+      <i class="fas fa-download"></i> Download Project SBOMs as Zip file
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+
+{% endblock%}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}
