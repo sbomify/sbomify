@@ -1,0 +1,12 @@
+{% if messages %}
+  <div class="messages-container" data-component="messages">
+    {% for message in messages %}
+      <div class="alert {% if message.level_tag == 'error' %}alert-danger{% elif message.level_tag == 'success' %}alert-success{% elif message.level_tag == 'warning' %}alert-warning{% else %}alert-info{% endif %} alert-dismissible" role="alert">
+        <div class="alert-message">
+          {{ message }}
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

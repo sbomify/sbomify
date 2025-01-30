@@ -1,0 +1,13 @@
+{% if user.first_name %}
+Hello {{ user.first_name }} {{ user.last_name}}!
+{% else %}
+Hello {{user.pk}}
+{% endif %}
+
+Welcome to sbomify. We've created a default team for you to help you get started.
+
+If you have any questions, please don't hesitate to contact us at hello@sbomify.com.
+
+Thanks,
+
+The sbomify Team

@@ -1,0 +1,16 @@
+Hello!
+
+{% if user.first_name %}
+{{ user.first_name }} {{ user.last_name}}
+{% else %}
+{{user.username}}
+{% endif %}
+
+has invited you to join their team {{ team.name }} as {{ invitation.role }}.
+Please use the link below (copy and open it in browser) to accept the invitation.
+
+{{ base_url }}{% url 'teams:accept_invite' invitation.id %}
+
+Thanks,
+
+The sbomify Team

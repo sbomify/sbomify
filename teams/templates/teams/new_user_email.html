@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to sbomify</title>
+</head>
+<body>
+    <p>Hi {{ user.first_name }},</p>
+
+    <p>{{ inviter.first_name }} {{ inviter.last_name }} has invited you to join {{ team.name }} on sbomify.</p>
+
+    <p>Please click on the following link to accept the invitation: <a href="{{ invitation_url }}">{{ invitation_url }}</a></p>
+
+    <p>If you have any questions, please don't hesitate to contact us at hello@sbomify.com.</p><br />
+
+    <p>Best regards,<br />
+    The sbomify team</p>
+</body>
+</html>

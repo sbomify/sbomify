@@ -1,0 +1,86 @@
+{% extends "core/base.html" %}
+{% comment %}
+Template context:
+project: Project object
+{% endcomment %}
+
+{% load widget_tweaks %}
+{% load django_vite %}
+
+{% block main %}
+  <main class="content public-page mb-4">
+    <div class="brand" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};">
+      {% if brand.brand_image %}
+        <img src="{{ brand.brand_image }}" alt="{{ brand.name }}">
+      {% else %}
+        <img src="/static/img/sbomify.svg" alt="sbomify logo">
+      {% endif %}
+    </div>
+    <div class="pp-content-container">
+      <div class="pp-content-bg" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};"></div>
+      <div class="pp-content">
+        <h3 class="page-title" style="color: {{ brand.accent_color|default:'#7c8b9d' }};">
+          Project: {{ project.name }}
+        </h3>
+
+        <div class="row">
+          <div class="col-12 col-lg-6">
+            <div class="vc-dashboard-stats" data-item-type="project" data-item-id="{{ project.id }}"></div>
+          </div>
+          <div class="col-12 col-lg-6">
+            <div class="row pp-main">
+              <div class="col-12">
+                <h4 style="color: {{ brand.accent_color|default:'#7c8b9d' }};">Project Components</h4>
+
+                <div class="card data-table">
+                  <div class="card-body">
+                    {% if project.components.all.count > 0 %}
+                      <p>Components that are part of this project.</p>
+                      <table class="table">
+                        <tr>
+                          <th scope="col">Name</th>
+                        </tr>
+
+                        {% for component in project.components.all %}
+                          <tr>
+                            <td>
+                              {% if component.is_public %}
+                                <a href="{% url 'sboms:component_details_public' component.id %}">{{ component.name }}</a>
+                              {% else %}
+                                {{ component.name }}
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </table>
+                    {% else %}
+                    <p class="p-3 mb-0">No components added to the project yet.</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-3 offset-md-9 text-end">
+            <a class="btn btn-success w-100" href="{% url 'sboms:sbom_download_project' project.id %}">
+              <i class="fas fa-download"></i> Download Project SBOMs as Zip file
+            </a>
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+
+
+    <div class="credits">
+      Powered by <a href="https://sbomify.com"><img src="/static/img/sbomify.svg" alt="sbomify logo" /></a>
+    </div>
+	</main>
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

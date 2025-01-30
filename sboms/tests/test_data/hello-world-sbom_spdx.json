@@ -1,0 +1,48 @@
+{
+    "spdxVersion": "SPDX-2.3",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "hello-world",
+    "documentNamespace": "https://anchore.com/syft/image/hello-world-3cdeb763-13f9-4fcf-aa36-fcff15b7a417",
+    "creationInfo": {
+        "licenseListVersion": "3.24",
+        "creators": [
+            "Organization: Anchore, Inc",
+            "Tool: syft-1.5.0"
+        ],
+        "created": "2024-05-31T13:08:17Z"
+    },
+    "packages": [
+        {
+            "name": "hello-world",
+            "SPDXID": "SPDXRef-DocumentRoot-Image-hello-world",
+            "versionInfo": "sha256:74975aeb70d299bcbad3d0024b4e64dacf1759e6bb1d96a36318d4631f0271cc",
+            "supplier": "NOASSERTION",
+            "downloadLocation": "NOASSERTION",
+            "filesAnalyzed": false,
+            "checksums": [
+                {
+                    "algorithm": "SHA256",
+                    "checksumValue": "74975aeb70d299bcbad3d0024b4e64dacf1759e6bb1d96a36318d4631f0271cc"
+                }
+            ],
+            "licenseConcluded": "NOASSERTION",
+            "licenseDeclared": "NOASSERTION",
+            "externalRefs": [
+                {
+                    "referenceCategory": "PACKAGE-MANAGER",
+                    "referenceType": "purl",
+                    "referenceLocator": "pkg:oci/hello-world@sha256:74975aeb70d299bcbad3d0024b4e64dacf1759e6bb1d96a36318d4631f0271cc?arch=amd64"
+                }
+            ],
+            "primaryPackagePurpose": "CONTAINER"
+        }
+    ],
+    "relationships": [
+        {
+            "spdxElementId": "SPDXRef-DOCUMENT",
+            "relatedSpdxElement": "SPDXRef-DocumentRoot-Image-hello-world",
+            "relationshipType": "DESCRIBES"
+        }
+    ]
+}

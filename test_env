@@ -1,0 +1,11 @@
+SECRET_KEY=not-so-secret
+DEBUG=True
+DATABASE_URL=postgres://sbomify:sbomify@sbomify-db/sbomify
+
+SOCIAL_AUTH_AUTH0_DOMAIN=none
+SOCIAL_AUTH_AUTH0_KEY=none
+SOCIAL_AUTH_AUTH0_SECRET=none
+
+APP_BASE_URL=http://127.0.0.1:8000
+
+LOG_LEVEL=DEBUG

@@ -1,0 +1,21 @@
+{% extends "./base.html" %}
+{% block title %}sbomify{% endblock %}
+
+{% block main %}
+  <div class="wrapper">
+    {% include "core/sidebar.html" %}
+
+    <div class="main">
+      {% include "core/topnav.html" %}
+
+      <main class="content">
+        <div class="container-fluid p-0">
+          {% include "core/components/messages.html" %}
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+
+      {% include "core/components/footer.html" %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        padding: 20px;
+    }
+    .stats-card {
+        background: white;
+        padding: 20px;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    .breadcrumbs {
+        margin: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a> &rsaquo; System Dashboard
+</div>
+
+<div class="stats-container">
+    <div class="stats-card">
+        <h3>Users &amp; Teams</h3>
+        <div class="chart-container">
+            <canvas id="usersTeamsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="stats-card">
+        <h3>Users per Team</h3>
+        <div class="chart-container">
+            <canvas id="usersPerTeamChart"></canvas>
+        </div>
+    </div>
+
+    <div class="stats-card">
+        <h3>Components Overview</h3>
+        <div class="chart-container">
+            <canvas id="componentsChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Users & Teams Bar Chart
+    new Chart(document.getElementById('usersTeamsChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Users', 'Teams'],
+            datasets: [{
+                label: 'Count',
+                data: [{{ stats.users }}, {{ stats.teams }}],
+                backgroundColor: ['#36a2eb', '#ff6384']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // Users per Team Chart
+    new Chart(document.getElementById('usersPerTeamChart'), {
+        type: 'bar',
+        data: {
+            labels: [{% for team in stats.users_per_team %}'{{ team.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+            datasets: [{
+                label: 'Users',
+                data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                backgroundColor: '#4bc0c0'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // Components Overview Bar Chart
+    new Chart(document.getElementById('componentsChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Products', 'Projects', 'Components', 'SBOMs'],
+            datasets: [{
+                label: 'Count',
+                data: [
+                    {{ stats.products }},
+                    {{ stats.projects }},
+                    {{ stats.components }},
+                    {{ stats.sboms }}
+                ],
+                backgroundColor: [
+                    '#ff6384',
+                    '#36a2eb',
+                    '#ffcd56',
+                    '#4bc0c0'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

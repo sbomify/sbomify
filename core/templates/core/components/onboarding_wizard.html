@@ -1,0 +1,182 @@
+{% extends "core/dashboard_base.html" %}
+{% load widget_tweaks %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12 col-lg-8 mx-auto">
+      <div class="card">
+        <div class="card-header border-0 pb-0">
+          <div class="card-actions float-end">
+            <a href="{% url 'core:dashboard' %}" class="btn btn-link text-muted">
+              <i class="align-middle" data-feather="x"></i>
+            </a>
+          </div>
+          <h1 class="h3 mb-3">Create Your First Component</h1>
+        </div>
+        <div class="card-body">
+          <!-- Step indicators -->
+          <div class="wizard-steps mb-4">
+            <div class="progress" style="height: 3px; background-color: var(--bs-gray-200);">
+              <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress }}%" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="step {% if current_step == 'product' %}active{% elif current_step in 'project,component,complete' %}completed{% endif %}">Product</span>
+              <span class="step {% if current_step == 'project' %}active{% elif current_step in 'component,complete' %}completed{% endif %}">Project</span>
+              <span class="step {% if current_step == 'component' %}active{% elif current_step == 'complete' %}completed{% endif %}">Component</span>
+              <span class="step {% if current_step == 'complete' %}active{% endif %}">Complete</span>
+            </div>
+          </div>
+
+          {% if current_step != 'complete' %}
+          <form method="post" action="{% url 'teams:onboarding_wizard' %}" class="needs-validation" novalidate>
+            {% csrf_token %}
+
+            <div class="wizard-step">
+              {% if form.non_field_errors %}
+              <div class="alert alert-danger bg-danger-subtle border-0">
+                {% for error in form.non_field_errors %}
+                  {{ error }}
+                {% endfor %}
+              </div>
+              {% endif %}
+
+              {% for field in form.visible_fields %}
+              <div class="mb-4">
+                <label class="form-label text-secondary fw-medium" for="{{ field.id_for_label }}">
+                  {{ field.label }}
+                  {% if field.field.required %}
+                    <span class="text-danger">*</span>
+                  {% endif %}
+                </label>
+                {% if field.help_text %}
+                  <div class="bg-light border-start border-4 border-primary p-3 mb-3">
+                    <div class="d-flex">
+                      <div class="flex-shrink-0">
+                        <i class="align-middle text-primary" data-feather="info"></i>
+                      </div>
+                      <div class="flex-grow-1 ms-3">
+                        {{ field.help_text }}
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+                {{ field }}
+                {% if field.errors %}
+                  <div class="invalid-feedback d-block">
+                    {% for error in field.errors %}
+                      {{ error }}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+              {% endfor %}
+
+              {% for field in form.hidden_fields %}
+                {{ field }}
+              {% endfor %}
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+              {% if current_step != 'product' %}
+              <a href="?step={% if current_step == 'component' %}project{% else %}product{% endif %}" class="btn btn-lg btn-outline-secondary">Previous</a>
+              {% else %}
+              <div></div>
+              {% endif %}
+              <button type="submit" class="btn btn-lg btn-primary px-4">{% if current_step == 'component' %}Create{% else %}Next{% endif %}</button>
+            </div>
+          </form>
+
+          {% else %}
+          <!-- Success step -->
+          <div class="wizard-step text-center">
+            <!-- Success icon -->
+            <div class="mb-5">
+              <div class="bg-success-subtle d-inline-flex p-4 rounded-circle">
+                <i class="align-middle text-success" data-feather="check" style="width: 48px; height: 48px;"></i>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <h4 class="mb-4">All Set! Here's What's Next</h4>
+
+            <div class="row justify-content-center">
+              <div class="col-md-10">
+                <!-- Step 1: Metadata -->
+                <div class="card bg-light border-0 hover-shadow-sm mb-4">
+                  <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                      <div class="bg-primary-subtle rounded-circle p-2 me-3">
+                        <i class="align-middle text-primary" data-feather="file-text" style="width: 24px; height: 24px;"></i>
+                      </div>
+                      <h5 class="fw-bold mb-0">1. Complete Your Metadata</h5>
+                    </div>
+                    <p class="text-muted mb-0">Start by filling out essential information about your component, including licensing and supplier details. This helps establish the foundation for your SBOMs.</p>
+                  </div>
+                </div>
+
+                <!-- Step 2: Upload SBOM -->
+                <div class="card bg-light border-0 hover-shadow-sm mb-5">
+                  <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                      <div class="bg-primary-subtle rounded-circle p-2 me-3">
+                        <i class="align-middle text-primary" data-feather="upload-cloud" style="width: 24px; height: 24px;"></i>
+                      </div>
+                      <h5 class="fw-bold mb-0">2. Upload Your First SBOM</h5>
+                    </div>
+                    <p class="text-muted mb-0">Ready to upload your SBOM? Check out the CI/CD integration instructions in the components page to automate your SBOM generation and upload process.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <a href="{% url 'sboms:component_details' component_id=component_id %}" class="btn btn-lg btn-primary px-4">
+              View Component
+              <i class="align-middle ms-2" data-feather="arrow-right"></i>
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.wizard-steps .progress {
+  margin-bottom: 1rem;
+}
+
+.wizard-steps .step {
+  position: relative;
+  color: var(--bs-gray-600);
+  font-weight: 500;
+}
+
+.wizard-steps .step.active {
+  color: var(--bs-primary);
+}
+
+.wizard-steps .step::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background-color: var(--bs-gray-400);
+  border-radius: 50%;
+}
+
+.wizard-steps .step.active::before {
+  background-color: var(--bs-primary);
+}
+
+.wizard-steps .step.completed::before {
+  background-color: var(--bs-success);
+}
+</style>
+{% endblock %}

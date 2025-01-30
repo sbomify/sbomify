@@ -1,0 +1,49 @@
+{% load cache %}
+
+{% if debug %}
+<footer class="footer mt-auto py-3 border-top">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
+        <span class="text-muted">
+          <a href="https://sbomify.com" class="text-decoration-none">
+            <strong class="text-primary">sbomify</strong>
+          </a>
+          <span class="ms-1">&copy; 2024</span>
+        </span>
+      </div>
+      <div class="col-lg-6 text-lg-end text-center">
+        <nav class="nav justify-content-lg-end justify-content-center">
+          <a class="nav-link px-2 text-muted" href="mailto:hello@sbomify.com">
+            Contact Support
+          </a>
+        </nav>
+      </div>
+    </div>
+  </div>
+</footer>
+{% else %}
+{% cache 3600 'footer' %}
+<footer class="footer mt-auto py-3 border-top">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
+        <span class="text-muted">
+          <a href="https://sbomify.com" class="text-decoration-none">
+            <strong class="text-primary">sbomify</strong>
+          </a>
+          <span class="ms-1">&copy; 2024</span>
+        </span>
+      </div>
+      <div class="col-lg-6 text-lg-end text-center">
+        <nav class="nav justify-content-lg-end justify-content-center">
+          <a class="nav-link px-2 text-muted" href="mailto:hello@sbomify.com">
+            Contact Support
+          </a>
+        </nav>
+      </div>
+    </div>
+  </div>
+</footer>
+{% endcache %}
+{% endif %}
