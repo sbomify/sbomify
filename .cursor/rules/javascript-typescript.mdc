@@ -1,0 +1,24 @@
+---
+description: Javascript and Typescript
+globs: *.js, *.ts
+---
+# Javascript Runtime
+
+- Always use bun as the javascript runtime.
+- Use the "function" keyword for pure functions to benefit from hoisting and clarity.
+- Implement proper error boundaries or try-catch mechanisms to handle errors gracefully, especially in asynchronous operations.
+
+# Javascript and TypeScript Code Style and Structure
+- Write concise, maintainable, and technically accurate TypeScript code with relevant examples.
+- Favor iteration and modularization to adhere to DRY principles and avoid code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
+- Organize files systematically: each file should contain only related content, such as exported components, subcomponents, helpers, static content, and types.
+
+# Naming Conventions
+- Use lowercase with dashes for directories (e.g., components/auth-wizard).
+- Favor named exports for functions.
+
+# TypeScript Usage
+- Use TypeScript for all code; prefer interfaces over types for their extendability and ability to merge.
+- Avoid enums; use maps instead for better type safety and flexibility.
+- Use functional components with TypeScript interfaces.
