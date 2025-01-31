@@ -43,6 +43,7 @@ services:
   sbomify-backend:
     build:
       dockerfile: Dockerfile
+      target: application
     depends_on:
       - sbomify-db
       - sbomify-minio
@@ -68,6 +69,7 @@ services:
   sbomify-migrations:
     build:
       dockerfile: Dockerfile
+      target: migrations
     depends_on:
       - sbomify-db
     volumes: []  # Remove development volume mounts

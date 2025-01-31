@@ -23,8 +23,8 @@ COPY teams/js/ teams/js/
 
 RUN bun run build
 
-## Python App Build
-FROM python:${PYTHON_VERSION}
+### Base Python stage
+FROM python:${PYTHON_VERSION} AS python-base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -46,14 +46,25 @@ RUN poetry config virtualenvs.create false
 # Install only main and prod dependencies
 RUN poetry install --no-root --only main,prod --no-interaction
 
-# Copy application code
-COPY . /code
-
-# Copy built JS assets to static directory
-COPY --from=js-build /js-build/static/* /code/static/
+# Copy Python application code
+COPY manage.py /code/
+COPY sbomify/ /code/sbomify/
+COPY access_tokens/ /code/access_tokens/
+COPY core/ /code/core/
+COPY sboms/ /code/sboms/
+COPY teams/ /code/teams/
 
 # Install the package itself
 RUN poetry install --only-root --no-interaction
+
+### Migrations target
+FROM python-base AS migrations
+CMD ["poetry", "run", "python", "manage.py", "migrate"]
+
+### Main application target
+FROM python-base AS application
+# Copy built JS assets to static directory
+COPY --from=js-build /js-build/static/* /code/static/
 
 # Collect static files
 RUN poetry run python manage.py collectstatic --noinput

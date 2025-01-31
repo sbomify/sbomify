@@ -86,6 +86,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: migrations
     env_file:
       - .env
     environment:
@@ -105,7 +106,6 @@ services:
       AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
     volumes:
       - .:/code
-    command: poetry run python manage.py migrate
     depends_on:
       sbomify-db:
         condition: service_healthy
