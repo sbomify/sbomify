@@ -99,6 +99,21 @@ jobs:
         if: matrix.check == 'lint'
         run: bun lint
 
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up test environment variables
+        run: cp .env.example .env
+
+      - name: Test Development Docker Build
+        run: docker compose build
+
+      - name: Test Production Docker Build
+        run: docker compose -f docker-compose.prod.yml build
+
   generate-sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest

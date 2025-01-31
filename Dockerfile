@@ -5,15 +5,18 @@ FROM oven/bun:1.2.1 AS js-build
 
 WORKDIR /js-build
 
-# Copy base JS files
-COPY bun.lockb .
-COPY package.json .
+# Copy base JS files first for dependency installation
+COPY bun.lock package.json ./
 RUN bun install --frozen-lockfile
 
+# Copy all configuration files
+COPY tsconfig*.json .
+COPY vite.config.ts .
+COPY .eslintrc.* .
+COPY .prettierrc* .
+COPY .dockerignore .
+
 # Copy source files
-COPY *.json .
-COPY *.js .
-COPY *.ts .
 COPY core/js/ core/js/
 COPY sboms/js/ sboms/js/
 COPY teams/js/ teams/js/
@@ -37,11 +40,11 @@ WORKDIR /code
 
 # Install Python dependencies
 RUN pip install poetry
-COPY pyproject.toml poetry.lock /code/
+COPY pyproject.toml poetry.lock README.md /code/
 RUN poetry config virtualenvs.create false
 
 # Install only main and prod dependencies
-RUN poetry install --only main,prod --no-interaction
+RUN poetry install --no-root --only main,prod --no-interaction
 
 # Copy application code
 COPY . /code
