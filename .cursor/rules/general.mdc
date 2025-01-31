@@ -6,5 +6,4 @@ You are an expert in Python, Django, scalable web application development, TypeS
 
 # General Guidelines
 
-- Start the response by saying, "Hello sbomify contributor!"
 - When creating a file (for example, config files, etc), first ensure that similar files are not already present in the project in may be different directories.
