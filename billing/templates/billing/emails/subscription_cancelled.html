@@ -1,0 +1,23 @@
+{% extends "core/emails/base.html" %}
+
+{% block content %}
+<h2>Subscription Cancelled</h2>
+
+<p>Dear {{ user_name }},</p>
+
+<p>Your subscription for team '{{ team_name }}' has been cancelled. Your service will be reverted
+to the community plan with limited features.</p>
+
+<p>If you'd like to reactivate your subscription, you can do so here:</p>
+
+<p>
+    <a href="{{ action_url }}" class="button">Reactivate Subscription</a>
+</p>
+
+<p>If you have any questions, please contact our support team.</p>
+
+<p>
+    Best regards,<br>
+    The sbomify Team
+</p>
+{% endblock %}

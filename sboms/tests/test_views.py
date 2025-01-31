@@ -4,6 +4,7 @@ import os
 from urllib.parse import quote
 
 import pytest
+from django.conf import settings
 from django.http import HttpResponse
 from django.test import Client
 from django.urls import reverse
@@ -23,6 +24,7 @@ from .fixtures import (
 
 @pytest.mark.django_db
 def test_dasbhoard_pages_only_accessible_when_logged_in(sample_user):  # noqa: F811
+    """Test that dashboard pages require authentication."""
     uris = [
         reverse("sboms:products_dashboard"),
         reverse("sboms:projects_dashboard"),
@@ -292,6 +294,8 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
 
         assert response.status_code == 404
         assert quote(response.request["PATH_INFO"]) == uri
+        # The response should use our custom 404 template which includes the messages component
+        assert "core/components/messages.html" in [t.name for t in response.templates]
 
 
 @pytest.mark.django_db

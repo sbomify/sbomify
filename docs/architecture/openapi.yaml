@@ -1,0 +1,612 @@
+openapi: 3.1.0
+info:
+  title: SBOMify API
+  description: API for managing products, projects, components, and security artifacts
+  version: 2.0.0
+
+servers:
+  - url: /api/v2
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Workspace-scoped bearer token
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Workspace-scoped API key
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie for web UI
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        identifiers:
+          type: object
+          properties:
+            purl:
+              type: string
+            cpe:
+              type: string
+            custom_id:
+              type: string
+        metadata:
+          type: object
+          properties:
+            vendor:
+              type: object
+              properties:
+                name:
+                  type: string
+                website:
+                  type: string
+                contact:
+                  type: string
+            tags:
+              type: array
+              items:
+                type: string
+            category:
+              type: string
+            lifecycle_status:
+              type: string
+            custom_fields:
+              type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - name
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [application, library, service]
+            status:
+              type: string
+              enum: [active, archived]
+            tags:
+              type: array
+              items:
+                type: string
+            custom_fields:
+              type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - name
+        - product_id
+
+    Component:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        identifiers:
+          type: object
+          properties:
+            purl:
+              type: string
+            cpe:
+              type: string
+            custom_id:
+              type: string
+        metadata:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [library, framework, service]
+            tags:
+              type: array
+              items:
+                type: string
+            lifecycle_status:
+              type: string
+            custom_fields:
+              type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - name
+        - project_id
+
+    Version:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        release_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, published, archived]
+        metadata:
+          type: object
+          properties:
+            release_notes:
+              type: string
+            release_type:
+              type: string
+              enum: [major, minor, patch]
+            distribution:
+              type: object
+              properties:
+                channel:
+                  type: string
+                platform:
+                  type: string
+            custom_fields:
+              type: object
+        artifacts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              type:
+                type: string
+                enum: [sbom, vex]
+              format:
+                type: string
+                enum: [cyclonedx, spdx, csaf]
+              component_id:
+                type: string
+                format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - version
+        - product_id
+
+    Artifact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        component_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [sbom, vex, certification]
+        format:
+          type: string
+          enum: [cyclonedx, spdx, csaf]
+        version:
+          type: string
+        content:
+          type: object
+        metadata:
+          type: object
+          properties:
+            created_at:
+              type: string
+              format: date-time
+            created_by:
+              type: string
+            source:
+              type: string
+              enum: [api, upload, ci]
+            validation:
+              type: object
+              properties:
+                status:
+                  type: string
+                errors:
+                  type: array
+                  items:
+                    type: string
+            custom_fields:
+              type: object
+      required:
+        - component_id
+        - type
+        - format
+        - content
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+      required:
+        - error
+        - message
+
+    PaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - items
+        - total
+        - page
+        - limit
+
+paths:
+  /products:
+    get:
+      summary: List products in current workspace
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: lifecycle_status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+
+  /products/{product_id}/projects:
+    get:
+      summary: List projects in product
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      summary: Create project
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /projects/{project_id}/components:
+    get:
+      summary: List components in project
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of components
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      summary: Create component
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Component'
+      responses:
+        '201':
+          description: Component created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+
+  /products/{product_id}/versions:
+    get:
+      summary: List versions
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published, archived]
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      summary: Create version
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Version'
+      responses:
+        '201':
+          description: Version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+
+  /products/{product_id}/versions/{version}/artifacts:
+    post:
+      summary: Associate artifact with version
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: artifact_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Artifact associated with version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product_id:
+                    type: string
+                    format: uuid
+                  version:
+                    type: string
+                  artifact_id:
+                    type: string
+                    format: uuid
+
+  /artifacts:
+    get:
+      summary: List artifacts
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [sbom, vex, certification]
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [cyclonedx, spdx, csaf]
+        - name: component_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of artifacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResponse'
+
+    post:
+      summary: Create artifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Artifact'
+      responses:
+        '201':
+          description: Artifact created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+
+  /artifacts/{id}:
+    get:
+      summary: Get artifact details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Artifact details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+
+    patch:
+      summary: Update artifact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Artifact'
+      responses:
+        '200':
+          description: Artifact updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+
+    delete:
+      summary: Delete artifact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Artifact deleted
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+  - cookieAuth: []

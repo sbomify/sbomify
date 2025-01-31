@@ -16,78 +16,6 @@
     width: 100px;
   }
 
-  .alert {
-    margin-bottom: 1rem;
-    position: relative;
-  }
-
-  .alert-outline-coloured {
-    border: none;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .alert-success {
-    background-color: rgba(40, 167, 69, 0.1);
-    border-left: 3px solid var(--bs-success);
-  }
-
-  .alert-danger {
-    background-color: rgba(220, 53, 69, 0.1);
-    border-left: 3px solid var(--bs-danger);
-  }
-
-  .alert-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    width: 2rem;
-    margin-right: 0.5rem;
-  }
-
-  .alert-success .alert-icon {
-    color: var(--bs-success);
-  }
-
-  .alert-danger .alert-icon {
-    color: var(--bs-danger);
-  }
-
-  .alert-message {
-    flex-grow: 1;
-    display: flex;
-    align-items: center;
-    font-weight: 500;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    margin-right: 0.5rem;
-  }
-
-  .btn-close {
-    padding: 0.25rem;
-    margin: 0;
-    border-radius: 4px;
-    opacity: 0.5;
-    transition: all 0.15s ease-in-out;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    background: none;
-    border: 0;
-    cursor: pointer;
-  }
-
-  .btn-close:hover {
-    opacity: 1;
-    background: var(--bs-gray-100);
-  }
-
   :deep(.floating-alert) {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   }
@@ -166,16 +94,14 @@
 
 <script setup lang="ts">
   import { ref, onMounted } from 'vue';
+  import { isAxiosError } from 'axios';
   import $axios from '../../../core/js/utils';
   import FileDragAndDrop from '../../../core/js/components/FileDragAndDrop.vue';
-  import Swal from 'sweetalert2';
+  import { showSuccess, showError } from '../../../core/js/alerts';
 
   interface Props {
     teamKey: string;
   }
-
-  const props = defineProps<Props>();
-  const isLoading = ref(true);
 
   interface BrandingInfo {
     brand_color: string;
@@ -185,20 +111,11 @@
     icon_url: string;
     logo_url: string;
     prefer_logo_over_icon: boolean;
+    [key: string]: string | boolean | File | null;
   }
 
-  const Toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 3000,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-      toast.addEventListener('mouseenter', Swal.stopTimer);
-      toast.addEventListener('mouseleave', Swal.resumeTimer);
-    }
-  });
-
+  const props = defineProps<Props>();
+  const isLoading = ref(true);
   const brandingInfo = ref<BrandingInfo>({
     brand_color: "",
     accent_color: "",
@@ -209,69 +126,54 @@
     prefer_logo_over_icon: false
   });
 
-  const showSuccess = (message: string) => {
-    Toast.fire({
-      icon: 'success',
-      title: message
-    });
-  };
+  const handleFileUpload = async (field: string, file: File | null) => {
+    if (!file) return;
 
-  const showError = (message: string) => {
-    Toast.fire({
-      icon: 'error',
-      title: message
-    });
-  };
+    const formData = new FormData();
+    formData.append(field, file);
 
-  const apiUrl = '/api/v1/teams/' + props.teamKey + '/branding';
-
-  const loadImagesFromUrls = async (data: any) => {
-    const newBrandingInfo: BrandingInfo = {
-      brand_color: data.brand_color,
-      accent_color: data.accent_color,
-      icon: null,
-      logo: null,
-      icon_url: data.icon_url,
-      logo_url: data.logo_url,
-      prefer_logo_over_icon: data.prefer_logo_over_icon
-    };
-
-    if (data.icon_url) {
-      try {
-        const iconResponse = await fetch(data.icon_url);
-        const iconBlob = await iconResponse.blob();
-        const filename = data.icon_url.split('/').pop() || '';
-        newBrandingInfo.icon = new File([iconBlob], filename);
-      } catch (error) {
-        console.error('Failed to load icon:', error);
-      }
-    }
-
-    if (data.logo_url) {
-      try {
-        const logoResponse = await fetch(data.logo_url);
-        const logoBlob = await logoResponse.blob();
-        const filename = data.logo_url.split('/').pop() || '';
-        newBrandingInfo.logo = new File([logoBlob], filename, { type: logoBlob.type });
-      } catch (error) {
-        console.error('Failed to load logo:', error);
-      }
-    }
-
-    return newBrandingInfo;
-  };
-
-  onMounted(async () => {
     try {
-      const response = await $axios.get(apiUrl);
-      brandingInfo.value = await loadImagesFromUrls(response.data);
-    } catch (error) {
-      console.error('Failed to fetch branding info:', error);
-      showError('Failed to load branding information');
-    } finally {
-      isLoading.value = false;
+      const response = await $axios.post(`/api/v1/teams/${props.teamKey}/branding/${field}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error('Network response was not ok. ' + response.statusText);
+      }
+
+      await showSuccess('File uploaded successfully');
+    } catch (error: unknown) {
+      console.log(error);
+      if (isAxiosError(error)) {
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+      } else {
+        showError('Failed to upload file');
+      }
     }
-  });
+  };
+
+  const updateField = async (field: string) => {
+    try {
+      const response = await $axios.post(`/api/v1/teams/${props.teamKey}/branding/${field}`, {
+        [field]: brandingInfo.value[field]
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error('Network response was not ok. ' + response.statusText);
+      }
+
+      await showSuccess('Setting updated successfully');
+    } catch (error: unknown) {
+      console.log(error);
+      if (isAxiosError(error)) {
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+      } else {
+        showError('Failed to update setting');
+      }
+    }
+  };
 
   const validateAndUpdateColor = async (event: Event, field: 'brand_color' | 'accent_color') => {
     const input = event.target as HTMLInputElement;
@@ -282,46 +184,43 @@
     }
   };
 
-  const updateField = async (field: string) => {
-    try {
-      const value = brandingInfo.value[field as keyof BrandingInfo];
-      const response = await $axios.patch(`${apiUrl}/${field}`, { value });
-      brandingInfo.value = await loadImagesFromUrls(response.data);
-      showSuccess(`${field.replace('_', ' ')} updated successfully`);
-    } catch (error) {
-      console.error(`Failed to update ${field}:`, error);
-      showError(`Failed to update ${field.replace('_', ' ')}`);
-    }
-  };
-
-  const handleFileUpload = async (fileType: 'icon' | 'logo', file: File | null) => {
-    try {
-      if (file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await $axios.post(
-          `${apiUrl}/upload/${fileType}`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
-          }
-        );
-
-        brandingInfo.value = await loadImagesFromUrls(response.data);
-        showSuccess(`${fileType} uploaded successfully`);
-      } else {
-        // Handle file deletion by setting the field to null
-        const response = await $axios.patch(`${apiUrl}/${fileType}`, { value: null });
-        brandingInfo.value = await loadImagesFromUrls(response.data);
-        showSuccess(`${fileType} removed successfully`);
+  const loadImagesFromUrls = async () => {
+    if (brandingInfo.value.icon_url) {
+      try {
+        const iconResponse = await fetch(brandingInfo.value.icon_url);
+        const iconBlob = await iconResponse.blob();
+        brandingInfo.value.icon = new File([iconBlob], 'icon', { type: iconBlob.type });
+      } catch (error) {
+        console.error('Failed to load icon:', error);
       }
-    } catch (error) {
-      console.error(`Failed to upload ${fileType}:`, error);
-      showError(`Failed to ${file ? 'upload' : 'remove'} ${fileType}`);
+    }
+
+    if (brandingInfo.value.logo_url) {
+      try {
+        const logoResponse = await fetch(brandingInfo.value.logo_url);
+        const logoBlob = await logoResponse.blob();
+        brandingInfo.value.logo = new File([logoBlob], 'logo', { type: logoBlob.type });
+      } catch (error) {
+        console.error('Failed to load logo:', error);
+      }
     }
   };
+
+  onMounted(async () => {
+    try {
+      const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
+      brandingInfo.value = response.data;
+      await loadImagesFromUrls();
+    } catch (error: unknown) {
+      console.log(error);
+      if (isAxiosError(error)) {
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+      } else {
+        showError('Failed to load branding settings');
+      }
+    } finally {
+      isLoading.value = false;
+    }
+  });
 </script>
 

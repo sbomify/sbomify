@@ -14,18 +14,6 @@
 
       <div v-if="isExpanded">
         <div class="container-fluid p-0">
-          <div v-if="alertMessage.message !== null" role="alert"
-            class="alert alert-outline-coloured alert-dismissible"
-            :class="'alert-' + alertMessage.alertType">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <div class="alert-icon">
-              <i class="far fa-fw fa-bell"></i>
-            </div>
-            <div class="alert-message">
-              <strong>{{ alertMessage.title }}</strong> {{ alertMessage.message }}
-            </div>
-          </div>
-
           <div class="row">
             <div class="col-sm-12 col-lg-6">
               <div class="card">
@@ -154,6 +142,7 @@
   import SupplierEditor from './SupplierEditor.vue';
   import LicensesEditor from './LicensesEditor.vue';
   import ContactsEditor from './ContactsEditor.vue';
+  import { showSuccess, showError } from '../../../core/js/alerts';
 
   interface Props {
     componentId: string;
@@ -369,11 +358,7 @@
       }
 
       hasUnsavedChanges.value = false;
-      alertMessage.value = {
-        alertType: 'success',
-        title: 'Success',
-        message: 'Changes saved successfully'
-      };
+      await showSuccess('Changes saved successfully');
 
       // Switch to display view after delay
       setTimeout(() => {
@@ -383,17 +368,9 @@
     } catch (error) {
       console.error(error);
       if (isAxiosError(error)) {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: `${error.response?.status} - ${error.response?.statusText}`,
-          message: error.response?.data?.detail[0].msg
-        }
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
       } else {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: 'Error',
-          message: 'Failed to save metadata'
-        }
+        showError('Failed to save metadata');
       }
     } finally {
       isSaving.value = false;

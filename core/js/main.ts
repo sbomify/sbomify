@@ -6,6 +6,7 @@ import CopyableValue from './components/CopyableValue.vue';
 import ConfirmAction from './components/ConfirmAction.vue';
 import DashboardStats from '../../sboms/js/components/DashboardStats.vue';
 import CopyToken from './components/CopyToken.vue';
+import SiteNotifications from './components/SiteNotifications.vue';
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -13,12 +14,16 @@ mountVueComponent('vc-copyable-value', CopyableValue);
 mountVueComponent('vc-confirm-action', ConfirmAction);
 mountVueComponent('vc-dashboard-stats', DashboardStats);
 mountVueComponent('vc-copy-token', CopyToken);
+mountVueComponent('vc-site-notifications', SiteNotifications);
 
-// Initialize Feather icons
-interface Feather {
-  replace(): void;
+// Declare the global feather variable
+declare global {
+  interface Window {
+    feather: {
+      replace(): void;
+    };
+  }
 }
-declare var feather: Feather;
 
 // Handle modal UX improvements
 document.addEventListener('DOMContentLoaded', function() {
@@ -38,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Initialize Feather icons
-  feather.replace();
+  window.feather.replace();
 });
 
 // Export something to make TypeScript happy

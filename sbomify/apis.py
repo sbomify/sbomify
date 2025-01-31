@@ -19,3 +19,4 @@ api = NinjaAPI(
 api.add_router("/sboms", "sboms.apis.router")
 api.add_router("/teams", "teams.apis.router")
 api.add_router("/", "core.apis.router")
+api.add_router("/billing", "billing.apis.router")

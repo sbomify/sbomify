@@ -1,0 +1,12 @@
+Dear {{ user_name }},
+
+We were unable to process your payment for team '{{ team_name }}'. This was attempt {{ attempt_count }}.
+We will try again on {{ next_payment_attempt }}.
+
+To avoid service interruption, please update your payment information:
+{{ action_url }}
+
+If you have any questions, please contact our support team.
+
+Best regards,
+The sbomify Team

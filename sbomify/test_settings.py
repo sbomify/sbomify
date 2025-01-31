@@ -1,9 +1,25 @@
 import json
+import os
 
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
 
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("TEST_DB_NAME", "postgres"),  # Use the default postgres database
+        "USER": os.environ.get("TEST_DB_USER", "postgres"),
+        "PASSWORD": os.environ.get("TEST_DB_PASSWORD", "postgres"),
+        "HOST": os.environ.get("TEST_DB_HOST", "localhost"),
+        "PORT": os.environ.get("TEST_DB_PORT", "5432"),
+        "ATOMIC_REQUESTS": True,
+        # Test database settings
+        "TEST": {
+            "NAME": os.environ.get("TEST_DB_NAME", "sbomify_test"),
+            "SERIALIZE": False,  # Speeds up tests by not serializing db
+        },
+    }
+}
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
@@ -54,6 +70,22 @@ manifest = {
         "src": "teams/js/main.ts",
         "isEntry": True,
         "css": ["assets/teams.css"]
+    },
+    "billing/js/main.ts": {
+        "file": "assets/billing.js",
+        "src": "billing/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/billing.css"]
+    },
+    "core/js/django-messages.ts": {
+        "file": "assets/django-messages.js",
+        "src": "core/js/django-messages.ts",
+        "isEntry": True
+    },
+    "core/js/alerts-global.ts": {
+        "file": "assets/alerts-global.js",
+        "src": "core/js/alerts-global.ts",
+        "isEntry": True
     }
 }
 with open(STATIC_ROOT / "manifest.json", "w") as f:
