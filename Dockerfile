@@ -1,7 +1,7 @@
 ARG PYTHON_VERSION=3.11-slim-bookworm
 
 ### Bun JS build for Vue components
-FROM oven/bun:1.2.1 AS js-build
+FROM oven/bun:1.2.2 AS js-build
 
 WORKDIR /js-build
 
