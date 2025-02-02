@@ -40,14 +40,21 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
+  sbomify-js-build:
+    build:
+      dockerfile: Dockerfile-frontend
+    volumes:
+      - js_build_output:/build-output
+
   sbomify-backend:
     build:
       dockerfile: Dockerfile
     depends_on:
+      - sbomify-js-build
       - sbomify-db
       - sbomify-minio
       - sbomify-createbuckets
-    volumes: []  # Remove development volume mounts
+    volumes: []
     ports:
       - "8000:8000"  # Only expose the web port
     environment:
@@ -68,6 +75,7 @@ services:
   sbomify-migrations:
     build:
       dockerfile: Dockerfile
+      target: migrations
     depends_on:
       - sbomify-db
     volumes: []  # Remove development volume mounts
@@ -77,3 +85,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  js_build_output:

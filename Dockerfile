@@ -1,27 +1,7 @@
 ARG PYTHON_VERSION=3.11-slim-bookworm
 
-### Bun JS build for Vue components
-FROM oven/bun:1.2.1 AS js-build
-
-WORKDIR /js-build
-
-# Copy base JS files
-COPY bun.lockb .
-COPY package.json .
-RUN bun install --frozen-lockfile
-
-# Copy source files
-COPY *.json .
-COPY *.js .
-COPY *.ts .
-COPY core/js/ core/js/
-COPY sboms/js/ sboms/js/
-COPY teams/js/ teams/js/
-
-RUN bun run build
-
-## Python App Build
-FROM python:${PYTHON_VERSION}
+### Base Python stage
+FROM python:${PYTHON_VERSION} AS python-base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -37,20 +17,31 @@ WORKDIR /code
 
 # Install Python dependencies
 RUN pip install poetry
-COPY pyproject.toml poetry.lock /code/
+COPY pyproject.toml poetry.lock README.md /code/
 RUN poetry config virtualenvs.create false
 
 # Install only main and prod dependencies
-RUN poetry install --only main,prod --no-interaction
+RUN poetry install --no-root --only main,prod --no-interaction
 
-# Copy application code
-COPY . /code
-
-# Copy built JS assets to static directory
-COPY --from=js-build /js-build/static/* /code/static/
+# Copy Python application code
+COPY manage.py /code/
+COPY sbomify/ /code/sbomify/
+COPY access_tokens/ /code/access_tokens/
+COPY core/ /code/core/
+COPY sboms/ /code/sboms/
+COPY teams/ /code/teams/
 
 # Install the package itself
 RUN poetry install --only-root --no-interaction
+
+### Migrations target
+FROM python-base AS migrations
+CMD ["poetry", "run", "python", "manage.py", "migrate"]
+
+### Main application target
+FROM python-base AS application
+# Create static directory first
+RUN mkdir -p /code/static
 
 # Collect static files
 RUN poetry run python manage.py collectstatic --noinput
