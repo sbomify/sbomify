@@ -3,6 +3,8 @@ services:
     image: postgres:15-alpine
     restart: always
     environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       POSTGRES_USER: ${POSTGRES_USER:-sbomify}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sbomify}
       POSTGRES_DB: ${POSTGRES_DB:-sbomify}
@@ -20,6 +22,8 @@ services:
     image: minio/minio:latest
     restart: always
     environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
@@ -47,6 +51,25 @@ services:
       /usr/bin/mc anonymous set public myminio/sbomify-media;
       exit 0;
       "
+    environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+
+  sbomify-js-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.js
+    environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    volumes:
+      - js_build_output:/build-output
 
   sbomify-backend:
     build:
@@ -56,6 +79,8 @@ services:
     env_file:
       - .env
     environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       AM_I_IN_DOCKER_CONTAINER: 1
       # Docker-specific Minio configuration
       AWS_ACCESS_KEY_ID: minioadmin
@@ -72,6 +97,7 @@ services:
       AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
     volumes:
       - .:/code
+      - js_build_output:/code/static
     ports:
       - "8000:8000"
     depends_on:
@@ -80,6 +106,8 @@ services:
       sbomify-migrations:
         condition: service_completed_successfully
       sbomify-createbuckets:
+        condition: service_completed_successfully
+      sbomify-js-build:
         condition: service_completed_successfully
 
   sbomify-migrations:
@@ -90,6 +118,8 @@ services:
     env_file:
       - .env
     environment:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
       AM_I_IN_DOCKER_CONTAINER: 1
       # Docker-specific Minio configuration
       AWS_ACCESS_KEY_ID: minioadmin
@@ -113,3 +143,4 @@ services:
 volumes:
   sbomify_postgres_data:
   sbomify_minio_data:
+  js_build_output:

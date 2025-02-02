@@ -3,6 +3,7 @@ import { resolve } from 'path'
 import fs from 'fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
 import { config } from 'dotenv'
 
 const envFilePath = path.join(__dirname, '.env')
@@ -32,6 +33,9 @@ export default defineConfig({
     assetsDir: '',
     manifest: 'manifest.json',
     rollupOptions: {
+      watch: false,
+      treeshake: false,
+      cache: false,
       input: {
         core: resolve('./core/js/main.ts'),
         sboms: resolve('./sboms/js/main.ts'),

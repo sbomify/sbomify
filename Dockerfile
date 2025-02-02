@@ -1,28 +1,5 @@
 ARG PYTHON_VERSION=3.11-slim-bookworm
 
-### Bun JS build for Vue components
-FROM oven/bun:1.2.1 AS js-build
-
-WORKDIR /js-build
-
-# Copy base JS files first for dependency installation
-COPY bun.lock package.json ./
-RUN bun install --frozen-lockfile
-
-# Copy all configuration files
-COPY tsconfig*.json .
-COPY vite.config.ts .
-COPY .eslintrc.* .
-COPY .prettierrc* .
-COPY .dockerignore .
-
-# Copy source files
-COPY core/js/ core/js/
-COPY sboms/js/ sboms/js/
-COPY teams/js/ teams/js/
-
-RUN bun run build
-
 ### Base Python stage
 FROM python:${PYTHON_VERSION} AS python-base
 
@@ -63,8 +40,8 @@ CMD ["poetry", "run", "python", "manage.py", "migrate"]
 
 ### Main application target
 FROM python-base AS application
-# Copy built JS assets to static directory
-COPY --from=js-build /js-build/static/* /code/static/
+# Create static directory first
+RUN mkdir -p /code/static
 
 # Collect static files
 RUN poetry run python manage.py collectstatic --noinput
