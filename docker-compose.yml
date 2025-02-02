@@ -58,7 +58,7 @@ services:
   sbomify-js-build:
     build:
       context: .
-      dockerfile: Dockerfile.js
+      dockerfile: Dockerfile-frontend
     environment:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8

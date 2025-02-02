@@ -42,7 +42,7 @@ services:
 
   sbomify-js-build:
     build:
-      dockerfile: Dockerfile.js
+      dockerfile: Dockerfile-frontend
     volumes:
       - js_build_output:/build-output
 
