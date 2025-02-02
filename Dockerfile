@@ -1,23 +1,27 @@
 ARG PYTHON_VERSION=3.11-slim-bookworm
 
 ### Bun JS build for Vue components
-FROM oven/bun:1.2.1 AS js-build
+FROM oven/bun:1.2.2 AS js-build
 
 WORKDIR /js-build
 
-# Copy base JS files
-COPY bun.lockb .
-COPY package.json .
+# Copy all frontend configuration files first
+COPY package.json ./
+COPY bun.lock ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY eslint.config.js ./
+COPY .prettierrc.js ./
+
+# Clean install dependencies
 RUN bun install --frozen-lockfile
 
 # Copy source files
-COPY *.json .
-COPY *.js .
-COPY *.ts .
 COPY core/js/ core/js/
 COPY sboms/js/ sboms/js/
 COPY teams/js/ teams/js/
 
+# Run the build
 RUN bun run build
 
 ## Python App Build
@@ -41,7 +45,7 @@ COPY pyproject.toml poetry.lock /code/
 RUN poetry config virtualenvs.create false
 
 # Install only main and prod dependencies
-RUN poetry install --only main,prod --no-interaction
+RUN poetry install --only main,prod --no-interaction --no-root
 
 # Copy application code
 COPY . /code
