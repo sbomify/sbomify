@@ -23,6 +23,7 @@ from .utils import number_to_random_token, token_to_number, obj_extract, Extract
 from .object_store import S3Client
 
 
+@pytest.mark.django_db
 def test_homepage():
     client = Client()
     response: HttpResponse = client.get(reverse("core:home"))

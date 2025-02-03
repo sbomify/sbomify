@@ -17,39 +17,6 @@ from .models import BillingPlan
 logger = getLogger(__name__)
 
 
-def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
-    """Check if a team can downgrade to a specific plan based on usage limits"""
-    if not plan.max_products and not plan.max_projects and not plan.max_components:
-        # Enterprise plan has no limits
-        return True, ""
-
-    product_count = Product.objects.filter(team=team).count()
-    if plan.max_products and product_count > plan.max_products:
-        return (
-            False,
-            f"Cannot downgrade: You have {product_count} products, "
-            f"but the {plan.name} plan only allows {plan.max_products}",
-        )
-
-    project_count = Project.objects.filter(product__team=team).count()
-    if plan.max_projects and project_count > plan.max_projects:
-        return (
-            False,
-            f"Cannot downgrade: You have {project_count} projects, "
-            f"but the {plan.name} plan only allows {plan.max_projects}",
-        )
-
-    component_count = Component.objects.filter(project__product__team=team).count()
-    if plan.max_components and component_count > plan.max_components:
-        return (
-            False,
-            f"Cannot downgrade: You have {component_count} components, "
-            f"but the {plan.name} plan only allows {plan.max_components}",
-        )
-
-    return True, ""
-
-
 # Create your views here.
 @login_required
 def select_plan(request: HttpRequest, team_key: str):
@@ -73,7 +40,7 @@ def select_plan(request: HttpRequest, team_key: str):
             and current_plan.max_products
             and (not plan.max_products or plan.max_products < current_plan.max_products)
         ):
-            can_downgrade, message = can_downgrade_to_plan(team, plan)
+            can_downgrade, message = billing_processing.can_downgrade_to_plan(team, plan)
             if not can_downgrade:
                 messages.error(request, message)
                 return redirect("billing:select_plan", team_key=team_key)

@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from billing.models import BillingPlan
 from core.fixtures import guest_user, sample_user  # noqa: F401
+from sboms.models import Component, Product, ProductProject, Project, ProjectComponent
 from teams.models import Member, Team
 
 
@@ -59,7 +60,7 @@ def enterprise_plan() -> BillingPlan:
 
 
 @pytest.fixture
-def team_with_business_plan(sample_user: AbstractBaseUser, business_plan: BillingPlan) -> Team:
+def team_with_business_plan(sample_user: AbstractBaseUser, business_plan: BillingPlan) -> Team:  # noqa: F811
     """Team fixture with active business plan subscription."""
     team = Team.objects.create(
         name="Test Business Team",
@@ -214,3 +215,72 @@ def mock_stripe_subscription(monkeypatch):
 
     monkeypatch.setattr("stripe.Subscription", MockSubscription)
     return MockSubscription
+
+
+@pytest.fixture
+def test_product(team_with_business_plan: Team) -> Product:
+    """Create a test product and clean it up after the test."""
+    product = Product.objects.create(name="Test Product", team=team_with_business_plan)
+    yield product
+    product.delete()
+
+
+@pytest.fixture
+def multiple_products(team_with_business_plan: Team, community_plan: BillingPlan) -> list[Product]:
+    """Create multiple products exceeding community plan limits and clean up after test."""
+    products = []
+    for i in range(community_plan.max_products + 1):
+        products.append(Product.objects.create(name=f"Test Product {i}", team=team_with_business_plan))
+    yield products
+    for product in products:
+        product.delete()
+
+
+@pytest.fixture
+def test_project(team_with_business_plan: Team) -> Project:
+    """Create a test project and clean it up after the test."""
+    project = Project.objects.create(
+        name=f"Test Project {team_with_business_plan.key}",
+        team=team_with_business_plan,
+    )
+    yield project
+    project.delete()
+
+
+@pytest.fixture
+def multiple_projects(
+    team_with_business_plan: Team, test_product: Product, community_plan: BillingPlan
+) -> list[Project]:
+    """Create multiple projects exceeding community plan limits and clean up after test."""
+    projects = []
+    for i in range(community_plan.max_projects + 1):
+        project = Project.objects.create(
+            name=f"Test Project {team_with_business_plan.key} {i}",
+            team=team_with_business_plan,
+        )
+        ProductProject.objects.create(
+            product=test_product,
+            project=project,
+        )
+        projects.append(project)
+    yield projects
+    for project in projects:
+        project.delete()
+
+
+@pytest.fixture
+def multiple_components(
+    team_with_business_plan: Team, test_project: Project, community_plan: BillingPlan
+) -> list[Component]:
+    """Create multiple components exceeding community plan limits and clean up after test."""
+    components = []
+    for i in range(community_plan.max_components + 1):
+        component = Component.objects.create(name=f"Test Component {i}", team=team_with_business_plan)
+        ProjectComponent.objects.create(
+            project=test_project,
+            component=component,
+        )
+        components.append(component)
+    yield components
+    for component in components:
+        component.delete()

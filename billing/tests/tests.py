@@ -2,9 +2,9 @@
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 
+from billing.billing_processing import can_downgrade_to_plan
 from billing.models import BillingPlan
-from billing.views import can_downgrade_to_plan
-from sboms.models import Component, Product, Project
+from sboms.models import Component, Product, Project, ProductProject, ProjectComponent
 from teams.models import Team
 
 from .fixtures import (  # noqa: F401
@@ -13,6 +13,11 @@ from .fixtures import (  # noqa: F401
     business_plan,
     enterprise_plan,
     team_with_business_plan,
+    test_product,
+    multiple_products,
+    test_project,
+    multiple_projects,
+    multiple_components,
 )
 
 
@@ -38,16 +43,11 @@ def test_can_downgrade_to_enterprise_plan(
 
 @pytest.mark.django_db
 def test_cannot_downgrade_with_too_many_products(
-    team_with_business_plan: Team, community_plan: BillingPlan
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    multiple_products: list[Product]
 ):
     """Test downgrade prevention when team has more products than plan allows."""
-    # Create products exceeding community plan limits
-    for i in range(community_plan.max_products + 1):
-        Product.objects.create(
-            name=f"Test Product {i}",
-            team=team_with_business_plan
-        )
-
     can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
     assert can_downgrade is False
     assert "products" in message.lower()
@@ -55,21 +55,11 @@ def test_cannot_downgrade_with_too_many_products(
 
 @pytest.mark.django_db
 def test_cannot_downgrade_with_too_many_projects(
-    team_with_business_plan: Team, community_plan: BillingPlan
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    multiple_projects: list[Project]
 ):
     """Test downgrade prevention when team has more projects than plan allows."""
-    product = Product.objects.create(
-        name="Test Product",
-        team=team_with_business_plan
-    )
-
-    # Create projects exceeding community plan limits
-    for i in range(community_plan.max_projects + 1):
-        Project.objects.create(
-            name=f"Test Project {team_with_business_plan.key} {i}",
-            product=product
-        )
-
     can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
     assert can_downgrade is False
     assert "projects" in message.lower()
@@ -77,25 +67,11 @@ def test_cannot_downgrade_with_too_many_projects(
 
 @pytest.mark.django_db
 def test_cannot_downgrade_with_too_many_components(
-    team_with_business_plan: Team, community_plan: BillingPlan
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    multiple_components: list[Component]
 ):
     """Test downgrade prevention when team has more components than plan allows."""
-    product = Product.objects.create(
-        name="Test Product",
-        team=team_with_business_plan
-    )
-    project = Project.objects.create(
-        name="Test Project",
-        product=product
-    )
-
-    # Create components exceeding community plan limits
-    for i in range(community_plan.max_components + 1):
-        Component.objects.create(
-            name=f"Test Component {i}",
-            project=project
-        )
-
     can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
     assert can_downgrade is False
     assert "components" in message.lower()

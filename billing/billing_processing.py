@@ -3,6 +3,7 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 from sbomify.logging import getLogger
+from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from . import email_notifications
@@ -122,3 +123,36 @@ def handle_payment_succeeded(invoice):
 
     except Team.DoesNotExist:
         logger.error(f"No team found for customer {invoice.customer}")
+
+
+def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
+    """Check if a team can downgrade to a specific plan based on usage limits"""
+    if not plan.max_products and not plan.max_projects and not plan.max_components:
+        # Enterprise plan has no limits
+        return True, ""
+
+    product_count = Product.objects.filter(team=team).count()
+    if plan.max_products and product_count > plan.max_products:
+        return (
+            False,
+            f"Cannot downgrade: You have {product_count} products, "
+            f"but the {plan.name} plan only allows {plan.max_products}",
+        )
+
+    project_count = Project.objects.filter(team=team).count()
+    if plan.max_projects and project_count > plan.max_projects:
+        return (
+            False,
+            f"Cannot downgrade: You have {project_count} projects, "
+            f"but the {plan.name} plan only allows {plan.max_projects}",
+        )
+
+    component_count = Component.objects.filter(team=team).count()
+    if plan.max_components and component_count > plan.max_components:
+        return (
+            False,
+            f"Cannot downgrade: You have {component_count} components, "
+            f"but the {plan.name} plan only allows {plan.max_components}",
+        )
+
+    return True, ""
