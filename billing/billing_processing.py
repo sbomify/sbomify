@@ -2,6 +2,8 @@
 Module for handling Stripe billing webhook events and related processing
 """
 
+from django.http import HttpResponseForbidden
+from functools import wraps
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
 from teams.models import Team
@@ -10,6 +12,54 @@ from . import email_notifications
 from .models import BillingPlan
 
 logger = getLogger(__name__)
+
+
+def check_billing_limits(model_type: str):
+    """Decorator to check billing plan limits before creating new items."""
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            # Get current team
+            team_key = request.session.get("current_team", {}).get("key")
+            if not team_key:
+                return HttpResponseForbidden("No team selected")
+
+            try:
+                team = Team.objects.get(key=team_key)
+            except Team.DoesNotExist:
+                return HttpResponseForbidden("Invalid team")
+
+            # Get billing plan
+            if not team.billing_plan:
+                return HttpResponseForbidden("No active billing plan")
+            
+            try:
+                plan = BillingPlan.objects.get(key=team.billing_plan)
+            except BillingPlan.DoesNotExist:
+                return HttpResponseForbidden("Invalid billing plan configuration")
+
+            # Get current counts
+            model_map = {
+                "product": (Product, plan.max_products),
+                "project": (Project, plan.max_projects),
+                "component": (Component, plan.max_components),
+            }
+
+            if model_type not in model_map:
+                return HttpResponseForbidden("Invalid resource type")
+
+            model_class, max_allowed = model_map[model_type]
+            current_count = model_class.objects.filter(team=team).count()
+
+            if max_allowed is not None and current_count >= max_allowed:
+                return HttpResponseForbidden(
+                    f"Your {plan.name} plan allows maximum {max_allowed} {model_type}s. "
+                    f"Current usage: {current_count}/{max_allowed}."
+                )
+
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
 
 
 def handle_subscription_updated(subscription):
