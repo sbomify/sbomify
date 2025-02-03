@@ -19,6 +19,10 @@ def check_billing_limits(model_type: str):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
+            # Only check limits for POST requests
+            if request.method != "POST":
+                return view_func(request, *args, **kwargs)
+
             # Get current team
             team_key = request.session.get("current_team", {}).get("key")
             if not team_key:
