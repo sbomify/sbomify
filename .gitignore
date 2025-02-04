@@ -188,3 +188,4 @@ node_modules
 
 # ESLint
 .eslintcache
+.aider*

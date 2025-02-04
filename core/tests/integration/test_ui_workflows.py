@@ -2,12 +2,26 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from billing.models import BillingPlan
+
 
 @pytest.mark.django_db
 class TestUIWorkflows:
     def test_dashboard_stats_load(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that dashboard stats load correctly with Vue component"""
         client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="stats_plan",
+            name="Stats Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "stats_plan"
+        team.save()
 
         # Test initial page load
         response = client.get(reverse("core:dashboard"))
@@ -17,7 +31,6 @@ class TestUIWorkflows:
         assert 'class="vc-dashboard-stats"' in content
 
         # Test API endpoint for stats with team context
-        team = sample_team_with_owner_member.team
         response = client.get(f"/api/v1/sboms/stats?team_key={team.key}")
         assert response.status_code == 200
         data = response.json()
@@ -32,6 +45,17 @@ class TestUIWorkflows:
         """Test that forms work without JavaScript and have API fallback"""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="ui_workflow_plan",
+            name="UI Workflow Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "ui_workflow_plan"
+        team.save()
 
         # Set current team in session
         session = client.session
@@ -74,6 +98,17 @@ class TestUIWorkflows:
         """Test the component creation workflow from the dashboard."""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="ui_workflow_plan",
+            name="UI Workflow Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "ui_workflow_plan"
+        team.save()
 
         # Set current team in session
         session = client.session

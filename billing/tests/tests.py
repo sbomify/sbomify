@@ -1,7 +1,7 @@
 """Generic billing functionality tests."""
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 
 from billing.billing_processing import can_downgrade_to_plan, check_billing_limits
 from billing.models import BillingPlan
@@ -86,14 +86,16 @@ def test_product_creation_within_limit(team_with_business_plan: Team, business_p
 
     # Mock request with team session
     request = HttpRequest()
+    request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("product")
     def dummy_view(request):
-        return "Success"
+        return HttpResponse("Success", status=200)
 
     response = dummy_view(request)
-    assert response == "Success"
+    assert response.status_code == 200
+    assert response.content == b"Success"
 
 
 @pytest.mark.django_db
@@ -108,11 +110,12 @@ def test_product_creation_over_limit(team_with_business_plan: Team, community_pl
 
     # Mock request
     request = HttpRequest()
+    request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("product")
     def dummy_view(request):
-        return "Success"
+        return HttpResponse("Success")
 
     response = dummy_view(request)
     assert response.status_code == 403
@@ -130,14 +133,16 @@ def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, 
         Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
 
     request = HttpRequest()
+    request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("component")
     def dummy_view(request):
-        return "Success"
+        return HttpResponse("Success", status=200)
 
     response = dummy_view(request)
-    assert response == "Success"
+    assert response.status_code == 200
+    assert response.content == b"Success"
 
 
 @pytest.mark.django_db
@@ -147,11 +152,12 @@ def test_project_creation_no_plan(team_with_business_plan: Team):
     team_with_business_plan.save()
 
     request = HttpRequest()
+    request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("project")
     def dummy_view(request):
-        return "Success"
+        return HttpResponse("Success")
 
     response = dummy_view(request)
     assert response.status_code == 403
