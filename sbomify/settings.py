@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "ninja",
     "widget_tweaks",
     "core",
+    "social_django",
     "anymail",
     "teams",
     "sboms",
@@ -159,16 +160,32 @@ DJANGO_VITE = {
 
 IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'sbomify'),
-        'USER': os.environ.get('DB_USER', 'sbomify'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'sbomify'),
-        'HOST': os.environ.get('DB_HOST', 'sbomify-db'),  # Match the service name in docker-compose.yml
-        'PORT': os.environ.get('DB_PORT', '5432'),
+# DB_URL = os.environ.get("DATABASE_URL", "")
+if "DATABASE_URL" in os.environ:
+    db_config_dict = dj_database_url.parse(os.environ["DATABASE_URL"])
+else:
+    db_config_dict = {}
+    DATABASE_USER = os.environ.get("DATABASE_USER", "")
+    DATABASE_PASSWORD = os.environ.get("DATABASE_PASSWORD", "")
+    DATABASE_NAME = os.environ.get("DATABASE_NAME", "")
+    DATABASE_PORT = os.environ.get("DATABASE_PORT", "")
+
+    if IN_DOCKER:
+        DATABASE_HOST = os.environ.get("DOCKER_DATABASE_HOST", "")
+    else:
+        DATABASE_HOST = os.environ.get("DATABASE_HOST", "")
+
+    db_config_dict = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": DATABASE_NAME,
+        "USER": DATABASE_USER,
+        "PASSWORD": DATABASE_PASSWORD,
+        "HOST": DATABASE_HOST,
+        "PORT": DATABASE_PORT,
     }
-}
+
+
+DATABASES = {"default": db_config_dict}
 
 
 # Password validation
@@ -233,30 +250,45 @@ LOGGING = {
 
 
 # Auth0 settings
-# SOCIAL_AUTH_TRAILING_SLASH = False
-# SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
-# SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
-# SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
-# SOCIAL_AUTH_JSONFIELD_ENABLED = True
-# SOCIAL_AUTH_URL_NAMESPACE = "social"
-# SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
+SOCIAL_AUTH_TRAILING_SLASH = False  # Remove trailing slash from routes
+SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
+SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
+SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
+SOCIAL_AUTH_JSONFIELD_ENABLED = True
+SOCIAL_AUTH_URL_NAMESPACE = "social"
+SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
 
 # JWT validation settings for Auth0
-# SOCIAL_AUTH_AUTH0_JWT_ENABLED = True
-# SOCIAL_AUTH_AUTH0_JWT_ALGORITHM = "RS256"
-# SOCIAL_AUTH_AUTH0_JWT_VERIFY = True
-# SOCIAL_AUTH_AUTH0_JWT_VERIFY_EXP = True
-# SOCIAL_AUTH_AUTH0_JWT_LEEWAY = 60
+SOCIAL_AUTH_AUTH0_JWT_ENABLED = True
+SOCIAL_AUTH_AUTH0_JWT_ALGORITHM = "RS256"
+SOCIAL_AUTH_AUTH0_JWT_VERIFY = True
+SOCIAL_AUTH_AUTH0_JWT_VERIFY_EXP = True
+SOCIAL_AUTH_AUTH0_JWT_LEEWAY = 60  # 1 minute leeway for clock skew
 
 # Custom Auth0 Pipeline
-# SOCIAL_AUTH_PIPELINE = ( ... )
+SOCIAL_AUTH_PIPELINE = (
+    "social_core.pipeline.social_auth.social_details",
+    "social_core.pipeline.social_auth.social_uid",
+    "social_core.pipeline.social_auth.auth_allowed",
+    "social_core.pipeline.social_auth.social_user",
+    "core.pipeline.auth0.require_email",  # Moved after social_user for proper user handling
+    "social_core.pipeline.user.get_username",
+    "social_core.pipeline.user.create_user",
+    "social_core.pipeline.social_auth.associate_user",
+    "social_core.pipeline.social_auth.load_extra_data",
+    "social_core.pipeline.user.user_details",
+)
+
+if DEBUG is False:  # If in production, then force HTTPS for auth0
+    SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
+
 
 AUTHENTICATION_BACKENDS = {
-    "django.contrib.auth.backends.ModelBackend",  # Use Django's default auth
+    "core.auth.SafeAuth0OAuth2",
+    "django.contrib.auth.backends.ModelBackend",
 }
 
-# Use Django's default auth URLs
-LOGIN_URL = "/login/"
+LOGIN_URL = "/login/auth0"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
