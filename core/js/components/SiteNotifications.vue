@@ -53,7 +53,7 @@ const mapSeverityToType = (severity: string): 'info' | 'warning' | 'error' | 'su
 
 const fetchNotifications = async () => {
   try {
-    const response = await axios.get('/api/v1/notifications')
+    const response = await axios.get('/api/v1/notifications/')
     notifications.value = response.data
   } catch (error) {
     console.error('Failed to fetch notifications:', error)

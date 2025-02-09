@@ -15,5 +15,5 @@ router = Router(tags=["notifications"], auth=(PersonalAccessTokenAuth(), django_
     response={200: list[NotificationSchema], 403: ErrorResponse},
 )
 def list_notifications(request):
-    """Get all active notifications for the current user"""
+    """Get all active notifications for the current user and their active team"""
     return get_notifications(request)
