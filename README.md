@@ -72,7 +72,7 @@ docker compose \
     -e DJANGO_SUPERUSER_PASSWORD=<password> \
     -e DJANGO_SUPERUSER_EMAIL=<email> \
     sbomify-backend \
-    python manage.py createsuperuser \
+    poetry run python manage.py createsuperuser \
         --noinput
 ```
 
