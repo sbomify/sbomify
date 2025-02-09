@@ -30,7 +30,7 @@
               <div class="tab-content mt-4">
                 <div v-if="activeTab === 'gitlab'" class="mb-3">
                   <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                    <i class="fa-solid fa-triangle-exclamation text-warning"></i>
                     <span class="text-warning fw-medium">Note:</span>
                     <span>GitLab CI requires Docker-in-Docker (DinD) service for Docker image scanning. The configuration above includes the necessary DinD setup.</span>
                   </div>
@@ -102,7 +102,7 @@
 
                   <!-- Token requirement note -->
                   <div class="mb-3 d-flex align-items-center">
-                    <i class="fas fa-key me-2 text-info"></i>
+                    <i class="fa-solid fa-key me-2 text-info"></i>
                     <div>
                       <strong>Required:</strong> Before using any CI integration, create a secret named <code>SBOMIFY_TOKEN</code> containing your API token. You can find your token in your account settings.
                     </div>

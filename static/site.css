@@ -130,14 +130,49 @@ li.sidebar-item {
   margin-bottom: 2rem;
 }
 
-.btn-primary {
-  border-color: var(--btn-primary-bg);
-  background-color: var(--btn-primary-bg);
+.btn {
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 
-.btn-primary:hover {
-  opacity: 0.8;
-  transition: opacity 0.3s linear;
+/* Make selectors more specific */
+button.btn.btn-primary,
+a.btn.btn-primary,
+input.btn.btn-primary {
+  background-color: var(--btn-primary-bg);
+  border: none;
+  color: var(--white) !important; /* Use !important as last resort */
+}
+
+button.btn.btn-primary:hover,
+a.btn.btn-primary:hover,
+input.btn.btn-primary:hover {
+  background-color: #2d62b9;
+  transform: translateY(-1px);
+  color: var(--white) !important;
+}
+
+button.btn.btn-secondary,
+a.btn.btn-secondary,
+input.btn.btn-secondary {
+  background-color: #6c757d;
+  border: none;
+  color: var(--white) !important;
+}
+
+button.btn.btn-secondary:hover,
+a.btn.btn-secondary:hover,
+input.btn.btn-secondary:hover {
+  background-color: #5c636a;
+  transform: translateY(-1px);
+  color: var(--white) !important;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .card {

@@ -2,8 +2,10 @@
 Module for handling Stripe billing webhook events and related processing
 """
 
-from django.http import HttpResponseForbidden
 from functools import wraps
+
+from django.http import HttpResponseForbidden
+
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
 from teams.models import Team
@@ -36,7 +38,7 @@ def check_billing_limits(model_type: str):
             # Get billing plan
             if not team.billing_plan:
                 return HttpResponseForbidden("No active billing plan")
-            
+
             try:
                 plan = BillingPlan.objects.get(key=team.billing_plan)
             except BillingPlan.DoesNotExist:
