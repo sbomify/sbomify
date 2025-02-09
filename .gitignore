@@ -189,3 +189,6 @@ node_modules
 # ESLint
 .eslintcache
 .aider*
+
+# Ignore cursor rules
+.cursorrules

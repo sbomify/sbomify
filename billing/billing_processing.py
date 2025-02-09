@@ -6,6 +6,7 @@ from functools import wraps
 
 from django.http import HttpResponseForbidden
 
+from core.errors import error_response
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
 from teams.models import Team
@@ -28,21 +29,21 @@ def check_billing_limits(model_type: str):
             # Get current team
             team_key = request.session.get("current_team", {}).get("key")
             if not team_key:
-                return HttpResponseForbidden("No team selected")
+                return error_response(request, HttpResponseForbidden("No team selected"))
 
             try:
                 team = Team.objects.get(key=team_key)
             except Team.DoesNotExist:
-                return HttpResponseForbidden("Invalid team")
+                return error_response(request, HttpResponseForbidden("Invalid team"))
 
             # Get billing plan
             if not team.billing_plan:
-                return HttpResponseForbidden("No active billing plan")
+                return error_response(request, HttpResponseForbidden("No active billing plan"))
 
             try:
                 plan = BillingPlan.objects.get(key=team.billing_plan)
             except BillingPlan.DoesNotExist:
-                return HttpResponseForbidden("Invalid billing plan configuration")
+                return error_response(request, HttpResponseForbidden("Invalid billing plan configuration"))
 
             # Get current counts
             model_map = {
@@ -52,16 +53,17 @@ def check_billing_limits(model_type: str):
             }
 
             if model_type not in model_map:
-                return HttpResponseForbidden("Invalid resource type")
+                return error_response(request, HttpResponseForbidden("Invalid resource type"))
 
             model_class, max_allowed = model_map[model_type]
             current_count = model_class.objects.filter(team=team).count()
 
             if max_allowed is not None and current_count >= max_allowed:
-                return HttpResponseForbidden(
+                error_message = (
                     f"Your {plan.name} plan allows maximum {max_allowed} {model_type}s. "
                     f"Current usage: {current_count}/{max_allowed}."
                 )
+                return error_response(request, HttpResponseForbidden(error_message))
 
             return view_func(request, *args, **kwargs)
         return _wrapped_view
