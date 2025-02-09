@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from billing.models import BillingPlan
 from core.fixtures import guest_user, sample_user  # noqa: F401
-from sboms.models import Component, Product, ProductProject, Project, ProjectComponent
+from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from teams.models import Member, Team
 
 
@@ -169,51 +169,36 @@ def mock_stripe_checkout_session(monkeypatch):
 
 @pytest.fixture
 def mock_stripe_customer(monkeypatch):
-    """Mock Stripe customer operations."""
-
+    """Mock Stripe customer for testing."""
     class MockCustomer:
-        def __init__(self):
-            self.id = "cus_test123"
-
         @classmethod
         def retrieve(cls, id, **kwargs):
             if id.startswith("c_test"):
-                # Simulate existing customer
                 instance = cls()
                 instance.id = id
                 return instance
-            else:
-                # Simulate customer not found error
-                raise stripe.error.InvalidRequestError("Customer not found", param="customer")
+            raise stripe.error.InvalidRequestError("Customer not found", param="customer")
 
-        @classmethod
-        def create(cls, **kwargs):
-            instance = cls()
-            instance.id = kwargs.get("id", "cus_test123")
-            return instance
-
-    monkeypatch.setattr("stripe.Customer", MockCustomer)
+    monkeypatch.setattr(stripe.Customer, "retrieve", MockCustomer.retrieve)
     return MockCustomer
 
 
 @pytest.fixture
 def mock_stripe_subscription(monkeypatch):
-    """Mock Stripe subscription operations."""
-
+    """Mock Stripe subscription for testing."""
     class MockSubscription:
         @classmethod
-        def list(cls, customer, limit=None):
-            return type("Subscriptions", (), {"data": [type("Subscription", (), {"id": "sub_test123"})()]})()
+        def list(cls, customer, limit=1):
+            class SubscriptionList:
+                data = []
+            return SubscriptionList()
 
         @classmethod
         def modify(cls, subscription_id, **kwargs):
-            return type(
-                "Subscription",
-                (),
-                {"id": subscription_id, "cancel_at_period_end": kwargs.get("cancel_at_period_end", False)},
-            )()
+            pass
 
-    monkeypatch.setattr("stripe.Subscription", MockSubscription)
+    monkeypatch.setattr(stripe.Subscription, "list", MockSubscription.list)
+    monkeypatch.setattr(stripe.Subscription, "modify", MockSubscription.modify)
     return MockSubscription
 
 

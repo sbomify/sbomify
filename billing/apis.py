@@ -7,7 +7,7 @@ from ninja.security import django_auth
 
 from access_tokens.auth import PersonalAccessTokenAuth
 from core.schemas import ErrorResponse
-from sboms.models import Component, Product, Project
+from sboms.models import SBOM, Component, Product, Project
 from teams.models import Team
 
 from .models import BillingPlan
@@ -88,9 +88,8 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                 subscriptions = stripe.Subscription.list(customer=customer.id, limit=1)
 
                 if subscriptions.data:
-                    # Cancel at period end to avoid immediate cancellation
+                    # Cancel at period end
                     stripe.Subscription.modify(subscriptions.data[0].id, cancel_at_period_end=True)
-                    # Keep the subscription ID in billing_plan_limits until it's actually cancelled
                     team.billing_plan = plan.key
                     team.billing_plan_limits = {
                         "max_products": plan.max_products,
@@ -99,25 +98,30 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                         "stripe_subscription_id": subscriptions.data[0].id,
                         "subscription_status": "canceled",
                     }
+
+                    # Update both components and SBOMs
+                    Component.objects.filter(team=team).update(is_public=True)
+                    SBOM.objects.filter(component__team=team).update(is_public=True)
+
                 else:
-                    # No subscription to cancel, just update the plan limits
                     team.billing_plan = plan.key
                     team.billing_plan_limits = {
                         "max_products": plan.max_products,
                         "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                     }
+                    # Update components even without subscription
+                    Component.objects.filter(team=team).update(is_public=True)
+
             except stripe.error.InvalidRequestError:
-                # Customer not found in Stripe, just update the plan limits
                 team.billing_plan = plan.key
                 team.billing_plan_limits = {
                     "max_products": plan.max_products,
                     "max_projects": plan.max_projects,
                     "max_components": plan.max_components,
                 }
-            except stripe.error.StripeError as e:
-                # Handle other Stripe errors that might need attention
-                return 400, {"detail": str(e)}
+                # Update components for non-Stripe customers
+                Component.objects.filter(team=team).update(is_public=True)
 
             team.save()
             return 200, {"success": True}

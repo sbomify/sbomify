@@ -10,9 +10,7 @@ from django.test import Client
 from django.urls import reverse
 
 from billing.models import BillingPlan
-from teams.models import Member, Team
-
-from .fixtures import (  # noqa: F401
+from billing.tests.fixtures import (  # noqa: F401
     business_plan,
     community_plan,
     enterprise_plan,
@@ -22,44 +20,11 @@ from .fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
+from sboms.models import SBOM, Component
 
-
-@pytest.fixture
-def mock_stripe_customer(monkeypatch):
-    """Mock Stripe customer for testing."""
-
-    class MockCustomer:
-        @classmethod
-        def retrieve(cls, id, **kwargs):
-            if id.startswith("c_test"):
-                instance = cls()
-                instance.id = id
-                return instance
-            raise stripe.error.InvalidRequestError("Customer not found", param="customer")
-
-    monkeypatch.setattr(stripe.Customer, "retrieve", MockCustomer.retrieve)
-    return MockCustomer
-
-
-@pytest.fixture
-def mock_stripe_subscription(monkeypatch):
-    """Mock Stripe subscription for testing."""
-
-    class MockSubscription:
-        @classmethod
-        def list(cls, customer, limit=1):
-            class SubscriptionList:
-                data = []
-
-            return SubscriptionList()
-
-        @classmethod
-        def modify(cls, subscription_id, **kwargs):
-            pass
-
-    monkeypatch.setattr(stripe.Subscription, "list", MockSubscription.list)
-    monkeypatch.setattr(stripe.Subscription, "modify", MockSubscription.modify)
-    return MockSubscription
+# Import SBOM-related fixtures from sboms app
+from sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401
+from teams.models import Member, Team
 
 
 @pytest.mark.django_db
@@ -171,8 +136,6 @@ def test_change_plan_to_community(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
-    mock_stripe_customer,
-    mock_stripe_subscription,
 ):
     """Test downgrading to community plan."""
     client.force_login(sample_user)
@@ -250,7 +213,6 @@ def test_change_plan_to_business_monthly(
     team_with_business_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811,
     mock_stripe_checkout_session,  # noqa: F811
-    mock_stripe_customer,  # noqa: F811
 ):
     """Test upgrading to business plan with monthly billing."""
     client.force_login(sample_user)
@@ -276,7 +238,6 @@ def test_change_plan_to_business_annual(
     team_with_business_plan: Team,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811,
     mock_stripe_checkout_session,  # noqa: F811
-    mock_stripe_customer,  # noqa: F811
 ):
     """Test upgrading to business plan with annual billing."""
     client.force_login(sample_user)
@@ -301,8 +262,6 @@ def test_change_plan_to_community_with_active_subscription(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
-    mock_stripe_customer,  # noqa: F811
-    mock_stripe_subscription,  # noqa: F811
 ):
     """Test downgrading to community plan with an active subscription."""
     client.force_login(sample_user)
@@ -320,3 +279,91 @@ def test_change_plan_to_community_with_active_subscription(
     # Verify team was updated
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == community_plan.key
+
+
+@pytest.mark.django_db
+def test_changing_to_community_makes_sboms_public(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    sample_component: Component,
+    sample_sbom: SBOM,
+    community_plan: BillingPlan,
+):
+    """Test that changing to community plan makes all team's SBOMs public."""
+    # Create 3 private components with their SBOMs
+    components = [
+        Component.objects.create(name=f"Private Component {i}", team=team_with_business_plan, is_public=False)
+        for i in range(3)
+    ]
+
+    for component in components:
+        SBOM.objects.create(
+            name=f"SBOM for {component.name}", version="1.0.0", component=component
+        )
+
+    client.force_login(sample_user)
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({
+            "team_key": team_with_business_plan.key,
+            "plan": community_plan.key,
+            "billing_period": None
+        }),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    # Verify all components (and their SBOMs) are now public
+    for component in Component.objects.filter(team=team_with_business_plan):
+        assert component.is_public is True
+
+
+@pytest.mark.django_db
+def test_changing_to_business_keeps_sboms_private(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    sample_component: Component,
+    sample_sbom: SBOM,
+    business_plan: BillingPlan,
+    enterprise_plan: BillingPlan,
+    mock_stripe_checkout_session,  # Add missing mock fixture
+):
+    """Test changing from enterprise to business plan maintains SBOM privacy."""
+    team = sample_component.team
+    team.billing_plan = enterprise_plan.key
+    team.save()
+
+    # Create private components with SBOMs under enterprise plan
+    components = [
+        Component.objects.create(name=f"Enterprise Component {i}", team=team, is_public=False)
+        for i in range(3)
+    ]
+
+    for component in components:
+        SBOM.objects.create(
+            name=f"SBOM for {component.name}",
+            version="1.0.0",
+            component=component
+        )
+
+    client.force_login(sample_user)
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({
+            "team_key": team.key,
+            "plan": business_plan.key,
+            "billing_period": "monthly"
+        }),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+
+    # Verify components remain private
+    for component in Component.objects.filter(team=team):
+        assert component.is_public is False
+
+    # Verify SBOMs remain private through component relationship
+    for sbom in SBOM.objects.filter(component__team=team):
+        assert sbom.public_access_allowed is False

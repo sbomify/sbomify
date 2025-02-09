@@ -155,12 +155,15 @@ async function handlePlanSelection(plan: Plan) {
       return;
     }
 
-    // If downgrading, show confirmation dialog
-    if (plan.key === 'community' && currentPlan.value === 'business') {
+    // If downgrading to community, show warning about public SBOMs
+    if (plan.key === 'community' && currentPlan.value !== 'business') {
       const { default: Swal } = await import('sweetalert2');
       const result = await Swal.fire({
         title: 'Confirm Downgrade',
-        text: 'Are you sure you want to downgrade to the Community plan? This will immediately cancel your subscription.',
+        html:
+          'Are you sure you want to downgrade to the Community plan?<br><br>' +
+          '<strong class="text-warning">Warning:</strong> All your SBOMs will become public.<br><br>' +
+          'This will also immediately cancel your subscription.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Yes, downgrade',
