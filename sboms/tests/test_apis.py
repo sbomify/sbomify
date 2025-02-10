@@ -11,7 +11,7 @@ from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
 from access_tokens.models import AccessToken
-from core.fixtures import sample_user  # noqa: F401
+from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
 

@@ -5,7 +5,7 @@ from django.urls import reverse
 from ninja.testing import TestClient
 
 from core.apis import router
-from core.fixtures import guest_user, sample_user  # noqa: F401
+from core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sboms.models import Component, Product, Project
 from sboms.tests.fixtures import (  # noqa: F401
     sample_component,

@@ -128,7 +128,7 @@ skips = ["B101", "B404", "B603", "B608"]
 [tool.ruff]
 line-length = 120
 src = ["."]
-exclude = ["migrations", "sbom_format_schemas", "tests.py", "conftest.py", "manage.py", "asgi.py", "wsgi.py"]
+exclude = ["migrations", "sbom_format_schemas", "tests", "tests.py", "conftest.py", "manage.py", "asgi.py", "wsgi.py"]
 
 [tool.ruff.lint]
 select = ["F", "E", "I", "Q", "T"]

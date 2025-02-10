@@ -12,7 +12,7 @@ from django.conf import settings
 # from django.conf import settings
 # from rest_framework.test import APIClient
 
-from core.fixtures import sample_user  # noqa: F401
+from core.tests.fixtures import sample_user  # noqa: F401
 from .utils import (
     create_personal_access_token,
     decode_personal_access_token,

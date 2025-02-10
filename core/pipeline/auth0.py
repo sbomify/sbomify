@@ -7,19 +7,19 @@ from social_core.pipeline.partial import partial
 logger = logging.getLogger(__name__)
 
 
-def debug_pipeline(strategy, backend, *args, **kwargs):
-    """Debug pipeline to log all incoming data from Auth0"""
-    logger.info("==== Debug Pipeline Start ====")
-    logger.info(f"Strategy: {strategy}")
-    logger.info(f"Backend: {backend}")
-    logger.info(f"Args: {args}")
-    # Log each kwarg separately to avoid potential sensitive data in one line
-    logger.info("Kwargs:")
-    for key, value in kwargs.items():
-        if key in ["response", "details", "user"]:
-            logger.info(f"{key}: {value}")
-    logger.info("==== Debug Pipeline End ====")
-    return {"debug_pipeline": "completed"}
+# def debug_pipeline(strategy, backend, *args, **kwargs):
+#     """Debug pipeline to log all incoming data from Auth0"""
+#     logger.info("==== Debug Pipeline Start ====")
+#     logger.info(f"Strategy: {strategy}")
+#     logger.info(f"Backend: {backend}")
+#     logger.info(f"Args: {args}")
+#     # Log each kwarg separately to avoid potential sensitive data in one line
+#     logger.info("Kwargs:")
+#     for key, value in kwargs.items():
+#         if key in ["response", "details", "user"]:
+#             logger.info(f"{key}: {value}")
+#     logger.info("==== Debug Pipeline End ====")
+#     return {"debug_pipeline": "completed"}
 
 
 def get_auth0_user_id(strategy, backend, response, details, *args, **kwargs):

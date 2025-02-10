@@ -17,7 +17,7 @@ def tests_init():
 
 
 pytest_plugins = [
-   "core.fixtures",
+   "core.tests.fixtures",
    "teams.fixtures",
    "sboms.tests.fixtures",
 ]

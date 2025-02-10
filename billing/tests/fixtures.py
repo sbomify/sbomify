@@ -6,8 +6,8 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.utils import timezone
 
 from billing.models import BillingPlan
-from core.fixtures import guest_user, sample_user  # noqa: F401
-from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from core.tests.fixtures import sample_user  # noqa: F401
+from sboms.models import Component, Product, ProductProject, Project, ProjectComponent
 from teams.models import Member, Team
 
 

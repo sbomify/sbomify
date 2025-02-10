@@ -4,15 +4,14 @@ import os
 from urllib.parse import quote
 
 import pytest
-from django.conf import settings
 from django.http import HttpResponse
 from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
 from billing.models import BillingPlan
-from core.fixtures import sample_user  # noqa: F401
-from core.utils import number_to_random_token, token_to_number
+from core.tests.fixtures import sample_user  # noqa: F401
+from core.utils import number_to_random_token
 from teams.models import Member
 
 from ..models import SBOM, Component, Product, Project
