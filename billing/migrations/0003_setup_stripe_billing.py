@@ -23,8 +23,15 @@ PRICE_PLANS = {
 
 
 def setup_stripe_billing(apps, schema_editor):
-    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY.startswith('sk_test_dummy'):
-        print("Skipping Stripe setup in test environment")
+    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY == 'sk_test_dummy_key_for_ci':
+        print("Skipping Stripe setup in test/CI environment")
+        # Create dummy data for test environment
+        BillingPlan = apps.get_model('billing', 'BillingPlan')
+        for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
+            plan.stripe_product_id = f'prod_test_{plan.key}'
+            plan.stripe_price_monthly_id = f'price_test_monthly_{plan.key}'
+            plan.stripe_price_annual_id = f'price_test_annual_{plan.key}'
+            plan.save()
         return
 
     stripe.api_key = settings.STRIPE_API_KEY
@@ -76,8 +83,15 @@ def setup_stripe_billing(apps, schema_editor):
 
 
 def cleanup_stripe_billing(apps, schema_editor):
-    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY.startswith('sk_test_dummy'):
-        print("Skipping Stripe cleanup in test environment")
+    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY == 'sk_test_dummy_key_for_ci':
+        print("Skipping Stripe cleanup in test/CI environment")
+        # Clean up dummy data
+        BillingPlan = apps.get_model('billing', 'BillingPlan')
+        for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
+            plan.stripe_product_id = None
+            plan.stripe_price_monthly_id = None
+            plan.stripe_price_annual_id = None
+            plan.save()
         return
 
     stripe.api_key = settings.STRIPE_API_KEY
