@@ -89,12 +89,21 @@ jobs:
 
       - name: Run Backend Tests
         if: matrix.check == 'tests'
+        env:
+          STRIPE_API_KEY: 'sk_test_dummy_key_for_ci'
+          STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
+          STRIPE_WEBHOOK_SECRET: 'whsec_dummy_webhook_secret_for_ci'
+          STRIPE_ENDPOINT_SECRET: 'whsec_dummy_endpoint_secret_for_ci'
+          # Add any other Stripe-related variables that might be in your .env.example
         run: |
+          # Copy environment variables
+          cp .env.example .env
+
           # Add database setup commands
           psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE test_sbomify;"
           poetry run python manage.py migrate
 
-          # Existing test command
+          # Rest of the test commands...
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
 

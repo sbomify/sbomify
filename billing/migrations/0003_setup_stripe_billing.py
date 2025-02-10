@@ -23,6 +23,10 @@ PRICE_PLANS = {
 
 
 def setup_stripe_billing(apps, schema_editor):
+    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY.startswith('sk_test_dummy'):
+        print("Skipping Stripe setup in test environment")
+        return
+
     stripe.api_key = settings.STRIPE_API_KEY
 
     for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
@@ -72,6 +76,10 @@ def setup_stripe_billing(apps, schema_editor):
 
 
 def cleanup_stripe_billing(apps, schema_editor):
+    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY.startswith('sk_test_dummy'):
+        print("Skipping Stripe cleanup in test environment")
+        return
+
     stripe.api_key = settings.STRIPE_API_KEY
 
     # Get all products and store them in a dict by key with key being the product name
