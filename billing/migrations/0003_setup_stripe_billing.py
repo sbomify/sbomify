@@ -9,9 +9,6 @@ from django.conf import settings
 from django.db import migrations
 from django.db.models import Q
 from django.db import models
-import stripe
-import time
-
 
 PRICE_PLANS = {
     'business': {
@@ -20,19 +17,29 @@ PRICE_PLANS = {
     }
 }
 
+def is_test_environment():
+    """Helper to check if we're in test environment."""
+    return (not settings.STRIPE_API_KEY or
+            settings.STRIPE_API_KEY == 'sk_test_dummy_key_for_ci')
 
 def setup_stripe_billing(apps, schema_editor):
     BillingPlan = apps.get_model('billing', 'BillingPlan')
 
-    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY == 'sk_test_dummy_key_for_ci':
+    if is_test_environment():
         print("Skipping Stripe setup in test/CI environment")
         # Create dummy data for test environment
-        for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
+        for plan in BillingPlan.objects.filter(~Q(key__exact='community'),
+                                             max_products__isnull=False,
+                                             max_projects__isnull=False):
             plan.stripe_product_id = f'prod_test_{plan.key}'
             plan.stripe_price_monthly_id = f'price_test_monthly_{plan.key}'
             plan.stripe_price_annual_id = f'price_test_annual_{plan.key}'
             plan.save()
         return
+
+    # Only import stripe if we're not in test environment
+    import stripe
+    import time
 
     stripe.api_key = settings.STRIPE_API_KEY
 
@@ -83,16 +90,23 @@ def setup_stripe_billing(apps, schema_editor):
 
 
 def cleanup_stripe_billing(apps, schema_editor):
-    if not settings.STRIPE_API_KEY or settings.STRIPE_API_KEY == 'sk_test_dummy_key_for_ci':
+    BillingPlan = apps.get_model('billing', 'BillingPlan')
+
+    if is_test_environment():
         print("Skipping Stripe cleanup in test/CI environment")
         # Clean up dummy data
-        BillingPlan = apps.get_model('billing', 'BillingPlan')
-        for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
+        for plan in BillingPlan.objects.filter(~Q(key__exact='community'),
+                                             max_products__isnull=False,
+                                             max_projects__isnull=False):
             plan.stripe_product_id = None
             plan.stripe_price_monthly_id = None
             plan.stripe_price_annual_id = None
             plan.save()
         return
+
+    # Only import stripe if we're not in test environment
+    import stripe
+    import time
 
     stripe.api_key = settings.STRIPE_API_KEY
 
