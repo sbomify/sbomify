@@ -41,7 +41,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for pre-commit checks
+          fetch-depth: 0
+
+      - name: Set up environment variables
+        run: |
+          echo "STRIPE_API_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_WEBHOOK_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_ENDPOINT_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "DJANGO_TEST=true" >> $GITHUB_ENV
+          cp .env.example .env
 
       - name: Set up Python ${{ matrix.python-version }}
         if: matrix.check != 'lint'
@@ -92,9 +101,11 @@ jobs:
         env:
           STRIPE_API_KEY: 'sk_test_dummy_key_for_ci'
           STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
-          STRIPE_WEBHOOK_SECRET: 'whsec_dummy_webhook_secret_for_ci'
-          STRIPE_ENDPOINT_SECRET: 'whsec_dummy_endpoint_secret_for_ci'
-          # Add any other Stripe-related variables that might be in your .env.example
+          STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
+          STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
+          DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
+          DJANGO_SETTINGS_MODULE: sbomify.settings
+          DJANGO_TEST: 'true'  # Add this to help identify test environment
         run: |
           # Copy environment variables
           cp .env.example .env
