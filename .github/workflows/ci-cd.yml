@@ -20,6 +20,23 @@ jobs:
         check: ['tests', 'pre-commit', 'lint']
         python-version: ["3.10.12"]
         poetry-version: ["1.8.1"]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: sbomify
+          POSTGRES_PASSWORD: sbomify
+          POSTGRES_DB: sbomify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
+      DJANGO_SETTINGS_MODULE: sbomify.settings
 
     steps:
       - uses: actions/checkout@v4
@@ -66,9 +83,18 @@ jobs:
         if: matrix.check == 'pre-commit'
         run: poetry run pre-commit run --all-files
 
+      - name: Install PostgreSQL client
+        if: matrix.check == 'tests'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
       - name: Run Backend Tests
         if: matrix.check == 'tests'
         run: |
+          # Add database setup commands
+          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE test_sbomify;"
+          poetry run python manage.py migrate
+
+          # Existing test command
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
 
