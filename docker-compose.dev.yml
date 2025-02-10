@@ -9,12 +9,24 @@ x-common-env: &common-env
 services:
   sbomify-backend:
     build:
-      dockerfile: docker/Dockerfile-dev
+      dockerfile: docker/Dockerfile-backend
     environment:
       <<: *common-env
 
   sbomify-migrations:
     build:
-      dockerfile: docker/Dockerfile-dev
+      dockerfile: docker/Dockerfile-backend
     environment:
       <<: *common-env
+
+  sbomify-frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-frontend
+    ports:
+      - "5170:5170"
+    volumes:
+      - .:/code
+      - /code/node_modules
+    environment:
+      NODE_ENV: development

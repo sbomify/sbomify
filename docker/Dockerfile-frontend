@@ -1,0 +1,26 @@
+FROM oven/bun:1.0.29 as base
+WORKDIR /code
+
+# Install dependencies for bun
+RUN apt-get update && apt-get install -y \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install specific version of bun
+RUN bun upgrade --version 1.2.2
+
+# Copy package files
+COPY package.json bun.lock ./
+
+# Install dependencies
+RUN bun install
+
+# Copy the rest of the application
+COPY . .
+
+# Expose Vite's default port
+EXPOSE 5170
+
+# Command to run development server
+CMD ["bun", "run", "dev", "--host"]
