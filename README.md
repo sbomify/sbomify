@@ -53,7 +53,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 Alternatively you can run the following script to start the development environment:
 
 ```bash
-./scripts/start_development_environment.sh
+./bin/start_development_environment.sh
 ```
 
 This will start all required services:
@@ -68,9 +68,9 @@ The fastest way to log in to the development server is to create a superuser acc
 docker compose \
     -f docker-compose.yml \
     -f docker-compose.dev.yml exec \
-    -e DJANGO_SUPERUSER_USERNAME=<username> \
-    -e DJANGO_SUPERUSER_PASSWORD=<password> \
-    -e DJANGO_SUPERUSER_EMAIL=<email> \
+    -e DJANGO_SUPERUSER_USERNAME=sbomifyadmin \
+    -e DJANGO_SUPERUSER_PASSWORD=sbomifyadmin \
+    -e DJANGO_SUPERUSER_EMAIL=admin@sbomify.com \
     sbomify-backend \
     poetry run python manage.py createsuperuser \
         --noinput
