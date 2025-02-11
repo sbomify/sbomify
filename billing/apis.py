@@ -66,6 +66,10 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
 
     team_key = data.team_key or request.session.get("current_team", {}).get("key")
 
+    # print("team_key")
+    # breakpoint()
+    # print(team_key)
+
     if not team_key:
         return 404, {"detail": "No team selected"}
 
@@ -79,7 +83,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
             return 403, {"detail": "Only team owners can change billing plans"}
 
         plan = BillingPlan.objects.get(key=data.plan)
-        stripe.api_key = settings.STRIPE_API_KEY
+        stripe.api_key = settings.STRIPE_SECRET_KEY
         customer_id = f"c_{team_key}"
 
         if plan.key == "community":

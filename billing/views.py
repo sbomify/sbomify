@@ -96,19 +96,18 @@ def select_plan(request: HttpRequest, team_key: str):
 
 
 @login_required
-def billing_redirect(request: HttpRequest, team_key: str):
-    "Create billing session and redirect to stripe"
+def billing_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
+    """Redirect to Stripe checkout."""
     team = get_object_or_404(Team, key=team_key)
-
-    # Check if user is team owner
     if not team.members.filter(member__user=request.user, member__role="owner").exists():
+        messages.error(request, "Only team owners can change billing plans")
         return redirect("core:dashboard")
 
+    stripe.api_key = settings.STRIPE_SECRET_KEY
     selected_plan = request.session.get("selected_plan")
     if not selected_plan:
         return redirect("billing:select_plan", team_key=team_key)
 
-    stripe.api_key = settings.STRIPE_API_KEY
     customer_id = f"c_{team_key}"  # Use team key instead of user id
 
     # First try to fetch the customer, create if doesn't exist
@@ -227,7 +226,33 @@ def stripe_webhook(request: HttpRequest):
         logger.info(f"Processing Stripe webhook event: {event.type}")
 
         # Handle specific event types
-        if event.type == "customer.subscription.updated":
+        if event.type == "checkout.session.completed":
+            # Get the session data
+            session = event.data.object
+
+            # Only proceed if payment was successful
+            if session.payment_status == "paid":
+                # Get the team from metadata
+                team_key = session.metadata.get("team_key")
+                if team_key:
+                    team = Team.objects.get(key=team_key)
+                    plan_key = session.metadata.get("plan")
+                    plan = BillingPlan.objects.get(key=plan_key)
+
+                    # Update team billing information
+                    team.billing_plan = plan.key
+                    team.billing_plan_limits = {
+                        "max_products": plan.max_products,
+                        "max_projects": plan.max_projects,
+                        "max_components": plan.max_components,
+                        "stripe_customer_id": session.customer,
+                        "stripe_subscription_id": session.subscription,
+                        "subscription_status": "active",
+                    }
+                    team.save()
+                    logger.info("Successfully processed checkout session for team %s", team_key)
+
+        elif event.type == "customer.subscription.updated":
             billing_processing.handle_subscription_updated(event.data.object)
 
         elif event.type == "customer.subscription.deleted":

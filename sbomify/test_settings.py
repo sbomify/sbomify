@@ -1,5 +1,16 @@
-import json
+# Mock Stripe settings for testing - set these before any other imports
 import os
+
+os.environ["STRIPE_API_KEY"] = "sk_test_dummy_key_for_ci"
+os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_ci"
+os.environ["STRIPE_PUBLISHABLE_KEY"] = "pk_test_dummy_key_for_ci"
+os.environ["STRIPE_BILLING_URL"] = "https://billing.stripe.com/test"
+os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
+
+import json
+
+# Import settings in a way that ensures they are loaded immediately
+from django.conf import settings as django_settings
 
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly

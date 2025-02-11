@@ -22,8 +22,8 @@ def is_test_environment():
     """Helper to check if we're in test environment."""
     # Check for test environment indicators
     is_test = any([
-        not getattr(settings, 'STRIPE_API_KEY', None),  # Check if setting exists
-        getattr(settings, 'STRIPE_API_KEY', '') == 'sk_test_dummy_key_for_ci',
+        not getattr(settings, 'STRIPE_SECRET_KEY', None),  # Check if setting exists
+        getattr(settings, 'STRIPE_SECRET_KEY', '') == 'sk_test_dummy_key_for_ci',
         getattr(settings, 'DJANGO_TEST', False),  # Check explicit test flag
         getattr(settings, 'TESTING', False),  # Check Django's test flag
         'test' in settings.DATABASES['default']['NAME'],
@@ -60,12 +60,12 @@ def setup_stripe_billing(apps, schema_editor):
         import stripe
         import time
 
-        if not settings.STRIPE_API_KEY:
+        if not settings.STRIPE_SECRET_KEY:
             print("No Stripe API key found, skipping Stripe setup")
             return
 
         BillingPlan = apps.get_model('billing', 'BillingPlan')
-        stripe.api_key = settings.STRIPE_API_KEY
+        stripe.api_key = settings.STRIPE_SECRET_KEY
 
         for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
             # Create the product
@@ -135,7 +135,7 @@ def cleanup_stripe_billing(apps, schema_editor):
     import stripe
     import time
 
-    stripe.api_key = settings.STRIPE_API_KEY
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
     # Get all products and store them in a dict by key with key being the product name
     products = {product.name: product for product in stripe.Product.list()}

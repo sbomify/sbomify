@@ -43,9 +43,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up environment variables
+      - name: Set environment variables
         run: |
-          echo "STRIPE_API_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "DEBUG=True" >> $GITHUB_ENV
+          echo "STRIPE_SECRET_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
           echo "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_key_for_ci" >> $GITHUB_ENV
           echo "STRIPE_WEBHOOK_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
           echo "STRIPE_ENDPOINT_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
@@ -99,7 +100,8 @@ jobs:
       - name: Run Backend Tests
         if: matrix.check == 'tests'
         env:
-          STRIPE_API_KEY: 'sk_test_dummy_key_for_ci'
+          DEBUG: True
+          STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
           STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
           STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
           STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'

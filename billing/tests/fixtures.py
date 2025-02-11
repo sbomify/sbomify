@@ -1,4 +1,5 @@
 from typing import Any
+import json
 
 import pytest
 import stripe
@@ -79,113 +80,44 @@ def team_with_business_plan(sample_user: AbstractBaseUser, business_plan: Billin
     return team
 
 
-class MockStripeSession:
-    def __init__(
-        self,
-        id: str,
-        object: str,
-        client_reference_id: str,
-        customer: str,
-        subscription: str,
-        payment_status: str,
-        status: str,
-        created: int,
-        url: str,
-        type: str,
-    ):
-        self.id = id
-        self.object = object
-        self.client_reference_id = client_reference_id
-        self.customer = customer
-        self.subscription = subscription
-        self.payment_status = payment_status
-        self.status = status
-        self.created = created
-        self.url = url
-        self.type = type
+@pytest.fixture(autouse=True)
+def mock_stripe(monkeypatch):
+    """Mock all Stripe functionality for tests.
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "object": self.object,
-            "client_reference_id": self.client_reference_id,
-            "customer": self.customer,
-            "subscription": self.subscription,
-            "payment_status": self.payment_status,
-            "status": self.status,
-            "created": self.created,
-            "url": self.url,
-            "type": self.type,
-        }
+    This fixture automatically mocks all Stripe operations including:
+    - API key configuration
+    - Customer operations (create, retrieve)
+    - Subscription operations (list, modify)
+    - Checkout Session operations (create)
+    - Webhook signature verification
+    - Webhook secret
 
+    No real Stripe API calls will be made when this fixture is active.
+    """
+    # Mock the API key and webhook secret
+    monkeypatch.setattr(stripe, "api_key", "sk_test_dummy_key_for_ci")
+    monkeypatch.setattr("django.conf.settings.STRIPE_WEBHOOK_SECRET", "whsec_test_webhook_secret_key")
 
-@pytest.fixture
-def mock_stripe_session() -> MockStripeSession:
-    """Mock Stripe checkout session data."""
-
-    return MockStripeSession(
-        id="cs_test_123",
-        object="checkout.session",
-        client_reference_id="test-business-team",
-        customer="cus_test123",
-        subscription="sub_test123",
-        payment_status="paid",
-        status="complete",
-        created=int(timezone.now().timestamp()),
-        url="https://checkout.stripe.com/test-session",
-        type="checkout.session.completed",
-    )
-
-
-@pytest.fixture
-def mock_stripe_webhook_signature() -> str:
-    """Mock Stripe webhook signature."""
-    return "whsec_test123"
-
-
-@pytest.fixture
-def mock_stripe_checkout_session(monkeypatch):
-    """Mock Stripe checkout session creation."""
-
-    class MockSession:
-        create_kwargs = {}  # Class variable to store create arguments
-
-        def __init__(self):
-            self.url = "https://checkout.stripe.com/test"
-
-        @classmethod
-        def create(cls, **kwargs):
-            cls.create_kwargs = kwargs  # Store the kwargs at class level
-            instance = cls()
-            return instance
-
-        def get_create_kwargs(self):
-            # Method to access the stored kwargs
-            return self.__class__.create_kwargs
-
-    monkeypatch.setattr(stripe.checkout.Session, "create", MockSession.create)
-    return MockSession
-
-
-@pytest.fixture
-def mock_stripe_customer(monkeypatch):
-    """Mock Stripe customer for testing."""
+    # Mock Customer operations
     class MockCustomer:
         @classmethod
         def retrieve(cls, id, **kwargs):
-            if id.startswith("c_test"):
-                instance = cls()
-                instance.id = id
-                return instance
-            raise stripe.error.InvalidRequestError("Customer not found", param="customer")
+            if id == "c_no-stripe-customer":
+                raise stripe.error.InvalidRequestError("Customer not found", param="customer")
+            instance = cls()
+            instance.id = id
+            return instance
 
-    monkeypatch.setattr(stripe.Customer, "retrieve", MockCustomer.retrieve)
-    return MockCustomer
+        @classmethod
+        def create(cls, **kwargs):
+            instance = cls()
+            instance.id = kwargs.get('id')
+            instance.email = kwargs.get('email')
+            instance.name = kwargs.get('name')
+            instance.metadata = kwargs.get('metadata', {})
+            return instance
 
-
-@pytest.fixture
-def mock_stripe_subscription(monkeypatch):
-    """Mock Stripe subscription for testing."""
+    # Mock Subscription operations
     class MockSubscription:
         @classmethod
         def list(cls, customer, limit=1):
@@ -197,9 +129,71 @@ def mock_stripe_subscription(monkeypatch):
         def modify(cls, subscription_id, **kwargs):
             pass
 
+    # Mock Checkout Session operations
+    class MockCheckoutSession:
+        def __init__(self):
+            self.url = "https://checkout.stripe.com/test"
+
+        @classmethod
+        def create(cls, **kwargs):
+            instance = cls()
+            return instance
+
+    # Mock Webhook operations
+    class MockWebhook:
+        @classmethod
+        def construct_event(cls, payload, sig_header, secret):
+            """Mock Stripe webhook event construction.
+
+            Args:
+                payload: The webhook payload as a string
+                sig_header: The signature header
+                secret: The webhook secret
+
+            Returns:
+                The constructed event object
+            """
+            if sig_header == "invalid_signature":
+                raise stripe.error.SignatureVerificationError("Invalid", "sig")
+
+            # Parse the payload
+            data = json.loads(payload)
+
+            # Convert dictionary to object with attributes recursively
+            def dict_to_obj(d):
+                if isinstance(d, dict):
+                    # Create a new object that allows attribute access
+                    obj = type('StripeObject', (), {})()
+                    for key, value in d.items():
+                        setattr(obj, key, dict_to_obj(value))
+                    return obj
+                elif isinstance(d, list):
+                    return [dict_to_obj(item) for item in d]
+                else:
+                    return d
+
+            # Create a mock event object with proper attribute access
+            class StripeEvent:
+                def __init__(self, event_type, data_object):
+                    self.type = event_type
+                    self.data = type('EventData', (), {'object': dict_to_obj(data_object)})()
+
+            # For checkout.session.completed events, return the session object directly
+            if data.get("type") == "checkout.session.completed":
+                return StripeEvent("checkout.session.completed", data["data"]["object"])
+
+            # For other events, wrap the data in a proper event object
+            return StripeEvent(data["type"], data["data"]["object"])
+
+    # Apply all mocks
+    monkeypatch.setattr(stripe.Customer, "retrieve", MockCustomer.retrieve)
+    monkeypatch.setattr(stripe.Customer, "create", MockCustomer.create)
     monkeypatch.setattr(stripe.Subscription, "list", MockSubscription.list)
     monkeypatch.setattr(stripe.Subscription, "modify", MockSubscription.modify)
-    return MockSubscription
+    monkeypatch.setattr(stripe.checkout.Session, "create", MockCheckoutSession.create)
+    monkeypatch.setattr(stripe.Webhook, "construct_event", MockWebhook.construct_event)
+
+    return "sk_test_dummy_key_for_ci"
 
 
 @pytest.fixture

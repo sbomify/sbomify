@@ -81,6 +81,20 @@ def handle_subscription_updated(subscription):
         # Update subscription status
         team.billing_plan_limits["subscription_status"] = new_status
 
+        # Update billing plan based on subscription's product
+        if subscription.items.data:
+            product_id = subscription.items.data[0].plan.product
+            try:
+                plan = BillingPlan.objects.get(stripe_product_id=product_id)
+                team.billing_plan = plan.key
+                team.billing_plan_limits.update({
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                })
+            except BillingPlan.DoesNotExist:
+                logger.error(f"No billing plan found for product {product_id}")
+
         # Handle specific status transitions
         if new_status == "past_due" and old_status == "active":
             # Send notification to team owners about payment being past due
