@@ -116,8 +116,8 @@ jobs:
           STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
           STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
           DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
-          DJANGO_SETTINGS_MODULE: sbomify.settings
-          DJANGO_TEST: 'true'  # Add this to help identify test environment
+          DJANGO_SETTINGS_MODULE: sbomify.test_settings
+          DJANGO_TEST: 'true'
         run: |
           # Copy environment variables
           cp .env.example .env
