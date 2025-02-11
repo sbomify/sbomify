@@ -58,46 +58,6 @@ DJANGO_VITE = {
     }
 }
 
-# Create staticfiles directory if it doesn't exist
+# Ensure staticfiles directory exists
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATIC_ROOT.mkdir(exist_ok=True)
-
-# Create a minimal manifest file for testing
-manifest = {
-    "core/js/main.ts": {
-        "file": "assets/main.js",
-        "src": "core/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/main.css"]
-    },
-    "sboms/js/main.ts": {
-        "file": "assets/sboms.js",
-        "src": "sboms/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/sboms.css"]
-    },
-    "teams/js/main.ts": {
-        "file": "assets/teams.js",
-        "src": "teams/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/teams.css"]
-    },
-    "billing/js/main.ts": {
-        "file": "assets/billing.js",
-        "src": "billing/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/billing.css"]
-    },
-    "core/js/django-messages.ts": {
-        "file": "assets/django-messages.js",
-        "src": "core/js/django-messages.ts",
-        "isEntry": True
-    },
-    "core/js/alerts-global.ts": {
-        "file": "assets/alerts-global.js",
-        "src": "core/js/alerts-global.ts",
-        "isEntry": True
-    }
-}
-with open(STATIC_ROOT / "manifest.json", "w") as f:
-    json.dump(manifest, f)
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)

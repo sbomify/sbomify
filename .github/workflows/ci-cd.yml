@@ -116,6 +116,9 @@ jobs:
           psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE test_sbomify;"
           poetry run python manage.py migrate
 
+          # Collect static files
+          poetry run python manage.py collectstatic --noinput
+
           # Rest of the test commands...
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
