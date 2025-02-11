@@ -18,16 +18,16 @@ from .settings import BASE_DIR  # Import BASE_DIR explicitly
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("TEST_DB_NAME", "postgres"),  # Use the default postgres database
-        "USER": os.environ.get("TEST_DB_USER", "postgres"),
-        "PASSWORD": os.environ.get("TEST_DB_PASSWORD", "postgres"),
+        "NAME": os.environ.get("TEST_DB_NAME", "postgres"),  # Local default
+        "USER": os.environ.get("TEST_DB_USER", "postgres"),  # Local default
+        "PASSWORD": os.environ.get("TEST_DB_PASSWORD", "postgres"),  # Local default
         "HOST": os.environ.get("TEST_DB_HOST", "localhost"),
         "PORT": os.environ.get("TEST_DB_PORT", "5432"),
         "ATOMIC_REQUESTS": True,
         # Test database settings
         "TEST": {
             "NAME": os.environ.get("TEST_DB_NAME", "sbomify_test"),
-            "SERIALIZE": False,  # Speeds up tests by not serializing db
+            "SERIALIZE": False,
         },
     }
 }

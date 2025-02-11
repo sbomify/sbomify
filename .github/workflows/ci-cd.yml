@@ -110,6 +110,9 @@ jobs:
       - name: Run Backend Tests
         if: matrix.check == 'tests'
         env:
+          TEST_DB_NAME: sbomify_test
+          TEST_DB_USER: sbomify
+          TEST_DB_PASSWORD: sbomify
           DEBUG: True
           STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
           STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
@@ -122,8 +125,11 @@ jobs:
           # Copy environment variables
           cp .env.example .env
 
+          # Create test database with correct privileges
+          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE sbomify_test;"
+          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "GRANT ALL PRIVILEGES ON DATABASE sbomify_test TO sbomify;"
+
           # Add database setup commands
-          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE test_sbomify;"
           poetry run python manage.py migrate
 
           # Collect static files
