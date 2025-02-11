@@ -1,0 +1,32 @@
+x-common-env: &common-env
+  DATABASE_USER: sbomify
+  DATABASE_PASSWORD: sbomify
+  DATABASE_NAME: sbomify
+  DATABASE_PORT: 5432
+  DATABASE_HOST: localhost
+  DOCKER_DATABASE_HOST: sbomify-db
+
+services:
+  sbomify-backend:
+    build:
+      dockerfile: docker/Dockerfile-backend-dev
+    environment:
+      <<: *common-env
+
+  sbomify-migrations:
+    build:
+      dockerfile: docker/Dockerfile-backend-dev
+    environment:
+      <<: *common-env
+
+  sbomify-frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-frontend-dev
+    ports:
+      - "5170:5170"
+    volumes:
+      - .:/code
+      - /code/node_modules
+    environment:
+      NODE_ENV: development
