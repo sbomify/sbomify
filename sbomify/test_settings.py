@@ -50,14 +50,56 @@ AWS_SBOMS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-sboms-bucket"
 
 APP_BASE_URL = "http://localhost:8001"
 
+# Static files configuration
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Django Vite test settings
 DJANGO_VITE = {
     "default": {
-        "dev_mode": False,
+        "dev_mode": False,  # Always False for tests
+        "dev_server_host": "127.0.0.1",
+        "dev_server_port": 5170,
         "manifest_path": str(BASE_DIR / "staticfiles" / "manifest.json"),
     }
 }
 
 # Ensure staticfiles directory exists
-STATIC_ROOT = BASE_DIR / "staticfiles"
 STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Create manifest in the static directory
+manifest = {
+    "core/js/main.ts": {
+        "file": "assets/main.js",
+        "src": "core/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/main.css"]
+    },
+    "teams/js/main.ts": {
+        "file": "assets/teams.js",
+        "src": "teams/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/teams.css"]
+    },
+    "core/js/django-messages.ts": {
+        "file": "assets/django-messages.js",
+        "src": "core/js/django-messages.ts",
+        "isEntry": True
+    },
+    "core/js/alerts-global.ts": {
+        "file": "assets/alerts-global.js",
+        "src": "core/js/alerts-global.ts",
+        "isEntry": True
+    }
+}
+
+# Create manifest file in the static directory
+with open(BASE_DIR / "static" / "manifest.json", "w") as f:
+    json.dump(manifest, f)
+
+# Ensure WhiteNoise is configured
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+] + MIDDLEWARE[2:]  # Keep the rest of the middleware unchanged

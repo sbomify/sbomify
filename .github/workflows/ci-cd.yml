@@ -97,6 +97,16 @@ jobs:
         if: matrix.check == 'tests'
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
+      - name: Setup test assets
+        if: matrix.check == 'tests'
+        run: |
+          # Create static assets structure
+          mkdir -p sbomify/static/assets
+          # Create empty asset files
+          for file in main.js main.css teams.js teams.css django-messages.js alerts-global.js; do
+            echo "// Test asset" > sbomify/static/assets/$file
+          done
+
       - name: Run Backend Tests
         if: matrix.check == 'tests'
         env:
