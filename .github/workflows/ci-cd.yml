@@ -100,11 +100,11 @@ jobs:
       - name: Setup test assets
         if: matrix.check == 'tests'
         run: |
-          # Create static assets structure
-          mkdir -p sbomify/static/assets
+          # Create static assets structure in project root
+          mkdir -p static/assets
           # Create empty asset files
-          for file in main.js main.css teams.js teams.css django-messages.js alerts-global.js; do
-            echo "// Test asset" > sbomify/static/assets/$file
+          for file in main.js main.css teams.js teams.css billing.js billing.css sboms.js sboms.css django-messages.js alerts-global.js; do
+            echo "// Test asset" > static/assets/$file
           done
 
       - name: Run Backend Tests

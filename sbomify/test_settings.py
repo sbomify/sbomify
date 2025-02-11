@@ -61,7 +61,7 @@ DJANGO_VITE = {
         "dev_mode": False,  # Always False for tests
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(BASE_DIR / "staticfiles" / "manifest.json"),
+        "manifest_path": str(STATIC_ROOT / "manifest.json"),
     }
 }
 
@@ -82,6 +82,12 @@ manifest = {
         "isEntry": True,
         "css": ["assets/teams.css"]
     },
+    "billing/js/main.ts": {
+        "file": "assets/billing.js",
+        "src": "billing/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/billing.css"]
+    },
     "core/js/django-messages.ts": {
         "file": "assets/django-messages.js",
         "src": "core/js/django-messages.ts",
@@ -91,11 +97,17 @@ manifest = {
         "file": "assets/alerts-global.js",
         "src": "core/js/alerts-global.ts",
         "isEntry": True
+    },
+    "sboms/js/main.ts": {
+        "file": "assets/sboms.js",
+        "src": "sboms/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/sboms.css"]
     }
 }
 
 # Create manifest file in the static directory
-with open(BASE_DIR / "static" / "manifest.json", "w") as f:
+with open(STATIC_ROOT / "manifest.json", "w") as f:
     json.dump(manifest, f)
 
 # Ensure WhiteNoise is configured
