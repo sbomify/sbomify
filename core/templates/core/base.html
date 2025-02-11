@@ -1,10 +1,11 @@
+{% load static %}
+{% load django_vite %}
+{% load cache %}
+
 <!doctype html>
 <html lang="en">
 
 <head>
-  {% load static %}
-  {% load django_vite %}
-  {% load cache %}
   {% block head %}
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -16,7 +17,7 @@
 	<link rel="shortcut icon" href="{% static 'img/sbomify-icon.svg' %}" />
   <link rel="icon" type="image/svg+xml" href="{% static 'img/sbomify-icon.svg' %}" sizes="any">
 
-  <title>{% block title %}sbomify{% endblock %}</title>
+  <title>{% block title %}SBOMify{% endblock %}</title>
 
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
@@ -41,6 +42,9 @@
             {% endcache %}
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="messages-container">
+                    {% include "core/components/messages.html" %}
+                </div>
                 {% block content %}{% endblock %}
             </main>
         </div>
@@ -48,7 +52,7 @@
   {% endblock %}
 
   <script src="{% static 'js/app.js' %}"></script>
-  <script src="{% static 'js/notifications.js' %}"></script>
+
   {% block scripts %}{% endblock %}
   {% vite_asset 'core/js/main.ts' %}
 </body>

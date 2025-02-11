@@ -1,8 +1,10 @@
 import pytest
+import pytest_django
 
 # from django.test.utils import setup_test_environment
 
 
+# @pytest_django.django_db_setup
 @pytest.fixture(scope="session", autouse=True)
 def tests_init():
     """This only gets executed once."""
@@ -15,7 +17,7 @@ def tests_init():
 
 
 pytest_plugins = [
-   "core.fixtures",
+   "core.tests.fixtures",
    "teams.fixtures",
    "sboms.tests.fixtures",
 ]

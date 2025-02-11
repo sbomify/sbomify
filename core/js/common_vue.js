@@ -1,22 +1,51 @@
 import { createApp } from 'vue'
 
 // Vuetify
-// import 'vuetify/styles'
+import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'  // Use SVG icons instead of font
 
+// Create vuetify instance with icons
 const vuetify = createVuetify({
   components,
   directives,
   theme: {
     defaultTheme: 'light',
+    themes: {
+      light: {
+        colors: {
+          primary: '#3B7DDD',
+          secondary: '#6c757d',
+          success: '#28a745', 
+          warning: '#ffc107',
+          danger: '#dc3545'
+        }
+      }
+    }
+  },
+  blueprints: {
+    defaults: {
+      VBtn: {
+        color: 'primary',
+        variant: 'flat'
+      }
+    }
+  },
+  directives: {
+    defaults: {
+      'global': { disableGlobalStyles: true }
+    }
+  },
+  icons: {
+    defaultSet: 'mdi',
+    aliases,
+    sets: { mdi }
   }
 })
 
-
 function mountVueComponent(elementClass, Component) {
-  // const elem = document.getElementById(elementId)
   console.log('Mounting Vue component', elementClass);
   const elements = document.getElementsByClassName(elementClass);
   if (elements.length > 0) {
@@ -32,7 +61,6 @@ function mountVueComponent(elementClass, Component) {
     }
     return;
   }
-
 }
 
 export default mountVueComponent;

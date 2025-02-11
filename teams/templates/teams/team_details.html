@@ -117,6 +117,29 @@
     </div>
   </div>
 
+  {% if request.session.current_team.role == "owner" %}
+  <div class="col-12">
+    <h4 class="p-1">Billing Plan</h4>
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-1">{{ team.billing_plan|title }} Plan</h5>
+            {% if team.billing_plan_limits %}
+              <p class="mb-0 text-muted">
+                Limits: {{ team.billing_plan_limits.max_products }} Products,
+                {{ team.billing_plan_limits.max_projects }} Projects,
+                {{ team.billing_plan_limits.max_components }} Components
+              </p>
+            {% endif %}
+          </div>
+          <a href="{% url 'billing:select_plan' team.key %}" class="btn btn-primary">Change Plan</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="col-sm-12 col-md-3">
     <a id="del_{{ team.key }}" href="{% url 'teams:delete_team' team.key %}" title="Delete team" class="btn btn-danger">
       Delete Team

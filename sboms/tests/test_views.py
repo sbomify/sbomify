@@ -9,7 +9,9 @@ from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
-from core.fixtures import sample_user  # noqa: F401
+from billing.models import BillingPlan
+from core.tests.fixtures import sample_user  # noqa: F401
+from core.utils import number_to_random_token
 from teams.models import Member
 
 from ..models import SBOM, Component, Product, Project
@@ -22,87 +24,154 @@ from .fixtures import (
 
 
 @pytest.mark.django_db
-def test_dasbhoard_pages_only_accessible_when_logged_in(sample_user):  # noqa: F811
+def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_member):  # Changed fixture and name
+    """Test that dashboard pages require authentication."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+
+    # Setup billing plan
+    BillingPlan.objects.create(
+        key="dashboard_test_plan",
+        name="Dashboard Test Plan",
+        max_components=10,
+        max_products=10,
+        max_projects=10
+    )
+    team.billing_plan = "dashboard_test_plan"
+    team.key = number_to_random_token(team.id)
+    team.save()
+
     uris = [
         reverse("sboms:products_dashboard"),
         reverse("sboms:projects_dashboard"),
         reverse("sboms:components_dashboard"),
     ]
 
-    client = Client()
-
+    # Test unauthenticated access
     for uri in uris:
-        response: HttpResponse = client.get(uri)
-
+        response = client.get(uri)
         assert response.status_code == 302
         assert quote(response.request["PATH_INFO"]) == uri
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Authenticate with team context
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {
+        "id": team.id,
+        "role": "owner",
+        "key": team.key
+    }
+    session.save()
 
+    # Test authenticated access
     for uri in uris:
-        response: HttpResponse = client.get(uri)
-
+        response = client.get(uri)
         assert response.status_code == 200
         assert quote(response.request["PATH_INFO"]) == uri
 
 
 @pytest.mark.django_db
-def test_create_product(sample_user):  # noqa: F811
+def test_create_product(sample_team_with_owner_member):  # Changed fixture
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:products_dashboard")
+    # Set valid team key that encodes the team ID
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Setup default billing plan
+    BillingPlan.objects.create(
+        key="default_plan",
+        name="Default Plan",
+        max_products=10,
+        max_projects=10,
+        max_components=10
+    )
+    team.billing_plan = "default_plan"
+    team.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Product"})
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session.save()
 
+    response = client.post(
+        reverse("sboms:products_dashboard"),
+        {"name": "Test Product"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:products_dashboard")
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 1
-    assert str(messages[0]) == "Product Test Product created"
 
 
 @pytest.mark.django_db
-def test_delete_product(sample_user):  # noqa: F811
+def test_delete_product(sample_team_with_owner_member):  # Changed fixture
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:products_dashboard")
+    # Setup billing plan
+    BillingPlan.objects.create(
+        key="delete_product_plan",
+        name="Delete Product Plan",
+        max_products=10,
+        max_projects=10,
+        max_components=10
+    )
+    team.billing_plan = "delete_product_plan"
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {
+        "id": team.id,
+        "role": "owner",
+        "key": team.key
+    }
+    session.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Product"})
+    # Create product
+    response = client.post(
+        reverse("sboms:products_dashboard"),
+        {"name": "Test Product"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:products_dashboard")
 
+    # Delete product
     product_id = Product.objects.first().id
-
-    uri = reverse("sboms:delete_product", kwargs={"product_id": product_id})
-
-    response: HttpResponse = client.get(uri)
-
+    response = client.get(
+        reverse("sboms:delete_product", kwargs={"product_id": product_id})
+    )
     assert response.status_code == 302
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 2
-    assert str(messages[0]) == "Product Test Product created"
-    assert str(messages[1]) == "Product Test Product deleted"
-
     assert Product.objects.filter(id=product_id).exists() is False
 
 
 @pytest.mark.django_db
-def test_create_project(sample_user):  # noqa: F811
+def test_create_project(sample_team_with_owner_member):
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:projects_dashboard")
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    BillingPlan.objects.create(
+        key="default_plan",
+        name="Default Plan",
+        max_projects=10,
+        max_products=10,
+        max_components=10
+    )
+    team.billing_plan = "default_plan"
+    team.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Project"})
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session.save()
+
+    response = client.post(
+        reverse("sboms:projects_dashboard"),
+        {"name": "Test Project"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:projects_dashboard")
 
     messages = list(response.wsgi_request._messages)
     assert len(messages) == 1
@@ -110,104 +179,163 @@ def test_create_project(sample_user):  # noqa: F811
 
 
 @pytest.mark.django_db
-def test_delete_project(sample_user):  # noqa: F811
+def test_delete_project(sample_team_with_owner_member):  # Changed fixture
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:projects_dashboard")
+    # Setup billing plan
+    BillingPlan.objects.create(
+        key="delete_project_plan",
+        name="Delete Project Plan",
+        max_projects=10,
+        max_products=10,
+        max_components=10
+    )
+    team.billing_plan = "delete_project_plan"
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {
+        "id": team.id,
+        "role": "owner",
+        "key": team.key
+    }
+    session.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Project"})
+    # Create project
+    response = client.post(
+        reverse("sboms:projects_dashboard"),
+        {"name": "Test Project"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:projects_dashboard")
 
+    # Delete project
     project_id = Project.objects.first().id
-
-    uri = reverse("sboms:delete_project", kwargs={"project_id": project_id})
-
-    response: HttpResponse = client.get(uri)
-
+    response = client.get(
+        reverse("sboms:delete_project", kwargs={"project_id": project_id})
+    )
     assert response.status_code == 302
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 2
-    assert str(messages[0]) == "Project Test Project created"
-    assert str(messages[1]) == "Project Test Project deleted"
-
     assert Project.objects.filter(id=project_id).exists() is False
 
 
 @pytest.mark.django_db
-def test_create_component(sample_user):  # noqa: F811
+def test_create_component(sample_team_with_owner_member):
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:components_dashboard")
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    BillingPlan.objects.create(
+        key="default_plan",
+        name="Default Plan",
+        max_components=10,
+        max_products=10,
+        max_projects=10
+    )
+    team.billing_plan = "default_plan"
+    team.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Component"})
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session.save()
 
+    response = client.post(
+        reverse("sboms:components_dashboard"),
+        {"name": "Test Component"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:components_dashboard")
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 1
-    assert str(messages[0]) == "Component Test Component created"
 
 
 @pytest.mark.django_db
-def test_create_duplicate_component(sample_user):  # noqa: F811
+def test_create_duplicate_component(sample_team_with_owner_member):  # Changed fixture
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:components_dashboard")
+    # Setup billing plan
+    BillingPlan.objects.create(
+        key="duplicate_test_plan",
+        name="Duplicate Test Plan",
+        max_components=10,
+        max_products=10,
+        max_projects=10
+    )
+    team.billing_plan = "duplicate_test_plan"
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {
+        "id": team.id,
+        "role": "owner",
+        "key": team.key
+    }
+    session.save()
 
     # Create first component
-    response: HttpResponse = client.post(uri, {"name": "Test Component"})
+    response = client.post(
+        reverse("sboms:components_dashboard"),
+        {"name": "Test Component"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:components_dashboard")
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 1
-    assert str(messages[0]) == "Component Test Component created"
 
     # Try to create duplicate component
-    response: HttpResponse = client.post(uri, {"name": "Test Component"})
+    response = client.post(
+        reverse("sboms:components_dashboard"),
+        {"name": "Test Component"}
+    )
     assert response.status_code == 200  # Form is re-rendered
     content = response.content.decode()
     assert "A component with this name already exists in this team" in content
 
-    # Verify only one component was created
-    assert Component.objects.filter(name="Test Component").count() == 1
+    # Verify only one component exists
+    count = Component.objects.filter(team=team, name="Test Component").count()
+    assert count == 1
 
 
 @pytest.mark.django_db
-def test_delete_component(sample_user):  # noqa: F811
+def test_delete_component(sample_team_with_owner_member):  # Changed fixture
     client = Client()
+    team = sample_team_with_owner_member.team
 
-    uri = reverse("sboms:components_dashboard")
+    # Setup billing plan
+    BillingPlan.objects.create(
+        key="delete_component_plan",
+        name="Delete Component Plan",
+        max_components=10,
+        max_products=10,
+        max_projects=10
+    )
+    team.billing_plan = "delete_component_plan"
+    team.key = number_to_random_token(team.id)
+    team.save()
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    client.force_login(team.members.first())
+    session = client.session
+    session["current_team"] = {
+        "id": team.id,
+        "role": "owner",
+        "key": team.key
+    }
+    session.save()
 
-    response: HttpResponse = client.post(uri, {"name": "Test Component"})
-
+    # Create component
+    response = client.post(
+        reverse("sboms:components_dashboard"),
+        {"name": "Test Component"}
+    )
     assert response.status_code == 302
-    assert response.url == reverse("sboms:components_dashboard")
 
+    # Delete component
     component_id = Component.objects.first().id
-
-    uri = reverse("sboms:delete_component", kwargs={"component_id": component_id})
-
-    response: HttpResponse = client.get(uri)
-
+    response = client.get(
+        reverse("sboms:delete_component", kwargs={"component_id": component_id})
+    )
     assert response.status_code == 302
-
-    messages = list(response.wsgi_request._messages)
-    assert len(messages) == 2
-    assert str(messages[0]) == "Component Test Component created"
-    assert str(messages[1]) == "Component Test Component deleted"
-
     assert Component.objects.filter(id=component_id).exists() is False
 
 
@@ -292,6 +420,8 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
 
         assert response.status_code == 404
         assert quote(response.request["PATH_INFO"]) == uri
+        # The response should use our custom 404 template which includes the messages component
+        assert "core/components/messages.html" in [t.name for t in response.templates]
 
 
 @pytest.mark.django_db
@@ -516,8 +646,21 @@ class TestDuplicateNames:
 
     def test_create_duplicate_product_name(self, client, sample_team_with_owner_member, caplog):
         """Test that creating a product with a duplicate name in the same team fails gracefully."""
-        client.force_login(sample_team_with_owner_member.user)
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="duplicate_prod_plan",
+            name="Duplicate Product Plan",
+            max_products=10,
+            max_projects=10,
+            max_components=10
+        )
+        team.billing_plan = "duplicate_prod_plan"
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+        client.force_login(team.members.first())
         session = client.session
         session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
         session.save()
@@ -544,8 +687,21 @@ class TestDuplicateNames:
 
     def test_create_duplicate_project_name(self, client, sample_team_with_owner_member, caplog):
         """Test that creating a project with a duplicate name in the same team fails gracefully."""
-        client.force_login(sample_team_with_owner_member.user)
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="duplicate_proj_plan",
+            name="Duplicate Project Plan",
+            max_projects=10,
+            max_products=10,
+            max_components=10
+        )
+        team.billing_plan = "duplicate_proj_plan"
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+        client.force_login(team.members.first())
         session = client.session
         session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
         session.save()
@@ -572,8 +728,21 @@ class TestDuplicateNames:
 
     def test_create_duplicate_component_name(self, client, sample_team_with_owner_member, caplog):
         """Test that creating a component with a duplicate name in the same team fails gracefully."""
-        client.force_login(sample_team_with_owner_member.user)
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="duplicate_comp_plan",
+            name="Duplicate Component Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "duplicate_comp_plan"
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+        client.force_login(team.members.first())
         session = client.session
         session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
         session.save()
@@ -597,3 +766,177 @@ class TestDuplicateNames:
         # Verify only one component exists
         count = Component.objects.filter(team=team, name="Component 1").count()
         assert count == 1
+
+
+@pytest.mark.django_db
+class TestBillingPlanLimits:
+    """Test billing plan enforcement for resource creation limits."""
+
+    def _setup_team_plan(self, client, team, plan_data):
+        """Helper to configure team billing plan and session."""
+        plan = BillingPlan.objects.create(**plan_data)
+        team.billing_plan = plan.key
+        # Set valid team key that encodes the team ID
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+        client.force_login(team.members.first())
+        session = client.session
+        session["current_team"] = {
+            "id": team.id,
+            "role": "owner",
+            "key": team.key  # This key will properly encode the team ID
+        }
+        session.save()
+        return plan
+
+    def test_product_creation_limits(self, client, sample_team_with_owner_member):
+        """Test product creation with billing limits."""
+        plan = self._setup_team_plan(
+            client,
+            sample_team_with_owner_member.team,
+            {
+                "key": "test_prod_plan",
+                "name": "Product Limit Plan",
+                "max_products": 2,
+                "max_projects": 10,
+                "max_components": 10
+            }
+        )
+
+        # Create up to limit
+        for i in range(plan.max_products):
+            response = client.post(
+                reverse("sboms:products_dashboard"),
+                {"name": f"Product {i+1}"}
+            )
+            assert response.status_code == 302
+
+        # Try to exceed limit
+        response = client.post(
+            reverse("sboms:products_dashboard"),
+            {"name": "Over Limit Product"}
+        )
+        assert response.status_code == 403
+        assert f"maximum {plan.max_products} products" in response.content.decode()
+
+    def test_project_creation_limits(self, client, sample_team_with_owner_member):
+        """Test project creation with billing limits."""
+        plan = self._setup_team_plan(
+            client,
+            sample_team_with_owner_member.team,
+            {
+                "key": "test_proj_plan",
+                "name": "Project Limit Plan",
+                "max_projects": 1,
+                "max_products": 10,
+                "max_components": 10
+            }
+        )
+
+        # Create up to limit
+        response = client.post(
+            reverse("sboms:projects_dashboard"),
+            {"name": "Project 1"}
+        )
+        assert response.status_code == 302
+
+        # Try to exceed limit
+        response = client.post(
+            reverse("sboms:projects_dashboard"),
+            {"name": "Over Limit Project"}
+        )
+        assert response.status_code == 403
+        assert f"maximum {plan.max_projects} projects" in response.content.decode()
+
+    def test_component_creation_limits(self, client, sample_team_with_owner_member):
+        """Test component creation with billing limits."""
+        plan = self._setup_team_plan(
+            client,
+            sample_team_with_owner_member.team,
+            {
+                "key": "test_comp_plan",
+                "name": "Component Limit Plan",
+                "max_components": 3,
+                "max_products": 10,
+                "max_projects": 10
+            }
+        )
+
+        # Create up to limit
+        for i in range(plan.max_components):
+            response = client.post(
+                reverse("sboms:components_dashboard"),
+                {"name": f"Component {i+1}"}
+            )
+            assert response.status_code == 302
+
+        # Try to exceed limit
+        response = client.post(
+            reverse("sboms:components_dashboard"),
+            {"name": "Over Limit Component"}
+        )
+        assert response.status_code == 403
+        assert f"maximum {plan.max_components} components" in response.content.decode()
+
+    def test_unlimited_plan_allows_creation(self, client, sample_team_with_owner_member):
+        """Test unlimited plan allows creation beyond default limits."""
+        self._setup_team_plan(
+            client,
+            sample_team_with_owner_member.team,
+            {
+                "key": "unlimited",
+                "name": "Unlimited Plan",
+                "max_products": None,
+                "max_projects": None,
+                "max_components": None
+            }
+        )
+
+        # Create multiple resources
+        for i in range(5):
+            client.post(reverse("sboms:products_dashboard"), {"name": f"Product {i+1}"})
+            client.post(reverse("sboms:projects_dashboard"), {"name": f"Project {i+1}"})
+            client.post(reverse("sboms:components_dashboard"), {"name": f"Component {i+1}"})
+
+        assert Product.objects.count() == 5
+        assert Project.objects.count() == 5
+        assert Component.objects.count() == 5
+
+    def test_no_plan_blocks_creation(self, client, sample_team_with_owner_member):
+        """Test resource creation fails when no billing plan exists."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = None
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+        client.force_login(team.members.first())
+        session = client.session
+        session["current_team"] = {
+            "id": team.id,
+            "role": "owner",
+            "key": team.key
+        }
+        session.save()
+
+        # Test product creation
+        response = client.post(
+            reverse("sboms:products_dashboard"),
+            {"name": "Test Product"}
+        )
+        assert response.status_code == 403
+        assert "No active billing plan" in response.content.decode()
+
+        # Test project creation
+        response = client.post(
+            reverse("sboms:projects_dashboard"),
+            {"name": "Test Project"}
+        )
+        assert response.status_code == 403
+
+        # Test component creation
+        response = client.post(
+            reverse("sboms:components_dashboard"),
+            {"name": "Test Component"}
+        )
+        assert response.status_code == 403

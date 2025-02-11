@@ -75,7 +75,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
-    assert messages[0].message == "Team New Test Team created"
+    assert messages[0].message == "Team New Test Team created successfully"
 
     team = Team.objects.filter(name="New Test Team").first()
     assert team is not None  # nosec

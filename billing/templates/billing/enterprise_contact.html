@@ -1,0 +1,29 @@
+{% extends "core/dashboard_base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <h1 class="mb-4">Enterprise Plan Information</h1>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Contact Our Sales Team</h5>
+                    <p class="card-text">
+                        For information about our Enterprise plan and custom pricing options, please email our sales team at:
+                    </p>
+                    <p class="card-text">
+                        <a href="mailto:billing@sbomify.com" class="h5">billing@sbomify.com</a>
+                    </p>
+                    <p class="card-text text-muted mt-3">
+                        Our team will work with you to understand your requirements and provide a tailored solution for your organization.
+                    </p>
+                    <a href="{% url 'core:dashboard' %}" class="btn btn-primary mt-3">
+                        Return to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

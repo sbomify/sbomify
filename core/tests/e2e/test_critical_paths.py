@@ -4,6 +4,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from billing.models import BillingPlan
+
 
 @pytest.mark.django_db
 class TestCriticalPaths:
@@ -11,6 +13,17 @@ class TestCriticalPaths:
         """Test full workflow: Create component -> View details -> Update metadata"""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="e2e_plan",
+            name="E2E Test Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "e2e_plan"
+        team.save()
 
         # Set current team in session
         session = client.session
@@ -74,6 +87,18 @@ class TestCriticalPaths:
 
         # Ensure component belongs to the team
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="e2e_plan",
+            name="E2E Test Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "e2e_plan"
+        team.save()
+
         sample_component.team = team
         sample_component.save()
 
@@ -115,6 +140,17 @@ class TestCriticalPaths:
         """Test creating and copying an access token."""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="e2e_plan",
+            name="E2E Test Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "e2e_plan"
+        team.save()
 
         # Set current team in session
         session = client.session
@@ -158,6 +194,18 @@ class TestCriticalPaths:
         """Test that all pages have proper titles."""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
+
+        # Setup billing plan
+        BillingPlan.objects.create(
+            key="e2e_plan",
+            name="E2E Test Plan",
+            max_components=10,
+            max_products=10,
+            max_projects=10
+        )
+        team.billing_plan = "e2e_plan"
+        team.save()
+
         component = sample_component
         component.team = team
         component.save()

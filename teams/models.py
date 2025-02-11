@@ -36,7 +36,8 @@ class Team(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
-
+    billing_plan = models.CharField(max_length=30, null=True)
+    billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:

@@ -5,7 +5,7 @@ from typing import Any, Generator
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 
-from core.fixtures import guest_user, sample_user  # noqa: F401
+from core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from core.utils import number_to_random_token
 
 from .models import Member, Team

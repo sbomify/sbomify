@@ -6,7 +6,7 @@
           Component Metadata
           <div class="d-flex align-items-center">
             <button v-if="showEditButton" class="btn btn-link p-0 me-2" style="font-size: inherit;" @click.stop="$emit('edit')">
-              <i class="fas fa-pen"></i>
+              <i class="fa-solid fa-pen"></i>
             </button>
             <svg v-if="!isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
             <svg v-if="isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -14,7 +14,7 @@
         </h4>
         <div v-if="isExpanded">
           <div class="hint-text mb-4">
-            <i class="far fa-lightbulb text-muted"></i>
+            <i class="fa-regular fa-lightbulb text-muted"></i>
             <span>Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/" target="_blank" rel="noopener noreferrer" class="hint-link">Augmentation</a> feature to include this metadata in your SBOM</span>
           </div>
           <div class="row gy-4">
@@ -46,7 +46,7 @@
                     <div class="contacts">
                       <span v-for="(contact, index) in metadata.supplier.contacts" class="contact-item">
                         {{ contact.name }} ({{ contact.email }})
-                        <i v-if="showEditButton" class="far fa-times-circle" @click="removeSupplierContact(index)"></i>
+                        <i v-if="showEditButton" class="fa-regular fa-circle-xmark" @click="removeSupplierContact(index)"></i>
                       </span>
                     </div>
                   </template>
@@ -88,7 +88,7 @@
                   <div class="contacts">
                     <span v-for="(author, index) in metadata.authors" class="contact-item">
                       {{ author.name }} ({{ author.email }})
-                      <i v-if="showEditButton" class="far fa-times-circle" @click="removeAuthor(index)"></i>
+                      <i v-if="showEditButton" class="fa-regular fa-circle-xmark" @click="removeAuthor(index)"></i>
                     </span>
                   </div>
                 </template>

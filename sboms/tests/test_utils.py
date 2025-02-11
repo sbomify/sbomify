@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from django.http import HttpRequest
 
-from core.fixtures import sample_user  # noqa: F401
+from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
 from sboms.utils import ProjectSBOMBuilder, verify_item_access
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401

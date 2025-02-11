@@ -1,0 +1,10 @@
+{% extends "core/dashboard_base.html" %}
+{% load django_vite %}
+
+{% block content %}
+<div class="vc-plan-selection"></div>
+{% endblock %}
+
+{% block scripts %}
+{% vite_asset 'billing/js/main.ts' %}
+{% endblock %}

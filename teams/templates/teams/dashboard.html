@@ -2,10 +2,11 @@
 {% load django_vite %}
 {% load widget_tweaks %}
 
-{% load django_vite %}
-
 {% block content %}
-<div class="row align-items-center">
+{% include "core/base_messages.html" %}
+
+<div class="v-application-wrapper">
+  <div class="row align-items-center">
   <div class="col-12">
     <div class="card dashboard-card">
       <div class="card-header">
@@ -83,6 +84,7 @@
         {% endif %}
       </div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -125,6 +127,11 @@
       {% if add_team_form.errors %}
         var addTeamModal = new bootstrap.Modal(document.getElementById('addTeamModal'));
         addTeamModal.show();
+        {% for field, errors in add_team_form.errors.items %}
+          {% for error in errors %}
+            window.showError('{{ error }}');
+          {% endfor %}
+        {% endfor %}
       {% endif %}
 
       // Handle modal shown event

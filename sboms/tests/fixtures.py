@@ -7,7 +7,7 @@ from django.db import transaction
 
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
-from core.fixtures import sample_user  # noqa: F401
+from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
 
