@@ -46,7 +46,14 @@ cp .env.example .env
 #### Using Docker Compose (recommended)
 
 ```bash
-docker compose up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+Alternatively you can run the following script to start the development environment:
+
+```bash
+./bin/start_development_environment.sh
 ```
 
 This will start all required services:
@@ -54,6 +61,23 @@ This will start all required services:
 * PostgreSQL database for data storage
 * MinIO S3-compatible storage (accessible at `http://localhost:9001`)
 * Django development server
+
+The fastest way to log in to the development server is to create a superuser account:
+
+```bash
+docker compose \
+    -f docker-compose.yml \
+    -f docker-compose.dev.yml exec \
+    -e DJANGO_SUPERUSER_USERNAME=sbomifyadmin \
+    -e DJANGO_SUPERUSER_PASSWORD=sbomifyadmin \
+    -e DJANGO_SUPERUSER_EMAIL=admin@sbomify.com \
+    sbomify-backend \
+    poetry run python manage.py createsuperuser \
+        --noinput
+```
+
+Go to `http://localhost:8000/admin` and log in with the superuser account you just created.
+After that you can go to `http://localhost:8000/` to access the web interface.
 
 #### Running Locally (without Docker for Django)
 
