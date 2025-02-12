@@ -67,8 +67,8 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
             request.session["user_teams"] = get_user_teams(request.user)
             messages.add_message(
                 request,
-                messages.INFO,
-                f"Team {team.name} created",
+                messages.SUCCESS,
+                f"Team {team.name} created successfully",
             )
 
             return redirect("teams:teams_dashboard")

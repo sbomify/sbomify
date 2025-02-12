@@ -28,7 +28,7 @@ item_type_map = {"team": Team, "component": Component, "project": Project, "prod
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
-    },
+    }
 )
 def rename_item(request, item_type: str, item_id: str, payload: RenameItemSchema):
     if item_type not in item_type_map:

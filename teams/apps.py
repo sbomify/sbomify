@@ -6,4 +6,5 @@ class TeamsConfig(AppConfig):
     name = "teams"
 
     def ready(self):
+        """Import notification providers when app is ready"""
         import teams.signals.handlers  # noqa: F401

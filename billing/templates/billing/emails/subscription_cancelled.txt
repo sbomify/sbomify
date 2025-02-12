@@ -1,0 +1,11 @@
+Dear {{ user_name }},
+
+Your subscription for team '{{ team_name }}' has been cancelled. Your service will be reverted to the community plan with limited features.
+
+If you'd like to reactivate your subscription, you can do so here:
+{{ action_url }}
+
+If you have any questions, please contact our support team.
+
+Best regards,
+The sbomify Team

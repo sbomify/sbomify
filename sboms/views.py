@@ -19,6 +19,7 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 
+from billing.billing_processing import check_billing_limits
 from core.errors import error_response
 from core.object_store import S3Client
 from core.utils import get_current_team_id, token_to_number
@@ -31,6 +32,7 @@ from .utils import get_project_sbom_package, verify_item_access
 
 
 @login_required
+@check_billing_limits("product")
 def products_dashboard(request: HttpRequest) -> HttpResponse:
     team_id = get_current_team_id(request)
     if team_id is None:
@@ -178,6 +180,7 @@ def delete_product(request: HttpRequest, product_id: str) -> HttpResponse:
 
 
 @login_required
+@check_billing_limits("project")
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
     team_id = get_current_team_id(request)
     if team_id is None:
@@ -331,6 +334,7 @@ def delete_project(request: HttpRequest, project_id: str) -> HttpResponse:
 
 
 @login_required
+@check_billing_limits("component")
 def components_dashboard(request: HttpRequest) -> HttpResponse:
     team_id = get_current_team_id(request)
     if team_id is None:

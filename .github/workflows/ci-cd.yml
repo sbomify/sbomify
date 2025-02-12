@@ -20,11 +20,38 @@ jobs:
         check: ['tests', 'pre-commit', 'lint']
         python-version: ["3.10.12"]
         poetry-version: ["1.8.1"]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: sbomify
+          POSTGRES_PASSWORD: sbomify
+          POSTGRES_DB: sbomify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
+      DJANGO_SETTINGS_MODULE: sbomify.settings
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for pre-commit checks
+          fetch-depth: 0
+
+      - name: Set environment variables
+        run: |
+          echo "DEBUG=True" >> $GITHUB_ENV
+          echo "STRIPE_SECRET_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_WEBHOOK_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "STRIPE_ENDPOINT_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
+          echo "DJANGO_TEST=true" >> $GITHUB_ENV
+          cp .env.example .env
 
       - name: Set up Python ${{ matrix.python-version }}
         if: matrix.check != 'lint'
@@ -66,9 +93,49 @@ jobs:
         if: matrix.check == 'pre-commit'
         run: poetry run pre-commit run --all-files
 
-      - name: Run Backend Tests
+      - name: Install PostgreSQL client
+        if: matrix.check == 'tests'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Setup test assets
         if: matrix.check == 'tests'
         run: |
+          # Create static assets structure in project root
+          mkdir -p static/assets
+          # Create empty asset files
+          for file in main.js main.css teams.js teams.css billing.js billing.css sboms.js sboms.css django-messages.js alerts-global.js; do
+            echo "// Test asset" > static/assets/$file
+          done
+
+      - name: Run Backend Tests
+        if: matrix.check == 'tests'
+        env:
+          TEST_DB_NAME: sbomify_test
+          TEST_DB_USER: sbomify
+          TEST_DB_PASSWORD: sbomify
+          DEBUG: True
+          STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
+          STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
+          STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
+          STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
+          DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
+          DJANGO_SETTINGS_MODULE: sbomify.test_settings
+          DJANGO_TEST: 'true'
+        run: |
+          # Copy environment variables
+          cp .env.example .env
+
+          # Create test database with correct privileges
+          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE sbomify_test;"
+          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "GRANT ALL PRIVILEGES ON DATABASE sbomify_test TO sbomify;"
+
+          # Add database setup commands
+          poetry run python manage.py migrate
+
+          # Collect static files
+          poetry run python manage.py collectstatic --noinput
+
+          # Rest of the test commands...
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
 

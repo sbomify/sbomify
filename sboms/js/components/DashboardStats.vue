@@ -1,19 +1,6 @@
 <template>
   <div class="container-fluid p-0">
-    <div v-if="alertMessage.message !== null" role="alert"
-      class="alert alert-outline-coloured alert-dismissible"
-      :class="'alert-' + alertMessage.alertType ">
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-      <div class="alert-icon">
-        <i class="far fa-fw fa-bell"></i>
-      </div>
-      <div class="alert-message">
-        <strong>{{ alertMessage.title }}</strong> {{ alertMessage.message}}
-      </div>
-    </div>
-
     <div v-if="props.itemType !== 'component'" class="row">
-
       <div v-if="stats.total_products !== null" :class="sizeClasses">
         <div class="card">
           <div class="card-header">
@@ -170,8 +157,9 @@
     Legend
   } from 'chart.js';
   import { Bar } from 'vue-chartjs';
+  import { showError } from '../../../core/js/alerts';
 
-  import type { DashboardStats, AlertMessage } from '../type_defs.d.ts';
+  import type { DashboardStats } from '../type_defs.d.ts';
 
   ChartJS.register(
     CategoryScale,
@@ -255,19 +243,7 @@
     };
   });
 
-  const alertMessage = ref<AlertMessage>({
-    alertType: null,
-    title: null,
-    message: null,
-  });
-
   const getStats = async () => {
-    alertMessage.value = {
-      alertType: null,
-      title: null,
-      message: null,
-    };
-
     let apiUrl = '/api/v1/sboms/stats';
     if (props.teamKey !== undefined) {
       apiUrl += `?team_key=${props.teamKey}`;
@@ -285,33 +261,23 @@
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);
       }
-      // update metadata values with response data
       stats.value = response.data;
     } catch (error) {
-      console.log(error)
+      console.log(error);
       if (isAxiosError(error)) {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: `${error.response?.status} - ${error.response?.statusText}`,
-          message: error.response?.data?.detail[0].msg
-        }
-
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
       } else {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: 'Error',
-          message: 'Failed to save metadata'
-        }
+        showError('Failed to load stats');
       }
     }
-  }
+  };
 
   const openSBOMPage = (sbomId: string) => {
     location.href = '/sboms/sbom/' + sbomId;
-  }
+  };
 
-  onMounted(async () => {
-    await getStats();
+  onMounted(() => {
+    getStats();
   });
 </script>
 

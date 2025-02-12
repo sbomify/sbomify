@@ -72,7 +72,7 @@
   </div>
 
   <button v-else class="add-contact-button" @click="startAddContact">
-    <i class="far fa-plus-circle"></i>
+    <i class="fa-solid fa-circle-plus"></i>
     Add {{ props.contactType }}{{ modelValue.length ? ' another' : '' }}
   </button>
 </template>

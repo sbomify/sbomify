@@ -20,6 +20,7 @@ RUN bun install --frozen-lockfile
 COPY core/js/ core/js/
 COPY sboms/js/ sboms/js/
 COPY teams/js/ teams/js/
+COPY billing/js/ billing/js/
 
 # Run the build
 RUN bun run build

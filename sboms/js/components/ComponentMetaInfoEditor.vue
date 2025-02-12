@@ -5,7 +5,7 @@
         Component Metadata
         <div class="d-flex gap-2 align-items-center">
           <button class="btn btn-outline-secondary btn-sm" @click.stop="$emit('closeEditor')">
-            <i class="fas fa-times"></i>
+            <i class="fa-solid fa-xmark"></i>
           </button>
           <svg v-if="!isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           <svg v-if="isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -14,28 +14,15 @@
 
       <div v-if="isExpanded">
         <div class="container-fluid p-0">
-          <div v-if="alertMessage.message !== null" role="alert"
-            class="alert alert-outline-coloured alert-dismissible"
-            :class="'alert-' + alertMessage.alertType">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <div class="alert-icon">
-              <i class="far fa-fw fa-bell"></i>
-            </div>
-            <div class="alert-message">
-              <strong>{{ alertMessage.title }}</strong> {{ alertMessage.message }}
-            </div>
-          </div>
-
           <div class="row">
             <div class="col-sm-12 col-lg-6">
               <div class="card">
                 <div class="card-header">
                   <h4 class="card-title">
                     Supplier Information
-                    <div class="tooltip">
-                      <i class="far fa-question-circle help-icon"></i>
+                    <i class="fa-regular fa-circle-question help-icon">
                       <span class="tooltiptext">Organization that supplied or manufactured the component</span>
-                    </div>
+                    </i>
                   </h4>
                 </div>
                 <div class="card-body">
@@ -53,10 +40,9 @@
                 <div class="card-header">
                   <h4 class="card-title">
                     Lifecycle Phase
-                    <div class="tooltip">
-                      <i class="far fa-question-circle help-icon"></i>
+                    <i class="fa-regular fa-circle-question help-icon">
                       <span class="tooltiptext">Current phase in the component's lifecycle</span>
-                    </div>
+                    </i>
                   </h4>
                 </div>
                 <div class="card-body">
@@ -86,10 +72,9 @@
                 <div class="card-header">
                   <h4 class="card-title">
                     Licenses
-                    <div class="tooltip">
-                      <i class="far fa-question-circle help-icon"></i>
+                    <i class="fa-regular fa-circle-question help-icon">
                       <span class="tooltiptext">Software licenses that apply to this component</span>
-                    </div>
+                    </i>
                   </h4>
                 </div>
                 <div class="card-body">
@@ -105,10 +90,9 @@
                 <div class="card-header">
                   <h4 class="card-title">
                     Authors
-                    <div class="tooltip">
-                      <i class="far fa-question-circle help-icon"></i>
+                    <i class="fa-regular fa-circle-question help-icon">
                       <span class="tooltiptext">People who contributed to this component</span>
-                    </div>
+                    </i>
                   </h4>
                 </div>
                 <div class="card-body">
@@ -134,7 +118,7 @@
                 @click="updateMetaData"
               >
                 <span v-if="isSaving">
-                  <i class="fas fa-spinner fa-spin me-2"></i>Saving...
+                  <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving...
                 </span>
                 <span v-else>Save Changes</span>
               </button>
@@ -154,6 +138,7 @@
   import SupplierEditor from './SupplierEditor.vue';
   import LicensesEditor from './LicensesEditor.vue';
   import ContactsEditor from './ContactsEditor.vue';
+  import { showSuccess, showError } from '../../../core/js/alerts';
 
   interface Props {
     componentId: string;
@@ -369,11 +354,7 @@
       }
 
       hasUnsavedChanges.value = false;
-      alertMessage.value = {
-        alertType: 'success',
-        title: 'Success',
-        message: 'Changes saved successfully'
-      };
+      await showSuccess('Changes saved successfully');
 
       // Switch to display view after delay
       setTimeout(() => {
@@ -383,17 +364,9 @@
     } catch (error) {
       console.error(error);
       if (isAxiosError(error)) {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: `${error.response?.status} - ${error.response?.statusText}`,
-          message: error.response?.data?.detail[0].msg
-        }
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
       } else {
-        alertMessage.value = {
-          alertType: 'danger',
-          title: 'Error',
-          message: 'Failed to save metadata'
-        }
+        showError('Failed to save metadata');
       }
     } finally {
       isSaving.value = false;
@@ -427,6 +400,36 @@
   color: #6c757d;
   cursor: help;
   font-size: 0.875rem;
+  position: relative;
+  margin-left: 0.5rem;
+}
+
+.help-icon .tooltiptext {
+  visibility: hidden;
+  width: 200px;
+  background-color: #2c3e50;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-size: 0.875rem;
+  font-weight: normal;
+  text-transform: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+.help-icon:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
 }
 
 .form-control, .form-select {
@@ -481,62 +484,6 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.btn-primary {
-  background: #0d6efd;
-  border: none;
-}
-
-.btn-primary:hover {
-  background: #0b5ed7;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  border: none;
-}
-
-.btn-secondary:hover {
-  background: #5c636a;
-  transform: translateY(-1px);
-}
-
-.tooltip {
-  position: relative;
-  display: inline-block;
-}
-
-.tooltip .tooltiptext {
-  visibility: hidden;
-  width: 200px;
-  background-color: #2c3e50;
-  color: #fff;
-  text-align: center;
-  border-radius: 6px;
-  padding: 8px;
-  position: absolute;
-  z-index: 1;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  transition: opacity 0.2s;
-  font-size: 0.875rem;
-  font-weight: normal;
-}
-
-.tooltip:hover .tooltiptext {
-  visibility: visible;
-  opacity: 1;
 }
 </style>
 

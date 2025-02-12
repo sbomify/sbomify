@@ -75,6 +75,8 @@ INSTALLED_APPS = [
     "teams",
     "sboms",
     "access_tokens",
+    "billing",
+    "notifications",
     "health_check",
     "health_check.db",
 ]
@@ -240,6 +242,11 @@ LOGGING = {
             "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        "core": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         # "teams": {
         #     "handlers": ["console"],
         #     "level": os.getenv("LOG_LEVEL", "INFO"),
@@ -258,6 +265,9 @@ SOCIAL_AUTH_JSONFIELD_ENABLED = True
 SOCIAL_AUTH_URL_NAMESPACE = "social"
 SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
 
+# Ensure we get the correct response type from Auth0
+SOCIAL_AUTH_AUTH0_RESPONSE_TYPE = "code"
+
 # JWT validation settings for Auth0
 SOCIAL_AUTH_AUTH0_JWT_ENABLED = True
 SOCIAL_AUTH_AUTH0_JWT_ALGORITHM = "RS256"
@@ -267,11 +277,13 @@ SOCIAL_AUTH_AUTH0_JWT_LEEWAY = 60  # 1 minute leeway for clock skew
 
 # Custom Auth0 Pipeline
 SOCIAL_AUTH_PIPELINE = (
+    # "core.pipeline.auth0.debug_pipeline",  # Debug pipeline at the start
     "social_core.pipeline.social_auth.social_details",
+    "core.pipeline.auth0.get_auth0_user_id",  # Extract user ID before social_uid
     "social_core.pipeline.social_auth.social_uid",
     "social_core.pipeline.social_auth.auth_allowed",
     "social_core.pipeline.social_auth.social_user",
-    "core.pipeline.auth0.require_email",  # Moved after social_user for proper user handling
+    "core.pipeline.auth0.require_email",  # Email verification
     "social_core.pipeline.user.get_username",
     "social_core.pipeline.user.create_user",
     "social_core.pipeline.social_auth.associate_user",
@@ -371,3 +383,18 @@ if DEBUG:
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+
+STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+# Enable specific notification providers
+NOTIFICATION_PROVIDERS = [
+    "billing.notifications.get_notifications",
+    # "core.notifications.get_notifications",  # For future system-wide notifications
+]
+
+# Optionally override refresh interval
+NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
