@@ -104,6 +104,8 @@ services:
 
   # Base template for backend services
   x-sbomify-backend-common: &sbomify-backend-common
+    build:
+      context: .
     restart: always
     env_file:
       - .env
@@ -174,6 +176,8 @@ services:
 
   # Base template for migrations services
   x-sbomify-migrations-common: &sbomify-migrations-common
+    build:
+      context: .
     env_file:
       - .env
     environment:
