@@ -127,7 +127,6 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      <<: *sbomify-backend-common
       DATABASE_URL: postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
