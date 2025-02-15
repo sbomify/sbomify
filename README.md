@@ -43,11 +43,14 @@ cp .env.example .env
 
 * You can run the application in two ways:
 
-#### Using Docker Compose (recommended)
+#### Running in Docker Compose (recommended)
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml build
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Development mode
+docker compose --profile dev up
+
+# Production mode
+docker compose --profile prod up -d
 ```
 
 Alternatively you can run the following script to start the development environment:
@@ -271,10 +274,10 @@ APP_BASE_URL=https://[your-domain]
 
 ```bash
 # Build the images
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+docker compose --profile prod build
 
 # Start the stack
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose --profile prod up -d
 ```
 
 1. Create a superuser account (first time only):

@@ -1,7 +1,16 @@
 services:
-  sbomify-db:
-    image: postgres:15-alpine
+  x-sbomify-db-common: &sbomify-db-common
+    image: postgres:15
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sbomify}"]
+      interval: 10s
+      timeout: 2s
+      retries: 10
+
+  sbomify-db-dev:
+    <<: *sbomify-db-common
+    image: postgres:15-alpine  # Override with Alpine for dev
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sbomify}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sbomify}
@@ -10,15 +19,43 @@ services:
       - "5432:5432"
     volumes:
       - sbomify_postgres_data:/var/lib/postgresql/data
+    profiles: ["dev"]
+
+  sbomify-db:
+    <<: *sbomify-db-common
+    environment:
+      - POSTGRES_USER=sbomify
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=sbomify
+    ports: []  # Remove exposed ports in production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles: ["prod"]
+
+  # Common Minio configuration
+  x-sbomify-minio-common: &sbomify-minio-common
+    image: minio/minio
+    restart: always
+    command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sbomify}"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 10s
-      timeout: 2s
-      retries: 10
+      timeout: 5s
+      retries: 5
 
   sbomify-minio:
-    image: minio/minio:latest
-    restart: always
+    <<: *sbomify-minio-common
+    environment:
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY}
+    ports: []  # Remove exposed ports in production
+    volumes:
+      - minio_data:/data
+    profiles: ["prod"]
+
+  sbomify-minio-dev:
+    <<: *sbomify-minio-common
+    image: minio/minio:latest  # Override with latest tag for dev
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -27,17 +64,33 @@ services:
       - "9001:9001"  # Console
     volumes:
       - sbomify_minio_data:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    profiles: ["dev"]
+
+  x-sbomify-createbuckets-common: &sbomify-createbuckets-common
+    image: minio/mc
 
   sbomify-createbuckets:
-    image: minio/mc
+    <<: *sbomify-createbuckets-common
     depends_on:
-      sbomify-minio:
+      - sbomify-minio
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc config host add minio http://sbomify-minio:9000 ${AWS_ACCESS_KEY_ID} ${AWS_SECRET_ACCESS_KEY};
+      mc mb --ignore-existing minio/sbomify-media;
+      mc mb --ignore-existing minio/sbomify-sboms;
+      mc anonymous set download minio/sbomify-media;
+      exit 0;
+      "
+    profiles: ["prod"]
+
+  sbomify-createbuckets-dev:
+    <<: *sbomify-createbuckets-common
+    depends_on:
+      sbomify-minio-dev:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
@@ -47,69 +100,144 @@ services:
       /usr/bin/mc anonymous set public myminio/sbomify-media;
       exit 0;
       "
+    profiles: ["dev"]
 
-  sbomify-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # Base template for backend services
+  x-sbomify-backend-common: &sbomify-backend-common
     restart: always
     env_file:
       - .env
-    environment:
-      AM_I_IN_DOCKER_CONTAINER: 1
-      # Docker-specific Minio configuration
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
-      AWS_REGION: auto
-      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
-      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
-      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
-      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
-      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
-      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
-      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
-      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
-    volumes:
-      - .:/code
     ports:
       - "8000:8000"
-    depends_on:
-      sbomify-db:
-        condition: service_healthy
-      sbomify-migrations:
-        condition: service_completed_successfully
-      sbomify-createbuckets:
-        condition: service_completed_successfully
+    environment:
+      AM_I_IN_DOCKER_CONTAINER: 1
+      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
+      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
+      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
+      DATABASE_USER: sbomify
+      DATABASE_PASSWORD: sbomify
+      DATABASE_NAME: sbomify
+      DATABASE_PORT: 5432
+      DATABASE_HOST: localhost
+      DOCKER_DATABASE_HOST: sbomify-db
 
-  sbomify-migrations:
+  sbomify-backend:
+    <<: *sbomify-backend-common
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      <<: *sbomify-backend-common
+      DATABASE_URL: postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      SECRET_KEY: ${SECRET_KEY}
+      SOCIAL_AUTH_AUTH0_DOMAIN: ${SOCIAL_AUTH_AUTH0_DOMAIN}
+      SOCIAL_AUTH_AUTH0_KEY: ${SOCIAL_AUTH_AUTH0_KEY}
+      SOCIAL_AUTH_AUTH0_SECRET: ${SOCIAL_AUTH_AUTH0_SECRET}
+      APP_BASE_URL: ${APP_BASE_URL}
+    volumes: []  # Remove development volume mounts
+    depends_on:
+      - sbomify-db
+      - sbomify-minio
+      - sbomify-createbuckets
+    command: poetry run gunicorn --bind :8000 --workers 2 sbomify.wsgi
+    profiles: ["prod"]
+
+  sbomify-backend-dev:
+    <<: *sbomify-backend-common
+    build:
+      dockerfile: docker/Dockerfile-backend-dev
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: auto
+      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
+      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
+      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
+      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
+      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
+      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
+    volumes:
+      - .:/code
+    depends_on:
+      sbomify-db-dev:
+        condition: service_healthy
+      sbomify-migrations-dev:
+        condition: service_completed_successfully
+      sbomify-createbuckets-dev:
+        condition: service_completed_successfully
+    profiles: ["dev"]
+
+  # Base template for migrations services
+  x-sbomify-migrations-common: &sbomify-migrations-common
     env_file:
       - .env
     environment:
       AM_I_IN_DOCKER_CONTAINER: 1
-      # Docker-specific Minio configuration
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
-      AWS_REGION: auto
-      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
-      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
       AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
-      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
-      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
-      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
       AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
-      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
+    command: poetry run python manage.py migrate
     volumes:
       - .:/code
-    command: poetry run python manage.py migrate
+
+  sbomify-migrations:
+    <<: *sbomify-migrations-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *sbomify-migrations-common
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     depends_on:
       sbomify-db:
         condition: service_healthy
+    profiles: ["prod"]
+
+  sbomify-migrations-dev:
+    <<: *sbomify-migrations-common
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-backend-dev
+    environment:
+      <<: *sbomify-migrations-common
+      DATABASE_USER: sbomify
+      DATABASE_PASSWORD: sbomify
+      DATABASE_NAME: sbomify
+      DATABASE_PORT: 5432
+      DATABASE_HOST: localhost
+      DOCKER_DATABASE_HOST: sbomify-db
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: auto
+      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
+      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
+      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
+      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
+      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
+      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
+    depends_on:
+      sbomify-db-dev:
+        condition: service_healthy
+    profiles: ["dev"]
+
+  sbomify-frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-frontend-dev
+    ports:
+      - "5170:5170"
+    volumes:
+      - .:/code
+      - /code/node_modules
+    environment:
+      NODE_ENV: development
+    profiles: ["dev"]
 
 volumes:
   sbomify_postgres_data:
   sbomify_minio_data:
+  postgres_data:
+  minio_data:
