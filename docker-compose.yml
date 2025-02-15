@@ -127,6 +127,10 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      AM_I_IN_DOCKER_CONTAINER: 1
+      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
+      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
+      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
       DATABASE_URL: postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
@@ -187,6 +191,10 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      AM_I_IN_DOCKER_CONTAINER: 1
+      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
+      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
+      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     depends_on:
