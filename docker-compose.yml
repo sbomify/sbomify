@@ -187,7 +187,6 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      <<: *sbomify-migrations-common
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     depends_on:
@@ -201,7 +200,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile-backend-dev
     environment:
-      <<: *sbomify-migrations-common
       DATABASE_USER: sbomify
       DATABASE_PASSWORD: sbomify
       DATABASE_NAME: sbomify
