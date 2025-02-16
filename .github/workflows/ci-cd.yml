@@ -176,10 +176,10 @@ jobs:
         run: cp .env.example .env
 
       - name: Test Development Docker Build
-        run: docker compose build
+        run: docker compose --profile dev build
 
       - name: Test Production Docker Build
-        run: docker compose -f docker-compose.prod.yml build
+        run: docker compose --profile prod build
 
   generate-sbom:
     name: Generate SBOM
