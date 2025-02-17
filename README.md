@@ -67,7 +67,8 @@ The fastest way to log in to the development server is to create a superuser acc
 ```bash
 docker compose \
     -f docker-compose.yml \
-    -f docker-compose.dev.yml exec \
+    -f docker-compose.dev.yml \
+    exec \
     -e DJANGO_SUPERUSER_USERNAME=sbomifyadmin \
     -e DJANGO_SUPERUSER_PASSWORD=sbomifyadmin \
     -e DJANGO_SUPERUSER_EMAIL=admin@sbomify.com \
