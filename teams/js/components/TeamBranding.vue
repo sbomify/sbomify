@@ -65,7 +65,7 @@
             <label for="icon" class="form-label">Icon</label>
           </div>
           <div class="col-md-2 col-3">
-            <FileDragAndDrop accept="image/*" v-model="brandingInfo.icon" @update:modelValue="handleFileUpload('icon', $event)" />
+            <FileDragAndDrop accept="image/*" v-model="brandingInfo.icon" @update:modelValue="(file: File | null) => handleFileUpload('icon', file)" />
           </div>
         </div>
 
@@ -74,7 +74,7 @@
             <label for="logo" class="form-label">Logo</label>
           </div>
           <div class="col-md-2 col-3">
-            <FileDragAndDrop accept="image/*" v-model="brandingInfo.logo" @update:modelValue="handleFileUpload('logo', $event)" />
+            <FileDragAndDrop accept="image/*" v-model="brandingInfo.logo" @update:modelValue="(file: File | null) => handleFileUpload('logo', file)" />
           </div>
         </div>
 
