@@ -67,49 +67,70 @@ def setup_stripe_billing(apps, schema_editor):
         BillingPlan = apps.get_model('billing', 'BillingPlan')
         stripe.api_key = settings.STRIPE_SECRET_KEY
 
-        for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
-            # Create the product
-            product = stripe.Product.create(
-                name=plan.key,
-                description=plan.description,
-            )
+        # Get existing Stripe products - only active ones
+        existing_products = {p.name.lower(): p for p in stripe.Product.list(active=True, limit=100).data}  # Added active filter
+
+        for plan in BillingPlan.objects.filter(~Q(key__exact='community'),
+                                             max_products__isnull=False,
+                                             max_projects__isnull=False):
+            # Use title case for Stripe product name
+            product_name = plan.key.title()
+
+            # Check if product exists and is active
+            if plan.key in existing_products:
+                product = existing_products[plan.key]
+                print(f"Using existing active product {product_name} ({product.id})")
+            else:
+                # Create new product with title case name
+                product = stripe.Product.create(
+                    name=product_name,
+                    description=plan.description,
+                )
+                print(f"Created new product {product_name} ({product.id})")
+                existing_products[plan.key] = product  # Add to cache
 
             # Store the product ID
             plan.stripe_product_id = product.id
 
-            # Create price plans if defined
+            # Handle price creation
             if plan.key in PRICE_PLANS:
-                # Create monthly price
-                monthly_price = stripe.Price.create(
-                    product=product.id,
-                    unit_amount=PRICE_PLANS[plan.key]['monthly'] * 100,  # Amount in cents
-                    currency='usd',
-                    recurring={
-                        'interval': 'month',
-                        'interval_count': 1
-                    },
-                    metadata={
-                        'billing_period': 'monthly'
-                    }
-                )
+                # Get existing prices for this product
+                existing_prices = stripe.Price.list(product=product.id).data
+
+                # Helper to find matching price
+                def find_price(amount, interval):
+                    return next((p for p in existing_prices
+                               if p.recurring.interval == interval
+                               and p.unit_amount == amount), None)
+
+                # Monthly price
+                monthly_amount = PRICE_PLANS[plan.key]['monthly'] * 100
+                monthly_price = find_price(monthly_amount, 'month')
+                if not monthly_price:
+                    monthly_price = stripe.Price.create(
+                        product=product.id,
+                        unit_amount=monthly_amount,
+                        currency='usd',
+                        recurring={'interval': 'month', 'interval_count': 1},
+                        metadata={'billing_period': 'monthly'}
+                    )
+                    print(f"Created new monthly price for {product_name}")
                 plan.stripe_price_monthly_id = monthly_price.id
 
-                # Create annual price with built-in discount
-                annual_price = stripe.Price.create(
-                    product=product.id,
-                    unit_amount=PRICE_PLANS[plan.key]['annual'] * 100,  # Amount in cents
-                    currency='usd',
-                    recurring={
-                        'interval': 'year',
-                        'interval_count': 1
-                    },
-                    metadata={
-                        'billing_period': 'annual'
-                    }
-                )
+                # Annual price
+                annual_amount = PRICE_PLANS[plan.key]['annual'] * 100
+                annual_price = find_price(annual_amount, 'year')
+                if not annual_price:
+                    annual_price = stripe.Price.create(
+                        product=product.id,
+                        unit_amount=annual_amount,
+                        currency='usd',
+                        recurring={'interval': 'year', 'interval_count': 1},
+                        metadata={'billing_period': 'annual'}
+                    )
+                    print(f"Created new annual price for {product_name}")
                 plan.stripe_price_annual_id = annual_price.id
 
-                # Save the plan with Stripe IDs
                 plan.save()
     except Exception as e:
         print(f"Error during Stripe setup: {str(e)}")
@@ -119,52 +140,11 @@ def setup_stripe_billing(apps, schema_editor):
 def cleanup_stripe_billing(apps, schema_editor):
     BillingPlan = apps.get_model('billing', 'BillingPlan')
 
-    if is_test_environment():
-        print("Skipping Stripe cleanup in test/CI environment")
-        # Clean up dummy data
-        for plan in BillingPlan.objects.filter(~Q(key__exact='community'),
-                                             max_products__isnull=False,
-                                             max_projects__isnull=False):
-            plan.stripe_product_id = None
-            plan.stripe_price_monthly_id = None
-            plan.stripe_price_annual_id = None
-            plan.save()
-        return
-
-    # Only import stripe if we're not in test environment
-    import stripe
-    import time
-
-    stripe.api_key = settings.STRIPE_SECRET_KEY
-
-    # Get all products and store them in a dict by key with key being the product name
-    products = {product.name: product for product in stripe.Product.list()}
-
-    for plan in BillingPlan.objects.filter(~Q(key__exact='community'), max_products__isnull=False, max_projects__isnull=False):
-        if plan.key not in products:
-            print(f"Product {plan.key} not found in Stripe")
-            continue
-
-        product = products[plan.key]
-
-        # First deactivate all prices associated with the product
-        prices = stripe.Price.list(product=product.id, active=True)
-        for price in prices.data:
-            stripe.Price.modify(
-                price.id,
-                active=False
-            )
-
-        # Wait a moment to ensure price updates are processed
-        time.sleep(1)
-
-        try:
-            # Then try to delete the product
-            stripe.Product.delete(product.id)
-        except stripe.error.InvalidRequestError as e:
-            print(f"Could not delete product {plan.key}: {str(e)}")
-
-        # Clear Stripe IDs regardless of deletion success
+    # Simplified cleanup - only remove local references
+    print("Clearing Stripe references from database")
+    for plan in BillingPlan.objects.filter(~Q(key__exact='community'),
+                                         max_products__isnull=False,
+                                         max_projects__isnull=False):
         plan.stripe_product_id = None
         plan.stripe_price_monthly_id = None
         plan.stripe_price_annual_id = None
