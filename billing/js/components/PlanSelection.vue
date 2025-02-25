@@ -87,6 +87,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import $axios from '../../../core/js/utils';
+import { showSuccess, showError, showConfirmation } from '../../../core/js/alerts';
 
 interface Plan {
   key: string;
@@ -155,27 +156,17 @@ async function handlePlanSelection(plan: Plan) {
       return;
     }
 
-    // If downgrading to community, show warning about public SBOMs
-    if (plan.key === 'community' && currentPlan.value !== 'business') {
-      const { default: Swal } = await import('sweetalert2');
-      const result = await Swal.fire({
+    // If downgrading to community from a paid plan, show warning about public SBOMs
+    if (plan.key === 'community' && currentPlan.value && currentPlan.value !== 'community') {
+      const confirmed = await showConfirmation({
         title: 'Confirm Downgrade',
-        html:
-          'Are you sure you want to downgrade to the Community plan?<br><br>' +
-          '<strong class="text-warning">Warning:</strong> All your SBOMs will become public.<br><br>' +
-          'This will also immediately cancel your subscription.',
-        icon: 'warning',
-        showCancelButton: true,
+        message: 'Are you sure you want to downgrade to the Community plan? All your SBOMs will become public. This will also immediately cancel your subscription.',
         confirmButtonText: 'Yes, downgrade',
         cancelButtonText: 'Cancel',
-        customClass: {
-          confirmButton: 'btn btn-secondary swal-confirm-button',
-          cancelButton: 'btn btn-outline-secondary swal-cancel-button',
-          popup: 'swal-modal'
-        },
-        buttonsStyling: false
+        type: 'warning'
       });
-      if (!result.isConfirmed) return;
+
+      if (!confirmed) return;
     }
 
     const response = await $axios.post(`/api/v1/billing/change-plan/`, {
@@ -189,29 +180,12 @@ async function handlePlanSelection(plan: Plan) {
       window.location.href = response.data.redirect_url;
     } else {
       // For community plan, show success message and emit event
-      const { default: Swal } = await import('sweetalert2');
-      await Swal.fire({
-        title: 'Success',
-        text: 'Plan updated successfully',
-        icon: 'success',
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000
-      });
+      showSuccess('Plan updated successfully');
       emit('plan-selected');
     }
   } catch (error: any) {
-    const { default: Swal } = await import('sweetalert2');
-    await Swal.fire({
-      title: 'Error',
-      text: error.response?.data?.detail || 'Failed to change plan',
-      icon: 'error',
-      toast: true,
-      position: 'top-end',
-      showConfirmButton: false,
-      timer: 3000
-    });
+    showError(error.response?.data?.detail || 'Failed to change plan');
+    console.error('Error changing plan:', error);
   }
 }
 
