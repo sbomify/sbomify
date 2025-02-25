@@ -53,7 +53,7 @@ const processNotifications = (newNotifications: Notification[]) => {
         Swal.fire({
           title: notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
           text: notification.message,
-          icon: notification.severity as any,
+          icon: notification.severity,
           showCancelButton: true,
           confirmButtonText: 'Take Action',
           cancelButtonText: 'Dismiss',

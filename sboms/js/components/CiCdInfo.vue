@@ -18,7 +18,7 @@
             <div v-if="isExpanded" class="nav-tabs-container">
               <!-- Tab navigation -->
               <ul class="nav nav-tabs" role="tablist">
-                <li class="nav-item" role="presentation" v-for="tab in tabs" :key="tab.id">
+                <li v-for="tab in tabs" :key="tab.id" class="nav-item" role="presentation">
                   <button class="nav-link" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">
                     <i :class="tab.icon"></i>
                     {{ tab.name }}

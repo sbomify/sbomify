@@ -42,3 +42,10 @@ repos:
         files: \.(ts|vue)$
         exclude: ^(node_modules|\.venv|venv|\.pytest_cache|__pycache__|\.ruff_cache)/
         pass_filenames: false
+      - id: bun-lint
+        name: Bun Lint
+        entry: bun lint
+        language: system
+        files: \.(js|ts|vue)$
+        exclude: ^(node_modules|\.venv|venv|\.pytest_cache|__pycache__|\.ruff_cache)/
+        pass_filenames: false
