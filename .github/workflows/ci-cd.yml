@@ -59,8 +59,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Python for lint
+        if: matrix.check == 'lint'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Cache Poetry dependencies
-        if: matrix.check != 'lint'
         uses: actions/cache@v4
         with:
           path: ~/.cache/pypoetry
@@ -69,7 +74,6 @@ jobs:
             ${{ runner.os }}-poetry-
 
       - name: Install poetry
-        if: matrix.check != 'lint'
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
@@ -78,6 +82,11 @@ jobs:
         if: matrix.check != 'lint'
         run: |
           poetry install --with dev,test
+
+      - name: Install minimal Python dependencies for lint
+        if: matrix.check == 'lint'
+        run: |
+          poetry install --only dev
 
       - name: Setup Bun
         if: matrix.check == 'pre-commit' || matrix.check == 'lint'
