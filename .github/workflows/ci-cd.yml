@@ -164,7 +164,7 @@ jobs:
 
       - name: Run lint
         if: matrix.check == 'lint'
-        run: bun lint
+        run: poetry run pre-commit run bun-lint --all-files
 
   docker-build:
     name: Docker Build Test
