@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        check: ['tests', 'pre-commit', 'lint']
+        check: ['tests', 'code-quality']
         python-version: ["3.10.12"]
         poetry-version: ["1.8.1"]
     services:
@@ -54,13 +54,18 @@ jobs:
           cp .env.example .env
 
       - name: Set up Python ${{ matrix.python-version }}
-        if: matrix.check != 'lint'
+        if: matrix.check != 'code-quality'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Python for lint
+        if: matrix.check == 'code-quality'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache Poetry dependencies
-        if: matrix.check != 'lint'
         uses: actions/cache@v4
         with:
           path: ~/.cache/pypoetry
@@ -69,29 +74,39 @@ jobs:
             ${{ runner.os }}-poetry-
 
       - name: Install poetry
-        if: matrix.check != 'lint'
         uses: abatilo/actions-poetry@v2
         with:
           poetry-version: ${{ matrix.poetry-version }}
 
       - name: Install Python dependencies
-        if: matrix.check != 'lint'
+        if: matrix.check != 'code-quality'
         run: |
           poetry install --with dev,test
 
+      - name: Install minimal Python dependencies for lint
+        if: matrix.check == 'code-quality'
+        run: |
+          poetry install --only dev
+
       - name: Setup Bun
-        if: matrix.check == 'pre-commit' || matrix.check == 'lint'
+        if: matrix.check == 'code-quality'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: "1.0.25"
 
       - name: Install JS dependencies
-        if: matrix.check == 'pre-commit' || matrix.check == 'lint'
+        if: matrix.check == 'code-quality'
         run: bun install
 
-      - name: Run pre-commit
-        if: matrix.check == 'pre-commit'
-        run: poetry run pre-commit run --all-files
+      - name: Run code quality checks
+        if: matrix.check == 'code-quality'
+        run: |
+          echo "Running all code quality checks via pre-commit..."
+          poetry run pre-commit run --all-files
+
+          # Add results to GitHub step summary
+          echo "## Code Quality Results" >> $GITHUB_STEP_SUMMARY
+          echo "All pre-commit hooks passed successfully." >> $GITHUB_STEP_SUMMARY
 
       - name: Install PostgreSQL client
         if: matrix.check == 'tests'
@@ -161,10 +176,6 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
           echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Run lint
-        if: matrix.check == 'lint'
-        run: bun lint
 
   docker-build:
     name: Docker Build Test

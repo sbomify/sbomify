@@ -126,7 +126,7 @@
     prefer_logo_over_icon: false
   });
 
-  const handleFileUpload = async (field: string, file: File | null) => {
+  const handleFileUpload = async (field: string, file: File | null | undefined) => {
     if (!file) return;
 
     const formData = new FormData();

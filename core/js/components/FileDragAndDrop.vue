@@ -1,84 +1,3 @@
-<style scoped>
-.file-upload-container {
-  width: 100%;
-}
-
-.drop-zone {
-  position: relative;
-  padding: 2rem;
-  border: 2px dashed #ccc;
-  border-radius: 4px;
-  background-color: #f8f8f8;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.drop-zone:hover {
-  background-color: #eee;
-}
-
-.drop-zone.has-file {
-  border-style: solid;
-}
-
-.file-input {
-  display: none;
-}
-
-.drop-zone-content {
-  text-align: center;
-  color: #666;
-}
-
-.drop-zone-content i {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.image-preview {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  max-height: 200px;
-  overflow: hidden;
-}
-
-.image-preview img {
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: contain;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background-color: #f0f0f0;
-  border-radius: 4px;
-}
-
-.file-name {
-  flex: 1;
-  margin-right: 0.5rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.remove-button {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  padding: 0.25rem;
-}
-
-.remove-button:hover {
-  color: #ff4444;
-}
-</style>
-
 <template>
   <div class="file-upload-container">
     <div
@@ -90,11 +9,11 @@
       @click="triggerFileInput"
     >
       <input
-        type="file"
         ref="fileInput"
+        type="file"
         class="file-input"
-        @change="handleFileSelect"
         :accept="accept"
+        @change="handleFileSelect"
       >
 
       <div v-if="!modelValue" class="drop-zone-content">
@@ -224,3 +143,85 @@
 
 
 </script>
+
+
+<style scoped>
+.file-upload-container {
+  width: 100%;
+}
+
+.drop-zone {
+  position: relative;
+  padding: 2rem;
+  border: 2px dashed #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.drop-zone:hover {
+  background-color: #eee;
+}
+
+.drop-zone.has-file {
+  border-style: solid;
+}
+
+.file-input {
+  display: none;
+}
+
+.drop-zone-content {
+  text-align: center;
+  color: #666;
+}
+
+.drop-zone-content i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.image-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+.file-name {
+  flex: 1;
+  margin-right: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.remove-button:hover {
+  color: #ff4444;
+}
+</style>

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint \"core/js/**/*.{js,ts,vue}\" \"sboms/js/**/*.{js,ts,vue}\" \"*.{js,ts}\"",
     "lint-fix": "eslint \"core/js/**/*.{js,ts,vue}\" \"sboms/js/**/*.{js,ts,vue}\" \"*.{js,ts}\" --fix",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,html}\" --ignore-path .gitignore"
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,html}\" --ignore-path .gitignore",
+    "type-check": "vue-tsc --noEmit --skipLibCheck -p tsconfig.app.json"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
