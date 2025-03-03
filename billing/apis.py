@@ -7,7 +7,7 @@ from ninja.security import django_auth
 
 from access_tokens.auth import PersonalAccessTokenAuth
 from core.schemas import ErrorResponse
-from sboms.models import SBOM, Component, Product, Project
+from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from .models import BillingPlan
@@ -105,7 +105,6 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
 
                     # Update both components and SBOMs
                     Component.objects.filter(team=team).update(is_public=True)
-                    SBOM.objects.filter(component__team=team).update(is_public=True)
 
                 else:
                     team.billing_plan = plan.key
