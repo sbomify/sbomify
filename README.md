@@ -265,6 +265,18 @@ AWS_SECRET_ACCESS_KEY=<your-s3-secret-key>
 APP_BASE_URL=https://[your-domain]
 ```
 
+To disable billing, use `BILLING=False`.
+
+Before you begin, you need a [create webhook](https://dashboard.stripe.com/workbench/webhooks/create) and point it to `https://[your-domain]/webhook/`.
+
+```bash
+# Billing
+STRIPE_BILLING_URL=https://billing.stripe.com/p/login/[redacted]
+STRIPE_PUBLISHABLE_KEY=[redacted]
+STRIPE_SECRET_KEY=[redacted]
+STRIPE_WEBHOOK_SECRET=
+```
+
 ### Running in Production
 
 1. Build and start the production stack:
