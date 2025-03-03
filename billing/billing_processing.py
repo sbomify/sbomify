@@ -2,9 +2,11 @@
 Module for handling Stripe billing webhook events and related processing
 """
 
+import datetime
 from functools import wraps
 
 from django.http import HttpResponseForbidden
+from django.utils import timezone
 
 from core.errors import error_response
 from sbomify.logging import getLogger
@@ -19,6 +21,7 @@ logger = getLogger(__name__)
 
 def check_billing_limits(model_type: str):
     """Decorator to check billing plan limits before creating new items."""
+
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
@@ -66,34 +69,71 @@ def check_billing_limits(model_type: str):
                 return error_response(request, HttpResponseForbidden(error_message))
 
             return view_func(request, *args, **kwargs)
+
         return _wrapped_view
+
     return decorator
 
 
 def handle_subscription_updated(subscription):
     """Handle subscription update events"""
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        # First try to find by subscription ID
+        team = Team.objects.filter(billing_plan_limits__stripe_subscription_id=subscription.id).first()
+
+        # If not found, try to find by customer ID
+        if not team and hasattr(subscription, "customer"):
+            team = Team.objects.filter(billing_plan_limits__stripe_customer_id=subscription.customer).first()
+
+        if not team:
+            logger.error(f"No team found for subscription {subscription.id}")
+            return
+
+        # Check if billing was recently updated (within the last minute)
+        # This helps prevent duplicate processing between webhook and billing_return
+        last_updated_str = team.billing_plan_limits.get("last_updated")
+        if last_updated_str:
+            try:
+                last_updated = datetime.datetime.fromisoformat(last_updated_str)
+                # Add timezone information if it's naive
+                if last_updated.tzinfo is None:
+                    last_updated = last_updated.replace(tzinfo=timezone.utc)
+
+                # If the billing was updated less than 60 seconds ago, skip this update
+                time_diff = timezone.now() - last_updated
+                if time_diff.total_seconds() < 60:
+                    logger.info(
+                        f"Skipping subscription update for team {team.key} - "
+                        f"recently updated ({time_diff.total_seconds()} seconds ago)"
+                    )
+                    return
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid last_updated format in team {team.key} billing_plan_limits")
+                # Continue processing if date parsing fails
 
         old_status = team.billing_plan_limits.get("subscription_status")
         new_status = subscription.status
 
         # Update subscription status
         team.billing_plan_limits["subscription_status"] = new_status
+        # Add/update the last_updated timestamp
+        team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
 
         # Update billing plan based on subscription's product
         if subscription.items.data:
-            product_id = subscription.items.data[0].plan.product
             try:
-                plan = BillingPlan.objects.get(stripe_product_id=product_id)
+                # Use business plan for now, as specified
+                plan = BillingPlan.objects.get(key="business")
                 team.billing_plan = plan.key
-                team.billing_plan_limits.update({
-                    "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
-                    "max_components": plan.max_components,
-                })
+                team.billing_plan_limits.update(
+                    {
+                        "max_products": plan.max_products,
+                        "max_projects": plan.max_projects,
+                        "max_components": plan.max_components,
+                    }
+                )
             except BillingPlan.DoesNotExist:
-                logger.error(f"No billing plan found for product {product_id}")
+                logger.error("Business billing plan not found")
 
         # Handle specific status transitions
         if new_status == "past_due" and old_status == "active":
@@ -131,23 +171,21 @@ def handle_subscription_deleted(subscription):
     try:
         team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
 
-        # Revert to community plan
-        community_plan = BillingPlan.objects.get(key="community")
-        team.billing_plan = "community"
-        team.billing_plan_limits = {
-            "max_products": community_plan.max_products,
-            "max_projects": community_plan.max_projects,
-            "max_components": community_plan.max_components,
-        }
+        # Update subscription status
+        team.billing_plan_limits["subscription_status"] = "canceled"
+        # Add/update the last_updated timestamp
+        team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
+
+        # Save the changes
         team.save()
 
         # Notify team owners
         team_owners = team.members.filter(member__role="owner")
         for owner in team_owners:
-            email_notifications.notify_subscription_cancelled(team, owner)
+            email_notifications.notify_subscription_ended(team, owner)
             logger.info(f"Subscription ended notification sent for team {team.key} to {owner.member.user.email}")
 
-        logger.info(f"Subscription ended for team {team.key}")
+        logger.info(f"Subscription canceled for team {team.key}")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {subscription.id}")
@@ -155,46 +193,48 @@ def handle_subscription_deleted(subscription):
 
 def handle_payment_failed(invoice):
     """Handle payment failure events"""
+    if not hasattr(invoice, "subscription") or not invoice.subscription:
+        logger.error("No subscription found in invoice")
+        return
+
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_customer_id=invoice.customer)
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
 
-        # Get payment failure details
-        attempt_count = invoice.attempt_count
-        next_payment_attempt = invoice.next_payment_attempt
+        # No need to change subscription status as Stripe will do that
+        # But still record the timestamp of this event
+        team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
+        team.save()
 
-        # Notify team owners with specific details
+        # Notify team owners
         team_owners = team.members.filter(member__role="owner")
         for owner in team_owners:
-            email_notifications.notify_payment_failed(team, owner, attempt_count, next_payment_attempt)
-            logger.error(
-                f"Payment failed notification sent for team {team.key} to {owner.member.user.email}. "
-                f"Attempt {attempt_count}, Next attempt: {next_payment_attempt}"
-            )
+            email_notifications.notify_payment_failed(team, owner, invoice.hosted_invoice_url)
+            logger.warning(f"Payment failed notification sent for team {team.key} to {owner.member.user.email}")
+
+        logger.warning(f"Payment failed for team {team.key}")
 
     except Team.DoesNotExist:
-        logger.error(f"No team found for customer {invoice.customer}")
+        logger.error(f"No team found for subscription {invoice.subscription}")
 
 
 def handle_payment_succeeded(invoice):
-    """Handle successful payment events"""
+    """Handle payment success events"""
+    if not hasattr(invoice, "subscription") or not invoice.subscription:
+        logger.error("No subscription found in invoice")
+        return
+
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_customer_id=invoice.customer)
+        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=invoice.subscription)
 
-        # Update any relevant payment status
-        if team.billing_plan_limits.get("subscription_status") == "past_due":
-            team.billing_plan_limits["subscription_status"] = "active"
-            team.save()
+        # Update status and timestamp
+        team.billing_plan_limits["subscription_status"] = "active"
+        team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
+        team.save()
 
-            # Notify team owners of restored service
-            team_owners = team.members.filter(member__role="owner")
-            for owner in team_owners:
-                email_notifications.notify_payment_succeeded(team, owner)
-                logger.info(f"Payment succeeded notification sent for team {team.key} to {owner.member.user.email}")
-
-        logger.info(f"Payment succeeded for team {team.key}")
+        logger.info(f"Payment successful for team {team.key}")
 
     except Team.DoesNotExist:
-        logger.error(f"No team found for customer {invoice.customer}")
+        logger.error(f"No team found for subscription {invoice.subscription}")
 
 
 def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
@@ -228,3 +268,43 @@ def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
         )
 
     return True, ""
+
+
+def handle_checkout_completed(session):
+    """Handle checkout session completed events"""
+    # Only proceed if payment was successful
+    if session.payment_status != "paid":
+        logger.error("Payment status was not 'paid': %s", session.payment_status)
+        return
+
+    # Get the team from metadata
+    team_key = session.metadata.get("team_key")
+    if not team_key:
+        logger.error("No team key found in session metadata")
+        return
+
+    try:
+        team = Team.objects.get(key=team_key)
+        plan = BillingPlan.objects.get(key="business")  # Hardcoded to business plan
+
+        # Update team billing information
+        team.billing_plan = plan.key
+
+        # Add last updated timestamp to track when billing was processed
+        billing_limits = {
+            "max_products": plan.max_products,
+            "max_projects": plan.max_projects,
+            "max_components": plan.max_components,
+            "stripe_customer_id": session.customer,
+            "stripe_subscription_id": session.subscription,
+            "subscription_status": "active",
+            "last_updated": timezone.now().isoformat(),
+        }
+
+        team.billing_plan_limits = billing_limits
+        team.save()
+        logger.info("Successfully processed checkout session for team %s", team_key)
+    except Team.DoesNotExist:
+        logger.error(f"Team with key {team_key} not found")
+    except BillingPlan.DoesNotExist:
+        logger.error("Business billing plan not found")
