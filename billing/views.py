@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from sbomify.logging import getLogger
@@ -194,6 +195,7 @@ def billing_return(request: HttpRequest):
                         "stripe_subscription_id": subscription.id,
                         "billing_period": billing_period,
                         "subscription_status": subscription.status,
+                        "last_updated": timezone.now().isoformat(),
                     }
 
                     team.billing_plan = plan.key
@@ -227,30 +229,7 @@ def stripe_webhook(request: HttpRequest):
 
         # Handle specific event types
         if event.type == "checkout.session.completed":
-            # Get the session data
-            session = event.data.object
-
-            # Only proceed if payment was successful
-            if session.payment_status == "paid":
-                # Get the team from metadata
-                team_key = session.metadata.get("team_key")
-                if team_key:
-                    team = Team.objects.get(key=team_key)
-                    plan_key = session.metadata.get("plan")
-                    plan = BillingPlan.objects.get(key=plan_key)
-
-                    # Update team billing information
-                    team.billing_plan = plan.key
-                    team.billing_plan_limits = {
-                        "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
-                        "max_components": plan.max_components,
-                        "stripe_customer_id": session.customer,
-                        "stripe_subscription_id": session.subscription,
-                        "subscription_status": "active",
-                    }
-                    team.save()
-                    logger.info("Successfully processed checkout session for team %s", team_key)
+            billing_processing.handle_checkout_completed(event.data.object)
 
         elif event.type == "customer.subscription.updated":
             billing_processing.handle_subscription_updated(event.data.object)
