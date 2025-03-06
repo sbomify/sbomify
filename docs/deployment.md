@@ -143,10 +143,12 @@ flyctl secrets set AWS_SBOMS_SECRET_ACCESS_KEY=[redacted]
 ## Deployment Rules
 
 ### Staging
+
 - Deploys automatically when new commits are pushed to master
 - Uses the configuration from `FLY_CONFIG_STAGE` secret
 
 ### Production
+
 - Only deploys on version tags (e.g., v1.0.0)
 - Requires successful tests and Docker builds
 - Uses the configuration from `FLY_CONFIG_PROD` secret
