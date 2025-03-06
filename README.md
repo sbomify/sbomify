@@ -13,7 +13,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ## Releases
 
-For information about cutting new releases, see [RELEASE.md](RELEASE.md).
+For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
 
 ## Deployment
 
