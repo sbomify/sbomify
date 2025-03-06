@@ -13,7 +13,20 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ## Releases
 
-For information about cutting new releases, see [RELEASE.md](RELEASE.md).
+For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
+
+## Deployment
+
+The application is automatically deployed to [fly.io](https://fly.io) when changes are pushed to the `master` branch (staging) or when a new version tag is created (production).
+
+For detailed information about the deployment process, including:
+
+* CI/CD workflow
+* Fly.io configuration
+* Environment setup
+* Storage configuration
+
+See [docs/deployment.md](docs/deployment.md).
 
 ## Local Development
 

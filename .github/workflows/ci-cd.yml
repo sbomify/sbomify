@@ -1,4 +1,4 @@
-name: CI / CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -192,11 +192,57 @@ jobs:
       - name: Test Production Docker Build
         run: docker compose -f docker-compose.prod.yml build
 
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
+    needs: [checks, docker-build]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Fly
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create fly.toml for staging
+        run: |
+          echo "${{ secrets.FLY_CONFIG_STAGE }}" > fly.toml
+
+      - name: Deploy to staging
+        run: |
+          flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: ${{ success() && startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push' }}
+    needs: [checks, docker-build]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Fly
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create fly.toml for production
+        run: |
+          echo "${{ secrets.FLY_CONFIG_PROD }}" > fly.toml
+
+      - name: Deploy to production
+        run: |
+          flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
+
   generate-sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
-    needs: [checks]
+    needs: [deploy-production]
     steps:
       - uses: actions/checkout@v4
 
