@@ -134,6 +134,19 @@ VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 
 These settings are preconfigured in the `.env.example` file.
 
+#### Keycloak
+
+* Run a keycloak instance via [docker](https://www.keycloak.org/getting-started/getting-started-docker) or [Podman](https://www.keycloak.org/getting-started/getting-started-podman)
+
+  ```shell
+  # Podman
+  podman run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.4 start-dev
+
+  # Or docker
+  docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.4 start-dev
+
+  ```
+
 #### S3/Minio Storage
 
 The application uses S3-compatible storage for storing files and assets. In

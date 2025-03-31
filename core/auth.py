@@ -34,8 +34,8 @@ class SafeAuth0OAuth2(Auth0OAuth2):
                     "verify_exp": True,
                     "verify_aud": True,
                     "verify_iss": True,
-                    "require": ["exp", "iss", "aud"]
-                }
+                    "require": ["exp", "iss", "aud"],
+                },
             )
             return decoded
         except jwt.InvalidTokenError as e:
@@ -61,7 +61,7 @@ class SafeAuth0OAuth2(Auth0OAuth2):
                     "first_name": response.get("given_name", ""),
                     "last_name": response.get("family_name", ""),
                     "picture": response.get("picture", ""),
-                    "email_verified": True  # Trust test mode
+                    "email_verified": True,  # Trust test mode
                 }
             else:
                 logger.error("No id_token present in production mode")
@@ -71,8 +71,7 @@ class SafeAuth0OAuth2(Auth0OAuth2):
             decoded_token = self.validate_and_return_id_token(response["id_token"])
 
             # Check if this is a social login (GitHub/Google) or username/password
-            is_social_login = any(provider in response.get("sub", "")
-                                for provider in ["github", "google"])
+            is_social_login = any(provider in response.get("sub", "") for provider in ["github", "google"])
 
             # Use validated token data
             details = {
@@ -83,16 +82,15 @@ class SafeAuth0OAuth2(Auth0OAuth2):
                 "last_name": decoded_token.get("family_name", ""),
                 "picture": decoded_token.get("picture", ""),
                 # Trust social logins, require verification for username/password
-                "email_verified": (is_social_login or
-                                 decoded_token.get("email_verified", False))
+                "email_verified": (is_social_login or decoded_token.get("email_verified", False)),
             }
 
         # Ensure email exists in response
         if not details.get("email"):
             # Try to get email from other fields
-            email = (response.get("email") or
-                    response.get("user_email") or
-                    response.get("verified_email"))  # Support verified_email for backward compatibility
+            email = (
+                response.get("email") or response.get("user_email") or response.get("verified_email")
+            )  # Support verified_email for backward compatibility
 
             if email:
                 details["email"] = email
@@ -102,9 +100,11 @@ class SafeAuth0OAuth2(Auth0OAuth2):
 
             # If still no email, try to get it from the payload
             if not details.get("email") and response.get("payload"):
-                email = (response["payload"].get("email") or
-                        response["payload"].get("user_email") or
-                        response["payload"].get("verified_email"))  # Support verified_email for backward compatibility
+                email = (
+                    response["payload"].get("email")
+                    or response["payload"].get("user_email")
+                    or response["payload"].get("verified_email")
+                )  # Support verified_email for backward compatibility
                 if email:
                     details["email"] = email
                     # If we got email from verified_email in payload, consider it verified
@@ -120,3 +120,5 @@ class SafeAuth0OAuth2(Auth0OAuth2):
             logger.warning("No email found in response")
 
         return details
+
+

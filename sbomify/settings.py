@@ -91,6 +91,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 
@@ -247,6 +248,16 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        "allauth": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "allauth.socialaccount": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         # "teams": {
         #     "handlers": ["console"],
         #     "level": os.getenv("LOG_LEVEL", "INFO"),
@@ -398,3 +409,77 @@ NOTIFICATION_PROVIDERS = [
 
 # Optionally override refresh interval
 NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
+
+# Keycloak Settings
+KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://localhost:8080/")
+KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
+KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+
+# Feature flags
+USE_KEYCLOAK = os.environ.get("USE_KEYCLOAK", "").lower() in ("true", "1", "yes")
+
+# Social Auth configuration
+if USE_KEYCLOAK:
+    AUTHENTICATION_BACKENDS = [
+        "django.contrib.auth.backends.ModelBackend",
+        "allauth.account.auth_backends.AuthenticationBackend",
+    ]
+
+    INSTALLED_APPS += [
+        "allauth",
+        "allauth.account",
+        "allauth.socialaccount",
+        "allauth.socialaccount.providers.openid_connect",
+    ]
+
+    # AllAuth settings
+    SOCIALACCOUNT_AUTO_SIGNUP = True
+    SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+    SOCIALACCOUNT_EMAIL_REQUIRED = True
+    SOCIALACCOUNT_STORE_TOKENS = True
+    SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+
+    # Modern AllAuth configuration
+    ACCOUNT_LOGIN_METHODS = {"email"}
+    ACCOUNT_SIGNUP_FIELDS = ["email*"]  # Only require email, as we're auto-creating username
+    ACCOUNT_UNIQUE_EMAIL = True
+
+    # Remove deprecated settings
+    # ACCOUNT_EMAIL_REQUIRED = True
+    # ACCOUNT_USERNAME_REQUIRED = True
+    # ACCOUNT_AUTHENTICATION_METHOD = "email"
+    # ACCOUNT_EMAIL_VERIFICATION = "none"
+
+    SOCIALACCOUNT_PROVIDERS = {
+        "openid_connect": {
+            "APPS": [
+                {
+                    "provider_id": "keycloak",
+                    "name": "Keycloak",
+                    "client_id": KEYCLOAK_CLIENT_ID,
+                    "secret": KEYCLOAK_CLIENT_SECRET,
+                    "settings": {
+                        "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration"
+                    },
+                }
+            ]
+        }
+    }
+
+    LOGIN_REDIRECT_URL = "/"
+    ACCOUNT_LOGOUT_REDIRECT_URL = "/"
+else:
+    # Existing Auth0 configuration
+    AUTHENTICATION_BACKENDS = [
+        "social_core.backends.auth0.Auth0OAuth2",
+        "django.contrib.auth.backends.ModelBackend",
+    ]
+
+    SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
+    SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
+    SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
+
+    SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]

@@ -17,7 +17,15 @@ def home(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         return redirect("core:dashboard")
 
-    return redirect("social:begin", backend="auth0")
+    if settings.USE_KEYCLOAK:
+        return redirect("core:keycloak_login")
+    else:
+        return redirect("social:begin", backend="auth0")
+
+
+def keycloak_login(request: HttpRequest) -> HttpResponse:
+    """Display the login page for Keycloak authentication."""
+    return render(request, "socialaccount/login.html")
 
 
 @login_required
@@ -78,11 +86,27 @@ def delete_access_token(request: HttpRequest, token_id: int):
 @login_required
 def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
-    domain = settings.SOCIAL_AUTH_AUTH0_DOMAIN
-    client_id = settings.SOCIAL_AUTH_AUTH0_KEY
 
-    return_to = settings.APP_BASE_URL
-
-    redirect_url = f"https://{domain}/v2/logout?client_id={client_id}&returnTo={return_to}"
+    if settings.USE_KEYCLOAK:
+        # Keycloak logout
+        redirect_url = (
+            f"{settings.KEYCLOAK_SERVER_URL}realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
+            f"?redirect_uri={settings.APP_BASE_URL}"
+        )
+    else:
+        # Auth0 logout
+        domain = settings.SOCIAL_AUTH_AUTH0_DOMAIN
+        client_id = settings.SOCIAL_AUTH_AUTH0_KEY
+        return_to = settings.APP_BASE_URL
+        redirect_url = f"https://{domain}/v2/logout?client_id={client_id}&returnTo={return_to}"
 
     return redirect(redirect_url)
+
+
+def login_error(request: HttpRequest) -> HttpResponse:
+    """Handle login errors and display more information."""
+    error_message = request.GET.get("error", "Unknown error occurred during authentication")
+    error_description = request.GET.get("error_description", "No additional information available")
+
+    context = {"error_message": error_message, "error_description": error_description}
+    return render(request, "socialaccount/authentication_error.html", context)
