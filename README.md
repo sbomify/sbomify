@@ -66,17 +66,20 @@ These endpoints are available when running the development server.
 ### Setup
 
 1. Copy `.env.example` to `.env` and adjust values as needed:
+
 ```bash
 cp .env.example .env
 ```
 
 2. Start the development environment (recommended method):
+
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 3. Create a local admin account:
+
 ```bash
 docker compose \
     -f docker-compose.yml \
@@ -89,8 +92,8 @@ docker compose \
 ```
 
 4. Access the application:
-   - Admin interface: `http://localhost:8000/admin`
-   - Main application: `http://localhost:8000`
+   * Admin interface: `http://localhost:8000/admin`
+   * Main application: `http://localhost:8000`
 
 > **Note**: For production deployment information, see [docs/deployment.md](docs/deployment.md).
 
@@ -246,9 +249,10 @@ For production deployments, it's strongly recommended to put a reverse proxy (su
 #### Current: Auth0 Configuration
 
 > **Important Migration Notice**: We are in the process of migrating from Auth0 to Keycloak for authentication. This work is being tracked in [issue #1](https://github.com/sbomify/sbomify/issues/1). During this transition period, you can:
-> - Continue using Auth0 configuration as described below
-> - Use Django admin interface (/admin) with local users for development
-> - Follow the migration issue for updates
+>
+> * Continue using Auth0 configuration as described below
+> * Use Django admin interface (/admin) with local users for development
+> * Follow the migration issue for updates
 
 Create a "Regular Web Application" in Auth0 with the following settings:
 
