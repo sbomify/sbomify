@@ -11,6 +11,7 @@ urlpatterns = [
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
     path("login_error", views.login_error, name="login_error"),
+    path("keycloak-webhook/", views.keycloak_webhook, name="keycloak_webhook"),
 ]
 
 # Add Keycloak specific URLs if enabled
