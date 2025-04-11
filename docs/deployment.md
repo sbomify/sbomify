@@ -80,7 +80,19 @@ fly postgres create
 fly postgres attach [database name] -a [app name]
 ```
 
-### Auth0/Okta Configuration
+### Authentication Configuration
+
+Authentication methods differ by environment:
+
+### Local Development
+
+Authentication for local development is handled through Django's admin interface. See the [README.md](../README.md#local-development) for setup instructions.
+
+### Production Environment
+>
+> **Note**: Production authentication is in transition. See [issue #1](https://github.com/sbomify/sbomify/issues/1) for details.
+
+#### Current: Auth0 Setup (Production Only)
 
 Create a "Regular Web Application" with the following settings:
 

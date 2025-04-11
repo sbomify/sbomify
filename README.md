@@ -30,6 +30,23 @@ See [docs/deployment.md](docs/deployment.md).
 
 ## Local Development
 
+### Authentication During Development
+
+For local development, authentication is handled through Django's admin interface:
+
+```bash
+# Create a superuser for local development
+docker compose \
+    -f docker-compose.yml \
+    -f docker-compose.dev.yml exec \
+    sbomify-backend \
+    poetry run python manage.py createsuperuser
+```
+
+Then access the admin interface at `http://localhost:8000/admin` to log in.
+
+> **Note**: Production environments use different authentication methods. See [docs/deployment.md](docs/deployment.md) for production authentication setup.
+
 ### Development Prerequisites
 
 * Python 3.12+
@@ -48,34 +65,20 @@ These endpoints are available when running the development server.
 
 ### Setup
 
-* Copy `.env.example` to `.env` and adjust values as needed:
+Copy `.env.example` to `.env` and adjust values as needed:
 
 ```bash
 cp .env.example .env
 ```
 
-* You can run the application in two ways:
-
-#### Using Docker Compose (recommended)
+Start the development environment (recommended method):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-Alternatively you can run the following script to start the development environment:
-
-```bash
-./bin/start_development_environment.sh
-```
-
-This will start all required services:
-
-* PostgreSQL database for data storage
-* MinIO S3-compatible storage (accessible at `http://localhost:9001`)
-* Django development server
-
-The fastest way to log in to the development server is to create a superuser account:
+Create a local admin account:
 
 ```bash
 docker compose \
@@ -85,14 +88,17 @@ docker compose \
     -e DJANGO_SUPERUSER_PASSWORD=sbomifyadmin \
     -e DJANGO_SUPERUSER_EMAIL=admin@sbomify.com \
     sbomify-backend \
-    poetry run python manage.py createsuperuser \
-        --noinput
+    poetry run python manage.py createsuperuser --noinput
 ```
 
-Go to `http://localhost:8000/admin` and log in with the superuser account you just created.
-After that you can go to `http://localhost:8000/` to access the web interface.
+Access the application:
 
-#### Running Locally (without Docker for Django)
+* Admin interface: `http://localhost:8000/admin`
+* Main application: `http://localhost:8000`
+
+> **Note**: For production deployment information, see [docs/deployment.md](docs/deployment.md).
+
+#### Alternative: Running Locally (without Docker for Django)
 
 * Start required services in Docker:
 
@@ -243,7 +249,11 @@ For production deployments, it's strongly recommended to put a reverse proxy (su
 
 #### Current: Auth0 Configuration
 
-> **Note**: The application is planned to migrate from Auth0 to Keycloak. See [#1](https://github.com/sbomify/sbomify/issues/1) for details.
+> **Important Migration Notice**: We are in the process of migrating from Auth0 to Keycloak for authentication. This work is being tracked in [issue #1](https://github.com/sbomify/sbomify/issues/1). During this transition period, you can:
+>
+> * Continue using Auth0 configuration as described below
+> * Use Django admin interface (/admin) with local users for development
+> * Follow the migration issue for updates
 
 Create a "Regular Web Application" in Auth0 with the following settings:
 
