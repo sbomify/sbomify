@@ -235,12 +235,29 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         sbom_dict["source"] = "api"
         sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
 
-        package: SPDXPackage | None = None
+        if not payload.packages:
+            return 400, {"detail": "No packages found in SPDX document"}
 
-        if payload.packages and payload.packages[0].name == payload.name:
-            package = payload.packages[0]
-        else:
-            return 400, {"detail": "No package found in packages for the SPDX document"}
+        # Find the package that corresponds to the document name
+        package = None
+
+        # First check if documentDescribes is present and points to a valid package
+        if hasattr(payload, 'documentDescribes') and payload.documentDescribes:
+            described_ref = payload.documentDescribes[0]  # Usually contains "SPDXRef-..." reference
+            for pkg in payload.packages:
+                if hasattr(pkg, 'SPDXID') and pkg.SPDXID == described_ref:
+                    package = pkg
+                    break
+
+        # If not found via documentDescribes, fall back to name matching
+        if not package:
+            for pkg in payload.packages:
+                if pkg.name == payload.name:
+                    package = pkg
+                    break
+
+        if not package:
+            return 400, {"detail": f"No package found with name '{payload.name}' in SPDX document"}
 
         sbom_dict["version"] = package.version
         sbom_dict["licenses"] = [package.license]
