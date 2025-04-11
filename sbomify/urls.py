@@ -30,7 +30,7 @@ urlpatterns = [
     path("", include("sboms.urls")),
     path("", include("billing.urls", namespace="billing")),
     path("api/v1/", api.urls, name="api-1"),
-    path(r"UuPha8mu/", include("health_check.urls")), # Random string
+    path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]
 
 if settings.DEBUG:

@@ -235,17 +235,25 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         sbom_dict["source"] = "api"
         sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
 
-        if not payload.packages:
-            return 400, {"detail": "No packages found in SPDX document"}
+        # Error message constants
+        NO_PACKAGES_ERROR = "No packages found in SPDX document"
+        NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
 
-        # Find the package that corresponds to the document name
-        package = None
+        if not payload.packages:
+            return 400, {"detail": NO_PACKAGES_ERROR}
+
+        """
+        Find the primary package in the SPDX document using the following strategy:
+        1. Look for a package referenced by documentDescribes field
+        2. Fall back to matching package name with document name
+        """
+        package: SPDXPackage | None = None
 
         # First check if documentDescribes is present and points to a valid package
-        if hasattr(payload, 'documentDescribes') and payload.documentDescribes:
-            described_ref = payload.documentDescribes[0]  # Usually contains "SPDXRef-..." reference
+        if hasattr(payload, "documentDescribes") and payload.documentDescribes:
+            described_ref: str = payload.documentDescribes[0]  # Usually contains "SPDXRef-..." reference
             for pkg in payload.packages:
-                if hasattr(pkg, 'SPDXID') and pkg.SPDXID == described_ref:
+                if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
                     package = pkg
                     break
 
@@ -257,7 +265,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
                     break
 
         if not package:
-            return 400, {"detail": f"No package found with name '{payload.name}' in SPDX document"}
+            return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
         sbom_dict["version"] = package.version
         sbom_dict["licenses"] = [package.license]
