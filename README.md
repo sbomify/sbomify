@@ -65,20 +65,20 @@ These endpoints are available when running the development server.
 
 ### Setup
 
-1. Copy `.env.example` to `.env` and adjust values as needed:
+Copy `.env.example` to `.env` and adjust values as needed:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Start the development environment (recommended method):
+Start the development environment (recommended method):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-3. Create a local admin account:
+Create a local admin account:
 
 ```bash
 docker compose \
@@ -91,9 +91,10 @@ docker compose \
     poetry run python manage.py createsuperuser --noinput
 ```
 
-4. Access the application:
-   * Admin interface: `http://localhost:8000/admin`
-   * Main application: `http://localhost:8000`
+Access the application:
+
+* Admin interface: `http://localhost:8000/admin`
+* Main application: `http://localhost:8000`
 
 > **Note**: For production deployment information, see [docs/deployment.md](docs/deployment.md).
 
