@@ -54,6 +54,22 @@ These endpoints are available when running the development server.
 cp .env.example .env
 ```
 
+### Development Billing Setup
+
+For development environments, you can use the test billing mode which automatically sets up dummy billing data without requiring a real Stripe account. To enable this:
+
+1. In your `.env` file, set:
+```bash
+STRIPE_SECRET_KEY=sk_test_dummy_key_for_ci
+```
+
+This will:
+- Automatically create test billing plans during migrations
+- Set up dummy Stripe product and price IDs
+- Allow you to use all billing features without a real Stripe account
+
+You can also completely disable billing by not setting STRIPE_SECRET_KEY at all in your `.env` file.
+
 * You can run the application in two ways:
 
 #### Using Docker Compose (recommended)
@@ -278,12 +294,17 @@ AWS_SECRET_ACCESS_KEY=<your-s3-secret-key>
 APP_BASE_URL=https://[your-domain]
 ```
 
-To disable billing, use `BILLING=False`.
-
 Before you begin, you need a [create webhook](https://dashboard.stripe.com/workbench/webhooks/create) and point it to `https://[your-domain]/webhook/`.
 
+### Billing Configuration
+
+For development environments, billing is automatically configured:
+- If `STRIPE_SECRET_KEY` is not set or set to `sk_test_dummy_key_for_ci`, all teams will automatically get enterprise plan access
+- No real Stripe account or configuration is needed
+- This is handled automatically during database migrations
+
+For production deployments, configure your real Stripe keys:
 ```bash
-# Billing
 STRIPE_BILLING_URL=https://billing.stripe.com/p/login/[redacted]
 STRIPE_PUBLISHABLE_KEY=[redacted]
 STRIPE_SECRET_KEY=[redacted]
@@ -302,13 +323,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-1. Create a superuser account (first time only):
+2. Create a superuser account (first time only):
 
 ```bash
 docker compose exec sbomify-backend poetry run python manage.py createsuperuser
 ```
 
-1. The application will be available at `http://[your-domain]:8000`
+3. The application will be available at `http://[your-domain]:8000`
 
 ### SBOM Upload via API
 

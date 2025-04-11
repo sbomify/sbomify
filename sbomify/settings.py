@@ -384,11 +384,15 @@ if DEBUG:
         "http://127.0.0.1:8000",
     ]
 
+# Stripe settings
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+# Billing configuration
+BILLING_MODE = os.environ.get("BILLING_MODE", "production")  # Can be 'production', 'development', or 'disabled'
 
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [

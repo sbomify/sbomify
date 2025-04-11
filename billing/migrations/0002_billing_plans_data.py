@@ -42,15 +42,17 @@ def add_billing_plans(apps, schema_editor):
                 max_components=plan["max_components"],
             )
 
+def remove_billing_plans(apps, schema_editor):
+    BillingPlan = apps.get_model("billing", "BillingPlan")
+    BillingPlan.objects.all().delete()
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("billing", "0001_initial"),
     ]
 
     operations = [
-        migrations.RunPython(add_billing_plans, migrations.RunPython.noop),
+        migrations.RunPython(add_billing_plans, remove_billing_plans),
     ]
 
 
