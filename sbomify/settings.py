@@ -316,6 +316,7 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/

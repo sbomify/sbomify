@@ -1,6 +1,7 @@
 """Utility functions for Keycloak user management."""
 
 import logging
+import uuid
 
 from django.conf import settings
 
@@ -33,20 +34,8 @@ class KeycloakManager:
 
         logger.debug(f"Initializing KeycloakManager with target realm: {self.realm}")
 
-        # Initialize admin client with proper realm configuration
-        self.admin_client = self._get_admin_client()
-
-        # Initialize OpenID client
-        self.openid_client = self._get_openid_client()
-
-    def _get_admin_client(self) -> KeycloakAdmin:
-        """Get a Keycloak admin client.
-
-        First authenticates with the master realm (required for admin),
-        then changes to the target realm for operations.
-        """
-        # First authenticate with the master realm
-        admin = KeycloakAdmin(
+        # Initialize master realm admin client
+        self.master_admin = KeycloakAdmin(
             server_url=self.server_url,
             username=self.admin_username,
             password=self.admin_password,
@@ -54,13 +43,19 @@ class KeycloakManager:
             verify=True,
         )
 
-        # Now switch to our target realm for subsequent operations
-        admin.realm_name = self.realm
+        # Initialize realm admin client by cloning master admin and switching realm
+        self.admin_client = KeycloakAdmin(
+            server_url=self.master_admin.server_url,
+            username=self.master_admin.username,
+            password=self.master_admin.password,
+            realm_name=self.realm,  # Set target realm directly
+            verify=True,
+            token=self.master_admin.token,  # Reuse the authentication token
+        )
+        logger.info(f"Configured KeycloakAdmin for realm: {self.admin_client.realm_name}")
 
-        # Log the configuration
-        logger.info(f"Configured KeycloakAdmin for realm: {admin.realm_name}")
-
-        return admin
+        # Initialize OpenID client
+        self.openid_client = self._get_openid_client()
 
     def _get_openid_client(self) -> KeycloakOpenID:
         """Get a Keycloak OpenID client."""
@@ -144,3 +139,105 @@ class KeycloakManager:
         except Exception as e:
             logger.error(f"Failed to send password reset email to {email}: {str(e)}")
             return False
+
+    def create_realm(self) -> bool:
+        """Create the realm in Keycloak if it doesn't exist.
+
+        Returns:
+            bool: True if realm was created, False if it already existed.
+        """
+        try:
+            # Check if realm exists
+            realms = self.master_admin.get_realms()
+            for realm in realms:
+                if realm.get("realm") == self.realm:
+                    logger.info(f"Realm '{self.realm}' already exists in Keycloak")
+                    return False
+
+            # Realm configuration
+            realm_representation = {
+                "realm": self.realm,
+                "enabled": True,
+                "displayName": self.realm,
+                "registrationAllowed": False,
+                "resetPasswordAllowed": True,
+                "loginWithEmailAllowed": True,
+                "duplicateEmailsAllowed": False,
+                "sslRequired": "external",
+            }
+
+            # Create the realm
+            self.master_admin.create_realm(payload=realm_representation, skip_exists=True)
+            logger.info(f"Created realm '{self.realm}' in Keycloak")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create realm: {str(e)}")
+            raise
+
+    def create_client(self) -> str | None:
+        """Create the client in the realm if it doesn't exist.
+
+        Returns:
+            str | None: The client secret if client was created, None if it already existed.
+        """
+        try:
+            # Check if client exists
+            clients = self.admin_client.get_clients()
+            for client in clients:
+                if client.get("clientId") == self.client_id:
+                    logger.info(f"Client '{self.client_id}' already exists in realm '{self.realm}'")
+                    return None
+
+            # Prepare redirect URIs
+            redirect_uris = [f"{settings.APP_BASE_URL}/*"]
+
+            # Add WEBSITE_BASE_URL if it exists
+            if hasattr(settings, "WEBSITE_BASE_URL"):
+                redirect_uris.append(f"{settings.WEBSITE_BASE_URL}/*")
+            # If not available, check if defined in environment but not loaded in settings
+            elif hasattr(settings, "VITE_WEBSITE_BASE_URL"):
+                redirect_uris.append(f"{settings.VITE_WEBSITE_BASE_URL}/*")
+
+            # Client configuration
+            client_representation = {
+                "clientId": self.client_id,
+                "name": self.client_id,
+                "enabled": True,
+                "clientAuthenticatorType": "client-secret",
+                "secret": self.client_secret or str(uuid.uuid4()),
+                "redirectUris": redirect_uris,
+                "webOrigins": ["+"],
+                "publicClient": False,
+                "protocol": "openid-connect",
+                "bearerOnly": False,
+                "standardFlowEnabled": True,
+                "implicitFlowEnabled": False,
+                "directAccessGrantsEnabled": True,
+                "serviceAccountsEnabled": True,
+                "authorizationServicesEnabled": False,
+            }
+
+            # Create the client
+            client_id = self.admin_client.create_client(payload=client_representation)
+            logger.info(f"Created client '{self.client_id}' in realm '{self.realm}'")
+
+            # Get the client secret
+            client_secret = self.admin_client.get_client_secrets(client_id)["value"]
+            logger.info(f"Generated client secret for client '{self.client_id}'")
+
+            return client_secret
+        except Exception as e:
+            logger.error(f"Failed to create client: {str(e)}")
+            raise
+
+    def ensure_realm_and_client(self) -> str | None:
+        """Ensure the realm and client exist, creating them if necessary.
+
+        Returns:
+            str | None: The client secret if a new client was created, None if client already existed.
+        """
+        # Create realm if needed
+        self.create_realm()
+
+        # Create client if needed and return the client secret
+        return self.create_client()
