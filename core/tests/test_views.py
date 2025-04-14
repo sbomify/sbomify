@@ -53,12 +53,40 @@ def test_logout_redirect(sample_user: AbstractBaseUser):
         SOCIAL_AUTH_AUTH0_DOMAIN="test-domain.com",
         SOCIAL_AUTH_AUTH0_KEY="test-client-id",
         APP_BASE_URL="http://test-return.url",
+        USE_KEYCLOAK=False,  # Force Auth0 logout flow for this test
     ):
         response: HttpResponse = client.get(reverse("core:logout"))
         assert response.status_code == 302
         assert response.url.startswith("https://test-domain.com/v2/logout")
         assert "client_id=test-client-id" in response.url
         assert "returnTo=http://test-return.url" in response.url
+
+
+@pytest.mark.django_db
+def test_logout_redirect_keycloak(django_user_model):
+    """Test the logout redirect when Keycloak is enabled."""
+    # Create a test user
+    user = django_user_model.objects.create(
+        username="keycloak_test_user",
+        email="keycloak_test@example.com",
+    )
+    user.set_password("keycloak_test_password")
+    user.save()
+
+    client = Client()
+    assert client.login(username="keycloak_test_user", password="keycloak_test_password")
+
+    with override_settings(
+        KEYCLOAK_SERVER_URL="http://test-keycloak.com/",
+        KEYCLOAK_REALM="test-realm",
+        APP_BASE_URL="http://test-return.url",
+        USE_KEYCLOAK=True,  # Force Keycloak logout flow for this test
+    ):
+        response: HttpResponse = client.get(reverse("core:logout"))
+        assert response.status_code == 302
+        expected_url = "http://test-keycloak.com/realms/test-realm/protocol/openid-connect/logout"
+        assert response.url.startswith(expected_url)
+        assert "redirect_uri=http://test-return.url" in response.url
 
 
 @pytest.mark.django_db
