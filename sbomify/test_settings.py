@@ -15,6 +15,10 @@ from django.conf import settings as django_settings
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
 
+# Ensure allauth apps are included in INSTALLED_APPS
+if "allauth" not in INSTALLED_APPS:
+    INSTALLED_APPS.extend(["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"])
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -117,4 +121,15 @@ with open(STATIC_ROOT / "manifest.json", "w") as f:
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-] + MIDDLEWARE[2:]  # Keep the rest of the middleware unchanged
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+]
+
+# Add debug toolbar middleware if DEBUG is True
+if DEBUG:
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
