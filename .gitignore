@@ -192,3 +192,9 @@ node_modules
 
 # Ignore cursor rules
 .cursorrules
+
+# Keycloak data directories
+keycloak-data/
+~/keycloak-data/
+~/keycloak-postgres-data/
+keycloak-postgres-data/
