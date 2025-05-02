@@ -110,6 +110,20 @@ services:
       sbomify-db:
         condition: service_healthy
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    restart: always
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: dev-file
+    ports:
+      - "8080:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    command: start-dev
+
 volumes:
   sbomify_postgres_data:
   sbomify_minio_data:
+  keycloak_data:

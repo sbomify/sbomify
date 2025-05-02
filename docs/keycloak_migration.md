@@ -6,64 +6,17 @@ This document provides step-by-step instructions for migrating from Auth0 to Key
 
 ### 1.1 Running Keycloak
 
-First, create a directory for persistent storage:
+Keycloak is now managed as part of the Docker Compose environment. You do not need to run Keycloak manually.
+
+To start Keycloak (and all other services), simply run:
 
 ```bash
-mkdir -p ~/keycloak-data
+docker compose up
 ```
 
-Run Keycloak using Docker or Podman with persistent storage:
+Keycloak will be available at <http://localhost:8080/>.
 
-```bash
-# Using Podman
-podman run -p 8080:8080 \
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  -e KC_DB=dev-file \
-  -v ~/keycloak-data:/opt/keycloak/data \
-  quay.io/keycloak/keycloak:26.1.4 \
-  start-dev
-
-# Using Docker
-docker run -p 8080:8080 \
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  -e KC_DB=dev-file \
-  -v ~/keycloak-data:/opt/keycloak/data \
-  quay.io/keycloak/keycloak:26.1.4 \
-  start-dev
-```
-
-For production environments, you should use a proper database like PostgreSQL instead of the file-based storage. Here's how to run Keycloak with PostgreSQL:
-
-```bash
-# First, create a network for Keycloak and PostgreSQL to communicate
-podman network create keycloak-network
-
-# Run PostgreSQL
-podman run -d --name keycloak-db \
-  --net keycloak-network \
-  -e POSTGRES_DB=keycloak \
-  -e POSTGRES_USER=keycloak \
-  -e POSTGRES_PASSWORD=keycloak \
-  -v ~/keycloak-postgres-data:/var/lib/postgresql/data \
-  postgres:15
-
-# Run Keycloak with PostgreSQL
-podman run -p 8080:8080 \
-  --name keycloak \
-  --net keycloak-network \
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
-  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-  -e KC_DB=postgres \
-  -e KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak \
-  -e KC_DB_USERNAME=keycloak \
-  -e KC_DB_PASSWORD=keycloak \
-  quay.io/keycloak/keycloak:26.1.4 \
-  start-dev
-```
-
-Access the Keycloak admin console at <http://localhost:8080/admin/> and log in with the admin credentials.
+Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
 ### 1.2 Create a Realm
 

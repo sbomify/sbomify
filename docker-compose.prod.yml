@@ -47,6 +47,7 @@ services:
       - sbomify-db
       - sbomify-minio
       - sbomify-createbuckets
+      - keycloak
     volumes: []  # Remove development volume mounts
     ports:
       - "8000:8000"  # Only expose the web port
@@ -58,10 +59,14 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - SECRET_KEY=${SECRET_KEY}
-      - SOCIAL_AUTH_AUTH0_DOMAIN=${SOCIAL_AUTH_AUTH0_DOMAIN}
-      - SOCIAL_AUTH_AUTH0_KEY=${SOCIAL_AUTH_AUTH0_KEY}
-      - SOCIAL_AUTH_AUTH0_SECRET=${SOCIAL_AUTH_AUTH0_SECRET}
       - APP_BASE_URL=${APP_BASE_URL}
+      - USE_KEYCLOAK=True
+      - KEYCLOAK_SERVER_URL=http://keycloak:8080/
+      - KEYCLOAK_REALM=sbomify
+      - KEYCLOAK_CLIENT_ID=sbomify
+      - KEYCLOAK_CLIENT_SECRET=your-client-secret-from-previous-step
+      - KEYCLOAK_ADMIN_USERNAME=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
     command: poetry run gunicorn --bind :8000 --workers 2 sbomify.wsgi
     restart: always
 
@@ -70,6 +75,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - sbomify-db
+      - keycloak
     volumes: []  # Remove development volume mounts
     environment:
       - DATABASE_URL=postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
