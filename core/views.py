@@ -154,10 +154,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
         if not user_id:
             return HttpResponse(status=204)  # No content to process
 
-        logger.info(
-            f"Received Keycloak webhook event: {event_type} "
-            f"for user {user_id} at {event_time}"
-        )
+        logger.info(f"Received Keycloak webhook event: {event_type} " f"for user {user_id} at {event_time}")
 
         # Handle different event types
         if event_type == "DELETE_ACCOUNT":
@@ -182,10 +179,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
                 if "email" in details:
                     django_user.email = details["email"]
                     django_user.save()
-                    logger.info(
-                        f"Updated email for user {django_user.username} "
-                        f"to {details['email']}"
-                    )
+                    logger.info(f"Updated email for user {django_user.username} " f"to {details['email']}")
 
                 # Update extra_data in social account
                 social_account.extra_data.update(details)
@@ -196,10 +190,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
         elif event_type in ["LOGIN", "LOGOUT"]:
             # Log these events for audit purposes
-            logger.info(
-                f"User {user_id} performed {event_type} "
-                f"from IP {details.get('ipAddress', 'unknown')}"
-            )
+            logger.info(f"User {user_id} performed {event_type} " f"from IP {details.get('ipAddress', 'unknown')}")
 
         return HttpResponse(status=200)
 

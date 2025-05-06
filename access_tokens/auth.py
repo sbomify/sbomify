@@ -34,6 +34,7 @@ class OptionalAuthBase(HttpBearer):
 
 def optional_auth(func):
     auth_instance = OptionalAuthBase()
+
     def wrapper(request, *args, **kwargs):
         auth_header = request.headers.get("Authorization")
         token = None
@@ -41,6 +42,7 @@ def optional_auth(func):
             token = auth_header.split(" ")[1]
         auth_instance.authenticate(request, token)
         return func(request, *args, **kwargs)
+
     return wrapper
 
 
@@ -51,6 +53,5 @@ def optional_token_auth(func):
             token = auth_header.split(" ")[1]
             PersonalAccessTokenAuth().authenticate(request, token)
         return func(request, *args, **kwargs)
+
     return wrapper
-
-

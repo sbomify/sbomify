@@ -38,12 +38,14 @@ class DashboardView(admin.AdminSite):
             "app_label": "core",
             "app_url": "/admin/dashboard/",
             "has_module_perms": True,
-            "models": [{
-                "name": "System Dashboard",
-                "object_name": "Dashboard",
-                "admin_url": "/admin/dashboard/",
-                "view_only": True,
-            }],
+            "models": [
+                {
+                    "name": "System Dashboard",
+                    "object_name": "Dashboard",
+                    "admin_url": "/admin/dashboard/",
+                    "view_only": True,
+                }
+            ],
         }
 
         app_list.insert(0, dashboard_app)
@@ -61,9 +63,7 @@ class DashboardView(admin.AdminSite):
                 "projects": Project.objects.count(),
                 "components": Component.objects.count(),
                 "sboms": SBOM.objects.count(),
-                "users_per_team": list(Team.objects.annotate(
-                    user_count=Count("members")
-                ).values("name", "user_count")),
+                "users_per_team": list(Team.objects.annotate(user_count=Count("members")).values("name", "user_count")),
             },
             "app_label": "core",
             "has_permission": True,
@@ -79,7 +79,7 @@ class CustomUserAdmin(UserAdmin):
 
     @admin.display(
         description="Email Verified",
-        boolean=False  # We're using custom HTML output
+        boolean=False,  # We're using custom HTML output
     )
     def email_verified_status(self, obj):
         """Get email verification status from Auth0.
@@ -97,32 +97,26 @@ class CustomUserAdmin(UserAdmin):
                     return format_html(
                         '<img src="/static/admin/img/icon-yes.svg" alt="True"> '
                         '<span style="color: #417690;">({})</span>',
-                        auth.provider
+                        auth.provider,
                     )
 
                 # Check Auth0 verification
                 if auth.provider == "auth0" and auth.extra_data:
                     email_verified = auth.extra_data.get("email_verified", False)
                     if email_verified:
-                        return format_html(
-                            '<img src="/static/admin/img/icon-yes.svg" alt="True">'
-                        )
+                        return format_html('<img src="/static/admin/img/icon-yes.svg" alt="True">')
                     return format_html(
                         '<img src="/static/admin/img/icon-no.svg" alt="False"> '
                         '<span style="color: #ba2121;">unverified</span>'
                     )
 
             # No social auths found
-            return format_html(
-                '<span style="color: #666;">no social auth</span>'
-            )
+            return format_html('<span style="color: #666;">no social auth</span>')
 
         except Exception as e:
             # Log the error but don't expose it in admin
             logger.error(f"Error checking email verification for user {obj.id}: {str(e)}")
-            return format_html(
-                '<span style="color: #666;">error checking status</span>'
-            )
+            return format_html('<span style="color: #666;">error checking status</span>')
 
 
 # Create custom admin site
