@@ -99,8 +99,10 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 Keycloak will be available at <http://keycloak:8080/>.
 
 > **Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
->
->     127.0.0.1   keycloak
+
+```bash
+127.0.0.1   keycloak
+```
 
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
@@ -122,12 +124,12 @@ Persistent storage for Keycloak is managed by Docker using a named volume (`keyc
 6. Enable "Standard flow" and "Direct access grants"
 7. Click "Next"
 8. Add valid redirect URIs (adjust according to your deployment environment):
-   - https://sbomify.example.com/*
+   - <https://sbomify.example.com/>*
 9. Add valid web origins:
-   - https://sbomify.example.com
+   - <https://sbomify.example.com>
 10. Click "Save"
 
-The realm account console is at: https://auth.example.com/realms/sbomify/account
+The realm account console is at: <https://auth.example.com/realms/sbomify/account>
 
 ##### 3. Get Client Secret
 
