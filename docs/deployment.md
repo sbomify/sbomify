@@ -106,6 +106,10 @@ Keycloak will be available at <http://keycloak:8080/>.
 
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
+##### Keycloak Realm and Client Setup
+
+> **Note:** In development, Keycloak realm and client setup are handled automatically by the `bin/keycloak-bootstrap.sh` script. You do not need to perform any manual steps for realm or client creation when using Docker Compose in development mode.
+
 ##### 1. Create a Realm
 
 1. Hover over the dropdown in the top-left corner (showing "master") and click "Create Realm"
