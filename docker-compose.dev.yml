@@ -1,10 +1,10 @@
 x-common-env: &common-env
-  DATABASE_USER: sbomify
-  DATABASE_PASSWORD: sbomify
-  DATABASE_NAME: sbomify
-  DATABASE_PORT: 5432
-  DATABASE_HOST: localhost
-  DOCKER_DATABASE_HOST: sbomify-db
+  DATABASE_USER: ${DATABASE_USER:-sbomify}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
+  DATABASE_NAME: ${DATABASE_NAME:-sbomify}
+  DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_HOST: ${DATABASE_HOST:-localhost}
+  DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
 
 x-keycloak-env: &keycloak-env
   USE_KEYCLOAK: "True"

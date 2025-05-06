@@ -89,19 +89,19 @@ Authentication methods differ by environment:
 Authentication for local development is handled through Django's admin interface. See the [README.md](../README.md#local-development) for setup instructions.
 
 ### Production Environment
->
+
 > **Note**: Production authentication is in transition. See [issue #1](https://github.com/sbomify/sbomify/issues/1) for details.
 
 #### Current: Auth0 Setup (Production Only)
 
 Create a "Regular Web Application" with the following settings:
 
-| Setting | Value |
-|---------|-------|
-| APPLICATION LOGIN URI | https://[yourdomain] |
+| Setting               | Value                               |
+| --------------------- | ----------------------------------- |
+| APPLICATION LOGIN URI | https://[yourdomain]                |
 | ALLOWED CALLBACK URLs | https://[yourdomain]/complete/auth0 |
-| ALLOWED LOGOUT URLs | https://[yourdomain] |
-| ALLOWED WEB ORIGINS | https://[yourdomain] |
+| ALLOWED LOGOUT URLs   | https://[yourdomain]                |
+| ALLOWED WEB ORIGINS   | https://[yourdomain]                |
 
 ### Application Configuration
 

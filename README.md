@@ -167,7 +167,9 @@ Keycloak will be available at <http://keycloak:8080/>.
 
 > **Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
 
-    > 127.0.0.1   keycloak
+```bash
+127.0.0.1   keycloak
+```
 
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
@@ -259,7 +261,7 @@ To test the integration:
 
 ###### Keycloak Integration Issues
 
-- Check that Keycloak is running and accessible at http://keycloak:8080/
+- Check that Keycloak is running and accessible at <http://keycloak:8080/>
 - Verify your realm name and client ID are correct
 - Ensure your client secret is correctly copied to your `.env` file
 - Confirm that redirect URIs in Keycloak match your Django application URLs
