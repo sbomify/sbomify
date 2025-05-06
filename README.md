@@ -8,8 +8,8 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ## Roadmap and Goals
 
-* Be compatible with both CycloneDX and SPDX SBOM formats
-* Be compatible with Project Koala / [Transparency Exchange API (TEA)](https://github.com/CycloneDX/transparency-exchange-api/)
+- Be compatible with both CycloneDX and SPDX SBOM formats
+- Be compatible with Project Koala / [Transparency Exchange API (TEA)](https://github.com/CycloneDX/transparency-exchange-api/)
 
 ## Releases
 
@@ -21,10 +21,10 @@ The application is automatically deployed to [fly.io](https://fly.io) when chang
 
 For detailed information about the deployment process, including:
 
-* CI/CD workflow
-* Fly.io configuration
-* Environment setup
-* Storage configuration
+- CI/CD workflow
+- Fly.io configuration
+- Environment setup
+- Storage configuration
 
 See [docs/deployment.md](docs/deployment.md).
 
@@ -49,17 +49,17 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 
 ### Development Prerequisites
 
-* Python 3.12+
-* Poetry
-* Docker (for running PostgreSQL and Minio)
-* Bun (for JavaScript development)
+- Python 3.12+
+- Poetry
+- Docker (for running PostgreSQL and Minio)
+- Bun (for JavaScript development)
 
 ### API Documentation
 
 The API documentation is available at:
 
-* Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
-* OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
+- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
 
 These endpoints are available when running the development server.
 
@@ -93,34 +93,34 @@ docker compose \
 
 Access the application:
 
-* Admin interface: `http://localhost:8000/admin`
-* Main application: `http://localhost:8000`
+- Admin interface: `http://localhost:8000/admin`
+- Main application: `http://localhost:8000`
 
 > **Note**: For production deployment information, see [docs/deployment.md](docs/deployment.md).
 
 #### Alternative: Running Locally (without Docker for Django)
 
-* Start required services in Docker:
+- Start required services in Docker:
 
 ```bash
 # Start both PostgreSQL and MinIO
 docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
 ```
 
-* Install dependencies:
+- Install dependencies:
 
 ```bash
 poetry install
 bun install  # for JavaScript dependencies
 ```
 
-* Run migrations:
+- Run migrations:
 
 ```bash
 poetry run python manage.py migrate
 ```
 
-* Start the development servers:
+- Start the development servers:
 
 ```bash
 # In one terminal, start Django
@@ -166,8 +166,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 Keycloak will be available at <http://keycloak:8080/>.
 
 > **Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
->
->     127.0.0.1   keycloak
+
+    > 127.0.0.1   keycloak
 
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
@@ -258,17 +258,20 @@ To test the integration:
 ##### 7. Troubleshooting
 
 ###### Keycloak Integration Issues
+
 - Check that Keycloak is running and accessible at http://keycloak:8080/
 - Verify your realm name and client ID are correct
 - Ensure your client secret is correctly copied to your `.env` file
 - Confirm that redirect URIs in Keycloak match your Django application URLs
 
 ###### User Migration Issues
+
 - Check the logs for detailed error messages
 - Verify that Keycloak admin credentials are correct
 - Ensure that users have valid email addresses in the Django database
 
 ###### Login Issues
+
 - Clear your browser cookies and try again
 - Check that the Keycloak server is running and accessible
 - Verify that the user exists in Keycloak (check the Users section in the Keycloak admin console)
@@ -282,18 +285,18 @@ Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstr
 The application uses S3-compatible storage for storing files and assets. In
 development, we use Minio as a local S3 replacement.
 
-* When running with Docker Compose, everything is configured automatically
-* When running locally (Django outside Docker):
-  * Make sure Minio is running via Docker:
-     `docker compose up sbomify-minio sbomify-createbuckets -d`
-  * Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
-  * The required buckets (`sbomify-media` and `sbomify-sboms`) will be created
-     automatically
+- When running with Docker Compose, everything is configured automatically
+- When running locally (Django outside Docker):
+  - Make sure Minio is running via Docker:
+    `docker compose up sbomify-minio sbomify-createbuckets -d`
+  - Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
+  - The required buckets (`sbomify-media` and `sbomify-sboms`) will be created
+    automatically
 
 You can access the Minio console at:
 
-* `http://localhost:9001`
-* Default credentials: minioadmin/minioadmin
+- `http://localhost:9001`
+- Default credentials: minioadmin/minioadmin
 
 ### Running test cases
 
@@ -340,10 +343,10 @@ bun run dev
 
 ### Production Prerequisites
 
-* Docker and Docker Compose
-* S3-compatible storage (like Amazon S3 or Google Cloud Storage)
-* PostgreSQL database
-* Reverse proxy (e.g., Nginx) for production deployments
+- Docker and Docker Compose
+- S3-compatible storage (like Amazon S3 or Google Cloud Storage)
+- PostgreSQL database
+- Reverse proxy (e.g., Nginx) for production deployments
 
 ### Docker Compose Configuration
 
