@@ -83,7 +83,6 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-
 @login_required
 def team_details(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
@@ -343,7 +342,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
             "project": 33,
             "component": 66,
             "complete": 100,
-        }[current_step]
+        }[current_step],
     }
 
     if request.method == "POST":
@@ -356,10 +355,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     team = Team.objects.get(key=team_key)
 
                     # Create the product
-                    product = Product.objects.create(
-                        name=form.cleaned_data["name"],
-                        team=team
-                    )
+                    product = Product.objects.create(name=form.cleaned_data["name"], team=team)
                     # Store product ID in session
                     request.session["wizard_product_id"] = product.id
                     # Move to next step
@@ -368,8 +364,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     return redirect("teams:onboarding_wizard")
                 except IntegrityError:
                     messages.warning(
-                        request,
-                        f"A product with the name '{form.cleaned_data['name']}' already exists in your team."
+                        request, f"A product with the name '{form.cleaned_data['name']}' already exists in your team."
                     )
         elif current_step == "project":
             form = OnboardingProjectForm(request.POST)
@@ -389,10 +384,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     product = Product.objects.get(id=product_id)
 
                     # Create the project
-                    project = Project.objects.create(
-                        name=form.cleaned_data["name"],
-                        team=team
-                    )
+                    project = Project.objects.create(name=form.cleaned_data["name"], team=team)
 
                     # Store project ID in session
                     request.session["wizard_project_id"] = project.id
@@ -402,8 +394,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     return redirect("teams:onboarding_wizard")
                 except IntegrityError:
                     messages.warning(
-                        request,
-                        f"A project with the name '{form.cleaned_data['name']}' already exists in your team."
+                        request, f"A project with the name '{form.cleaned_data['name']}' already exists in your team."
                     )
                 except Product.DoesNotExist:
                     messages.error(request, "The product from the previous step no longer exists.")
@@ -432,10 +423,13 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     social_auth = UserSocialAuth.objects.filter(user=request.user, provider="auth0").first()
                     user_metadata = social_auth.extra_data.get("user_metadata", {}) if social_auth else {}
                     company_name = user_metadata.get("company", team.name)
-                    supplier_contact = user_metadata.get("supplier_contact", {
-                        "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                        "email": request.user.email
-                    })
+                    supplier_contact = user_metadata.get(
+                        "supplier_contact",
+                        {
+                            "name": f"{request.user.first_name} {request.user.last_name}".strip(),
+                            "email": request.user.email,
+                        },
+                    )
 
                     # Create the component
                     component = Component.objects.create(
@@ -446,18 +440,15 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                                 "name": company_name,
                                 "contact": {
                                     "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                                    "email": request.user.email
-                                }
+                                    "email": request.user.email,
+                                },
                             },
-                            "supplier": {
-                                "name": company_name,
-                                "contact": supplier_contact
-                            },
+                            "supplier": {"name": company_name, "contact": supplier_contact},
                             "author": {
                                 "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                                "email": request.user.email
-                            }
-                        }
+                                "email": request.user.email,
+                            },
+                        },
                     )
 
                     # Link the project to the product
@@ -482,8 +473,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     return redirect("teams:onboarding_wizard")
                 except IntegrityError:
                     messages.warning(
-                        request,
-                        f"A component with the name '{form.cleaned_data['name']}' already exists in your team."
+                        request, f"A component with the name '{form.cleaned_data['name']}' already exists in your team."
                     )
                 except (Product.DoesNotExist, Project.DoesNotExist):
                     messages.error(request, "The product or project from previous steps no longer exists.")

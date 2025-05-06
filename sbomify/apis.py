@@ -13,7 +13,7 @@ api = NinjaAPI(
     description="API for managing Software Bill of Materials (SBOM)",
     openapi_url="/openapi.json",
     docs_url="/docs",
-    urls_namespace="api-1"
+    urls_namespace="api-1",
 )
 
 api.add_router("/sboms", "sboms.apis.router")

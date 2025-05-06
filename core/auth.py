@@ -120,5 +120,3 @@ class SafeAuth0OAuth2(Auth0OAuth2):
             logger.warning("No email found in response")
 
         return details
-
-
