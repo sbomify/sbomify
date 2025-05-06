@@ -114,14 +114,31 @@ services:
     image: quay.io/keycloak/keycloak:26.1.4
     restart: always
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_DB: dev-file
+      KC_HOSTNAME_URL: http://keycloak:8080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
     command: start-dev
+
+
+  keycloak-bootstrap:
+    image: quay.io/keycloak/keycloak:26.1.4
+    depends_on:
+      - keycloak
+    volumes:
+      - ./bin/keycloak-bootstrap.sh:/keycloak-bootstrap.sh
+    entrypoint: /bin/sh /keycloak-bootstrap.sh
+    environment:
+      KC_HOSTNAME_URL: http://keycloak:8080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
+      KC_HEALTH_ENABLED: "true"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
 
 volumes:
   sbomify_postgres_data:

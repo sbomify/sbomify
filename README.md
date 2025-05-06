@@ -153,18 +153,129 @@ VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 
 These settings are preconfigured in the `.env.example` file.
 
-#### Keycloak
+#### Keycloak Authentication Setup
 
-* Run a keycloak instance via [docker](https://www.keycloak.org/getting-started/getting-started-docker) or [Podman](https://www.keycloak.org/getting-started/getting-started-podman)
+Keycloak is now managed as part of the Docker Compose environment. You do not need to run Keycloak manually.
 
-  ```shell
-  # Podman
-  podman run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.4 start-dev
+To start Keycloak (and all other services) in development, simply run:
 
-  # Or docker
-  docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.1.4 start-dev
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
 
-  ```
+Keycloak will be available at <http://keycloak:8080/>.
+
+> **Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
+>
+>     127.0.0.1   keycloak
+
+Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
+
+##### 1. Create a Realm
+
+1. Hover over the dropdown in the top-left corner (showing "master") and click "Create Realm"
+2. Enter "sbomify" as the realm name
+3. Click "Create"
+
+##### 2. Create a Client
+
+1. Navigate to "Clients" in the left sidebar
+2. Click "Create client"
+3. Enter the following details:
+   - Client type: OpenID Connect
+   - Client ID: sbomify
+4. Click "Next"
+5. Enable "Client authentication"
+6. Enable "Standard flow" and "Direct access grants"
+7. Click "Next"
+8. Add valid redirect URIs (adjust according to your environment):
+   - <http://localhost:8000/>*
+   - <http://127.0.0.1:8000/>*
+9. Add valid web origins:
+   - <http://localhost:8000>
+   - <http://127.0.0.1:8000>
+10. Click "Save"
+
+The realm account console is at: <http://keycloak:8080/realms/sbomify-dev/account>
+
+##### 3. Get Client Secret
+
+1. Navigate to the "Credentials" tab of your new client
+2. Copy the client secret (you will need this for your Django settings)
+
+##### 4. Configure Django for Keycloak
+
+You can set these environment variables either in your `.env` file (recommended for local development), or directly in your `docker-compose.dev.yml` (or `docker-compose.yml`) under the `environment` section for the relevant services:
+
+```env
+USE_KEYCLOAK=True
+KEYCLOAK_SERVER_URL=http://keycloak:8080/
+KEYCLOAK_REALM=sbomify
+KEYCLOAK_CLIENT_ID=sbomify
+KEYCLOAK_CLIENT_SECRET=your-client-secret-from-previous-step
+KEYCLOAK_ADMIN_USERNAME=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+```
+
+> **Note:** If you set these in `.env`, make sure your docker-compose file includes an `env_file: .env` line for the relevant service, or that your environment is loaded accordingly. If you set them in the compose file, they will override `.env` values for that service.
+
+##### 5. Migrating Existing Users
+
+Django comes with a management command to migrate existing users from Django to Keycloak:
+
+```bash
+# Dry run (does not create users in Keycloak, just shows what would happen)
+python manage.py migrate_to_keycloak --dry-run
+
+# Migrate all users
+python manage.py migrate_to_keycloak
+
+# Migrate all users and send password reset emails
+python manage.py migrate_to_keycloak --send-reset-emails
+
+# Migrate a specific user
+python manage.py migrate_to_keycloak --user-email user@example.com
+```
+
+During migration:
+
+1. Users are created in Keycloak with the same email, username, first name, and last name as in Django
+2. A random temporary password is set for each user
+3. Optionally, password reset emails can be sent to users
+
+##### 6. Testing the Integration
+
+To test the integration:
+
+1. Make sure Keycloak is running
+2. Set `USE_KEYCLOAK=True` in your `.env` file
+3. Start the Django server
+4. Navigate to the login page
+5. Click "Sign in with Keycloak"
+6. You should be redirected to the Keycloak login page
+7. After signing in, you should be redirected back to the Django application
+
+##### 7. Troubleshooting
+
+###### Keycloak Integration Issues
+- Check that Keycloak is running and accessible at http://keycloak:8080/
+- Verify your realm name and client ID are correct
+- Ensure your client secret is correctly copied to your `.env` file
+- Confirm that redirect URIs in Keycloak match your Django application URLs
+
+###### User Migration Issues
+- Check the logs for detailed error messages
+- Verify that Keycloak admin credentials are correct
+- Ensure that users have valid email addresses in the Django database
+
+###### Login Issues
+- Clear your browser cookies and try again
+- Check that the Keycloak server is running and accessible
+- Verify that the user exists in Keycloak (check the Users section in the Keycloak admin console)
+
+##### Keycloak Bootstrapping
+
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your `.env` file or Docker Compose configuration to control the bootstrap process.
 
 #### S3/Minio Storage
 
@@ -230,153 +341,21 @@ bun run dev
 ### Production Prerequisites
 
 * Docker and Docker Compose
-* S3-compatible storage (like MinIO)
+* S3-compatible storage (like Amazon S3 or Google Cloud Storage)
 * PostgreSQL database
-* Auth0 account for authentication (Note: Migration to Keycloak is planned)
 * Reverse proxy (e.g., Nginx) for production deployments
 
 ### Docker Compose Configuration
 
-The application uses two Docker Compose files:
+A `docker-compose.prod.yml` file is available for production-like setups. **Note:** This configuration is not fully tested and is not recommended for use in real production environments as-is. The provided settings are for demonstration and staging purposes only and will be updated and improved in the future.
 
-* `docker-compose.yml`: Base configuration with development defaults
-* `docker-compose.prod.yml`: Production overrides that:
-  * Remove development-specific settings
-  * Add production-specific configurations
-  * Configure proper restart policies
-  * Remove exposed ports except for the web interface
-  * Remove development volume mounts
-
-### Reverse Proxy Setup
-
-For production deployments, it's strongly recommended to put a reverse proxy (such as Nginx) in front of the application server. This provides:
-
-* SSL/TLS termination
-* Better security
-* Static file serving
-* Load balancing (if needed)
-* Request buffering
-* Gzip compression
-
-### Authentication
-
-#### Current: Auth0 Configuration
-
-> **Important Migration Notice**: We are in the process of migrating from Auth0 to Keycloak for authentication. This work is being tracked in [issue #1](https://github.com/sbomify/sbomify/issues/1). During this transition period, you can:
->
-> * Continue using Auth0 configuration as described below
-> * Use Django admin interface (/admin) with local users for development
-> * Follow the migration issue for updates
-
-Create a "Regular Web Application" in Auth0 with the following settings:
-
-| Setting | Value |
-|---------|-------|
-| APPLICATION LOGIN URI | https://[yourdomain] |
-| ALLOWED CALLBACK URLs | https://[yourdomain]/complete/auth0 |
-| ALLOWED LOGOUT URLs | https://[yourdomain] |
-| ALLOWED WEB ORIGINS | https://[yourdomain] |
-
-### Environment Variables
-
-Create a `.env` file with the following variables:
+To try a production-like stack:
 
 ```bash
-# Database
-POSTGRES_PASSWORD=<secure-password>
-
-# Security
-SECRET_KEY=<django-secret-key>
-
-# Auth0
-SOCIAL_AUTH_AUTH0_DOMAIN=<your-auth0-domain>
-SOCIAL_AUTH_AUTH0_KEY=<your-auth0-client-id>
-SOCIAL_AUTH_AUTH0_SECRET=<your-auth0-client-secret>
-
-# Storage (MinIO/S3)
-AWS_ACCESS_KEY_ID=<your-s3-access-key>
-AWS_SECRET_ACCESS_KEY=<your-s3-secret-key>
-
-# Application
-APP_BASE_URL=https://[your-domain]
-```
-
-To disable billing, use `BILLING=False`.
-
-Before you begin, you need a [create webhook](https://dashboard.stripe.com/workbench/webhooks/create) and point it to `https://[your-domain]/webhook/`.
-
-```bash
-# Billing
-STRIPE_BILLING_URL=https://billing.stripe.com/p/login/[redacted]
-STRIPE_PUBLISHABLE_KEY=[redacted]
-STRIPE_SECRET_KEY=[redacted]
-STRIPE_WEBHOOK_SECRET=
-```
-
-### Running in Production
-
-1. Build and start the production stack:
-
-```bash
-# Build the images
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build
-
-# Start the stack
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-1. Create a superuser account (first time only):
+You will need to set appropriate environment variables (see `.env.example` for guidance) and ensure your reverse proxy, storage, and database are configured securely.
 
-```bash
-docker compose exec sbomify-backend poetry run python manage.py createsuperuser
-```
-
-1. The application will be available at `http://[your-domain]:8000`
-
-### SBOM Upload via API
-
-#### CycloneDX
-
-```shell
-curl -v -X POST -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  --data-binary @cyclonedx-format-sbom-file.json \
-  https://[your-domain]/api/v1/sboms/artifact/cyclonedx/<component-id>
-```
-
-#### SPDX
-
-```shell
-curl -v -X POST -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  --data-binary @spdx-format-sbom-file.json \
-  https://[your-domain]/api/v1/sboms/artifact/spdx/<component-id>
-```
-
-### Backup and Restore
-
-```shell
-# Take DB backup
-docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
-
-# Restore DB from backup
-cat backup.sql | docker compose exec -T sbomify-db psql -U sbomify sbomify
-```
-
-### Generating Pydantic Models
-
-For sbom formats, models for new versions can be generated using
-`datamodel-codegen` which is installed as a dev dependency.
-
-```shell
-poetry run datamodel-codegen \
-  --url https://github.com/CycloneDX/specification/raw/refs/tags/1.6/schema/bom-1.6.schema.json \
-  --output-model-type pydantic_v2.BaseModel \
-  --use-standard-collections \
-  --use-subclass-enum \
-  --use-double-quotes \
-  --use-schema-description \
-  --target-python-version 3.10 \
-  --use-annotated \
-  --output cyclonedx
-```
+> **Warning:** Do not use the provided production compose setup as-is for real deployments. Review and harden all settings, secrets, and network exposure before using in production.
