@@ -9,3 +9,16 @@ SOCIAL_AUTH_AUTH0_SECRET=none
 APP_BASE_URL=http://127.0.0.1:8000
 
 LOG_LEVEL=DEBUG
+
+# Test environment variables
+DJANGO_TEST_USER=testuser
+DJANGO_TEST_EMAIL=testuser@example.com
+DJANGO_TEST_PASSWORD=testpassword
+
+# Keycloak settings (needed for tests)
+KEYCLOAK_SERVER_URL=http://localhost:8080/
+KEYCLOAK_REALM=sbomify3
+KEYCLOAK_CLIENT_ID=sbomify
+KEYCLOAK_CLIENT_SECRET=test-client-secret
+KEYCLOAK_ADMIN_USERNAME=admin
+KEYCLOAK_ADMIN_PASSWORD=admin

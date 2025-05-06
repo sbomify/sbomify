@@ -10,7 +10,7 @@ This document outlines the steps to cut a new release of sbomify.
 # Run linting
 poetry run ruff check .
 poetry run ruff format --check .
-bun markdownlint "**/*.md"
+bun markdownlint "**/*.md" --ignore node_modules
 
 # Run tests and coverage
 poetry run coverage run -m pytest

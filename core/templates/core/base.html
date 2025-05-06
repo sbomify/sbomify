@@ -17,7 +17,7 @@
 	<link rel="shortcut icon" href="{% static 'img/sbomify-icon.svg' %}" />
   <link rel="icon" type="image/svg+xml" href="{% static 'img/sbomify-icon.svg' %}" sizes="any">
 
-  <title>{% block title %}SBOMify{% endblock %}</title>
+  <title>{% block title %}sbomify{% endblock %}</title>
 
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
@@ -31,22 +31,36 @@
 
 <body data-theme="default" data-layout="fluid" data-sidebar-position="left" data-sidebar-layout="default">
   {% block main %}
-    {% cache 300 'header' request.user.id %}
-        {% include "core/components/topnav.html" %}
-    {% endcache %}
+    {% if request.user.is_authenticated %}
+      {% cache 300 'header' request.user.id %}
+          {% include "core/components/topnav.html" %}
+      {% endcache %}
+    {% endif %}
 
     <div class="container-fluid">
+      {% if request.user.is_authenticated %}
         <div class="row">
-            {% cache 300 'sidebar' request.user.id request.session.current_team.id %}
-                {% include "core/components/sidebar.html" %}
-            {% endcache %}
-
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <div class="messages-container">
-                    {% include "core/components/messages.html" %}
-                </div>
-                {% block content %}{% endblock %}
-            </main>
+          {% cache 300 'sidebar' request.user.id request.session.current_team.id %}
+              {% include "core/components/sidebar.html" %}
+          {% endcache %}
+          <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="messages-container">
+                {% include "core/components/messages.html" %}
+            </div>
+      {% else %}
+        <div class="row justify-content-center">
+          <div class="col-md-6 col-lg-4 mt-5">
+            <div class="text-center mb-4">
+              <img src="{% static 'img/logo.svg' %}" alt="sbomify Logo" class="img-fluid mb-3" style="max-width: 200px;">
+            </div>
+            <div class="messages-container">
+              {% include "core/components/messages.html" %}
+            </div>
+      {% endif %}
+          {% block content %}{% endblock %}
+      {% if request.user.is_authenticated %}
+          </main>
+      {% endif %}
         </div>
     </div>
   {% endblock %}
