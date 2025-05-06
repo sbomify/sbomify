@@ -1,5 +1,7 @@
 # Deployment Process
 
+> **⚠️ NOTE: This documentation is a work in progress and may change. Please consult the team for the latest deployment procedures.**
+
 This document outlines how sbomify is deployed to our hosting environments.
 
 ## Overview
@@ -82,26 +84,134 @@ fly postgres attach [database name] -a [app name]
 
 ### Authentication Configuration
 
-Authentication methods differ by environment:
+Authentication for all environments is now handled via Keycloak, which is managed as part of the Docker Compose environment.
 
-### Local Development
+#### Keycloak Setup
 
-Authentication for local development is handled through Django's admin interface. See the [README.md](../README.md#local-development) for setup instructions.
+Keycloak is started automatically with Docker Compose. You do not need to run Keycloak manually.
 
-### Production Environment
->
-> **Note**: Production authentication is in transition. See [issue #1](https://github.com/sbomify/sbomify/issues/1) for details.
+To start Keycloak (and all other services) in development, simply run:
 
-#### Current: Auth0 Setup (Production Only)
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
 
-Create a "Regular Web Application" with the following settings:
+Keycloak will be available at <http://keycloak:8080/>.
 
-| Setting | Value |
-|---------|-------|
-| APPLICATION LOGIN URI | https://[yourdomain] |
-| ALLOWED CALLBACK URLs | https://[yourdomain]/complete/auth0 |
-| ALLOWED LOGOUT URLs | https://[yourdomain] |
-| ALLOWED WEB ORIGINS | https://[yourdomain] |
+> **Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
+
+```bash
+127.0.0.1   keycloak
+```
+
+Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
+
+##### 1. Create a Realm
+
+1. Hover over the dropdown in the top-left corner (showing "master") and click "Create Realm"
+2. Enter "sbomify" as the realm name
+3. Click "Create"
+
+##### 2. Create a Client
+
+1. Navigate to "Clients" in the left sidebar
+2. Click "Create client"
+3. Enter the following details:
+   - Client type: OpenID Connect
+   - Client ID: sbomify
+4. Click "Next"
+5. Enable "Client authentication"
+6. Enable "Standard flow" and "Direct access grants"
+7. Click "Next"
+8. Add valid redirect URIs (adjust according to your deployment environment):
+   - <https://sbomify.example.com/>*
+9. Add valid web origins:
+   - <https://sbomify.example.com>
+10. Click "Save"
+
+The realm account console is at: <https://auth.example.com/realms/sbomify/account>
+
+##### 3. Get Client Secret
+
+1. Navigate to the "Credentials" tab of your new client
+2. Copy the client secret (you will need this for your Django settings)
+
+##### 4. Configure Django for Keycloak
+
+Set these environment variables in your `.env` file or in your Docker Compose configuration:
+
+```env
+USE_KEYCLOAK=True
+KEYCLOAK_SERVER_URL=https://auth.example.com/
+KEYCLOAK_REALM=sbomify
+KEYCLOAK_CLIENT_ID=sbomify
+KEYCLOAK_CLIENT_SECRET=your-client-secret-from-previous-step
+KEYCLOAK_ADMIN_USERNAME=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+```
+
+> **Note:** If you set these in `.env`, make sure your docker-compose file includes an `env_file: .env` line for the relevant service, or that your environment is loaded accordingly. If you set them in the compose file, they will override `.env` values for that service.
+
+##### 5. Migrating Existing Users
+
+Django comes with a management command to migrate existing users from Django to Keycloak:
+
+```bash
+# Dry run (does not create users in Keycloak, just shows what would happen)
+python manage.py migrate_to_keycloak --dry-run
+
+# Migrate all users
+python manage.py migrate_to_keycloak
+
+# Migrate all users and send password reset emails
+python manage.py migrate_to_keycloak --send-reset-emails
+
+# Migrate a specific user
+python manage.py migrate_to_keycloak --user-email user@example.com
+```
+
+During migration:
+
+1. Users are created in Keycloak with the same email, username, first name, and last name as in Django
+2. A random temporary password is set for each user
+3. Optionally, password reset emails can be sent to users
+
+##### 6. Testing the Integration
+
+To test the integration:
+
+1. Make sure Keycloak is running
+2. Set `USE_KEYCLOAK=True` in your `.env` file
+3. Start the Django server
+4. Navigate to the login page
+5. Click "Log In / Register"
+6. You should be redirected to the Keycloak login page
+7. After signing in, you should be redirected back to the Django application
+
+##### 7. Troubleshooting
+
+###### Keycloak Integration Issues
+
+- Check that Keycloak is running and accessible at <http://keycloak:8080/>
+- Verify your realm name and client ID are correct
+- Ensure your client secret is correctly copied to your `.env` file
+- Confirm that redirect URIs in Keycloak match your Django application URLs
+
+###### User Migration Issues
+
+- Check the logs for detailed error messages
+- Verify that Keycloak admin credentials are correct
+- Ensure that users have valid email addresses in the Django database
+
+###### Login Issues
+
+- Clear your browser cookies and try again
+- Check that the Keycloak server is running and accessible
+- Verify that the user exists in Keycloak (check the Users section in the Keycloak admin console)
+
+##### Keycloak Bootstrapping
+
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your `.env` file or Docker Compose configuration to control the bootstrap process.
 
 ### Application Configuration
 
