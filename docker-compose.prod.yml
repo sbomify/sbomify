@@ -68,7 +68,7 @@ services:
       - "8000:8000"  # Only expose the web port
     environment:
       <<: [*common-env, *keycloak-env]
-      DATABASE_URL: postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
+      DATABASE_URL: postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@${DOCKER_DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
       AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
       AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
       AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
@@ -88,7 +88,7 @@ services:
     volumes: []  # Remove development volume mounts
     environment:
       <<: [*common-env, *keycloak-env]
-      DATABASE_URL: postgres://sbomify:${POSTGRES_PASSWORD}@sbomify-db:5432/sbomify
+      DATABASE_URL: postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@${DOCKER_DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.4
