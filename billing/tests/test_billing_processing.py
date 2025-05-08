@@ -5,12 +5,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import stripe
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from billing import billing_processing
 from billing.models import BillingPlan
-from teams.models import Member, Team, User
+from teams.models import Member, Team
 
+User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 

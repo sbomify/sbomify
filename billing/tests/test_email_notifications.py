@@ -3,12 +3,14 @@
 from unittest.mock import patch
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.urls import reverse
 
 from billing import email_notifications
-from teams.models import Member, Team, User
+from teams.models import Member, Team
 
+User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 

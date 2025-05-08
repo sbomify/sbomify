@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import stripe
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
 from django.test import Client, RequestFactory
@@ -13,7 +14,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from billing.models import BillingPlan
-from teams.models import Member, Team, User
+from teams.models import Member, Team
+
+User = get_user_model()
 
 from .fixtures import (  # noqa: F401
     business_plan,
