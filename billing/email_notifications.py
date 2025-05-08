@@ -20,7 +20,10 @@ def send_billing_email(team: Team, owner: Member, subject: str, template: str, c
             {
                 "team_name": team.name,
                 "user_name": owner.member.user.get_full_name() or owner.member.user.email,
-                "action_url": f"{settings.WEBSITE_BASE_URL}{reverse('billing:select_plan', kwargs={'team_key': team.key})}",
+                "action_url": (
+                    f"{settings.WEBSITE_BASE_URL}"
+                    f"{reverse('billing:select_plan', kwargs={'team_key': team.key})}"
+                ),
             }
         )
 

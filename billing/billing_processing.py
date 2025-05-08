@@ -3,13 +3,11 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
-import hashlib
-import hmac
 from functools import wraps
 
 import stripe
 from django.conf import settings
-from django.http import HttpResponseForbidden, HttpResponse
+from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from core.errors import error_response
@@ -228,14 +226,18 @@ def handle_subscription_updated(subscription):
             for owner in team_owners:
                 email_notifications.notify_subscription_cancelled(team, owner)
                 logger.info(
-                    f"Subscription cancelled notification sent for team {team.key} to {owner.member.user.email}"
+                    f"Subscription cancelled notification sent for team {team.key} "
+                    f"to {owner.member.user.email}"
                 )
         elif new_status in ["incomplete", "incomplete_expired"]:
             # Handle failed initial payment
             team_owners = team.members.filter(member__role="owner")
             for owner in team_owners:
                 email_notifications.notify_payment_failed(team, owner, None)
-                logger.warning(f"Initial payment failed notification sent for team {team.key} to {owner.member.user.email}")
+                logger.warning(
+                    f"Initial payment failed notification sent for team {team.key} "
+                    f"to {owner.member.user.email}"
+                )
 
         team.save()
 
@@ -381,7 +383,7 @@ def handle_checkout_completed(session):
         # Get the subscription to check trial status
         subscription = stripe.Subscription.retrieve(
             session.subscription,
-            expand=['latest_invoice.payment_intent']  # Expand payment intent for better error handling
+            expand=["latest_invoice.payment_intent"]  # Expand payment intent for better error handling
         )
 
         # Update team billing information
