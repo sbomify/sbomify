@@ -487,4 +487,4 @@ else:
     SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
 
 # Billing settings
-BILLING = os.getenv('BILLING', 'True').lower() == 'true'
+BILLING = os.getenv("BILLING", "True").lower() == "true"

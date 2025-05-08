@@ -7,10 +7,10 @@ from datetime import datetime
 from django.http import HttpRequest
 from django.urls import reverse
 
+from billing.config import is_billing_enabled
 from notifications.schemas import NotificationSchema
 from sbomify.logging import getLogger
 from teams.models import Team
-from billing.config import is_billing_enabled
 
 logger = getLogger(__name__)
 

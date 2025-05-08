@@ -14,7 +14,7 @@ from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from . import email_notifications
-from .config import is_billing_enabled, get_unlimited_plan_limits
+from .config import is_billing_enabled
 from .models import BillingPlan
 
 logger = getLogger(__name__)
