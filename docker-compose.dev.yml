@@ -39,6 +39,8 @@ services:
       - /code/node_modules
     environment:
       NODE_ENV: development
+      VITE_API_BASE_URL: http://127.0.0.1:8000/api/v1
+
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.4
