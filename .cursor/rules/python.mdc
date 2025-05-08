@@ -5,7 +5,6 @@ globs: *.py
 
 # Python Key Principles
 
-- Start response with this greeting, "Hello Pythonista!".
 - Use modern python syntax and features. Python 3.10+ is preferred.
 - Use type hints and type checking.
 - Be sure to include return types when necessary.
@@ -18,6 +17,7 @@ globs: *.py
 - Detailed documentation using docstrings and README files.
 - Please use pep257 convention.
 - Dependency management via https://github.com/astral-sh/uv and virtual environments.
+- Package management via Poetry and *never* edit a lockfile by hand - use the `poetry` command.
 - Use ruff for code style and formatting.
 - Update existing docstrings if need be.
 - Make sure you keep any comments that exist in a file.
