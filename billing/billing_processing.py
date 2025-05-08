@@ -14,6 +14,7 @@ from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from . import email_notifications
+from .config import is_billing_enabled, get_unlimited_plan_limits
 from .models import BillingPlan
 
 logger = getLogger(__name__)
@@ -27,6 +28,10 @@ def check_billing_limits(model_type: str):
         def _wrapped_view(request, *args, **kwargs):
             # Only check limits for POST requests
             if request.method != "POST":
+                return view_func(request, *args, **kwargs)
+
+            # If billing is disabled, bypass all checks
+            if not is_billing_enabled():
                 return view_func(request, *args, **kwargs)
 
             # Get current team
@@ -56,17 +61,16 @@ def check_billing_limits(model_type: str):
             }
 
             if model_type not in model_map:
-                return error_response(request, HttpResponseForbidden("Invalid resource type"))
+                return error_response(request, HttpResponseForbidden(f"Invalid model type: {model_type}"))
 
-            model_class, max_allowed = model_map[model_type]
-            current_count = model_class.objects.filter(team=team).count()
-
-            if max_allowed is not None and current_count >= max_allowed:
-                error_message = (
-                    f"Your {plan.name} plan allows maximum {max_allowed} {model_type}s. "
-                    f"Current usage: {current_count}/{max_allowed}."
-                )
-                return error_response(request, HttpResponseForbidden(error_message))
+            model_class, max_count = model_map[model_type]
+            if max_count is not None:  # None means unlimited
+                current_count = model_class.objects.filter(team=team).count()
+                if current_count >= max_count:
+                    return error_response(
+                        request,
+                        HttpResponseForbidden(f"You have reached the maximum {max_count} {model_type}s for your plan"),
+                    )
 
             return view_func(request, *args, **kwargs)
 

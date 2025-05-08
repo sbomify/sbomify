@@ -5,6 +5,7 @@ x-common-env: &common-env
   DATABASE_PORT: ${DATABASE_PORT:-5432}
   DATABASE_HOST: ${DATABASE_HOST:-localhost}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+  BILLING: ${BILLING:-False}
 
 x-keycloak-env: &keycloak-env
   USE_KEYCLOAK: "True"

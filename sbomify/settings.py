@@ -485,3 +485,6 @@ else:
     SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
 
     SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
+
+# Billing settings
+BILLING = os.getenv('BILLING', 'True').lower() == 'true'
