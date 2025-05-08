@@ -18,6 +18,7 @@ pytestmark = pytest.mark.django_db
 def team(db):
     """Create a test team."""
     user = User.objects.create_user(
+        username="testuser",
         email="test@example.com",
         password="testpass123",
         first_name="Test",
