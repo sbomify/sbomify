@@ -19,7 +19,7 @@ def send_billing_email(team: Team, owner: Member, subject: str, template: str, c
         context.update(
             {
                 "team_name": team.name,
-                "user_name": owner.member.user.get_full_name() or owner.member.user.email,
+                "user_name": owner.user.get_full_name() or owner.user.email,
                 "action_url": (
                     f"{settings.WEBSITE_BASE_URL}"
                     f"{reverse('billing:select_plan', kwargs={'team_key': team.key})}"
@@ -34,11 +34,11 @@ def send_billing_email(team: Team, owner: Member, subject: str, template: str, c
             f"{settings.EMAIL_SUBJECT_PREFIX}{subject}",
             text_message,
             settings.DEFAULT_FROM_EMAIL,
-            [owner.member.user.email],
+            [owner.user.email],
             html_message=html_message,
             fail_silently=True,
         )
-        logger.info(f"Sent {template} email to {owner.member.user.email}")
+        logger.info(f"Sent {template} email to {owner.user.email}")
     except Exception as e:
         logger.exception(f"Error sending {template} email: {str(e)}")
 
@@ -72,10 +72,10 @@ def notify_payment_failed(team: Team, owner: Member, invoice_id: str | None) -> 
         f"{settings.EMAIL_SUBJECT_PREFIX}{subject}",
         message,
         settings.DEFAULT_FROM_EMAIL,
-        [owner.member.user.email],
+        [owner.user.email],
         fail_silently=True,
     )
-    logger.info(f"Sent payment failed notification to {owner.member.user.email}")
+    logger.info(f"Sent payment failed notification to {owner.user.email}")
 
 
 def notify_subscription_cancelled(team: Team, owner: Member) -> None:
@@ -116,7 +116,7 @@ def notify_trial_ending(team: Team, owner: Member, days_remaining: int) -> None:
         f"{settings.EMAIL_SUBJECT_PREFIX}{subject}",
         message,
         settings.DEFAULT_FROM_EMAIL,
-        [owner.member.user.email],
+        [owner.user.email],
         fail_silently=True,
     )
-    logger.info(f"Sent trial ending notification to {owner.member.user.email}")
+    logger.info(f"Sent trial ending notification to {owner.user.email}")

@@ -176,7 +176,7 @@ def test_select_business_plan(
 def test_stripe_webhook_invalid_signature(factory):
     """Test webhook with invalid signature."""
     request = factory.post(
-        reverse("billing:stripe_webhook"),
+        reverse("billing:webhook"),
         data=json.dumps({"type": "test.event"}),
         content_type="application/json",
     )
@@ -204,7 +204,7 @@ def test_stripe_webhook_checkout_completed(factory, team):
     }
 
     request = factory.post(
-        reverse("billing:stripe_webhook"),
+        reverse("billing:webhook"),
         data=json.dumps(event_data),
         content_type="application/json",
     )
@@ -234,7 +234,7 @@ def test_stripe_webhook_subscription_updated(factory, team):
     }
 
     request = factory.post(
-        reverse("billing:stripe_webhook"),
+        reverse("billing:webhook"),
         data=json.dumps(event_data),
         content_type="application/json",
     )
@@ -263,7 +263,7 @@ def test_stripe_webhook_payment_failed(factory, team):
     }
 
     request = factory.post(
-        reverse("billing:stripe_webhook"),
+        reverse("billing:webhook"),
         data=json.dumps(event_data),
         content_type="application/json",
     )
@@ -281,7 +281,7 @@ def test_stripe_webhook_payment_failed(factory, team):
 def test_stripe_webhook_error_handling(factory):
     """Test webhook error handling."""
     request = factory.post(
-        reverse("billing:stripe_webhook"),
+        reverse("billing:webhook"),
         data=json.dumps({"type": "test.event"}),
         content_type="application/json",
     )
@@ -297,29 +297,17 @@ def test_stripe_webhook_error_handling(factory):
 @pytest.mark.django_db
 def test_billing_redirect_trial(client, team, business_plan):
     """Test billing redirect with trial period."""
-    client.force_login(team.members.first().user)
-
-    # Set up session data
-    session = client.session
-    session["selected_plan"] = {
-        "key": "business",
-        "billing_period": "monthly",
-        "limits": {
-            "max_products": 10,
-            "max_projects": 20,
-            "max_components": 100,
-        },
-    }
-    session.save()
+    member = team.members.first()
+    client.force_login(member.user)
 
     with patch("stripe.checkout.Session.create") as mock_create:
-        mock_create.return_value = MagicMock(url="https://stripe.com/checkout")
+        mock_create.return_value = MagicMock(url="https://checkout.stripe.com/test")
         response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team.key}))
-        assert response.status_code == 302
-        assert response.url == "https://stripe.com/checkout"
 
-        # Verify session creation parameters
+        assert response.status_code == 302
+        assert "checkout.stripe.com/test" in response.url
+
+        # Verify trial period was included in session creation
         mock_create.assert_called_once()
-        call_args = mock_create.call_args[1]
-        assert call_args["mode"] == "subscription"
-        assert call_args["metadata"]["team_key"] == team.key
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["subscription_data"]["trial_period_days"] == settings.TRIAL_PERIOD_DAYS

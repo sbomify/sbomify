@@ -13,6 +13,7 @@ os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
+EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
 import json
 

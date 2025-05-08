@@ -214,6 +214,32 @@ poetry run coverage run -m pytest --pdb -x -s
 poetry run coverage report
 ```
 
+### Running Tests with PostgreSQL
+
+The test suite requires PostgreSQL to run. You can use a separate PostgreSQL container for testing:
+
+```bash
+# Start a PostgreSQL container for testing
+docker run --name sbomify-test-db \
+  -e POSTGRES_USER=sbomify \
+  -e POSTGRES_PASSWORD=sbomify \
+  -e POSTGRES_DB=sbomify \
+  -p 5433:5432 \
+  -d postgres:15-alpine
+
+# Run the tests with the test database
+DJANGO_SETTINGS_MODULE=sbomify.test_settings \
+DJANGO_TEST=true \
+TEST_DB_HOST=localhost \
+TEST_DB_PORT=5433 \
+poetry run coverage run -m pytest
+
+# Clean up the test database container when done
+docker rm -f sbomify-test-db
+```
+
+> **Note**: We use port 5433 to avoid conflicts with the development database which runs on port 5432.
+
 ### JS build tooling
 
 For frontend JS work, setting up JS tooling is required.
