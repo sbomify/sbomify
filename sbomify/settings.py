@@ -402,6 +402,13 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
+# Trial period settings
+TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))
+TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_DAYS", "3"))
+
+# Email settings
+EMAIL_SUBJECT_PREFIX = "[sbomify] "
+
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
     "billing.notifications.get_notifications",

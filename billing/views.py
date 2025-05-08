@@ -2,11 +2,12 @@ import stripe
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
@@ -215,39 +216,38 @@ def billing_return(request: HttpRequest):
     return redirect("core:dashboard")
 
 
-@csrf_exempt
-def stripe_webhook(request: HttpRequest):
+@require_http_methods(["POST"])
+def stripe_webhook(request):
     """Handle Stripe webhook events"""
-    payload = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+    # Verify webhook signature
+    event = billing_processing.verify_stripe_webhook(request)
+    if not event:
+        return HttpResponseForbidden("Invalid webhook signature")
 
     try:
-        # Verify webhook signature
-        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-
-        logger.info(f"Processing Stripe webhook event: {event.type}")
-
-        # Handle specific event types
+        # Handle the event
         if event.type == "checkout.session.completed":
-            billing_processing.handle_checkout_completed(event.data.object)
-
+            session = event.data.object
+            billing_processing.handle_checkout_completed(session)
         elif event.type == "customer.subscription.updated":
-            billing_processing.handle_subscription_updated(event.data.object)
-
+            subscription = event.data.object
+            billing_processing.handle_subscription_updated(subscription)
         elif event.type == "customer.subscription.deleted":
-            billing_processing.handle_subscription_deleted(event.data.object)
-
+            subscription = event.data.object
+            billing_processing.handle_subscription_deleted(subscription)
         elif event.type == "invoice.payment_failed":
-            billing_processing.handle_payment_failed(event.data.object)
-
-        elif event.type == "invoice.paid":
-            billing_processing.handle_payment_succeeded(event.data.object)
+            invoice = event.data.object
+            billing_processing.handle_payment_failed(invoice)
+        elif event.type == "invoice.payment_succeeded":
+            invoice = event.data.object
+            billing_processing.handle_payment_succeeded(invoice)
+        else:
+            logger.info(f"Unhandled event type: {event.type}")
 
         return HttpResponse(status=200)
-
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
-        logger.error(f"Invalid webhook signature: {str(e)}")
+    except billing_processing.StripeError as e:
+        logger.error(f"Error processing webhook: {str(e)}")
         return HttpResponse(status=400)
     except Exception as e:
-        logger.exception(f"Error processing webhook: {str(e)}")
-        return HttpResponse(status=400)
+        logger.exception(f"Unexpected error processing webhook: {str(e)}")
+        return HttpResponse(status=500)

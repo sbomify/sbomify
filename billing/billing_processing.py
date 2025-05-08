@@ -3,9 +3,13 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
+import hashlib
+import hmac
 from functools import wraps
 
-from django.http import HttpResponseForbidden
+import stripe
+from django.conf import settings
+from django.http import HttpResponseForbidden, HttpResponse
 from django.utils import timezone
 
 from core.errors import error_response
@@ -17,6 +21,70 @@ from . import email_notifications
 from .models import BillingPlan
 
 logger = getLogger(__name__)
+
+# Stripe webhook signature verification
+def verify_stripe_webhook(request):
+    """Verify that the webhook request is from Stripe."""
+    signature = request.headers.get("Stripe-Signature")
+    if not signature:
+        logger.error("No Stripe signature found in request headers")
+        return False
+
+    try:
+        event = stripe.Webhook.construct_event(
+            request.body,
+            signature,
+            settings.STRIPE_WEBHOOK_SECRET
+        )
+        return event
+    except stripe.error.SignatureVerificationError:
+        logger.error("Invalid Stripe signature")
+        return False
+    except Exception as e:
+        logger.error(f"Error verifying Stripe webhook: {str(e)}")
+        return False
+
+# Stripe error handling
+class StripeError(Exception):
+    """Base class for Stripe-related errors."""
+    pass
+
+class StripeWebhookError(StripeError):
+    """Error processing Stripe webhook."""
+    pass
+
+class StripeSubscriptionError(StripeError):
+    """Error processing Stripe subscription."""
+    pass
+
+def handle_stripe_error(func):
+    """Decorator to handle Stripe errors consistently."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except stripe.error.CardError as e:
+            logger.error(f"Card error: {str(e)}")
+            raise StripeError(f"Card error: {e.user_message}")
+        except stripe.error.RateLimitError as e:
+            logger.error(f"Rate limit error: {str(e)}")
+            raise StripeError("Too many requests made to Stripe API")
+        except stripe.error.InvalidRequestError as e:
+            logger.error(f"Invalid request error: {str(e)}")
+            raise StripeError(f"Invalid request: {str(e)}")
+        except stripe.error.AuthenticationError as e:
+            logger.error(f"Authentication error: {str(e)}")
+            raise StripeError("Authentication with Stripe failed")
+        except stripe.error.APIConnectionError as e:
+            logger.error(f"API connection error: {str(e)}")
+            raise StripeError("Could not connect to Stripe API")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error: {str(e)}")
+            raise StripeError(f"Stripe error: {str(e)}")
+        except Exception as e:
+            logger.exception(f"Unexpected error: {str(e)}")
+            raise StripeError(f"Unexpected error: {str(e)}")
+    return wrapper
 
 
 def check_billing_limits(model_type: str):
@@ -75,8 +143,9 @@ def check_billing_limits(model_type: str):
     return decorator
 
 
+@handle_stripe_error
 def handle_subscription_updated(subscription):
-    """Handle subscription update events"""
+    """Handle subscription updated events."""
     try:
         # First try to find by subscription ID
         team = Team.objects.filter(billing_plan_limits__stripe_subscription_id=subscription.id).first()
@@ -114,8 +183,11 @@ def handle_subscription_updated(subscription):
         old_status = team.billing_plan_limits.get("subscription_status")
         new_status = subscription.status
 
-        # Update subscription status
+        # Update subscription status and trial information
         team.billing_plan_limits["subscription_status"] = new_status
+        team.billing_plan_limits["trial_end"] = subscription.trial_end
+        team.billing_plan_limits["is_trial"] = subscription.status == "trialing"
+
         # Add/update the last_updated timestamp
         team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
 
@@ -158,12 +230,30 @@ def handle_subscription_updated(subscription):
                 logger.info(
                     f"Subscription cancelled notification sent for team {team.key} to {owner.member.user.email}"
                 )
+        elif new_status in ["incomplete", "incomplete_expired"]:
+            # Handle failed initial payment
+            team_owners = team.members.filter(member__role="owner")
+            for owner in team_owners:
+                email_notifications.notify_payment_failed(team, owner, None)
+                logger.warning(f"Initial payment failed notification sent for team {team.key} to {owner.member.user.email}")
 
         team.save()
-        logger.info(f"Updated subscription status to {new_status} for team {team.key}")
 
-    except Team.DoesNotExist:
-        logger.error(f"No team found for subscription {subscription.id}")
+        # If trial is ending soon, notify team owners
+        if subscription.status == "trialing" and subscription.trial_end:
+            trial_end = datetime.datetime.fromtimestamp(subscription.trial_end, tz=timezone.utc)
+            days_remaining = (trial_end - timezone.now()).days
+            if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
+                team_owners = team.members.filter(member__role="owner")
+                for owner in team_owners:
+                    email_notifications.notify_trial_ending(team, owner, days_remaining)
+                    logger.info(f"Trial ending notification sent for team {team.key} to {owner.member.user.email}")
+
+        logger.info(f"Updated subscription status for team {team.key} to {new_status}")
+
+    except Exception as e:
+        logger.exception(f"Error processing subscription update: {str(e)}")
+        raise StripeSubscriptionError(f"Error processing subscription update: {str(e)}")
 
 
 def handle_subscription_deleted(subscription):
@@ -270,6 +360,7 @@ def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
     return True, ""
 
 
+@handle_stripe_error
 def handle_checkout_completed(session):
     """Handle checkout session completed events"""
     # Only proceed if payment was successful
@@ -287,6 +378,12 @@ def handle_checkout_completed(session):
         team = Team.objects.get(key=team_key)
         plan = BillingPlan.objects.get(key="business")  # Hardcoded to business plan
 
+        # Get the subscription to check trial status
+        subscription = stripe.Subscription.retrieve(
+            session.subscription,
+            expand=['latest_invoice.payment_intent']  # Expand payment intent for better error handling
+        )
+
         # Update team billing information
         team.billing_plan = plan.key
 
@@ -297,7 +394,9 @@ def handle_checkout_completed(session):
             "max_components": plan.max_components,
             "stripe_customer_id": session.customer,
             "stripe_subscription_id": session.subscription,
-            "subscription_status": "active",
+            "subscription_status": subscription.status,
+            "trial_end": subscription.trial_end,
+            "is_trial": subscription.status == "trialing",
             "last_updated": timezone.now().isoformat(),
         }
 
@@ -306,5 +405,10 @@ def handle_checkout_completed(session):
         logger.info("Successfully processed checkout session for team %s", team_key)
     except Team.DoesNotExist:
         logger.error(f"Team with key {team_key} not found")
+        raise StripeError(f"Team with key {team_key} not found")
     except BillingPlan.DoesNotExist:
         logger.error("Business billing plan not found")
+        raise StripeError("Business billing plan not found")
+    except stripe.error.StripeError as e:
+        logger.error(f"Error retrieving subscription: {str(e)}")
+        raise StripeError(f"Error retrieving subscription: {str(e)}")
