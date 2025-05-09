@@ -20,6 +20,7 @@ from .models import BillingPlan
 
 logger = getLogger(__name__)
 
+
 # Stripe webhook signature verification
 def verify_stripe_webhook(request):
     """Verify that the webhook request is from Stripe."""
@@ -29,11 +30,7 @@ def verify_stripe_webhook(request):
         return False
 
     try:
-        event = stripe.Webhook.construct_event(
-            request.body,
-            signature,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
+        event = stripe.Webhook.construct_event(request.body, signature, settings.STRIPE_WEBHOOK_SECRET)
         return event
     except stripe.error.SignatureVerificationError:
         logger.error("Invalid Stripe signature")
@@ -42,21 +39,29 @@ def verify_stripe_webhook(request):
         logger.error(f"Error verifying Stripe webhook: {str(e)}")
         return False
 
+
 # Stripe error handling
 class StripeError(Exception):
     """Base class for Stripe-related errors."""
+
     pass
+
 
 class StripeWebhookError(StripeError):
     """Error processing Stripe webhook."""
+
     pass
+
 
 class StripeSubscriptionError(StripeError):
     """Error processing Stripe subscription."""
+
     pass
+
 
 def handle_stripe_error(func):
     """Decorator to handle Stripe errors consistently."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -82,6 +87,7 @@ def handle_stripe_error(func):
         except Exception as e:
             logger.exception(f"Unexpected error: {str(e)}")
             raise StripeError(f"Unexpected error: {str(e)}")
+
     return wrapper
 
 
@@ -209,18 +215,14 @@ def handle_subscription_updated(subscription):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_subscription_cancelled(team, member)
-                logger.info(
-                    f"Subscription cancelled notification sent for team {team.key} "
-                    f"to {member.user.email}"
-                )
+                logger.info(f"Subscription cancelled notification sent for team {team.key} " f"to {member.user.email}")
         elif new_status in ["incomplete", "incomplete_expired"]:
             # Handle failed initial payment
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_failed(team, member, None)
                 logger.warning(
-                    f"Initial payment failed notification sent for team {team.key} "
-                    f"to {member.user.email}"
+                    f"Initial payment failed notification sent for team {team.key} " f"to {member.user.email}"
                 )
 
         team.save()
@@ -366,7 +368,7 @@ def handle_checkout_completed(session):
         # Get the subscription to check trial status
         subscription = stripe.Subscription.retrieve(
             session.subscription,
-            expand=["latest_invoice.payment_intent"]  # Expand payment intent for better error handling
+            expand=["latest_invoice.payment_intent"],  # Expand payment intent for better error handling
         )
 
         # Update team billing information

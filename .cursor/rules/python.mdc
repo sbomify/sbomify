@@ -3,7 +3,6 @@ description: Python programming
 globs: *.py
 alwaysApply: false
 ---
-
 # Python Key Principles
 
 - Use modern python syntax and features. Python 3.10+ is preferred.
@@ -28,3 +27,5 @@ alwaysApply: false
 - All tests should be fully annotated and should contain docstrings.
 - Run tests and often to verify that you haven't broken anything.
 - Make sure to use `ruff` to lint your code base frequently.
+- ALWAYS run `ruff check` and `ruff format` after making any changes to Python files.
+- If `ruff` reports any issues, fix them with the `--fix` variable in ruff before manually trying to fix them. Do this before proceeding with other changes.
