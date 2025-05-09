@@ -7,6 +7,7 @@ from datetime import datetime
 from django.http import HttpRequest
 from django.urls import reverse
 
+from billing.config import is_billing_enabled
 from notifications.schemas import NotificationSchema
 from sbomify.logging import getLogger
 from teams.models import Team
@@ -72,6 +73,10 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
 def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     """Main notification provider for billing app - handles all billing-related notifications"""
     notifications: list[NotificationSchema] = []
+
+    # Skip all billing notifications if billing is disabled
+    if not is_billing_enabled():
+        return notifications
 
     if "current_team" not in request.session:
         return notifications
