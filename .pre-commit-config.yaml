@@ -16,7 +16,9 @@ repos:
     # Ruff version.
     rev: v0.9.7
     hooks:
-      # Run the linter.
+      # Run the formatter first
+      - id: ruff-format
+      # Run the linter after formatting
       - id: ruff
 
   - repo: https://github.com/PyCQA/bandit

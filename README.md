@@ -52,9 +52,42 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 ### Development Prerequisites
 
 - Python 3.12+
-- Poetry
+- Poetry (Python package manager)
 - Docker (for running PostgreSQL and Minio)
 - Bun (for JavaScript development)
+
+#### Installing Poetry
+
+1. Install Poetry using the official installer:
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+2. Verify the installation:
+```bash
+poetry --version
+```
+
+3. Configure Poetry to create virtual environments in the project directory:
+```bash
+poetry config virtualenvs.in-project true
+```
+
+#### Installing Dependencies
+
+1. Install Python dependencies using Poetry:
+```bash
+# Install all dependencies including development dependencies
+poetry install
+
+# Activate the virtual environment
+poetry shell
+```
+
+2. Install JavaScript dependencies using Bun:
+```bash
+bun install
+```
 
 ### API Documentation
 
