@@ -35,9 +35,9 @@ def business_plan() -> BillingPlan:
         key="business",
         name="Business",
         description="For growing teams",
-        max_products=5,
-        max_projects=50,  # 10 projects per product * 5 products
-        max_components=10000,  # 200 components per project * 50 projects
+        max_products=10,
+        max_projects=20,
+        max_components=100,
         stripe_product_id="prod_test_business",
         stripe_price_monthly_id="price_test_business_monthly",  # $199/month
         stripe_price_annual_id="price_test_business_annual",  # $159 * 12/year
