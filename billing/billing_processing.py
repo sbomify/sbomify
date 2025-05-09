@@ -7,11 +7,9 @@ from functools import wraps
 
 import stripe
 from django.conf import settings
-from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
 
-from core.errors import error_response
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
 from teams.models import Member, Team
@@ -26,8 +24,69 @@ logger = getLogger(__name__)
 stripe_client = StripeClient()
 
 
+def check_billing_limits(resource_type: str):
+    """
+    Decorator to check if a team has reached their billing plan limits.
+
+    Args:
+        resource_type: Type of resource being created ('product', 'project', or 'component')
+    """
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            # Get current team from session
+            team_key = request.session.get("current_team", {}).get("key")
+            if not team_key:
+                return HttpResponseForbidden("No team selected")
+
+            try:
+                team = Team.objects.get(key=team_key)
+            except Team.DoesNotExist:
+                return HttpResponseForbidden("Team not found")
+
+            # Check if team has a billing plan
+            if not team.billing_plan:
+                return HttpResponseForbidden("No active billing plan")
+
+            try:
+                plan = BillingPlan.objects.get(key=team.billing_plan)
+            except BillingPlan.DoesNotExist:
+                return HttpResponseForbidden("Invalid billing plan")
+
+            # Check limits based on resource type
+            if resource_type == "product":
+                current_count = Product.objects.filter(team=team).count()
+                max_allowed = plan.max_products
+            elif resource_type == "project":
+                current_count = Project.objects.filter(team=team).count()
+                max_allowed = plan.max_projects
+            elif resource_type == "component":
+                current_count = Component.objects.filter(team=team).count()
+                max_allowed = plan.max_components
+            else:
+                return HttpResponseForbidden("Invalid resource type")
+
+            # Enterprise plan or None (unlimited) values have no limits
+            if plan.key == "enterprise" or max_allowed is None:
+                return view_func(request, *args, **kwargs)
+
+            # Check if limit is reached
+            if current_count >= max_allowed:
+                return HttpResponseForbidden(
+                    f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
+                )
+
+            return view_func(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def _handle_stripe_error(func):
     """Decorator to handle Stripe errors consistently."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -53,6 +112,7 @@ def _handle_stripe_error(func):
         except Exception as e:
             logger.exception(f"Unexpected error: {str(e)}")
             raise StripeError(f"Unexpected error: {str(e)}")
+
     return wrapper
 
 
@@ -64,11 +124,7 @@ def verify_stripe_webhook(request):
         return False
 
     try:
-        event = stripe.Webhook.construct_event(
-            request.body,
-            signature,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
+        event = stripe.Webhook.construct_event(request.body, signature, settings.STRIPE_WEBHOOK_SECRET)
         return event
     except stripe.error.SignatureVerificationError:
         logger.error("Invalid Stripe signature")
@@ -81,16 +137,14 @@ def verify_stripe_webhook(request):
 @_handle_stripe_error
 def handle_trial_period(subscription, team):
     """Handle trial period status and notifications."""
-    if subscription.status == 'trialing' and subscription.trial_end:
+    if subscription.status == "trialing" and subscription.trial_end:
         trial_end = datetime.datetime.fromtimestamp(subscription.trial_end, tz=datetime.timezone.utc)
         days_remaining = (trial_end - timezone.now()).days
 
         # Update trial status
-        team.billing_plan_limits.update({
-            'is_trial': True,
-            'trial_end': subscription.trial_end,
-            'trial_days_remaining': days_remaining
-        })
+        team.billing_plan_limits.update(
+            {"is_trial": True, "trial_end": subscription.trial_end, "trial_days_remaining": days_remaining}
+        )
 
         # Handle trial ending soon
         if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
@@ -101,10 +155,7 @@ def handle_trial_period(subscription, team):
 
         # Handle trial expired
         if days_remaining <= 0:
-            team.billing_plan_limits.update({
-                'is_trial': False,
-                'subscription_status': 'canceled'
-            })
+            team.billing_plan_limits.update({"is_trial": False, "subscription_status": "canceled"})
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_trial_expired(team, member)
@@ -139,14 +190,16 @@ def handle_subscription_updated(subscription):
         if subscription.items.data:
             try:
                 # Get plan from metadata
-                plan_key = subscription.metadata.get('plan_key', 'business')
+                plan_key = subscription.metadata.get("plan_key", "business")
                 plan = BillingPlan.objects.get(key=plan_key)
                 team.billing_plan = plan.key
-                team.billing_plan_limits.update({
-                    "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
-                    "max_components": plan.max_components,
-                })
+                team.billing_plan_limits.update(
+                    {
+                        "max_products": plan.max_products,
+                        "max_projects": plan.max_projects,
+                        "max_components": plan.max_components,
+                    }
+                )
             except BillingPlan.DoesNotExist:
                 logger.error(f"Billing plan {plan_key} not found")
                 raise StripeError(f"Billing plan {plan_key} not found")
@@ -311,7 +364,7 @@ def handle_checkout_completed(session):
         team = Team.objects.get(key=team_key)
 
         # Get plan from metadata
-        plan_key = session.metadata.get('plan_key', 'business')
+        plan_key = session.metadata.get("plan_key", "business")
         plan = BillingPlan.objects.get(key=plan_key)
 
         # Get the subscription
@@ -331,10 +384,7 @@ def handle_checkout_completed(session):
 
         # Handle trial period
         if subscription.status == "trialing":
-            billing_limits.update({
-                "is_trial": True,
-                "trial_end": subscription.trial_end
-            })
+            billing_limits.update({"is_trial": True, "trial_end": subscription.trial_end})
 
         team.billing_plan_limits = billing_limits
         team.save()

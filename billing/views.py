@@ -2,6 +2,7 @@
 Views for handling billing-related functionality
 """
 
+import stripe
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 from core.errors import error_response
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
-from teams.models import Member, Team
+from teams.models import Team
 
 from . import billing_processing
 from .models import BillingPlan
@@ -25,6 +26,7 @@ logger = getLogger(__name__)
 
 # Initialize Stripe client
 stripe_client = StripeClient()
+
 
 # Create your views here.
 @login_required
@@ -252,9 +254,7 @@ def redirect_to_stripe_checkout(request, plan_key):
         if not customer_id:
             # Create new customer
             customer = stripe_client.create_customer(
-                email=request.user.email,
-                name=team.name,
-                metadata={"team_key": team.key}
+                email=request.user.email, name=team.name, metadata={"team_key": team.key}
             )
             customer_id = customer.id
             team.billing_plan_limits["stripe_customer_id"] = customer_id
@@ -262,10 +262,7 @@ def redirect_to_stripe_checkout(request, plan_key):
         else:
             # Update existing customer
             stripe_client.update_customer(
-                customer_id,
-                email=request.user.email,
-                name=team.name,
-                metadata={"team_key": team.key}
+                customer_id, email=request.user.email, name=team.name, metadata={"team_key": team.key}
             )
 
         # Create checkout session
@@ -277,10 +274,7 @@ def redirect_to_stripe_checkout(request, plan_key):
             price_id=plan.stripe_price_id,
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={
-                "team_key": team.key,
-                "plan_key": plan.key
-            }
+            metadata={"team_key": team.key, "plan_key": plan.key},
         )
 
         return HttpResponseRedirect(session.url)
@@ -292,15 +286,18 @@ def redirect_to_stripe_checkout(request, plan_key):
         logger.exception(f"Unexpected error: {str(e)}")
         return error_response(request, HttpResponseForbidden("An unexpected error occurred"))
 
+
 @require_http_methods(["GET"])
 def checkout_success(request):
     """Handle successful checkout completion."""
     return render(request, "billing/checkout_success.html")
 
+
 @require_http_methods(["GET"])
 def checkout_cancel(request):
     """Handle cancelled checkout."""
     return render(request, "billing/checkout_cancel.html")
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -314,11 +311,7 @@ def stripe_webhook(request):
             return HttpResponseForbidden("No Stripe signature found")
 
         # Construct and verify the event
-        event = stripe_client.construct_webhook_event(
-            request.body,
-            signature,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
+        event = stripe_client.construct_webhook_event(request.body, signature, settings.STRIPE_WEBHOOK_SECRET)
 
         # Handle the event
         if event.type == "checkout.session.completed":

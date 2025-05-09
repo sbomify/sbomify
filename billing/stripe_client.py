@@ -2,14 +2,14 @@
 Stripe client wrapper for handling Stripe operations.
 """
 
+import logging
+from functools import wraps
+
 import stripe
 from django.conf import settings
-from django.core.cache import cache
-from django.utils import timezone
-from functools import wraps
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 class StripeClient:
     """Wrapper for Stripe operations with proper error handling and caching."""
@@ -23,6 +23,7 @@ class StripeClient:
     @staticmethod
     def _handle_stripe_error(func):
         """Decorator to handle Stripe errors consistently."""
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
@@ -48,6 +49,7 @@ class StripeClient:
             except Exception as e:
                 logger.exception(f"Unexpected error: {str(e)}")
                 raise StripeError(f"Unexpected error: {str(e)}")
+
         return wrapper
 
     @_handle_stripe_error
@@ -58,11 +60,7 @@ class StripeClient:
     @_handle_stripe_error
     def create_customer(self, email, name, metadata=None):
         """Create a new customer in Stripe."""
-        return self.stripe.Customer.create(
-            email=email,
-            name=name,
-            metadata=metadata or {}
-        )
+        return self.stripe.Customer.create(email=email, name=name, metadata=metadata or {})
 
     @_handle_stripe_error
     def update_customer(self, customer_id, **kwargs):
@@ -72,14 +70,10 @@ class StripeClient:
     @_handle_stripe_error
     def create_subscription(self, customer_id, price_id, trial_days=None, metadata=None):
         """Create a new subscription."""
-        subscription_data = {
-            'customer': customer_id,
-            'items': [{'price': price_id}],
-            'metadata': metadata or {}
-        }
+        subscription_data = {"customer": customer_id, "items": [{"price": price_id}], "metadata": metadata or {}}
 
         if trial_days:
-            subscription_data['trial_period_days'] = trial_days
+            subscription_data["trial_period_days"] = trial_days
 
         return self.stripe.Subscription.create(**subscription_data)
 
@@ -96,25 +90,24 @@ class StripeClient:
     @_handle_stripe_error
     def get_subscription(self, subscription_id):
         """Retrieve a subscription."""
-        return self.stripe.Subscription.retrieve(
-            subscription_id,
-            expand=['latest_invoice.payment_intent']
-        )
+        return self.stripe.Subscription.retrieve(subscription_id, expand=["latest_invoice.payment_intent"])
 
     @_handle_stripe_error
     def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None):
         """Create a checkout session."""
         return self.stripe.checkout.Session.create(
             customer=customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price': price_id,
-                'quantity': 1,
-            }],
-            mode='subscription',
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price": price_id,
+                    "quantity": 1,
+                }
+            ],
+            mode="subscription",
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
     @_handle_stripe_error
@@ -125,12 +118,10 @@ class StripeClient:
     @_handle_stripe_error
     def construct_webhook_event(self, payload, sig_header):
         """Construct a webhook event from payload and signature."""
-        return self.stripe.Webhook.construct_event(
-            payload,
-            sig_header,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
+        return self.stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+
 
 class StripeError(Exception):
     """Base class for Stripe-related errors."""
+
     pass

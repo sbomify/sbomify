@@ -2,16 +2,16 @@
 Stripe webhook handler with proper security and idempotency.
 """
 
+import logging
+import time
+
 from django.core.cache import cache
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseTooManyRequests
-from django.utils import timezone
-import logging
-from functools import wraps
-import time
 
 from .stripe_client import StripeClient, StripeError
 
 logger = logging.getLogger(__name__)
+
 
 class WebhookHandler:
     """Handler for Stripe webhooks with security and idempotency."""
@@ -24,8 +24,8 @@ class WebhookHandler:
 
     def _rate_limit_check(self, request):
         """Check if request is within rate limits."""
-        client_ip = request.META.get('REMOTE_ADDR')
-        key = f'webhook_rate_limit_{client_ip}'
+        client_ip = request.META.get("REMOTE_ADDR")
+        key = f"webhook_rate_limit_{client_ip}"
 
         # Get current requests count
         requests = cache.get(key, [])
@@ -48,7 +48,7 @@ class WebhookHandler:
         if not event_id:
             return False
 
-        key = f'webhook_event_{event_id}'
+        key = f"webhook_event_{event_id}"
         if cache.get(key):
             return True
 
@@ -57,16 +57,13 @@ class WebhookHandler:
 
     def _verify_webhook(self, request):
         """Verify webhook signature and construct event."""
-        sig_header = request.headers.get('Stripe-Signature')
+        sig_header = request.headers.get("Stripe-Signature")
         if not sig_header:
             logger.error("No Stripe signature found in request headers")
             return None
 
         try:
-            return self.stripe_client.construct_webhook_event(
-                request.body,
-                sig_header
-            )
+            return self.stripe_client.construct_webhook_event(request.body, sig_header)
         except Exception as e:
             logger.error(f"Error verifying webhook: {str(e)}")
             return None
@@ -83,12 +80,12 @@ class WebhookHandler:
             return HttpResponseForbidden("Invalid webhook signature")
 
         # Check idempotency
-        event_id = request.headers.get('Stripe-Event-Id')
+        event_id = request.headers.get("Stripe-Event-Id")
         if self._check_idempotency(event_id):
             return HttpResponse(status=200)  # Already processed
 
         # Check webhook version
-        if request.headers.get('Stripe-Event-Version') != '2020-08-27':
+        if request.headers.get("Stripe-Event-Version") != "2020-08-27":
             logger.warning(f"Unsupported webhook version: {request.headers.get('Stripe-Event-Version')}")
 
         try:
@@ -118,24 +115,29 @@ class WebhookHandler:
     def _handle_checkout_completed(self, session):
         """Handle checkout completed event."""
         from .billing_processing import handle_checkout_completed
+
         handle_checkout_completed(session)
 
     def _handle_subscription_updated(self, subscription):
         """Handle subscription updated event."""
         from .billing_processing import handle_subscription_updated
+
         handle_subscription_updated(subscription)
 
     def _handle_subscription_deleted(self, subscription):
         """Handle subscription deleted event."""
         from .billing_processing import handle_subscription_deleted
+
         handle_subscription_deleted(subscription)
 
     def _handle_payment_failed(self, invoice):
         """Handle payment failed event."""
         from .billing_processing import handle_payment_failed
+
         handle_payment_failed(invoice)
 
     def _handle_payment_succeeded(self, invoice):
         """Handle payment succeeded event."""
         from .billing_processing import handle_payment_succeeded
+
         handle_payment_succeeded(invoice)
