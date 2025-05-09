@@ -1,7 +1,10 @@
 import logging
+from functools import wraps
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.template.response import TemplateResponse
 from django.urls import path
@@ -14,6 +17,18 @@ from teams.models import Member, Team
 from .models import User
 
 logger = logging.getLogger(__name__)
+
+
+def admin_dashboard_required(view_func):
+    """Decorator to check if user has permission to view dashboard."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_staff:
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 class DashboardView(admin.AdminSite):
@@ -47,24 +62,52 @@ class DashboardView(admin.AdminSite):
                 }
             ],
         }
-
         app_list.insert(0, dashboard_app)
         extra_context["app_list"] = app_list
         return super().index(request, extra_context)
 
+    def get_dashboard_stats(self):
+        """Get dashboard statistics with caching."""
+        cache_key = "admin_dashboard_stats"
+        stats = cache.get(cache_key)
+
+        if stats is None:
+            try:
+                stats = {
+                    "users": User.objects.count(),
+                    "teams": Team.objects.count(),
+                    "products": Product.objects.count(),
+                    "projects": Project.objects.count(),
+                    "components": Component.objects.count(),
+                    "sboms": SBOM.objects.count(),
+                    "users_per_team": list(
+                        Team.objects.annotate(user_count=Count("members")).values("name", "user_count")
+                    ),
+                }
+                # Cache for 5 minutes
+                cache.set(cache_key, stats, 300)
+            except Exception as e:
+                logger.error(f"Error fetching dashboard stats: {str(e)}")
+                stats = {
+                    "error": "Unable to fetch statistics",
+                    "users": 0,
+                    "teams": 0,
+                    "products": 0,
+                    "projects": 0,
+                    "components": 0,
+                    "sboms": 0,
+                    "users_per_team": [],
+                }
+
+        return stats
+
+    @admin_dashboard_required
     def dashboard_view(self, request):
+        """View for the admin dashboard."""
         context = {
             **self.each_context(request),
             "title": "System Dashboard",
-            "stats": {
-                "users": User.objects.count(),
-                "teams": Team.objects.count(),
-                "products": Product.objects.count(),
-                "projects": Project.objects.count(),
-                "components": Component.objects.count(),
-                "sboms": SBOM.objects.count(),
-                "users_per_team": list(Team.objects.annotate(user_count=Count("members")).values("name", "user_count")),
-            },
+            "stats": self.get_dashboard_stats(),
             "app_label": "core",
             "has_permission": True,
         }
@@ -74,8 +117,39 @@ class DashboardView(admin.AdminSite):
 class CustomUserAdmin(UserAdmin):
     """Custom admin for User model with Auth0 integration."""
 
-    list_display = UserAdmin.list_display + ("email_verified_status",)
-    readonly_fields = UserAdmin.readonly_fields + ("email_verified_status",)
+    list_display = UserAdmin.list_display + ("email_verified_status", "last_login_display")
+    readonly_fields = UserAdmin.readonly_fields + ("email_verified_status", "last_login_display")
+    list_filter = UserAdmin.list_filter + ("last_login",)
+
+    @admin.display(
+        description="Last Login",
+        ordering="last_login",
+    )
+    def last_login_display(self, obj):
+        """Display last login time in a user-friendly format."""
+        if not obj.last_login:
+            return format_html('<span style="color: #666;">Never</span>')
+
+        from django.utils import timezone
+
+        now = timezone.now()
+        diff = now - obj.last_login
+
+        if diff.days == 0:
+            if diff.seconds < 60:
+                return format_html('<span style="color: #417690;">Just now</span>')
+            elif diff.seconds < 3600:
+                minutes = diff.seconds // 60
+                return format_html('<span style="color: #417690;">{} minutes ago</span>', minutes)
+            else:
+                hours = diff.seconds // 3600
+                return format_html('<span style="color: #417690;">{} hours ago</span>', hours)
+        elif diff.days == 1:
+            return format_html('<span style="color: #417690;">Yesterday</span>')
+        elif diff.days < 7:
+            return format_html('<span style="color: #417690;">{} days ago</span>', diff.days)
+        else:
+            return format_html('<span style="color: #666;">{}</span>', obj.last_login.strftime("%Y-%m-%d %H:%M"))
 
     @admin.display(
         description="Email Verified",
