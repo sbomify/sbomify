@@ -23,10 +23,10 @@ def admin_dashboard_required(view_func):
     """Decorator to check if user has permission to view dashboard."""
 
     @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
+    def wrapper(self, request, *args, **kwargs):
         if not request.user.is_staff:
             raise PermissionDenied
-        return view_func(request, *args, **kwargs)
+        return view_func(self, request, *args, **kwargs)
 
     return wrapper
 
