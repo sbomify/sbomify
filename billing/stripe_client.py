@@ -116,9 +116,10 @@ class StripeClient:
         return self.stripe.checkout.Session.retrieve(session_id)
 
     @_handle_stripe_error
-    def construct_webhook_event(self, payload, sig_header):
+    def construct_webhook_event(self, payload, sig_header, webhook_secret=None):
         """Construct a webhook event from payload and signature."""
-        return self.stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+        secret = webhook_secret or settings.STRIPE_WEBHOOK_SECRET
+        return self.stripe.Webhook.construct_event(payload, sig_header, secret)
 
 
 class StripeError(Exception):
