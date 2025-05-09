@@ -1,0 +1,17 @@
+Trial Ending Soon
+
+Hello,
+
+Your trial period for {{ team_name }} will end in {{ days_remaining }} days (on {{ trial_end_date|date:"F j, Y" }}).
+
+To continue using all features and maintain uninterrupted access to your account, please upgrade to a paid plan before your trial expires.
+
+Upgrade now: {{ upgrade_url }}
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+The {{ team_name }} Team
+
+---
+This is an automated message. Please do not reply to this email.

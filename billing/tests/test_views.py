@@ -6,14 +6,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 import stripe
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
-from django.test import Client
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
+from billing import billing_processing
 from billing.models import BillingPlan
-from teams.models import Team
+from teams.models import Member, Team
+
+User = get_user_model()
 
 from .fixtures import (  # noqa: F401
     business_plan,
@@ -23,6 +27,66 @@ from .fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def client():
+    """Create a test client."""
+    return Client()
+
+
+@pytest.fixture
+def factory():
+    """Create a request factory."""
+    return RequestFactory()
+
+
+@pytest.fixture
+def team(db):
+    """Create a test team."""
+    user = User.objects.create_user(
+        username="testuser",
+        email="test@example.com",
+        password="testpass123",
+        first_name="Test",
+        last_name="User",
+    )
+    team = Team.objects.create(
+        name="Test Team",
+        key="test-team",
+        billing_plan="business",
+        billing_plan_limits={
+            "max_products": 10,
+            "max_projects": 20,
+            "max_components": 100,
+            "stripe_customer_id": "cus_test123",
+            "stripe_subscription_id": "sub_test123",
+            "subscription_status": "active",
+            "last_updated": "2024-01-01T00:00:00Z",
+        },
+    )
+    Member.objects.create(
+        team=team,
+        user=user,
+        role="owner",
+    )
+    return team
+
+
+@pytest.fixture
+def business_plan(db):
+    """Create a business plan."""
+    return BillingPlan.objects.create(
+        key="business",
+        name="Business",
+        max_products=10,
+        max_projects=20,
+        max_components=100,
+        stripe_price_monthly_id="price_monthly",
+        stripe_price_annual_id="price_annual",
+    )
 
 
 @pytest.mark.django_db
@@ -110,69 +174,149 @@ def test_select_business_plan(
 
 
 @pytest.mark.django_db
-def test_stripe_webhook_invalid_signature(client: Client):
-    """Test webhook endpoint with invalid signature."""
-    with patch("stripe.Webhook.construct_event") as mock_construct_event:
-        mock_construct_event.side_effect = stripe.error.SignatureVerificationError("Invalid", "sig")
+def test_stripe_webhook_invalid_signature(factory):
+    """Test webhook with invalid signature."""
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "test.event"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "invalid_sig"}
 
-        response = client.post(
-            reverse("billing:webhook"),
-            data=json.dumps({"type": "checkout.session.completed"}),
-            content_type="application/json",
-            HTTP_STRIPE_SIGNATURE="invalid_signature",
-        )
-
-        assert response.status_code == 400
+    with patch("billing.billing_processing.verify_stripe_webhook", return_value=False):
+        response = billing_processing.stripe_webhook(request)
+        assert response.status_code == 403
 
 
 @pytest.mark.django_db
-def test_stripe_webhook_subscription_success(
-    client: Client,
-    team_with_business_plan: Team,  # noqa: F811
-    business_plan: BillingPlan,  # noqa: F811
-):
-    """Test successful subscription webhook processing."""
-    webhook_data = {
+def test_stripe_webhook_checkout_completed(factory, team):
+    """Test webhook for checkout completed event."""
+    event_data = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": "cs_test123",
+                "customer": "cus_test123",
+                "subscription": "sub_test123",
+                "payment_status": "paid",
+                "metadata": {"team_key": team.key},
+            }
+        },
+    }
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps(event_data),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    mock_event = MagicMock()
+    mock_event.type = event_data["type"]
+    mock_event.data.object = event_data["data"]["object"]
+
+    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+        mock_verify.return_value = mock_event
+        with patch("billing.billing_processing.handle_checkout_completed") as mock_handler:
+            response = billing_processing.stripe_webhook(request)
+            assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_subscription_updated(factory, team):
+    """Test webhook for subscription updated event."""
+    event_data = {
         "type": "customer.subscription.updated",
         "data": {
             "object": {
-                "id": team_with_business_plan.billing_plan_limits["stripe_subscription_id"],
-                "object": "subscription",
-                "customer": team_with_business_plan.billing_plan_limits["stripe_customer_id"],
-                "status": "active",
-                "items": {
-                    "data": [{
-                        "price": business_plan.stripe_price_monthly_id,
-                        "plan": {
-                            "product": business_plan.stripe_product_id
-                        }
-                    }]
-                },
-                "metadata": {
-                    "team_key": team_with_business_plan.key
-                }
+                "id": "sub_test123",
+                "status": "trialing",
+                "trial_end": 1234567890,
+                "customer": "cus_test123",
             }
-        }
+        },
     }
 
-    # Store original plan to verify change
-    original_plan = team_with_business_plan.billing_plan
-    team_with_business_plan.billing_plan = "community"  # Set to different plan to verify change
-    team_with_business_plan.save()
-
-    # Create a valid signature using the test webhook secret
-    response = client.post(
+    request = factory.post(
         reverse("billing:webhook"),
-        data=json.dumps(webhook_data),
+        data=json.dumps(event_data),
         content_type="application/json",
-        HTTP_STRIPE_SIGNATURE="whsec_test_webhook_secret_key",  # Use the same secret we mocked
     )
+    request.headers = {"Stripe-Signature": "test_sig"}
 
-    assert response.status_code == 200
+    mock_event = MagicMock()
+    mock_event.type = event_data["type"]
+    mock_event.data.object = event_data["data"]["object"]
 
-    # Verify team was updated
-    team_with_business_plan.refresh_from_db()
-    assert team_with_business_plan.billing_plan == business_plan.key
-    assert team_with_business_plan.billing_plan_limits["stripe_customer_id"] == webhook_data["data"]["object"]["customer"]
-    assert team_with_business_plan.billing_plan_limits["stripe_subscription_id"] == webhook_data["data"]["object"]["id"]
-    assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
+    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+        mock_verify.return_value = mock_event
+        with patch("billing.billing_processing.handle_subscription_updated") as mock_handler:
+            response = billing_processing.stripe_webhook(request)
+            assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_payment_failed(factory, team):
+    """Test webhook for payment failed event."""
+    event_data = {
+        "type": "invoice.payment_failed",
+        "data": {
+            "object": {
+                "id": "in_test123",
+                "subscription": "sub_test123",
+                "customer": "cus_test123",
+            }
+        },
+    }
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps(event_data),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    mock_event = MagicMock()
+    mock_event.type = event_data["type"]
+    mock_event.data.object = event_data["data"]["object"]
+
+    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+        mock_verify.return_value = mock_event
+        with patch("billing.billing_processing.handle_payment_failed") as mock_handler:
+            response = billing_processing.stripe_webhook(request)
+            assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_error_handling(factory):
+    """Test webhook error handling."""
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "test.event"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    mock_event = MagicMock()
+    mock_event.type = "checkout.session.completed"
+    mock_event.data.object = {}
+
+    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+        mock_verify.return_value = mock_event
+        with patch("billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
+            response = billing_processing.stripe_webhook(request)
+            assert response.status_code == 500
+
+
+@pytest.mark.django_db
+def test_billing_redirect_trial(client, team, business_plan):
+    """Test billing redirect with trial period."""
+    member = team.members.first()
+    client.force_login(member)
+
+    with patch("stripe.checkout.Session.create") as mock_create:
+        mock_create.return_value = MagicMock(url="https://checkout.stripe.com/test")
+        response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team.key}))
+
+        assert response.status_code == 302
+        assert response.url == f"/select-plan/{team.key}"

@@ -2,10 +2,8 @@
 Module for billing-related email notifications
 """
 
-from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.urls import reverse
 
 from sbomify.logging import getLogger
 from teams.models import Member, Team
@@ -13,71 +11,74 @@ from teams.models import Member, Team
 logger = getLogger(__name__)
 
 
-def send_billing_email(team: Team, owner: Member, subject: str, template: str, context: dict) -> None:
-    """Send billing-related email notification using HTML template"""
-    context.update(
-        {
-            "team_name": team.name,
-            "user_name": owner.member.user.get_full_name() or owner.member.user.email,
-            "action_url": f"{settings.WEBSITE_BASE_URL}{reverse('billing:select_plan', kwargs={'team_key': team.key})}",
-        }
-    )
+def send_billing_email(team: Team, member: Member, subject: str, template_name: str, context: dict) -> None:
+    """Send a billing-related email using a template."""
+    if not team:
+        logger.error("Cannot send billing email: team is None")
+        return
 
-    html_message = render_to_string(f"billing/emails/{template}.html", context)
-    text_message = render_to_string(f"billing/emails/{template}.txt", context)
+    if not member:
+        logger.error("Cannot send billing email: member is None")
+        return
 
-    send_mail(
-        subject,
-        text_message,
-        settings.DEFAULT_FROM_EMAIL,
-        [owner.member.user.email],
-        html_message=html_message,
-        fail_silently=True,
-    )
+    try:
+        # Render email content from template
+        try:
+            html_message = render_to_string(f"billing/emails/{template_name}.html", context)
+            plain_message = render_to_string(f"billing/emails/{template_name}.txt", context)
+        except Exception as e:
+            logger.error(f"Failed to render email template {template_name}: {str(e)}")
+            return
 
-
-def notify_payment_past_due(team: Team, owner: Member) -> None:
-    """Send payment past due notification"""
-    send_billing_email(
-        team,
-        owner,
-        "[sbomify] Payment Past Due - Action Required",
-        "payment_past_due",
-        {},
-    )
-
-
-def notify_payment_failed(team: Team, owner: Member, attempt_count: int, next_payment_attempt: str) -> None:
-    """Send payment failed notification"""
-    send_billing_email(
-        team,
-        owner,
-        "[sbomify] Payment Failed - Action Required",
-        "payment_failed",
-        {
-            "attempt_count": attempt_count,
-            "next_payment_attempt": next_payment_attempt,
-        },
-    )
+        # Send email
+        try:
+            send_mail(
+                subject,
+                plain_message,
+                None,  # Use default from_email
+                [member.user.email],
+                html_message=html_message,
+                fail_silently=True,
+            )
+            logger.info(f"Sent {template_name} email to {member.user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send {template_name} email: {str(e)}")
+            return
+    except Exception as e:
+        logger.error(f"Failed to send {template_name} email: {str(e)}")
+        return
 
 
-def notify_subscription_cancelled(team: Team, owner: Member) -> None:
-    """Send subscription cancelled notification"""
-    send_billing_email(
-        team,
-        owner,
-        "[sbomify] Subscription Cancelled",
-        "subscription_cancelled",
-        {},
-    )
+def notify_payment_past_due(team: Team, member: Member) -> None:
+    """Notify team owner about past due payment."""
+    send_billing_email(team, member, "Payment Past Due - Action Required", "payment_past_due", {})
 
 
-def notify_payment_succeeded(team: Team, owner: Member) -> None:
-    """Send payment succeeded notification"""
-    send_billing_email(
-        team,
-        owner,
-        "[sbomify] Payment Successful",
-        "payment_succeeded",
-        {},
-    )
+def notify_payment_failed(team: Team, member: Member, invoice_id: str | None) -> None:
+    """Notify team owner about failed payment."""
+    send_billing_email(team, member, "Payment Failed", "payment_failed", {"invoice_id": invoice_id})
+
+
+def notify_subscription_cancelled(team: Team, member: Member) -> None:
+    """Notify team owner about subscription cancellation."""
+    send_billing_email(team, member, "Subscription Cancelled", "subscription_cancelled", {})
+
+
+def notify_payment_succeeded(team: Team, member: Member) -> None:
+    """Notify team owner about successful payment."""
+    send_billing_email(team, member, "Payment Successful", "payment_succeeded", {})
+
+
+def notify_trial_ending(team: Team, member: Member, days_remaining: int) -> None:
+    """Notify team owner that trial period is ending soon."""
+    send_billing_email(team, member, "Trial Period Ending", "trial_ending", {"days_remaining": days_remaining})
+
+
+def notify_trial_expired(team: Team, member: Member) -> None:
+    """Notify team owner that trial period has expired."""
+    send_billing_email(team, member, "Trial Expired", "trial_expired", {})
+
+
+def notify_subscription_ended(team: Team, member: Member) -> None:
+    """Notify team owner about subscription ending."""
+    send_billing_email(team, member, "Subscription Ended", "subscription_ended", {})

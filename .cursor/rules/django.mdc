@@ -1,6 +1,7 @@
 ---
 description: Django
 globs: *.py *.html
+alwaysApply: false
 ---
 # Django Guidelines
 
@@ -12,6 +13,7 @@ globs: *.py *.html
 - Leverage Django’s ORM for database interactions; avoid raw SQL queries unless necessary for performance.
 - Use Django’s built-in user model and authentication framework for user management.
 - Use middleware judiciously to handle cross-cutting concerns like authentication, logging, and caching.
+- Assume all migrations have been run. Never edit an existing migration file.
 
 ## Django Error Handling and Validation
 - Implement error handling at the view level and use Django's built-in error handling mechanisms.
