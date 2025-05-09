@@ -1,22 +1,30 @@
-import stripe
+"""
+Views for handling billing-related functionality
+"""
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from core.errors import error_response
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
-from teams.models import Team
+from teams.models import Member, Team
 
 from . import billing_processing
 from .models import BillingPlan
+from .stripe_client import StripeClient, StripeError
 
 logger = getLogger(__name__)
 
+# Initialize Stripe client
+stripe_client = StripeClient()
 
 # Create your views here.
 @login_required
@@ -215,15 +223,103 @@ def billing_return(request: HttpRequest):
     return redirect("core:dashboard")
 
 
+@require_http_methods(["GET"])
+def redirect_to_stripe_checkout(request, plan_key):
+    """Redirect user to Stripe checkout for the specified plan."""
+    try:
+        # Get current team
+        team_key = request.session.get("current_team", {}).get("key")
+        if not team_key:
+            return error_response(request, HttpResponseForbidden("No team selected"))
+
+        team = Team.objects.get(key=team_key)
+        if not team:
+            return error_response(request, HttpResponseForbidden("Invalid team"))
+
+        # Get billing plan
+        try:
+            plan = BillingPlan.objects.get(key=plan_key)
+        except BillingPlan.DoesNotExist:
+            return error_response(request, HttpResponseForbidden("Invalid billing plan"))
+
+        # Check if team can upgrade/downgrade to this plan
+        can_downgrade, message = billing_processing.can_downgrade_to_plan(team, plan)
+        if not can_downgrade:
+            return error_response(request, HttpResponseForbidden(message))
+
+        # Get or create Stripe customer
+        customer_id = team.billing_plan_limits.get("stripe_customer_id")
+        if not customer_id:
+            # Create new customer
+            customer = stripe_client.create_customer(
+                email=request.user.email,
+                name=team.name,
+                metadata={"team_key": team.key}
+            )
+            customer_id = customer.id
+            team.billing_plan_limits["stripe_customer_id"] = customer_id
+            team.save()
+        else:
+            # Update existing customer
+            stripe_client.update_customer(
+                customer_id,
+                email=request.user.email,
+                name=team.name,
+                metadata={"team_key": team.key}
+            )
+
+        # Create checkout session
+        success_url = request.build_absolute_uri(reverse("billing:checkout_success"))
+        cancel_url = request.build_absolute_uri(reverse("billing:checkout_cancel"))
+
+        session = stripe_client.create_checkout_session(
+            customer_id=customer_id,
+            price_id=plan.stripe_price_id,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "team_key": team.key,
+                "plan_key": plan.key
+            }
+        )
+
+        return HttpResponseRedirect(session.url)
+
+    except StripeError as e:
+        logger.error(f"Stripe error: {str(e)}")
+        return error_response(request, HttpResponseForbidden(str(e)))
+    except Exception as e:
+        logger.exception(f"Unexpected error: {str(e)}")
+        return error_response(request, HttpResponseForbidden("An unexpected error occurred"))
+
+@require_http_methods(["GET"])
+def checkout_success(request):
+    """Handle successful checkout completion."""
+    return render(request, "billing/checkout_success.html")
+
+@require_http_methods(["GET"])
+def checkout_cancel(request):
+    """Handle cancelled checkout."""
+    return render(request, "billing/checkout_cancel.html")
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def stripe_webhook(request):
-    """Handle Stripe webhook events"""
-    # Verify webhook signature
-    event = billing_processing.verify_stripe_webhook(request)
-    if not event:
-        return HttpResponseForbidden("Invalid webhook signature")
-
+    """Handle Stripe webhook events."""
     try:
+        # Get the webhook signature
+        signature = request.headers.get("Stripe-Signature")
+        if not signature:
+            logger.error("No Stripe signature found in request headers")
+            return HttpResponseForbidden("No Stripe signature found")
+
+        # Construct and verify the event
+        event = stripe_client.construct_webhook_event(
+            request.body,
+            signature,
+            settings.STRIPE_WEBHOOK_SECRET
+        )
+
         # Handle the event
         if event.type == "checkout.session.completed":
             session = event.data.object
@@ -234,19 +330,20 @@ def stripe_webhook(request):
         elif event.type == "customer.subscription.deleted":
             subscription = event.data.object
             billing_processing.handle_subscription_deleted(subscription)
-        elif event.type == "invoice.payment_failed":
-            invoice = event.data.object
-            billing_processing.handle_payment_failed(invoice)
         elif event.type == "invoice.payment_succeeded":
             invoice = event.data.object
             billing_processing.handle_payment_succeeded(invoice)
+        elif event.type == "invoice.payment_failed":
+            invoice = event.data.object
+            billing_processing.handle_payment_failed(invoice)
         else:
             logger.info(f"Unhandled event type: {event.type}")
 
         return HttpResponse(status=200)
-    except billing_processing.StripeError as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        return HttpResponse(status=400)
+
+    except StripeError as e:
+        logger.error(f"Stripe error: {str(e)}")
+        return HttpResponseForbidden(str(e))
     except Exception as e:
-        logger.exception(f"Unexpected error processing webhook: {str(e)}")
-        return HttpResponse(status=500)
+        logger.exception(f"Unexpected error: {str(e)}")
+        return HttpResponseForbidden("An unexpected error occurred")

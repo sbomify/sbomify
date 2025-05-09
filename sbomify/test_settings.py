@@ -132,3 +132,5 @@ MIDDLEWARE = [
 # Add debug toolbar middleware if DEBUG is True
 if DEBUG:
     MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+
+SITE_URL = "http://testserver"
