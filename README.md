@@ -209,36 +209,32 @@ You can access the Minio console at:
 
 ### Running test cases
 
+First, ensure you have the test environment set up:
+
 ```bash
+# Copy the test environment file
+cp test_env .env.test
+```
+
+Then run the tests:
+
+```bash
+# Run all tests with coverage
+poetry run coverage run -m pytest
+
+# Run specific test groups
+poetry run coverage run -m pytest core/tests/
+poetry run coverage run -m pytest sboms/tests/
+poetry run coverage run -m pytest teams/tests/
+
+# Run with debugger on failure
 poetry run coverage run -m pytest --pdb -x -s
+
+# Generate coverage report
 poetry run coverage report
 ```
 
-### Running Tests with PostgreSQL
-
-The test suite requires PostgreSQL to run. You can use a separate PostgreSQL container for testing:
-
-```bash
-# Start a PostgreSQL container for testing
-docker run --name sbomify-test-db \
-  -e POSTGRES_USER=sbomify \
-  -e POSTGRES_PASSWORD=sbomify \
-  -e POSTGRES_DB=sbomify \
-  -p 5433:5432 \
-  -d postgres:15-alpine
-
-# Run the tests with the test database
-DJANGO_SETTINGS_MODULE=sbomify.test_settings \
-DJANGO_TEST=true \
-TEST_DB_HOST=localhost \
-TEST_DB_PORT=5433 \
-poetry run coverage run -m pytest
-
-# Clean up the test database container when done
-docker rm -f sbomify-test-db
-```
-
-> **Note**: We use port 5433 to avoid conflicts with the development database which runs on port 5432.
+The test environment uses SQLite in-memory database for faster test execution. Test coverage must be at least 80% to pass CI checks.
 
 ### JS build tooling
 
