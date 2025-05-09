@@ -7,13 +7,13 @@ from functools import wraps
 
 import stripe
 from django.conf import settings
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, HttpResponse
 from django.utils import timezone
 
 from core.errors import error_response
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
-from teams.models import Team
+from teams.models import Team, Member
 
 from . import email_notifications
 from .models import BillingPlan
@@ -156,30 +156,13 @@ def handle_subscription_updated(subscription):
             logger.error(f"No team found for subscription {subscription.id}")
             return
 
-        # Check if billing was recently updated (within the last minute)
-        # This helps prevent duplicate processing between webhook and billing_return
-        last_updated_str = team.billing_plan_limits.get("last_updated")
-        if last_updated_str:
-            try:
-                last_updated = datetime.datetime.fromisoformat(last_updated_str)
-                # Add timezone information if it's naive
-                if last_updated.tzinfo is None:
-                    last_updated = last_updated.replace(tzinfo=timezone.utc)
-
-                # If the billing was updated less than 60 seconds ago, skip this update
-                time_diff = timezone.now() - last_updated
-                if time_diff.total_seconds() < 60:
-                    logger.info(
-                        f"Skipping subscription update for team {team.key} - "
-                        f"recently updated ({time_diff.total_seconds()} seconds ago)"
-                    )
-                    return
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid last_updated format in team {team.key} billing_plan_limits")
-                # Continue processing if date parsing fails
-
         old_status = team.billing_plan_limits.get("subscription_status")
         new_status = subscription.status
+
+        # Validate subscription status
+        valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
+        if new_status not in valid_statuses:
+            raise StripeSubscriptionError(f"Invalid subscription status: {new_status}")
 
         # Update subscription status and trial information
         team.billing_plan_limits["subscription_status"] = new_status
@@ -204,52 +187,53 @@ def handle_subscription_updated(subscription):
                 )
             except BillingPlan.DoesNotExist:
                 logger.error("Business billing plan not found")
+                raise StripeSubscriptionError("Business billing plan not found")
 
         # Handle specific status transitions
         if new_status == "past_due" and old_status == "active":
             # Send notification to team owners about payment being past due
-            team_owners = team.members.filter(member__role="owner")
-            for owner in team_owners:
-                email_notifications.notify_payment_past_due(team, owner)
-                logger.warning(f"Payment past due notification sent for team {team.key} to {owner.member.user.email}")
+            team_owners = Member.objects.filter(team=team, role="owner")
+            for member in team_owners:
+                email_notifications.notify_payment_past_due(team, member)
+                logger.warning(f"Payment past due notification sent for team {team.key} to {member.user.email}")
 
         elif new_status == "active" and old_status == "past_due":
             # Payment has been resolved
-            team_owners = team.members.filter(member__role="owner")
-            for owner in team_owners:
-                email_notifications.notify_payment_succeeded(team, owner)
-                logger.info(f"Payment restored notification sent for team {team.key} to {owner.member.user.email}")
+            team_owners = Member.objects.filter(team=team, role="owner")
+            for member in team_owners:
+                email_notifications.notify_payment_succeeded(team, member)
+                logger.info(f"Payment restored notification sent for team {team.key} to {member.user.email}")
 
         elif new_status == "canceled":
             # Subscription has been canceled but not yet ended
-            team_owners = team.members.filter(member__role="owner")
-            for owner in team_owners:
-                email_notifications.notify_subscription_cancelled(team, owner)
+            team_owners = Member.objects.filter(team=team, role="owner")
+            for member in team_owners:
+                email_notifications.notify_subscription_cancelled(team, member)
                 logger.info(
                     f"Subscription cancelled notification sent for team {team.key} "
-                    f"to {owner.member.user.email}"
+                    f"to {member.user.email}"
                 )
         elif new_status in ["incomplete", "incomplete_expired"]:
             # Handle failed initial payment
-            team_owners = team.members.filter(member__role="owner")
-            for owner in team_owners:
-                email_notifications.notify_payment_failed(team, owner, None)
+            team_owners = Member.objects.filter(team=team, role="owner")
+            for member in team_owners:
+                email_notifications.notify_payment_failed(team, member, None)
                 logger.warning(
                     f"Initial payment failed notification sent for team {team.key} "
-                    f"to {owner.member.user.email}"
+                    f"to {member.user.email}"
                 )
 
         team.save()
 
         # If trial is ending soon, notify team owners
         if subscription.status == "trialing" and subscription.trial_end:
-            trial_end = datetime.datetime.fromtimestamp(subscription.trial_end, tz=timezone.utc)
+            trial_end = datetime.datetime.fromtimestamp(subscription.trial_end, tz=datetime.timezone.utc)
             days_remaining = (trial_end - timezone.now()).days
             if days_remaining <= settings.TRIAL_ENDING_NOTIFICATION_DAYS:
-                team_owners = team.members.filter(member__role="owner")
-                for owner in team_owners:
-                    email_notifications.notify_trial_ending(team, owner, days_remaining)
-                    logger.info(f"Trial ending notification sent for team {team.key} to {owner.member.user.email}")
+                team_owners = Member.objects.filter(team=team, role="owner")
+                for member in team_owners:
+                    email_notifications.notify_trial_ending(team, member, days_remaining)
+                    logger.info(f"Trial ending notification sent for team {team.key} to {member.user.email}")
 
         logger.info(f"Updated subscription status for team {team.key} to {new_status}")
 
@@ -272,10 +256,10 @@ def handle_subscription_deleted(subscription):
         team.save()
 
         # Notify team owners
-        team_owners = team.members.filter(member__role="owner")
-        for owner in team_owners:
-            email_notifications.notify_subscription_ended(team, owner)
-            logger.info(f"Subscription ended notification sent for team {team.key} to {owner.member.user.email}")
+        team_owners = Member.objects.filter(team=team, role="owner")
+        for member in team_owners:
+            email_notifications.notify_subscription_ended(team, member)
+            logger.info(f"Subscription ended notification sent for team {team.key} to {member.user.email}")
 
         logger.info(f"Subscription canceled for team {team.key}")
 
@@ -298,10 +282,10 @@ def handle_payment_failed(invoice):
         team.save()
 
         # Notify team owners
-        team_owners = team.members.filter(member__role="owner")
-        for owner in team_owners:
-            email_notifications.notify_payment_failed(team, owner, invoice.hosted_invoice_url)
-            logger.warning(f"Payment failed notification sent for team {team.key} to {owner.member.user.email}")
+        for member in team.members.all():
+            if member.role == "owner":
+                email_notifications.notify_payment_failed(team, member, invoice.hosted_invoice_url)
+                logger.warning(f"Payment failed notification sent for team {team.key} to {member.user.email}")
 
         logger.warning(f"Payment failed for team {team.key}")
 
@@ -335,29 +319,28 @@ def can_downgrade_to_plan(team: Team, plan: BillingPlan) -> tuple[bool, str]:
         # Enterprise plan has no limits
         return True, ""
 
+    error_messages = []
+
     product_count = Product.objects.filter(team=team).count()
     if plan.max_products and product_count > plan.max_products:
-        return (
-            False,
-            f"Cannot downgrade: You have {product_count} products, "
-            f"but the {plan.name} plan only allows {plan.max_products}",
+        error_messages.append(
+            f"You have {product_count} products, but the {plan.name} plan only allows {plan.max_products}"
         )
 
     project_count = Project.objects.filter(team=team).count()
     if plan.max_projects and project_count > plan.max_projects:
-        return (
-            False,
-            f"Cannot downgrade: You have {project_count} projects, "
-            f"but the {plan.name} plan only allows {plan.max_projects}",
+        error_messages.append(
+            f"You have {project_count} projects, but the {plan.name} plan only allows {plan.max_projects}"
         )
 
     component_count = Component.objects.filter(team=team).count()
     if plan.max_components and component_count > plan.max_components:
-        return (
-            False,
-            f"Cannot downgrade: You have {component_count} components, "
-            f"but the {plan.name} plan only allows {plan.max_components}",
+        error_messages.append(
+            f"You have {component_count} components, but the {plan.name} plan only allows {plan.max_components}"
         )
+
+    if error_messages:
+        return False, "Cannot downgrade: " + "; ".join(error_messages)
 
     return True, ""
 
@@ -414,3 +397,29 @@ def handle_checkout_completed(session):
     except stripe.error.StripeError as e:
         logger.error(f"Error retrieving subscription: {str(e)}")
         raise StripeError(f"Error retrieving subscription: {str(e)}")
+
+
+def stripe_webhook(request):
+    """Handle Stripe webhook events."""
+    event = verify_stripe_webhook(request)
+    if not event:
+        return HttpResponseForbidden("Invalid signature")
+
+    try:
+        if event.type == "checkout.session.completed":
+            handle_checkout_completed(event.data.object)
+        elif event.type == "customer.subscription.updated":
+            handle_subscription_updated(event.data.object)
+        elif event.type == "customer.subscription.deleted":
+            handle_subscription_deleted(event.data.object)
+        elif event.type == "invoice.payment_failed":
+            handle_payment_failed(event.data.object)
+        elif event.type == "invoice.payment_succeeded":
+            handle_payment_succeeded(event.data.object)
+        else:
+            logger.info(f"Unhandled event type: {event.type}")
+
+        return HttpResponse(status=200)
+    except Exception as e:
+        logger.exception(f"Error processing webhook: {str(e)}")
+        return HttpResponse(status=500)
