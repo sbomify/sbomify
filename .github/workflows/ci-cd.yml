@@ -101,7 +101,6 @@ jobs:
           for file in main.js main.css teams.js teams.css billing.js billing.css sboms.js sboms.css django-messages.js alerts-global.js; do
             echo "// Test asset" > static/assets/$file
           done
-          poetry run python manage.py migrate
           poetry run python manage.py collectstatic --noinput
 
       - name: Run Tests
