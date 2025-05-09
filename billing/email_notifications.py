@@ -4,12 +4,9 @@ Module for billing-related email notifications
 
 import logging
 
-from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.urls import reverse
 
-from sbomify.logging import getLogger
 from teams.models import Member, Team
 
 logger = logging.getLogger(__name__)
