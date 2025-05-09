@@ -139,10 +139,6 @@ jobs:
   docker-build:
     name: Docker Build Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: ['dev', 'prod']
     steps:
       - uses: actions/checkout@v4
 
@@ -164,11 +160,9 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          DOCKERFILE=${{ matrix.environment == 'prod' && 'Dockerfile.prod' || 'Dockerfile' }}
           docker buildx build \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
-            --file $DOCKERFILE \
             --load \
             .
 
