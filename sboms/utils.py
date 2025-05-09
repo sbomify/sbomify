@@ -8,7 +8,6 @@ from uuid import uuid4
 from django.http import HttpRequest
 
 from core.object_store import S3Client
-from core.utils import token_to_number
 from sbomify import logging
 from teams.models import Member, Team
 
@@ -31,37 +30,37 @@ def verify_item_access(
         return False
 
     team_id = None
+    team_key = None
 
     if isinstance(item, Team):
         team_id = item.id
-
+        team_key = item.key
     elif isinstance(item, (Product, Project, Component)):
         team_id = item.team_id
-
+        team_key = item.team.key
     elif isinstance(item, SBOM):
         team_id = item.component.team_id
+        team_key = item.component.team.key
 
-    user_teams = request.session.get("user_teams", {})
-
-    if user_teams:
-        for team_key, team_data in user_teams.items():
-            if token_to_number(team_key) == team_id:
-                if allowed_roles is not None and team_data["role"] not in allowed_roles:
-                    return False
-
+    # Check session data first
+    if team_key and "user_teams" in request.session:
+        team_data = request.session["user_teams"].get(team_key)
+        if team_data and "role" in team_data:
+            # If no roles are specified, any role is allowed
+            if allowed_roles is None:
                 return True
+            return team_data["role"] in allowed_roles
 
-        return False
+    # Fall back to database check
+    if team_id:
+        member = Member.objects.filter(user=request.user, team_id=team_id).first()
+        if member:
+            # If no roles are specified, any role is allowed
+            if allowed_roles is None:
+                return True
+            return member.role in allowed_roles
 
-    # If here then it's personal access token based auth so no user teams present in session
-    member = Member.objects.filter(user=request.user, team_id=team_id).first()
-    if member is None:
-        return False
-
-    if allowed_roles is not None and member.role not in allowed_roles:
-        return False
-
-    return True
+    return False
 
 
 class ProjectSBOMBuilder:

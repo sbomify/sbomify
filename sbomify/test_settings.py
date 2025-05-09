@@ -134,3 +134,5 @@ if DEBUG:
     MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
 
 SITE_URL = "http://testserver"
+
+INVITATION_EXPIRY_DAYS = 7

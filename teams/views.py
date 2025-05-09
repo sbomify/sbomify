@@ -7,6 +7,7 @@ from sbomify.logging import getLogger
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
 
+from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -20,7 +21,6 @@ from django.http import (
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET
-from social_django.models import UserSocialAuth
 
 from core.errors import error_response
 from core.utils import number_to_random_token, token_to_number
@@ -419,17 +419,11 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     product = Product.objects.get(id=product_id)
                     project = Project.objects.get(id=project_id)
 
-                    # Get Auth0 user metadata
-                    social_auth = UserSocialAuth.objects.filter(user=request.user, provider="auth0").first()
-                    user_metadata = social_auth.extra_data.get("user_metadata", {}) if social_auth else {}
+                    # Get Keycloak user metadata
+                    social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
+                    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
                     company_name = user_metadata.get("company", team.name)
-                    supplier_contact = user_metadata.get(
-                        "supplier_contact",
-                        {
-                            "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                            "email": request.user.email,
-                        },
-                    )
+                    supplier_contact = user_metadata.get("supplier_contact", {})
 
                     # Create the component
                     component = Component.objects.create(

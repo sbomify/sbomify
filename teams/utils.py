@@ -23,6 +23,7 @@ def get_user_teams(user, include_team_id: bool = False) -> dict:
 
 
 def get_user_default_team(user) -> int:
+    """Get the user's default team ID. Returns the first team they're a member of."""
     try:
         default_team = Member.objects.get(user=user, is_default_team=True)
         return default_team.team_id
