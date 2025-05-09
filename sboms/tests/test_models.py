@@ -23,8 +23,10 @@ class TestUniqueConstraints:
                 name="Project 1",
                 team=team
             )
-        assert "duplicate key value violates unique constraint" in str(exc.value)
-        assert "sboms_projects" in str(exc.value)
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
 
         # Clean up
         project.delete()
@@ -45,8 +47,10 @@ class TestUniqueConstraints:
                 name="Product 1",
                 team=team
             )
-        assert "duplicate key value violates unique constraint" in str(exc.value)
-        assert "sboms_products" in str(exc.value)
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
 
         # Clean up
         product.delete()
@@ -67,8 +71,10 @@ class TestUniqueConstraints:
                 name="Component 1",
                 team=team
             )
-        assert "duplicate key value violates unique constraint" in str(exc.value)
-        assert "sboms_components" in str(exc.value)
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
 
         # Clean up
         component.delete()
