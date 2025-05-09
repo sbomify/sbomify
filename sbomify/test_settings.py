@@ -7,6 +7,14 @@ os.environ["STRIPE_PUBLISHABLE_KEY"] = "pk_test_dummy_key_for_ci"
 os.environ["STRIPE_BILLING_URL"] = "https://billing.stripe.com/test"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 
+# Mock trial period settings
+os.environ["TRIAL_PERIOD_DAYS"] = "14"
+os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
+
+# Mock email settings
+os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
+EMAIL_SUBJECT_PREFIX = "[sbomify] "
+
 import json
 
 # Import settings in a way that ensures they are loaded immediately
@@ -124,3 +132,5 @@ MIDDLEWARE = [
 # Add debug toolbar middleware if DEBUG is True
 if DEBUG:
     MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+
+SITE_URL = "http://testserver"

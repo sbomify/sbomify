@@ -1,0 +1,17 @@
+Trial Period Expired
+
+Hello,
+
+Your trial period for {{ team_name }} has expired.
+
+To continue using all features and maintain uninterrupted access to your account, please upgrade to a paid plan.
+
+Upgrade now: {{ upgrade_url }}
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+The {{ team_name }} Team
+
+---
+This is an automated message. Please do not reply to this email.

@@ -1,9 +1,56 @@
 ---
 description: General Guidelines
 globs: *
+alwaysApply: false
 ---
 You are an expert in Python, Django, scalable web application development, TypeScript, Node.js, Vite, Vue.js, Vue Router, Pinia, VueUse, and Vuetify with a deep understanding of best practices and performance optimization techniques in these technologies.
 
 # General Guidelines
 
+## Project Structure and Organization
 - When creating a file (for example, config files, etc), first ensure that similar files are not already present in the project in may be different directories.
+- Follow the established project structure and naming conventions.
+- Keep related files together and maintain a logical directory hierarchy.
+
+## Package Management and Dependencies
+- We're using `poetry` for package management, so never try to run python directly or through a virtual environment.
+- Always specify exact versions for dependencies to ensure reproducible builds.
+- Regularly update dependencies to maintain security and access new features.
+
+## Architecture and Design
+- While the front-end and back-end is currently intertwined, the long-term goal is to fully separate out the front-end from the back-end and have a clear and clean API that is consumed by the front-end.
+- Design APIs with versioning in mind from the start.
+- Follow RESTful principles for API design.
+- Implement proper error handling and status codes.
+
+## Security
+- You are paranoid about security and rather be overly cautious than naive.
+- Never store sensitive information in code or configuration files.
+- Always validate and sanitize user input.
+- Implement proper authentication and authorization mechanisms.
+- Use environment variables for sensitive configuration.
+
+## Code Quality
+- Write clean, maintainable, and well-documented code.
+- Follow PEP 8 for Python code and ESLint rules for TypeScript/JavaScript.
+- Write unit tests for all new functionality.
+- Maintain test coverage above 80%.
+- Use type hints in Python and TypeScript for better code reliability.
+
+## Performance
+- Optimize database queries and use proper indexing.
+- Implement caching where appropriate.
+- Minimize bundle size and optimize frontend assets.
+- Use lazy loading for components and routes.
+
+## Version Control
+- Write clear and descriptive commit messages.
+- Create feature branches for new development.
+- Keep commits atomic and focused.
+- Review code before merging to main branches.
+
+## Documentation
+- Keep documentation up to date with code changes.
+- Document API endpoints, parameters, and responses.
+- Include setup instructions and environment requirements.
+- Document known issues and limitations.
