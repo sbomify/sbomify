@@ -58,24 +58,28 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 
 #### Installing Poetry
 
-1. Install Poetry using the official installer:
+- Install Poetry using the official installer:
+
 ```bash
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-2. Verify the installation:
+- Verify the installation:
+
 ```bash
 poetry --version
 ```
 
-3. Configure Poetry to create virtual environments in the project directory:
+- Configure Poetry to create virtual environments in the project directory:
+
 ```bash
 poetry config virtualenvs.in-project true
 ```
 
 #### Installing Dependencies
 
-1. Install Python dependencies using Poetry:
+- Install Python dependencies using Poetry:
+
 ```bash
 # Install all dependencies including development dependencies
 poetry install
@@ -84,7 +88,8 @@ poetry install
 poetry shell
 ```
 
-2. Install JavaScript dependencies using Bun:
+- Install JavaScript dependencies using Bun:
+
 ```bash
 bun install
 ```
@@ -301,6 +306,37 @@ bun lint-fix
 
 ```bash
 bun run dev
+```
+
+### Pre-commit Checks
+
+The project uses pre-commit hooks to ensure code quality and consistency. The hooks check for:
+
+- Code formatting (ruff-format)
+- Python linting (ruff)
+- Security issues (bandit)
+- Markdown formatting
+- TypeScript type checking
+- JavaScript/TypeScript linting
+- Merge conflicts
+- Debug statements
+
+To set up pre-commit:
+
+- Install pre-commit hooks:
+
+```bash
+poetry run pre-commit install
+```
+
+- Run pre-commit checks manually:
+
+```bash
+# Check all files
+poetry run pre-commit run --all-files
+
+# Check staged files only
+poetry run pre-commit run
 ```
 
 ## Production Deployment

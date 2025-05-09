@@ -114,14 +114,20 @@ def get_stats_for_team(
     where_or_and = "AND" if team else "WHERE"
 
     uploads_sql += f"""
-    {f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-     f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
-     f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
-     if item_type == "product" else ""}
+    {
+        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
+        f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
+        f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
+        if item_type == "product"
+        else ""
+    }
 
-    {f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-     f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
-     if item_type == "project" else ""}
+    {
+        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
+        f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
+        if item_type == "project"
+        else ""
+    }
 
     {" WHERE c.team_id=%(team_id)s" if team else ""}
     {f" {where_or_and} c.id=%(item_id)s" if item_type == "component" else ""}
@@ -137,20 +143,28 @@ def get_stats_for_team(
         ROW_NUMBER() OVER (PARTITION BY s.component_id ORDER BY s.component_id, s.created_at desc) AS row_num,
         s.packages_licenses
         FROM {SBOM._meta.db_table} s
-        {f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
-         if item_type == "component" else ""}
-        {f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
-         f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-         f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
-         if item_type == "project" else ""}
-        {f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
-         f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-         f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
-         f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
-         if item_type == "product" else ""}
+        {f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id " if item_type == "component" else ""}
+        {
+        f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
+        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
+        f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
+        if item_type == "project"
+        else ""
+    }
+        {
+        f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
+        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
+        f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
+        f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
+        if item_type == "product"
+        else ""
+    }
 
-        {f" WHERE s.component_id IN (SELECT id FROM {Component._meta.db_table} WHERE team_id=%(team_id)s)"
-         if team else ""}
+        {
+        f" WHERE s.component_id IN (SELECT id FROM {Component._meta.db_table} WHERE team_id=%(team_id)s)"
+        if team
+        else ""
+    }
         {f" {where_or_and} c.id=%(item_id)s" if item_type == "component" else ""}
         {f" {where_or_and} p.id=%(item_id)s" if item_type == "project" else ""}
         {f" {where_or_and} pp.product_id=%(item_id)s" if item_type == "product" else ""}
