@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 
 from billing import email_notifications
 from teams.models import Member, Team
+from core.utils import number_to_random_token
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -21,7 +22,9 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def team(db):
     """Create a test team with a member."""
-    team = Team.objects.create(name="Test Team", key="test-team")
+    team = Team.objects.create(name="Test Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
     user = User.objects.create_user(
         username="testuser",
         email="test@example.com",

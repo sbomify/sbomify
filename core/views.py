@@ -23,8 +23,7 @@ def home(request: HttpRequest) -> HttpResponse:
 
     if settings.USE_KEYCLOAK:
         return redirect("core:keycloak_login")
-    else:
-        return redirect("social:begin", backend="auth0")
+    return redirect("account_login")
 
 
 def keycloak_login(request: HttpRequest) -> HttpResponse:
@@ -94,17 +93,13 @@ def logout(request: HttpRequest) -> HttpResponse:
     if settings.USE_KEYCLOAK:
         # Keycloak logout
         redirect_url = (
-            f"{settings.KEYCLOAK_SERVER_URL}realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
-            f"?redirect_uri={settings.APP_BASE_URL}"
+            f"{settings.KEYCLOAK_SERVER_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
+            f"?client_id={settings.KEYCLOAK_CLIENT_ID}"
+            f"&post_logout_redirect_uri={settings.APP_BASE_URL}"
         )
-    else:
-        # Auth0 logout
-        domain = settings.SOCIAL_AUTH_AUTH0_DOMAIN
-        client_id = settings.SOCIAL_AUTH_AUTH0_KEY
-        return_to = settings.APP_BASE_URL
-        redirect_url = f"https://{domain}/v2/logout?client_id={client_id}&returnTo={return_to}"
+        return redirect(redirect_url)
 
-    return redirect(redirect_url)
+    return redirect("core:home")
 
 
 def login_error(request: HttpRequest) -> HttpResponse:

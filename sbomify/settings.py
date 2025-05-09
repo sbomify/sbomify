@@ -65,13 +65,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     "django_extensions",
     "django_vite",
     "ninja",
     "widget_tweaks",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.openid_connect",
     "core",
-    "social_django",
-    "anymail",
     "teams",
     "sboms",
     "access_tokens",
@@ -79,6 +82,7 @@ INSTALLED_APPS = [
     "notifications",
     "health_check",
     "health_check.db",
+    "anymail",
 ]
 
 
@@ -267,53 +271,53 @@ LOGGING = {
 }
 
 
-# Auth0 settings
-SOCIAL_AUTH_TRAILING_SLASH = False  # Remove trailing slash from routes
-SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
-SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
-SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
-SOCIAL_AUTH_JSONFIELD_ENABLED = True
-SOCIAL_AUTH_URL_NAMESPACE = "social"
-SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
+# Feature flags
+USE_KEYCLOAK = os.environ.get("USE_KEYCLOAK", "").lower() in ("true", "1", "yes")
 
-# Ensure we get the correct response type from Auth0
-SOCIAL_AUTH_AUTH0_RESPONSE_TYPE = "code"
-
-# JWT validation settings for Auth0
-SOCIAL_AUTH_AUTH0_JWT_ENABLED = True
-SOCIAL_AUTH_AUTH0_JWT_ALGORITHM = "RS256"
-SOCIAL_AUTH_AUTH0_JWT_VERIFY = True
-SOCIAL_AUTH_AUTH0_JWT_VERIFY_EXP = True
-SOCIAL_AUTH_AUTH0_JWT_LEEWAY = 60  # 1 minute leeway for clock skew
-
-# Custom Auth0 Pipeline
-SOCIAL_AUTH_PIPELINE = (
-    # "core.pipeline.auth0.debug_pipeline",  # Debug pipeline at the start
-    "social_core.pipeline.social_auth.social_details",
-    "core.pipeline.auth0.get_auth0_user_id",  # Extract user ID before social_uid
-    "social_core.pipeline.social_auth.social_uid",
-    "social_core.pipeline.social_auth.auth_allowed",
-    "social_core.pipeline.social_auth.social_user",
-    "core.pipeline.auth0.require_email",  # Email verification
-    "social_core.pipeline.user.get_username",
-    "social_core.pipeline.user.create_user",
-    "social_core.pipeline.social_auth.associate_user",
-    "social_core.pipeline.social_auth.load_extra_data",
-    "social_core.pipeline.user.user_details",
-)
-
-if DEBUG is False:  # If in production, then force HTTPS for auth0
-    SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
-
-
-AUTHENTICATION_BACKENDS = {
-    "core.auth.SafeAuth0OAuth2",
+# Authentication settings
+AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+# AllAuth settings
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_VERIFICATION = "mandatory"
+SOCIALACCOUNT_EMAIL_REQUIRED = True
+SOCIALACCOUNT_STORE_TOKENS = True
+SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+
+# Modern AllAuth configuration
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*"]  # Only require email, as we're auto-creating username
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+
+SOCIALACCOUNT_PROVIDERS = {
+    "openid_connect": {
+        "SERVERS": [
+            {
+                "id": "keycloak",
+                "name": "Keycloak",
+                "server_url": os.environ.get("KEYCLOAK_SERVER_URL", ""),
+                "client_id": os.environ.get("KEYCLOAK_CLIENT_ID", ""),
+                "client_secret": os.environ.get("KEYCLOAK_CLIENT_SECRET", ""),
+                "authorization_endpoint": os.environ.get("KEYCLOAK_AUTH_ENDPOINT", ""),
+                "token_endpoint": os.environ.get("KEYCLOAK_TOKEN_ENDPOINT", ""),
+                "userinfo_endpoint": os.environ.get("KEYCLOAK_USERINFO_ENDPOINT", ""),
+                "jwks_uri": os.environ.get("KEYCLOAK_JWKS_URI", ""),
+                "end_session_endpoint": os.environ.get("KEYCLOAK_END_SESSION_ENDPOINT", ""),
+            }
+        ]
+    }
 }
 
-LOGIN_URL = "/login/auth0"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "core:dashboard"
+ACCOUNT_LOGOUT_REDIRECT_URL = "core:home"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -428,69 +432,3 @@ KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
-
-# Feature flags
-USE_KEYCLOAK = os.environ.get("USE_KEYCLOAK", "").lower() in ("true", "1", "yes")
-
-# Social Auth configuration
-if USE_KEYCLOAK:
-    AUTHENTICATION_BACKENDS = [
-        "django.contrib.auth.backends.ModelBackend",
-        "allauth.account.auth_backends.AuthenticationBackend",
-    ]
-
-    INSTALLED_APPS += [
-        "allauth",
-        "allauth.account",
-        "allauth.socialaccount",
-        "allauth.socialaccount.providers.openid_connect",
-    ]
-
-    # AllAuth settings
-    SOCIALACCOUNT_AUTO_SIGNUP = True
-    SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
-    SOCIALACCOUNT_EMAIL_REQUIRED = True
-    SOCIALACCOUNT_STORE_TOKENS = True
-    SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
-
-    # Modern AllAuth configuration
-    ACCOUNT_LOGIN_METHODS = {"email"}
-    ACCOUNT_SIGNUP_FIELDS = ["email*"]  # Only require email, as we're auto-creating username
-    ACCOUNT_UNIQUE_EMAIL = True
-
-    # Remove deprecated settings
-    # ACCOUNT_EMAIL_REQUIRED = True
-    # ACCOUNT_USERNAME_REQUIRED = True
-    # ACCOUNT_AUTHENTICATION_METHOD = "email"
-    # ACCOUNT_EMAIL_VERIFICATION = "none"
-
-    SOCIALACCOUNT_PROVIDERS = {
-        "openid_connect": {
-            "APPS": [
-                {
-                    "provider_id": "keycloak",
-                    "name": "Keycloak",
-                    "client_id": KEYCLOAK_CLIENT_ID,
-                    "secret": KEYCLOAK_CLIENT_SECRET,
-                    "settings": {
-                        "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration"
-                    },
-                }
-            ]
-        }
-    }
-
-    LOGIN_REDIRECT_URL = "/"
-    ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-else:
-    # Existing Auth0 configuration
-    AUTHENTICATION_BACKENDS = [
-        "social_core.backends.auth0.Auth0OAuth2",
-        "django.contrib.auth.backends.ModelBackend",
-    ]
-
-    SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
-    SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
-    SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
-
-    SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]

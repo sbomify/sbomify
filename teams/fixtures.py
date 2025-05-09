@@ -31,12 +31,21 @@ def sample_team_with_owner_member(
     sample_team: Team,
     sample_user: AbstractBaseUser,  # noqa: F811
 ) -> Generator[Member, Any, None]:
-    membership = Member(user=sample_user, team=sample_team, role="owner")
-    membership.save()
+    # First try to get existing membership
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "owner"
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="owner")
+        membership.save()
 
     yield membership
 
-    membership.delete()
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass
 
 
 @pytest.fixture
@@ -44,12 +53,21 @@ def sample_team_with_admin_member(
     sample_team: Team,
     sample_user: AbstractBaseUser,  # noqa: F811
 ) -> Generator[Member, Any, None]:
-    membership = Member(user=sample_user, team=sample_team, role="admin")
-    membership.save()
+    # First try to get existing membership
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "admin"
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="admin")
+        membership.save()
 
     yield membership
 
-    membership.delete()
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass
 
 
 @pytest.fixture
@@ -57,9 +75,18 @@ def sample_team_with_guest_member(
     sample_team: Team,
     sample_user: AbstractBaseUser,  # noqa: F811
 ) -> Generator[Member, Any, None]:
-    membership = Member(user=sample_user, team=sample_team, role="guest")
-    membership.save()
+    # First try to get existing membership
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "guest"
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="guest")
+        membership.save()
 
     yield membership
 
-    membership.delete()
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass

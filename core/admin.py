@@ -1,6 +1,7 @@
 import logging
 from functools import wraps
 
+from allauth.socialaccount.models import SocialAccount
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.core.cache import cache
@@ -9,7 +10,6 @@ from django.db.models import Count
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils.html import format_html
-from social_django.models import UserSocialAuth
 
 from sboms.models import SBOM, Component, Product, Project
 from teams.models import Member, Team
@@ -113,9 +113,16 @@ class DashboardView(admin.AdminSite):
         }
         return TemplateResponse(request, "admin/dashboard.html", context)
 
+    def social_accounts(self, obj):
+        """Display social accounts for the user."""
+        social_auths = SocialAccount.objects.filter(user=obj)
+        if not social_auths:
+            return "None"
+        return format_html("<br>".join(f"{auth.provider}: {auth.uid}" for auth in social_auths))
+
 
 class CustomUserAdmin(UserAdmin):
-    """Custom admin for User model with Auth0 integration."""
+    """Custom admin for User model with Keycloak integration."""
 
     list_display = UserAdmin.list_display + ("email_verified_status", "last_login_display")
     readonly_fields = UserAdmin.readonly_fields + ("email_verified_status", "last_login_display")
@@ -156,41 +163,26 @@ class CustomUserAdmin(UserAdmin):
         boolean=False,  # We're using custom HTML output
     )
     def email_verified_status(self, obj):
-        """Get email verification status from Auth0.
+        """Get email verification status from Keycloak.
 
-        Checks both Auth0 and social login providers (GitHub/Google) which
-        always have verified emails.
+        Checks both Keycloak and social login providers (GitHub/Google) which
+        may have different verification statuses.
         """
-        try:
-            # First check for social logins (GitHub/Google)
-            social_auths = UserSocialAuth.objects.filter(user=obj)
+        auth = obj.socialaccount_set.first()
+        if not auth:
+            return False
 
-            for auth in social_auths:
-                # GitHub/Google emails are always verified
-                if auth.provider in ["github", "google-oauth2"]:
-                    return format_html(
-                        '<img src="/static/admin/img/icon-yes.svg" alt="True"> '
-                        '<span style="color: #417690;">({})</span>',
-                        auth.provider,
-                    )
+        # Check Keycloak verification
+        if auth.provider == "keycloak" and auth.extra_data:
+            return auth.extra_data.get("email_verified", False)
 
-                # Check Auth0 verification
-                if auth.provider == "auth0" and auth.extra_data:
-                    email_verified = auth.extra_data.get("email_verified", False)
-                    if email_verified:
-                        return format_html('<img src="/static/admin/img/icon-yes.svg" alt="True">')
-                    return format_html(
-                        '<img src="/static/admin/img/icon-no.svg" alt="False"> '
-                        '<span style="color: #ba2121;">unverified</span>'
-                    )
+        # For other providers, check their specific verification field
+        if auth.provider == "github":
+            return auth.extra_data.get("email_verified", False)
+        elif auth.provider == "google":
+            return auth.extra_data.get("verified_email", False)
 
-            # No social auths found
-            return format_html('<span style="color: #666;">no social auth</span>')
-
-        except Exception as e:
-            # Log the error but don't expose it in admin
-            logger.error(f"Error checking email verification for user {obj.id}: {str(e)}")
-            return format_html('<span style="color: #666;">error checking status</span>')
+        return False
 
 
 # Create custom admin site

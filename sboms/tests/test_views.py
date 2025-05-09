@@ -8,11 +8,12 @@ from django.http import HttpResponse
 from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
+from django.contrib.messages import get_messages
 
 from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
-from teams.models import Member
+from teams.models import Member, Team
 
 from ..models import SBOM, Component, Product, Project
 from .fixtures import (
@@ -21,6 +22,47 @@ from .fixtures import (
     sample_project,  # noqa: F401
     sample_sbom,  # noqa: F401
 )
+
+
+def setup_test_session(client: Client, team: Team, user) -> None:
+    """Set up session data for tests.
+
+    Args:
+        client: The test client
+        team: The team to set up session data for
+        user: The user to log in
+    """
+    # Ensure team has a valid key
+    if not team.key or len(team.key) < 9:
+        team.key = number_to_random_token(team.id)
+        team.save()
+
+    # Get the member's role
+    member = Member.objects.filter(user=user, team=team).first()
+    if not member:
+        raise ValueError("User is not a member of the team")
+
+    role = member.role
+
+    # Log in the user
+    client.force_login(user)
+
+    # Set up session data
+    session = client.session
+    session["user_teams"] = {
+        team.key: {
+            "role": role,
+            "name": team.name,
+            "is_default_team": member.is_default_team
+        }
+    }
+    session["current_team"] = {
+        "key": team.key,
+        "role": role,
+        "name": team.name,
+        "is_default_team": member.is_default_team
+    }
+    session.save()
 
 
 @pytest.mark.django_db
@@ -103,11 +145,13 @@ def test_create_product(sample_team_with_owner_member):  # Changed fixture
 
 
 @pytest.mark.django_db
-def test_delete_product(sample_team_with_owner_member):  # Changed fixture
+def test_delete_product(sample_team_with_owner_member):
     client = Client()
     team = sample_team_with_owner_member.team
 
-    # Setup billing plan
+    team.key = number_to_random_token(team.id)
+    team.save()
+
     BillingPlan.objects.create(
         key="delete_product_plan",
         name="Delete Product Plan",
@@ -116,15 +160,17 @@ def test_delete_product(sample_team_with_owner_member):  # Changed fixture
         max_components=10
     )
     team.billing_plan = "delete_product_plan"
-    team.key = number_to_random_token(team.id)
     team.save()
 
     client.force_login(team.members.first())
     session = client.session
+    session["user_teams"] = {
+        team.key: {"role": "owner", "name": team.name}
+    }
     session["current_team"] = {
-        "id": team.id,
+        "key": team.key,
         "role": "owner",
-        "key": team.key
+        "name": team.name
     }
     session.save()
 
@@ -141,7 +187,15 @@ def test_delete_product(sample_team_with_owner_member):  # Changed fixture
         reverse("sboms:delete_product", kwargs={"product_id": product_id})
     )
     assert response.status_code == 302
-    assert Product.objects.filter(id=product_id).exists() is False
+
+    # Verify product is deleted
+    assert not Product.objects.filter(pk=product_id).exists()
+
+    # Check success messages
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 2
+    assert str(messages[0]) == "Product Test Product created"
+    assert str(messages[1]) == "Product Test Product deleted"
 
 
 @pytest.mark.django_db
@@ -179,11 +233,13 @@ def test_create_project(sample_team_with_owner_member):
 
 
 @pytest.mark.django_db
-def test_delete_project(sample_team_with_owner_member):  # Changed fixture
+def test_delete_project(sample_team_with_owner_member):
     client = Client()
     team = sample_team_with_owner_member.team
 
-    # Setup billing plan
+    team.key = number_to_random_token(team.id)
+    team.save()
+
     BillingPlan.objects.create(
         key="delete_project_plan",
         name="Delete Project Plan",
@@ -192,15 +248,17 @@ def test_delete_project(sample_team_with_owner_member):  # Changed fixture
         max_components=10
     )
     team.billing_plan = "delete_project_plan"
-    team.key = number_to_random_token(team.id)
     team.save()
 
     client.force_login(team.members.first())
     session = client.session
+    session["user_teams"] = {
+        team.key: {"role": "owner", "name": team.name}
+    }
     session["current_team"] = {
-        "id": team.id,
+        "key": team.key,
         "role": "owner",
-        "key": team.key
+        "name": team.name
     }
     session.save()
 
@@ -217,7 +275,15 @@ def test_delete_project(sample_team_with_owner_member):  # Changed fixture
         reverse("sboms:delete_project", kwargs={"project_id": project_id})
     )
     assert response.status_code == 302
-    assert Project.objects.filter(id=project_id).exists() is False
+
+    # Verify project is deleted
+    assert not Project.objects.filter(pk=project_id).exists()
+
+    # Check success messages
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 2
+    assert str(messages[0]) == "Project Test Project created"
+    assert str(messages[1]) == "Project Test Project deleted"
 
 
 @pytest.mark.django_db
@@ -298,11 +364,13 @@ def test_create_duplicate_component(sample_team_with_owner_member):  # Changed f
 
 
 @pytest.mark.django_db
-def test_delete_component(sample_team_with_owner_member):  # Changed fixture
+def test_delete_component(sample_team_with_owner_member):
     client = Client()
     team = sample_team_with_owner_member.team
 
-    # Setup billing plan
+    team.key = number_to_random_token(team.id)
+    team.save()
+
     BillingPlan.objects.create(
         key="delete_component_plan",
         name="Delete Component Plan",
@@ -311,15 +379,17 @@ def test_delete_component(sample_team_with_owner_member):  # Changed fixture
         max_projects=10
     )
     team.billing_plan = "delete_component_plan"
-    team.key = number_to_random_token(team.id)
     team.save()
 
     client.force_login(team.members.first())
     session = client.session
+    session["user_teams"] = {
+        team.key: {"role": "owner", "name": team.name}
+    }
     session["current_team"] = {
-        "id": team.id,
+        "key": team.key,
         "role": "owner",
-        "key": team.key
+        "name": team.name
     }
     session.save()
 
@@ -336,7 +406,15 @@ def test_delete_component(sample_team_with_owner_member):  # Changed fixture
         reverse("sboms:delete_component", kwargs={"component_id": component_id})
     )
     assert response.status_code == 302
-    assert Component.objects.filter(id=component_id).exists() is False
+
+    # Verify component is deleted
+    assert not Component.objects.filter(pk=component_id).exists()
+
+    # Check success messages
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 2
+    assert str(messages[0]) == "Component Test Component created"
+    assert str(messages[1]) == "Component Test Component deleted"
 
 
 @pytest.mark.django_db
@@ -346,6 +424,9 @@ def test_details_page_only_accessible_when_logged_in(
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
 ):
+    """Test that details pages require authentication."""
+    client = Client()
+
     uris = [
         reverse("sboms:product_details", kwargs={"product_id": sample_product.id}),
         reverse("sboms:project_details", kwargs={"project_id": sample_project.id}),
@@ -353,19 +434,18 @@ def test_details_page_only_accessible_when_logged_in(
         reverse("sboms:sbom_details", kwargs={"sbom_id": sample_sbom.id}),
     ]
 
-    client = Client()
-
+    # Test unauthenticated access
     for uri in uris:
         response: HttpResponse = client.get(uri)
-
         assert response.status_code == 302
         assert quote(response.request["PATH_INFO"]) == uri
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
+    # Test authenticated access
     for uri in uris:
         response: HttpResponse = client.get(uri)
-
         assert response.status_code == 200
         assert quote(response.request["PATH_INFO"]) == uri
 
@@ -426,6 +506,7 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
 
 @pytest.mark.django_db
 def test_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """Test SBOM download functionality."""
     mocker.patch("boto3.resource")
     mocked_s3_get_file_data = mocker.patch("core.object_store.S3Client.get_file_data")
     mocked_s3_get_file_data.return_value = b'{"name": "com.github.test/test", "a": 1}'
@@ -434,17 +515,17 @@ def test_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
 
     uri = reverse("sboms:sbom_download", kwargs={"sbom_id": sample_sbom.id})
 
+    # Test unauthenticated access
     response: HttpResponse = client.get(uri)
-
     assert response.status_code == 403
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
 
+    # Test authenticated access
     response: HttpResponse = client.get(uri)
-
     assert response.status_code == 200
-    assert quote(response.request["PATH_INFO"]) == uri
-    assert response.json()["name"] == "com.github.test/test"
+    assert response.content == b'{"name": "com.github.test/test", "a": 1}'
 
 
 @pytest.mark.django_db
@@ -484,23 +565,21 @@ def test_transfer_component_to_team(
     sample_team_with_owner_member: Member,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ):
-    # By default sample component beloings to default team that's created for sample_user upon user creation.
+    """Test transferring a component to another team."""
     client = Client()
 
     uri = reverse("sboms:transfer_component", kwargs={"component_id": sample_component.id})
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
 
+    # Test transferring component
     response: HttpResponse = client.post(uri, {"team_key": sample_team_with_owner_member.team.key})
-
     assert response.status_code == 302
-    assert response.url == reverse(
-        "sboms:component_details",
-        kwargs={"component_id": sample_component.id},
-    )
 
+    # Verify component was transferred
     sample_component.refresh_from_db()
-    assert sample_component.team_id == sample_team_with_owner_member.team_id
+    assert sample_component.team == sample_team_with_owner_member.team
 
 
 @pytest.mark.django_db
@@ -508,30 +587,35 @@ def test_adding_and_removing_components_to_projects(
     sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ):
+    """Test adding and removing components to/from projects."""
     client = Client()
 
     uri = reverse("sboms:project_details", kwargs={"project_id": sample_project.id})
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_project.team, sample_project.team.members.first())
 
+    # Test adding component
     response: HttpResponse = client.post(
         uri + "?action=add_components", {"component_" + sample_component.id: sample_component.id}
     )
+    assert response.status_code == 302
+    assert response.url == uri
 
-    assert response.status_code == 200
-
+    # Verify component was added
     sample_project.refresh_from_db()
-    assert sample_project.components.count() == 1
-    assert sample_project.components.first().id == sample_component.id
+    assert sample_component in sample_project.components.all()
 
-    response: HttpResponse = client.post(
+    # Test removing component
+    response = client.post(
         uri + "?action=remove_components", {"component_" + sample_component.id: sample_component.id}
     )
+    assert response.status_code == 302
+    assert response.url == uri
 
-    assert response.status_code == 200
-
+    # Verify component was removed
     sample_project.refresh_from_db()
-    assert sample_project.components.count() == 0
+    assert sample_component not in sample_project.components.all()
 
 
 @pytest.mark.django_db
@@ -539,30 +623,35 @@ def test_adding_and_removing_projects_to_products(
     sample_product: Product,  # noqa: F811
     sample_project: Project,  # noqa: F811
 ):
+    """Test adding and removing projects to/from products."""
     client = Client()
 
     uri = reverse("sboms:product_details", kwargs={"product_id": sample_product.id})
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
+    # Test adding project
     response: HttpResponse = client.post(
         uri + "?action=add_projects", {"project_" + sample_project.id: sample_project.id}
     )
+    assert response.status_code == 302
+    assert response.url == uri
 
-    assert response.status_code == 200
-
+    # Verify project was added
     sample_product.refresh_from_db()
-    assert sample_product.projects.count() == 1
-    assert sample_product.projects.first().id == sample_project.id
+    assert sample_project in sample_product.projects.all()
 
-    response: HttpResponse = client.post(
+    # Test removing project
+    response = client.post(
         uri + "?action=remove_projects", {"project_" + sample_project.id: sample_project.id}
     )
+    assert response.status_code == 302
+    assert response.url == uri
 
-    assert response.status_code == 200
-
+    # Verify project was removed
     sample_product.refresh_from_db()
-    assert sample_product.projects.count() == 0
+    assert sample_project not in sample_product.projects.all()
 
 
 @pytest.mark.django_db

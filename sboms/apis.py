@@ -72,7 +72,7 @@ def get_item_public_status(request, item_type: str, item_id: str):
 @router.patch(
     "/{item_type}/{item_id}/public_status",
     response={
-        200: PublicStatusSchema,
+        204: None,
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
@@ -86,7 +86,7 @@ def patch_item_public_status(request, item_type: str, item_id: str, payload: Pub
     result.is_public = payload.is_public
     result.save()
 
-    return {"is_public": result.is_public}
+    return 204, None
 
 
 @router.get(

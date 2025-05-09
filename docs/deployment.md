@@ -226,10 +226,10 @@ Set up the required environment variables:
 fly secrets set APP_BASE_URL=https://[your domain]
 fly secrets set SECRET_KEY=[...]  # Generate this safely offline
 
-# Auth0 configuration
-fly secrets set SOCIAL_AUTH_AUTH0_DOMAIN=[...]
-fly secrets set SOCIAL_AUTH_AUTH0_KEY=[...]
-fly secrets set SOCIAL_AUTH_AUTH0_SECRET=[...]
+# Keycloak configuration
+fly secrets set SOCIAL_AUTH_KEYCLOAK_DOMAIN=[...]
+fly secrets set SOCIAL_AUTH_KEYCLOAK_KEY=[...]
+fly secrets set SOCIAL_AUTH_KEYCLOAK_SECRET=[...]
 
 # Monitoring and email
 fly secrets set SENTRY_DSN=[...]
