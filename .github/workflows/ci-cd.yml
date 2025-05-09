@@ -11,95 +11,45 @@ on:
       - master
 
 jobs:
-  checks:
-    name: Code Quality Checks
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        check: ['tests', 'code-quality']
-        python-version: ["3.10.12"]
-        poetry-version: ["1.8.1"]
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: sbomify
-          POSTGRES_PASSWORD: sbomify
-          POSTGRES_DB: sbomify
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
-      DJANGO_SETTINGS_MODULE: sbomify.settings
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set environment variables
-        run: |
-          echo "DEBUG=True" >> $GITHUB_ENV
-          echo "STRIPE_SECRET_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
-          echo "STRIPE_PUBLISHABLE_KEY=pk_test_dummy_key_for_ci" >> $GITHUB_ENV
-          echo "STRIPE_WEBHOOK_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
-          echo "STRIPE_ENDPOINT_SECRET=whsec_dummy_key_for_ci" >> $GITHUB_ENV
-          echo "DJANGO_TEST=true" >> $GITHUB_ENV
-          cp .env.example .env
-
-      - name: Set up Python ${{ matrix.python-version }}
-        if: matrix.check != 'code-quality'
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10.12"
 
-      - name: Set up Python for lint
-        if: matrix.check == 'code-quality'
-        uses: actions/setup-python@v5
+      - uses: actions/cache@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Cache Poetry dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pypoetry
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            ${{ runner.os }}-pip-
 
-      - name: Install poetry
-        uses: abatilo/actions-poetry@v2
-        with:
-          poetry-version: ${{ matrix.poetry-version }}
-
-      - name: Install Python dependencies
-        if: matrix.check != 'code-quality'
+      # Install poetry directly instead of using a third-party action
+      - name: Install Poetry
         run: |
-          poetry install --with dev,test
+          curl -sSL https://install.python-poetry.org | python3 -
+          poetry --version
 
-      - name: Install minimal Python dependencies for lint
-        if: matrix.check == 'code-quality'
+      - name: Install minimal Python dependencies
         run: |
           poetry install --only dev
 
+      # Install bun directly instead of using a third-party action
       - name: Setup Bun
-        if: matrix.check == 'code-quality'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: "1.0.25"
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
 
       - name: Install JS dependencies
-        if: matrix.check == 'code-quality'
         run: bun install
 
       - name: Run code quality checks
-        if: matrix.check == 'code-quality'
         run: |
           echo "Running all code quality checks via pre-commit..."
           poetry run pre-commit run --all-files
@@ -108,51 +58,61 @@ jobs:
           echo "## Code Quality Results" >> $GITHUB_STEP_SUMMARY
           echo "All pre-commit hooks passed successfully." >> $GITHUB_STEP_SUMMARY
 
-      - name: Install PostgreSQL client
-        if: matrix.check == 'tests'
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # Don't fail fast to see all test failures
+      matrix:
+        test-group: ['core', 'sboms', 'teams', 'billing', 'notifications', 'access_tokens']
+        python-version: ["3.10.12"]
+    env:
+      DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      DEBUG: True
+      STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
+      STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
+      STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
+      STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
+      DJANGO_TEST: 'true'
 
-      - name: Setup test assets
-        if: matrix.check == 'tests'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Poetry
         run: |
-          # Create static assets structure in project root
+          curl -sSL https://install.python-poetry.org | python3 -
+          poetry --version
+
+      - name: Install Python dependencies
+        run: |
+          poetry install --with dev,test
+
+      - name: Setup test environment
+        run: |
+          cp .env.example .env
+          # Create static assets structure
           mkdir -p static/assets
-          # Create empty asset files
           for file in main.js main.css teams.js teams.css billing.js billing.css sboms.js sboms.css django-messages.js alerts-global.js; do
             echo "// Test asset" > static/assets/$file
           done
-
-      - name: Run Backend Tests
-        if: matrix.check == 'tests'
-        env:
-          TEST_DB_NAME: sbomify_test
-          TEST_DB_USER: sbomify
-          TEST_DB_PASSWORD: sbomify
-          DEBUG: True
-          STRIPE_SECRET_KEY: 'sk_test_dummy_key_for_ci'
-          STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy_key_for_ci'
-          STRIPE_WEBHOOK_SECRET: 'whsec_dummy_key_for_ci'
-          STRIPE_ENDPOINT_SECRET: 'whsec_dummy_key_for_ci'
-          DATABASE_URL: postgres://sbomify:sbomify@localhost:5432/sbomify
-          DJANGO_SETTINGS_MODULE: sbomify.test_settings
-          DJANGO_TEST: 'true'
-        run: |
-          # Copy environment variables
-          cp .env.example .env
-
-          # Create test database with correct privileges
-          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "CREATE DATABASE sbomify_test;"
-          psql postgres://sbomify:sbomify@localhost:5432/sbomify -c "GRANT ALL PRIVILEGES ON DATABASE sbomify_test TO sbomify;"
-
-          # Add database setup commands
           poetry run python manage.py migrate
-
-          # Collect static files
           poetry run python manage.py collectstatic --noinput
 
-          # Rest of the test commands...
-          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-          poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
+      - name: Run Tests for ${{ matrix.test-group }}
+        run: |
+          echo "## Test Results for ${{ matrix.test-group }}" >> $GITHUB_STEP_SUMMARY
+          poetry run coverage run -m pytest --json-report --json-report-file=pytest.json ${{ matrix.test-group }}/tests/
 
           # Create test summary table
           echo "### Summary" >> $GITHUB_STEP_SUMMARY
@@ -164,7 +124,6 @@ jobs:
           | Skipped | \(.summary.skipped) |
           | Duration | \(.duration)s |"' pytest.json >> $GITHUB_STEP_SUMMARY
 
-          # Add test details if there are failures
           if [ $(jq '.summary.failed' pytest.json) -gt 0 ]; then
             echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
             echo "| Test | Duration | Error |" >> $GITHUB_STEP_SUMMARY
@@ -180,30 +139,54 @@ jobs:
   docker-build:
     name: Docker Build Test
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ['dev', 'prod']
     steps:
       - uses: actions/checkout@v4
+
+      # Use Docker's built-in buildx instead of an action
+      - name: Set up Docker Buildx
+        run: docker buildx create --use
+
+      # Use Docker CLI directly for caching
+      - name: Docker Build Cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Set up test environment variables
         run: cp .env.example .env
 
-      - name: Test Development Docker Build
-        run: docker compose build
+      - name: Build Docker Image
+        run: |
+          DOCKERFILE=${{ matrix.environment == 'prod' && 'Dockerfile.prod' || 'Dockerfile' }}
+          docker buildx build \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --file $DOCKERFILE \
+            --load \
+            .
 
-      - name: Test Production Docker Build
-        run: docker compose -f docker-compose.prod.yml build
+      # Cache cleanup
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
-    needs: [checks, docker-build]
-
+    needs: [code-quality, tests, docker-build]
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Fly
-        uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Create fly.toml for staging
         run: |
@@ -219,14 +202,11 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push' }}
-    needs: [checks, docker-build]
-
+    needs: [code-quality, tests, docker-build]
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Fly
-        uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Create fly.toml for production
         run: |

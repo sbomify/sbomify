@@ -209,10 +209,32 @@ You can access the Minio console at:
 
 ### Running test cases
 
+First, ensure you have the test environment set up:
+
 ```bash
+# Copy the test environment file
+cp test_env .env.test
+```
+
+Then run the tests:
+
+```bash
+# Run all tests with coverage
+poetry run coverage run -m pytest
+
+# Run specific test groups
+poetry run coverage run -m pytest core/tests/
+poetry run coverage run -m pytest sboms/tests/
+poetry run coverage run -m pytest teams/tests/
+
+# Run with debugger on failure
 poetry run coverage run -m pytest --pdb -x -s
+
+# Generate coverage report
 poetry run coverage report
 ```
+
+The test environment uses SQLite in-memory database for faster test execution. Test coverage must be at least 80% to pass CI checks.
 
 ### JS build tooling
 
