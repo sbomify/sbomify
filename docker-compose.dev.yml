@@ -13,7 +13,7 @@ x-keycloak-env: &keycloak-env
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
-  KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+  KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
   KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
 
 services:
@@ -40,6 +40,8 @@ services:
       - /code/node_modules
     environment:
       NODE_ENV: development
+      VITE_API_BASE_URL: http://127.0.0.1:8000/api/v1
+
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.4
@@ -49,8 +51,6 @@ services:
       KC_HOSTNAME_URL: ${KEYCLOAK_SERVER_URL}
       KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
       KC_HEALTH_ENABLED: "true"
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
@@ -69,8 +69,6 @@ services:
       KC_HOSTNAME_URL: ${KEYCLOAK_SERVER_URL}
       KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
       KC_HEALTH_ENABLED: "true"
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
 
 volumes:
   keycloak_data:

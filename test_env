@@ -1,24 +1,23 @@
-SECRET_KEY=not-so-secret
+SECRET_KEY=test_secret_key
 DEBUG=True
-DATABASE_URL=postgres://sbomify:sbomify@sbomify-db/sbomify
 
 SOCIAL_AUTH_AUTH0_DOMAIN=none
 SOCIAL_AUTH_AUTH0_KEY=none
 SOCIAL_AUTH_AUTH0_SECRET=none
 
-APP_BASE_URL=http://127.0.0.1:8000
+APP_BASE_URL=http://localhost:8000
 
 LOG_LEVEL=DEBUG
 
 # Test environment variables
 DJANGO_TEST_USER=testuser
-DJANGO_TEST_EMAIL=testuser@example.com
-DJANGO_TEST_PASSWORD=testpassword
+DJANGO_TEST_EMAIL=test@example.com
+DJANGO_TEST_PASSWORD=testpass123
 
 # Keycloak settings (needed for tests)
-KEYCLOAK_SERVER_URL=http://localhost:8080/
-KEYCLOAK_REALM=sbomify3
-KEYCLOAK_CLIENT_ID=sbomify
-KEYCLOAK_CLIENT_SECRET=test-client-secret
+KEYCLOAK_SERVER_URL=http://localhost:8080
+KEYCLOAK_REALM=master
+KEYCLOAK_CLIENT_ID=test-client
+KEYCLOAK_CLIENT_SECRET=test-secret
 KEYCLOAK_ADMIN_USERNAME=admin
 KEYCLOAK_ADMIN_PASSWORD=admin

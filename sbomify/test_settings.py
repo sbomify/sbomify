@@ -21,18 +21,9 @@ if "allauth" not in INSTALLED_APPS:
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("TEST_DB_NAME", "postgres"),  # Local default
-        "USER": os.environ.get("TEST_DB_USER", "postgres"),  # Local default
-        "PASSWORD": os.environ.get("TEST_DB_PASSWORD", "postgres"),  # Local default
-        "HOST": os.environ.get("TEST_DB_HOST", "localhost"),
-        "PORT": os.environ.get("TEST_DB_PORT", "5432"),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",  # Use in-memory SQLite for faster tests
         "ATOMIC_REQUESTS": True,
-        # Test database settings
-        "TEST": {
-            "NAME": os.environ.get("TEST_DB_NAME", "sbomify_test"),
-            "SERIALIZE": False,
-        },
     }
 }
 
