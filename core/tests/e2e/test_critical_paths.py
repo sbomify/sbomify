@@ -126,7 +126,8 @@ class TestCriticalPaths:
             data=json.dumps({"is_public": True}),
             content_type="application/json"
         )
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json()["is_public"] is True
 
         # 3. Verify public access
         client.logout()

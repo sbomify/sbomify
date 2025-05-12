@@ -15,6 +15,7 @@ from sboms.models import Component, Product, Project
 from teams.models import Member, Team
 
 from . import email_notifications
+from .config import is_billing_enabled
 from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
 
@@ -34,8 +35,16 @@ def check_billing_limits(resource_type: str):
 
     def decorator(view_func):
         @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            # Get current team from session
+        def _wrapped_view(request, *args, **kwargs):
+            # Only check limits for POST requests
+            if request.method != "POST":
+                return view_func(request, *args, **kwargs)
+
+            # If billing is disabled, bypass all checks
+            if not is_billing_enabled():
+                return view_func(request, *args, **kwargs)
+
+            # Get current team
             team_key = request.session.get("current_team", {}).get("key")
             if not team_key:
                 return HttpResponseForbidden("No team selected")
@@ -79,7 +88,7 @@ def check_billing_limits(resource_type: str):
 
             return view_func(request, *args, **kwargs)
 
-        return wrapper
+        return _wrapped_view
 
     return decorator
 

@@ -63,7 +63,8 @@ def test_sbom_api_is_public(
 
     # Make the component public
     response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Verify component is public
     response = client.get(component_uri, content_type="application/json")
@@ -72,7 +73,8 @@ def test_sbom_api_is_public(
 
     # Make the project public
     response = client.patch(project_uri, json.dumps({"is_public": True}), content_type="application/json")
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Verify project is public
     response = client.get(project_uri, content_type="application/json")
@@ -81,7 +83,8 @@ def test_sbom_api_is_public(
 
     # Make the product public
     response = client.patch(product_uri, json.dumps({"is_public": True}), content_type="application/json")
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Verify product is public
     response = client.get(product_uri, content_type="application/json")

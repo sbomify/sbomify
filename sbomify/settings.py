@@ -432,3 +432,6 @@ KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
+
+# Billing settings
+BILLING = os.getenv("BILLING", "True").lower() == "true"

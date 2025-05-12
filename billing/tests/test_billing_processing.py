@@ -8,7 +8,8 @@ import stripe
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.http import HttpResponseForbidden
 
 from billing import billing_processing
 from billing.models import BillingPlan
@@ -459,3 +460,149 @@ def test_can_downgrade_to_plan_no_limits(team):
     can_downgrade, message = billing_processing.can_downgrade_to_plan(team, enterprise_plan)
     assert can_downgrade is True
     assert message == ""
+
+
+@override_settings(BILLING=False)
+def test_billing_disabled_bypass():
+    """Test that billing checks are bypassed when billing is disabled."""
+    # Create a test team with no billing plan
+    team = Team.objects.create(
+        name="Test Team",
+        key="test-team",
+        billing_plan=None,
+        billing_plan_limits={}
+    )
+
+    # Create a test user and member
+    user = User.objects.create_user(
+        username="testuser",
+        email="test@example.com",
+        password="testpass123"
+    )
+    Member.objects.create(
+        team=team,
+        user=user,
+        role="owner"
+    )
+
+    # Create a test request
+    request = MagicMock()
+    request.method = "POST"
+    request.session = {"current_team": {"key": "test-team"}}
+
+    # Create a test view function
+    @billing_processing.check_billing_limits("product")
+    def test_view(request):
+        return "success"
+
+    # Test that the view is called without any billing checks
+    result = test_view(request)
+    assert result == "success"
+
+    # Verify that no billing plan was required
+    team.refresh_from_db()
+    assert team.billing_plan is None
+
+
+@override_settings(BILLING=False)
+def test_billing_disabled_unlimited_limits():
+    """Test that unlimited limits are applied when billing is disabled."""
+    # Create a test team
+    team = Team.objects.create(
+        name="Test Team",
+        key="test-team",
+        billing_plan=None,
+        billing_plan_limits={}
+    )
+
+    # Create a test user and member
+    user = User.objects.create_user(
+        username="testuser",
+        email="test@example.com",
+        password="testpass123"
+    )
+    Member.objects.create(
+        team=team,
+        user=user,
+        role="owner"
+    )
+
+    # Create a test request
+    request = MagicMock()
+    request.method = "POST"
+    request.session = {"current_team": {"key": "test-team"}}
+
+    # Create a test view function
+    @billing_processing.check_billing_limits("product")
+    def test_view(request):
+        return "success"
+
+    # Create products exceeding normal limits
+    for i in range(100):
+        Product.objects.create(team=team, name=f"Product {i}")
+
+    # Test that the view is called without any billing checks
+    result = test_view(request)
+    assert result == "success"
+
+    # Verify that no limits were enforced
+    assert Product.objects.filter(team=team).count() == 100
+
+
+@override_settings(BILLING=True)
+def test_billing_enabled_checks():
+    """Test that billing checks are enforced when billing is enabled."""
+    # Create a starter plan with limits
+    starter_plan = BillingPlan.objects.create(
+        key="starter",
+        name="Starter",
+        max_products=5,
+        max_projects=10,
+        max_components=50,
+        stripe_price_monthly_id="price_starter_monthly",
+        stripe_price_annual_id="price_starter_annual"
+    )
+
+    # Create a test team with the starter plan
+    team = Team.objects.create(
+        name="Test Team",
+        key="test-team",
+        billing_plan=starter_plan.key,
+        billing_plan_limits={
+            "max_products": starter_plan.max_products,
+            "max_projects": starter_plan.max_projects,
+            "max_components": starter_plan.max_components,
+            "subscription_status": "active"
+        }
+    )
+
+    # Create a test user and member
+    user = User.objects.create_user(
+        username="testuser",
+        email="test@example.com",
+        password="testpass123"
+    )
+    Member.objects.create(
+        team=team,
+        user=user,
+        role="owner"
+    )
+
+    # Create a test request
+    request = MagicMock()
+    request.method = "POST"
+    request.session = {"current_team": {"key": "test-team"}}
+
+    # Create a test view function
+    @billing_processing.check_billing_limits("product")
+    def test_view(request):
+        return "success"
+
+    # Create products exceeding the limit
+    for i in range(6):  # Exceeds max_products (5)
+        Product.objects.create(team=team, name=f"Product {i}")
+
+    # Test that the view is blocked by billing checks
+    result = test_view(request)
+    assert isinstance(result, HttpResponseForbidden)
+    assert result.content.decode() == "You have reached the maximum 5 products allowed by your plan"
