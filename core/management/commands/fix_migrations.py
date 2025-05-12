@@ -4,18 +4,18 @@ from django.db.migrations.recorder import MigrationRecorder
 
 
 class Command(BaseCommand):
-    help = "Fixes migration history by removing socialaccount.0001_initial if it was applied before sites.0001_initial"
+    help = "Fixes migration history by removing all socialaccount migrations to fix dependency order"
 
     def handle(self, *args, **options):
         with transaction.atomic():
             recorder = MigrationRecorder(connection)
             Migration = recorder.Migration
 
-            # Remove socialaccount.0001_initial if it exists
-            socialaccount = Migration.objects.filter(app="socialaccount", name="0001_initial").first()
-            if socialaccount:
-                self.stdout.write("Removing socialaccount.0001_initial to fix dependency order...")
-                socialaccount.delete()
-                self.stdout.write(self.style.SUCCESS("Successfully removed socialaccount.0001_initial"))
+            # Remove all socialaccount migrations
+            socialaccount_migrations = Migration.objects.filter(app="socialaccount")
+            if socialaccount_migrations.exists():
+                self.stdout.write("Removing all socialaccount migrations to fix dependency order...")
+                socialaccount_migrations.delete()
+                self.stdout.write(self.style.SUCCESS("Successfully removed all socialaccount migrations"))
             else:
-                self.stdout.write("No socialaccount.0001_initial migration found - nothing to fix")
+                self.stdout.write("No socialaccount migrations found - nothing to fix")
