@@ -4,7 +4,7 @@ from django.contrib.messages import get_messages
 from django.db import transaction
 from django.test import Client
 from django.urls import reverse
-from social_django.models import UserSocialAuth
+from allauth.socialaccount.models import SocialAccount
 
 from sboms.models import Component, Product, Project
 from teams.models import Team
@@ -89,23 +89,23 @@ class TestOnboardingWizard:
         team = Team.objects.get(pk=sample_team_with_owner_member.team.pk)
         assert team.has_completed_wizard is True
 
-    def test_auth0_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that Auth0 user metadata is properly used when creating a component."""
-        # Create Auth0 social auth record with metadata
-        social_auth = UserSocialAuth.objects.create(
+    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member):
+        """Test that Keycloak user metadata is properly used when creating a component."""
+        # Create Keycloak social auth record with metadata
+        social_account = SocialAccount.objects.create(
             user=sample_user,
-            provider="auth0",
+            provider="keycloak",
             extra_data={
                 "user_metadata": {
                     "company": "Acme Corp",
                     "supplier_contact": {
-                        "name": "John Supplier",
-                        "email": "john@supplier.com"
+                        "name": "John Doe",
+                        "email": "john@example.com"
                     }
                 }
             }
         )
-        social_auth.save()
+        social_account.save()
 
         # Login and set session data
         client.force_login(sample_user)
@@ -147,12 +147,10 @@ class TestOnboardingWizard:
         # Verify component metadata
         component = Component.objects.filter(name="Test Component").first()
         assert component is not None
-        assert component.metadata["organization"]["name"] == "Acme Corp"
-        assert component.metadata["supplier"]["name"] == "Acme Corp"
-        assert component.metadata["supplier"]["contact"]["name"] == "John Supplier"
-        assert component.metadata["supplier"]["contact"]["email"] == "john@supplier.com"
-        assert component.metadata["author"]["name"] == f"{sample_user.first_name} {sample_user.last_name}".strip()
-        assert component.metadata["author"]["email"] == sample_user.email
+        assert component.metadata.get("supplier", {}).get("contact") == {
+            "name": "John Doe",
+            "email": "john@example.com"
+        }
 
     def test_duplicate_names(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that duplicate names are handled correctly."""

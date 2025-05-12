@@ -22,6 +22,7 @@ from .fixtures import (  # noqa: F401
     sample_project,
     sample_sbom,
 )
+from .test_views import setup_test_session
 
 
 @pytest.mark.django_db
@@ -52,7 +53,8 @@ def test_sbom_api_is_public(
         kwargs={"item_type": "product", "item_id": sample_product.id},
     )
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
     # Test for unknown type
     response: HttpResponse = client.get(unknown_uri, content_type="application/json")
@@ -62,20 +64,32 @@ def test_sbom_api_is_public(
     # Make the component public
     response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify component is public
+    response = client.get(component_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Make the project public
     response = client.patch(project_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify project is public
+    response = client.get(project_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Make the product public
     response = client.patch(product_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify product is public
+    response = client.get(product_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
 
 @pytest.mark.django_db

@@ -1,17 +1,6 @@
-from __future__ import annotations
-
-import logging
-import typing
-
-if typing.TYPE_CHECKING:
-    from django.contrib.auth.models import User
-    from django.db.models import Model
-    from django.http import HttpRequest
-
 from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.signals import user_logged_in
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models.signals import post_save
@@ -20,48 +9,37 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from billing.models import BillingPlan
-from billing.stripe_client import StripeClient
+from billing.stripe_client import stripe_client
 from core.utils import number_to_random_token
-from teams.utils import get_user_teams
+from sbomify.logging import getLogger
 
-from ..models import Member, Team
+from .models import Member, Team
 
-log = logging.getLogger(__name__)
-stripe_client = StripeClient()
+log = getLogger(__name__)
 
 
-@receiver(user_logged_in)
-def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kwargs):
-    request.session["user_photo"] = ""
-    social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
-    if social_account:
-        request.session["user_photo"] = social_account.extra_data.get("picture", "")
+def get_team_name_for_user(user) -> str:
+    """Get the team name for a user based on their profile information."""
+    # Get user metadata from social auth
+    social_account = SocialAccount.objects.filter(user=user).first()
+    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+    company_name = user_metadata.get("company")
 
-    # Get user teams and store them in session
-    user_teams = get_user_teams(user)
-    request.session["user_teams"] = user_teams
-
-    if request.session.get("current_team", None) is None and user_teams:
-        # Use the first team as the default
-        first_team_key = next(iter(user_teams))
-        first_team = {"key": first_team_key, **user_teams[first_team_key]}
-        request.session["current_team"] = first_team
+    if company_name:
+        return company_name
+    elif user.first_name:
+        return f"{user.first_name}'s Team"
+    else:
+        return f"{user.username}'s Team"
 
 
 @receiver(post_save, sender=get_user_model())
 def create_team_for_user(sender, instance, created, **kwargs):
     """Create a team for a new user."""
     if created:
-        # Get user metadata from social auth
-        social_account = SocialAccount.objects.filter(user=instance).first()
-        user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
-        company_name = user_metadata.get(
-            "company", f"{instance.first_name}'s Team" if instance.first_name else instance.email.split("@")[0]
-        )
-
         with transaction.atomic():
             # Create default team
-            default_team = Team(name=company_name)
+            default_team = Team(name=get_team_name_for_user(instance))
             default_team.save()
 
             # Set team key before creating membership

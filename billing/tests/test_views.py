@@ -16,6 +16,7 @@ from django.utils import timezone
 from billing import billing_processing
 from billing.models import BillingPlan
 from teams.models import Member, Team
+from core.utils import number_to_random_token
 
 User = get_user_model()
 
@@ -55,7 +56,6 @@ def team(db):
     )
     team = Team.objects.create(
         name="Test Team",
-        key="test-team",
         billing_plan="business",
         billing_plan_limits={
             "max_products": 10,
@@ -67,6 +67,8 @@ def team(db):
             "last_updated": "2024-01-01T00:00:00Z",
         },
     )
+    team.key = number_to_random_token(team.pk)
+    team.save()
     Member.objects.create(
         team=team,
         user=user,
@@ -319,4 +321,4 @@ def test_billing_redirect_trial(client, team, business_plan):
         response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team.key}))
 
         assert response.status_code == 302
-        assert response.url == f"/select-plan/{team.key}"
+        assert response.url == reverse("billing:select_plan", kwargs={"team_key": team.key})

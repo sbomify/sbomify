@@ -1,16 +1,16 @@
 from datetime import timedelta
 
+from allauth.socialaccount.models import SocialAccount
 from django.apps import apps
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-from social_django.models import UserSocialAuth
 
 
 def get_team_name_for_user(user) -> str:
     """Get the team name for a user based on available information"""
-    # Check Auth0 user metadata first
-    social_record = UserSocialAuth.objects.filter(user=user).first()
+    # Check Keycloak user metadata first
+    social_record = SocialAccount.objects.filter(user=user).first()
     if social_record and social_record.extra_data:
         user_metadata = social_record.extra_data.get("user_metadata", {})
         company_name = user_metadata.get("company")
@@ -60,8 +60,7 @@ class Member(models.Model):
 
 
 def calculate_invitation_expiry():
-    now = timezone.now()
-    return now + timedelta(seconds=settings.TEAMS_INVITATION_EXPIRY_DURATION)
+    return timezone.now() + timedelta(days=settings.INVITATION_EXPIRY_DAYS)
 
 
 class Invitation(models.Model):

@@ -17,6 +17,7 @@ from teams.models import Member, Team
 from sboms.models import Product, Project, Component
 from sbomify.logging import getLogger
 from ..stripe_client import StripeClient, StripeError
+from core.utils import number_to_random_token
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -36,7 +37,6 @@ def team(db):
     )
     team = Team.objects.create(
         name="Test Team",
-        key="test-team",
         billing_plan="business",
         billing_plan_limits={
             "max_products": 10,
@@ -48,6 +48,8 @@ def team(db):
             "last_updated": timezone.now().isoformat(),
         },
     )
+    team.key = number_to_random_token(team.pk)
+    team.save()
     Member.objects.create(
         team=team,
         user=user,
@@ -91,7 +93,7 @@ def mock_stripe_subscription():
 
 
 @pytest.fixture
-def mock_stripe_checkout_session():
+def mock_stripe_checkout_session(team):
     """Create a mock Stripe checkout session for testing."""
     session = MagicMock()
     session.id = "cs_123"
@@ -99,7 +101,7 @@ def mock_stripe_checkout_session():
     session.subscription = "sub_test123"  # Match the team's subscription ID
     session.payment_status = "paid"
     session.metadata = {
-        "team_key": "test-team",  # Match the team's key
+        "team_key": team.key,  # Use the actual team key
         "plan_key": "business"
     }
     return session
@@ -144,7 +146,6 @@ def test_team(db):
     """Create a test team with billing information."""
     team = Team.objects.create(
         name="Test Team",
-        key="test-team",
         billing_plan="business",
         billing_plan_limits={
             "stripe_customer_id": "cus_123",
@@ -156,6 +157,8 @@ def test_team(db):
             "last_updated": timezone.now().isoformat()
         }
     )
+    team.key = number_to_random_token(team.pk)
+    team.save()
     return team
 
 

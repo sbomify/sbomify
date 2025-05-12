@@ -1,9 +1,11 @@
 """Utility functions for Keycloak user management."""
 
+import json
 import logging
 import uuid
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 
 try:
     # Try importing from python-keycloak
@@ -18,6 +20,7 @@ except ImportError:
         from keycloak.keycloak_openid import KeycloakOpenID
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class KeycloakManager:
@@ -84,10 +87,10 @@ class KeycloakManager:
                 "firstName": first_name,
                 "lastName": last_name,
                 "enabled": enabled,
-                "emailVerified": True,  # Assume emails are verified since they were verified in Auth0
+                "emailVerified": True,  # Assume emails are verified since they were verified in social login
                 "attributes": {
-                    "migrated_from_auth0": ["true"],
-                    "migration_date": [self._get_current_time()],
+                    "company": [],
+                    "supplier_contact": [],
                 },
             }
 
@@ -241,3 +244,18 @@ class KeycloakManager:
 
         # Create client if needed and return the client secret
         return self.create_client()
+
+    def create_user_data(self, user: User) -> dict:
+        """Create user data for Keycloak."""
+        return {
+            "username": user.username,
+            "email": user.email,
+            "firstName": user.first_name,
+            "lastName": user.last_name,
+            "enabled": True,
+            "emailVerified": True,  # Assume emails are verified since they were verified in social login
+            "attributes": {
+                "company": [user.company] if hasattr(user, "company") else [],
+                "supplier_contact": [json.dumps(user.supplier_contact)] if hasattr(user, "supplier_contact") else [],
+            },
+        }

@@ -14,6 +14,7 @@ from sboms.tests.fixtures import (  # noqa: F401
 )
 from teams.fixtures import sample_team  # noqa: F401
 from teams.models import Member, Team
+from sboms.tests.test_views import setup_test_session
 
 client = TestClient(router)
 
@@ -36,7 +37,9 @@ def test_rename_item_success(
 ) -> None:
     """Test successful renaming of different item types with valid permissions."""
     client = Client()
-    client.force_login(sample_user)
+
+    # Set up session with team access
+    setup_test_session(client, sample_team, sample_user)
 
     # Get the correct identifier for each item type
     item_data = {
@@ -76,12 +79,13 @@ def test_rename_item_permission_denied(
     sample_product: Product,
 ) -> None:
     """Test renaming items with insufficient permissions returns 403."""
-
-    # Create member with lower privileges (admin instead of owner)
-    Member.objects.create(user=guest_user, team=sample_team, role="admin")
+    # Create member with guest role (lowest privileges)
+    Member.objects.create(user=guest_user, team=sample_team, role="guest")
 
     client = Client()
-    client.force_login(guest_user)
+
+    # Set up session with team access
+    setup_test_session(client, sample_team, guest_user)
 
     item_id = {
         "team": sample_team.key,
@@ -96,18 +100,21 @@ def test_rename_item_permission_denied(
         content_type="application/json",
     )
 
-    if "admin" in required_roles:
-        assert response.status_code == 204  # Admin should have access
-    else:
-        assert response.status_code == 403
-        assert response.json() == {"detail": "Forbidden"}
+    # All item types should return 403 when user has guest role
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Forbidden"}
 
 
 @pytest.mark.django_db
-def test_rename_item_invalid_type(sample_user: AnonymousUser) -> None:
+def test_rename_item_invalid_type(sample_user: AnonymousUser, sample_team: Team) -> None:
     """Test renaming with invalid item type returns 400."""
     client = Client()
-    client.force_login(sample_user)
+
+    # Create team membership
+    Member.objects.create(user=sample_user, team=sample_team, role="owner")
+
+    # Set up session with team access
+    setup_test_session(client, sample_team, sample_user)
 
     response = client.patch(
         reverse("api-1:rename_item", kwargs={"item_type": "invalid_type", "item_id": "123"}),

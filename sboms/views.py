@@ -127,6 +127,7 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
                     product.projects.add(selected_project)
 
                 product.save()
+                return redirect("sboms:product_details", product_id=product_id)
 
         elif request.GET.get("action", "") == "remove_projects":
             with transaction.atomic():
@@ -134,6 +135,7 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
                     product.projects.remove(selected_project)
 
                 product.save()
+                return redirect("sboms:product_details", product_id=product_id)
 
     product_projects_ids = product.projects.values_list("id", flat=True)
 
@@ -276,6 +278,7 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
                     project.components.add(selected_component)
 
                 project.save()
+                return redirect("sboms:project_details", project_id=project_id)
 
         elif request.GET.get("action", "") == "remove_components":
             with transaction.atomic():
@@ -283,8 +286,10 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
                     project.components.remove(selected_component)
 
                 project.save()
+                return redirect("sboms:project_details", project_id=project_id)
 
     project_components_ids = project.components.values_list("id", flat=True)
+
     team_id = get_current_team_id(request)
     if team_id is None:
         return error_response(request, HttpResponseBadRequest("No current team selected"))
