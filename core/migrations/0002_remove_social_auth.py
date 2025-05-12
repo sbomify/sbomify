@@ -1,6 +1,8 @@
 from django.db import migrations, models
 from django.apps.registry import Apps
 from django.db.utils import OperationalError, ProgrammingError
+from django.db.migrations.recorder import MigrationRecorder
+from django.db import connection
 
 
 def remove_social_auth_tables(apps: Apps, schema_editor):
@@ -28,22 +30,22 @@ def remove_social_auth_tables(apps: Apps, schema_editor):
 
     # Remove the migration records for social_auth
     try:
-        MigrationRecorder = apps.get_model('migrations', 'Migration')
-        MigrationRecorder.objects.filter(
+        recorder = MigrationRecorder(connection)
+        recorder.Migration.objects.filter(
             app__in=['social_auth', 'social_auth_django']
         ).delete()
-    except LookupError:
+    except (OperationalError, ProgrammingError):
         pass
 
     # --- Fix for InconsistentMigrationHistory ---
     try:
-        MigrationRecorder = apps.get_model('migrations', 'Migration')
+        recorder = MigrationRecorder(connection)
         # Get all migration records for socialaccount and sites
         socialaccount_migrations = list(
-            MigrationRecorder.objects.filter(app='socialaccount').order_by('applied').values('name', 'applied')
+            recorder.Migration.objects.filter(app='socialaccount').order_by('applied').values('name', 'applied')
         )
         sites_migrations = list(
-            MigrationRecorder.objects.filter(app='sites').order_by('applied').values('name', 'applied')
+            recorder.Migration.objects.filter(app='sites').order_by('applied').values('name', 'applied')
         )
         if socialaccount_migrations and sites_migrations:
             socialaccount_first = socialaccount_migrations[0]['applied']
@@ -51,7 +53,7 @@ def remove_social_auth_tables(apps: Apps, schema_editor):
             # If socialaccount.0001_initial was applied before sites.0001_initial, fix it
             if socialaccount_first < sites_first:
                 # Remove all socialaccount migration records so they can be re-applied in the correct order
-                MigrationRecorder.objects.filter(app='socialaccount').delete()
+                recorder.Migration.objects.filter(app='socialaccount').delete()
     except (OperationalError, ProgrammingError) as e:
         # These errors can occur if the database is not yet ready or if the migrations table doesn't exist
         # We can safely ignore them as the migration will be retried later
