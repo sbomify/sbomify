@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
-# First run sites migration
-poetry run python manage.py migrate sites --noinput
+# Fix migration history
+poetry run python manage.py fix_migrations
 
-# Then run all other migrations
+# Run all migrations
 poetry run python manage.py migrate --noinput
