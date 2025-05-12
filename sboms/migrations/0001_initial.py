@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             name="Package",
             fields=[
                 ("cpe_id", models.CharField(max_length=255, primary_key=True, serialize=False)),
-                ("license_name", models.CharField(null=True)),
+                ("license_name", models.CharField(max_length=255, null=True, default=None)),
             ],
             options={
                 "db_table": "sboms_packages",
