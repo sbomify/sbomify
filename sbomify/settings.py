@@ -138,14 +138,27 @@ MESSAGE_TAGS = {
 }
 
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
+
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Django Vite
 DJANGO_VITE = {
     "default": {
         "dev_mode": DEBUG,
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
+        "manifest_path": str(STATIC_ROOT / "manifest.json"),
     }
 }
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Database
@@ -347,19 +360,6 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@sbomify.com")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-generated emails
 EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
-STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     # Set traces_sample_rate to 1.0 to capture 100%
@@ -374,7 +374,7 @@ sentry_sdk.init(
 
 # Teams app related config
 TEAMS_SUPPORTED_ROLES = [("owner", "Owner"), ("admin", "Admin"), ("guest", "Guest")]
-TEAMS_INVITATION_EXPIRY_DURATION = 60 * 60 * 24 * 7  # 7 days
+INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "sbomify")

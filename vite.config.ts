@@ -39,32 +39,32 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/static/img/favicons/favicon-16x16.png',
+            src: 'img/favicons/favicon-16x16.png',
             sizes: '16x16',
             type: 'image/png'
           },
           {
-            src: '/static/img/favicons/favicon-32x32.png',
+            src: 'img/favicons/favicon-32x32.png',
             sizes: '32x32',
             type: 'image/png'
           },
           {
-            src: '/static/img/favicons/apple-touch-icon.png',
+            src: 'img/favicons/apple-touch-icon.png',
             sizes: '180x180',
             type: 'image/png'
           },
           {
-            src: '/static/img/favicons/android-chrome-192x192.png',
+            src: 'img/favicons/android-chrome-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/static/img/favicons/android-chrome-512x512.png',
+            src: 'img/favicons/android-chrome-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: '/static/img/favicons/favicon.svg',
+            src: 'img/favicons/favicon.svg',
             sizes: 'any',
             type: 'image/svg+xml'
           }
