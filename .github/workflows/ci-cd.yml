@@ -129,14 +129,10 @@ jobs:
             jq -r '.tests[] | select(.outcome=="failed") | "| \\(.nodeid) | \\(.duration)s | \\(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Move coverage file
-        run: mv .coverage .coverage.${{ matrix.group }}
-
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.group }}
-          path: .coverage.${{ matrix.group }}
+          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
   docker-build:
     name: Docker Build Test
@@ -175,46 +171,9 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-  combine-coverage:
-    name: Combine Coverage Reports
-    needs: [tests]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10.12"
-
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          poetry --version
-
-      - name: Install Python dependencies
-        run: |
-          poetry install --with dev,test
-
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: coverage-data
-
-      - name: Move all coverage files to workspace
-        run: |
-          find coverage-data -name '.coverage.*' -exec mv {} . \;
-
-      - name: Combine coverage reports
-        run: |
-          poetry run coverage combine .coverage.*
-          echo "## Combined Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
   deploy-staging:
     name: Deploy to Staging
-    needs: [code-quality, combine-coverage, docker-build]
+    needs: [code-quality, docker-build]
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
     steps:
