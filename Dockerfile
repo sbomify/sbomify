@@ -52,7 +52,7 @@ RUN poetry install --only main,prod --no-interaction --no-root
 COPY . /code
 
 # Copy built JS assets to static directory
-COPY --from=js-build /js-build/static/* /code/static/
+COPY --from=js-build /js-build/staticfiles/* /code/staticfiles/
 
 # Install the package itself
 RUN poetry install --only-root --no-interaction
