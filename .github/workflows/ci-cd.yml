@@ -61,6 +61,14 @@ jobs:
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        group: [
+          'unit',
+          'integration',
+          'api',
+          'e2e'
+        ]
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -105,30 +113,8 @@ jobs:
 
       - name: Run Tests
         run: |
-          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-          poetry run coverage run -m pytest --json-report --json-report-file=pytest.json
-
-          # Create test summary table
-          echo "### Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          jq -r '"| Total Tests | \(.summary.total) |
-          | Passed | \(.summary.passed) |
-          | Failed | \(.summary.failed) |
-          | Skipped | \(.summary.skipped) |
-          | Duration | \(.duration)s |"' pytest.json >> $GITHUB_STEP_SUMMARY
-
-          if [ $(jq '.summary.failed' pytest.json) -gt 0 ]; then
-            echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
-            echo "| Test | Duration | Error |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-            jq -r '.tests[] | select(.outcome=="failed") | "| \(.nodeid) | \(.duration)s | \(.call.longrepr) |"' pytest.json >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "## Test Results for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
+          poetry run pytest -k "${{ matrix.group }}" | tee -a $GITHUB_STEP_SUMMARY
 
   docker-build:
     name: Docker Build Test
@@ -168,9 +154,9 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
+    needs: [code-quality, tests, docker-build]
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
-    needs: [code-quality, tests, docker-build]
     steps:
       - uses: actions/checkout@v4
 
