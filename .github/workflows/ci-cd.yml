@@ -129,11 +129,14 @@ jobs:
             jq -r '.tests[] | select(.outcome=="failed") | "| \\(.nodeid) | \\(.duration)s | \\(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Move coverage file
+        run: mv .coverage .coverage.${{ matrix.group }}
+
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.group }}
-          path: .coverage
+          path: .coverage.${{ matrix.group }}
 
   docker-build:
     name: Docker Build Test
@@ -197,9 +200,13 @@ jobs:
         with:
           path: coverage-data
 
+      - name: Move all coverage files to workspace
+        run: |
+          find coverage-data -name '.coverage.*' -exec mv {} . \;
+
       - name: Combine coverage reports
         run: |
-          poetry run coverage combine coverage-data/*/.coverage
+          poetry run coverage combine .coverage.*
           echo "## Combined Coverage Report" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
