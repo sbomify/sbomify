@@ -30,6 +30,24 @@ class Team(models.Model):
         db_table = apps.get_app_config("teams").name + "_teams"
         indexes = [models.Index(fields=["key"])]
         ordering = ["name"]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(
+                    # Both IDs present
+                    (
+                        models.Q(billing_plan_limits__stripe_subscription_id__isnull=False)
+                        & models.Q(billing_plan_limits__stripe_customer_id__isnull=False)
+                    )
+                    |
+                    # Both IDs null
+                    (
+                        models.Q(billing_plan_limits__stripe_subscription_id__isnull=True)
+                        & models.Q(billing_plan_limits__stripe_customer_id__isnull=True)
+                    )
+                ),
+                name="valid_billing_relationship",
+            )
+        ]
 
     key = models.CharField(max_length=30, unique=True, null=True)
     name = models.CharField(max_length=255)

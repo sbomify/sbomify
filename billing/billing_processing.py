@@ -180,15 +180,37 @@ def handle_subscription_updated(subscription):
     """Handle subscription updated events."""
     try:
         # First try to find by subscription ID
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        try:
+            team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        except Team.DoesNotExist:
+            # Recovery: Try to find team by customer ID
+            try:
+                team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
+                logger.warning(
+                    "Found team by customer ID instead of subscription ID for subscription %s",
+                    subscription.id,
+                )
+            except Team.DoesNotExist:
+                # Recovery: Try to find team by metadata in customer
+                try:
+                    customer = stripe_client.get_customer(subscription.customer)
+                    if customer.metadata and "team_key" in customer.metadata:
+                        team = Team.objects.get(key=customer.metadata["team_key"])
+                        logger.warning(f"Found team by customer metadata for subscription {subscription.id}")
+                    else:
+                        raise Team.DoesNotExist("No team key in customer metadata")
+                except Exception as e:
+                    logger.error(f"Failed to recover team for subscription {subscription.id}: {str(e)}")
+                    raise StripeError(f"No team found for subscription {subscription.id}")
 
         # Validate subscription status
         valid_statuses = ["trialing", "active", "past_due", "canceled", "incomplete", "incomplete_expired"]
         if subscription.status not in valid_statuses:
             raise StripeError(f"Invalid subscription status: {subscription.status}")
 
-        # Update subscription status
+        # Update subscription status and ensure subscription ID is set
         team.billing_plan_limits["subscription_status"] = subscription.status
+        team.billing_plan_limits["stripe_subscription_id"] = subscription.id  # Ensure this is set
         team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
 
         # Handle trial period
@@ -236,7 +258,9 @@ def handle_subscription_updated(subscription):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_failed(team, member, None)
-                logger.warning(f"Initial payment failed notification sent for team {team.key} to {member.user.email}")
+                logger.warning(
+                    f"Initial payment failed notification sent for team {team.key} " f"to {member.user.email}"
+                )
 
         team.save()
         logger.info(f"Updated subscription status for team {team.key} to {subscription.status}")
