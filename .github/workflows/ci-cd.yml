@@ -120,23 +120,14 @@ jobs:
           echo "### Summary for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
           echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          jq -r '"| Total Tests | \(.summary.total) |
-          | Passed | \(.summary.passed) |
-          | Failed | \(.summary.failed) |
-          | Skipped | \(.summary.skipped) |
-          | Duration | \(.duration)s |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
+          jq -r '"| Total Tests | \\(.summary.total) |\n| Passed | \\(.summary.passed) |\n| Failed | \\(.summary.failed) |\n| Skipped | \\(.summary.skipped) |\n| Duration | \\(.duration)s |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
 
           if [ $(jq '.summary.failed' pytest-${{ matrix.group }}.json) -gt 0 ]; then
             echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
             echo "| Test | Duration | Error |" >> $GITHUB_STEP_SUMMARY
             echo "|------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-            jq -r '.tests[] | select(.outcome=="failed") | "| \(.nodeid) | \(.duration)s | \(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
+            jq -r '.tests[] | select(.outcome=="failed") | "| \\(.nodeid) | \\(.duration)s | \\(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
           fi
-
-          echo -e "\n## Coverage Report for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
@@ -146,6 +137,7 @@ jobs:
 
   docker-build:
     name: Docker Build Test
+    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -180,11 +172,44 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
+  combine-coverage:
+    name: Combine Coverage Reports
+    needs: [tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.12"
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          poetry --version
+
+      - name: Install Python dependencies
+        run: |
+          poetry install --with dev,test
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-data
+
+      - name: Combine coverage reports
+        run: |
+          poetry run coverage combine coverage-data/*/.coverage
+          echo "## Combined Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
   deploy-staging:
     name: Deploy to Staging
+    needs: [code-quality, combine-coverage, docker-build]
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
-    needs: [code-quality, tests, docker-build]
     steps:
       - uses: actions/checkout@v4
 
