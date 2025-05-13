@@ -70,12 +70,35 @@ class StripeClient:
     @_handle_stripe_error
     def create_subscription(self, customer_id, price_id, trial_days=None, metadata=None):
         """Create a new subscription."""
-        subscription_data = {"customer": customer_id, "items": [{"price": price_id}], "metadata": metadata or {}}
+        # Ensure we have the customer metadata
+        customer = self.get_customer(customer_id)
+
+        # Validate customer metadata
+        if not customer.metadata or "team_key" not in customer.metadata:
+            raise ValueError("Customer must have team_key in metadata")
+
+        # Merge metadata, preferring provided metadata over customer metadata
+        if not metadata:
+            metadata = customer.metadata.copy()
+        else:
+            metadata = {**customer.metadata, **metadata}
+
+        # Ensure team_key is present
+        if "team_key" not in metadata:
+            metadata["team_key"] = customer.metadata["team_key"]
+
+        subscription_data = {"customer": customer_id, "items": [{"price": price_id}], "metadata": metadata}
 
         if trial_days:
             subscription_data["trial_period_days"] = trial_days
 
-        return self.stripe.Subscription.create(**subscription_data)
+        subscription = self.stripe.Subscription.create(**subscription_data)
+
+        # Double-check metadata was set
+        if not subscription.metadata or "team_key" not in subscription.metadata:
+            subscription = self.stripe.Subscription.modify(subscription.id, metadata=metadata)
+
+        return subscription
 
     @_handle_stripe_error
     def update_subscription(self, subscription_id, **kwargs):
