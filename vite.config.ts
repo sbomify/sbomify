@@ -74,7 +74,7 @@ export default defineConfig({
   ],
   build: {
     target: 'esnext',
-    outDir: resolve('./static/'),
+    outDir: resolve('./staticfiles/'),
     emptyOutDir: false,
     assetsDir: '',
     manifest: 'manifest.json',
