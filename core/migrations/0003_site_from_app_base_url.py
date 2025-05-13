@@ -24,7 +24,7 @@ def reverse_func(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0002_remove_social_auth"),
+        ("core", "0001_initial"),
         ("sites", "0002_alter_domain_unique"),
     ]
     operations = [
