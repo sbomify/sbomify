@@ -22,6 +22,28 @@ class Command(BaseCommand):
             except OperationalError:
                 self.stdout.write(self.style.WARNING("Could not acquire lock, proceeding anyway"))
 
+            # Check if django_migrations table exists
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = 'django_migrations'
+                );
+            """
+            )
+            if not cursor.fetchone()[0]:
+                self.stdout.write(
+                    self.style.WARNING("django_migrations table does not exist. Running initial migrations first...")
+                )
+                try:
+                    call_command("migrate", "sites", "0001_initial")
+                    call_command("migrate", "core", "0001_initial")
+                    self.stdout.write(self.style.SUCCESS("Initial migrations applied successfully"))
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f"Failed to apply initial migrations: {str(e)}"))
+                    raise
+
             with transaction.atomic():
                 recorder = MigrationRecorder(connection)
                 Migration = recorder.Migration
