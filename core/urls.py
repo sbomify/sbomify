@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.urls import path
 
 from . import views
@@ -12,8 +11,5 @@ urlpatterns = [
     path("logout", views.logout, name="logout"),
     path("login_error", views.login_error, name="login_error"),
     path("keycloak-webhook/", views.keycloak_webhook, name="keycloak_webhook"),
+    path("login", views.keycloak_login, name="keycloak_login"),
 ]
-
-# Add Keycloak specific URLs if enabled
-if settings.USE_KEYCLOAK:
-    urlpatterns.append(path("login", views.keycloak_login, name="keycloak_login"))

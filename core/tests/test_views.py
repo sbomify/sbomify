@@ -51,44 +51,28 @@ def test_logout_redirect(sample_user: AbstractBaseUser):
 
     with override_settings(
         KEYCLOAK_SERVER_URL="https://test-domain.com",
-        KEYCLOAK_CLIENT_ID="test-client-id",
-        KEYCLOAK_END_SESSION_ENDPOINT="https://test-domain.com/realms/sbomify/protocol/openid-connect/logout",
+        KEYCLOAK_REALM="sbomify",
         APP_BASE_URL="http://test-return.url",
-        USE_KEYCLOAK=True,
     ):
         response: HttpResponse = client.get(reverse("core:logout"))
         assert response.status_code == 302
         assert response.url.startswith("https://test-domain.com/realms/sbomify/protocol/openid-connect/logout")
-        assert "client_id=test-client-id" in response.url
-        assert "post_logout_redirect_uri=http://test-return.url" in response.url
+        assert "redirect_uri=http://test-return.url" in response.url
 
 
 @pytest.mark.django_db
-def test_logout_view_with_keycloak(client: Client, sample_user: AbstractBaseUser):
-    """Test that logout view works correctly with Keycloak enabled."""
+def test_logout_view(client: Client, sample_user: AbstractBaseUser):
+    """Test that logout view works correctly."""
     client.force_login(sample_user)
     with override_settings(
         KEYCLOAK_SERVER_URL="https://test-domain.com",
-        KEYCLOAK_CLIENT_ID="test-client-id",
         KEYCLOAK_REALM="sbomify",
-        USE_KEYCLOAK=True,
         APP_BASE_URL="http://test-return.url",
     ):
         response = client.get(reverse("core:logout"))
         assert response.status_code == 302
         assert response.url.startswith("https://test-domain.com/realms/sbomify/protocol/openid-connect/logout")
-        assert "client_id=test-client-id" in response.url
-        assert "post_logout_redirect_uri=http://test-return.url" in response.url
-
-
-@pytest.mark.django_db
-def test_logout_view_without_keycloak(client: Client, sample_user: AbstractBaseUser):
-    """Test that logout view works correctly with Keycloak disabled."""
-    client.force_login(sample_user)
-    with override_settings(USE_KEYCLOAK=False):
-        response = client.get(reverse("core:logout"))
-        assert response.status_code == 302
-        assert response.url == reverse("core:home")
+        assert "redirect_uri=http://test-return.url" in response.url
 
 
 @pytest.mark.django_db
@@ -153,3 +137,26 @@ def test_settings_invalid_form_submission(sample_user: AbstractBaseUser):
     assert AccessToken.objects.count() == initial_count
     messages = list(get_messages(response.wsgi_request))
     assert not any(m.message == "New access token created" for m in messages)
+
+
+@pytest.mark.django_db
+def test_keycloak_login_page_redirects_or_renders(client: Client) -> None:
+    """Test that the custom Keycloak login page either renders or redirects to the Allauth login page."""
+    client.logout()
+    response = client.get(reverse("core:keycloak_login"), follow=False)
+    # Accept either a direct render or a redirect to /accounts/login/
+    if response.status_code in (301, 302):
+        assert response["Location"].endswith("/accounts/login/")
+    else:
+        assert response.status_code == 200
+        assert b"Log In / Register" in response.content
+
+
+@pytest.mark.django_db
+def test_login_page_renders_account_login(client: Client) -> None:
+    """Test that /login renders the Allauth login page (account/login.html) without redirect."""
+    client.logout()
+    response = client.get("/login", follow=False)
+    assert response.status_code == 200
+    # Check for a string unique to the Allauth login page
+    assert b"Sign In" in response.content or b"Log In" in response.content

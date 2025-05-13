@@ -57,6 +57,7 @@ services:
       - .env
     environment:
       AM_I_IN_DOCKER_CONTAINER: 1
+      APP_BASE_URL: http://127.0.0.1:8000
       # Docker-specific Minio configuration
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
@@ -146,15 +147,14 @@ volumes:
   keycloak_data:
 
 x-common-env: &common-env
-  DATABASE_USER: sbomify
-  DATABASE_PASSWORD: sbomify
-  DATABASE_NAME: sbomify
-  DATABASE_PORT: 5432
-  DATABASE_HOST: localhost
-  DOCKER_DATABASE_HOST: sbomify-db
+  DATABASE_USER: ${DATABASE_USER:-sbomify}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
+  DATABASE_NAME: ${DATABASE_NAME:-sbomify}
+  DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_HOST: ${DATABASE_HOST:-localhost}
+  DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
 
 x-keycloak-env: &keycloak-env
-  USE_KEYCLOAK: "True"
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}

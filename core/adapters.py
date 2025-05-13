@@ -19,7 +19,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         Args:
             request: The current HTTP request
-            sociallogin: The social login instance being processed
+            sociallogin: The social login instance
         """
         logger.debug(f"Pre-social login: {sociallogin.account.provider} - {sociallogin.account.uid}")
         logger.debug(f"Extra data: {sociallogin.account.extra_data}")
@@ -28,14 +28,10 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             try:
-                # Try to find the first user with this email
-                user = User.objects.filter(email=existing_user.email).first()
-                if user:
-                    logger.debug(f"Found existing user with email {existing_user.email}")
-                    # Update the sociallogin instance to use the existing user
-                    sociallogin.connect(request, user)
-            except Exception as e:
-                logger.error(f"Error while processing social login: {e}", exc_info=True)
+                existing_user = User.objects.get(email=existing_user.email)
+                sociallogin.connect(request, existing_user)
+            except User.DoesNotExist:
+                pass
 
     def populate_user(self, request: HttpRequest, sociallogin: SocialLogin, data: dict[str, Any]) -> Any:
         """

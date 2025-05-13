@@ -20,15 +20,12 @@ logger = logging.getLogger(__name__)
 def home(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         return redirect("core:dashboard")
-
-    if settings.USE_KEYCLOAK:
-        return redirect("core:keycloak_login")
-    return redirect("account_login")
+    return redirect("core:keycloak_login")
 
 
 def keycloak_login(request: HttpRequest) -> HttpResponse:
-    """Display the login page for Keycloak authentication."""
-    return render(request, "socialaccount/login.html")
+    """Render the Allauth default login page on /login."""
+    return render(request, "account/login.html")
 
 
 @login_required
@@ -89,17 +86,12 @@ def delete_access_token(request: HttpRequest, token_id: int):
 @login_required
 def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
-
-    if settings.USE_KEYCLOAK:
-        # Keycloak logout
-        redirect_url = (
-            f"{settings.KEYCLOAK_SERVER_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
-            f"?client_id={settings.KEYCLOAK_CLIENT_ID}"
-            f"&post_logout_redirect_uri={settings.APP_BASE_URL}"
-        )
-        return redirect(redirect_url)
-
-    return redirect("core:home")
+    # Redirect to Keycloak logout page
+    redirect_url = (
+        f"{settings.KEYCLOAK_SERVER_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
+        f"?redirect_uri={settings.APP_BASE_URL}"
+    )
+    return redirect(redirect_url)
 
 
 def login_error(request: HttpRequest) -> HttpResponse:

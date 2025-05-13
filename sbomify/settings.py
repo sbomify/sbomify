@@ -113,7 +113,7 @@ ROOT_URLCONF = "sbomify.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -307,27 +307,34 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 
+# Keycloak settings
+KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
+KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
+
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
-        "SERVERS": [
+        "APPS": [
             {
-                "id": "keycloak",
+                "provider_id": "keycloak",
                 "name": "Keycloak",
-                "server_url": os.environ.get("KEYCLOAK_SERVER_URL", ""),
-                "client_id": os.environ.get("KEYCLOAK_CLIENT_ID", ""),
-                "client_secret": os.environ.get("KEYCLOAK_CLIENT_SECRET", ""),
-                "authorization_endpoint": os.environ.get("KEYCLOAK_AUTH_ENDPOINT", ""),
-                "token_endpoint": os.environ.get("KEYCLOAK_TOKEN_ENDPOINT", ""),
-                "userinfo_endpoint": os.environ.get("KEYCLOAK_USERINFO_ENDPOINT", ""),
-                "jwks_uri": os.environ.get("KEYCLOAK_JWKS_URI", ""),
-                "end_session_endpoint": os.environ.get("KEYCLOAK_END_SESSION_ENDPOINT", ""),
+                "client_id": KEYCLOAK_CLIENT_ID,
+                "secret": KEYCLOAK_CLIENT_SECRET,
+                "settings": {
+                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                },
             }
         ]
     }
 }
 
-LOGIN_REDIRECT_URL = "core:dashboard"
-ACCOUNT_LOGOUT_REDIRECT_URL = "core:home"
+LOGIN_REDIRECT_URL = "/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/"
+LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -421,14 +428,7 @@ NOTIFICATION_PROVIDERS = [
 # Optionally override refresh interval
 NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
 
-# Keycloak Settings
-KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://localhost:8080/")
-KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
-KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
-KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
-
 # Billing settings
 BILLING = os.getenv("BILLING", "True").lower() == "true"
+
+SITE_ID = 1
