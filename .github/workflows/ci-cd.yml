@@ -114,7 +114,7 @@ jobs:
       - name: Run Tests
         run: |
           echo "## Test Results for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
-          poetry run pytest -v -rA --tb=short --color=yes -k "${{ matrix.group }}" | tee -a $GITHUB_STEP_SUMMARY
+          poetry run pytest -k "${{ matrix.group }}" | tee -a $GITHUB_STEP_SUMMARY
 
   docker-build:
     name: Docker Build Test
