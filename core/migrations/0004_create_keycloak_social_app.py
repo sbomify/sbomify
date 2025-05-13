@@ -17,7 +17,7 @@ def create_keycloak_social_app(apps, schema_editor):
         defaults={
             'client_id': settings.KEYCLOAK_CLIENT_ID,
             'secret': settings.KEYCLOAK_CLIENT_SECRET,
-            'extra_data': {
+            'settings': {
                 'server_url': f"{settings.KEYCLOAK_SERVER_URL}realms/{settings.KEYCLOAK_REALM}/.well-known/openid-configuration"
             }
         }
