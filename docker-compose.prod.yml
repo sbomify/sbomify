@@ -7,7 +7,6 @@ x-common-env: &common-env
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
 
 x-keycloak-env: &keycloak-env
-  USE_KEYCLOAK: "True"
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
