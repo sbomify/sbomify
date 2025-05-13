@@ -116,11 +116,10 @@ jobs:
           echo "## Test Results for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
           poetry run coverage run -m pytest --json-report --json-report-file=pytest-${{ matrix.group }}.json -k "${{ matrix.group }}"
 
-          # Create test summary table
-          echo "### Summary for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
-          echo "| Category | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          jq -r '"| Total Tests | \\(.summary.total) |\n| Passed | \\(.summary.passed) |\n| Failed | \\(.summary.failed) |\n| Skipped | \\(.summary.skipped) |\n| Duration | \\(.duration)s |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
+          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
           if [ $(jq '.summary.failed' pytest-${{ matrix.group }}.json) -gt 0 ]; then
             echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
@@ -128,11 +127,6 @@ jobs:
             echo "|------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
             jq -r '.tests[] | select(.outcome=="failed") | "| \\(.nodeid) | \\(.duration)s | \\(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
           fi
-
-          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
   docker-build:
     name: Docker Build Test
