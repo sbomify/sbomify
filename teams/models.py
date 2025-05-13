@@ -3,6 +3,7 @@ from datetime import timedelta
 from allauth.socialaccount.models import SocialAccount
 from django.apps import apps
 from django.conf import settings
+from django.core.validators import MinLengthValidator
 from django.db import models
 from django.utils import timezone
 
@@ -49,7 +50,7 @@ class Team(models.Model):
             )
         ]
 
-    key = models.CharField(max_length=30, unique=True, null=True)
+    key = models.CharField(max_length=30, unique=True, null=True, validators=[MinLengthValidator(9)])
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
