@@ -114,19 +114,7 @@ jobs:
       - name: Run Tests
         run: |
           echo "## Test Results for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
-          poetry run coverage run -m pytest --json-report --json-report-file=pytest-${{ matrix.group }}.json -k "${{ matrix.group }}"
-
-          echo -e "\n## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          poetry run coverage report --fail-under=80 | tee >(cat >> $GITHUB_STEP_SUMMARY)
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-          if [ $(jq '.summary.failed' pytest-${{ matrix.group }}.json) -gt 0 ]; then
-            echo -e "\n### Failed Tests" >> $GITHUB_STEP_SUMMARY
-            echo "| Test | Duration | Error |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-            jq -r '.tests[] | select(.outcome=="failed") | "| \\(.nodeid) | \\(.duration)s | \\(.call.longrepr) |"' pytest-${{ matrix.group }}.json >> $GITHUB_STEP_SUMMARY
-          fi
+          poetry run pytest -v -k "${{ matrix.group }}" | tee -a $GITHUB_STEP_SUMMARY
 
   docker-build:
     name: Docker Build Test
