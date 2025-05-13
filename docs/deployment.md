@@ -32,6 +32,39 @@ The deployment uses the following GitHub Secrets:
 - `FLY_CONFIG_PROD` - The fly.toml configuration for the production environment
 - `FLY_TOKEN` - The API token for authenticating with fly.io
 
+### Sample configuration file
+
+```toml
+app = 'your-app-name'
+primary_region = 'your-location'
+console_command = '/code/manage.py shell'
+
+[build]
+
+[deploy]
+  release_command = 'sh /code/bin/release.sh'
+
+[env]
+  PORT = '8000'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[[statics]]
+  guest_path = '/code/static'
+  url_prefix = '/static/'
+```
+
 ## Manual Deployment
 
 If needed, you can manually trigger the CI/CD workflow from the GitHub Actions tab, which will run the full test suite and deploy if successful.
