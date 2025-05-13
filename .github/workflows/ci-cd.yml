@@ -136,7 +136,6 @@ jobs:
 
   docker-build:
     name: Docker Build Test
-    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +172,7 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    needs: [code-quality, docker-build]
+    needs: [code-quality, tests, docker-build]
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
     steps:
