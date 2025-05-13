@@ -8,7 +8,7 @@ def update_team_keys(apps, schema_editor):
     Team = apps.get_model("teams", "Team")
     for team in Team.objects.all():
         if len(team.key) < 9:
-            team.key = number_to_random_token(team.pk)
+            team.key = number_to_random_token(abs(team.pk))
             team.save()
 
 
