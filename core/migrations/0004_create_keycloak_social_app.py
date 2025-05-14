@@ -38,6 +38,7 @@ class Migration(migrations.Migration):
         ('core', '0003_site_from_app_base_url'),
         ('sites', '0002_alter_domain_unique'),
         ('socialaccount', '0001_initial'),
+        ('socialaccount', '0004_app_provider_id_settings'),
     ]
 
     operations = [
