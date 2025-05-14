@@ -38,6 +38,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         Populate user instance with data from social account.
 
         Creates a username from the email address by replacing @ with . to ensure uniqueness.
+        Also handles Keycloak-specific data like email verification status.
 
         Args:
             request: The current HTTP request
@@ -49,6 +50,21 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         user = super().populate_user(request, sociallogin, data)
         logger.debug(f"Populating user with data: {data}")
+
+        # Handle Keycloak-specific data
+        if sociallogin.account.provider == "keycloak":
+            # Set email verification status
+            user.is_active = True  # Keycloak handles activation
+            user.email_verified = data.get("email_verified", False)
+
+            # Map Keycloak name fields directly to Django fields
+            user.first_name = data.get("given_name", "")
+            user.last_name = data.get("family_name", "")
+
+            # Use preferred_username if available
+            if "preferred_username" in data:
+                user.username = data["preferred_username"]
+                return user  # Skip email-based username generation
 
         if user.email:
             # Create username from email (e.g., "kashif@compulife.com.pk" -> "kashif.compulife.com.pk")
