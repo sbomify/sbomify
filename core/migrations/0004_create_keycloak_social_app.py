@@ -3,12 +3,12 @@ from django.conf import settings
 
 
 def create_keycloak_social_app(apps, schema_editor):
-    """Create the Keycloak social app and associate it with the site."""
+    """Create the Keycloak social app."""
     Site = apps.get_model('sites', 'Site')
     SocialApp = apps.get_model('socialaccount', 'SocialApp')
 
     # Get the site
-    site = Site.objects.get(id=1)
+    # site = Site.objects.get(id=1) # Site association deferred
 
     # Create the Keycloak social app if it doesn't exist
     social_app, created = SocialApp.objects.get_or_create(
@@ -22,9 +22,7 @@ def create_keycloak_social_app(apps, schema_editor):
             }
         }
     )
-
-    # The following line was deferred to a later migration (core.0007):
-    # social_app.sites.add(site)
+    # Association with site is handled in core.0007
 
 
 def reverse_keycloak_social_app(apps, schema_editor):
@@ -37,8 +35,8 @@ class Migration(migrations.Migration):
     dependencies = [
         ('core', '0003_site_from_app_base_url'),
         ('sites', '0002_alter_domain_unique'),
-        ('socialaccount', '0001_initial'),
-        ('socialaccount', '0004_app_provider_id_settings'),
+        ('socialaccount', '0001_initial'), # SocialApp model definition
+        ('socialaccount', '0004_app_provider_id_settings'), # Later socialaccount migration
     ]
 
     operations = [

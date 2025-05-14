@@ -46,10 +46,9 @@ def reverse_associate_keycloak_to_site(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0006_create_socialapp_sites_table'),
-        # Ensure socialaccount models are available and M2M table is created
-        ('socialaccount', '0007_ensure_socialapp_sites_table'),
-        ('sites', '0002_alter_domain_unique'), # Ensure site model is up to date
+        ('core', '0006_create_socialapp_sites_table'), # Ensures the M2M table exists
+        ('socialaccount', '0006_alter_socialaccount_extra_data'), # Ensures SocialApp model is fully up-to-date
+        ('sites', '0002_alter_domain_unique'), # Ensures Site model is fully up-to-date
     ]
 
     operations = [
