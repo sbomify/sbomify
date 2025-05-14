@@ -33,7 +33,7 @@ class Team(models.Model):
         ordering = ["name"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(
+                condition=models.Q(
                     # Both IDs present
                     (
                         models.Q(billing_plan_limits__stripe_subscription_id__isnull=False)
