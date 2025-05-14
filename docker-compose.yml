@@ -1,17 +1,56 @@
+---
+x-common-env: &common-env
+  DATABASE_USER: ${DATABASE_USER:-sbomify}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
+  DATABASE_NAME: ${DATABASE_NAME:-sbomify}
+  DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_HOST: ${DATABASE_HOST:-localhost}
+  DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+
+x-keycloak-admin-env: &keycloak-admin-env
+  KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+  KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+
+x-keycloak-env: &keycloak-env
+  KC_HOSTNAME_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
+  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
+
+x-minio-env: &minio-env
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+x-django-env: &django-env
+  AWS_ACCESS_KEY_ID: minioadmin
+  AWS_SECRET_ACCESS_KEY: minioadmin
+  AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
+  AWS_REGION: auto
+  AWS_MEDIA_ACCESS_KEY_ID: minioadmin
+  AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
+  AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
+  AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
+  AWS_SBOMS_ACCESS_KEY_ID: minioadmin
+  AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
+  AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
+  AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
 services:
   sbomify-db:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sbomify}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sbomify}
-      POSTGRES_DB: ${POSTGRES_DB:-sbomify}
+      # We can't use anchors here, since anchors are resolved *after* these values are set.
+      # You can however override all of them using a `.env` file.
+      POSTGRES_USER: ${DATABASE_USER:-sbomify}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
+      POSTGRES_DB: ${DATABASE_NAME:-sbomify}
     ports:
       - "5432:5432"
     volumes:
       - sbomify_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sbomify}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 2s
       retries: 10
@@ -20,8 +59,7 @@ services:
     image: minio/minio:latest
     restart: always
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      <<: *keycloak-env
     ports:
       - "9000:9000"  # API
       - "9001:9001"  # Console
@@ -39,15 +77,16 @@ services:
     depends_on:
       sbomify-minio:
         condition: service_healthy
+    environment:
+      <<: *minio-env
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc config host add myminio http://sbomify-minio:9000 minioadmin minioadmin;
+      /usr/bin/mc config host add myminio http://sbomify-minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
       /usr/bin/mc mb myminio/sbomify-media;
       /usr/bin/mc mb myminio/sbomify-sboms;
       /usr/bin/mc anonymous set public myminio/sbomify-media;
       exit 0;
       "
-
   sbomify-backend:
     build:
       context: .
@@ -56,21 +95,10 @@ services:
     env_file:
       - .env
     environment:
+      <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
       APP_BASE_URL: http://127.0.0.1:8000
       # Docker-specific Minio configuration
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
-      AWS_REGION: auto
-      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
-      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
-      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
-      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
-      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
-      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
-      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
-      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
     volumes:
       - .:/code
     ports:
@@ -82,7 +110,6 @@ services:
         condition: service_completed_successfully
       sbomify-createbuckets:
         condition: service_completed_successfully
-
   sbomify-migrations:
     build:
       context: .
@@ -90,43 +117,26 @@ services:
     env_file:
       - .env
     environment:
+      <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
-      # Docker-specific Minio configuration
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
-      AWS_REGION: auto
-      AWS_MEDIA_ACCESS_KEY_ID: minioadmin
-      AWS_MEDIA_SECRET_ACCESS_KEY: minioadmin
-      AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
-      AWS_MEDIA_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-media
-      AWS_SBOMS_ACCESS_KEY_ID: minioadmin
-      AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
-      AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
-      AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
     volumes:
       - .:/code
     command: /code/bin/release.sh
     depends_on:
       sbomify-db:
         condition: service_healthy
-
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.4
     restart: always
     environment:
-      KC_HOSTNAME_URL: http://keycloak:8080
+      <<: [*keycloak-env, *keycloak-admin-env]
       KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
       KC_HEALTH_ENABLED: "true"
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
     command: start-dev
-
-
   keycloak-bootstrap:
     image: quay.io/keycloak/keycloak:26.1.4
     depends_on:
@@ -135,29 +145,8 @@ services:
       - ./bin/keycloak-bootstrap.sh:/keycloak-bootstrap.sh
     entrypoint: /bin/sh /keycloak-bootstrap.sh
     environment:
-      KC_HOSTNAME_URL: http://keycloak:8080
-      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
-      KC_HEALTH_ENABLED: "true"
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-
+      <<: [*keycloak-env, *keycloak-admin-env]
 volumes:
   sbomify_postgres_data:
   sbomify_minio_data:
   keycloak_data:
-
-x-common-env: &common-env
-  DATABASE_USER: ${DATABASE_USER:-sbomify}
-  DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
-  DATABASE_NAME: ${DATABASE_NAME:-sbomify}
-  DATABASE_PORT: ${DATABASE_PORT:-5432}
-  DATABASE_HOST: ${DATABASE_HOST:-localhost}
-  DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
-
-x-keycloak-env: &keycloak-env
-  KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
-  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
-  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
-  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
-  KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
-  KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
