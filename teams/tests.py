@@ -29,8 +29,12 @@ from .schemas import BrandingInfo
 
 @pytest.mark.django_db
 def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # noqa: F811
+    client = Client()
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
     membership = Member.objects.filter(user=sample_user).first()
-    assert membership.team.name == "Test's Team"
+    assert membership.team.name == "Test's Workspace"
     assert membership.team.key is not None  # nosec
 
 

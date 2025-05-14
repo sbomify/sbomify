@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from allauth.socialaccount.models import SocialAccount
 from django.apps import apps
 from django.conf import settings
 from django.core.validators import MinLengthValidator
@@ -10,20 +9,11 @@ from django.utils import timezone
 
 def get_team_name_for_user(user) -> str:
     """Get the team name for a user based on available information"""
-    # Check Keycloak user metadata first
-    social_record = SocialAccount.objects.filter(user=user).first()
-    if social_record and social_record.extra_data:
-        user_metadata = social_record.extra_data.get("user_metadata", {})
-        company_name = user_metadata.get("company")
-        if company_name:
-            return company_name
-
-    # Fall back to first name if available
     if user.first_name:
-        return f"{user.first_name}'s Team"
-
-    # Default fallback
-    return "My Team"
+        return f"{user.first_name}'s Workspace"
+    if hasattr(user, "username") and user.username:
+        return f"{user.username}'s Workspace"
+    return "My Workspace"
 
 
 class Team(models.Model):
