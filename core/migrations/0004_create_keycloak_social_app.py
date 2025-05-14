@@ -23,8 +23,8 @@ def create_keycloak_social_app(apps, schema_editor):
         }
     )
 
-    # Associate the social app with the site
-    social_app.sites.add(site)
+    # The following line was deferred to a later migration (core.0007):
+    # social_app.sites.add(site)
 
 
 def reverse_keycloak_social_app(apps, schema_editor):

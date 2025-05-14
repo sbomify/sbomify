@@ -9,21 +9,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='SocialAppSites',
-            fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('socialapp', models.ForeignKey(on_delete=models.CASCADE, to='socialaccount.socialapp')),
-                ('site', models.ForeignKey(on_delete=models.CASCADE, to='sites.site')),
-            ],
-            options={
-                'verbose_name': 'social application site',
-                'verbose_name_plural': 'social application sites',
-                'db_table': 'socialaccount_socialapp_sites',
-            },
-        ),
-        migrations.AlterUniqueTogether(
-            name='socialappsites',
-            unique_together={('socialapp', 'site')},
-        ),
     ]
