@@ -113,20 +113,36 @@ class DashboardView(admin.AdminSite):
         }
         return TemplateResponse(request, "admin/dashboard.html", context)
 
-    def social_accounts(self, obj):
-        """Display social accounts for the user."""
-        social_auths = SocialAccount.objects.filter(user=obj)
-        if not social_auths:
-            return "None"
-        return format_html("<br>".join(f"{auth.provider}: {auth.uid}" for auth in social_auths))
+    def get_social_accounts(self, obj):
+        accounts = obj.socialaccount_set.all()
+        return format_html("<br>".join(f"{account.provider}: {account.uid}" for account in accounts))
+
+    get_social_accounts.short_description = "Social Accounts"
 
 
 class CustomUserAdmin(UserAdmin):
     """Custom admin for User model with Keycloak integration."""
 
-    list_display = UserAdmin.list_display + ("email_verified_status", "last_login_display")
-    readonly_fields = UserAdmin.readonly_fields + ("email_verified_status", "last_login_display")
-    list_filter = UserAdmin.list_filter + ("last_login",)
+    list_display = UserAdmin.list_display + (
+        "email_verified",
+        "email_verified_status",
+        "last_login_display",
+        "social_accounts",
+    )
+    readonly_fields = UserAdmin.readonly_fields + (
+        "email_verified",
+        "email_verified_status",
+        "last_login_display",
+        "social_accounts",
+    )
+    list_filter = UserAdmin.list_filter + ("last_login", "email_verified", "is_active")
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Personal info", {"fields": ("first_name", "last_name", "email", "email_verified")}),
+        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
+        ("Social Accounts", {"fields": ("social_accounts",)}),
+    )
 
     @admin.display(
         description="Last Login",
@@ -159,7 +175,7 @@ class CustomUserAdmin(UserAdmin):
             return format_html('<span style="color: #666;">{}</span>', obj.last_login.strftime("%Y-%m-%d %H:%M"))
 
     @admin.display(
-        description="Email Verified",
+        description="Email Verified Status",
         boolean=False,  # We're using custom HTML output
     )
     def email_verified_status(self, obj):
@@ -170,19 +186,45 @@ class CustomUserAdmin(UserAdmin):
         """
         auth = obj.socialaccount_set.first()
         if not auth:
-            return False
+            return format_html('<span style="color: #666;">No social account</span>')
 
         # Check Keycloak verification
         if auth.provider == "keycloak" and auth.extra_data:
-            return auth.extra_data.get("email_verified", False)
+            verified = auth.extra_data.get("email_verified", False)
+            return format_html(
+                '<span style="color: {};">{}</span>',
+                "#28a745" if verified else "#dc3545",
+                "Verified" if verified else "Not Verified",
+            )
 
         # For other providers, check their specific verification field
         if auth.provider == "github":
-            return auth.extra_data.get("email_verified", False)
+            verified = auth.extra_data.get("email_verified", False)
         elif auth.provider == "google":
-            return auth.extra_data.get("verified_email", False)
+            verified = auth.extra_data.get("verified_email", False)
+        else:
+            verified = False
 
-        return False
+        return format_html(
+            '<span style="color: {};">{}</span>',
+            "#28a745" if verified else "#dc3545",
+            "Verified" if verified else "Not Verified",
+        )
+
+    def social_accounts(self, obj):
+        """Display social accounts for the user."""
+        social_auths = SocialAccount.objects.filter(user=obj)
+        if not social_auths:
+            return format_html('<span style="color: #666;">None</span>')
+
+        accounts = []
+        for auth in social_auths:
+            provider = auth.provider.capitalize()
+            uid = auth.uid
+            verified = "✓" if auth.extra_data.get("email_verified", False) else "✗"
+            accounts.append(f"{provider}: {uid} {verified}")
+
+        return format_html("<br>".join(accounts))
 
 
 # Create custom admin site
