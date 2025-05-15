@@ -1,13 +1,10 @@
-import json
 from collections import Counter
 from typing import Literal
 
-from django.db import connection
-
 from teams.models import Team
 
-from .models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
-from .schemas import ComponentUploadInfo, DBSBOMLicense, StatsResponse
+from .models import SBOM, Component, Product, Project
+from .schemas import ComponentUploadInfo, StatsResponse
 
 
 def get_stats_for_team(
@@ -33,13 +30,6 @@ def get_stats_for_team(
     """
     result = StatsResponse()
 
-    query_params = {}
-    if team:
-        query_params["team_id"] = team.id
-
-    if item_id:
-        query_params["item_id"] = item_id
-
     # Return empty stats if no team and no item_id provided
     if not team and not item_id:
         result.total_products = None
@@ -49,163 +39,111 @@ def get_stats_for_team(
         result.component_uploads = []
         return result
 
-    # Get item counts
+    # Base querysets
+    products_qs = Product.objects
+    projects_qs = Project.objects
+    components_qs = Component.objects
+    sboms_qs = SBOM.objects
+
+    # Apply team filter if provided
+    if team:
+        products_qs = products_qs.filter(team=team)
+        projects_qs = projects_qs.filter(team=team)
+        components_qs = components_qs.filter(team=team)
+        sboms_qs = sboms_qs.filter(component__team=team)
+
+    # Get item counts based on type
     if item_type is None:
-        sql = f"""
-        SELECT product_count, project_count, component_count
-        FROM (
-            SELECT COUNT(*) AS product_count
-            FROM {Product._meta.db_table}
-            WHERE team_id = %(team_id)s
-        ) AS products,
-        (
-            SELECT COUNT(*) AS project_count
-            FROM {Project._meta.db_table}
-            WHERE team_id = %(team_id)s
-        ) AS projects,
-        (
-            SELECT COUNT(*) AS component_count
-            FROM {Component._meta.db_table}
-            WHERE team_id = %(team_id)s
-        ) AS components
-        """  # nosec B608
-
+        result.total_products = products_qs.count()
+        result.total_projects = projects_qs.count()
+        result.total_components = components_qs.count()
     elif item_type == "product":
-        sql = f"""
-        SELECT NULL as product_count, project_count, component_count
-        FROM (
-            SELECT COUNT(*) AS project_count
-            FROM {Project._meta.db_table} p
-            INNER JOIN {ProductProject._meta.db_table} pp ON p.id = pp.project_id
-            WHERE pp.product_id = %(item_id)s
-        ) AS projects,
-        (
-            SELECT COUNT(*) AS component_count
-            FROM {Component._meta.db_table} c
-            INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id = pc.component_id
-            INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id = pp.project_id
-            WHERE pp.product_id = %(item_id)s
-        ) AS components
-        """  # nosec B608
-
+        result.total_products = None
+        result.total_projects = Project.objects.filter(productproject__product_id=item_id).count()
+        result.total_components = (
+            Component.objects.filter(projectcomponent__project__productproject__product_id=item_id).distinct().count()
+        )
     elif item_type == "project":
-        sql = f"""
-        SELECT NULL as product_count, NULL as project_count, component_count
-        FROM (
-            SELECT COUNT(*) AS component_count
-            FROM {Component._meta.db_table} c
-            INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id = pc.component_id
-            WHERE pc.project_id = %(item_id)s
-        ) AS components
-        """  # nosec B608
-
+        result.total_products = None
+        result.total_projects = None
+        result.total_components = Component.objects.filter(projectcomponent__project_id=item_id).distinct().count()
     elif item_type == "component":
-        sql = """
-        SELECT NULL as product_count, NULL as project_count, NULL as component_count
-        """  # nosec B608
+        result.total_products = None
+        result.total_projects = None
+        result.total_components = None
 
     # Get latest component uploads
-    uploads_sql = f"""
-    SELECT c.id, c.name, s.id, s.name, s.version, s.created_at
-    FROM {Component._meta.db_table} c
-    INNER JOIN {SBOM._meta.db_table} s ON c.id=s.component_id
-    """  # nosec B608
+    uploads_qs = SBOM.objects.select_related("component")
 
-    where_or_and = "AND" if team else "WHERE"
+    if item_type == "product":
+        uploads_qs = uploads_qs.filter(component__projectcomponent__project__productproject__product_id=item_id)
+    elif item_type == "project":
+        uploads_qs = uploads_qs.filter(component__projectcomponent__project_id=item_id)
+    elif item_type == "component":
+        uploads_qs = uploads_qs.filter(component_id=item_id)
 
-    uploads_sql += f"""
-    {
-        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-        f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
-        f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
-        if item_type == "product"
-        else ""
-    }
+    # Get the latest SBOM for each component (manual approach for DB compatibility)
+    all_sboms_ordered = uploads_qs.order_by("component_id", "-created_at")
+    latest_sboms_dict = {}
+    for sbom in all_sboms_ordered:
+        if sbom.component_id not in latest_sboms_dict:
+            latest_sboms_dict[sbom.component_id] = sbom
 
-    {
-        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-        f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
-        if item_type == "project"
-        else ""
-    }
+    latest_sboms_list = list(latest_sboms_dict.values())
+    # Further sort this list by created_at descending to maintain original intent for the top 10 overall
+    latest_sboms_list.sort(key=lambda s: s.created_at, reverse=True)
 
-    {" WHERE c.team_id=%(team_id)s" if team else ""}
-    {f" {where_or_and} c.id=%(item_id)s" if item_type == "component" else ""}
-    {f" {where_or_and} p.id=%(item_id)s" if item_type == "project" else ""}
-    {f" {where_or_and} pp.product_id=%(item_id)s" if item_type == "product" else ""}
-    ORDER BY s.created_at DESC
-    LIMIT 10;
-    """  # nosec B608
+    # Process component uploads
+    result.component_uploads = []
+    for sbom in latest_sboms_list[:10]:  # Limit to 10 latest uploads
+        ci = ComponentUploadInfo(
+            component_id=sbom.component.id,
+            component_name=sbom.component.name,
+            sbom_id=sbom.id,
+            sbom_name=sbom.name,
+            sbom_version=sbom.version,
+            sbom_created_at=sbom.created_at,
+        )
+        result.component_uploads.append(ci)
 
-    latest_component_sbom_licenses_sql = f"""
-    WITH latest_sboms AS (
-        SELECT
-        ROW_NUMBER() OVER (PARTITION BY s.component_id ORDER BY s.component_id, s.created_at desc) AS row_num,
-        s.packages_licenses
-        FROM {SBOM._meta.db_table} s
-        {f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id " if item_type == "component" else ""}
-        {
-        f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
-        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-        f"INNER JOIN {Project._meta.db_table} p ON pc.project_id=p.id"
-        if item_type == "project"
-        else ""
-    }
-        {
-        f"INNER JOIN {Component._meta.db_table} c ON s.component_id=c.id "
-        f"INNER JOIN {ProjectComponent._meta.db_table} pc ON c.id=pc.component_id "
-        f"INNER JOIN {ProductProject._meta.db_table} pp ON pc.project_id=pp.project_id "
-        f"INNER JOIN {Product._meta.db_table} p ON pp.product_id=p.id"
-        if item_type == "product"
-        else ""
-    }
+    # Get license counts
+    all_licenses_found = []
+    for sbom_instance in latest_sboms_list:  # Iterate through all relevant SBOMs for the component/item
+        if sbom_instance.packages_licenses and isinstance(sbom_instance.packages_licenses, dict):
+            # packages_licenses is Dict[str, List[Dict[str, str | None]]]
+            # e.g., {"package_name": [{"id": "MIT", "name": "MIT License"}, ...]}
+            for package_license_list in sbom_instance.packages_licenses.values():
+                if isinstance(package_license_list, list):
+                    for license_dict in package_license_list:
+                        if isinstance(license_dict, dict):
+                            # Extract license by ID preferably, then by name
+                            license_id = license_dict.get("id")
+                            license_name = license_dict.get("name")
 
-        {
-        f" WHERE s.component_id IN (SELECT id FROM {Component._meta.db_table} WHERE team_id=%(team_id)s)"
-        if team
-        else ""
-    }
-        {f" {where_or_and} c.id=%(item_id)s" if item_type == "component" else ""}
-        {f" {where_or_and} p.id=%(item_id)s" if item_type == "project" else ""}
-        {f" {where_or_and} pp.product_id=%(item_id)s" if item_type == "product" else ""}
-    )
-    SELECT packages_licenses FROM latest_sboms WHERE row_num=1;
-    """  # nosec B608
+                            chosen_license = None
+                            if license_id:
+                                chosen_license = str(license_id)  # Ensure it's a string
+                            elif license_name:
+                                chosen_license = str(license_name)  # Ensure it's a string
 
-    with connection.cursor() as cursor:
-        # Get item counts
-        cursor.execute(sql, query_params)
+                            if chosen_license:
+                                all_licenses_found.append(chosen_license)
 
-        result.total_products, result.total_projects, result.total_components = cursor.fetchone()
+        # Optional: Consider licenses from sbom_instance.licenses if it's a simple list
+        # This part is commented out because sbom.licenses is overwritten by a complex analysis dict
+        # by the process_sbom_licenses task, making it unsuitable for simple license name/id aggregation here.
+        # if sbom_instance.licenses and isinstance(sbom_instance.licenses, list):
+        #     for lic in sbom_instance.licenses:
+        #         if isinstance(lic, str):
+        #             all_licenses_found.append(lic)
+        #         elif isinstance(lic, dict):
+        #             # Handle cases where sbom.licenses might store dicts like {"id": "..."} or {"name": "..."}
+        #             license_id = lic.get('id')
+        #             license_name = lic.get('name')
+        #             chosen_license_top_level = license_id if license_id else license_name
+        #             if chosen_license_top_level:
+        #                 all_licenses_found.append(str(chosen_license_top_level))
 
-        cursor.execute(uploads_sql, query_params)
-
-        # Latest component uploads
-        result.component_uploads = []
-
-        for row in cursor.fetchall():
-            ci = ComponentUploadInfo()
-
-            ci.component_id, ci.component_name, ci.sbom_id, ci.sbom_name, ci.sbom_version, ci.sbom_created_at = row
-            result.component_uploads.append(ci)
-
-        # Get latest component sbom licenses and then calculate count of each standard license present.
-        cursor.execute(latest_component_sbom_licenses_sql, query_params)
-        all_licenses = []
-        for licenses_dict in cursor.fetchall():
-            if not licenses_dict[0]:
-                continue
-            licenses_list = json.loads(licenses_dict[0]).values()
-
-            for package_licenses in licenses_list:
-                for l_dict in package_licenses:
-                    l_item = DBSBOMLicense(**l_dict)
-
-                    if l_item.id:
-                        all_licenses.append(l_item.id)
-                    elif l_item.name:
-                        all_licenses.append(l_item.name)
-
-        result.license_count = dict(Counter(all_licenses))
+    result.license_count = dict(Counter(all_licenses_found))
 
     return result

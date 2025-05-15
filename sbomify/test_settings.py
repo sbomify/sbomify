@@ -1,3 +1,15 @@
+# Configure Dramatiq to use StubBroker for tests
+import dramatiq
+from dramatiq.brokers.stub import StubBroker
+from dramatiq.results import Results
+from dramatiq.results.backends.stub import StubBackend
+
+# Set up the StubBroker with a StubBackend for results
+stub_broker = StubBroker()
+stub_backend = StubBackend()
+stub_broker.add_middleware(Results(backend=stub_backend))
+dramatiq.set_broker(stub_broker)
+
 # Mock Stripe settings for testing - set these before any other imports
 import os
 
@@ -136,3 +148,13 @@ if DEBUG:
 SITE_URL = "http://testserver"
 
 INVITATION_EXPIRY_DAYS = 7
+
+# Use local memory cache for testing
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+
+TESTING = True

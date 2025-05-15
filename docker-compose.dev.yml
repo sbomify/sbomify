@@ -14,6 +14,16 @@ services:
       - .:/code
       - /code/node_modules
 
+  sbomify-worker:
+    build:
+      dockerfile: docker/Dockerfile-backend-dev
+    environment:
+      BILLING: False
+    volumes:
+      - .:/code
+      - /code/node_modules
+    command: dramatiq sbomify.tasks
+
   sbomify-frontend:
     build:
       context: .
@@ -25,4 +35,4 @@ services:
       - /code/node_modules
     environment:
       NODE_ENV: development
-      VITE_API_BASE_URL: http://127.0.0.1:8000/api/v1
+      VITE_API_BASE_URL: http://127.0.0.1:8000

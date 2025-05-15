@@ -11,6 +11,7 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
 from core.utils import ExtractSpec, dict_update, obj_extract
+from sbomify.tasks import process_sbom_licenses
 from teams.models import Team
 from teams.utils import get_user_teams
 
@@ -171,32 +172,36 @@ def sbom_upload_cyclonedx(
 
         # Packages licenses handling
         packages_licenses: dict[str, list] = {}
-        for package_component in payload.components:
-            if package_component.licenses:
-                if package_component.name not in packages_licenses:
-                    packages_licenses[package_component.name] = []
+        if payload.components:
+            for package_component in payload.components:
+                if package_component.licenses:
+                    if package_component.name not in packages_licenses:
+                        packages_licenses[package_component.name] = []
 
-                licenses = []
+                    licenses_for_pkg = []
 
-                for l_item in package_component.licenses.model_dump(exclude_none=True):
-                    if "license" not in l_item:
-                        continue
+                    for l_item in package_component.licenses.model_dump(exclude_none=True):
+                        if "license" not in l_item:
+                            continue
 
-                    l_dict: dict = l_item["license"]
+                        l_dict: dict = l_item["license"]
 
-                    # Handle invalid long license names
-                    if "name" in l_dict:
-                        l_dict["name"] = l_dict["name"].split("\n")[0]
+                        # Handle invalid long license names
+                        if "name" in l_dict:
+                            l_dict["name"] = l_dict["name"].split("\n")[0]
 
-                    licenses.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
+                        licenses_for_pkg.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
 
-                packages_licenses[package_component.name].extend(licenses)
+                    packages_licenses[package_component.name].extend(licenses_for_pkg)
 
         sbom_dict["packages_licenses"] = packages_licenses
 
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
+
+            # Trigger license processing task
+            process_sbom_licenses.send(sbom.id)
 
         return 201, {"id": sbom.id}
 
@@ -273,6 +278,9 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
+
+            # Trigger license processing task
+            process_sbom_licenses.send(sbom.id)
 
         return 201, {"id": sbom.id}
 
