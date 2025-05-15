@@ -68,9 +68,9 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.is_active = True  # Keycloak handles activation
             user.email_verified = data.get("email_verified", False)
 
-            # Map Keycloak name fields directly to Django fields
-            user.first_name = data.get("given_name", "")
-            user.last_name = data.get("family_name", "")
+            # Map Keycloak name fields directly to Django fields (try both possible keys)
+            user.first_name = data.get("given_name") or data.get("first_name", "")
+            user.last_name = data.get("family_name") or data.get("last_name", "")
 
             # Use preferred_username if available
             if "preferred_username" in data:

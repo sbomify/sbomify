@@ -1,4 +1,4 @@
-from django.db import migrations
+from django.db import migrations, connection
 
 # SQL to create the table and its FKs. Assumes PKs in referenced tables are BIGINT.
 SQL_CREATE_TABLE_IF_NOT_EXISTS = """
@@ -50,8 +50,9 @@ class Migration(migrations.Migration):
             sql=SQL_CREATE_TABLE_IF_NOT_EXISTS,
             reverse_sql=SQL_DROP_TABLE,
         ),
+        # Only run the index creation on Postgres
         migrations.RunSQL(
-            sql=SQL_CREATE_INDEXES_IF_NOT_EXISTS,
-            reverse_sql="", # Indexes are dropped if the table is dropped
-        )
+            sql=SQL_CREATE_INDEXES_IF_NOT_EXISTS if connection.vendor == 'postgresql' else '',
+            reverse_sql='',
+        ),
     ]

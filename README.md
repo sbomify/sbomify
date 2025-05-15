@@ -269,6 +269,42 @@ poetry run coverage report
 
 Test coverage must be at least 80% to pass CI checks.
 
+### Test Data Management
+
+The application includes management commands to help set up and manage test data in your development environment:
+
+```bash
+# Create a test environment with sample SBOM data
+# If no team is specified, uses the first team found in the database
+python manage.py create_test_sbom_environment
+
+# Create test environment for a specific team
+python manage.py create_test_sbom_environment --team-id=your_team_id
+
+# Clean up existing test data and create fresh environment
+python manage.py create_test_sbom_environment --clean
+
+# Clean up all test data across all teams
+python manage.py cleanup_test_sbom_environment
+
+# Clean up test data for a specific team
+python manage.py cleanup_test_sbom_environment --team-id=your_team_id
+
+# Preview what would be deleted (dry run)
+python manage.py cleanup_test_sbom_environment --dry-run
+```
+
+These commands will:
+
+1. Create test products, projects, and components
+2. Load real SBOM data from test files (both SPDX and CycloneDX formats)
+3. Set up proper relationships between all entities
+4. Allow you to clean up test data when needed
+
+The test data is grouped by source (e.g., hello-world and sbomify) rather than by format, so each component will have both SPDX and CycloneDX SBOMs attached to it.
+
+Note: You must have at least one team in the database to use these commands without specifying a team ID.
+
 ### JS build tooling
 
 For frontend JS work, setting up JS tooling is required.
