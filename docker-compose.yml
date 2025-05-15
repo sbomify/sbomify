@@ -98,7 +98,6 @@ services:
       <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
       APP_BASE_URL: http://127.0.0.1:8000
-      # Docker-specific Minio configuration
     volumes:
       - .:/code
     ports:
