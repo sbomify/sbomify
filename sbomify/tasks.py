@@ -27,8 +27,8 @@ from sboms.schemas import DBSBOMLicense  # noqa: E402
 
 # Configure Dramatiq
 if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):
-    redis_broker = RedisBroker(url=settings.REDIS_URL)
-    result_backend = RedisBackend(url=settings.REDIS_URL)
+    redis_broker = RedisBroker(url=settings.REDIS_WORKER_URL)
+    result_backend = RedisBackend(url=settings.REDIS_WORKER_URL)
     redis_broker.add_middleware(Results(backend=result_backend))
     dramatiq.set_broker(redis_broker)
 
