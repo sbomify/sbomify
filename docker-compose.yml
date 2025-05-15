@@ -6,6 +6,7 @@ x-common-env: &common-env
   DATABASE_PORT: ${DATABASE_PORT:-5432}
   DATABASE_HOST: ${DATABASE_HOST:-localhost}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
+  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379/0}
 
 x-keycloak-admin-env: &keycloak-admin-env
   KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
@@ -146,7 +147,42 @@ services:
     entrypoint: /bin/sh /keycloak-bootstrap.sh
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
+
+  sbomify-redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - sbomify_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sbomify-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - .env
+    environment:
+      <<: [*common-env, *django-env, *keycloak-env]
+      AM_I_IN_DOCKER_CONTAINER: 1
+      APP_BASE_URL: http://127.0.0.1:8000
+    volumes:
+      - .:/code
+    command: dramatiq sbomify.tasks
+    depends_on:
+      sbomify-redis:
+        condition: service_healthy
+      sbomify-db:
+        condition: service_healthy
+
 volumes:
   sbomify_postgres_data:
   sbomify_minio_data:
   keycloak_data:
+  sbomify_redis_data:

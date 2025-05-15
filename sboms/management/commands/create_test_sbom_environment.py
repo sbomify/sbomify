@@ -1,13 +1,17 @@
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.http import HttpRequest
 
 from core.object_store import S3Client
+from sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sboms.schemas import SPDXSchema, cdx15, cdx16
 from teams.models import Team
 
 
@@ -148,58 +152,88 @@ class Command(BaseCommand):
 
             # Create SBOMs for this component
             for sbom_file in sbom_files:
-                # Load and create SBOM from test data
                 sbom_path = Path(__file__).parent.parent.parent / "tests" / "test_data" / sbom_file
                 self.stdout.write(f"Loading SBOM from: {sbom_path}")
                 if not sbom_path.exists():
                     self.stdout.write(self.style.ERROR(f"SBOM file not found: {sbom_path}"))
                     continue
 
-                with open(sbom_path) as f:
-                    sbom_data = json.load(f)
+                with open(sbom_path, "rb") as f_raw:
+                    sbom_raw_data = f_raw.read()
 
-                # Determine format and version
-                if "spdxVersion" in sbom_data:
-                    format_type = "spdx"
-                    format_version = sbom_data["spdxVersion"].removeprefix("SPDX-")
-                    name = sbom_data.get("name", f"{source_name}-component")
-                    version = sbom_data.get("packages", [{}])[0].get("versionInfo", "1.0.0")
-                    licenses = [pkg.get("licenseConcluded", "NOASSERTION") for pkg in sbom_data.get("packages", [])]
-                else:  # CycloneDX
-                    format_type = "cyclonedx"
-                    format_version = sbom_data.get("specVersion", "1.5")
-                    name = sbom_data.get("metadata", {}).get("component", {}).get("name", f"{source_name}-component")
-                    version = sbom_data.get("metadata", {}).get("component", {}).get("version", "1.0.0")
-                    licenses = []
-                    for comp in sbom_data.get("components", []):
-                        if "licenses" in comp:
-                            for license_info in comp["licenses"]:
-                                if "license" in license_info:
-                                    if "id" in license_info["license"]:
-                                        licenses.append(license_info["license"]["id"])
-                                    elif "name" in license_info["license"]:
-                                        licenses.append(license_info["license"]["name"])
+                with open(sbom_path) as f_json:
+                    sbom_data_dict = json.load(f_json)
 
-                # Create SBOM record
-                SBOM.objects.create(
-                    name=name,
-                    version=version,
-                    format=format_type,
-                    format_version=format_version,
-                    licenses=licenses,
-                    sbom_filename=sbom_file,
-                    source=source_name,
-                    component=component,
-                )
+                # Prepare mock request for API call
+                mock_request = MagicMock(spec=HttpRequest)
+                mock_request.body = sbom_raw_data
+                mock_request.user = MagicMock()  # Simulate an authenticated user
+                mock_request.session = MagicMock()  # Simulate a session
 
-                # Upload SBOM file to S3
-                with open(sbom_path, "rb") as f:
-                    self.s3.upload_data_as_file(self.sbom_bucket, sbom_file, f.read())
+                format_type = ""
 
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f"Created and uploaded {format_type.upper()} SBOM for component {component.name}"
+                # Patch verify_item_access for the duration of the API call
+                with patch("sboms.apis.verify_item_access", return_value=True):
+                    if "spdxVersion" in sbom_data_dict:
+                        format_type = "spdx"
+                        self.stdout.write(f"Processing {format_type.upper()} SBOM: {sbom_file}")
+                        try:
+                            payload = SPDXSchema(**sbom_data_dict)
+                            status_code, response_data = sbom_upload_spdx(mock_request, component.id, payload)
+                            if status_code == 201:
+                                sbom_id = response_data.get("id")
+                                success_msg = f"API call successful for {sbom_file}, " f"SBOM ID: {sbom_id}"
+                                self.stdout.write(self.style.SUCCESS(success_msg))
+                            else:
+                                error_msg = (
+                                    f"API call failed for {sbom_file}: "
+                                    f"Status {status_code}, Response: {response_data}"
+                                )
+                                self.stdout.write(self.style.ERROR(error_msg))
+                        except Exception as e:
+                            self.stdout.write(self.style.ERROR(f"Error processing SPDX {sbom_file} via API: {e}"))
+                            continue
+
+                    else:  # CycloneDX
+                        format_type = "cyclonedx"
+                        self.stdout.write(f"Processing {format_type.upper()} SBOM: {sbom_file}")
+                        try:
+                            spec_version = sbom_data_dict.get("specVersion", "1.5")
+                            if spec_version == "1.5":
+                                payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data_dict)
+                            elif spec_version == "1.6":
+                                payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data_dict)
+                            else:
+                                self.stdout.write(
+                                    self.style.WARNING(
+                                        f"Unsupported CycloneDX specVersion {spec_version} for {sbom_file}"
+                                    )
+                                )
+                                continue
+
+                            status_code, response_data = sbom_upload_cyclonedx(mock_request, component.id, payload)
+                            if status_code == 201:
+                                sbom_id = response_data.get("id")
+                                success_msg = f"API call successful for {sbom_file}, " f"SBOM ID: {sbom_id}"
+                                self.stdout.write(self.style.SUCCESS(success_msg))
+                            else:
+                                error_msg = (
+                                    f"API call failed for {sbom_file}: "
+                                    f"Status {status_code}, Response: {response_data}"
+                                )
+                                self.stdout.write(self.style.ERROR(error_msg))
+                        except Exception as e:
+                            self.stdout.write(self.style.ERROR(f"Error processing CycloneDX {sbom_file} via API: {e}"))
+                            continue
+
+                # Removed manual SBOM object creation, S3 upload, and task triggering.
+                # The API functions (sbom_upload_spdx/sbom_upload_cyclonedx) now handle this.
+
+                if format_type:  # Only print if format_type was set (i.e., processing happened)
+                    success_msg = (
+                        f"Successfully processed {format_type.upper()} SBOM "
+                        f"for component {component.name} via API call"
                     )
-                )
+                    self.stdout.write(self.style.SUCCESS(success_msg))
 
         self.stdout.write(self.style.SUCCESS("Test environment created successfully!"))

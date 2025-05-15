@@ -12,6 +12,8 @@ ENV VIRTUAL_ENV=/usr/local
 # install psycopg2 dependencies.
 RUN apt-get update && apt-get install -y \
     libpq-dev \
+    redis-tools \
+    postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,14 +27,12 @@ RUN poetry config virtualenvs.in-project false
 RUN poetry config virtualenvs.create false
 RUN poetry config virtualenvs.path /usr/local
 
-
-## @TODO: Disable 'dev' - which currently breaks auth0 login
-#RUN poetry install --only main,prod --no-root --no-interaction
+# Install all dependencies including dev and test for development environment
 RUN poetry install --only main,dev,test --no-root --no-interaction
 COPY . /code
 RUN poetry install --only main,dev,test --no-interaction
-# RUN poetry run python manage.py migrate
 
 EXPOSE 8000
 
+# Use Django development server for local development
 CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]

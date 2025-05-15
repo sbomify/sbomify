@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.11-slim-bookworm
+ARG PYTHON_VERSION=3.12-slim-bookworm
 
 ### Bun JS build for Vue components
 FROM oven/bun:1.2.2 AS js-build
@@ -34,6 +34,7 @@ ENV PYTHONUNBUFFERED=1
 # install psycopg2 dependencies.
 RUN apt-get update && apt-get install -y \
     libpq-dev \
+    redis-tools \
     postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/*
