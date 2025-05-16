@@ -79,7 +79,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         tmp_file_path = tmp_file_obj.name
                     # download_file expects a path, not a file object, so we close the temp
                     # file first (it remains due to delete=False) then S3 can write to it.
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Downloading S3 object "
                             f"{sbom.sbom_filename} "
@@ -88,7 +88,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         )
                     )
                     s3_client.download_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename, tmp_file_path)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully downloaded SBOM "
                             f"from S3 to temporary file: {tmp_file_path}"
@@ -99,7 +99,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         import json
 
                         sbom_data = json.load(f)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                             f"Successfully loaded and parsed JSON from temporary file."
@@ -108,7 +108,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
 
                     # Clean up the temporary file
                     os.unlink(tmp_file_path)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                             f"Cleaned up temporary file: {tmp_file_path}"
@@ -145,7 +145,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                     logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as CycloneDX format.")
                     for comp_idx, comp in enumerate(sbom_data.get("components", [])):
                         comp_name = comp.get("name", f"UnnamedComponent_{comp_idx}")
-                        logger.info(
+                        logger.debug(
                             (
                                 f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing "
                                 f"CycloneDX component: {comp_name}"
@@ -196,7 +196,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                                     )
                             if licenses:
                                 packages_licenses[comp_name] = licenses
-                                logger.info(
+                                logger.debug(
                                     (
                                         f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Component {comp_name} - "
                                         f"Added {len(licenses)} licenses."
@@ -214,7 +214,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                     logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as SPDX format.")
                     for pkg_idx, pkg in enumerate(sbom_data.get("packages", [])):
                         pkg_name = pkg.get("name", f"UnnamedPackage_{pkg_idx}")
-                        logger.info(
+                        logger.debug(
                             (
                                 f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                                 f"Processing SPDX package: {pkg_name}"
@@ -234,14 +234,14 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                             licenses
                         ):  # SPDX structure stores one licenseConcluded, this check might be redundant if only one
                             packages_licenses[pkg_name] = licenses
-                            logger.info(
+                            logger.debug(
                                 (
                                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
                                     f"Added license: {licenses}"
                                 )
                             )
                         else:
-                            logger.info(
+                            logger.debug(
                                 (
                                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
                                     f"No valid 'licenseConcluded' found or was NOASSERTION."
@@ -263,7 +263,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                 )
 
             # Save extracted package licenses
-            logger.info(
+            logger.debug(
                 (
                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Final packages_licenses "
                     f"to be saved: {packages_licenses}"
@@ -358,7 +358,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
             # Store the analysis results in the licenses field
             sbom.licenses = results
             sbom.save()  # This save will commit both licenses and packages_licenses due to transaction
-            logger.info(
+            logger.debug(
                 (
                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully processed and saved "
                     f"license analysis. Result: {results}"
