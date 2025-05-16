@@ -1,0 +1,17 @@
+Subscription Ended
+
+Hello,
+
+Your subscription for {{ team.name }} has ended. Your access to premium features has been deactivated.
+
+To continue using all features and maintain uninterrupted access to your account, please renew your subscription.
+
+Renew now: {{ upgrade_url }}
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+The {{ team.name }} Team
+
+---
+This is an automated message. Please do not reply to this email.

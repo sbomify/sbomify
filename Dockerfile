@@ -1,7 +1,9 @@
-ARG PYTHON_VERSION=3.11-slim-bookworm
+# Base Python version
+ARG PYTHON_VERSION=3.12-slim-bookworm
+ARG BUILD_ENV=production # Default to production
 
-### Bun JS build for Vue components
-FROM oven/bun:1.2.2 AS js-build
+### Stage 1: Bun JS build for Production Frontend Assets
+FROM oven/bun:1.2.2 AS js-build-prod
 
 WORKDIR /js-build
 
@@ -13,53 +15,102 @@ COPY vite.config.ts ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
-# Clean install dependencies
+# Install dependencies
 RUN bun install --frozen-lockfile
 
 # Copy source files
-COPY core/js/ core/js/
-COPY sboms/js/ sboms/js/
-COPY teams/js/ teams/js/
-COPY billing/js/ billing/js/
+COPY core/js/ ./core/js/
+COPY sboms/js/ ./sboms/js/
+COPY teams/js/ ./teams/js/
+COPY billing/js/ ./billing/js/
 
-# Run the build
+# Run the build for production - assumes output is to 'staticfiles' directory
 RUN bun run build
 
-## Python App Build
-FROM python:${PYTHON_VERSION}
+### Stage 2: Frontend Development Server
+FROM oven/bun:1.2.2 AS frontend-dev-server
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+WORKDIR /app-frontend
 
-# install psycopg2 dependencies.
+# Copy frontend configuration and source
+COPY package.json ./
+COPY bun.lock ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY eslint.config.js ./
+COPY .prettierrc.js ./
+COPY core/js/ ./core/js/
+COPY sboms/js/ ./sboms/js/
+COPY teams/js/ ./teams/js/
+COPY billing/js/ ./billing/js/
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Expose Vite dev server port
+EXPOSE 5170
+
+# Command to run Vite dev server
+CMD ["bun", "run", "dev"]
+
+
+### Stage 3: Python Common Code Base
+FROM python:${PYTHON_VERSION} AS python-common-code
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies & Poetry
 RUN apt-get update && apt-get install -y \
     libpq-dev \
+    redis-tools \
+    postgresql-client \
     gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install poetry
 
-RUN mkdir -p /code
 WORKDIR /code
 
-# Install Python dependencies
-RUN pip install poetry
-COPY pyproject.toml poetry.lock /code/
-RUN poetry config virtualenvs.create false
+# Copy project configuration and all application code
+COPY pyproject.toml poetry.lock ./
+COPY . .
 
-# Install only main and prod dependencies
-RUN poetry install --only main,prod --no-interaction --no-root
+### Stage 4: Python Dependencies
+FROM python-common-code AS python-dependencies
 
-# Copy application code
-COPY . /code
+ARG BUILD_ENV
+ENV BUILD_ENV=${BUILD_ENV}
 
-# Copy built JS assets to static directory
-COPY --from=js-build /js-build/static/* /code/static/
+# Install Python dependencies based on BUILD_ENV
+# This will also install the project package itself.
+RUN if [ "${BUILD_ENV}" = "production" ]; then \
+        echo "Installing production Python dependencies..."; \
+        poetry install --only main,prod --no-interaction; \
+    else \
+        echo "Installing development Python dependencies (includes dev, test)..."; \
+        poetry install --no-interaction; \
+    fi
 
-# Install the package itself
-RUN poetry install --only-root --no-interaction
+### Stage 5: Python Application for Development (python-app-dev)
+FROM python-dependencies AS python-app-dev
 
-# Collect static files
+WORKDIR /code
+# No production-specific asset copying or collectstatic needed for dev
+
+EXPOSE 8000
+# CMD for Development (using Django's runserver)
+CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+### Stage 6: Python Application for Production (python-app-prod)
+# This is the default final stage if no target is specified.
+FROM python-dependencies AS python-app-prod
+
+WORKDIR /code
+
+# Production-specific steps
+COPY --from=js-build-prod /js-build/staticfiles/* /code/staticfiles/
 RUN poetry run python manage.py collectstatic --noinput
 
 EXPOSE 8000
-
+# CMD for Production
 CMD ["poetry", "run", "gunicorn", "--bind", ":8000", "--workers", "2", "sbomify.wsgi"]

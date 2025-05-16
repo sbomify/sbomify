@@ -8,7 +8,7 @@ from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
 from sboms.utils import ProjectSBOMBuilder, verify_item_access
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from teams.models import Team
+from teams.models import Team, Member
 
 from .fixtures import (
     sample_access_token,  # noqa: F401
@@ -28,8 +28,22 @@ def mock_request(sample_user) -> HttpRequest:  # noqa: F811
 
 @pytest.fixture
 def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: F811
-    team_key = number_to_random_token(sample_team.id)
-    mock_request.session["user_teams"] = {team_key: {"role": "owner", "name": "test team"}}
+    # Create team membership
+    member = Member.objects.create(user=mock_request.user, team=sample_team, role="owner")
+
+    # Ensure team has a valid key
+    if not sample_team.key or len(sample_team.key) < 9:
+        sample_team.key = number_to_random_token(sample_team.id)
+        sample_team.save()
+
+    # Set up session data
+    mock_request.session["user_teams"] = {
+        sample_team.key: {
+            "role": member.role,
+            "name": sample_team.name,
+            "is_default_team": member.is_default_team
+        }
+    }
     return mock_request
 
 

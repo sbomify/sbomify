@@ -3,6 +3,7 @@ from ninja import Schema
 
 class NotificationSchema(Schema):
     """Schema for notifications"""
+
     id: str
     type: str
     message: str

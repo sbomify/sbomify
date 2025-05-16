@@ -1,3 +1,15 @@
+# Configure Dramatiq to use StubBroker for tests
+import dramatiq
+from dramatiq.brokers.stub import StubBroker
+from dramatiq.results import Results
+from dramatiq.results.backends.stub import StubBackend
+
+# Set up the StubBroker with a StubBackend for results
+stub_broker = StubBroker()
+stub_backend = StubBackend()
+stub_broker.add_middleware(Results(backend=stub_backend))
+dramatiq.set_broker(stub_broker)
+
 # Mock Stripe settings for testing - set these before any other imports
 import os
 
@@ -7,6 +19,14 @@ os.environ["STRIPE_PUBLISHABLE_KEY"] = "pk_test_dummy_key_for_ci"
 os.environ["STRIPE_BILLING_URL"] = "https://billing.stripe.com/test"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_webhook_secret_key"
 
+# Mock trial period settings
+os.environ["TRIAL_PERIOD_DAYS"] = "14"
+os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
+
+# Mock email settings
+os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
+EMAIL_SUBJECT_PREFIX = "[sbomify] "
+
 import json
 
 # Import settings in a way that ensures they are loaded immediately
@@ -15,20 +35,15 @@ from django.conf import settings as django_settings
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
 
+# Ensure allauth apps are included in INSTALLED_APPS
+if "allauth" not in INSTALLED_APPS:
+    INSTALLED_APPS.extend(["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"])
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("TEST_DB_NAME", "postgres"),  # Local default
-        "USER": os.environ.get("TEST_DB_USER", "postgres"),  # Local default
-        "PASSWORD": os.environ.get("TEST_DB_PASSWORD", "postgres"),  # Local default
-        "HOST": os.environ.get("TEST_DB_HOST", "localhost"),
-        "PORT": os.environ.get("TEST_DB_PORT", "5432"),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",  # Use in-memory SQLite for faster tests
         "ATOMIC_REQUESTS": True,
-        # Test database settings
-        "TEST": {
-            "NAME": os.environ.get("TEST_DB_NAME", "sbomify_test"),
-            "SERIALIZE": False,
-        },
     }
 }
 
@@ -117,4 +132,29 @@ with open(STATIC_ROOT / "manifest.json", "w") as f:
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-] + MIDDLEWARE[2:]  # Keep the rest of the middleware unchanged
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+]
+
+# Add debug toolbar middleware if DEBUG is True
+if DEBUG:
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+
+SITE_URL = "http://testserver"
+
+INVITATION_EXPIRY_DAYS = 7
+
+# Use local memory cache for testing
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+
+TESTING = True

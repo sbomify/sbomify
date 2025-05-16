@@ -22,6 +22,7 @@ from .fixtures import (  # noqa: F401
     sample_project,
     sample_sbom,
 )
+from .test_views import setup_test_session
 
 
 @pytest.mark.django_db
@@ -52,7 +53,8 @@ def test_sbom_api_is_public(
         kwargs={"item_type": "product", "item_id": sample_product.id},
     )
 
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    # Set up session with team access
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
     # Test for unknown type
     response: HttpResponse = client.get(unknown_uri, content_type="application/json")
@@ -62,20 +64,32 @@ def test_sbom_api_is_public(
     # Make the component public
     response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify component is public
+    response = client.get(component_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Make the project public
     response = client.patch(project_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify project is public
+    response = client.get(project_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Make the product public
     response = client.patch(product_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
-    r = response.json()
-    assert r["is_public"] is True
+    assert response.json()["is_public"] is True
+
+    # Verify product is public
+    response = client.get(product_uri, content_type="application/json")
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
 
 @pytest.mark.django_db
@@ -542,29 +556,18 @@ def test_get_stats(
     assert stats["total_products"] == 1
     assert stats["total_projects"] == 1
     assert stats["total_components"] == 1
-    assert stats["license_count"]["BSD-3-Clause"] == 7
-    assert stats["license_count"]["MIT"] == 43
+    assert stats["license_count"]["BSD-3-Clause"] == 20
+    assert stats["license_count"]["MIT"] == 47
     assert stats["license_count"]["BSD-2-Clause"] == 2
-    assert stats["license_count"]["BSD 3-Clause License"] == 3
-    assert stats["license_count"]["Apache 2.0"] == 4
-    assert stats["license_count"]["Apache-2.0 license"] == 1
+    assert stats["license_count"]["Apache-2.0"] == 9
     assert stats["license_count"]["MPL-2.0"] == 1
-    assert stats["license_count"]["Apache-2.0"] == 4
-    assert stats["license_count"]["new BSD License"] == 1
     assert stats["license_count"]["PSFL"] == 1
     assert stats["license_count"]["PSF-2.0"] == 1
-    assert stats["license_count"]["BSD"] == 7
-    assert stats["license_count"]["[The BSD 3-Clause License]"] == 1
-    assert stats["license_count"]["MIT License"] == 3
-    assert stats["license_count"]["MIT license"] == 1
     assert stats["license_count"]["Apachev2 or later or GPLv2"] == 1
     assert stats["license_count"]["Unlicense"] == 1
     assert stats["license_count"]["UNKNOWN"] == 4
-    assert stats["license_count"]["ISC license"] == 1
+    assert stats["license_count"]["ISC"] == 3
     assert stats["license_count"]["LGPL with exceptions"] == 1
-    assert stats["license_count"]["pytest-django is released under the BSD (3-clause) license"] == 1
-    assert stats["license_count"]["ISC"] == 1
-    assert stats["license_count"]["ISC License"] == 1
 
     assert len(stats["component_uploads"]) == 1
     assert stats["component_uploads"][0]["component_name"] == "test component"

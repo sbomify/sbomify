@@ -8,6 +8,4 @@ function run_docker_compose() {
         -f docker-compose.dev.yml "$@"
 }
 
-cp .env.example .env
-run_docker_compose build
-run_docker_compose up -d
+run_docker_compose up -d --build

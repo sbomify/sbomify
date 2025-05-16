@@ -2,27 +2,18 @@ from datetime import timedelta
 
 from django.apps import apps
 from django.conf import settings
+from django.core.validators import MinLengthValidator
 from django.db import models
 from django.utils import timezone
-from social_django.models import UserSocialAuth
 
 
 def get_team_name_for_user(user) -> str:
     """Get the team name for a user based on available information"""
-    # Check Auth0 user metadata first
-    social_record = UserSocialAuth.objects.filter(user=user).first()
-    if social_record and social_record.extra_data:
-        user_metadata = social_record.extra_data.get("user_metadata", {})
-        company_name = user_metadata.get("company")
-        if company_name:
-            return company_name
-
-    # Fall back to first name if available
     if user.first_name:
-        return f"{user.first_name}'s Team"
-
-    # Default fallback
-    return "My Team"
+        return f"{user.first_name}'s Workspace"
+    if hasattr(user, "username") and user.username:
+        return f"{user.username}'s Workspace"
+    return "My Workspace"
 
 
 class Team(models.Model):
@@ -30,8 +21,26 @@ class Team(models.Model):
         db_table = apps.get_app_config("teams").name + "_teams"
         indexes = [models.Index(fields=["key"])]
         ordering = ["name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    # Both IDs present
+                    (
+                        models.Q(billing_plan_limits__stripe_subscription_id__isnull=False)
+                        & models.Q(billing_plan_limits__stripe_customer_id__isnull=False)
+                    )
+                    |
+                    # Both IDs null
+                    (
+                        models.Q(billing_plan_limits__stripe_subscription_id__isnull=True)
+                        & models.Q(billing_plan_limits__stripe_customer_id__isnull=True)
+                    )
+                ),
+                name="valid_billing_relationship",
+            )
+        ]
 
-    key = models.CharField(max_length=30, unique=True, null=True)
+    key = models.CharField(max_length=30, unique=True, null=True, validators=[MinLengthValidator(9)])
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
@@ -60,8 +69,7 @@ class Member(models.Model):
 
 
 def calculate_invitation_expiry():
-    now = timezone.now()
-    return now + timedelta(seconds=settings.TEAMS_INVITATION_EXPIRY_DURATION)
+    return timezone.now() + timedelta(days=settings.INVITATION_EXPIRY_DAYS)
 
 
 class Invitation(models.Model):

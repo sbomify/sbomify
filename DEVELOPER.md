@@ -18,8 +18,8 @@ This command will handle starting all required services for development.
 
 ### Backend
 
-* **Language/Framework**: The backend is written in **Python** using the **Django** framework.
-* **Package Manager**: We use **poetry** to manage Python packages.
+- **Language/Framework**: The backend is written in **Python** using the **Django** framework.
+- **Package Manager**: We use **poetry** to manage Python packages.
 
 ### Dependencies
 
@@ -32,8 +32,8 @@ These services can either be run inside Docker Compose or directly on your local
 
 ### Frontend
 
-* **Language/Framework**: The frontend is written in **TypeScript**, with Tailwind for CSS.
-* **Runtime**: We use **Bun** to manage the JavaScript environment.
+- **Language/Framework**: The frontend is written in **TypeScript**, with Tailwind for CSS.
+- **Runtime**: We use **Bun** to manage the JavaScript environment.
 
 To start the development server:
 
@@ -64,8 +64,8 @@ We use **Sentry** to catch and track bugs in both the backend and frontend. Ensu
 1. Run `docker-compose up` to start all necessary services.
 2. Configure your environment file as needed.
 3. Install dependencies for:
-   * Python: Use `poetry install`.
-   * JavaScript: Install Bun and run `bun install`.
+   - Python: Use `poetry install`.
+   - JavaScript: Install Bun and run `bun install`.
 4. Run the backend or frontend as needed, ensuring proper linting and tests are in place.
 
 Follow these principles and standards to ensure smooth development and maintain high code quality.

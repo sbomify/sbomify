@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="card shadow">
+  <div class="card-body p-5">
+    <div class="text-center mb-4">
+      <h1 class="h3 mb-3 text-danger">Authentication Error</h1>
+      <p>There was a problem authenticating your account.</p>
+    </div>
+
+    <div class="alert alert-danger">
+      <h5>Error Details:</h5>
+      <p><strong>{{ error_message }}</strong></p>
+      {% if error_description %}
+      <p>{{ error_description }}</p>
+      {% endif %}
+    </div>
+
+    <div class="mt-4">
+      <p>Please try the following:</p>
+      <ul>
+        <li>Clear your browser cache and cookies</li>
+        <li>Try signing in again</li>
+        <li>Contact your system administrator if the problem persists</li>
+      </ul>
+    </div>
+
+    <div class="d-grid gap-2 mt-4">
+      <a href="{% url 'core:home' %}" class="btn btn-primary">Return to Home</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

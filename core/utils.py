@@ -17,7 +17,7 @@ def number_to_random_token(value: int) -> str:
     """
     Convert an integer to a random token.
     """
-    tok_prefix = token_urlsafe(4)
+    tok_prefix = token_urlsafe(6)
     tok_suffix = "".join(TRANSLATION_STRING[int(c)] for c in str(value))
 
     return f"{tok_prefix}{tok_suffix}"
@@ -36,11 +36,11 @@ def token_to_number(token: str) -> int:
     Raises:
         ValueError: If token is too short or contains invalid characters
     """
-    if len(token) < 7:
+    if len(token) < 9:
         raise ValueError("Token is too short")
 
     try:
-        return int("".join(str(TRANSLATION_STRING.index(c)) for c in token[6:]))
+        return int("".join(str(TRANSLATION_STRING.index(c)) for c in token[8:]))
     except ValueError:
         raise ValueError("Invalid token format")
 

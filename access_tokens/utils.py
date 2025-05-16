@@ -39,14 +39,11 @@ def decode_personal_access_token(token: str) -> dict:
             options={
                 "verify_signature": True,
                 "verify_sub": False,  # Don't validate subject type yet
-            }
+            },
         )
 
         # If signature is valid, decode without verification to get the payload
-        unverified_payload = jwt.decode(
-            token,
-            options={"verify_signature": False}
-        )
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
 
         # Convert sub to string if it exists and isn't already a string
         if "sub" in unverified_payload and not isinstance(unverified_payload["sub"], str):
@@ -60,7 +57,7 @@ def decode_personal_access_token(token: str) -> dict:
             options={
                 "verify_signature": True,
                 "require": ["sub"],
-            }
+            },
         )
     except InvalidTokenError as e:
         log.error(f"Token validation failed: {str(e)}")

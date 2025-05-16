@@ -24,13 +24,13 @@ from .apis import api
 
 urlpatterns = [
     path("admin/", admin_site.urls),
+    path("accounts/", include("allauth.urls")),
     path("", include("core.urls")),
-    path("", include("social_django.urls", namespace="social")),
-    path("", include("teams.urls")),
-    path("", include("sboms.urls")),
-    path("", include("billing.urls", namespace="billing")),
+    path("teams/", include("teams.urls")),
+    path("sboms/", include("sboms.urls")),
+    path("billing/", include("billing.urls")),
     path("api/v1/", api.urls, name="api-1"),
-    path(r"UuPha8mu/", include("health_check.urls")), # Random string
+    path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]
 
 if settings.DEBUG:

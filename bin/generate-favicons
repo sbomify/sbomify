@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Check if ImageMagick is installed
+if ! command -v convert &> /dev/null; then
+    echo "ImageMagick is required. Please install it first."
+    exit 1
+fi
+
+# Create output directory if it doesn't exist
+mkdir -p static/img/favicons
+
+# Generate different sizes
+convert static/img/logo-circle.png -resize 16x16 static/img/favicons/favicon-16x16.png
+convert static/img/logo-circle.png -resize 32x32 static/img/favicons/favicon-32x32.png
+convert static/img/logo-circle.png -resize 180x180 static/img/favicons/apple-touch-icon.png
+convert static/img/logo-circle.png -resize 192x192 static/img/favicons/android-chrome-192x192.png
+convert static/img/logo-circle.png -resize 512x512 static/img/favicons/android-chrome-512x512.png
+
+# Copy SVG version
+cp static/img/logo-circle.svg static/img/favicons/favicon.svg
+
+echo "Favicons generated successfully!"

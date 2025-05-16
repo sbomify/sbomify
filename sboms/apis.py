@@ -171,26 +171,27 @@ def sbom_upload_cyclonedx(
 
         # Packages licenses handling
         packages_licenses: dict[str, list] = {}
-        for package_component in payload.components:
-            if package_component.licenses:
-                if package_component.name not in packages_licenses:
-                    packages_licenses[package_component.name] = []
+        if payload.components:
+            for package_component in payload.components:
+                if package_component.licenses:
+                    if package_component.name not in packages_licenses:
+                        packages_licenses[package_component.name] = []
 
-                licenses = []
+                    licenses_for_pkg = []
 
-                for l_item in package_component.licenses.model_dump(exclude_none=True):
-                    if "license" not in l_item:
-                        continue
+                    for l_item in package_component.licenses.model_dump(exclude_none=True):
+                        if "license" not in l_item:
+                            continue
 
-                    l_dict: dict = l_item["license"]
+                        l_dict: dict = l_item["license"]
 
-                    # Handle invalid long license names
-                    if "name" in l_dict:
-                        l_dict["name"] = l_dict["name"].split("\n")[0]
+                        # Handle invalid long license names
+                        if "name" in l_dict:
+                            l_dict["name"] = l_dict["name"].split("\n")[0]
 
-                    licenses.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
+                        licenses_for_pkg.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
 
-                packages_licenses[package_component.name].extend(licenses)
+                    packages_licenses[package_component.name].extend(licenses_for_pkg)
 
         sbom_dict["packages_licenses"] = packages_licenses
 
@@ -235,12 +236,37 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         sbom_dict["source"] = "api"
         sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
 
+        # Error message constants
+        NO_PACKAGES_ERROR = "No packages found in SPDX document"
+        NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
+
+        if not payload.packages:
+            return 400, {"detail": NO_PACKAGES_ERROR}
+
+        """
+        Find the primary package in the SPDX document using the following strategy:
+        1. Look for a package referenced by documentDescribes field
+        2. Fall back to matching package name with document name
+        """
         package: SPDXPackage | None = None
 
-        if payload.packages and payload.packages[0].name == payload.name:
-            package = payload.packages[0]
-        else:
-            return 400, {"detail": "No package found in packages for the SPDX document"}
+        # First check if documentDescribes is present and points to a valid package
+        if hasattr(payload, "documentDescribes") and payload.documentDescribes:
+            described_ref: str = payload.documentDescribes[0]  # Usually contains "SPDXRef-..." reference
+            for pkg in payload.packages:
+                if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
+                    package = pkg
+                    break
+
+        # If not found via documentDescribes, fall back to name matching
+        if not package:
+            for pkg in payload.packages:
+                if pkg.name == payload.name:
+                    package = pkg
+                    break
+
+        if not package:
+            return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
         sbom_dict["version"] = package.version
         sbom_dict["licenses"] = [package.license]

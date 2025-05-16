@@ -26,6 +26,8 @@ if ENV_FILE:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Define IN_DOCKER early
+IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
 API_VERSION = "v1"
 
@@ -41,7 +43,7 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 if DEBUG:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
@@ -65,13 +67,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     "django_extensions",
     "django_vite",
     "ninja",
     "widget_tweaks",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.openid_connect",
     "core",
-    "social_django",
-    "anymail",
     "teams",
     "sboms",
     "access_tokens",
@@ -79,6 +84,7 @@ INSTALLED_APPS = [
     "notifications",
     "health_check",
     "health_check.db",
+    "anymail",
 ]
 
 
@@ -91,6 +97,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 
@@ -108,7 +115,7 @@ ROOT_URLCONF = "sbomify.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -133,14 +140,27 @@ MESSAGE_TAGS = {
 }
 
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.0/howto/static-files/
+
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Django Vite
 DJANGO_VITE = {
     "default": {
         "dev_mode": DEBUG,
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
+        "manifest_path": str(STATIC_ROOT / "manifest.json"),
     }
 }
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Database
@@ -159,8 +179,6 @@ DJANGO_VITE = {
 #         "PORT": os.environ["SQL_PORT"],
 #     }
 # }
-
-IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
 # DB_URL = os.environ.get("DATABASE_URL", "")
 if "DATABASE_URL" in os.environ:
@@ -189,6 +207,28 @@ else:
 
 DATABASES = {"default": db_config_dict}
 
+# Redis Configuration
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")  # Base URL without db
+
+# Construct specific URLs for cache and worker, both pointing to database 0
+REDIS_CACHE_URL = f"{REDIS_URL}/0"
+REDIS_WORKER_URL = f"{REDIS_URL}/0"  # Also points to /0
+
+# Cache Configuration
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_CACHE_URL,  # Use cache-specific URL
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SOCKET_CONNECT_TIMEOUT": 5,
+            "SOCKET_TIMEOUT": 5,
+            "RETRY_ON_TIMEOUT": True,
+            "MAX_CONNECTIONS": 1000,
+            "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+        },
+    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -247,6 +287,16 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        "allauth": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "allauth.socialaccount": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         # "teams": {
         #     "handlers": ["console"],
         #     "level": os.getenv("LOG_LEVEL", "INFO"),
@@ -256,55 +306,60 @@ LOGGING = {
 }
 
 
-# Auth0 settings
-SOCIAL_AUTH_TRAILING_SLASH = False  # Remove trailing slash from routes
-SOCIAL_AUTH_AUTH0_DOMAIN = os.environ.get("SOCIAL_AUTH_AUTH0_DOMAIN", "")
-SOCIAL_AUTH_AUTH0_KEY = os.environ.get("SOCIAL_AUTH_AUTH0_KEY", "")
-SOCIAL_AUTH_AUTH0_SECRET = os.environ.get("SOCIAL_AUTH_AUTH0_SECRET", "")
-SOCIAL_AUTH_JSONFIELD_ENABLED = True
-SOCIAL_AUTH_URL_NAMESPACE = "social"
-SOCIAL_AUTH_AUTH0_SCOPE = ["openid", "profile", "email"]
+# Feature flags
+USE_KEYCLOAK = os.environ.get("USE_KEYCLOAK", "").lower() in ("true", "1", "yes")
 
-# Ensure we get the correct response type from Auth0
-SOCIAL_AUTH_AUTH0_RESPONSE_TYPE = "code"
-
-# JWT validation settings for Auth0
-SOCIAL_AUTH_AUTH0_JWT_ENABLED = True
-SOCIAL_AUTH_AUTH0_JWT_ALGORITHM = "RS256"
-SOCIAL_AUTH_AUTH0_JWT_VERIFY = True
-SOCIAL_AUTH_AUTH0_JWT_VERIFY_EXP = True
-SOCIAL_AUTH_AUTH0_JWT_LEEWAY = 60  # 1 minute leeway for clock skew
-
-# Custom Auth0 Pipeline
-SOCIAL_AUTH_PIPELINE = (
-    # "core.pipeline.auth0.debug_pipeline",  # Debug pipeline at the start
-    "social_core.pipeline.social_auth.social_details",
-    "core.pipeline.auth0.get_auth0_user_id",  # Extract user ID before social_uid
-    "social_core.pipeline.social_auth.social_uid",
-    "social_core.pipeline.social_auth.auth_allowed",
-    "social_core.pipeline.social_auth.social_user",
-    "core.pipeline.auth0.require_email",  # Email verification
-    "social_core.pipeline.user.get_username",
-    "social_core.pipeline.user.create_user",
-    "social_core.pipeline.social_auth.associate_user",
-    "social_core.pipeline.social_auth.load_extra_data",
-    "social_core.pipeline.user.user_details",
-)
-
-if DEBUG is False:  # If in production, then force HTTPS for auth0
-    SOCIAL_AUTH_REDIRECT_IS_HTTPS = True
-
-
-AUTHENTICATION_BACKENDS = {
-    "core.auth.SafeAuth0OAuth2",
+# Authentication settings
+AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+# AllAuth settings
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_EMAIL_REQUIRED = True
+SOCIALACCOUNT_STORE_TOKENS = True
+SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+
+# Modern AllAuth configuration
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*"]
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+
+# Keycloak settings
+KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
+KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
+
+SOCIALACCOUNT_PROVIDERS = {
+    "openid_connect": {
+        "APPS": [
+            {
+                "provider_id": "keycloak",
+                "name": "Keycloak",
+                "client_id": KEYCLOAK_CLIENT_ID,
+                "secret": KEYCLOAK_CLIENT_SECRET,
+                "settings": {
+                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                },
+            }
+        ]
+    }
 }
 
-LOGIN_URL = "/login/auth0"
 LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/"
+LOGIN_URL = "/login"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
@@ -318,29 +373,21 @@ USE_I18N = True
 USE_TZ = True
 
 
-# EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-# EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-# EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-# EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
-# EMAIL_USE_TLS = str_to_bool(os.environ.get("EMAIL_USE_TLS", "False"))
+# Email settings
+if DEBUG:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
-ANYMAIL = {"SENDGRID_API_KEY": os.environ.get("SENDGRID_API_KEY", "")}
-
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() == "true"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() == "true"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@sbomify.com")
-SERVER_EMAIL = DEFAULT_FROM_EMAIL
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
-STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
-STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-generated emails
+EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
@@ -356,7 +403,7 @@ sentry_sdk.init(
 
 # Teams app related config
 TEAMS_SUPPORTED_ROLES = [("owner", "Owner"), ("admin", "Admin"), ("guest", "Guest")]
-TEAMS_INVITATION_EXPIRY_DURATION = 60 * 60 * 24 * 7  # 7 days
+INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "sbomify")
@@ -390,6 +437,10 @@ STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
+# Trial period settings
+TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))
+TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_DAYS", "3"))
+
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
     "billing.notifications.get_notifications",
@@ -398,3 +449,8 @@ NOTIFICATION_PROVIDERS = [
 
 # Optionally override refresh interval
 NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
+
+# Billing settings
+BILLING = os.getenv("BILLING", "True").lower() == "true"
+
+SITE_ID = 1

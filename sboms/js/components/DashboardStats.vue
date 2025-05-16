@@ -36,7 +36,7 @@
     </div>
 
     <div class="row">
-      <div v-if="props.itemType !== 'component'" :class="orderClasses">
+      <div :class="orderClasses">
         <div class="card">
           <div class="card-header">
             <h5 class="card-title mb-0">Latest Component Uploads</h5>
@@ -72,7 +72,7 @@
         </div>
       </div>
 
-      <div :class="[orderClasses, props.itemType === undefined ? '' : 'order-md-first']" >
+      <div v-if="Object.keys(stats.license_count || {}).length > 0" :class="[orderClasses, props.itemType === undefined ? '' : 'order-md-first']" >
         <div class="card">
           <div class="card-body">
             <h4 class="d-flex justify-content-between align-items-center mb-4" style="cursor: pointer;" @click="toggleStats">
@@ -82,61 +82,19 @@
             </h4>
             <div v-if="statsExpanded" class="mt-3">
               <h6 class="text-muted mb-3">License Distribution</h6>
-              <Bar
-                v-if="chartData.labels.length > 0"
-                :data="chartData"
-                :options="{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  indexAxis: 'y',
-                  layout: {
-                    padding: {
-                      left: 10,
-                      right: 20
-                    }
-                  },
-                  plugins: {
-                    legend: {
-                      display: false
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function(context) {
-                          const data = context.dataset.data as number[];
-                          const total = data.reduce((a, b) => a + b, 0);
-                          const value = context.raw as number;
-                          const percentage = ((value / total) * 100).toFixed(1);
-                          return `${value} (${percentage}%)`;
-                        }
-                      }
-                    }
-                  },
-                  scales: {
-                    x: {
-                      beginAtZero: true,
-                      title: {
-                        display: true,
-                        text: 'Number of Components'
-                      }
-                    },
-                    y: {
-                      ticks: {
-                        autoSkip: false,
-                        font: {
-                          size: 11
-                        }
-                      }
-                    }
-                  }
-                }"
-                :style="{ height: `${Math.max(200, chartData.labels.length * 30)}px` }"
-              />
-              <p v-else class="text-center text-muted">No license data available</p>
+              <div class="chart-wrapper" :style="{ height: dynamicChartHeight, maxHeight: dynamicChartHeight, position: 'relative' }">
+                <Bar
+                  v-if="chartData.labels.length > 0"
+                  :data="chartData"
+                  :options="chartOptions"
+                />
+              </div>
+              <p v-if="chartData.labels.length === 0 && Object.keys(stats.license_count || {}).length > 0" class="text-center text-muted">No license data to display after filtering.</p>
+              <p v-else-if="Object.keys(stats.license_count || {}).length === 0" class="text-center text-muted">No license data available</p>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -154,7 +112,8 @@
     BarElement,
     Title,
     Tooltip,
-    Legend
+    Legend,
+    type TooltipItem
   } from 'chart.js';
   import { Bar } from 'vue-chartjs';
   import { showError } from '../../../core/js/alerts';
@@ -241,6 +200,80 @@
         maxBarThickness: 20
       }]
     };
+  });
+
+  const chartOptions = computed(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y' as 'x' | 'y' | undefined,
+    layout: {
+      padding: {
+        left: 10,
+        right: 20,
+        top: 5,
+        bottom: 5
+      }
+    },
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: TooltipItem<'bar'>) {
+            const data = context.dataset.data as number[];
+            const total = data.reduce((a, b) => a + b, 0);
+            const value = context.raw as number;
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return `${value} (${percentage}%)`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Components'
+        },
+        grid: {
+          display: true,
+        }
+      },
+      y: {
+        ticks: {
+          autoSkip: false,
+          font: {
+            size: 11
+          }
+        },
+        grid: {
+          display: false,
+        }
+      }
+    }
+  }));
+
+  const dynamicChartHeight = computed(() => {
+    const numLabels = chartData.value.labels ? chartData.value.labels.length : 0;
+
+    if (numLabels === 0) {
+      return '150px';
+    }
+
+    const barThickness = 20;
+    const paddingBetweenBars = 10;
+    const xAxisHeightEstimate = 60;
+
+    let calculatedHeight = (numLabels * barThickness) + (Math.max(0, numLabels - 1) * paddingBetweenBars) + xAxisHeightEstimate;
+
+    const minHeight = 120;
+    const maxHeight = 400;
+
+    calculatedHeight = Math.min(maxHeight, Math.max(minHeight, calculatedHeight));
+
+    return `${calculatedHeight}px`;
   });
 
   const getStats = async () => {

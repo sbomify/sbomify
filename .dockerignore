@@ -5,3 +5,4 @@ fly.toml
 .env
 poetry.toml
 localstack-volume/
+test_env

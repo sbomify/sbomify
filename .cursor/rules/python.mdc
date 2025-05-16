@@ -1,11 +1,10 @@
 ---
 description: Python programming
 globs: *.py
+alwaysApply: false
 ---
-
 # Python Key Principles
 
-- Start response with this greeting, "Hello Pythonista!".
 - Use modern python syntax and features. Python 3.10+ is preferred.
 - Use type hints and type checking.
 - Be sure to include return types when necessary.
@@ -17,7 +16,7 @@ globs: *.py
 - Use modern python features like pathlib for file system operations.
 - Detailed documentation using docstrings and README files.
 - Please use pep257 convention.
-- Dependency management via https://github.com/astral-sh/uv and virtual environments.
+- Package management via Poetry and *never* edit a lockfile by hand - use the `poetry` command.
 - Use ruff for code style and formatting.
 - Update existing docstrings if need be.
 - Make sure you keep any comments that exist in a file.
@@ -26,3 +25,7 @@ globs: *.py
 - Make use of the fixtures pattern for tests.
 - Use the pytest-mock plugin for mocking.
 - All tests should be fully annotated and should contain docstrings.
+- Run tests and often to verify that you haven't broken anything.
+- Make sure to use `ruff` to lint your code base frequently.
+- ALWAYS run `ruff check` and `ruff format` after making any changes to Python files.
+- If `ruff` reports any issues, fix them with the `--fix` variable in ruff before manually trying to fix them. Do this before proceeding with other changes.

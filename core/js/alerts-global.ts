@@ -1,4 +1,4 @@
-import { showSuccess, showError, showWarning, showInfo } from './alerts';
+import { showSuccess, showError, showWarning, showInfo, showToast } from './alerts';
 
 // Expose alert functions globally
 declare global {
@@ -7,6 +7,7 @@ declare global {
     showError: typeof showError;
     showWarning: typeof showWarning;
     showInfo: typeof showInfo;
+    showToast: typeof showToast;
   }
 }
 
@@ -14,5 +15,6 @@ window.showSuccess = showSuccess;
 window.showError = showError;
 window.showWarning = showWarning;
 window.showInfo = showInfo;
+window.showToast = showToast;
 
-export {};
+export { showToast, showSuccess, showError, showWarning, showInfo };
