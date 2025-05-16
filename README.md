@@ -1,8 +1,8 @@
 [![CI/CD Pipeline](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml)
 
-![sbomify logo](static/img/sbomify.svg)
+[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/sboms/product/eP_4dk8ixV)
 
-[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/product/eP_4dk8ixV)
+![sbomify logo](static/img/sbomify.svg)
 
 sbomify is a Software Bill of Materials (SBOM) management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs, allowing you to share them with stakeholders or make them publicly accessible.
 
