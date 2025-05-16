@@ -22,6 +22,9 @@ x-keycloak-env: &keycloak-env
 x-minio-env: &minio-env
   MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  AWS_ENDPOINT_URL_S3: http://sbomify-minio:9000
+  AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
+  AWS_MEDIA_STORAGE_BUCKET_NAME: sbomify-media
 
 x-django-env: &django-env
   AWS_ACCESS_KEY_ID: minioadmin
@@ -36,6 +39,8 @@ x-django-env: &django-env
   AWS_SBOMS_SECRET_ACCESS_KEY: minioadmin
   AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
   AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
+  BILLING: 'False'
+
 services:
   sbomify-db:
     image: postgres:15-alpine
@@ -51,19 +56,19 @@ services:
     volumes:
       - sbomify_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sbomify}"]
       interval: 10s
       timeout: 2s
       retries: 10
 
   sbomify-minio:
-    image: minio/minio:latest
+    image: minio/minio
     restart: always
-    environment:
-      <<: *keycloak-env
     ports:
       - "9000:9000"  # API
       - "9001:9001"  # Console
+    environment:
+      <<: *minio-env
     volumes:
       - sbomify_minio_data:/data
     command: server /data --console-address ":9001"
@@ -80,28 +85,22 @@ services:
         condition: service_healthy
     environment:
       <<: *minio-env
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc config host add myminio http://sbomify-minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
-      /usr/bin/mc mb myminio/sbomify-media;
-      /usr/bin/mc mb myminio/sbomify-sboms;
-      /usr/bin/mc anonymous set public myminio/sbomify-media;
-      exit 0;
-      "
+    volumes:
+      - ./bin/create-minio-buckets.sh:/opt/bin/create-minio-buckets.sh
+    entrypoint: /bin/sh /opt/bin/create-minio-buckets.sh
+
   sbomify-backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      target: python-app-prod
+      args:
+        BUILD_ENV: production
     restart: always
-    env_file:
-      - .env
     environment:
       <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
       APP_BASE_URL: http://127.0.0.1:8000
-      # Docker-specific Minio configuration
-    volumes:
-      - .:/code
+      SECRET_KEY: "django-insecure-your-development-secret-key-here-CHANGE-ME!"
     ports:
       - "8000:8000"
     depends_on:
@@ -111,21 +110,22 @@ services:
         condition: service_completed_successfully
       sbomify-createbuckets:
         condition: service_completed_successfully
+
   sbomify-migrations:
     build:
       context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env
+      target: python-app-prod
+      args:
+        BUILD_ENV: production
     environment:
       <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
-    volumes:
-      - .:/code
+      SECRET_KEY: "django-insecure-your-development-secret-key-here-CHANGE-ME!"
     command: /code/bin/release.sh
     depends_on:
       sbomify-db:
         condition: service_healthy
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.4
     restart: always
@@ -138,6 +138,7 @@ services:
     volumes:
       - keycloak_data:/opt/keycloak/data
     command: start-dev
+
   keycloak-bootstrap:
     image: quay.io/keycloak/keycloak:26.1.4
     depends_on:
@@ -164,17 +165,16 @@ services:
   sbomify-worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      target: python-app-prod
+      args:
+        BUILD_ENV: production
     restart: always
-    env_file:
-      - .env
     environment:
       <<: [*common-env, *django-env, *keycloak-env]
       AM_I_IN_DOCKER_CONTAINER: 1
       APP_BASE_URL: http://127.0.0.1:8000
-    volumes:
-      - .:/code
-    command: dramatiq sbomify.tasks
+      SECRET_KEY: "django-insecure-your-development-secret-key-here-CHANGE-ME!"
+    command: poetry run dramatiq sbomify.tasks
     depends_on:
       sbomify-redis:
         condition: service_healthy
