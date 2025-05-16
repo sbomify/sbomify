@@ -26,6 +26,8 @@ if ENV_FILE:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Define IN_DOCKER early
+IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
 API_VERSION = "v1"
 
@@ -177,8 +179,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #         "PORT": os.environ["SQL_PORT"],
 #     }
 # }
-
-IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER_CONTAINER" in os.environ else False
 
 # DB_URL = os.environ.get("DATABASE_URL", "")
 if "DATABASE_URL" in os.environ:

@@ -9,6 +9,8 @@ services:
     # ports are inherited from docker-compose.yml
     volumes:
       - .:/code # Mount local code for development
+    environment:
+      DEBUG: "True"
 
   sbomify-migrations:
     build:
