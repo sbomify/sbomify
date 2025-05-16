@@ -108,6 +108,39 @@ def get_stats_for_team(
 
     # Get license counts
     all_licenses_found = []
+
+    LICENSE_NORMALIZATION_MAP = {
+        # SPDX IDs are preferred, so mainly map common name variations to SPDX IDs
+        "Apache 2.0": "Apache-2.0",
+        "Apache 2.0 License": "Apache-2.0",
+        "Apache-2.0 license": "Apache-2.0",
+        "Apache License, Version 2.0": "Apache-2.0",
+        "MIT License": "MIT",
+        "MIT license": "MIT",
+        "The MIT License": "MIT",
+        "BSD": "BSD-3-Clause",  # Or BSD-2-Clause, be specific if possible or choose a common default
+        "BSD License": "BSD-3-Clause",
+        "New BSD License": "BSD-3-Clause",
+        "BSD 3-Clause": "BSD-3-Clause",
+        "BSD 3-Clause License": "BSD-3-Clause",
+        "BSD 2-Clause": "BSD-2-Clause",
+        "BSD 2-Clause License": "BSD-2-Clause",
+        "ISC License": "ISC",
+        "ISC license": "ISC",
+        "Mozilla Public License 2.0": "MPL-2.0",
+        "Eclipse Public License 1.0": "EPL-1.0",
+        "Eclipse Public License 2.0": "EPL-2.0",
+        "GNU General Public License v2.0 only": "GPL-2.0-only",
+        "GNU General Public License v3.0 only": "GPL-3.0-only",
+        "GNU Lesser General Public License v2.1 only": "LGPL-2.1-only",
+        "GNU Lesser General Public License v3.0 only": "LGPL-3.0-only",
+        # Specific verbose names to common IDs
+        "new BSD License": "BSD-3-Clause",
+        "[The BSD 3-Clause License]": "BSD-3-Clause",
+        "pytest-django is released under the BSD (3-clause) license": "BSD-3-Clause",
+        # Add other common variations as needed
+    }
+
     for sbom_instance in latest_sboms_list:  # Iterate through all relevant SBOMs for the component/item
         if sbom_instance.packages_licenses and isinstance(sbom_instance.packages_licenses, dict):
             # packages_licenses is Dict[str, List[Dict[str, str | None]]]
@@ -127,6 +160,8 @@ def get_stats_for_team(
                                 chosen_license = str(license_name)  # Ensure it's a string
 
                             if chosen_license:
+                                # Normalize before appending
+                                chosen_license = LICENSE_NORMALIZATION_MAP.get(chosen_license, chosen_license)
                                 all_licenses_found.append(chosen_license)
 
         # Optional: Consider licenses from sbom_instance.licenses if it's a simple list

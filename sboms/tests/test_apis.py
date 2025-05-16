@@ -556,29 +556,18 @@ def test_get_stats(
     assert stats["total_products"] == 1
     assert stats["total_projects"] == 1
     assert stats["total_components"] == 1
-    assert stats["license_count"]["BSD-3-Clause"] == 7
-    assert stats["license_count"]["MIT"] == 43
+    assert stats["license_count"]["BSD-3-Clause"] == 20
+    assert stats["license_count"]["MIT"] == 47
     assert stats["license_count"]["BSD-2-Clause"] == 2
-    assert stats["license_count"]["BSD 3-Clause License"] == 3
-    assert stats["license_count"]["Apache 2.0"] == 4
-    assert stats["license_count"]["Apache-2.0 license"] == 1
+    assert stats["license_count"]["Apache-2.0"] == 9
     assert stats["license_count"]["MPL-2.0"] == 1
-    assert stats["license_count"]["Apache-2.0"] == 4
-    assert stats["license_count"]["new BSD License"] == 1
     assert stats["license_count"]["PSFL"] == 1
     assert stats["license_count"]["PSF-2.0"] == 1
-    assert stats["license_count"]["BSD"] == 7
-    assert stats["license_count"]["[The BSD 3-Clause License]"] == 1
-    assert stats["license_count"]["MIT License"] == 3
-    assert stats["license_count"]["MIT license"] == 1
     assert stats["license_count"]["Apachev2 or later or GPLv2"] == 1
     assert stats["license_count"]["Unlicense"] == 1
     assert stats["license_count"]["UNKNOWN"] == 4
-    assert stats["license_count"]["ISC license"] == 1
+    assert stats["license_count"]["ISC"] == 3
     assert stats["license_count"]["LGPL with exceptions"] == 1
-    assert stats["license_count"]["pytest-django is released under the BSD (3-clause) license"] == 1
-    assert stats["license_count"]["ISC"] == 1
-    assert stats["license_count"]["ISC License"] == 1
 
     assert len(stats["component_uploads"]) == 1
     assert stats["component_uploads"][0]["component_name"] == "test component"

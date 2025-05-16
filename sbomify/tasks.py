@@ -20,8 +20,11 @@ import django  # noqa: E402
 
 django.setup()
 
+import tempfile  # noqa: E402
+
 from django.conf import settings  # noqa: E402
 
+from core.object_store import S3Client  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
 from sboms.schemas import DBSBOMLicense  # noqa: E402
 
@@ -41,50 +44,233 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
     Process and analyze license data from an SBOM asynchronously.
     This now also extracts and populates the packages_licenses field from the SBOM file or data.
     """
+    logger.info(f"[TASK_process_sbom_licenses] Received task for SBOM ID: {sbom_id}")
     try:
         with transaction.atomic():
+            logger.info(f"[TASK_process_sbom_licenses] Attempting to fetch SBOM ID: {sbom_id} from database.")
             sbom = SBOM.objects.select_for_update().get(id=sbom_id)
+            logger.info(
+                (
+                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} fetched. "
+                    f"Format: {sbom.format}, Filename: {sbom.sbom_filename}"
+                )
+            )
 
             # Try to load SBOM data from file or data field
             sbom_data = None
             if hasattr(sbom, "data") and sbom.data:
+                logger.info(
+                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Attempting to load from sbom.data field."
+                )
                 sbom_data = sbom.data
             elif sbom.sbom_filename:
-                # Try to load from file (assume local file for now)
-                sbom_path = os.path.join("/code", "sboms", "sbom_files", sbom.sbom_filename)
-                if os.path.exists(sbom_path):
-                    import json
+                logger.info(
+                    (
+                        f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Attempting to load from "
+                        f"sbom_filename: {sbom.sbom_filename} via S3."
+                    )
+                )
+                s3_client = S3Client("SBOMS")
+                try:
+                    # Create a temporary file to download the SBOM content
+                    with tempfile.NamedTemporaryFile(
+                        mode="wb", delete=False, suffix=".json"
+                    ) as tmp_file_obj:  # Open in 'wb' for download_file
+                        tmp_file_path = tmp_file_obj.name
+                    # download_file expects a path, not a file object, so we close the temp
+                    # file first (it remains due to delete=False) then S3 can write to it.
+                    logger.info(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Downloading S3 object "
+                            f"{sbom.sbom_filename} "
+                            f"to temporary file: "
+                            f"{tmp_file_path}"
+                        )
+                    )
+                    s3_client.download_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename, tmp_file_path)
+                    logger.info(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully downloaded SBOM "
+                            f"from S3 to temporary file: {tmp_file_path}"
+                        )
+                    )
 
-                    with open(sbom_path) as f:
+                    with open(tmp_file_path, "r") as f:  # Open in 'r' mode for json.load
+                        import json
+
                         sbom_data = json.load(f)
+                    logger.info(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                            f"Successfully loaded and parsed JSON from temporary file."
+                        )
+                    )
+
+                    # Clean up the temporary file
+                    os.unlink(tmp_file_path)
+                    logger.info(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                            f"Cleaned up temporary file: {tmp_file_path}"
+                        )
+                    )
+
+                except Exception as s3_error:
+                    logger.error(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id}"
+                            f"- Error downloading/processing SBOM from S3: {s3_error}"
+                        ),
+                        exc_info=True,
+                    )
+                    sbom_data = None  # Ensure sbom_data is None if S3 operations fail
+            else:
+                logger.warning(
+                    (
+                        f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - No sbom.data and no "
+                        f"sbom.sbom_filename. Cannot load SBOM content."
+                    )
+                )
 
             packages_licenses = {}
-            # CycloneDX
-            if sbom.format == "cyclonedx" and sbom_data:
-                for comp in sbom_data.get("components", []):
-                    if "licenses" in comp:
+            if sbom_data:
+                logger.info(
+                    (
+                        f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                        f"SBOM data loaded, proceeding with license extraction."
+                    )
+                )
+                # CycloneDX
+                if sbom.format == "cyclonedx":
+                    logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as CycloneDX format.")
+                    for comp_idx, comp in enumerate(sbom_data.get("components", [])):
+                        comp_name = comp.get("name", f"UnnamedComponent_{comp_idx}")
+                        logger.info(
+                            (
+                                f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing "
+                                f"CycloneDX component: {comp_name}"
+                            )
+                        )
+                        if "licenses" in comp:
+                            licenses = []
+                            for lic_info_idx, license_info in enumerate(comp["licenses"]):
+                                if "license" in license_info:
+                                    l_dict = license_info["license"]
+                                    logger.debug(
+                                        (
+                                            f"[TASK_process_sbom_licenses] SBOM ID: "
+                                            f"{sbom_id} - Component {comp_name} - "
+                                            f"Raw license data: {l_dict}"
+                                        )
+                                    )
+                                    # Handle invalid long license names
+                                    if "name" in l_dict and isinstance(l_dict["name"], str):
+                                        l_dict["name"] = l_dict["name"].split("\n")[0]
+                                    try:
+                                        parsed_license = DBSBOMLicense(**l_dict).model_dump(exclude_none=True)
+                                        licenses.append(parsed_license)
+                                        logger.debug(
+                                            (
+                                                f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id}"
+                                                f" - Component {comp_name} - "
+                                                f"Parsed license: {parsed_license}"
+                                            )
+                                        )
+                                    except Exception as lic_parse_err:
+                                        logger.error(
+                                            (
+                                                f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} "
+                                                f"- Component {comp_name} - "
+                                                f"Error parsing license_info {l_dict}: "
+                                                f"{lic_parse_err}"
+                                            )
+                                        )
+                                else:
+                                    logger.warning(
+                                        (
+                                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} "
+                                            f"- Component {comp_name} - "
+                                            f"license_info item {lic_info_idx} does not contain "
+                                            f"'license' key: {license_info}"
+                                        )
+                                    )
+                            if licenses:
+                                packages_licenses[comp_name] = licenses
+                                logger.info(
+                                    (
+                                        f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Component {comp_name} - "
+                                        f"Added {len(licenses)} licenses."
+                                    )
+                                )
+                        else:
+                            logger.info(
+                                (
+                                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                                    f"Component {comp_name} - No 'licenses' field found."
+                                )
+                            )
+                # SPDX
+                elif sbom.format == "spdx":
+                    logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as SPDX format.")
+                    for pkg_idx, pkg in enumerate(sbom_data.get("packages", [])):
+                        pkg_name = pkg.get("name", f"UnnamedPackage_{pkg_idx}")
+                        logger.info(
+                            (
+                                f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                                f"Processing SPDX package: {pkg_name}"
+                            )
+                        )
                         licenses = []
-                        for license_info in comp["licenses"]:
-                            if "license" in license_info:
-                                l_dict = license_info["license"]
-                                # Handle invalid long license names
-                                if "name" in l_dict:
-                                    l_dict["name"] = l_dict["name"].split("\n")[0]
-                                licenses.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
-                        if licenses:
-                            packages_licenses[comp.get("name", "")] = licenses
-            # SPDX
-            elif sbom.format == "spdx" and sbom_data:
-                for pkg in sbom_data.get("packages", []):
-                    licenses = []
-                    if "licenseConcluded" in pkg and pkg["licenseConcluded"] != "NOASSERTION":
-                        licenses.append({"id": pkg["licenseConcluded"]})
-                    if licenses:
-                        packages_licenses[pkg.get("name", "")] = licenses
+                        if "licenseConcluded" in pkg and pkg["licenseConcluded"] != "NOASSERTION":
+                            license_id_val = pkg["licenseConcluded"]
+                            licenses.append({"id": license_id_val})
+                            logger.debug(
+                                (
+                                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
+                                    f"Package {pkg_name} - Found licenseConcluded: {license_id_val}"
+                                )
+                            )
+                        if (
+                            licenses
+                        ):  # SPDX structure stores one licenseConcluded, this check might be redundant if only one
+                            packages_licenses[pkg_name] = licenses
+                            logger.info(
+                                (
+                                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
+                                    f"Added license: {licenses}"
+                                )
+                            )
+                        else:
+                            logger.info(
+                                (
+                                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
+                                    f"No valid 'licenseConcluded' found or was NOASSERTION."
+                                )
+                            )
+                else:
+                    logger.warning(
+                        (
+                            f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Unknown SBOM format: {sbom.format}. "
+                            f"Cannot extract package licenses."
+                        )
+                    )
+            else:
+                logger.warning(
+                    (
+                        f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - sbom_data is empty. "
+                        f"Skipping package license extraction."
+                    )
+                )
 
             # Save extracted package licenses
+            logger.info(
+                (
+                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Final packages_licenses "
+                    f"to be saved: {packages_licenses}"
+                )
+            )
             sbom.packages_licenses = packages_licenses
-            sbom.save()
+            # sbom.save() # Already part of transaction, will save at the end of 'with' block
 
             # Store original license data for analysis
             original_licenses = sbom.licenses
@@ -172,13 +358,23 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
 
             # Store the analysis results in the licenses field
             sbom.licenses = results
-            sbom.save()
+            sbom.save()  # This save will commit both licenses and packages_licenses due to transaction
+            logger.info(
+                (
+                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully processed and saved "
+                    f"license analysis. Result: {results}"
+                )
+            )
 
             return results
 
     except SBOM.DoesNotExist:
+        logger.error(f"[TASK_process_sbom_licenses] SBOM with ID {sbom_id} not found.")
         return {"error": f"SBOM with ID {sbom_id} not found"}
     except Exception as e:
+        logger.error(
+            f"[TASK_process_sbom_licenses] Error processing SBOM ID {sbom_id}: {e}", exc_info=True
+        )  # Add exc_info for traceback
         return {"error": str(e)}
 
 
