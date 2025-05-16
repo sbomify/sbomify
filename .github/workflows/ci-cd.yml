@@ -198,19 +198,28 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
 
-  generate-sbom:
-    name: Generate SBOM
+  generate-sboms:
+    name: Generate SBOMs
     runs-on: ubuntu-latest
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
     needs: [deploy-production]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Upload SBOM
+      - name: Upload backend SBOM
         uses: sbomify/github-action@master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
           LOCK_FILE: 'poetry.lock'
+          AUGMENT: true
+          UPLOAD: true
+
+      - name: Upload frontend SBOM
+        uses: sbomify/github-action@master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: vKhyt5bLHk4B
+          LOCK_FILE: 'package-lock.json'
           AUGMENT: true
           UPLOAD: true

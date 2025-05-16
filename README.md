@@ -2,6 +2,8 @@
 
 ![sbomify logo](static/img/sbomify.svg)
 
+[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/product/eP_4dk8ixV)
+
 sbomify is a Software Bill of Materials (SBOM) management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs, allowing you to share them with stakeholders or make them publicly accessible.
 
 The sbomify backend integrates with our [github actions module](https://github.com/sbomify/github-action) to automatically generate SBOMs from lock files and docker files.
