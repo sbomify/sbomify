@@ -270,7 +270,6 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                 )
             )
             sbom.packages_licenses = packages_licenses
-            # sbom.save() # Already part of transaction, will save at the end of 'with' block
 
             # Store original license data for analysis
             original_licenses = sbom.licenses
