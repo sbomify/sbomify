@@ -164,7 +164,9 @@ jobs:
 
       - name: Create fly.toml for staging
         run: |
-          echo "${{ secrets.FLY_CONFIG_STAGE }}" > fly.toml
+          cat <<EOF > fly.toml
+          ${{ secrets.FLY_CONFIG_STAGE }}
+          EOF
 
       - name: Deploy to staging
         run: |
@@ -184,7 +186,9 @@ jobs:
 
       - name: Create fly.toml for production
         run: |
-          echo "${{ secrets.FLY_CONFIG_PROD }}" > fly.toml
+          cat <<EOF > fly.toml
+          ${{ secrets.FLY_CONFIG_PROD }}
+          EOF
 
       - name: Deploy to production
         run: |
