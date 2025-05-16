@@ -208,17 +208,17 @@ else:
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")  # Base URL without db
 
-# Construct specific URLs for cache and worker
+# Construct specific URLs for cache and worker, both pointing to database 0
 REDIS_CACHE_URL = f"{REDIS_URL}/0"
-REDIS_WORKER_URL = f"{REDIS_URL}/1"
+REDIS_WORKER_URL = f"{REDIS_URL}/0"  # Also points to /0
 
 # Cache Configuration
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_CACHE_URL,
+        "LOCATION": REDIS_CACHE_URL,  # Use cache-specific URL
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "SOCKET_CONNECT_TIMEOUT": 5,

@@ -41,6 +41,10 @@ console_command = '/code/manage.py shell'
 
 [build]
 
+[processes]
+  web = "poetry run gunicorn --bind :8000 --workers 2 sbomify.wsgi"
+  worker = "poetry run dramatiq sbomify.tasks"
+
 [deploy]
   release_command = 'sh /code/bin/release.sh'
 
@@ -48,12 +52,12 @@ console_command = '/code/manage.py shell'
   PORT = '8000'
 
 [http_service]
+  processes = ["web"]
   internal_port = 8000
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
 
 [[vm]]
   memory = '1gb'
