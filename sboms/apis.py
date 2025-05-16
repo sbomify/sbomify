@@ -11,7 +11,6 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
 from core.utils import ExtractSpec, dict_update, obj_extract
-from sbomify.tasks import process_sbom_licenses
 from teams.models import Team
 from teams.utils import get_user_teams
 
@@ -200,9 +199,6 @@ def sbom_upload_cyclonedx(
             sbom = SBOM(**sbom_dict)
             sbom.save()
 
-            # Trigger license processing task
-            process_sbom_licenses.send(sbom.id)
-
         return 201, {"id": sbom.id}
 
     except Exception as e:
@@ -278,9 +274,6 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
-
-            # Trigger license processing task
-            process_sbom_licenses.send(sbom.id)
 
         return 201, {"id": sbom.id}
 
