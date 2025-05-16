@@ -2,37 +2,44 @@
 services:
   sbomify-backend:
     build:
-      dockerfile: docker/Dockerfile-backend-dev
-    environment:
-      BILLING: False
+      # context is inherited from docker-compose.yml
+      target: python-app-dev
+      args:
+        BUILD_ENV: development
+    # ports are inherited from docker-compose.yml
+    volumes:
+      - .:/code # Mount local code for development
+
   sbomify-migrations:
     build:
-      dockerfile: docker/Dockerfile-backend-dev
-    environment:
-      BILLING: False
+      target: python-app-dev
+      args:
+        BUILD_ENV: development
     volumes:
-      - .:/code
-      - /code/node_modules
+      - .:/code # Mount local code for development
+
 
   sbomify-worker:
     build:
-      dockerfile: docker/Dockerfile-backend-dev
-    environment:
-      BILLING: False
+      target: python-app-dev
+      args:
+        BUILD_ENV: development
     volumes:
-      - .:/code
-      - /code/node_modules
-    command: dramatiq sbomify.tasks
+      - .:/code # Mount local code for development
 
+  # sbomify-frontend is a new service specific to development
   sbomify-frontend:
     build:
-      context: .
-      dockerfile: docker/Dockerfile-frontend-dev
+      context: . # Must be defined as it's a new service
+      target: frontend-dev-server
     ports:
       - "5170:5170"
     volumes:
-      - .:/code
-      - /code/node_modules
+      - .:/app-frontend # Mount to the WORKDIR of frontend-dev-server stage
+      - /app-frontend/node_modules # Prevent host node_modules from overwriting container's
     environment:
       NODE_ENV: development
       VITE_API_BASE_URL: http://127.0.0.1:8000
+
+# Dev-specific volumes or networks could be defined here if needed.
+# Example placeholder comments for DB/Redis are removed as they are defined in the base docker-compose.yml
