@@ -13,6 +13,13 @@ from django.db import transaction
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_delay,
+    wait_exponential,
+)
 
 # Set up Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sbomify.settings")
@@ -23,6 +30,8 @@ django.setup()
 import tempfile  # noqa: E402
 
 from django.conf import settings  # noqa: E402
+from django.db import connection  # noqa: E402
+from django.db.utils import DatabaseError, OperationalError  # noqa: E402
 
 from core.object_store import S3Client  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
@@ -38,7 +47,21 @@ if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TE
 logger = logging.getLogger(__name__)
 
 
+def log_retry_attempt(retry_state):
+    """Log retry attempts with detailed information."""
+    logger.warning(
+        f"Retrying {retry_state.fn.__name__} after {retry_state.seconds_since_start:.2f}s "
+        f"(attempt {retry_state.attempt_number}) due to {retry_state.outcome.exception()}"
+    )
+
+
 @dramatiq.actor(queue_name="sbom_license_processing", max_retries=3, time_limit=300000, store_results=True)
+@retry(
+    retry=retry_if_exception_type((OperationalError, ConnectionError)),
+    wait=wait_exponential(multiplier=1, min=1, max=5),  # Start with 1s, max 5s between retries
+    stop=stop_after_delay(30),  # Stop after 30s total
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
 def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
     """
     Process and analyze license data from an SBOM asynchronously.
@@ -47,6 +70,9 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
     logger.info(f"[TASK_process_sbom_licenses] Received task for SBOM ID: {sbom_id}")
     try:
         with transaction.atomic():
+            # Ensure database connection is alive
+            connection.ensure_connection()
+
             logger.info(f"[TASK_process_sbom_licenses] Attempting to fetch SBOM ID: {sbom_id} from database.")
             sbom = SBOM.objects.select_for_update().get(id=sbom_id)
             logger.info(
@@ -79,7 +105,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         tmp_file_path = tmp_file_obj.name
                     # download_file expects a path, not a file object, so we close the temp
                     # file first (it remains due to delete=False) then S3 can write to it.
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Downloading S3 object "
                             f"{sbom.sbom_filename} "
@@ -88,7 +114,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         )
                     )
                     s3_client.download_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename, tmp_file_path)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully downloaded SBOM "
                             f"from S3 to temporary file: {tmp_file_path}"
@@ -99,7 +125,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                         import json
 
                         sbom_data = json.load(f)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                             f"Successfully loaded and parsed JSON from temporary file."
@@ -108,7 +134,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
 
                     # Clean up the temporary file
                     os.unlink(tmp_file_path)
-                    logger.info(
+                    logger.debug(
                         (
                             f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                             f"Cleaned up temporary file: {tmp_file_path}"
@@ -145,7 +171,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                     logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as CycloneDX format.")
                     for comp_idx, comp in enumerate(sbom_data.get("components", [])):
                         comp_name = comp.get("name", f"UnnamedComponent_{comp_idx}")
-                        logger.info(
+                        logger.debug(
                             (
                                 f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing "
                                 f"CycloneDX component: {comp_name}"
@@ -196,7 +222,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                                     )
                             if licenses:
                                 packages_licenses[comp_name] = licenses
-                                logger.info(
+                                logger.debug(
                                     (
                                         f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Component {comp_name} - "
                                         f"Added {len(licenses)} licenses."
@@ -214,7 +240,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                     logger.info(f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Processing as SPDX format.")
                     for pkg_idx, pkg in enumerate(sbom_data.get("packages", [])):
                         pkg_name = pkg.get("name", f"UnnamedPackage_{pkg_idx}")
-                        logger.info(
+                        logger.debug(
                             (
                                 f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
                                 f"Processing SPDX package: {pkg_name}"
@@ -234,14 +260,14 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                             licenses
                         ):  # SPDX structure stores one licenseConcluded, this check might be redundant if only one
                             packages_licenses[pkg_name] = licenses
-                            logger.info(
+                            logger.debug(
                                 (
                                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
                                     f"Added license: {licenses}"
                                 )
                             )
                         else:
-                            logger.info(
+                            logger.debug(
                                 (
                                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Package {pkg_name} - "
                                     f"No valid 'licenseConcluded' found or was NOASSERTION."
@@ -263,7 +289,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
                 )
 
             # Save extracted package licenses
-            logger.info(
+            logger.debug(
                 (
                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Final packages_licenses "
                     f"to be saved: {packages_licenses}"
@@ -358,7 +384,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
             # Store the analysis results in the licenses field
             sbom.licenses = results
             sbom.save()  # This save will commit both licenses and packages_licenses due to transaction
-            logger.info(
+            logger.debug(
                 (
                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Successfully processed and saved "
                     f"license analysis. Result: {results}"
@@ -370,11 +396,24 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
     except SBOM.DoesNotExist:
         logger.error(f"[TASK_process_sbom_licenses] SBOM with ID {sbom_id} not found.")
         return {"error": f"SBOM with ID {sbom_id} not found"}
+    except (DatabaseError, OperationalError) as db_err:
+        logger.error(
+            f"[TASK_process_sbom_licenses] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow tenacity to handle retries
+    except ConnectionError as conn_err:
+        logger.error(
+            f"[TASK_process_sbom_licenses] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow tenacity to handle retries
     except Exception as e:
         logger.error(
-            f"[TASK_process_sbom_licenses] Error processing SBOM ID {sbom_id}: {e}", exc_info=True
-        )  # Add exc_info for traceback
-        return {"error": str(e)}
+            f"[TASK_process_sbom_licenses] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow Dramatiq to handle retries
 
 
 # Example task for testing
