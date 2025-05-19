@@ -122,6 +122,8 @@
     text: null
   });
 
+  // DEPRECATED: The 'license' field is deprecated and will be removed. Do not use in new code. Only here for backward compatibility.
+
   // Common licenses to show at the top
   const commonLicenses = ['MIT', 'Apache-2.0', 'GPL-3.0', 'BSD-3-Clause', 'ISC'];
 

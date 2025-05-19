@@ -11,7 +11,6 @@ from core.utils import set_values_if_not_empty
 
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
-from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 
 class PublicStatusSchema(Schema):
@@ -118,8 +117,12 @@ class ComponentMetaData(BaseModel):
 
     supplier: SupplierSchema = SupplierSchema()
     authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = []
-    licenses: list[LicenseSchema | CustomLicenseSchema] = []
+    license_expression: str | None = None
     lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+
+    # TODO: The 'license' field is temporary and will be removed in the future.
+    # It will be replaced by license expressions in the next API version and generated
+    # ad-hoc from the view for backward compatibility.
 
     def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata:
         CycloneDx = get_cyclonedx_module(spec_version)
@@ -152,19 +155,12 @@ class ComponentMetaData(BaseModel):
                 set_values_if_not_empty(c, name=author.name, email=author.email, phone=author.phone)
                 result.authors.append(c)
 
-        if self.licenses:
-            licenses = []
-            for component_license in self.licenses:
-                if isinstance(component_license, CustomLicenseSchema):
-                    licenses.append(component_license.to_cyclonedx(spec_version))
-
-                else:
-                    licenses.append({"license": {"id": component_license.value}})
-
+        # Use the single license_expression string if present
+        if self.license_expression:
+            licenses = [{"license": {"id": self.license_expression}}]
             result.licenses = CycloneDx.LicenseChoice(licenses)
 
         if self.lifecycle_phase:
-            # result.lifecycles = [Lifecycles(phase=self.lifecycle_phase)]
             result.lifecycles = [CycloneDx.Lifecycles(phase=self.lifecycle_phase)]
 
         return result

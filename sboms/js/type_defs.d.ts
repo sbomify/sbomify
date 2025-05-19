@@ -22,7 +22,10 @@ export interface SupplierInfo {
 export interface ComponentMetaInfo {
   supplier: SupplierInfo;
   authors: ContactInfo[];
-  licenses: (string | CustomLicense)[];
+  // The license_expression field is the new primary field for storing SPDX license expressions
+  license_expression: string | null;
+  // The license field is kept for backward compatibility and will be generated from license_expression
+  license: (string | CustomLicense)[];
   lifecycle_phase: LifecyclePhase | null;
 }
 
@@ -60,4 +63,5 @@ export interface DashboardStats {
   total_projects: number;
   component_uploads: ComponentUpload[];
   license_count: Record<string, number>;
+  license_expression_count: Record<string, number>;
 }

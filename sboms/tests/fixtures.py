@@ -4,15 +4,30 @@ from typing import Any, Generator
 
 import pytest
 from django.db import transaction
+from django.utils import timezone
 
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
 from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from teams.models import Member
+from teams.models import Member, Team
 
 from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
 from ..schemas import SPDXSchema
+from core.utils import generate_id
+from sboms.models import (
+    LicenseComponent,
+    LicenseExpression,
+    ProjectComponent,
+    SBOM,
+)
+from sboms.schemas import (
+    ComponentMetaData as ComponentMetaDataSchema,
+    CustomLicenseSchema,
+    LicenseSchema,
+    SupplierSchema,
+)
+from sboms.license_utils import LicenseExpressionHandler
 
 SAMPLE_SBOM_DATA = {
     "SPDXID": "SPDXRef-DOCUMENT",
@@ -118,30 +133,134 @@ def sample_component(
 
 @pytest.fixture
 def sample_sbom(
-    sample_team_with_owner_member: Member,  # noqa: F811
-    sample_project: Project,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-) -> Generator[SBOM, Any, None]:
-
-    spdx_paylaod = SPDXSchema(**SAMPLE_SBOM_DATA)
-    package = spdx_paylaod.packages[0]
-
+    sample_component: Component,
+    spdx_payload: dict,
+    package: dict,
+) -> Generator[SBOM, None, None]:
+    """Create a sample SBOM for testing."""
     sbom = SBOM(
-        name=spdx_paylaod.name,
-        version=package.version,
-        licenses=[package.license],
+        name=spdx_payload["name"],
+        version=package.get("versionInfo", ""),
         format="spdx",
         sbom_filename="test-sbom.json",
         component=sample_component,
         source="test",
-        format_version=spdx_paylaod.spdx_version.removeprefix("SPDX-"),
+        format_version=spdx_payload["spdxVersion"].removeprefix("SPDX-"),
     )
-
     sbom.save()
 
-    yield sbom
+    # Create license expression if package has a license
+    if package.get("license"):
+        handler = LicenseExpressionHandler()
+        try:
+            # Parse and validate the license expression
+            parsed = handler.parse_expression(package["license"])
+            is_valid, warnings = handler.validate_expression(package["license"])
+            validation_status = "warning" if warnings else "valid" if is_valid else "invalid"
 
-    sbom.delete()
+            # Create the license expression tree
+            def _create_node(parsed_node, parent=None, order=0) -> LicenseExpression:
+                # Handle WITH nodes
+                if hasattr(parsed_node, "license_symbol") and hasattr(parsed_node, "exception_symbol"):
+                    operator = "WITH"
+                    node = LicenseExpression.objects.create(
+                        parent=parent,
+                        order=order,
+                        operator=operator,
+                        component=None,
+                        expression=str(parsed_node),
+                        normalized_expression=str(parsed_node),
+                        source="spdx",
+                        validation_status=validation_status,
+                        validation_errors=warnings,
+                    )
+                    # Create license component
+                    license_component = LicenseComponent.objects.create(
+                        identifier=str(parsed_node.license_symbol),
+                        name=str(parsed_node.license_symbol),
+                        type="spdx",
+                    )
+                    _create_node(parsed_node.license_symbol, parent=node, order=0)
+                    # Create exception component
+                    exception_component = LicenseComponent.objects.create(
+                        identifier=str(parsed_node.exception_symbol),
+                        name=str(parsed_node.exception_symbol),
+                        type="spdx",
+                    )
+                    LicenseExpression.objects.create(
+                        parent=node,
+                        order=1,
+                        component=exception_component,
+                        operator=None,
+                        expression=str(parsed_node.exception_symbol),
+                        normalized_expression=str(parsed_node.exception_symbol),
+                        source="spdx",
+                        validation_status=validation_status,
+                        validation_errors=warnings,
+                    )
+                    return node
+
+                # Handle leaf nodes (simple licenses)
+                if not hasattr(parsed_node, "operator"):
+                    component = LicenseComponent.objects.create(
+                        identifier=str(parsed_node),
+                        name=str(parsed_node),
+                        type="spdx",
+                    )
+                    return LicenseExpression.objects.create(
+                        parent=parent,
+                        order=order,
+                        component=component,
+                        operator=None,
+                        expression=str(parsed_node),
+                        normalized_expression=str(parsed_node),
+                        source="spdx",
+                        validation_status=validation_status,
+                        validation_errors=warnings,
+                    )
+
+                # Handle operator nodes (AND, OR)
+                op = getattr(parsed_node, "operator", None)
+                operator = op.strip() if isinstance(op, str) and op else None
+                node = LicenseExpression.objects.create(
+                    parent=parent,
+                    order=order,
+                    operator=operator,
+                    component=None,
+                    expression=str(parsed_node),
+                    normalized_expression=str(parsed_node),
+                    source="spdx",
+                    validation_status=validation_status,
+                    validation_errors=warnings,
+                )
+                # Create child nodes
+                for idx, child in enumerate(getattr(parsed_node, "args", [])):
+                    _create_node(child, parent=node, order=idx)
+                return node
+
+            # Create the root node
+            root = _create_node(parsed)
+            sbom.license_expression = root
+
+        except Exception as e:
+            # If parsing fails, create a simple invalid expression
+            component = LicenseComponent.objects.create(
+                identifier=package["license"],
+                name=package["license"],
+                type="custom",
+            )
+            root = LicenseExpression.objects.create(
+                component=component,
+                operator=None,
+                expression=package["license"],
+                normalized_expression=package["license"],
+                source="spdx",
+                validation_status="invalid",
+                validation_errors=[str(e)],
+            )
+            sbom.license_expression = root
+
+    yield sbom
 
 
 @pytest.fixture
@@ -156,3 +275,15 @@ def sample_access_token(
     yield access_token
 
     access_token.delete()
+
+
+@pytest.fixture
+def spdx_payload() -> dict:
+    """Fixture for a sample SPDX payload."""
+    return SAMPLE_SBOM_DATA
+
+
+@pytest.fixture
+def package() -> dict:
+    """Fixture for a sample SPDX package."""
+    return SAMPLE_SBOM_DATA["packages"][0]
