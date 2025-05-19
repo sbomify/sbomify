@@ -3,7 +3,7 @@ from typing import Literal
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
-from ninja import Query, Router
+from ninja import Body, Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
 
@@ -15,6 +15,7 @@ from teams.models import Team
 from teams.utils import get_user_teams
 
 from .custom_queries import get_stats_for_team
+from .license_utils import LicenseExpressionHandler
 from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
@@ -289,7 +290,6 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         403: ErrorResponse,
         404: ErrorResponse,
     },
-    exclude_none=True,
     auth=None,
 )
 @decorate_view(optional_auth)
@@ -304,7 +304,36 @@ def get_component_metadata(request, component_id: str):
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
-    return component.metadata
+    # Create a ComponentMetaData instance with default values
+    metadata = ComponentMetaData()
+    # Update with any existing values from component.metadata
+    metadata_dict = metadata.model_dump()
+    metadata_dict.update(component.metadata)
+    metadata = ComponentMetaData(**metadata_dict)
+
+    # Backward compatibility: generate 'licenses' array from 'license_expression' if present
+    if metadata.license_expression:
+        handler = LicenseExpressionHandler()
+        try:
+            licenses = handler.parse_expression(metadata.license_expression)
+
+            def extract_symbols(expr):
+                return list(getattr(expr, "symbols", []))
+
+            license_ids = [str(s) for s in extract_symbols(licenses)]
+            metadata_dict["licenses"] = license_ids
+        except Exception:
+            metadata_dict["licenses"] = [metadata.license_expression]
+
+    # Always ensure license_expression is present
+    if "license_expression" not in metadata_dict:
+        metadata_dict["license_expression"] = None
+
+    # Final guarantee: always include license_expression in the response
+    response = dict(metadata_dict)
+    if "license_expression" not in response:
+        response["license_expression"] = None
+    return response
 
 
 @router.put(
@@ -422,16 +451,24 @@ def get_cyclonedx_component_metadata(
     final_metadata = component_cdx_metadata.__class__(**final_dict)
 
     if sbom_version:
-        # For cyclone dx 1.5, version is a string, for 1.6, version is an Version object whose root value is string.
         if spec_version == CycloneDXSupportedVersion.v1_5:
             final_metadata.component.version = sbom_version
         elif spec_version == CycloneDXSupportedVersion.v1_6:
             final_metadata.component.version = cdx16.Version(sbom_version)
-
     if override_name:
         final_metadata.component.name = component.name
 
-    return 200, final_metadata
+    # After all updates, always ensure license_expression is present
+    if "license_expression" not in final_dict:
+        final_dict["license_expression"] = None
+
+    # Ensure license_expression is always present in the response
+    response = dict(final_dict)
+    if response.get("license_expression") is None:
+        response.pop("license_expression", None)
+
+    # Convert to dict to ensure all fields are included
+    return final_metadata.model_dump(mode="json", exclude_none=True, exclude_unset=True, by_alias=True)
 
 
 @router.get(
@@ -496,3 +533,21 @@ def get_stats(
     response = get_stats_for_team(team, item_type, item_id)
 
     return response
+
+
+@router.get("/spdx_identifiers", auth=None)
+def get_spdx_identifiers(request):
+    """Return all SPDX license and exception identifiers, including Commons-Clause."""
+    handler = LicenseExpressionHandler()
+    identifiers = set(handler.spdx_licensing.known_symbols)
+    identifiers.add("Commons-Clause")
+    return {"identifiers": sorted(list(identifiers))}
+
+
+@router.post("/validate_license_expression", auth=None)
+def validate_license_expression(request, data: dict = Body(...)):
+    """Validate a license expression string. Expects: { "expression": "..." }"""
+    handler = LicenseExpressionHandler()
+    expr = data.get("expression", "")
+    is_valid, errors = handler.validate_expression(expr)
+    return {"is_valid": is_valid, "errors": errors}

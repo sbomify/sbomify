@@ -71,17 +71,16 @@
               <div class="card">
                 <div class="card-header">
                   <h4 class="card-title">
-                    Licenses
+                    License Expression
                     <i class="fa-regular fa-circle-question help-icon">
-                      <span class="tooltiptext">Software licenses that apply to this component</span>
+                      <span class="tooltiptext">SPDX license expression for this component (e.g., MIT OR Apache-2.0)</span>
                     </i>
                   </h4>
                 </div>
                 <div class="card-body">
-                  <LicensesEditor
-                    v-model="metadata.licenses"
-                    :validation-errors="validationErrors.licenses"
-                    @update:modelValue="validateLicenses"
+                  <LicenseExpressionBuilder
+                    v-model="metadata.license_expression"
+                    @validation="onLicenseValidation"
                   />
                 </div>
               </div>
@@ -136,9 +135,9 @@
   import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
   import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage } from '../type_defs.d.ts';
   import SupplierEditor from './SupplierEditor.vue';
-  import LicensesEditor from './LicensesEditor.vue';
   import ContactsEditor from './ContactsEditor.vue';
   import { showSuccess, showError } from '../../../core/js/alerts';
+  import LicenseExpressionBuilder from './LicenseExpressionBuilder.vue';
 
   interface Props {
     componentId: string;
@@ -181,7 +180,8 @@
       contacts: []
     } as SupplierInfo,
     authors: [],
-    licenses: [],
+    license_expression: null,
+    license: [] as (string | CustomLicense)[],
     lifecycle_phase: null
   });
 
@@ -194,7 +194,6 @@
   const validationErrors = ref({
     supplier: {} as Record<string, string>,
     authors: {} as Record<string, string>,
-    licenses: {} as Record<string, string>,
     lifecycle_phase: null as string | null
   });
 
@@ -206,10 +205,9 @@
     // Only check for actual validation errors
     const hasSupplierErrors = Object.keys(validationErrors.value.supplier).length > 0;
     const hasAuthorErrors = Object.keys(validationErrors.value.authors).length > 0;
-    const hasLicenseErrors = Object.keys(validationErrors.value.licenses).length > 0;
     const hasLifecycleErrors = validationErrors.value.lifecycle_phase !== null;
 
-    return !hasSupplierErrors && !hasAuthorErrors && !hasLicenseErrors && !hasLifecycleErrors;
+    return !hasSupplierErrors && !hasAuthorErrors && !hasLifecycleErrors;
   });
 
   const validateSupplier = (supplier: SupplierInfo) => {
@@ -234,19 +232,6 @@
     });
 
     validationErrors.value.authors = errors;
-    hasUnsavedChanges.value = true;
-  };
-
-  const validateLicenses = (licenses: (string | CustomLicense)[]): void => {
-    const errors: Record<string, string> = {};
-
-    licenses.forEach((license, index) => {
-      if (typeof license === 'object' && license.name === '') {
-        errors[`license${index}`] = 'License name is required when adding a custom license';
-      }
-    });
-
-    validationErrors.value.licenses = errors;
     hasUnsavedChanges.value = true;
   };
 
@@ -290,7 +275,6 @@
       // Validate initial data
       validateSupplier(metadata.value.supplier);
       validateAuthors(metadata.value.authors);
-      validateLicenses(metadata.value.licenses);
 
       // Add beforeunload listener
       window.addEventListener('beforeunload', handleBeforeUnload);
@@ -325,9 +309,6 @@
     }
     if (metadata.value.authors.length > 0) {
       validateAuthors(metadata.value.authors);
-    }
-    if (metadata.value.licenses.length > 0) {
-      validateLicenses(metadata.value.licenses);
     }
 
     if (!isFormValid.value) {
@@ -380,6 +361,12 @@
   const toggleExpand = () => {
     isExpanded.value = !isExpanded.value;
   };
+
+  const licenseValidationError = ref<string | null>(null);
+
+  function onLicenseValidation(error: string | null) {
+    licenseValidationError.value = error;
+  }
 </script>
 
 <style scoped>
@@ -484,6 +471,27 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.section-content {
+  margin-bottom: 1.5rem;
+}
+
+.section-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+.license-expression {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.license-expression input {
+  flex: 1;
+  margin-right: 0.5rem;
 }
 </style>
 

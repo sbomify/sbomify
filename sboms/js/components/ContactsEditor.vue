@@ -165,6 +165,9 @@ const removeContact = (contactIndex: number) => {
   newContacts.splice(contactIndex, 1);
   emits('update:modelValue', newContacts);
 };
+
+// TODO: The 'license' field is temporary and will be removed in the future.
+// It will be generated ad-hoc from the view for backward compatibility.
 </script>
 
 <style scoped>

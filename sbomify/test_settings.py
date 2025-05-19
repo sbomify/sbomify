@@ -39,6 +39,12 @@ from .settings import BASE_DIR  # Import BASE_DIR explicitly
 if "allauth" not in INSTALLED_APPS:
     INSTALLED_APPS.extend(["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"])
 
+# Ignore temporary models during testing
+SILENCED_SYSTEM_CHECKS = [
+    'fields.E300',  # Field defines a relation with model that is not installed
+    'fields.E307',  # Field was declared with a lazy reference to a model that doesn't exist
+]
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",

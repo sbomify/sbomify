@@ -81,16 +81,7 @@
               <svg v-if="statsExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </h4>
             <div v-if="statsExpanded" class="mt-3">
-              <h6 class="text-muted mb-3">License Distribution</h6>
-              <div class="chart-wrapper" :style="{ height: dynamicChartHeight, maxHeight: dynamicChartHeight, position: 'relative' }">
-                <Bar
-                  v-if="chartData.labels.length > 0"
-                  :data="chartData"
-                  :options="chartOptions"
-                />
-              </div>
-              <p v-if="chartData.labels.length === 0 && Object.keys(stats.license_count || {}).length > 0" class="text-center text-muted">No license data to display after filtering.</p>
-              <p v-else-if="Object.keys(stats.license_count || {}).length === 0" class="text-center text-muted">No license data available</p>
+              <p class="text-center text-muted">No statistics available</p>
             </div>
           </div>
         </div>
@@ -105,29 +96,9 @@
   import $axios from '../../../core/js/utils';
   import { isAxiosError } from 'axios';
   import { ref, onMounted, computed } from 'vue';
-  import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
-    type TooltipItem
-  } from 'chart.js';
-  import { Bar } from 'vue-chartjs';
   import { showError } from '../../../core/js/alerts';
 
   import type { DashboardStats } from '../type_defs.d.ts';
-
-  ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend
-  );
 
   const props = defineProps<{
     size?: 'small' | 'large';
@@ -148,7 +119,8 @@
     total_products: 0,
     total_projects: 0,
     component_uploads: [],
-    license_count: {}
+    license_count: {},
+    license_expression_count: {}
   });
 
   const statsExpanded = ref(true);
@@ -161,119 +133,6 @@
     const classes = [];
     classes.push(props.itemType === undefined ? 'col-md-6' : 'col-md-12');
     return classes;
-  });
-
-  const chartData = computed(() => {
-    if (!stats.value.license_count) return { labels: [], datasets: [] };
-
-    // Sort licenses by count and get top 15
-    const sortedLicenses = Object.entries(stats.value.license_count)
-      .sort(([, a], [, b]) => (b as number) - (a as number));
-
-    const TOP_N = 15;
-    let labels: string[] = [];
-    let data: number[] = [];
-
-    if (sortedLicenses.length > TOP_N) {
-      // Take top N licenses
-      labels = sortedLicenses.slice(0, TOP_N).map(([name]) => name);
-      data = sortedLicenses.slice(0, TOP_N).map(([, count]) => count as number);
-
-      // Add "Others" category with sum of remaining
-      const othersSum = sortedLicenses.slice(TOP_N)
-        .reduce((sum, [, count]) => sum + (count as number), 0);
-      if (othersSum > 0) {
-        labels.push('Others');
-        data.push(othersSum);
-      }
-    } else {
-      labels = sortedLicenses.map(([name]) => name);
-      data = sortedLicenses.map(([, count]) => count as number);
-    }
-
-    return {
-      labels,
-      datasets: [{
-        backgroundColor: '#36A2EB',
-        data,
-        barThickness: 16,
-        maxBarThickness: 20
-      }]
-    };
-  });
-
-  const chartOptions = computed(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    indexAxis: 'y' as 'x' | 'y' | undefined,
-    layout: {
-      padding: {
-        left: 10,
-        right: 20,
-        top: 5,
-        bottom: 5
-      }
-    },
-    plugins: {
-      legend: {
-        display: false
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context: TooltipItem<'bar'>) {
-            const data = context.dataset.data as number[];
-            const total = data.reduce((a, b) => a + b, 0);
-            const value = context.raw as number;
-            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-            return `${value} (${percentage}%)`;
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Number of Components'
-        },
-        grid: {
-          display: true,
-        }
-      },
-      y: {
-        ticks: {
-          autoSkip: false,
-          font: {
-            size: 11
-          }
-        },
-        grid: {
-          display: false,
-        }
-      }
-    }
-  }));
-
-  const dynamicChartHeight = computed(() => {
-    const numLabels = chartData.value.labels ? chartData.value.labels.length : 0;
-
-    if (numLabels === 0) {
-      return '150px';
-    }
-
-    const barThickness = 20;
-    const paddingBetweenBars = 10;
-    const xAxisHeightEstimate = 60;
-
-    let calculatedHeight = (numLabels * barThickness) + (Math.max(0, numLabels - 1) * paddingBetweenBars) + xAxisHeightEstimate;
-
-    const minHeight = 120;
-    const maxHeight = 400;
-
-    calculatedHeight = Math.min(maxHeight, Math.max(minHeight, calculatedHeight));
-
-    return `${calculatedHeight}px`;
   });
 
   const getStats = async () => {

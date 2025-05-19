@@ -39,6 +39,9 @@ const supplierData = ref<SupplierInfo>({
   ...props.modelValue,
 });
 
+// TODO: The 'license' field is temporary and will be removed in the future.
+// It will be generated ad-hoc from the view for backward compatibility.
+
 watch(() => props.modelValue, (newVal) => {
   console.log('watch -> newVal', newVal);
   supplierData.value = {

@@ -1,3 +1,5 @@
+from typing import List
+
 from django.apps import apps
 from django.db import models
 
@@ -89,6 +91,121 @@ class ProjectComponent(models.Model):
         return f"{self.project_id} - {self.component_id}"
 
 
+class LicenseComponent(models.Model):
+    """Represents an individual license identifier."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_license_components"
+        ordering = ["identifier"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    identifier = models.CharField(max_length=100)  # SPDX identifier
+    name = models.CharField(max_length=255)  # Human readable name
+    type = models.CharField(max_length=20)  # spdx, custom
+
+    # Metadata
+    is_spdx = models.BooleanField(default=False)  # Whether this is a valid SPDX license
+    is_recognized = models.BooleanField(default=False)  # Whether this is a recognized license
+    is_deprecated = models.BooleanField(default=False)
+    is_osi_approved = models.BooleanField(default=False)
+    is_fsf_approved = models.BooleanField(default=False)
+    url = models.URLField(null=True)
+    text = models.TextField(null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.identifier} ({self.name})"
+
+
+class LicenseExpression(models.Model):
+    """Represents a license expression as a tree structure.
+
+    This model can represent any valid SPDX license expression, including:
+    - Simple licenses (MIT, Apache-2.0)
+    - Compound expressions (MIT AND Apache-2.0)
+    - Expressions with exceptions (GPL-2.0 WITH Classpath-exception-2.0)
+    - Nested expressions ((MIT OR Apache-2.0) AND BSD-3-Clause)
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_license_expressions"
+        ordering = ["-created_at"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+
+    # Tree structure
+    parent = models.ForeignKey("self", null=True, blank=True, related_name="children", on_delete=models.CASCADE)
+    operator = models.CharField(max_length=10, null=True, blank=True)  # AND, OR, WITH, or None for leaves
+    component = models.ForeignKey(LicenseComponent, null=True, blank=True, on_delete=models.SET_NULL)
+
+    # Expression data
+    expression = models.TextField()  # Raw expression for this node/subtree
+    normalized_expression = models.TextField()
+
+    # Metadata
+    source = models.CharField(max_length=50)  # spdx, cyclonedx, etc.
+    validation_status = models.CharField(max_length=20)  # valid, invalid, unknown
+    validation_errors = models.JSONField(default=list)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    order = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return self.normalized_expression or self.expression
+
+    def is_leaf(self) -> bool:
+        """Check if this is a leaf node (no children)."""
+        return not self.children.exists()
+
+    def is_exception(self) -> bool:
+        """Check if this is an exception node."""
+        return self.operator == "WITH" and self.component is not None
+
+    def get_all_components(self) -> List[LicenseComponent]:
+        """Get all license components used in this expression tree."""
+        components = []
+        if self.component:
+            components.append(self.component)
+        for child in self.children.all():
+            components.extend(child.get_all_components())
+        return components
+
+    def get_all_operators(self) -> List[str]:
+        """Get all operators used in this expression tree."""
+        operators = []
+        if self.operator:
+            operators.append(self.operator)
+        for child in self.children.all():
+            operators.extend(child.get_all_operators())
+        return operators
+
+    def to_string(self) -> str:
+        """Convert the tree back to a license expression string."""
+        if self.is_leaf():
+            return self.component.identifier if self.component else ""
+
+        if self.is_exception():
+            if not self.children.exists():
+                return ""
+            return f"{self.children.order_by('order').first().to_string()} WITH {self.component.identifier}"
+
+        # For AND/OR, recursively combine children in order
+        if not self.children.exists():
+            return ""
+
+        child_exprs = [child.to_string() for child in self.children.order_by("order")]
+        if len(child_exprs) == 1:
+            return child_exprs[0]
+
+        # Add parentheses if needed (for nested expressions)
+        child_exprs = [f"({expr})" if " " in expr else expr for expr in child_exprs]
+        return f" {self.operator} ".join(child_exprs)
+
+
 class SBOM(models.Model):
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_sboms"
@@ -99,7 +216,7 @@ class SBOM(models.Model):
     version = models.CharField(max_length=255, default="")
     format = models.CharField(max_length=255, default="spdx")  # spdx, cyclonedx, etc
     format_version = models.CharField(max_length=20, default="")
-    licenses = models.JSONField(default=list)
+    licenses = models.JSONField(default=list)  # DEPRECATED: Do not use. Scheduled for deletion.
     packages_licenses = models.JSONField(default=dict)
     sbom_filename = models.CharField(max_length=255, default="")
     created_at = models.DateTimeField(auto_now_add=True)

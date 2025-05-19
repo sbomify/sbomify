@@ -21,36 +21,33 @@
             <div class="col-12 col-lg-6">
               <div class="section-content">
                 <div class="section-label">Supplier</div>
-                <span v-if="isEmpty(metadata.supplier)" class="not-set">Not set yet</span>
-                <template v-else>
-                  <table v-if="hasSupplierInfo">
-                    <tbody>
-                      <tr v-if="metadata.supplier.name">
-                        <td>Name</td>
-                        <td>{{ metadata.supplier.name }}</td>
-                      </tr>
-                      <tr v-if="metadata.supplier.url">
-                        <td>URL</td>
-                        <td>{{ metadata.supplier.url }}</td>
-                      </tr>
-                      <tr v-if="metadata.supplier.address">
-                        <td>Address</td>
-                        <td>{{ metadata.supplier.address }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <span v-else class="not-set">No supplier information provided</span>
-
-                  <template v-if="!isEmpty(metadata.supplier.contacts)">
-                    <div class="sub-section-label mt-4">Contacts</div>
-                    <div class="contacts">
-                      <span v-for="(contact, index) in metadata.supplier.contacts" class="contact-item">
-                        {{ contact.name }} ({{ contact.email }})
-                        <i v-if="showEditButton" class="fa-regular fa-circle-xmark" @click="removeSupplierContact(index)"></i>
-                      </span>
+                <dl>
+                  <dt>Name</dt>
+                  <dd>
+                    <div v-if="metadata.supplier && metadata.supplier.name">{{ metadata.supplier.name }}</div>
+                    <div v-else>Not set</div>
+                  </dd>
+                  <dt>URL</dt>
+                  <dd>
+                    <div v-if="metadata.supplier && metadata.supplier.url">
+                      <a :href="metadata.supplier.url" target="_blank">{{ metadata.supplier.url }}</a>
                     </div>
-                  </template>
-                </template>
+                    <div v-else>Not set</div>
+                  </dd>
+                  <dt>Address</dt>
+                  <dd>
+                    <div v-if="metadata.supplier && metadata.supplier.address">{{ metadata.supplier.address }}</div>
+                    <div v-else>Not set</div>
+                  </dd>
+                </dl>
+                <div v-if="metadata.supplier && metadata.supplier.contacts && metadata.supplier.contacts.length">
+                  <div class="sub-section-label mt-4">Contacts</div>
+                  <ul>
+                    <li v-for="(contact, idx) in metadata.supplier.contacts" :key="idx">
+                      {{ contact.name }}<span v-if="contact.email"> ({{ contact.email }})</span><span v-if="contact.phone">, {{ contact.phone }}</span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
             <div class="col-12 col-lg-6">
@@ -68,14 +65,22 @@
             </div>
             <div class="col-12 col-lg-6">
               <div class="section-content">
-                <div class="section-label">Licenses</div>
-                <span v-if="isEmpty(metadata.licenses)" class="not-set">Not set yet</span>
+                <div class="section-label">License</div>
+                <span v-if="!metadata.license_expression && isEmpty(metadata.license)" class="not-set">Not set yet</span>
                 <span v-else>
-                  <div class="contacts">
-                    <span v-for="license in metadata.licenses" class="contact-item">
-                      <span v-if="typeof license === 'string'">{{ license }}</span>
-                      <span v-else-if="license && license.name">{{ license.name }} (custom)</span>
-                    </span>
+                  <div class="license-info">
+                    <div v-if="metadata.license_expression" class="license-expression">
+                      <strong>Expression:</strong> {{ metadata.license_expression }}
+                    </div>
+                    <div v-if="!isEmpty(metadata.license)" class="license-list">
+                      <strong>Legacy:</strong>
+                      <div class="contacts">
+                        <span v-for="license in metadata.license" class="contact-item">
+                          <span v-if="typeof license === 'string'">{{ license }}</span>
+                          <span v-else-if="license && license.name">{{ license.name }} (custom)</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </span>
               </div>
@@ -105,7 +110,7 @@
   import $axios from '../../../core/js/utils';
   import { isEmpty } from '../../../core/js/utils';
   import { isAxiosError } from 'axios';
-  import { ref, computed, onMounted } from 'vue';
+  import { ref, onMounted } from 'vue';
   import type { SupplierInfo, ComponentMetaInfo, AlertMessage, CustomLicense } from '../type_defs.d.ts';
 
   interface Props {
@@ -114,7 +119,7 @@
   }
 
   const props = defineProps<Props>();
-  const isExpanded = ref(false);
+  const isExpanded = ref(true);
   const metadata = ref<ComponentMetaInfo>({
     supplier: {
       name: null,
@@ -123,7 +128,8 @@
       contacts: []
     } as SupplierInfo,
     authors: [],
-    licenses: [] as (string | CustomLicense)[],
+    license_expression: null,
+    license: [] as (string | CustomLicense)[],
     lifecycle_phase: null
   });
 
@@ -179,12 +185,6 @@
     getComponentMetadata();
   });
 
-  const removeSupplierContact = async (index: number) => {
-    if (!metadata.value.supplier?.contacts) return;
-    metadata.value.supplier.contacts.splice(index, 1);
-    // TODO: Save changes
-  };
-
   const removeAuthor = async (index: number) => {
     if (!metadata.value.authors) return;
     metadata.value.authors.splice(index, 1);
@@ -206,10 +206,6 @@
         return 'badge-warning';
     }
   };
-
-  const hasSupplierInfo = computed(() => {
-    return metadata.value.supplier?.name || metadata.value.supplier?.url || metadata.value.supplier?.address;
-  });
 
   const toggleExpand = () => {
     isExpanded.value = !isExpanded.value;
@@ -261,18 +257,23 @@
   font-style: italic;
 }
 
-table {
-  width: 100%;
-  margin-bottom: 1rem;
+dl {
+  margin: 0;
 }
 
-td {
-  padding: 0.5rem 0;
+dt {
+  font-weight: 600;
+  margin-top: 1rem;
 }
 
-td:first-child {
-  width: 100px;
-  color: #6c757d;
+dd {
+  margin-left: 0;
+  margin-bottom: 0.5rem;
+}
+
+ul {
+  margin: 0.25rem 0 0.5rem 1.5rem;
+  padding: 0;
 }
 
 .contacts {
