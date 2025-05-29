@@ -132,8 +132,12 @@ class Command(BaseCommand):
 
         # Group SBOM files by source
         sbom_groups = {
-            "hello-world": ["hello-world-sbom_spdx.json", "hello-world-sbom_cyclonedx.json"],
-            "sbomify": ["sbomify_spdx.json", "sbomify_cyclonedx.json"],
+            "hello-world-syft": ["hello-world_syft.spdx.json", "hello-world_syft.cdx.json"],
+            "sbomify-syft": ["sbomify_syft.spdx.json", "sbomify_syft.cdx.json"],
+            "sbomify-syft-parlay": ["sbomify_syft_parlay.spdx.json", "sbomify_syft_parlay.cdx.json"],
+            "sbomify-trivy": ["sbomify_trivy.spdx.json", "sbomify_trivy.cdx.json"],
+            "sbomify-trivy-parlay": ["sbomify_trivy_parlay.spdx.json", "sbomify_trivy_parlay.cdx.json"],
+            "protobom": ["protobom-v0.5.2.spdx.json"],
         }
 
         for source_name, sbom_files in sbom_groups.items():

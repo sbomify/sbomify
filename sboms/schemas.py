@@ -138,16 +138,21 @@ class ComponentMetaData(BaseModel):
             for component_license in self.licenses:
                 if isinstance(component_license, CustomLicenseSchema):
                     licenses_list.append(component_license.to_cyclonedx(spec_version))
-                elif isinstance(component_license, LicenseSchema):
-                    cdx_lic = CycloneDx.License()
-                    if component_license.id:
-                        cdx_lic.id = component_license.id
-                    elif component_license.name:
-                        cdx_lic.name = component_license.name
+                elif isinstance(component_license, (str, LicenseSchema)):
+                    if isinstance(component_license, Enum):
+                        license_identifier = component_license.value
+                    else:
+                        license_identifier = str(component_license)
+                    try:
+                        # Primarily expect SPDX IDs from LicenseSchema
+                        cdx_lic = CycloneDx.License(id=license_identifier)
+                    except Exception:  # Broad catch, consider pydantic.ValidationError if possible
+                        # Fallback for non-SPDX IDs or other cases
+                        cdx_lic = CycloneDx.License(name=license_identifier)
                     licenses_list.append(cdx_lic)
 
             if licenses_list:
-                result.licenses = CycloneDx.LicenseChoice(license=licenses_list)
+                result.licenses = CycloneDx.LicenseChoice(licenses_list)
 
         if self.lifecycle_phase:
             result.lifecycles = [CycloneDx.Lifecycles(phase=self.lifecycle_phase)]
