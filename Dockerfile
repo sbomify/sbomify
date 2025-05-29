@@ -91,7 +91,14 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
         poetry install --no-interaction; \
     fi
 
-### Stage 5: Python Application for Development (python-app-dev)
+### Stage 5: Go Builder for OSV-Scanner
+FROM golang:1.24-alpine AS go-builder
+
+WORKDIR /src
+# Install osv-scanner
+RUN go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+
+### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev
 
 WORKDIR /code
@@ -101,11 +108,14 @@ EXPOSE 8000
 # CMD for Development (using Django's runserver)
 CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
 
-### Stage 6: Python Application for Production (python-app-prod)
+### Stage 7: Python Application for Production (python-app-prod)
 # This is the default final stage if no target is specified.
 FROM python-dependencies AS python-app-prod
 
 WORKDIR /code
+
+# Copy the osv-scanner binary from the go-builder stage
+COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Production-specific steps
 COPY --from=js-build-prod /js-build/staticfiles/* /code/staticfiles/
