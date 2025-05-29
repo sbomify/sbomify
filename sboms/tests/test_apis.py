@@ -152,7 +152,7 @@ def test_sbom_upload_api_spdx(
     patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
-    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_spdx.json"
+    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
     sbom_data = open(test_file_path, "r").read()
 
     client = Client()
@@ -172,7 +172,7 @@ def test_sbom_upload_api_spdx(
     # Verify sbom was uploaded against the default team for the user
     sbom = SBOM.objects.get(id=response.json()["id"])
     assert sbom.component.id == sample_component.id
-    assert sbom.sbom_filename == "a6325d19b1c584cd02b5e6002d381e8ffe2dcbadce06a3a9700c79df6716f8ed.json"
+    assert sbom.sbom_filename == "7a09e41d16c74019cecf78bc61682eafe1147d0d086fae04d562a7eb3b40d623.json"
     assert patched_upload_data_as_file.call_count == 1
 
     assert SBOM.objects.count() == 1
@@ -189,7 +189,7 @@ def test_sbom_upload_api_cyclonedx(
 
     SBOM.objects.all().delete()
 
-    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_cyclonedx.json"
+    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.cdx.json"
     sbom_data = open(test_file_path, "r").read()
 
     client = Client()
@@ -209,7 +209,7 @@ def test_sbom_upload_api_cyclonedx(
     # Verify sbom was uploaded against the default team for the user
     sbom = SBOM.objects.get(id=response.json()["id"])
     assert sbom.component.id == sample_component.id
-    assert sbom.sbom_filename == "be643628f555d0d3c06de9502f08779e07baf61c7b02dda40b6c58a3bcee7d07.json"
+    assert sbom.sbom_filename == "895d8ac5dfda0ce06fca501e1e5a72708bb1af62c3d080f23193588d6e63556e.json"
     assert sbom.format == "cyclonedx"
     assert sbom.format_version == "1.6"
     assert sbom.version == ""
@@ -428,7 +428,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     assert response_json["authors"][0]["name"] == component_metadata["authors"][0]["name"]
 
     # Verify license field is overridden
-    assert response_json["licenses"][0]["license"]["id"] == component_metadata["licenses"][0]
+    assert response_json["licenses"][0]["id"] == component_metadata["licenses"][0]
 
     # Verify version is overridden
     assert response_json["component"]["version"] == "1.1.1"
@@ -557,16 +557,15 @@ def test_get_dashboard_summary_authenticated_with_data(
         name="Test SBOM 2",
         version="2.0",
         component=sample_component,
-        format="cyclonedx", # ensure other fields are present
+        format="cyclonedx",  # ensure other fields are present
         sbom_filename="test2.json",
-        source="test"
+        source="test",
     )
     # Create another product, project, component under the same team
     # (assuming fixtures create them under some default or no team initially)
     Product.objects.create(name="Product 2", team=sample_team_with_owner_member.team)
     Project.objects.create(name="Project 2", team=sample_team_with_owner_member.team)
     Component.objects.create(name="Component 2", team=sample_team_with_owner_member.team)
-
 
     url = reverse("api-1:get_dashboard_summary")
     response = client.get(
@@ -581,8 +580,8 @@ def test_get_dashboard_summary_authenticated_with_data(
     assert data["total_projects"] == Project.objects.filter(team=sample_team_with_owner_member.team).count()
     assert data["total_components"] == Component.objects.filter(team=sample_team_with_owner_member.team).count()
 
-    assert len(data["latest_uploads"]) <= 5 # API returns max 5
-    assert len(data["latest_uploads"]) > 0 # We created 2
+    assert len(data["latest_uploads"]) <= 5  # API returns max 5
+    assert len(data["latest_uploads"]) > 0  # We created 2
 
     # Check the content of the first upload (should be the latest one, Test SBOM 2)
     latest_upload = data["latest_uploads"][0]
