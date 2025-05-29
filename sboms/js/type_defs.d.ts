@@ -39,25 +39,16 @@ export interface UserItemsResponse {
   item_name: string;
 }
 
-export interface ComponentUpload {
-  id: string;
-  name: string;
-  timestamp: string;
-  component_id: string;
+export interface DashboardSBOMUploadInfo {
   component_name: string;
-  sbom_id: string;
   sbom_name: string;
-  sbom_version: string;
-  sbom_created_at: string;
+  sbom_version?: string | null;
+  created_at: string;
 }
 
 export interface DashboardStats {
-  total_components: number;
-  total_public_components: number;
-  total_private_components: number;
-  total_users: number;
   total_products: number;
   total_projects: number;
-  component_uploads: ComponentUpload[];
-  license_count: Record<string, number>;
+  total_components: number;
+  latest_uploads: DashboardSBOMUploadInfo[];
 }

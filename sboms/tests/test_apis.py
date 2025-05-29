@@ -213,16 +213,6 @@ def test_sbom_upload_api_cyclonedx(
     assert sbom.format == "cyclonedx"
     assert sbom.format_version == "1.6"
     assert sbom.version == ""
-    # assert isinstance(sbom.licenses, list)
-    # assert sbom.licenses.count() == 1
-    assert sbom.licenses == [
-        {"id": "BSD-3-Clause"},
-        {"name": "custom test", "url": "https://custom.license/"},
-    ]
-
-    assert len(sbom.packages_licenses.keys()) == 92
-    assert len([v[0] for v in sbom.packages_licenses.values() if v]) == 91
-
     assert patched_upload_data_as_file.call_count == 1
 
     assert SBOM.objects.count() == 1
@@ -513,126 +503,97 @@ def test_metadata_enrichment_on_no_component_in_metadata(
 
 
 @pytest.mark.django_db
-def test_get_stats(
+def test_get_dashboard_summary_unauthenticated(client: Client):
+    """Test that an unauthenticated user receives a 403."""
+    url = reverse("api-1:get_dashboard_summary")
+    response = client.get(url, content_type="application/json")
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Authentication required."
+
+
+@pytest.mark.django_db
+def test_get_dashboard_summary_authenticated_no_data(
+    sample_user: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    client: Client,
+):
+    """Test that an authenticated user with no associated data gets an empty summary."""
+    url = reverse("api-1:get_dashboard_summary")
+    response = client.get(
+        url,
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_products"] == 0
+    assert data["total_projects"] == 0
+    assert data["total_components"] == 0
+    assert data["latest_uploads"] == []
+
+
+@pytest.mark.django_db
+def test_get_dashboard_summary_authenticated_with_data(
     sample_user: Member,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
     sample_product: Product,  # noqa: F811
     sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    client: Client,
     sample_team_with_owner_member,  # noqa: F811
-    mocker: MockerFixture,  # noqa: F811
 ):
-    client = Client()
+    """Test that an authenticated user with data gets the correct summary."""
+    # Ensure sample_sbom is associated with sample_component, which is part of the user's team
+    sample_component.team = sample_team_with_owner_member.team
+    sample_component.save()
+    sample_sbom.component = sample_component
+    sample_sbom.name = "Test SBOM 1"
+    sample_sbom.version = "1.0"
+    sample_sbom.save()
 
-    # upload sbom using the test_sbom_upload_api_cyclonedx test case function
-    test_sbom_upload_api_cyclonedx(sample_access_token, sample_component, mocker)
-
-    # Test invalid team key
-    url = reverse("api-1:get_stats") + "?team_key=invalid-team"
-    response = client.get(
-        url,
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    # Create a second SBOM for the same component to test ordering and limit
+    SBOM.objects.create(
+        name="Test SBOM 2",
+        version="2.0",
+        component=sample_component,
+        format="cyclonedx", # ensure other fields are present
+        sbom_filename="test2.json",
+        source="test"
     )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Team not found"
+    # Create another product, project, component under the same team
+    # (assuming fixtures create them under some default or no team initially)
+    Product.objects.create(name="Product 2", team=sample_team_with_owner_member.team)
+    Project.objects.create(name="Project 2", team=sample_team_with_owner_member.team)
+    Component.objects.create(name="Component 2", team=sample_team_with_owner_member.team)
 
-    # Test valid team key without item type
-    url = reverse("api-1:get_stats") + f"?team_key={sample_team_with_owner_member.team.key}"
-    response = client.get(
-        url,
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
-    assert response.status_code == 200
-    stats = response.json()
 
-    assert "total_products" in stats
-    assert "total_projects" in stats
-    assert "total_components" in stats
-    assert "license_count" in stats
-    assert "component_uploads" in stats
-
-    assert stats["total_products"] == 1
-    assert stats["total_projects"] == 1
-    assert stats["total_components"] == 1
-    assert stats["license_count"]["BSD-3-Clause"] == 20
-    assert stats["license_count"]["MIT"] == 47
-    assert stats["license_count"]["BSD-2-Clause"] == 2
-    assert stats["license_count"]["Apache-2.0"] == 9
-    assert stats["license_count"]["MPL-2.0"] == 1
-    assert stats["license_count"]["PSFL"] == 1
-    assert stats["license_count"]["PSF-2.0"] == 1
-    assert stats["license_count"]["Apachev2 or later or GPLv2"] == 1
-    assert stats["license_count"]["Unlicense"] == 1
-    assert stats["license_count"]["UNKNOWN"] == 4
-    assert stats["license_count"]["ISC"] == 3
-    assert stats["license_count"]["LGPL with exceptions"] == 1
-
-    assert len(stats["component_uploads"]) == 1
-    assert stats["component_uploads"][0]["component_name"] == "test component"
-    assert stats["component_uploads"][0]["sbom_name"] == "sbomify-backend"
-    assert stats["component_uploads"][0]["sbom_version"] == ""
-
-    # Test with specific item type
-    url = reverse("api-1:get_stats")
-    response = client.get(
-        url + "?item_type=component",
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
-    assert response.status_code == 400
-    assert response.json()["detail"] == "item_id is required when item_type is provided"
-
-    # Test with specific item type and ID
-    url = reverse("api-1:get_stats")
-    response = client.get(
-        url + f"?item_type=component&item_id={sample_component.id}",
-        content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
-    assert response.status_code == 200
-    stats = response.json()
-    assert "total_products" in stats
-    assert "total_projects" in stats
-    assert "total_components" in stats
-    assert "license_count" in stats
-    assert "component_uploads" in stats
-
-    # Test with neither team nor item_id
-    url = reverse("api-1:get_stats")
+    url = reverse("api-1:get_dashboard_summary")
     response = client.get(
         url,
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
-    stats = response.json()
-    assert stats["total_products"] is None
-    assert stats["total_projects"] is None
-    assert stats["total_components"] is None
-    assert stats["license_count"] == {}
-    assert stats["component_uploads"] == []
+    data = response.json()
 
+    assert data["total_products"] == Product.objects.filter(team=sample_team_with_owner_member.team).count()
+    assert data["total_projects"] == Project.objects.filter(team=sample_team_with_owner_member.team).count()
+    assert data["total_components"] == Component.objects.filter(team=sample_team_with_owner_member.team).count()
 
-@pytest.mark.django_db
-def test_get_stats_public(
-    sample_user: Member,  # noqa: F811
-    sample_access_token: AccessToken,  # noqa: F811
-    sample_product: Product,  # noqa: F811
-):
-    client = Client()
+    assert len(data["latest_uploads"]) <= 5 # API returns max 5
+    assert len(data["latest_uploads"]) > 0 # We created 2
 
-    # Test product stats public access when product is private
-    url = reverse("api-1:get_stats") + f"?item_type=product&item_id={sample_product.id}"
+    # Check the content of the first upload (should be the latest one, Test SBOM 2)
+    latest_upload = data["latest_uploads"][0]
+    assert latest_upload["component_name"] == sample_component.name
+    assert latest_upload["sbom_name"] == "Test SBOM 2"
+    assert latest_upload["sbom_version"] == "2.0"
+    assert "created_at" in latest_upload
 
-    response = client.get(url)
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Authentication required"
-
-    # Make the product public and test again
-    sample_product.is_public = True
-    sample_product.save()
-
-    response = client.get(url)
-    assert response.status_code == 200
+    # Check the content of the second upload (Test SBOM 1)
+    if len(data["latest_uploads"]) > 1:
+        second_latest_upload = data["latest_uploads"][1]
+        assert second_latest_upload["component_name"] == sample_component.name
+        assert second_latest_upload["sbom_name"] == "Test SBOM 1"
+        assert second_latest_upload["sbom_version"] == "1.0"

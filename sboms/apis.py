@@ -1,5 +1,3 @@
-from typing import Literal
-
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
@@ -14,19 +12,18 @@ from core.utils import ExtractSpec, dict_update, obj_extract
 from teams.models import Team
 from teams.utils import get_user_teams
 
-from .custom_queries import get_stats_for_team
 from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
     CopyComponentMetadataRequest,
     CycloneDXSupportedVersion,
-    DBSBOMLicense,
+    DashboardSBOMUploadInfo,
+    DashboardStatsResponse,
     ItemTypes,
     PublicStatusSchema,
     SBOMUploadRequest,
     SPDXPackage,
     SPDXSchema,
-    StatsResponse,
     UserItemsResponse,
     cdx15,
     cdx16,
@@ -159,42 +156,6 @@ def sbom_upload_cyclonedx(
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
 
-        # License handling. If license has id, then it's SPDX license, otherwise it's a custom license.
-        if payload.metadata.component.licenses:
-            licenses = []
-
-            for l_item in payload.metadata.component.licenses.model_dump(exclude_none=True):
-                l_dict: dict = l_item["license"]
-                licenses.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
-
-            sbom_dict["licenses"] = licenses
-
-        # Packages licenses handling
-        packages_licenses: dict[str, list] = {}
-        if payload.components:
-            for package_component in payload.components:
-                if package_component.licenses:
-                    if package_component.name not in packages_licenses:
-                        packages_licenses[package_component.name] = []
-
-                    licenses_for_pkg = []
-
-                    for l_item in package_component.licenses.model_dump(exclude_none=True):
-                        if "license" not in l_item:
-                            continue
-
-                        l_dict: dict = l_item["license"]
-
-                        # Handle invalid long license names
-                        if "name" in l_dict:
-                            l_dict["name"] = l_dict["name"].split("\n")[0]
-
-                        licenses_for_pkg.append(DBSBOMLicense(**l_dict).model_dump(exclude_none=True))
-
-                    packages_licenses[package_component.name].extend(licenses_for_pkg)
-
-        sbom_dict["packages_licenses"] = packages_licenses
-
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
@@ -269,7 +230,6 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
             return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
         sbom_dict["version"] = package.version
-        sbom_dict["licenses"] = [package.license]
 
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
@@ -435,64 +395,39 @@ def get_cyclonedx_component_metadata(
 
 
 @router.get(
-    "/stats",
-    response={
-        200: StatsResponse,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
+    "/dashboard/summary/",
+    response={200: DashboardStatsResponse, 403: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_stats(
-    request,
-    team_key: str | None = None,
-    item_type: Literal["product", "project", "component"] | None = None,
-    item_id: str | None = None,
-):
-    """
-    Retrieve statistics for a specific team based on the provided item type.
-    Args:
-        team_key (str): Unique identifier key for the team or None if item_type and item_id are provided.
-        item_type (Literal["ALL", "product", "project", "component"]): Type of items to get stats for
-        item_id (str): Optional ID of a specific item to get stats for. This is required if item_type is not 'ALL'
-    Returns:
-        tuple: A tuple containing:
-            - int: HTTP status code
-            - dict: Response data containing the statistics or error details
-    """
-    if item_type is None and item_id is None:
-        if not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
+def get_dashboard_summary(request: HttpRequest):
+    """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required."}
 
-    if item_type and not item_id:
-        return 400, {"detail": "item_id is required when item_type is provided"}
+    user_teams_qs = Team.objects.filter(member__user=request.user)
 
-    team = None
-    if team_key:
-        team = Team.objects.filter(key=team_key).first()
-        if team is None:
-            return 404, {"detail": "Team not found"}
+    total_products = Product.objects.filter(team__in=user_teams_qs).count()
+    total_projects = Project.objects.filter(team__in=user_teams_qs).count()
+    total_components = Component.objects.filter(team__in=user_teams_qs).count()
 
-    if item_type and item_id:
-        team = None  # No need for team if we have item_id
-        if item_type == "product":
-            item = Product.objects.filter(id=item_id).first()
-        elif item_type == "project":
-            item = Project.objects.filter(id=item_id).first()
-        elif item_type == "component":
-            item = Component.objects.filter(id=item_id).first()
-        else:
-            return 400, {"detail": "Invalid item_type"}
+    latest_sboms_qs = (
+        SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component").order_by("-created_at")[:5]
+    )  # Get latest 5
 
-        if not item:
-            return 404, {"detail": f"{item_type.title()} not found"}
+    latest_uploads_data = [
+        DashboardSBOMUploadInfo(
+            component_name=sbom.component.name,
+            sbom_name=sbom.name,
+            sbom_version=sbom.version,
+            created_at=sbom.created_at,
+        )
+        for sbom in latest_sboms_qs
+    ]
 
-        if not item.is_public and not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
-
-    # If item is public then we won't have team_id in the url query params.
-    response = get_stats_for_team(team, item_type, item_id)
-
-    return response
+    return 200, DashboardStatsResponse(
+        total_products=total_products,
+        total_projects=total_projects,
+        total_components=total_components,
+        latest_uploads=latest_uploads_data,
+    )

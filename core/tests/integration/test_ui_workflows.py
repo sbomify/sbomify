@@ -30,16 +30,17 @@ class TestUIWorkflows:
         # Check Vue component mounting point exists
         assert 'class="vc-dashboard-stats"' in content
 
-        # Test API endpoint for stats with team context
-        response = client.get(f"/api/v1/sboms/stats?team_key={team.key}")
+        # Test API endpoint for stats (new endpoint, no team_key needed in URL)
+        response = client.get(reverse("api-1:get_dashboard_summary"))
         assert response.status_code == 200
         data = response.json()
 
-        # Verify expected stats structure
+        # Verify expected stats structure from new endpoint
         assert "total_components" in data
         assert "total_projects" in data
         assert "total_products" in data
-        assert isinstance(data["license_count"], dict)
+        assert "latest_uploads" in data
+        assert isinstance(data["latest_uploads"], list)
 
     def test_progressive_enhancement(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that forms work without JavaScript and have API fallback"""
