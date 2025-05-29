@@ -93,7 +93,7 @@ class SBOM(models.Model):
     """
     Represents a Software Bill of Materials document.
 
-    License Data Handling Note (2024-07-29):
+    License Data Handling Note (2025-05-29):
     Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)
     to store parsed and categorized license information. This approach had limitations,
     especially with complex SPDX license expressions and custom licenses, leading to
