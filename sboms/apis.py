@@ -29,6 +29,7 @@ from .schemas import (
     cdx16,
 )
 from .utils import verify_item_access
+from sbomify.tasks import scan_sbom_for_vulnerabilities
 
 router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -159,6 +160,8 @@ def sbom_upload_cyclonedx(
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
+            # Trigger vulnerability scan for the new SBOM
+            scan_sbom_for_vulnerabilities.send(sbom.id)
 
         return 201, {"id": sbom.id}
 
@@ -234,6 +237,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
+            # Trigger vulnerability scan for the new SBOM
+            scan_sbom_for_vulnerabilities.send(sbom.id)
 
         return 201, {"id": sbom.id}
 
