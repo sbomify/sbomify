@@ -31,13 +31,13 @@ django.setup()
 from django.conf import settings  # noqa: E402
 from django.db import connection  # noqa: E402
 from django.db.utils import DatabaseError, OperationalError  # noqa: E402
-from django.utils import timezone # noqa: E402
+from django.utils import timezone  # noqa: E402
 
 from sboms.models import SBOM  # noqa: E402
-from core.object_store import S3Client # noqa: E402
-import subprocess # noqa: E402
-import tempfile # noqa: E402
-import json # noqa: E402
+from core.object_store import S3Client  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+import json  # noqa: E402
 
 # Configure Dramatiq
 if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):
@@ -136,8 +136,8 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
 @dramatiq.actor(queue_name="sbom_vulnerability_scanning", max_retries=3, time_limit=300000, store_results=True)
 @retry(
     retry=retry_if_exception_type((OperationalError, ConnectionError, subprocess.CalledProcessError)),
-    wait=wait_exponential(multiplier=1, min=1, max=10), # Start with 1s, max 10s
-    stop=stop_after_delay(60), # Stop after 60s total
+    wait=wait_exponential(multiplier=1, min=1, max=10),  # Start with 1s, max 10s
+    stop=stop_after_delay(60),  # Stop after 60s total
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
@@ -168,15 +168,21 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         sbom_data_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
         if not sbom_data_bytes:
-            logger.error(f"[TASK_scan_sbom_for_vulnerabilities] Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data).")
+            logger.error(
+                f"[TASK_scan_sbom_for_vulnerabilities] Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."
+            )
             return {"error": f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."}
 
-        logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Downloaded {len(sbom_data_bytes)} bytes for {sbom_instance.sbom_filename}.")
+        logger.info(
+            f"[TASK_scan_sbom_for_vulnerabilities] Downloaded {len(sbom_data_bytes)} bytes for {sbom_instance.sbom_filename}."
+        )
 
         # Attempt to parse as JSON to check basic integrity
         try:
-            json.loads(sbom_data_bytes.decode('utf-8')) # Try decoding as utf-8 common for json
-            logger.info(f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON.")
+            json.loads(sbom_data_bytes.decode("utf-8"))  # Try decoding as utf-8 common for json
+            logger.info(
+                f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON."
+            )
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(
                 f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} is not valid JSON or has encoding issues. Error: {e}. "
@@ -184,11 +190,11 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
             )
             return {
                 "error": f"SBOM {sbom_instance.sbom_filename} content is not valid JSON or has encoding issues.",
-                "details": str(e)
+                "details": str(e),
             }
 
         # Determine suffix based on SBOM format
-        file_suffix = ".json" # Default
+        file_suffix = ".json"  # Default
         if sbom_instance.format and "cyclonedx" in sbom_instance.format.lower():
             file_suffix = ".cyclonedx.json"
         elif sbom_instance.format and "spdx" in sbom_instance.format.lower():
@@ -199,10 +205,12 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         with tempfile.NamedTemporaryFile(delete=False, mode="wb", suffix=file_suffix) as temp_file:
             temp_sbom_file = temp_file.name
             temp_file.write(sbom_data_bytes)
-        logger.info(f"[TASK_scan_sbom_for_vulnerabilities] SBOM data written to temporary file: {temp_sbom_file} with format {sbom_instance.format}")
+        logger.info(
+            f"[TASK_scan_sbom_for_vulnerabilities] SBOM data written to temporary file: {temp_sbom_file} with format {sbom_instance.format}"
+        )
 
         # 3. Execute osv-scanner
-        osv_scanner_path = "/usr/local/bin/osv-scanner" # As defined in Dockerfile
+        osv_scanner_path = "/usr/local/bin/osv-scanner"  # As defined in Dockerfile
         scan_command = [osv_scanner_path, "--sbom", temp_sbom_file, "--format", "json"]
         logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Executing osv-scanner: {' '.join(scan_command)}")
 
@@ -210,8 +218,9 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         scan_output_json_str = process.stdout
         logger.info(f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner completed successfully for SBOM ID: {sbom_id}.")
         if process.stderr:
-            logger.warning(f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner stderr for SBOM ID {sbom_id}: {process.stderr}")
-
+            logger.warning(
+                f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner stderr for SBOM ID {sbom_id}: {process.stderr}"
+            )
 
         # 4. Store results in Redis
         # Ensure redis_broker is available and get a client
@@ -220,19 +229,24 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
             timestamp = timezone.now().isoformat()
             redis_key = f"osv_scan_result:{sbom_id}:{timestamp}"
             # Store the raw JSON string. Parsing can be done by the consumer.
-            redis_client.set(redis_key, scan_output_json_str, ex=settings.REDIS_RESULT_EXPIRY_SECONDS) # Use an expiry
-            logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Scan results for SBOM ID {sbom_id} stored in Redis with key: {redis_key}")
+            redis_client.set(redis_key, scan_output_json_str, ex=settings.REDIS_RESULT_EXPIRY_SECONDS)  # Use an expiry
+            logger.info(
+                f"[TASK_scan_sbom_for_vulnerabilities] Scan results for SBOM ID {sbom_id} stored in Redis with key: {redis_key}"
+            )
             result_message = f"Scan successful, results stored in Redis: {redis_key}"
         else:
-            logger.error("[TASK_scan_sbom_for_vulnerabilities] Redis client not available from Dramatiq broker. Cannot store results.")
+            logger.error(
+                "[TASK_scan_sbom_for_vulnerabilities] Redis client not available from Dramatiq broker. Cannot store results."
+            )
             result_message = "Scan successful, but Redis client not available to store results."
-
 
         return {
             "sbom_id": sbom_id,
             "status": "Scan completed.",
             "message": result_message,
-            "scan_output_preview": json.loads(scan_output_json_str)[:1] if scan_output_json_str else None # Preview of first result item
+            "scan_output_preview": json.loads(scan_output_json_str)[:1]
+            if scan_output_json_str
+            else None,  # Preview of first result item
         }
 
     except SBOM.DoesNotExist:
@@ -242,12 +256,17 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         logger.error(
             f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner failed for SBOM ID {sbom_id}. "
             f"Return code: {e.returncode}. Output: {e.output}. Stderr: {e.stderr}",
-            exc_info=True
+            exc_info=True,
         )
         # Include scanner output in the error if possible
-        error_detail = {"error": "osv-scanner execution failed.", "return_code": e.returncode, "stdout": e.stdout, "stderr": e.stderr}
-        if sbom_instance: # Add sbom_filename if available
-             error_detail["sbom_filename"] = sbom_instance.sbom_filename
+        error_detail = {
+            "error": "osv-scanner execution failed.",
+            "return_code": e.returncode,
+            "stdout": e.stdout,
+            "stderr": e.stderr,
+        }
+        if sbom_instance:  # Add sbom_filename if available
+            error_detail["sbom_filename"] = sbom_instance.sbom_filename
         # Do not re-raise here if tenacity should not retry subprocess errors,
         # or re-raise if retries are desired for transient scanner issues.
         # For now, returning error to prevent retry loops on persistent scan failures.
@@ -258,12 +277,12 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
             exc_info=True,
         )
         raise  # Re-raise to allow tenacity to handle retries
-    except ConnectionError as conn_err: # General connection error
+    except ConnectionError as conn_err:  # General connection error
         logger.error(
             f"[TASK_scan_sbom_for_vulnerabilities] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
             exc_info=True,
         )
-        raise # Re-raise to allow tenacity to handle retries
+        raise  # Re-raise to allow tenacity to handle retries
     except Exception as e:
         logger.error(
             f"[TASK_scan_sbom_for_vulnerabilities] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
@@ -278,7 +297,9 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
                 os.remove(temp_sbom_file)
                 logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Cleaned up temporary file: {temp_sbom_file}")
             except OSError as e:
-                logger.error(f"[TASK_scan_sbom_for_vulnerabilities] Error deleting temporary file {temp_sbom_file}: {e}")
+                logger.error(
+                    f"[TASK_scan_sbom_for_vulnerabilities] Error deleting temporary file {temp_sbom_file}: {e}"
+                )
 
 
 # Example task for testing
