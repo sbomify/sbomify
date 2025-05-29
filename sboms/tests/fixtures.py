@@ -129,7 +129,6 @@ def sample_sbom(
     sbom = SBOM(
         name=spdx_paylaod.name,
         version=package.version,
-        licenses=[package.license],
         format="spdx",
         sbom_filename="test-sbom.json",
         component=sample_component,

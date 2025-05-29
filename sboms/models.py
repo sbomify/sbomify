@@ -90,6 +90,24 @@ class ProjectComponent(models.Model):
 
 
 class SBOM(models.Model):
+    """
+    Represents a Software Bill of Materials document.
+
+    License Data Handling Note (2025-05-29):
+    Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)
+    to store parsed and categorized license information. This approach had limitations,
+    especially with complex SPDX license expressions and custom licenses, leading to
+    potential inaccuracies.
+
+    These fields have been removed as part of a transition towards a more robust system
+    for license data management. The future direction is to accurately store and process
+    standardized license expressions (e.g., SPDX license expressions like "MIT OR Apache-2.0")
+    as directly declared in the SBOM, rather than attempting to parse and pre-categorize them.
+    This change aims to improve accuracy and adherence to SBOM format specifications.
+    The related statistics and detailed license breakdowns on the frontend have also been
+    temporarily removed pending this new implementation.
+    """
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_sboms"
         ordering = ["-created_at"]
@@ -99,8 +117,6 @@ class SBOM(models.Model):
     version = models.CharField(max_length=255, default="")
     format = models.CharField(max_length=255, default="spdx")  # spdx, cyclonedx, etc
     format_version = models.CharField(max_length=20, default="")
-    licenses = models.JSONField(default=list)
-    packages_licenses = models.JSONField(default=dict)
     sbom_filename = models.CharField(max_length=255, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     # Where the sbom came from (file-upload, api, github-action, etc)
