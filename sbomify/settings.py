@@ -31,6 +31,9 @@ IN_DOCKER = bool(int(os.environ["AM_I_IN_DOCKER_CONTAINER"])) if "AM_I_IN_DOCKER
 
 API_VERSION = "v1"
 
+# This is used for the SBOM analysis results cache
+OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS = int(os.environ.get("OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS", 7 * 24 * 3600))
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 

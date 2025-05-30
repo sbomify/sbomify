@@ -10,4 +10,5 @@ def trigger_license_processing(sender, instance, created, **kwargs):
     if created:
         from sbomify.tasks import process_sbom_licenses
 
-        process_sbom_licenses.send(instance.id)
+        # Add a 30 second delay to ensure transaction is committed
+        process_sbom_licenses.send_with_options(args=[instance.id], delay=30000)
