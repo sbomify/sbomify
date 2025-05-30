@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 import typing
 from pathlib import Path
@@ -7,6 +8,9 @@ from pathlib import Path
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
 
+import json
+
+import redis
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -29,6 +33,8 @@ from teams.schemas import BrandingInfo
 from .forms import NewComponentForm, NewProductForm, NewProjectForm
 from .models import SBOM, Component, Product, Project
 from .utils import get_project_sbom_package, verify_item_access
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -408,14 +414,25 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
     if not component.is_public:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    sboms = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+    sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+    sboms_with_vuln_status = []
+    try:
+        redis_client = redis.from_url(settings.REDIS_WORKER_URL)
+        for sbom_item in sboms_queryset:
+            keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": bool(keys)})
+    except redis.exceptions.ConnectionError:
+        for sbom_item in sboms_queryset:
+            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": False})
+        # No messages.error for public view, just log or fail silently
+        # logger.warning("Could not connect to Redis in public component view.")
 
     branding_info = BrandingInfo(**component.team.branding_info)
 
     return render(
         request,
         "sboms/component_details_public.html",
-        {"component": component, "sboms": sboms, "brand": branding_info},
+        {"component": component, "sboms_data": sboms_with_vuln_status, "brand": branding_info},  # Changed from "sboms"
     )
 
 
@@ -433,7 +450,20 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
     has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
     is_owner = verify_item_access(request, component, ["owner"])
 
-    sboms = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+    sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+    sboms_with_vuln_status = []
+    try:
+        redis_client = redis.from_url(settings.REDIS_WORKER_URL)
+        for sbom_item in sboms_queryset:
+            keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": bool(keys)})
+    except redis.exceptions.ConnectionError:
+        # If Redis is down, assume no reports are available for simplicity
+        for sbom_item in sboms_queryset:
+            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": False})
+        messages.error(
+            request, "Could not connect to Redis to check for vulnerability reports. Status may be inaccurate."
+        )
 
     return render(
         request,
@@ -442,7 +472,7 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
             "component": component,
             "has_crud_permissions": has_crud_permissions,
             "is_owner": is_owner,
-            "sboms": sboms,
+            "sboms_data": sboms_with_vuln_status,  # Changed from "sboms"
             "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
         },
@@ -542,6 +572,81 @@ def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
         request,
         "sboms/sbom_details_private.html",
         {"sbom": sbom, "APP_BASE_URL": settings.APP_BASE_URL},
+    )
+
+
+@login_required
+def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
+    """
+    Display vulnerability scan results for a given SBOM.
+    """
+    try:
+        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("SBOM not found"))
+
+    if not verify_item_access(request, sbom, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    redis_client = None
+    vulnerabilities_data = None
+    scan_timestamp_str = None
+    error_message = None
+    error_details = None
+
+    try:
+        redis_url = settings.REDIS_WORKER_URL
+        redis_client = redis.from_url(redis_url)
+        # Fetch the latest scan result. Keys are like "osv_scan_result:SBOM_ID:TIMESTAMP"
+        keys = redis_client.keys(f"osv_scan_result:{sbom_id}:*")
+        if keys:
+            latest_key = sorted(keys, reverse=True)[0]
+            if isinstance(latest_key, bytes):  # redis-py can return bytes
+                latest_key = latest_key.decode("utf-8")
+
+            scan_timestamp_str = latest_key.split(":")[-1]
+            raw_data = redis_client.get(latest_key)
+            if raw_data:
+                if isinstance(raw_data, bytes):  # redis-py can return bytes
+                    raw_data = raw_data.decode("utf-8")
+                try:
+                    vulnerabilities_data = json.loads(raw_data)
+                    # Check if the loaded data is an error message from the scanner task
+                    if isinstance(vulnerabilities_data, dict) and "error" in vulnerabilities_data:
+                        error_message = (
+                            f"Vulnerability scan failed: {vulnerabilities_data.get('error', 'Unknown error')}"
+                        )
+                        error_details = vulnerabilities_data.get("details") or vulnerabilities_data.get("stderr")
+                        vulnerabilities_data = None  # Clear data so template shows error
+                except json.JSONDecodeError:
+                    error_message = "Failed to parse vulnerability data from Redis. The data might be corrupted."
+                    logger.error(
+                        f"Failed to parse JSON from Redis for key {latest_key}. Data: {raw_data[:200]}..."
+                    )  # Log a snippet
+            else:
+                error_message = "Scan result not found in Redis though a key was present."
+        else:
+            # This case is handled by the template's "else" for "if vulnerabilities"
+            pass
+
+    except redis.exceptions.ConnectionError:
+        error_message = "Could not connect to Redis to fetch vulnerability data."
+        logger.error("Redis connection error in sbom_vulnerabilities view.")
+    except Exception as e:
+        error_message = f"An unexpected error occurred while fetching vulnerability data: {str(e)}"
+        logger.error(f"Unexpected error in sbom_vulnerabilities view for SBOM {sbom_id}: {e}", exc_info=True)
+
+    return render(
+        request,
+        "sboms/sbom_vulnerabilities.html",
+        {
+            "sbom": sbom,
+            "vulnerabilities": vulnerabilities_data,
+            "scan_timestamp": scan_timestamp_str,
+            "error_message": error_message,
+            "error_details": error_details,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+        },
     )
 
 

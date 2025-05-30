@@ -9,6 +9,7 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
 from core.utils import ExtractSpec, dict_update, obj_extract
+from sbomify.tasks import scan_sbom_for_vulnerabilities
 from teams.models import Team
 from teams.utils import get_user_teams
 
@@ -29,7 +30,6 @@ from .schemas import (
     cdx16,
 )
 from .utils import verify_item_access
-from sbomify.tasks import scan_sbom_for_vulnerabilities
 
 router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -160,8 +160,9 @@ def sbom_upload_cyclonedx(
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
-            # Trigger vulnerability scan for the new SBOM
-            scan_sbom_for_vulnerabilities.send(sbom.id)
+
+        # Trigger vulnerability scan for the new SBOM with a 30 second delay
+        scan_sbom_for_vulnerabilities.send_with_options(args=[sbom.id], delay=30000)
 
         return 201, {"id": sbom.id}
 
@@ -237,8 +238,9 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         with transaction.atomic():
             sbom = SBOM(**sbom_dict)
             sbom.save()
-            # Trigger vulnerability scan for the new SBOM
-            scan_sbom_for_vulnerabilities.send(sbom.id)
+
+        # Trigger vulnerability scan for the new SBOM with a 30 second delay
+        scan_sbom_for_vulnerabilities.send_with_options(args=[sbom.id], delay=30000)
 
         return 201, {"id": sbom.id}
 

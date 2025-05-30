@@ -44,5 +44,8 @@
   <a href="{% url 'sboms:sbom_download' sbom.id %}" class="btn btn-success float-end">
     <i class="fas fa-download"></i> Download SBOM
   </a>
+  <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" class="btn btn-warning float-end me-2">
+    <i class="fas fa-shield-alt"></i> View Vulnerabilities
+  </a>
 
 {% endblock%}

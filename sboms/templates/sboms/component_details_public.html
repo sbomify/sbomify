@@ -49,10 +49,12 @@ sboms - List of SBOM objects without data and packages fields
                         <th scope="col">NTIA Compliant</th>
                         <th scope="col">Created</th>
                         <th scope="col">Download</th>
+                        <th scope="col">Vulnerabilities</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {% for sbom in sboms %}
+                      {% for item_data in sboms_data %}
+                      {% with sbom=item_data.sbom has_report=item_data.has_vulnerabilities_report %}
                       <tr>
                         <td>
                           <a href="{% url 'sboms:sbom_details_public' sbom.id %}" title="Details" class="icon-link">
@@ -61,7 +63,7 @@ sboms - List of SBOM objects without data and packages fields
                         </td>
                         <td>SBOM</td>
                         <td>{{ sbom.format }} {{ sbom.format_version }}</td>
-                        <td>{{ sbom.version }}</td>
+                        <td title="{{ sbom.version }}">{{ sbom.version|truncatechars:20 }}</td>
                         <td> N/A </td>
                         <td>{{ sbom.created_at }}</td>
                         <td>
@@ -69,7 +71,13 @@ sboms - List of SBOM objects without data and packages fields
                             Download
                           </a>
                         </td>
+                        <td>
+                          <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" title="Vulnerabilities" class="btn btn-sm btn-warning {% if not has_report %}disabled{% endif %}">
+                            <i class="fas fa-shield-alt"></i> View
+                          </a>
+                        </td>
                       </tr>
+                      {% endwith %}
                       {% endfor %}
                     </tbody>
                   </table>

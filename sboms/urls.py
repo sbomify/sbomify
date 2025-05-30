@@ -70,4 +70,9 @@ urlpatterns: list[URLPattern] = [
     ),
     path(app_name + "/sbom/<str:sbom_id>", views.sbom_details_private, name="sbom_details"),
     path("sbom/<str:sbom_id>", views.sbom_details_public, name="sbom_details_public"),
+    path(
+        app_name + "/sbom/<str:sbom_id>/vulnerabilities",
+        views.sbom_vulnerabilities,
+        name="sbom_vulnerabilities",
+    ),
 ]
