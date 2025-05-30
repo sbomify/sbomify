@@ -111,7 +111,11 @@
   });
 
   const getStats = async () => {
-    const apiUrl = '/api/v1/sboms/dashboard/summary/';
+    let apiUrl = '/api/v1/sboms/dashboard/summary/';
+
+    if (props.itemType === 'component' && props.itemId) {
+      apiUrl += `?component_id=${props.itemId}`;
+    }
 
     try {
       const response = await $axios.get(apiUrl);
