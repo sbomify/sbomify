@@ -7,6 +7,7 @@ import string
 import uuid
 from dataclasses import dataclass
 from secrets import token_urlsafe
+from typing import Any
 
 from django.http import HttpRequest
 
@@ -80,7 +81,7 @@ def set_values_if_not_empty(object_in, **kwargs):
 class ExtractSpec:
     field: str
     required: bool = True
-    default: any = None
+    default: Any | None = None
     error_message: str | None = None
     rename_to: str | None = None
 
@@ -111,7 +112,7 @@ def obj_extract(obj_in, fields: list[ExtractSpec]) -> dict:
                     else:
                         raise ValueError(f"Field '{field.field}' is required.")
 
-                elif field.default:
+                elif field.default is not None:
                     if field.rename_to:
                         result[field.rename_to] = field.default
                     else:
