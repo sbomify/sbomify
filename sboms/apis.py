@@ -407,7 +407,7 @@ def get_cyclonedx_component_metadata(
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_dashboard_summary(request: HttpRequest):
+def get_dashboard_summary(request: HttpRequest, component_id: str | None = Query(None)):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required."}
@@ -418,9 +418,12 @@ def get_dashboard_summary(request: HttpRequest):
     total_projects = Project.objects.filter(team__in=user_teams_qs).count()
     total_components = Component.objects.filter(team__in=user_teams_qs).count()
 
-    latest_sboms_qs = (
-        SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component").order_by("-created_at")[:5]
-    )  # Get latest 5
+    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
+
+    if component_id:
+        latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
+
+    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
 
     latest_uploads_data = [
         DashboardSBOMUploadInfo(
