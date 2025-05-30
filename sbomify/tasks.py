@@ -268,7 +268,7 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
             redis_client.set(
                 f"osv_scan_result:{sbom_id}:{datetime.now(timezone.utc).isoformat()}",
                 process.stdout,
-                ex=86400,  # 24 hours
+                ex=settings.OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS,  # Use setting here
             )
             logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Scan results for SBOM ID {sbom_id} stored in Redis")
 
