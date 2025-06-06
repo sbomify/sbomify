@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+- License API endpoints for listing licenses and validating expressions
+
 ## [0.5.0] - 2024-01-24
 
 ### Added

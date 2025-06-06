@@ -178,6 +178,14 @@ poetry run python manage.py runserver
 bun run dev
 ```
 
+## License API Phase 1
+
+Two new REST endpoints provide license metadata and validation.
+
+- `GET /api/v1/licenses` – returns all SPDX and custom licenses.
+- `POST /api/v1/license-expressions/validate` – validates a license expression and identifies unknown tokens.
+
+
 ### Configuration
 
 #### Development Server Settings
