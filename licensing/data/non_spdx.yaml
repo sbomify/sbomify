@@ -1,0 +1,59 @@
+Commons-Clause:
+  name: "Commons Clause License"
+  category: "proprietary"
+  origin: "Custom"
+  url: "https://commonsclause.com/"
+
+BUSL-1.1:
+  name: "Business Source License 1.1"
+  category: "proprietary"
+  origin: "Custom"
+  url: "https://mariadb.com/bsl11/"
+
+ELv2:
+  name: "Elastic License 2.0"
+  category: "proprietary"
+  origin: "Elastic"
+  url: "https://www.elastic.co/licensing/elastic-license"
+
+SSPL-1.0:
+  name: "Server Side Public License 1.0"
+  category: "proprietary"
+  origin: "MongoDB"
+  url: "https://www.mongodb.com/licensing/server-side-public-license"
+
+CCL-1.0:
+  name: "Confluent Community License 1.0"
+  category: "proprietary"
+  origin: "Confluent"
+  url: "https://www.confluent.io/confluent-community-license/"
+
+CRDB-CCL:
+  name: "Cockroach Community License"
+  category: "proprietary"
+  origin: "Cockroach Labs"
+  url: "https://github.com/cockroachdb/cockroach/blob/master/licenses/CCL.txt"
+
+Polyform-Shield-1.1.0:
+  name: "Polyform Shield License 1.1.0"
+  category: "proprietary"
+  origin: "Polyform Project"
+  url: "https://polyformproject.org/licenses/shield/1.1.0"
+
+Polyform-Noncommercial-1.0.0:
+  name: "Polyform Noncommercial License 1.0.0"
+  category: "proprietary"
+  origin: "Polyform Project"
+  url: "https://polyformproject.org/licenses/noncommercial/1.0.0"
+
+Prosperity-3.0.0:
+  name: "Prosperity Public License 3.0.0"
+  category: "proprietary"
+  origin: "License Zero"
+  url: "https://prosperitylicense.com/3.0.0"
+
+Timescale-License:
+  name: "Timescale License"
+  category: "proprietary"
+  origin: "Timescale"
+  url: "https://www.timescale.com/license"
