@@ -1,0 +1,29 @@
+openapi: 3.0.0
+info:
+  title: sbomify License API
+  version: 1.0.0
+paths:
+  /api/v1/licenses:
+    get:
+      summary: List all SPDX and custom licenses
+      responses:
+        '200':
+          description: List of licenses
+  /api/v1/license-expressions/validate:
+    post:
+      summary: Validate a license expression string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expression:
+                  type: string
+      responses:
+        '200':
+          description: Validation result
+        '400':
+          description: Invalid expression
+
