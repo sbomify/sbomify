@@ -5,10 +5,10 @@ from django.test import Client
 
 
 @pytest.mark.django_db
-def test_licenses_endpoint_via_http():
-    """Test the GET /api/v1/licenses endpoint via HTTP."""
+def test_integration_licenses_endpoint_via_http():
+    """Test the GET /api/v1/licensing/licenses endpoint via HTTP."""
     client = Client()
-    response = client.get("/api/v1/licenses")
+    response = client.get("/api/v1/licensing/licenses")
 
     assert response.status_code == 200
     licenses = response.json()
@@ -24,13 +24,13 @@ def test_licenses_endpoint_via_http():
 
 
 @pytest.mark.django_db
-def test_validate_expression_endpoint_via_http():
-    """Test the POST /api/v1/license-expressions/validate endpoint via HTTP."""
+def test_integration_validate_expression_endpoint_via_http():
+    """Test the POST /api/v1/licensing/license-expressions/validate endpoint via HTTP."""
     client = Client()
 
     # Test valid expression
     response = client.post(
-        "/api/v1/license-expressions/validate",
+        "/api/v1/licensing/license-expressions/validate",
         data={"expression": "Apache-2.0"},
         content_type="application/json"
     )
@@ -44,12 +44,12 @@ def test_validate_expression_endpoint_via_http():
 
 
 @pytest.mark.django_db
-def test_validate_expression_with_unknown_token_via_http():
+def test_integration_validate_expression_with_unknown_token_via_http():
     """Test validation with unknown token via HTTP."""
     client = Client()
 
     response = client.post(
-        "/api/v1/license-expressions/validate",
+        "/api/v1/licensing/license-expressions/validate",
         data={"expression": "FooBar-1.0"},
         content_type="application/json"
     )
@@ -61,12 +61,12 @@ def test_validate_expression_with_unknown_token_via_http():
 
 
 @pytest.mark.django_db
-def test_validate_expression_syntax_error_via_http():
+def test_integration_validate_expression_syntax_error_via_http():
     """Test validation with syntax error via HTTP."""
     client = Client()
 
     response = client.post(
-        "/api/v1/license-expressions/validate",
+        "/api/v1/licensing/license-expressions/validate",
         data={"expression": "Apache-2.0 AND ("},
         content_type="application/json"
     )

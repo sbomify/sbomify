@@ -9,7 +9,7 @@ from ..api import router
 client = TestClient(router)
 
 def test_list_licenses():
-    """Test the GET /licenses endpoint."""
+    """Test the GET /licensing/licenses endpoint."""
     response = client.get("/licenses")
     assert response.status_code == 200
 
@@ -25,7 +25,7 @@ def test_list_licenses():
     assert first_license["origin"] in ["SPDX", "Custom"]
 
 def test_validate_expression_valid():
-    """Test the POST /license-expressions/validate endpoint with valid expressions."""
+    """Test the POST /licensing/license-expressions/validate endpoint with valid expressions."""
     # Test simple valid expression
     response = client.post("/license-expressions/validate", json={"expression": "Apache-2.0"})
     assert response.status_code == 200
@@ -52,7 +52,7 @@ def test_validate_expression_valid():
     assert not result["unknown_tokens"]
 
 def test_validate_expression_unknown_token():
-    """Test the POST /license-expressions/validate endpoint with unknown tokens."""
+    """Test the POST /licensing/license-expressions/validate endpoint with unknown tokens."""
     response = client.post(
         "/license-expressions/validate",
         json={"expression": "FooBar-1.0"}
@@ -66,7 +66,7 @@ def test_validate_expression_unknown_token():
     assert result["unknown_tokens"] == ["FooBar-1.0"]
 
 def test_validate_expression_syntax_error():
-    """Test the POST /license-expressions/validate endpoint with syntax errors."""
+    """Test the POST /licensing/license-expressions/validate endpoint with syntax errors."""
     response = client.post(
         "/license-expressions/validate",
         json={"expression": "Apache-2.0 AND ("}
@@ -79,6 +79,6 @@ def test_validate_expression_syntax_error():
     assert "invalid" in result["error"].lower()
 
 def test_validate_expression_invalid_request():
-    """Test the POST /license-expressions/validate endpoint with invalid request."""
+    """Test the POST /licensing/license-expressions/validate endpoint with invalid request."""
     response = client.post("/license-expressions/validate", json={})
     assert response.status_code == 422  # Validation error
