@@ -143,6 +143,9 @@ MESSAGE_TAGS = {
     messages.constants.ERROR: "alert-danger",
 }
 
+# Filter out login success messages
+MESSAGE_LEVEL = messages.constants.INFO  # Only show messages of INFO level and above
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
