@@ -360,6 +360,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     request.session["wizard_product_id"] = product.id
                     # Move to next step
                     request.session["wizard_step"] = "project"
+                    request.session.modified = True  # Explicitly mark session as modified
                     messages.success(request, f"Product '{product.name}' created successfully.")
                     return redirect("teams:onboarding_wizard")
                 except IntegrityError:
@@ -390,6 +391,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     request.session["wizard_project_id"] = project.id
                     # Move to next step
                     request.session["wizard_step"] = "component"
+                    request.session.modified = True  # Explicitly mark session as modified
                     messages.success(request, f"Project '{project.name}' created successfully.")
                     return redirect("teams:onboarding_wizard")
                 except IntegrityError:
