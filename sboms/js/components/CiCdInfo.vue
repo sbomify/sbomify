@@ -229,7 +229,6 @@ import yaml from 'highlight.js/lib/languages/yaml';
 import bash from 'highlight.js/lib/languages/bash';
 import 'highlight.js/styles/github-dark.css';
 import CopyableValue from '../../../core/js/components/CopyableValue.vue';
-import { showWarning, showInfo } from '../../../core/js/alerts'
 
 interface BootstrapTooltipOptions {
   placement?: 'top' | 'bottom' | 'left' | 'right';
@@ -515,24 +514,10 @@ const tabs = [
 ]
 
 // Watch for tab changes to show relevant alerts
-watch(activeTab, (newTab) => {
-  if (newTab === 'gitlab') {
-    showWarning('GitLab CI requires Docker-in-Docker (DinD) service for Docker image scanning. The configuration above includes the necessary DinD setup.')
-  } else if (newTab === 'bitbucket') {
-    showInfo('Bitbucket Pipelines provides built-in Docker support. The configuration above includes the necessary Docker service setup.')
-  }
-})
+watch(activeTab, () => {});
 
 // Watch for source type changes to show relevant alerts
-watch(sourceType, (newType) => {
-  if (newType === 'docker') {
-    if (activeTab.value === 'github') {
-      showInfo('For Docker image scanning in GitHub Actions, the action will use GitHub\'s built-in Docker support. No additional configuration is needed.')
-    } else if (activeTab.value === 'docker') {
-      showInfo('For local Docker scanning, the Docker socket is mounted automatically when using Docker CLI.')
-    }
-  }
-})
+watch(sourceType, () => {});
 </script>
 
 <style scoped>
