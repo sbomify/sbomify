@@ -14,13 +14,27 @@ def test_integration_licenses_endpoint_via_http():
     licenses = response.json()
     assert len(licenses) >= 520
 
-    # Check structure of first license
-    first_license = licenses[0]
-    assert "key" in first_license
-    assert "name" in first_license
-    assert "category" in first_license
-    assert "origin" in first_license
-    assert first_license["origin"] in ["SPDX", "Custom"]
+    # Separate SPDX and custom licenses
+    spdx_licenses = [l for l in licenses if l["origin"] == "SPDX"]
+    custom_licenses = [l for l in licenses if l["origin"] != "SPDX"]
+
+    # Check SPDX license structure (should not have category)
+    if spdx_licenses:
+        spdx_license = spdx_licenses[0]
+        assert "key" in spdx_license
+        assert "name" in spdx_license
+        assert "origin" in spdx_license
+        assert spdx_license["origin"] == "SPDX"
+        assert "category" not in spdx_license
+
+    # Check custom license structure (should have category)
+    if custom_licenses:
+        custom_license = custom_licenses[0]
+        assert "key" in custom_license
+        assert "name" in custom_license
+        assert "category" in custom_license
+        assert "origin" in custom_license
+        assert custom_license["origin"] != "SPDX"
 
 
 @pytest.mark.django_db

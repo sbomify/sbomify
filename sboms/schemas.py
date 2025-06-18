@@ -67,7 +67,11 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     return module_map[spec_version]
 
 
-class CustomLicenseSchema(BaseModel):
+class BaseLicenseSchema(BaseModel):
+    pass
+
+
+class CustomLicenseSchema(BaseLicenseSchema):
     name: str
     url: str | None = None
     text: str | None = None
@@ -87,8 +91,9 @@ class CustomLicenseSchema(BaseModel):
 
 
 class SupplierSchema(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str | None = None
-    url: str | None = None
+    url: list[str] | None = None
     address: str | None = None
     contacts: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
 
@@ -98,7 +103,7 @@ class ComponentMetaData(BaseModel):
 
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
-    licenses: list[LicenseSchema | CustomLicenseSchema] = Field(default_factory=list)
+    licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
     lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
 
     def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata:
@@ -115,7 +120,7 @@ class ComponentMetaData(BaseModel):
                 result.supplier.address = cdx16.PostalAddress(streetAddress=self.supplier.address)
 
             if self.supplier.url:
-                result.supplier.url = [self.supplier.url]
+                result.supplier.url = self.supplier.url
 
             if self.supplier.contacts:
                 result.supplier.contact = []
@@ -143,12 +148,21 @@ class ComponentMetaData(BaseModel):
                         license_identifier = component_license.value
                     else:
                         license_identifier = str(component_license)
-                    try:
-                        # Primarily expect SPDX IDs from LicenseSchema
-                        cdx_lic = CycloneDx.License(id=license_identifier)
-                    except Exception:  # Broad catch, consider pydantic.ValidationError if possible
-                        # Fallback for non-SPDX IDs or other cases
+
+                    # Check if this is a license expression (contains operators)
+                    license_operators = ["AND", "OR", "WITH"]
+                    is_expression = any(f" {op} " in license_identifier for op in license_operators)
+
+                    if is_expression:
+                        # License expressions should be stored as name, not id
                         cdx_lic = CycloneDx.License(name=license_identifier)
+                    else:
+                        try:
+                            # Individual SPDX IDs should be stored as id
+                            cdx_lic = CycloneDx.License(id=license_identifier)
+                        except Exception:  # Broad catch, consider pydantic.ValidationError if possible
+                            # Fallback for non-SPDX IDs or other cases
+                            cdx_lic = CycloneDx.License(name=license_identifier)
                     licenses_list.append(cdx_lic)
 
             if licenses_list:
@@ -203,3 +217,8 @@ class SPDXSchema(BaseModel):
     name: str
     spdx_version: str = Field(..., alias="spdxVersion")
     packages: list[SPDXPackage] = Field(default_factory=list)
+
+
+# Patch OrganizationalContact to ignore extra fields
+cdx15.OrganizationalContact.model_config = ConfigDict(extra="ignore")
+cdx16.OrganizationalContact.model_config = ConfigDict(extra="ignore")

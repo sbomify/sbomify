@@ -98,10 +98,7 @@ class TestOnboardingWizard:
             extra_data={
                 "user_metadata": {
                     "company": "Acme Corp",
-                    "supplier_contact": {
-                        "name": "John Doe",
-                        "email": "john@example.com"
-                    }
+                    "supplier_url": "https://acme.example.com"
                 }
             }
         )
@@ -147,10 +144,8 @@ class TestOnboardingWizard:
         # Verify component metadata
         component = Component.objects.filter(name="Test Component").first()
         assert component is not None
-        assert component.metadata.get("supplier", {}).get("contact") == {
-            "name": "John Doe",
-            "email": "john@example.com"
-        }
+        assert component.metadata.get("supplier", {}).get("name") == "Acme Corp"
+        assert component.metadata.get("supplier", {}).get("url") == ["https://acme.example.com"]
 
     def test_duplicate_names(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that duplicate names are handled correctly."""

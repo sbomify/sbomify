@@ -1,18 +1,23 @@
 <template>
   <div class="card">
     <div class="card-body">
-      <h4 class="d-flex justify-content-between align-items-center mb-4" style="cursor: pointer;" @click="toggleExpand">
-        Component Metadata
-        <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-outline-secondary btn-sm" @click.stop="$emit('closeEditor')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-          <svg v-if="!isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          <svg v-if="isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      <div class="component-metadata-header d-flex justify-content-between align-items-start mb-4">
+        <div>
+          <h4 class="mb-2">Component Metadata</h4>
+          <div class="augmentation-notice d-flex align-items-center">
+                         <i class="fa-regular fa-lightbulb me-2" style="color: #4f46e5;"></i>
+                         <span class="text-muted">
+               Enable the <a href="#" class="text-decoration-none" style="color: #4f46e5;">Augmentation</a> feature to include this metadata in your SBOM
+             </span>
+          </div>
         </div>
-      </h4>
+        <button class="btn btn-secondary btn-sm" @click="$emit('closeEditor')">
+          <i class="fa-solid fa-times me-2"></i>
+          Cancel
+        </button>
+      </div>
 
-      <div v-if="isExpanded">
+      <div>
         <div class="container-fluid p-0">
           <div class="row">
             <div class="col-sm-12 col-lg-6">
@@ -81,6 +86,7 @@
                   <LicensesEditor
                     v-model="metadata.licenses"
                     :validation-errors="validationErrors.licenses"
+                    :validationResponse="{ status: 200, unknown_tokens: [] }"
                     @update:modelValue="validateLicenses"
                   />
                 </div>
@@ -107,21 +113,28 @@
             </div>
           </div>
 
-          <div class="row mb-4">
-            <div class="col-12 col-lg-6 d-grid">
-              <button class="btn btn-secondary" @click="handleCancel">Cancel</button>
-            </div>
-            <div class="col-12 col-lg-6 d-grid">
-              <button
-                class="btn btn-primary"
-                :disabled="!isFormValid || isSaving"
-                @click="updateMetaData"
-              >
-                <span v-if="isSaving">
-                  <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving...
-                </span>
-                <span v-else>Save Changes</span>
-              </button>
+          <div class="actions-section mt-4 pt-4 border-top">
+            <div class="row g-3">
+              <div class="col-12 col-lg-4">
+                <button class="btn btn-outline-secondary btn-lg w-100" @click="handleCancel">
+                  <i class="fa-solid fa-times me-2"></i>
+                  Cancel Changes
+                </button>
+              </div>
+              <div class="col-12 col-lg-8">
+                <button
+                  class="btn btn-success btn-lg w-100"
+                  :disabled="!isFormValid || isSaving"
+                  @click="updateMetaData"
+                >
+                  <span v-if="isSaving">
+                    <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving Changes...
+                  </span>
+                  <span v-else>
+                    <i class="fa-solid fa-save me-2"></i>Save Component Metadata
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -237,15 +250,49 @@
     hasUnsavedChanges.value = true;
   };
 
-  const validateLicenses = (licenses: (string | CustomLicense)[]): void => {
-    const errors: Record<string, string> = {};
+  interface LicenseApiResponse {
+    key: string;
+    known?: boolean;
+  }
 
-    licenses.forEach((license, index) => {
+  const validateLicenses = (licenses: (string | CustomLicense)[]): void => {
+    // Deduplicate licenses: for strings, by value; for objects, by .name or .key
+    const seen = new Set<string>();
+    const deduped: (string | CustomLicense)[] = [];
+    licenses.forEach(lic => {
+      let key: string;
+      let itemToAdd: string | CustomLicense;
+
+      if (typeof lic === 'string') {
+        key = lic;
+        itemToAdd = lic;
+      } else if (lic.name) {
+        key = lic.name;  // CustomLicense format
+        itemToAdd = lic;
+      } else if ('key' in lic && typeof lic.key === 'string') {
+        const apiResponse = lic as LicenseApiResponse;
+        key = apiResponse.key;  // API response format { key: "Apache-2.0", known: true }
+        itemToAdd = key;  // Convert API format to string for consistency
+      } else {
+        key = '';  // fallback
+        itemToAdd = lic;
+      }
+
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        deduped.push(itemToAdd);
+      }
+    });
+
+    // Replace the licenses array with deduped version
+    metadata.value.licenses = deduped;
+
+    const errors: Record<string, string> = {};
+    deduped.forEach((license, index) => {
       if (typeof license === 'object' && license.name === '') {
         errors[`license${index}`] = 'License name is required when adding a custom license';
       }
     });
-
     validationErrors.value.licenses = errors;
     hasUnsavedChanges.value = true;
   };
@@ -346,7 +393,7 @@
       message: null,
     };
 
-    try {
+        try {
       const response = await $axios.put(`/api/v1/sboms/component/${props.componentId}/meta`, metadata.value)
 
       if (response.status < 200 || response.status >= 300) {
@@ -373,16 +420,23 @@
     }
   }
 
-  // Add isExpanded state
-  const isExpanded = ref(true);
-
-  // Add toggle function
-  const toggleExpand = () => {
-    isExpanded.value = !isExpanded.value;
-  };
+  // Component is always expanded now - no collapsible functionality needed
 </script>
 
 <style scoped>
+:root {
+  --primary-color: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-dark: #3730a3;
+  --secondary-color: #64748b;
+  --secondary-hover: #475569;
+  --secondary-dark: #334155;
+  --success-color: #059669;
+  --success-hover: #047857;
+  --success-dark: #065f46;
+  --surface-color: #f8fafc;
+}
+
 .form-group {
   margin-bottom: 1.5rem;
 }
@@ -460,20 +514,35 @@
 }
 
 .card {
-  border: 1px solid #dee2e6;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
+  border: 1px solid #e5e9f2;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .card-header {
-  background: #f8f9fa;
-  border-bottom: 1px solid #eaecef;
-  padding: 1.25rem;
-  border-radius: 8px 8px 0 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #e5e9f2;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem 0.75rem 0 0;
 }
 
 .card-body {
   padding: 1.25rem;
+}
+
+/* Main component card styling */
+.card-body > .card {
+  background: #ffffff;
+}
+
+.card-body > .card:last-child {
+  margin-bottom: 0;
 }
 
 .card-title {
@@ -484,6 +553,152 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.component-metadata-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eaecef;
+  margin-bottom: 1.5rem !important;
+}
+
+.component-metadata-header h4 {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+
+.augmentation-notice {
+  font-size: 0.9rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border-left: 3px solid #4f46e5;
+}
+
+.augmentation-notice i {
+  font-size: 1rem;
+}
+
+.btn {
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #4f46e5;
+  border: 1px solid #4338ca;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+}
+
+.btn-primary:hover {
+  background: #4338ca;
+  border-color: #3730a3;
+  color: white;
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:focus {
+  background: #4338ca;
+  border-color: #3730a3;
+  color: white;
+  box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.25);
+}
+
+.btn-secondary {
+  background: #64748b;
+  border: 1px solid #475569;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(100, 116, 139, 0.2);
+}
+
+.btn-secondary:hover {
+  background: #475569;
+  border-color: #334155;
+  color: white;
+  box-shadow: 0 4px 8px rgba(100, 116, 139, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:focus {
+  background: #475569;
+  border-color: #334155;
+  color: white;
+  box-shadow: 0 0 0 0.2rem rgba(100, 116, 139, 0.25);
+}
+
+.btn-success {
+  background: #16a34a;
+  border: 1px solid #15803d;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
+}
+
+.btn-success:hover {
+  background: #15803d;
+  border-color: #166534;
+  color: white;
+  box-shadow: 0 4px 8px rgba(22, 163, 74, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-success:focus {
+  background: #15803d;
+  border-color: #166534;
+  color: white;
+  box-shadow: 0 0 0 0.2rem rgba(22, 163, 74, 0.25);
+}
+
+.btn-success:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  color: white;
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-outline-secondary {
+  border: 2px solid #64748b;
+  color: #64748b;
+  background: transparent;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-secondary:hover {
+  background: #64748b;
+  border-color: #64748b;
+  color: white;
+  box-shadow: 0 2px 4px rgba(100, 116, 139, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-outline-secondary:focus {
+  background: #64748b;
+  border-color: #64748b;
+  color: white;
+  box-shadow: 0 0 0 0.2rem rgba(100, 116, 139, 0.25);
+}
+
+.actions-section {
+  border-top: 1px solid #e5e9f2 !important;
+  background: #f8f9fa;
+  margin: 0 -1.25rem -1.25rem -1.25rem;
+  padding: 1.5rem 1.25rem 1.25rem 1.25rem;
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 </style>
 

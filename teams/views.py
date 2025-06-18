@@ -425,7 +425,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
                     user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
                     company_name = user_metadata.get("company", team.name)
-                    supplier_contact = user_metadata.get("supplier_contact", {})
+                    supplier_url = user_metadata.get("supplier_url")
 
                     # Create the component
                     component = Component.objects.create(
@@ -439,7 +439,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                                     "email": request.user.email,
                                 },
                             },
-                            "supplier": {"name": company_name, "contact": supplier_contact},
+                            "supplier": {"name": company_name, "url": [supplier_url] if supplier_url else None},
                             "author": {
                                 "name": f"{request.user.first_name} {request.user.last_name}".strip(),
                                 "email": request.user.email,

@@ -7,6 +7,16 @@ import vueParser from "vue-eslint-parser";
 
 export default [
   {
+    ignores: [
+      "static/**/*.js",
+      "staticfiles/**/*.js",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.min.js"
+    ],
+  },
+  {
     files: ["**/*.{js,mjs,cjs,jsx,mjsx,ts,tsx,mtsx}"],
     ...js.configs.recommended,
     languageOptions: {

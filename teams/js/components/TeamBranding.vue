@@ -1,26 +1,3 @@
-<style scoped>
-  .color-picker-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .color-picker {
-    width: 40px;
-    height: 38px;
-    padding: 0;
-    margin-left: 8px;
-  }
-
-  .color-text {
-    width: 100px;
-  }
-
-  :deep(.floating-alert) {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-  }
-</style>
-
 <template>
   <div class="card">
     <div class="card-body">
@@ -40,9 +17,9 @@
           </div>
           <div class="col-md-2 col-3">
             <div class="color-picker-wrapper">
-              <input type="text" class="form-control color-text" v-model="brandingInfo.brand_color"
+              <input v-model="brandingInfo.brand_color" type="text" class="form-control color-text"
                 placeholder="#000000" @input="validateAndUpdateColor($event, 'brand_color')">
-              <input type="color" class="form-control color-picker" v-model="brandingInfo.brand_color" @change="updateField('brand_color')">
+              <input v-model="brandingInfo.brand_color" type="color" class="form-control color-picker" @change="updateField('brand_color')">
             </div>
           </div>
         </div>
@@ -53,9 +30,9 @@
           </div>
           <div class="col-md-2 col-3">
             <div class="color-picker-wrapper">
-              <input type="text" class="form-control color-text" v-model="brandingInfo.accent_color"
+              <input v-model="brandingInfo.accent_color" type="text" class="form-control color-text"
                 placeholder="#000000" @input="validateAndUpdateColor($event, 'accent_color')">
-              <input type="color" class="form-control color-picker" v-model="brandingInfo.accent_color" @change="updateField('accent_color')">
+              <input v-model="brandingInfo.accent_color" type="color" class="form-control color-picker" @change="updateField('accent_color')">
             </div>
           </div>
         </div>
@@ -65,7 +42,7 @@
             <label for="icon" class="form-label">Icon</label>
           </div>
           <div class="col-md-2 col-3">
-            <FileDragAndDrop accept="image/*" v-model="brandingInfo.icon" @update:modelValue="handleFileUpload('icon', $event)" />
+            <FileDragAndDrop v-model="brandingInfo.icon" accept="image/*" @update:modelValue="handleFileUpload('icon', $event)" />
           </div>
         </div>
 
@@ -74,7 +51,7 @@
             <label for="logo" class="form-label">Logo</label>
           </div>
           <div class="col-md-2 col-3">
-            <FileDragAndDrop accept="image/*" v-model="brandingInfo.logo" @update:modelValue="handleFileUpload('logo', $event)" />
+            <FileDragAndDrop v-model="brandingInfo.logo" accept="image/*" @update:modelValue="handleFileUpload('logo', $event)" />
           </div>
         </div>
 
@@ -224,3 +201,25 @@
   });
 </script>
 
+<style scoped>
+  .color-picker-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .color-picker {
+    width: 40px;
+    height: 38px;
+    padding: 0;
+    margin-left: 8px;
+  }
+
+  .color-text {
+    width: 100px;
+  }
+
+  :deep(.floating-alert) {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+</style>

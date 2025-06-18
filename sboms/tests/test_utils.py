@@ -101,7 +101,7 @@ def test_verify_item_access_sbom(mock_request_with_teams, sample_sbom):  # noqa:
 
 @pytest.fixture
 def mock_s3_client():
-    with patch("sboms.utils.S3Client") as mock:
+    with patch("core.object_store.S3Client") as mock:
         instance = mock.return_value
         instance.get_sbom_data.return_value = json.dumps(
             {
@@ -116,8 +116,8 @@ def mock_s3_client():
 @pytest.mark.django_db
 def test_project_sbom_builder(sample_project, mock_s3_client, tmp_path):  # noqa: F811
     """Test ProjectSBOMBuilder generates valid SBOM"""
-    builder = ProjectSBOMBuilder()
-    sbom = builder(sample_project, tmp_path)
+    builder = ProjectSBOMBuilder(project=sample_project)
+    sbom = builder(tmp_path)
 
     assert sbom.bomFormat == "CycloneDX"
     assert sbom.specVersion == "1.6"
@@ -127,10 +127,10 @@ def test_project_sbom_builder(sample_project, mock_s3_client, tmp_path):  # noqa
 @pytest.mark.django_db
 def test_project_sbom_builder_no_components(sample_project, tmp_path):  # noqa: F811
     """Test ProjectSBOMBuilder with no components"""
-    builder = ProjectSBOMBuilder()
-    sbom = builder(sample_project, tmp_path)
+    builder = ProjectSBOMBuilder(project=sample_project)
+    sbom = builder(tmp_path)
 
-    assert sbom.components is None
+    assert sbom.components == []  # Changed expectation from None to []
 
 
 @pytest.mark.django_db
@@ -138,7 +138,7 @@ def test_project_sbom_builder_invalid_sbom_format(sample_project, mock_s3_client
     """Test ProjectSBOMBuilder with invalid SBOM format"""
     mock_s3_client.get_sbom_data.return_value = json.dumps({"bomFormat": "Invalid", "specVersion": "1.6"}).encode()
 
-    builder = ProjectSBOMBuilder()
-    sbom = builder(sample_project, tmp_path)
+    builder = ProjectSBOMBuilder(project=sample_project)
+    sbom = builder(tmp_path)
 
-    assert sbom.components is None
+    assert sbom.components == []  # Changed expectation from None to []

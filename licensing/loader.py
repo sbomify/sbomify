@@ -33,19 +33,18 @@ def get_license_list() -> list:
     """Get a list of all available licenses with their metadata."""
     licenses = []
 
-    # Add SPDX licenses
+    # Add SPDX licenses (without category since we can't determine it reliably)
     for key, symbol in SPDX_SYMBOLS.items():
         licenses.append(
             {
                 "key": key,
                 "name": str(symbol),
-                "category": getattr(symbol, "category", "unknown"),
                 "origin": "SPDX",
                 "url": getattr(symbol, "url", None),
             }
         )
 
-    # Add custom licenses
+    # Add custom licenses (with category since it's explicitly defined)
     for key, data in CUSTOM_SYMBOLS.items():
         licenses.append(
             {
@@ -71,7 +70,7 @@ def validate_expression(expr: str) -> dict:
     except Exception as e:
         return {"status": 400, "error": f"Invalid expression: {str(e)}"}
 
-        # Get tokens from the parsed tree - these are the individual license identifiers
+    # Get tokens from the parsed tree - these are the individual license identifiers
     tokens = []
     for symbol in tree.symbols:
         if hasattr(symbol, "key"):
@@ -88,21 +87,9 @@ def validate_expression(expr: str) -> dict:
     unique_tokens = list(dict.fromkeys(tokens))
     unknown = [t for t in unique_tokens if t not in ALL_LICENSES]
 
-    # Count tokens by category
-    category_counts = {}
-    for token in unique_tokens:
-        if token in ALL_LICENSES:
-            entry = ALL_LICENSES[token]
-            if isinstance(entry, dict):
-                category = entry.get("category", "unknown")
-            else:
-                category = getattr(entry, "category", "unknown")
-            category_counts[category] = category_counts.get(category, 0) + 1
-
     return {
         "status": 200,
         "normalized": str(tree),
         "tokens": [{"key": t, "known": t not in unknown} for t in unique_tokens],
         "unknown_tokens": unknown,
-        "category_summary": category_counts,
     }

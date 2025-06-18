@@ -2,11 +2,11 @@ import pytest
 
 from ..schemas import (
     CustomLicenseSchema,
-    CycloneDXSupportedVersion,
     SPDXPackage,
     SPDXSchema,
     get_cyclonedx_module,
 )
+from sboms.versioning import CycloneDXSupportedVersion
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ def sample_cyclonedx_component_dict():
 def sample_cyclonedx_schema_dict(sample_cyclonedx_component_dict):  # noqa: F811
     return {
         "bomFormat": "CycloneDX",
-        "specVersion": "1.5",
+        "specVersion": "1.6",
         "serialNumber": "urn:uuid:9d7b8a1b-7e1c-4c8e-bd9d-dee9b6f6f7f3",
         "version": 1,
         "metadata": {

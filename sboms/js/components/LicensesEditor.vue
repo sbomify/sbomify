@@ -1,322 +1,790 @@
 <template>
-
-  <div v-if="modelValue.length > 0" class="licenses-list">
-    <div v-for="(license, licenseIndex) in modelValue" class="license-badge">
-      <span v-if="typeof license === 'string'">{{ license }}</span>
-      <span v-else-if="license && license.name">{{ license.name }} (custom)</span>
-      <i class="far fa-times-circle" @click="removeLicense(licenseIndex)"></i>
-    </div>
-  </div>
-
-  <div class="license-type-selector">
-    <div
-      class="license-type-option"
-      :class="{ active: licenseType === 'well-known' }"
-      @click="licenseType = 'well-known'"
-    >
-      <i class="far fa-check-circle"></i>
-      Well-known
-    </div>
-    <div
-      class="license-type-option"
-      :class="{ active: licenseType === 'custom' }"
-      @click="licenseType = 'custom'"
-    >
-      <i class="far fa-edit"></i>
-      Custom
-    </div>
-  </div>
-
-  <div v-if="licenseType === 'well-known'" class="well-known-license-selector">
-    <select
-      v-model="selectedLicense"
-      class="form-select"
-      @change="addSelectedLicense"
-    >
-      <option value="">Select a license...</option>
-      <optgroup label="Common Licenses">
-        <option value="MIT">MIT License</option>
-        <option value="Apache-2.0">Apache License 2.0</option>
-        <option value="GPL-3.0">GNU General Public License v3.0</option>
-        <option value="BSD-3-Clause">BSD 3-Clause License</option>
-        <option value="ISC">ISC License</option>
-      </optgroup>
-      <optgroup label="All Licenses">
-        <option v-for="license in remainingLicenses" :value="license">{{ license }}</option>
-      </optgroup>
-    </select>
-  </div>
-
-  <div v-if="licenseType === 'custom'" class="custom-license-editor">
-    <div class="form-group">
-      <label class="form-label">Name <span class="text-danger">*</span></label>
-      <input
-        v-model="customLicenseData.name"
-        type="text"
-        class="form-control"
-        :class="{ 'is-invalid': validationErrors?.name }"
-        placeholder="Enter license name"
+  <div class="licenses-editor">
+    <!-- License Tags/Bubbles Display -->
+    <div v-if="licenseTags.length > 0" class="license-tags-container">
+      <div
+        v-for="(tag, index) in licenseTags"
+        :key="`tag-${index}`"
+        class="license-tag"
+        :class="{ 'invalid': tag.isInvalid }"
       >
-      <div v-if="validationErrors?.name" class="invalid-feedback">
-        {{ validationErrors.name }}
+        <span class="license-tag-text">{{ tag.value }}</span>
+        <button
+          type="button"
+          class="license-tag-remove"
+          title="Remove license"
+          @click="removeTag(index)"
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">URL</label>
-      <input
-        v-model="customLicenseData.url"
-        type="url"
-        class="form-control"
-        :class="{ 'is-invalid': validationErrors?.url }"
-        placeholder="https://example.com/license"
-      >
-      <div v-if="validationErrors?.url" class="invalid-feedback">
-        {{ validationErrors.url }}
+    <div class="license-expression-input">
+      <div class="license-input-container">
+        <div class="input-with-button">
+          <input
+            ref="licenseInputRef"
+            v-model="licenseExpression"
+            type="text"
+            class="form-control"
+            :class="{ 'is-invalid': validationError }"
+            placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
+            @input="onInput"
+            @keydown="handleKeyDown"
+            @focus="showSuggestions = true"
+            @blur="handleBlur"
+          >
+          <button
+            type="button"
+            class="btn btn-primary add-license-btn"
+            :disabled="!licenseExpression.trim()"
+            title="Add license as tag"
+            @click="addCurrentExpression"
+          >
+            Add
+          </button>
+        </div>
+        <div v-if="showSuggestions && filteredLicenses.length > 0" class="license-suggestions">
+          <div
+            v-for="(license, index) in filteredLicenses"
+            :key="license.key"
+            class="license-suggestion"
+            :class="{ 'active': index === selectedIndex }"
+            @mousedown.prevent="selectLicense(license)"
+          >
+            <div class="license-name">{{ license.name }}</div>
+            <div class="license-key">{{ license.key }}</div>
+            <div v-if="license.category" class="license-category" :class="{ 'operator': license.category === 'operator' }">{{ license.category }}</div>
+          </div>
+        </div>
+      </div>
+      <div v-if="validationError" class="invalid-feedback">
+        {{ validationError }}
       </div>
     </div>
 
-    <div class="form-group mb-0">
-      <label class="form-label">License Text</label>
-      <textarea
-        v-model="customLicenseData.text"
-        class="form-control"
-        :class="{ 'is-invalid': validationErrors?.text }"
-        rows="4"
-        placeholder="Enter the full text of the license"
-      ></textarea>
-      <div v-if="validationErrors?.text" class="invalid-feedback">
-        {{ validationErrors.text }}
+    <!-- Custom License Form -->
+    <div v-if="unknownTokens.length > 0" class="custom-license-form">
+      <div class="alert alert-info">
+        <h5>Unknown License Detected</h5>
+        <p>The following license identifier is not recognized: <span class="badge">{{ unknownTokens[0] }}</span></p>
+        <p>Please provide additional information to register this custom license.</p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h6>Register Custom License: {{ unknownTokens[0] }}</h6>
+        </div>
+        <div class="card-body">
+          <form @submit.prevent="submitCustomLicense">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label class="form-label">License Name <span class="text-danger">*</span></label>
+                  <input
+                    v-model="customLicense.name"
+                    type="text"
+                    class="form-control"
+                    :class="{ 'is-invalid': validationErrors?.name }"
+                    placeholder="Enter license name"
+                    required
+                  >
+                  <div v-if="validationErrors?.name" class="invalid-feedback">
+                    {{ validationErrors.name }}
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label class="form-label">License URL</label>
+                  <input
+                    v-model="customLicense.url"
+                    type="url"
+                    class="form-control"
+                    :class="{ 'is-invalid': validationErrors?.url }"
+                    placeholder="https://example.com/license"
+                  >
+                  <div v-if="validationErrors?.url" class="invalid-feedback">
+                    {{ validationErrors.url }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group mt-3">
+              <label class="form-label">License Text</label>
+              <textarea
+                v-model="customLicense.text"
+                class="form-control"
+                :class="{ 'is-invalid': validationErrors?.text }"
+                rows="4"
+                placeholder="Enter the full text of the license"
+              ></textarea>
+              <div v-if="validationErrors?.text" class="invalid-feedback">
+                {{ validationErrors.text }}
+              </div>
+            </div>
+            <div class="mt-3">
+              <button type="submit" class="btn btn-primary" :disabled="!customLicense.name">
+                Save License Information
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 
-    <button
-      class="btn-add mt-3"
-      :disabled="!customLicenseData.name"
-      @click="addCustomLicense"
-    >
-      <i class="far fa-plus-circle"></i>
-      Add Custom License
-    </button>
+    <!-- Success Message -->
+    <div v-if="showCustomLicenseSuccess" class="alert alert-success mt-3">
+      Custom license information saved successfully!
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { ref, computed } from 'vue';
-  import { License } from '../enums';
-  import type { CustomLicense } from '../type_defs';
+import { ref, reactive, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
+import type { CustomLicense } from '../type_defs'
+import $axios from '../../../core/js/utils'
+import { AxiosError } from 'axios'
 
-  interface Props {
-    modelValue: (string | CustomLicense)[];
-    validationErrors?: Record<string, string>;
+interface LicenseInfo {
+  key: string;
+  name: string;
+  category?: string | null; // Make category optional since SPDX licenses don't have it
+  origin: string;
+  url?: string;
+}
+
+interface ValidationResponse {
+  status: number;
+  normalized?: string;
+  tokens?: Array<{ key: string; known: boolean }>;
+  unknown_tokens?: string[];
+  error?: string;
+}
+
+interface LicenseTag {
+  value: string;
+  isInvalid?: boolean;
+}
+
+interface Props {
+  modelValue: (string | CustomLicense)[]
+  validationErrors?: Record<string, string>
+  validationResponse: ValidationResponse
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits(['update:modelValue'])
+
+const licenseExpression = ref('')
+const validationError = ref('')
+const showCustomLicenseSuccess = ref(false)
+const validationErrors = ref<Record<string, string>>({})
+const licenseTags = ref<LicenseTag[]>([])
+
+const unknownTokens = computed(() => props.validationResponse?.unknown_tokens || [])
+
+const customLicense = reactive({
+  key: '',
+  name: '',
+  url: '',
+  text: '',
+})
+
+// --- Autocomplete logic ---
+const licenses = ref<LicenseInfo[]>([])
+const showSuggestions = ref(false)
+const selectedIndex = ref(-1)
+const licenseInputRef = ref<HTMLInputElement | null>(null)
+
+const filteredLicenses = computed(() => {
+  if (!licenseExpression.value) return licenses.value
+
+  // Get the current cursor position and extract the current token being typed
+  const input = licenseInputRef.value
+  const cursorPos = input?.selectionStart || licenseExpression.value.length
+  const beforeCursor = licenseExpression.value.substring(0, cursorPos)
+
+  // Split by license operators to find the current token
+  const operators = ['AND', 'OR', 'WITH']
+  const operatorPattern = new RegExp(`\\s+(${operators.join('|')})\\s+`, 'gi')
+
+  // Find the last complete token before cursor
+  let currentToken = beforeCursor
+  let match
+  let lastOperatorEnd = 0
+
+  // Reset the regex lastIndex to avoid issues
+  operatorPattern.lastIndex = 0
+  while ((match = operatorPattern.exec(beforeCursor)) !== null) {
+    lastOperatorEnd = match.index + match[0].length
   }
 
-  const props = defineProps<Props>()
-  const emits = defineEmits(['update:modelValue'])
+  if (lastOperatorEnd > 0) {
+    currentToken = beforeCursor.substring(lastOperatorEnd).trim()
+  }
 
-  const selectedLicense = ref<string>('');
-  const licenseType = ref<string>('well-known');
-  const customLicenseData = ref<CustomLicense>({
-    name: null,
-    url: null,
-    text: null
-  });
+  // Filter licenses based on the current token being typed
+  if (!currentToken) return licenses.value
 
-  // Common licenses to show at the top
-  const commonLicenses = ['MIT', 'Apache-2.0', 'GPL-3.0', 'BSD-3-Clause', 'ISC'];
+  const searchTerm = currentToken.toLowerCase().replace(/\s+/g, '-')
 
-  // Compute remaining licenses excluding the common ones
-  const remainingLicenses = computed(() => {
-    return Object.values(License).filter(license => !commonLicenses.includes(license));
-  });
+  // Create a combined list of licenses and operators
+  const combinedSuggestions = [...licenses.value]
 
-  const addSelectedLicense = () => {
-    if (!selectedLicense.value) return;
+  // Add operator suggestions if we have a previous license token
+  if (lastOperatorEnd > 0 || (beforeCursor.trim().length > 0 && !currentToken.includes(' '))) {
+    // Check if currentToken could be the start of an operator
+    const matchingOperators = operators.filter(op =>
+      op.toLowerCase().startsWith(currentToken.toLowerCase())
+    )
 
-    // Check if license is already added
-    if (!props.modelValue.includes(selectedLicense.value)) {
-      emits('update:modelValue', [...props.modelValue, selectedLicense.value]);
+    matchingOperators.forEach(op => {
+      combinedSuggestions.push({
+        key: op,
+        name: `${op} operator`,
+        category: 'operator',
+        origin: 'system'
+      } as LicenseInfo)
+    })
+  }
+
+  return combinedSuggestions.filter(item => {
+    if (item.category === 'operator') {
+      return item.key.toLowerCase().startsWith(currentToken.toLowerCase())
+    } else {
+      const licenseKey = item.key.toLowerCase()
+      const licenseName = item.name.toLowerCase()
+      return (
+        licenseKey.includes(searchTerm) ||
+        licenseName.includes(searchTerm)
+      )
     }
+  })
+})
 
-    // Reset selection
-    selectedLicense.value = '';
-  };
+async function loadLicenses() {
+  try {
+    const response = await $axios.get('/api/v1/licensing/licenses')
+    licenses.value = response.data
+  } catch {
+    // fail silently
+  }
+}
+onMounted(loadLicenses)
 
-  const addCustomLicense = () => {
-    if (!customLicenseData.value.name?.trim()) return;
+// Initialize tags from props
+if (props.modelValue && props.modelValue.length > 0) {
+  licenseTags.value = props.modelValue.map(lic => ({
+    value: typeof lic === 'string' ? lic : (lic.name || ''),
+    isInvalid: false
+  })).filter(tag => tag.value.length > 0)
+  licenseExpression.value = ''
+} else {
+  licenseTags.value = []
+  licenseExpression.value = ''
+}
 
-    emits('update:modelValue', [...props.modelValue, { ...customLicenseData.value }]);
-    customLicenseData.value = { name: null, url: null, text: null };
-  };
+function onInput() {
+  showSuggestions.value = true
+}
 
-  const removeLicense = (licenseIndex: number) => {
-    const newLicenses = [...props.modelValue];
-    newLicenses.splice(licenseIndex, 1);
-    emits('update:modelValue', newLicenses);
-  };
+function addCurrentExpression() {
+  const expression = licenseExpression.value.trim()
+  if (expression && !licenseTags.value.some(tag => tag.value === expression)) {
+    licenseTags.value.push({ value: expression })
+    licenseExpression.value = ''
+    updateModelValue()
+    validateTag(expression, licenseTags.value.length - 1)
+  }
+}
 
+function removeTag(index: number) {
+  licenseTags.value.splice(index, 1)
+  updateModelValue()
+}
+
+function updateModelValue() {
+  const allLicenses: string[] = []
+
+  // Add all tags
+  licenseTags.value.forEach(tag => {
+    allLicenses.push(tag.value)
+  })
+
+  // Add current input if it has content
+  if (licenseExpression.value.trim()) {
+    allLicenses.push(licenseExpression.value.trim())
+  }
+
+  emit('update:modelValue', allLicenses)
+}
+
+async function validateTag(tagValue: string, tagIndex: number) {
+  try {
+    const response = await $axios.post('/api/v1/licensing/license-expressions/validate', {
+      expression: tagValue
+    })
+
+    if (response.data.status === 200) {
+      // Valid license - remove invalid flag if it exists
+      if (licenseTags.value[tagIndex]) {
+        licenseTags.value[tagIndex].isInvalid = false
+      }
+    } else {
+      // Invalid license - mark as invalid
+      if (licenseTags.value[tagIndex]) {
+        licenseTags.value[tagIndex].isInvalid = true
+      }
+    }
+  } catch {
+    // Error during validation - mark as invalid
+    if (licenseTags.value[tagIndex]) {
+      licenseTags.value[tagIndex].isInvalid = true
+    }
+  }
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  // Handle Backspace on empty input to remove last tag
+  if (e.key === 'Backspace' && !licenseExpression.value && licenseTags.value.length > 0) {
+    removeTag(licenseTags.value.length - 1)
+    return
+  }
+
+  // Handle Enter to add current expression as tag (when not using autocomplete)
+  if (e.key === 'Enter' && (!showSuggestions.value || selectedIndex.value < 0)) {
+    e.preventDefault()
+    addCurrentExpression()
+    return
+  }
+
+  // Autocomplete handling
+  if (!showSuggestions.value || filteredLicenses.value.length === 0) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    selectedIndex.value = (selectedIndex.value + 1) % filteredLicenses.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    selectedIndex.value = selectedIndex.value <= 0 ? filteredLicenses.value.length - 1 : selectedIndex.value - 1
+  } else if (e.key === 'Enter') {
+    if (selectedIndex.value >= 0) {
+      selectLicense(filteredLicenses.value[selectedIndex.value])
+      e.preventDefault()
+    }
+  } else if (e.key === 'Escape') {
+    showSuggestions.value = false
+    selectedIndex.value = -1
+  }
+}
+
+function handleBlur() {
+  setTimeout(() => {
+    showSuggestions.value = false
+    selectedIndex.value = -1
+  }, 200)
+}
+
+function selectLicense(license: LicenseInfo) {
+  // Get current cursor position and replace only the current token
+  const input = licenseInputRef.value
+  if (!input) {
+    // Fallback for when input ref is not available (like in tests)
+    if (license.category === 'operator') {
+      licenseExpression.value = licenseExpression.value.trim() + ' ' + license.key + ' '
+    } else {
+      licenseExpression.value = license.key
+    }
+    showSuggestions.value = false
+    selectedIndex.value = -1
+    return
+  }
+
+  const cursorPos = input.selectionStart || licenseExpression.value.length
+  const beforeCursor = licenseExpression.value.substring(0, cursorPos)
+  const afterCursor = licenseExpression.value.substring(cursorPos)
+
+  // Find where the current token starts
+  const operators = ['AND', 'OR', 'WITH']
+  const operatorPattern = new RegExp(`\\s+(${operators.join('|')})\\s+`, 'gi')
+
+  let tokenStart = 0
+  let match
+  operatorPattern.lastIndex = 0
+  while ((match = operatorPattern.exec(beforeCursor)) !== null) {
+    tokenStart = match.index + match[0].length
+  }
+
+  // Replace only the current token with the selected license/operator
+  const beforeToken = licenseExpression.value.substring(0, tokenStart)
+  let replacement = license.key
+
+  // If it's an operator, add appropriate spacing
+  if (license.category === 'operator') {
+    const needsSpaceBefore = beforeToken.length > 0 && !beforeToken.endsWith(' ')
+    const needsSpaceAfter = afterCursor.length > 0 && !afterCursor.startsWith(' ')
+
+    replacement = (needsSpaceBefore ? ' ' : '') + license.key + (needsSpaceAfter ? ' ' : '')
+  }
+
+  const newExpression = beforeToken + replacement + afterCursor
+
+  licenseExpression.value = newExpression
+  showSuggestions.value = false
+  selectedIndex.value = -1
+
+  // Position cursor after the inserted license/operator
+  nextTick(() => {
+    const newCursorPos = tokenStart + replacement.length
+    input.setSelectionRange(newCursorPos, newCursorPos)
+    input.focus()
+  })
+}
+// --- End autocomplete logic ---
+
+// Watch for unknown tokens and update the custom license form
+watch(
+  () => unknownTokens.value,
+  (tokens) => {
+    if (tokens.length) {
+      customLicense.key = tokens[0]
+      customLicense.name = ''
+      customLicense.url = ''
+      customLicense.text = ''
+      validationErrors.value = {}
+    }
+  },
+  { immediate: true }
+)
+
+// Watch for changes in modelValue from parent
+watch(() => props.modelValue, (newValue) => {
+  if (!newValue || newValue.length === 0) {
+    licenseTags.value = []
+    licenseExpression.value = ''
+  } else {
+    const newTags = newValue.map(lic => ({
+      value: typeof lic === 'string' ? lic : (lic.name || ''),
+      isInvalid: false
+    })).filter(tag => tag.value.length > 0)
+
+    // Only update if different to avoid infinite loops
+    const currentTagValues = licenseTags.value.map(tag => tag.value).join(',')
+    const newTagValues = newTags.map(tag => tag.value).join(',')
+
+    if (currentTagValues !== newTagValues) {
+      licenseTags.value = newTags
+      licenseExpression.value = ''
+    }
+  }
+})
+
+// Watch licenseExpression for validation (without debouncing, just for validation display)
+let debounceTimer: number | null = null
+watch(licenseExpression, async (expr) => {
+  // Clear any pending debounce
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+
+  if (!expr.trim()) {
+    validationError.value = ''
+    return
+  }
+
+  // Debounce the validation for UI feedback only
+  debounceTimer = window.setTimeout(async () => {
+    try {
+      await $axios.post('/api/v1/licensing/license-expressions/validate', {
+        expression: expr
+      })
+      validationError.value = ''
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        validationError.value = error.response?.data?.detail || 'Invalid license expression'
+      } else {
+        validationError.value = 'Invalid license expression'
+      }
+    }
+  }, 300) // 300ms debounce
+})
+
+// Initialize tags from props
+if (props.modelValue && props.modelValue.length > 0) {
+  licenseTags.value = props.modelValue.map(lic => ({
+    value: typeof lic === 'string' ? lic : (lic.name || ''),
+    isInvalid: false
+  })).filter(tag => tag.value.length > 0)
+  licenseExpression.value = ''
+} else {
+  licenseTags.value = []
+  licenseExpression.value = ''
+}
+
+// Clean up timer on component unmount
+onBeforeUnmount(() => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+})
+
+async function validateExpression() {
+  try {
+    const response = await $axios.post('/api/v1/licensing/license-expressions/validate', {
+      expression: licenseExpression.value
+    })
+    validationError.value = ''
+    return response.data
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      validationError.value = error.response?.data?.detail || 'Invalid license expression'
+    } else {
+      validationError.value = 'Invalid license expression'
+    }
+    return null
+  }
+}
+
+
+
+async function submitCustomLicense() {
+  try {
+    validationErrors.value = {}
+    await $axios.post('/api/v1/licensing/custom-licenses', {
+      key: customLicense.key,
+      name: customLicense.name,
+      url: customLicense.url,
+      text: customLicense.text,
+    })
+    showCustomLicenseSuccess.value = true
+    setTimeout(() => {
+      showCustomLicenseSuccess.value = false
+    }, 3000)
+    // Revalidate the expression to update the unknown tokens
+    await validateExpression()
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.data?.detail) {
+      validationErrors.value = error.response.data.detail
+    } else {
+      validationErrors.value = { general: 'Failed to save custom license information' }
+    }
+  }
+}
 </script>
 
 <style scoped>
+.licenses-editor {
+  width: 100%;
+}
 
-  .licenses-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-  }
+.license-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  background-color: #f8f9fa;
+  min-height: 2.5rem;
+  align-items: flex-start;
+  align-content: flex-start;
+}
 
-  .license-badge {
-    background-color: #ffffff;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    padding: 0.75rem 1rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    transition: all 0.2s ease;
-  }
+.license-tag {
+  display: inline-flex;
+  align-items: center;
+  background-color: #0d6efd;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 0.5rem;
+  max-width: 200px;
+  transition: all 0.2s ease;
+}
 
-  .license-badge:hover {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transform: translateY(-1px);
-  }
+.license-tag.invalid {
+  background-color: #dc3545;
+}
 
-  .license-badge i {
-    cursor: pointer;
-    color: #6c757d;
-    transition: all 0.2s ease;
-    font-size: 0.875rem;
-  }
+.license-tag:hover {
+  background-color: #0b5ed7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
 
-  .license-badge i:hover {
-    color: #dc3545;
-    transform: scale(1.1);
-  }
+.license-tag.invalid:hover {
+  background-color: #bb2d3b;
+}
 
-  .license-type-selector {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    padding: 0.5rem;
-    background: #f8f9fa;
-    border-radius: 6px;
-  }
+.license-tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
 
-  .license-type-option {
-    flex: 1;
-    text-align: center;
-    padding: 0.75rem;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
-  }
+.license-tag-remove {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
 
-  .license-type-option:hover {
-    background: #ffffff;
-  }
+.license-tag-remove:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
 
-  .license-type-option.active {
-    background: #ffffff;
-    border-color: #0d6efd;
-    color: #0d6efd;
-    box-shadow: 0 1px 3px rgba(13,110,253,0.1);
-  }
+.license-tag-remove:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 1px;
+}
 
-  .license-type-option i {
-    margin-right: 0.5rem;
-  }
+.license-input-container {
+  position: relative;
+}
 
-  .well-known-license-selector {
-    margin-bottom: 1rem;
-  }
+.input-with-button {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
 
-  .form-select {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    color: #495057;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
+.input-with-button .form-control {
+  flex: 1;
+}
 
-  .form-select:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.15);
-  }
+.add-license-btn {
+  white-space: nowrap;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
 
-  optgroup {
-    font-weight: 600;
-    color: #2c3e50;
-  }
-
-  option {
-    padding: 0.5rem;
-  }
-
-  .custom-license-editor {
-    background: #ffffff;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    padding: 1.5rem;
-  }
-
-  .form-group {
-    margin-bottom: 1.25rem;
-  }
-
-  .form-label {
-    font-weight: 500;
-    color: #495057;
-    margin-bottom: 0.5rem;
-    display: block;
-  }
-
-  .form-control {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-  }
-
-  .form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.15);
-  }
-
-  .btn-add {
-    width: 100%;
-    padding: 0.75rem;
-    background: #f8f9fa;
-    border: 1px dashed #dee2e6;
-    border-radius: 6px;
-    color: #6c757d;
-    transition: all 0.2s ease;
-    cursor: pointer;
-  }
-
-  .btn-add:hover:not(:disabled) {
-    background: #ffffff;
-    border-color: #0d6efd;
-    color: #0d6efd;
-  }
-
-  .btn-add:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn-add i {
-    margin-right: 0.5rem;
-  }
-
-  .validation-error {
-    color: #dc3545;
-    font-size: 0.875rem;
-    margin-top: 0.5rem;
-  }
+.license-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  max-height: 300px;
+  overflow-y: auto;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.license-suggestion {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.license-suggestion:last-child {
+  border-bottom: none;
+}
+.license-suggestion:hover,
+.license-suggestion.active {
+  background-color: #f8f9fa;
+}
+.license-suggestion .license-name {
+  font-weight: 500;
+  color: #212529;
+}
+.license-suggestion .license-key {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-family: monospace;
+}
+.license-suggestion .license-category {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: capitalize;
+  background-color: #e9ecef;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  display: inline-block;
+}
+.license-suggestion .license-category.operator {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  font-weight: 500;
+}
+.custom-license-form {
+  margin-top: 1.5rem;
+}
+.alert {
+  margin-bottom: 1rem;
+}
+.card {
+  background-color: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  padding: 1.25rem;
+}
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+.text-danger {
+  color: #dc3545;
+}
+.badge {
+  padding: 0.25em 0.5em;
+  font-size: 0.875em;
+  font-weight: 700;
+  color: #fff;
+  background-color: #0dcaf0;
+  border-radius: 0.25rem;
+}
+.btn-primary {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+  color: #fff;
+}
+.btn-primary:hover {
+  background-color: #0b5ed7;
+  border-color: #0a58ca;
+}
+.btn-primary:focus {
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.5);
+}
+.btn-primary:disabled {
+  background-color: #0b5ed7;
+  border-color: #0a58ca;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.alert-info {
+  background-color: #cff4fc;
+  border-color: #b6effb;
+  color: #055160;
+}
+.alert-success {
+  background-color: #d1e7dd;
+  border-color: #badbcc;
+  color: #0f5132;
+}
 </style>
