@@ -1,6 +1,7 @@
 ---
 description: Javascript and Typescript
 globs: *.js, *.ts
+alwaysApply: false
 ---
 # Javascript Runtime
 
@@ -22,3 +23,10 @@ globs: *.js, *.ts
 - Use TypeScript for all code; prefer interfaces over types for their extendability and ability to merge.
 - Avoid enums; use maps instead for better type safety and flexibility.
 - Use functional components with TypeScript interfaces.
+
+# Test scripts
+- All functionality in TypeScript shall have good test coverage
+
+# Validating
+- Always run `bun run lint` to lint TypeScript
+- Run `bun vitest` to invoke all unit tests

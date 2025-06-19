@@ -137,6 +137,11 @@
     <div v-if="showCustomLicenseSuccess" class="alert alert-success mt-3">
       Custom license information saved successfully!
     </div>
+
+    <!-- General validation errors from props -->
+    <div v-if="validationErrors.general" class="invalid-feedback d-block mt-2">
+      {{ validationErrors.general }}
+    </div>
   </div>
 </template>
 
@@ -179,7 +184,7 @@ const emit = defineEmits(['update:modelValue'])
 const licenseExpression = ref('')
 const validationError = ref('')
 const showCustomLicenseSuccess = ref(false)
-const validationErrors = ref<Record<string, string>>({})
+const validationErrors = ref<Record<string, string>>(props.validationErrors || {})
 const licenseTags = ref<LicenseTag[]>([])
 
 const unknownTokens = computed(() => props.validationResponse?.unknown_tokens || [])
@@ -442,6 +447,11 @@ function selectLicense(license: LicenseInfo) {
 }
 // --- End autocomplete logic ---
 
+// Watch for changes to validationErrors prop
+watch(() => props.validationErrors, (newErrors) => {
+  validationErrors.value = newErrors || {}
+}, { immediate: true })
+
 // Watch for unknown tokens and update the custom license form
 watch(
   () => unknownTokens.value,
@@ -451,7 +461,10 @@ watch(
       customLicense.name = ''
       customLicense.url = ''
       customLicense.text = ''
-      validationErrors.value = {}
+      // Only clear validation errors if they're not from props
+      if (!props.validationErrors) {
+        validationErrors.value = {}
+      }
     }
   },
   { immediate: true }
@@ -545,11 +558,12 @@ async function validateExpression() {
   }
 }
 
-
-
 async function submitCustomLicense() {
   try {
-    validationErrors.value = {}
+    // Only clear validation errors if they're not from props
+    if (!props.validationErrors) {
+      validationErrors.value = {}
+    }
     await $axios.post('/api/v1/licensing/custom-licenses', {
       key: customLicense.key,
       name: customLicense.name,

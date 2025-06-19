@@ -16,7 +16,7 @@ vi.mock('../../../core/js/utils', () => ({
 }))
 
 import $axios from '../../../core/js/utils'
-const mockPost = vi.mocked($axios.post)
+
 
 interface ValidationResponse {
   status: number
@@ -344,7 +344,20 @@ describe('LicensesEditor.vue', () => {
     })
 
     it('should submit custom license form', async () => {
-      vi.mocked($axios.post).mockResolvedValueOnce(createMockResponse({ success: true }))
+      // Mock the validation endpoint to not interfere
+      vi.mocked($axios.post).mockImplementation((url) => {
+        if (url === '/api/v1/licensing/custom-licenses') {
+          return Promise.resolve(createMockResponse({ success: true }))
+        }
+        if (url === '/api/v1/licensing/license-expressions/validate') {
+          return Promise.resolve(createMockResponse({
+            status: 200,
+            normalized: 'MIT',
+            tokens: [{ key: 'MIT', known: true }]
+          }))
+        }
+        return Promise.resolve(createMockResponse({}))
+      })
 
       wrapper = mount(LicensesEditor, {
         props: {
@@ -367,6 +380,11 @@ describe('LicensesEditor.vue', () => {
       await submitButton.trigger('click')
       await nextTick()
 
+      // Also try triggering submit on the form itself
+      const form = wrapper.find('form')
+      await form.trigger('submit')
+      await nextTick()
+
       expect(vi.mocked($axios.post)).toHaveBeenCalledWith('/api/v1/licensing/custom-licenses', {
         key: 'CUSTOM_LICENSE',
         name: 'My Custom License',
@@ -376,7 +394,20 @@ describe('LicensesEditor.vue', () => {
     })
 
     it('should show success message after custom license submission', async () => {
-      vi.mocked($axios.post).mockResolvedValueOnce(createMockResponse({ success: true }))
+      // Mock the validation endpoint to not interfere
+      vi.mocked($axios.post).mockImplementation((url) => {
+        if (url === '/api/v1/licensing/custom-licenses') {
+          return Promise.resolve(createMockResponse({ success: true }))
+        }
+        if (url === '/api/v1/licensing/license-expressions/validate') {
+          return Promise.resolve(createMockResponse({
+            status: 200,
+            normalized: 'MIT',
+            tokens: [{ key: 'MIT', known: true }]
+          }))
+        }
+        return Promise.resolve(createMockResponse({}))
+      })
 
       wrapper = mount(LicensesEditor, {
         props: {
@@ -393,6 +424,11 @@ describe('LicensesEditor.vue', () => {
       await submitButton.trigger('click')
       await nextTick()
 
+      // Also try triggering submit on the form itself
+      const form = wrapper.find('form')
+      await form.trigger('submit')
+      await nextTick()
+
       // Check for success message
       await new Promise(resolve => setTimeout(resolve, 100))
       await nextTick()
@@ -401,9 +437,22 @@ describe('LicensesEditor.vue', () => {
     })
 
     it('should handle custom license submission errors', async () => {
-      const errorDetail = { name: 'This field is required' }
-      vi.mocked($axios.post).mockRejectedValueOnce({
-        response: { data: { detail: errorDetail } }
+      const errorDetail = { url: 'Invalid URL format' }
+      // Mock the validation endpoint to not interfere
+      vi.mocked($axios.post).mockImplementation((url) => {
+        if (url === '/api/v1/licensing/custom-licenses') {
+          return Promise.reject({
+            response: { data: { detail: errorDetail } }
+          })
+        }
+        if (url === '/api/v1/licensing/license-expressions/validate') {
+          return Promise.resolve(createMockResponse({
+            status: 200,
+            normalized: 'MIT',
+            tokens: [{ key: 'MIT', known: true }]
+          }))
+        }
+        return Promise.resolve(createMockResponse({}))
       })
 
       wrapper = mount(LicensesEditor, {
@@ -414,8 +463,18 @@ describe('LicensesEditor.vue', () => {
       })
       await nextTick()
 
+      // Fill in the name to enable the submit button
+      const nameInput = wrapper.find('input[placeholder="Enter license name"]')
+      await nameInput.setValue('My Custom License')
+      await nextTick()
+
       const submitButton = wrapper.find('button[type="submit"]')
       await submitButton.trigger('click')
+      await nextTick()
+
+      // Also try triggering submit on the form itself
+      const form = wrapper.find('form')
+      await form.trigger('submit')
       await nextTick()
 
       // Should show validation errors in UI
@@ -463,7 +522,7 @@ describe('LicensesEditor.vue', () => {
 
     it('should clear validation error on successful validation', async () => {
       // First set an error
-      mockPost.mockRejectedValueOnce({
+      vi.mocked($axios.post).mockRejectedValueOnce({
         response: { data: { detail: 'Invalid' } }
       })
 
@@ -475,7 +534,7 @@ describe('LicensesEditor.vue', () => {
       expect(wrapper.find('.invalid-feedback').exists()).toBe(true)
 
       // Then provide valid response
-      mockPost.mockResolvedValueOnce(createMockResponse({
+      vi.mocked($axios.post).mockResolvedValueOnce(createMockResponse({
         status: 200,
         normalized: 'MIT',
         tokens: [{ key: 'MIT', known: true }]
@@ -539,7 +598,7 @@ describe('LicensesEditor.vue', () => {
     })
 
     it('should handle adding multiple licenses with Add button', async () => {
-      mockPost.mockResolvedValue(createMockResponse({
+      vi.mocked($axios.post).mockResolvedValue(createMockResponse({
         status: 200,
         normalized: 'MIT',
         tokens: [{ key: 'MIT', known: true }]
