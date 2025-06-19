@@ -11,10 +11,7 @@
              </span>
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" @click="$emit('closeEditor')">
-          <i class="fa-solid fa-times me-2"></i>
-          Cancel
-        </button>
+
       </div>
 
       <div>
@@ -401,12 +398,10 @@
       }
 
       hasUnsavedChanges.value = false;
-      await showSuccess('Changes saved successfully');
+      showSuccess('Changes saved successfully');
 
-      // Switch to display view after delay
-      setTimeout(() => {
-        emits('closeEditor');
-      }, 1500);
+      // Navigate back immediately after saving
+      emits('closeEditor');
 
     } catch (error) {
       console.error(error);

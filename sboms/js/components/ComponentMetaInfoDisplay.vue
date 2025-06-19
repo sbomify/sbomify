@@ -119,7 +119,7 @@
   }
 
   const props = defineProps<Props>();
-  const isExpanded = ref(false);
+  const isExpanded = ref(true);
   const metadata = ref<ComponentMetaInfo>({
     supplier: {
       name: null,
