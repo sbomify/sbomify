@@ -19,6 +19,7 @@ from teams.utils import get_user_teams
 from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
+    ComponentMetaDataUpdate,
     CopyComponentMetadataRequest,
     CycloneDXSupportedVersion,
     DashboardSBOMUploadInfo,
@@ -289,6 +290,10 @@ def get_component_metadata(request, component_id: str):
     if "authors" in metadata:
         metadata["authors"] = strip_extra_fields(metadata["authors"])
 
+    # Include component id and name in the response
+    metadata["id"] = result.id
+    metadata["name"] = result.name
+
     return metadata
 
 
@@ -301,7 +306,7 @@ def get_component_metadata(request, component_id: str):
         404: ErrorResponse,
     },
 )
-def update_component_metadata(request, component_id: str, metadata: ComponentMetaData):
+def update_component_metadata(request, component_id: str, metadata: ComponentMetaDataUpdate):
     "Update metadata for a component."
     log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
     try:
@@ -398,7 +403,10 @@ def get_cyclonedx_component_metadata(
         return result
 
     component = result
-    component_metadata = ComponentMetaData(**component.metadata)
+    metadata_dict = component.metadata or {}
+    metadata_dict["id"] = component.id
+    metadata_dict["name"] = component.name
+    component_metadata = ComponentMetaData(**metadata_dict)
 
     component_cdx_metadata: cdx15.Metadata | cdx16.Metadata = component_metadata.to_cyclonedx(spec_version)
     sbom_metadata_dict = metadata.model_dump(mode="json", exclude_none=True, exclude_unset=True, by_alias=True)

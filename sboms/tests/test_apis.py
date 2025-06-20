@@ -234,10 +234,12 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response.status_code == 200
     response_json = response.json()
 
+    assert response_json["id"] == sample_component.id
+    assert response_json["name"] == sample_component.name
     assert response_json["supplier"] == {"contacts": []}
     assert response_json["authors"] == []
     assert response_json["licenses"] == []
-    assert len(response_json.keys()) == 3
+    assert len(response_json.keys()) == 5
 
     # Set component metadata
     component_metadata = {
@@ -273,6 +275,8 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
 
     assert response.status_code == 200
     response_data = response.json()
+    assert response_data["id"] == sample_component.id
+    assert response_data["name"] == sample_component.name
     assert response_data["supplier"] == component_metadata["supplier"]
     assert response_data["supplier"]["contacts"] == component_metadata["supplier"]["contacts"]
     assert response_data["authors"] == component_metadata["authors"]
@@ -631,6 +635,8 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
 
     assert response.status_code == 200
     response_data = response.json()
+    assert response_data["id"] == sample_component.id
+    assert response_data["name"] == sample_component.name
     assert len(response_data["licenses"]) == 3
     assert "Apache-2.0 WITH Commons-Clause" in response_data["licenses"]
     assert "MIT OR GPL-3.0" in response_data["licenses"]
@@ -679,6 +685,8 @@ def test_component_metadata_supplier_url_handling(sample_component: Component, s
 
     assert response.status_code == 200
     response_data = response.json()
+    assert response_data["id"] == sample_component.id
+    assert response_data["name"] == sample_component.name
     assert response_data["supplier"]["url"] == expected_output
     assert response_data["supplier"]["name"] == "Foo Bar Inc"
     assert len(response_data["supplier"]["contacts"]) == 1
@@ -727,6 +735,8 @@ def test_component_metadata_author_information(sample_component: Component, samp
 
     assert response.status_code == 200
     response_data = response.json()
+    assert response_data["id"] == sample_component.id
+    assert response_data["name"] == sample_component.name
     assert len(response_data["authors"]) == 3
 
     # Verify first author
