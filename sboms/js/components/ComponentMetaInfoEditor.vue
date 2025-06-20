@@ -400,14 +400,35 @@
     };
 
         try {
-      // Exclude read-only fields (id and name) from the update request
-      const updatePayload = {
-        supplier: metadata.value.supplier,
-        authors: metadata.value.authors,
-        licenses: metadata.value.licenses,
-        lifecycle_phase: metadata.value.lifecycle_phase
-      };
-      const response = await $axios.put(`/api/v1/sboms/component/${props.componentId}/meta`, updatePayload)
+      // Only send changed fields in PATCH request
+      const currentMetadata = JSON.stringify(metadata.value);
+      const original = JSON.parse(originalMetadata.value || '{}');
+      const current = JSON.parse(currentMetadata);
+
+      const updatePayload: Partial<ComponentMetaInfo> = {};
+
+      // Check each field for changes (excluding read-only fields id and name)
+      if (JSON.stringify(current.supplier) !== JSON.stringify(original.supplier)) {
+        updatePayload.supplier = current.supplier;
+      }
+      if (JSON.stringify(current.authors) !== JSON.stringify(original.authors)) {
+        updatePayload.authors = current.authors;
+      }
+      if (JSON.stringify(current.licenses) !== JSON.stringify(original.licenses)) {
+        updatePayload.licenses = current.licenses;
+      }
+      if (current.lifecycle_phase !== original.lifecycle_phase) {
+        updatePayload.lifecycle_phase = current.lifecycle_phase;
+      }
+
+      // Only make the request if there are actually changes
+      if (Object.keys(updatePayload).length === 0) {
+        showSuccess('No changes to save');
+        emits('closeEditor');
+        return;
+      }
+
+      const response = await $axios.patch(`/api/v1/sboms/component/${props.componentId}/meta`, updatePayload)
 
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);

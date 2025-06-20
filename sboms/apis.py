@@ -19,6 +19,7 @@ from teams.utils import get_user_teams
 from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
+    ComponentMetaDataPatch,
     ComponentMetaDataUpdate,
     CopyComponentMetadataRequest,
     CycloneDXSupportedVersion,
@@ -323,6 +324,52 @@ def update_component_metadata(request, component_id: str, metadata: ComponentMet
 
         log.debug(f"Final metadata to be saved: {meta_dict}")
         result.metadata = meta_dict
+        result.save()
+        return 204, None
+    except ValidationError as ve:
+        log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
+        log.error(f"Failed validation data: {metadata.model_dump()}")
+        return 422, {"detail": str(ve.errors())}
+    except Exception as e:
+        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
+        return 400, {"detail": str(e)}
+
+
+@router.patch(
+    "/component/{component_id}/meta",
+    response={
+        204: None,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+)
+def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
+    "Partially update metadata for a component."
+    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    try:
+        result = _public_api_item_access_checks(request, "component", component_id)
+        if isinstance(result, tuple):
+            return result
+
+        # Get existing metadata
+        existing_metadata = result.metadata or {}
+
+        # Convert incoming metadata to dict, excluding unset fields
+        meta_dict = metadata.model_dump(exclude_unset=True)
+
+        # Only process licenses if they were explicitly provided in the request
+        if "licenses" in meta_dict:
+            licenses = meta_dict.get("licenses", [])
+            if licenses is None:
+                licenses = []
+            meta_dict["licenses"] = licenses
+
+        # Merge with existing metadata
+        updated_metadata = {**existing_metadata, **meta_dict}
+
+        log.debug(f"Final metadata to be saved: {updated_metadata}")
+        result.metadata = updated_metadata
         result.save()
         return 204, None
     except ValidationError as ve:

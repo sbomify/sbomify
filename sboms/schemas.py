@@ -256,6 +256,35 @@ class ComponentMetaDataUpdate(BaseModel):
         return v
 
 
+class ComponentMetaDataPatch(BaseModel):
+    """Schema for partially updating component metadata using PATCH (all fields optional)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    supplier: SupplierSchema | None = None
+    authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] | None = None
+    licenses: list[LicenseSchema | CustomLicenseSchema | str] | None = None
+    lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def clean_authors_contacts(cls, v):
+        """Clean author contact information by converting empty strings to None."""
+        if isinstance(v, list):
+            cleaned_authors = []
+            for author in v:
+                if isinstance(author, dict):
+                    # Convert empty strings to None for email validation
+                    cleaned_author = author.copy()
+                    if cleaned_author.get("email") == "":
+                        cleaned_author["email"] = None
+                    cleaned_authors.append(cleaned_author)
+                else:
+                    cleaned_authors.append(author)
+            return cleaned_authors
+        return v
+
+
 class ComponentMetadataRequest(BaseModel):
     version: str
 

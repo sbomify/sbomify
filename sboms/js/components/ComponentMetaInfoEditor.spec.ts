@@ -13,7 +13,8 @@ interface MockAxiosResponse<T = unknown> {
 // Mock the $axios utils module using Bun's mock
 const mockAxios = {
   get: mock<(url: string) => Promise<MockAxiosResponse<ComponentMetaInfo>>>(),
-  put: mock<(url: string, data: unknown) => Promise<MockAxiosResponse<Record<string, unknown>>>>()
+  put: mock<(url: string, data: unknown) => Promise<MockAxiosResponse<Record<string, unknown>>>>(),
+  patch: mock<(url: string, data: unknown) => Promise<MockAxiosResponse<Record<string, unknown>>>>()
 }
 
 mock.module('../../../core/js/utils', () => ({
@@ -56,10 +57,12 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
     // Clear all mocks
     mockAxios.get.mockClear()
     mockAxios.put.mockClear()
+    mockAxios.patch.mockClear()
 
     // Setup default mock responses
     mockAxios.get.mockResolvedValue(createMockResponse(mockMetadata))
     mockAxios.put.mockResolvedValue(createMockResponse({}))
+    mockAxios.patch.mockResolvedValue(createMockResponse({}))
   })
 
   describe('Lifecycle Phase Management', () => {
@@ -78,21 +81,13 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
     })
 
     it('should handle setting a lifecycle phase', async () => {
-      const metadataWithLifecycle = {
-        ...mockMetadata,
+      // Only send the changed field in PATCH request
+      const updatePayload = {
         lifecycle_phase: LifecyclePhase.Build
       }
+      await mockAxios.patch(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
 
-      // Exclude read-only fields from PUT request
-      const updatePayload = {
-        supplier: metadataWithLifecycle.supplier,
-        authors: metadataWithLifecycle.authors,
-        licenses: metadataWithLifecycle.licenses,
-        lifecycle_phase: metadataWithLifecycle.lifecycle_phase
-      }
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
-
-      expect(mockAxios.put).toHaveBeenCalledWith(
+      expect(mockAxios.patch).toHaveBeenCalledWith(
         `/api/v1/sboms/component/${mockComponentId}/meta`,
         updatePayload
       )
@@ -336,10 +331,11 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       )
 
       const [, callData] = mockAxios.put.mock.calls[0]
-      expect(callData.supplier.url).toHaveLength(3)
-      expect(callData.supplier.url).toContain('https://primary.com')
-      expect(callData.supplier.url).toContain('https://secondary.com')
-      expect(callData.supplier.url).toContain('https://docs.example.com')
+      const typedCallData = callData as ComponentMetaInfo
+      expect(typedCallData.supplier.url).toHaveLength(3)
+      expect(typedCallData.supplier.url).toContain('https://primary.com')
+      expect(typedCallData.supplier.url).toContain('https://secondary.com')
+      expect(typedCallData.supplier.url).toContain('https://docs.example.com')
     })
 
     it('should handle supplier with empty URL array', async () => {
@@ -356,8 +352,9 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithEmptyUrls)
 
       const [, callData] = mockAxios.put.mock.calls[0]
-      expect(callData.supplier.url).toEqual([])
-      expect(callData.supplier.name).toBe('No URL Supplier')
+      const typedCallData = callData as ComponentMetaInfo
+      expect(typedCallData.supplier.url).toEqual([])
+      expect(typedCallData.supplier.name).toBe('No URL Supplier')
     })
 
     it('should handle supplier with null URL', async () => {
@@ -374,8 +371,9 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithNullUrl)
 
       const [, callData] = mockAxios.put.mock.calls[0]
-      expect(callData.supplier.url).toBeNull()
-      expect(callData.supplier.name).toBe('Null URL Supplier')
+      const typedCallData = callData as ComponentMetaInfo
+      expect(typedCallData.supplier.url).toBeNull()
+      expect(typedCallData.supplier.name).toBe('Null URL Supplier')
     })
 
     it('should preserve supplier contacts when URLs are modified', async () => {
@@ -395,10 +393,11 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithContactsAndUrls)
 
       const [, callData] = mockAxios.put.mock.calls[0]
-      expect(callData.supplier.contacts).toHaveLength(2)
-      expect(callData.supplier.contacts[0].name).toBe('John Contact')
-      expect(callData.supplier.contacts[1].name).toBe('Jane Support')
-      expect(callData.supplier.url).toHaveLength(2)
+      const typedCallData = callData as ComponentMetaInfo
+      expect(typedCallData.supplier.contacts).toHaveLength(2)
+      expect(typedCallData.supplier.contacts[0].name).toBe('John Contact')
+      expect(typedCallData.supplier.contacts[1].name).toBe('Jane Support')
+      expect(typedCallData.supplier.url).toHaveLength(2)
     })
   })
 
