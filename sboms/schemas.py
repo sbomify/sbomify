@@ -5,7 +5,7 @@ from enum import Enum
 from types import ModuleType
 
 from ninja import Schema
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.utils import set_values_if_not_empty
 
@@ -97,6 +97,32 @@ class SupplierSchema(BaseModel):
     address: str | None = None
     contacts: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
 
+    @field_validator("url", mode="before")
+    @classmethod
+    def convert_url_to_list(cls, v):
+        """Convert string URL to list format for compatibility with frontend."""
+        if isinstance(v, str):
+            return [v]
+        return v
+
+    @field_validator("contacts", mode="before")
+    @classmethod
+    def clean_supplier_contacts(cls, v):
+        """Clean supplier contact information by converting empty strings to None."""
+        if isinstance(v, list):
+            cleaned_contacts = []
+            for contact in v:
+                if isinstance(contact, dict):
+                    # Convert empty strings to None for email validation
+                    cleaned_contact = contact.copy()
+                    if cleaned_contact.get("email") == "":
+                        cleaned_contact["email"] = None
+                    cleaned_contacts.append(cleaned_contact)
+                else:
+                    cleaned_contacts.append(contact)
+            return cleaned_contacts
+        return v
+
 
 class ComponentMetaData(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -105,6 +131,24 @@ class ComponentMetaData(BaseModel):
     authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
     lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def clean_authors_contacts(cls, v):
+        """Clean author contact information by converting empty strings to None."""
+        if isinstance(v, list):
+            cleaned_authors = []
+            for author in v:
+                if isinstance(author, dict):
+                    # Convert empty strings to None for email validation
+                    cleaned_author = author.copy()
+                    if cleaned_author.get("email") == "":
+                        cleaned_author["email"] = None
+                    cleaned_authors.append(cleaned_author)
+                else:
+                    cleaned_authors.append(author)
+            return cleaned_authors
+        return v
 
     def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata:
         CycloneDx = get_cyclonedx_module(spec_version)

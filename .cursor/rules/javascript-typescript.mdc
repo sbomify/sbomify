@@ -25,8 +25,9 @@ alwaysApply: false
 - Use functional components with TypeScript interfaces.
 
 # Test scripts
-- All functionality in TypeScript shall have good test coverage
+- All functionality in TypeScript shall have good test coverage.
+- We are using Bun's test tool for all front-end tests.
 
 # Validating
-- Always run `bun run lint` to lint TypeScript
-- Run `bun vitest` to invoke all unit tests
+- Always run `bun run lint` to lint TypeScript.
+- Run `bun test` to invoke all unit tests.

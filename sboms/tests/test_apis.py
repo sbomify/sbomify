@@ -635,3 +635,147 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
     assert "Apache-2.0 WITH Commons-Clause" in response_data["licenses"]
     assert "MIT OR GPL-3.0" in response_data["licenses"]
     assert "BSD-3-Clause" in response_data["licenses"]
+
+
+@pytest.mark.django_db
+def test_component_metadata_supplier_url_string_converted_to_array(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that sending supplier URL as string gets automatically converted to array."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # This should now work - URL as string should be converted to array
+    metadata_with_string_url = {
+        "supplier": {
+            "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
+            "name": "Foo Bar Inc",
+            "url": "https://jdoe.org"  # Single string should be converted to array
+        },
+        "authors": [],
+        "licenses": ["Apache-2.0"],
+        "lifecycle_phase": None
+    }
+
+    response = client.put(
+        url,
+        json.dumps(metadata_with_string_url),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify URL was converted to array
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["supplier"]["url"] == ["https://jdoe.org"]  # Should be converted to array
+    assert response_data["supplier"]["name"] == "Foo Bar Inc"
+    assert len(response_data["supplier"]["contacts"]) == 1
+    assert response_data["supplier"]["contacts"][0]["name"] == "John Doe"
+
+
+@pytest.mark.django_db
+def test_component_metadata_supplier_url_as_string_should_work(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that after the fix, supplier URL can be sent as string and gets converted to array."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # This should work after our fix - backend should accept string and convert to array
+    metadata_with_string_url = {
+        "supplier": {
+            "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
+            "name": "Foo Bar Inc",
+            "url": "https://jdoe.org"  # Single string should be converted to array
+        },
+        "authors": [],
+        "licenses": ["Apache-2.0"],
+        "lifecycle_phase": None
+    }
+
+    response = client.put(
+        url,
+        json.dumps(metadata_with_string_url),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify URL was converted to array
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["supplier"]["url"] == ["https://jdoe.org"]  # Should be converted to array
+    assert response_data["supplier"]["name"] == "Foo Bar Inc"
+
+
+@pytest.mark.django_db
+def test_component_metadata_author_information(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that author information can be saved and retrieved correctly."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Test with complete author information
+    metadata_with_authors = {
+        "supplier": {
+            "contacts": [],
+            "name": None,
+            "url": None,
+            "address": None
+        },
+        "authors": [
+            {"name": "John Doe", "email": "john@example.com", "phone": "123-456-7890"},
+            {"name": "Jane Smith", "email": "jane@example.com", "phone": ""},  # Empty phone should work
+            {"name": "Bob Wilson", "email": "", "phone": "987-654-3210"}  # Empty email should work
+        ],
+        "licenses": ["MIT"],
+        "lifecycle_phase": None
+    }
+
+    response = client.put(
+        url,
+        json.dumps(metadata_with_authors),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify authors were saved correctly
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data["authors"]) == 3
+
+    # Verify first author
+    assert response_data["authors"][0]["name"] == "John Doe"
+    assert response_data["authors"][0]["email"] == "john@example.com"
+    assert response_data["authors"][0]["phone"] == "123-456-7890"
+
+    # Verify second author (empty phone)
+    assert response_data["authors"][1]["name"] == "Jane Smith"
+    assert response_data["authors"][1]["email"] == "jane@example.com"
+    assert "phone" not in response_data["authors"][1] or response_data["authors"][1]["phone"] == ""
+
+    # Verify third author (empty email)
+    assert response_data["authors"][2]["name"] == "Bob Wilson"
+    assert "email" not in response_data["authors"][2] or response_data["authors"][2]["email"] == ""
+    assert response_data["authors"][2]["phone"] == "987-654-3210"

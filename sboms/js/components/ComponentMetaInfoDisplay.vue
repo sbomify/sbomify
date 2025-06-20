@@ -34,9 +34,24 @@
                         <td>Name</td>
                         <td>{{ metadata.supplier.name }}</td>
                       </tr>
-                      <tr v-if="metadata.supplier.url">
-                        <td>URL</td>
-                        <td>{{ metadata.supplier.url }}</td>
+                                            <tr v-if="metadata.supplier.url && ((Array.isArray(metadata.supplier.url) && metadata.supplier.url.length > 0 && metadata.supplier.url.some(url => url)) || (typeof metadata.supplier.url === 'string'))">
+                         <td>URL{{ Array.isArray(metadata.supplier.url) && metadata.supplier.url.length > 1 ? 's' : '' }}</td>
+                        <td>
+                          <div v-if="Array.isArray(metadata.supplier.url)">
+                            <div v-for="(url, index) in metadata.supplier.url" :key="index" class="mb-1">
+                              <a :href="url" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                                {{ url }}
+                                <i class="fas fa-external-link-alt ms-1 text-muted" style="font-size: 0.75rem;"></i>
+                              </a>
+                            </div>
+                          </div>
+                          <div v-else>
+                            <a :href="metadata.supplier.url" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                              {{ metadata.supplier.url }}
+                              <i class="fas fa-external-link-alt ms-1 text-muted" style="font-size: 0.75rem;"></i>
+                            </a>
+                          </div>
+                        </td>
                       </tr>
                       <tr v-if="metadata.supplier.address">
                         <td>Address</td>

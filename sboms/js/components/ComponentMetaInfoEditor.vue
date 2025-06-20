@@ -54,7 +54,7 @@
                       class="form-select"
                       :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
                     >
-                      <option value="">Select a phase...</option>
+                      <option :value="null">Select a phase...</option>
                       <option
                         v-for="phase in orderedLifecyclePhases"
                         :key="phase.value"
@@ -225,8 +225,15 @@
   const validateSupplier = (supplier: SupplierInfo) => {
     const errors: Record<string, string> = {};
 
-    // Only validate URL if it's provided
-    if (supplier.url && !isValidUrl(supplier.url)) {
+    // Validate URLs if provided (now supporting arrays)
+    if (supplier.url && Array.isArray(supplier.url)) {
+      supplier.url.forEach((url, index) => {
+        if (url && !isValidUrl(url)) {
+          errors[`url${index}`] = `URL ${index + 1}: Please enter a valid URL`;
+        }
+      });
+    } else if (supplier.url && typeof supplier.url === 'string' && !isValidUrl(supplier.url)) {
+      // Handle legacy string format for backward compatibility
       errors.url = 'Please enter a valid URL';
     }
 
@@ -362,8 +369,8 @@
     }
   };
 
-  const updateMetaData = async () => {
-    // Only validate what's provided
+      const updateMetaData = async () => {
+    // Only validate what's provided - validation function handles both string and array cases
     if (metadata.value.supplier.url) {
       validateSupplier(metadata.value.supplier);
     }
