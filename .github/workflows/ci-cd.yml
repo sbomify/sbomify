@@ -246,6 +246,6 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
-          LOCK_FILE: 'package-lock.json'
+          LOCK_FILE: 'bun.lock'
           AUGMENT: true
           UPLOAD: true

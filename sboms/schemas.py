@@ -135,6 +135,8 @@ class SupplierSchema(BaseModel):
 class ComponentMetaData(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    id: str
+    name: str
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
@@ -223,6 +225,35 @@ class ComponentMetaData(BaseModel):
         if self.lifecycle_phase:
             result.lifecycles = [CycloneDx.Lifecycles(phase=self.lifecycle_phase)]
         return result
+
+
+class ComponentMetaDataUpdate(BaseModel):
+    """Schema for updating component metadata (excludes read-only fields like id and name)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    supplier: SupplierSchema = Field(default_factory=SupplierSchema)
+    authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
+    licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
+    lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def clean_authors_contacts(cls, v):
+        """Clean author contact information by converting empty strings to None."""
+        if isinstance(v, list):
+            cleaned_authors = []
+            for author in v:
+                if isinstance(author, dict):
+                    # Convert empty strings to None for email validation
+                    cleaned_author = author.copy()
+                    if cleaned_author.get("email") == "":
+                        cleaned_author["email"] = None
+                    cleaned_authors.append(cleaned_author)
+                else:
+                    cleaned_authors.append(author)
+            return cleaned_authors
+        return v
 
 
 class ComponentMetadataRequest(BaseModel):

@@ -20,6 +20,8 @@ export interface SupplierInfo {
 }
 
 export interface ComponentMetaInfo {
+  id: string;
+  name: string;
   supplier: SupplierInfo;
   authors: ContactInfo[];
   licenses: (string | CustomLicense)[];

@@ -184,6 +184,8 @@
   });
 
   const metadata = ref<ComponentMetaInfo>({
+    id: '',
+    name: '',
     supplier: {
       name: null,
       url: null,
@@ -398,7 +400,14 @@
     };
 
         try {
-      const response = await $axios.put(`/api/v1/sboms/component/${props.componentId}/meta`, metadata.value)
+      // Exclude read-only fields (id and name) from the update request
+      const updatePayload = {
+        supplier: metadata.value.supplier,
+        authors: metadata.value.authors,
+        licenses: metadata.value.licenses,
+        lifecycle_phase: metadata.value.lifecycle_phase
+      };
+      const response = await $axios.put(`/api/v1/sboms/component/${props.componentId}/meta`, updatePayload)
 
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);

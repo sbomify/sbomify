@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
-import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense } from '../type_defs'
+import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense } from '../type_defs.d.ts'
 import { LifecyclePhase } from '../enums'
 
 interface MockAxiosResponse<T = unknown> {
@@ -13,7 +13,7 @@ interface MockAxiosResponse<T = unknown> {
 // Mock the $axios utils module using Bun's mock
 const mockAxios = {
   get: mock<(url: string) => Promise<MockAxiosResponse<ComponentMetaInfo>>>(),
-  put: mock<(url: string, data: ComponentMetaInfo) => Promise<MockAxiosResponse<Record<string, unknown>>>>()
+  put: mock<(url: string, data: unknown) => Promise<MockAxiosResponse<Record<string, unknown>>>>()
 }
 
 mock.module('../../../core/js/utils', () => ({
@@ -31,6 +31,8 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
   const mockComponentId = 'test-component-123'
 
   const mockMetadata: ComponentMetaInfo = {
+    id: 'test-component-123',
+    name: 'Test Component',
     supplier: {
       name: 'Test Supplier',
       url: ['https://example.com'],
@@ -75,17 +77,24 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       expect(response.status).toBe(200)
     })
 
-        it('should handle setting a lifecycle phase', async () => {
+    it('should handle setting a lifecycle phase', async () => {
       const metadataWithLifecycle = {
         ...mockMetadata,
         lifecycle_phase: LifecyclePhase.Build
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithLifecycle)
+      // Exclude read-only fields from PUT request
+      const updatePayload = {
+        supplier: metadataWithLifecycle.supplier,
+        authors: metadataWithLifecycle.authors,
+        licenses: metadataWithLifecycle.licenses,
+        lifecycle_phase: metadataWithLifecycle.lifecycle_phase
+      }
+      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
         `/api/v1/sboms/component/${mockComponentId}/meta`,
-        metadataWithLifecycle
+        updatePayload
       )
     })
 
@@ -95,16 +104,23 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         lifecycle_phase: null
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithNullLifecycle)
+      // Exclude read-only fields from PUT request
+      const updatePayload = {
+        supplier: metadataWithNullLifecycle.supplier,
+        authors: metadataWithNullLifecycle.authors,
+        licenses: metadataWithNullLifecycle.licenses,
+        lifecycle_phase: metadataWithNullLifecycle.lifecycle_phase
+      }
+      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
         `/api/v1/sboms/component/${mockComponentId}/meta`,
-        metadataWithNullLifecycle
+        updatePayload
       )
-      expect(metadataWithNullLifecycle.lifecycle_phase).toBeNull()
+      expect(updatePayload.lifecycle_phase).toBeNull()
     })
 
-        it('should handle all valid lifecycle phases', async () => {
+    it('should handle all valid lifecycle phases', async () => {
       const validPhases = [
         LifecyclePhase.Design,
         LifecyclePhase.PreBuild,
@@ -132,7 +148,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       expect(mockAxios.put).toHaveBeenCalledTimes(validPhases.length)
     })
 
-        it('should preserve other metadata when changing lifecycle phase', async () => {
+    it('should preserve other metadata when changing lifecycle phase', async () => {
       const metadataWithSupplier = {
         ...mockMetadata,
         supplier: {
@@ -155,10 +171,11 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       // Verify all fields are preserved
       const [, callData] = mockAxios.put.mock.calls[0]
-      expect(callData.supplier.name).toBe('Important Supplier')
-      expect(callData.authors).toHaveLength(1)
-      expect(callData.licenses).toHaveLength(2)
-      expect(callData.lifecycle_phase).toBe(LifecyclePhase.Operations)
+      const typedCallData = callData as ComponentMetaInfo
+      expect(typedCallData.supplier.name).toBe('Important Supplier')
+      expect(typedCallData.authors).toHaveLength(1)
+      expect(typedCallData.licenses).toHaveLength(2)
+      expect(typedCallData.lifecycle_phase).toBe(LifecyclePhase.Operations)
     })
   })
 
@@ -223,7 +240,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       expect(mockAxios.get).toHaveBeenCalledTimes(1)
     })
 
-        it('should update component metadata to correct endpoint', async () => {
+    it('should update component metadata to correct endpoint', async () => {
       const updatedMetadata = {
         ...mockMetadata,
         lifecycle_phase: LifecyclePhase.Build
@@ -260,7 +277,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
     })
   })
 
-    describe('Lifecycle Phase State Changes', () => {
+  describe('Lifecycle Phase State Changes', () => {
     it('should transition from null to selected phase', () => {
       let currentPhase: LifecyclePhase | null = null
 
@@ -508,6 +525,8 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
   describe('Complete Metadata Integration', () => {
     it('should handle complete metadata with all fields', async () => {
       const completeMetadata = {
+        id: 'test-component-123',
+        name: 'Test Component',
         supplier: {
           name: 'Complete Supplier Inc',
           url: ['https://complete.com', 'https://support.complete.com', 'https://docs.complete.com'],
@@ -526,9 +545,20 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         lifecycle_phase: LifecyclePhase.Operations
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, completeMetadata)
+      // Simulate what the frontend does: exclude read-only fields from PUT request
+      const updatePayload = {
+        supplier: completeMetadata.supplier,
+        authors: completeMetadata.authors,
+        licenses: completeMetadata.licenses,
+        lifecycle_phase: completeMetadata.lifecycle_phase
+      }
+      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
 
       const [, callData] = mockAxios.put.mock.calls[0]
+
+      // Verify that read-only fields are NOT included in the PUT request
+      expect(callData.id).toBeUndefined()
+      expect(callData.name).toBeUndefined()
 
       // Verify supplier data
       expect(callData.supplier.name).toBe('Complete Supplier Inc')
@@ -541,6 +571,37 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       // Verify other fields
       expect(callData.licenses).toHaveLength(2)
       expect(callData.lifecycle_phase).toBe(LifecyclePhase.Operations)
+    })
+
+    it('should exclude read-only fields from PUT requests', async () => {
+      const fullMetadata = {
+        id: 'component-456',
+        name: 'Another Component',
+        supplier: { name: 'Test Supplier', url: ['https://test.com'], address: null, contacts: [] },
+        authors: [],
+        licenses: ['MIT'],
+        lifecycle_phase: LifecyclePhase.Build
+      }
+
+      // Simulate the destructuring that happens in the frontend
+      const updateData = {
+        supplier: fullMetadata.supplier,
+        authors: fullMetadata.authors,
+        licenses: fullMetadata.licenses,
+        lifecycle_phase: fullMetadata.lifecycle_phase
+      }
+      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updateData)
+
+      const [, sentData] = mockAxios.put.mock.calls[0]
+
+      // Verify read-only fields are excluded
+      expect(sentData).not.toHaveProperty('id')
+      expect(sentData).not.toHaveProperty('name')
+
+      // Verify editable fields are included
+      expect(sentData.supplier.name).toBe('Test Supplier')
+      expect(sentData.licenses).toEqual(['MIT'])
+      expect(sentData.lifecycle_phase).toBe(LifecyclePhase.Build)
     })
   })
 })

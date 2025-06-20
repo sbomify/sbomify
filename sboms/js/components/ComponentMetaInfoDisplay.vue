@@ -136,6 +136,8 @@
   const props = defineProps<Props>();
   const isExpanded = ref(true);
   const metadata = ref<ComponentMetaInfo>({
+    id: '',
+    name: '',
     supplier: {
       name: null,
       url: null,
