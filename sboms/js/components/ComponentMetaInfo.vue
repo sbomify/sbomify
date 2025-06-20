@@ -8,6 +8,7 @@
           :componentId="props.componentId"
           :showEditButton="allowEdit"
           @edit="isEditing = true"
+          @copy="selectingCopyComponent = true"
         />
         <ComponentMetaInfoEditor
           v-else
@@ -50,21 +51,9 @@
   const copyComponentId = ref("");
   const infoComponentKey = ref(0);  // To force re-render of info component
 
-  const clearCopyComponentMetadata = async () => {
+  const clearCopyComponentMetadata = () => {
     selectingCopyComponent.value = false;
     copyComponentId.value = "";
-    try {
-      await showSuccess('Metadata copied successfully');
-      // force re-render of info component
-      infoComponentKey.value += 1;
-    } catch (error) {
-      console.log(error);
-      if (isAxiosError(error)) {
-        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
-      } else {
-        showError('Failed to save metadata');
-      }
-    }
   };
 
   const copyComponentMetadata = async () => {
@@ -89,7 +78,8 @@
         throw new Error('Network response was not ok. ' + response.statusText);
       }
 
-      // force re-render of info component
+      // Show success message and refresh the display
+      showSuccess('Metadata copied successfully');
       infoComponentKey.value += 1;
 
     } catch (error) {
@@ -97,7 +87,7 @@
       if (isAxiosError(error)) {
         showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
       } else {
-        showError('Failed to save metadata');
+        showError('Failed to copy metadata');
       }
     }
 

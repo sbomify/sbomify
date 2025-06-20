@@ -257,7 +257,7 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
         "lifecycle_phase": "post-build",
     }
 
-    response = client.put(
+    response = client.patch(
         url,
         json.dumps(component_metadata),
         content_type="application/json",
@@ -617,7 +617,7 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
         "lifecycle_phase": "pre-build",
     }
 
-    response = client.put(
+    response = client.patch(
         url,
         json.dumps(component_metadata),
         content_type="application/json",
@@ -644,12 +644,20 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url_input,expected_output", [
-    ("https://jdoe.org", ["https://jdoe.org"]),  # Single string should be converted to array
-    (["https://jdoe.org"], ["https://jdoe.org"]),  # Array should remain array
-    (["https://jdoe.org", "https://backup.org"], ["https://jdoe.org", "https://backup.org"]),  # Multiple URLs
-])
-def test_component_metadata_supplier_url_handling(sample_component: Component, sample_access_token: AccessToken, url_input, expected_output):  # noqa: F811
+@pytest.mark.parametrize(
+    "url_input,expected_output",
+    [
+        ("https://jdoe.org", ["https://jdoe.org"]),  # Single string should be converted to array
+        (["https://jdoe.org"], ["https://jdoe.org"]),  # Array should remain array
+        (["https://jdoe.org", "https://backup.org"], ["https://jdoe.org", "https://backup.org"]),  # Multiple URLs
+    ],
+)
+def test_component_metadata_supplier_url_handling(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    url_input,
+    expected_output,
+):
     """Test that supplier URL handling works correctly for both string and array inputs."""
     client = Client()
 
@@ -660,14 +668,14 @@ def test_component_metadata_supplier_url_handling(sample_component: Component, s
         "supplier": {
             "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
             "name": "Foo Bar Inc",
-            "url": url_input
+            "url": url_input,
         },
         "authors": [],
         "licenses": ["Apache-2.0"],
-        "lifecycle_phase": None
+        "lifecycle_phase": None,
     }
 
-    response = client.put(
+    response = client.patch(
         url,
         json.dumps(metadata_with_url),
         content_type="application/json",
@@ -694,6 +702,64 @@ def test_component_metadata_supplier_url_handling(sample_component: Component, s
 
 
 @pytest.mark.django_db
+def test_component_metadata_patch_partial_update(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that PATCH only updates the fields that are provided."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # First, set some initial metadata
+    initial_metadata = {
+        "supplier": {
+            "name": "Initial Supplier",
+            "url": ["https://initial.com"],
+            "address": "123 Initial St",
+            "contacts": [{"name": "Initial Contact", "email": "initial@example.com", "phone": "123-456-7890"}],
+        },
+        "authors": [{"name": "Initial Author", "email": "initial@example.com", "phone": "123-456-7890"}],
+        "licenses": ["MIT"],
+        "lifecycle_phase": "design",
+    }
+
+    response = client.patch(
+        url,
+        json.dumps(initial_metadata),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+    assert response.status_code == 204
+
+    # Now, only update the lifecycle_phase using PATCH
+    partial_update = {"lifecycle_phase": "build"}
+
+    response = client.patch(
+        url,
+        json.dumps(partial_update),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+    assert response.status_code == 204
+
+    # Verify that only lifecycle_phase was updated and other fields remain unchanged
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+    assert response.status_code == 200
+    response_data = response.json()
+
+    # Verify lifecycle_phase was updated
+    assert response_data["lifecycle_phase"] == "build"
+
+    # Verify other fields remain unchanged
+    assert response_data["supplier"]["name"] == "Initial Supplier"
+    assert response_data["supplier"]["url"] == ["https://initial.com"]
+    assert response_data["authors"][0]["name"] == "Initial Author"
+    assert response_data["licenses"] == ["MIT"]
+
+
+@pytest.mark.django_db
 def test_component_metadata_author_information(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
     """Test that author information can be saved and retrieved correctly."""
     client = Client()
@@ -702,22 +768,17 @@ def test_component_metadata_author_information(sample_component: Component, samp
 
     # Test with complete author information
     metadata_with_authors = {
-        "supplier": {
-            "contacts": [],
-            "name": None,
-            "url": None,
-            "address": None
-        },
+        "supplier": {"contacts": [], "name": None, "url": None, "address": None},
         "authors": [
             {"name": "John Doe", "email": "john@example.com", "phone": "123-456-7890"},
             {"name": "Jane Smith", "email": "jane@example.com", "phone": ""},  # Empty phone should work
-            {"name": "Bob Wilson", "email": "", "phone": "987-654-3210"}  # Empty email should work
+            {"name": "Bob Wilson", "email": "", "phone": "987-654-3210"},  # Empty email should work
         ],
         "licenses": ["MIT"],
-        "lifecycle_phase": None
+        "lifecycle_phase": None,
     }
 
-    response = client.put(
+    response = client.patch(
         url,
         json.dumps(metadata_with_authors),
         content_type="application/json",

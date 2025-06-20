@@ -16,10 +16,16 @@
                </span>
              </div>
           </div>
-          <button v-if="showEditButton" class="btn btn-outline-primary btn-sm" @click.stop="$emit('edit')">
-            <i class="fa-solid fa-edit me-2"></i>
-            Edit
-          </button>
+          <div v-if="showEditButton" class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" @click.stop="$emit('copy')">
+              <i class="fa-solid fa-copy me-2"></i>
+              Copy
+            </button>
+            <button class="btn btn-outline-primary btn-sm" @click.stop="$emit('edit')">
+              <i class="fa-solid fa-edit me-2"></i>
+              Edit
+            </button>
+          </div>
         </div>
         <div v-if="isExpanded">
           <div class="row gy-4">
@@ -377,6 +383,23 @@ td:first-child {
   border-color: #4f46e5;
   color: white;
   box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-outline-secondary {
+  border: 1px solid #64748b;
+  color: #64748b;
+  background: transparent;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-secondary:hover {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  border-color: #64748b;
+  color: white;
+  box-shadow: 0 2px 4px rgba(100, 116, 139, 0.15);
   transform: translateY(-1px);
 }
 </style>
