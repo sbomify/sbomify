@@ -187,6 +187,9 @@ node_modules
 *.tsbuildinfo
 .vite
 
+# npm lockfile (project uses Bun)
+package-lock.json
+
 # ESLint
 .eslintcache
 .aider*

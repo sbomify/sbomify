@@ -61,7 +61,7 @@ class TestCriticalPaths:
         metadata = {
             "supplier": {
                 "name": "Updated Supplier",
-                "url": "http://example.com"
+                "url": ["http://example.com"]
             }
         }
         response = client.put(
@@ -79,7 +79,7 @@ class TestCriticalPaths:
         assert response.status_code == 200
         data = response.json()
         assert data["supplier"]["name"] == "Updated Supplier"
-        assert data["supplier"]["url"] == "http://example.com"
+        assert data["supplier"]["url"] == ["http://example.com"]
 
     def test_public_private_toggle(self, client: Client, sample_user, sample_component, sample_team_with_owner_member):
         """Test toggling component public/private status"""

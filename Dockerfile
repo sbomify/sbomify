@@ -5,7 +5,7 @@ ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.2.2 AS js-build-prod
+FROM oven/bun:1.2-debian AS js-build-prod
 
 WORKDIR /js-build
 
@@ -18,7 +18,7 @@ COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --production
 
 # Copy source files
 COPY core/js/ ./core/js/
@@ -30,7 +30,7 @@ COPY billing/js/ ./billing/js/
 RUN bun run build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.2.2 AS frontend-dev-server
+FROM oven/bun:1.2-debian AS frontend-dev-server
 
 WORKDIR /app-frontend
 

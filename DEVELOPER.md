@@ -69,3 +69,15 @@ We use **Sentry** to catch and track bugs in both the backend and frontend. Ensu
 4. Run the backend or frontend as needed, ensuring proper linting and tests are in place.
 
 Follow these principles and standards to ensure smooth development and maintain high code quality.
+
+### Tests & Code Quality
+
+#### Python
+
+- Linting: `poetry run ruff check && poetry run ruff format`
+- Tests: `poetry run pytest`
+
+#### TypeScript
+
+- Linting: `bun run lint`
+- Tests: `bun test`

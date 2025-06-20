@@ -1,6 +1,9 @@
-// Initialize Bootstrap
-declare var bootstrap: any;
-declare var feather: any;
+// Initialize Feather icons
+interface FeatherIcon {
+  replace(): void;
+}
+
+declare var feather: FeatherIcon;
 
 // Handle modal UX improvements
 document.addEventListener('DOMContentLoaded', function() {

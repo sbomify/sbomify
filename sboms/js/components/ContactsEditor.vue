@@ -2,7 +2,7 @@
   <div v-if="modelValue && modelValue.length" class="contacts">
     <div v-for="(contact, contactIndex) in modelValue" class="contact-badge">
       {{ contact.name }} ({{ contact.email }})
-      <i v-if="addingContact" class="far fa-times-circle" @click="removeContact(contactIndex)"></i>
+      <i v-if="addingContact" class="fa-regular fa-circle-xmark" @click="removeContact(contactIndex)"></i>
     </div>
   </div>
 
@@ -57,7 +57,7 @@
         class="btn btn-outline"
         @click="cancelAddContact"
       >
-        <i class="far fa-times"></i>
+        <i class="fa-solid fa-times"></i>
         Cancel
       </button>
       <button
@@ -65,7 +65,7 @@
         :disabled="!newContactData.name"
         @click="saveContact"
       >
-        <i class="far fa-check"></i>
+        <i class="fa-solid fa-check"></i>
         Save {{ props.contactType }}
       </button>
     </div>

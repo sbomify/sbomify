@@ -10,19 +10,33 @@ def test_get_license_list():
     # Should have at least 520 items (500+ SPDX + custom licenses)
     assert len(licenses) >= 520
 
-    # Check structure of first license
-    first_license = licenses[0]
-    assert "key" in first_license
-    assert "name" in first_license
-    assert "category" in first_license
-    assert "origin" in first_license
-    assert first_license["origin"] in ["SPDX", "Custom"]
+    # Check structure - separate SPDX and custom licenses
+    spdx_licenses = [l for l in licenses if l["origin"] == "SPDX"]
+    custom_licenses = [l for l in licenses if l["origin"] != "SPDX"]
 
-    # Check that custom licenses are included
-    custom_licenses = [l for l in licenses if l["origin"] == "Custom"]
+    # Check SPDX license structure (should not have category field at all)
+    if spdx_licenses:
+        spdx_license = spdx_licenses[0]
+        assert "key" in spdx_license
+        assert "name" in spdx_license
+        assert "origin" in spdx_license
+        assert spdx_license["origin"] == "SPDX"
+        # SPDX licenses should not have category field at all
+        assert "category" not in spdx_license
+
+    # Check that custom licenses are included and have category
     assert len(custom_licenses) >= 2  # At least Commons-Clause and BUSL-1.1
     assert any(l["key"] == "Commons-Clause" for l in custom_licenses)
     assert any(l["key"] == "BUSL-1.1" for l in custom_licenses)
+
+    # Custom licenses should have category
+    for custom_license in custom_licenses:
+        assert "key" in custom_license
+        assert "name" in custom_license
+        assert "category" in custom_license
+        assert custom_license["category"] is not None
+        assert "origin" in custom_license
+        assert custom_license["origin"] != "SPDX"
 
 
 def test_expanded_custom_licenses():

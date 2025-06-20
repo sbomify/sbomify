@@ -1,9 +1,12 @@
+import logging
+
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
+from pydantic import ValidationError
 
 from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
 from core.object_store import S3Client
@@ -30,6 +33,8 @@ from .schemas import (
     cdx16,
 )
 from .utils import verify_item_access
+
+log = logging.getLogger(__name__)
 
 router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
 
@@ -261,17 +266,30 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
 )
 @decorate_view(optional_auth)
 def get_component_metadata(request, component_id: str):
-    "Get metadata for a component."
-    try:
-        component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return 404, {"detail": "Not found"}
+    result = _public_api_item_access_checks(request, "component", component_id)
+    if isinstance(result, tuple):
+        return result
 
-    if not component.is_public:
-        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
+    metadata = result.metadata or {}
 
-    return component.metadata
+    # Remove extra fields from contacts and authors
+    def strip_extra_fields(obj_list):
+        allowed = {"name", "email", "phone"}
+        return [
+            {k: v for k, v in obj.items() if k in allowed and v is not None}
+            for obj in obj_list
+            if isinstance(obj, dict)
+        ]
+
+    supplier = metadata.get("supplier", {})
+    if "contacts" in supplier:
+        supplier["contacts"] = strip_extra_fields(supplier["contacts"])
+    metadata["supplier"] = supplier
+
+    if "authors" in metadata:
+        metadata["authors"] = strip_extra_fields(metadata["authors"])
+
+    return metadata
 
 
 @router.put(
@@ -285,15 +303,30 @@ def get_component_metadata(request, component_id: str):
 )
 def update_component_metadata(request, component_id: str, metadata: ComponentMetaData):
     "Update metadata for a component."
+    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    try:
+        result = _public_api_item_access_checks(request, "component", component_id)
+        if isinstance(result, tuple):
+            return result
 
-    result = _public_api_item_access_checks(request, "component", component_id)
-    if isinstance(result, tuple):
-        return result
+        # Convert to dict and validate licenses
+        meta_dict = metadata.model_dump()
+        licenses = meta_dict.get("licenses", [])
+        if licenses is None:
+            licenses = []
+        meta_dict["licenses"] = licenses
 
-    result.metadata = metadata.model_dump(exclude_unset=True, exclude_none=True)
-    result.save()
-
-    return 204, None
+        log.debug(f"Final metadata to be saved: {meta_dict}")
+        result.metadata = meta_dict
+        result.save()
+        return 204, None
+    except ValidationError as ve:
+        log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
+        log.error(f"Failed validation data: {metadata.model_dump()}")
+        return 422, {"detail": str(ve.errors())}
+    except Exception as e:
+        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
+        return 400, {"detail": str(e)}
 
 
 @router.put(
@@ -354,7 +387,7 @@ def get_cyclonedx_component_metadata(
     ),
 ) -> cdx15.Metadata | cdx16.Metadata:
     """
-    Return metadata section of cyclone-dx format sbom.
+    Return metadata section of cyclone-x format sbom.
 
     metadata provided in POST request is enriched with additional information present in the
     component and returned as response.

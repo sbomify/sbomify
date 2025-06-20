@@ -243,7 +243,7 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     component_metadata = {
         "supplier": {
             "name": "Test supplier",
-            "url": "http://supply.org",
+            "url": ["http://supply.org"],
             "address": "1234, Test Street, Test City, Test Country",
             "contacts": [{"name": "C1", "email": "c1@contacts.org", "phone": "2356236236"}],
         },
@@ -298,7 +298,7 @@ def test_component_copy_metadata_api(
         metadata={
             "supplier": {
                 "name": "Another supplier",
-                "url": "http://another-supply.org",
+                "url": ["http://another-supply.org"],
                 "address": "5678, Another Street, Another City, Another Country",
                 "contacts": [{"name": "C2", "email": "c2@contacts.org", "phone": "1234567890"}],
             },
@@ -330,7 +330,7 @@ def test_component_copy_metadata_api(
     # Verify that sample_component's metadata has been set
     sample_component.refresh_from_db()
     assert sample_component.metadata["supplier"]["name"] == "Another supplier"
-    assert sample_component.metadata["supplier"]["url"] == "http://another-supply.org"
+    assert sample_component.metadata["supplier"]["url"] == ["http://another-supply.org"]
     assert sample_component.metadata["supplier"]["contacts"][0]["name"] == "C2"
     assert sample_component.metadata["authors"][0]["name"] == "B1"
     assert sample_component.metadata["licenses"][0] == "MIT"
@@ -344,7 +344,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     component_metadata = {
         "supplier": {
             "name": "Test supplier",
-            "url": "http://supply.org",
+            "url": ["http://supply.org"],
             "address": "1234, Test Street, Test City, Test Country",
             "contacts": [{"name": "C1", "email": "c1@contacts.org", "phone": "2356236236"}],
         },
@@ -388,7 +388,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     response_json = response.json()
 
     assert response_json["supplier"]["name"] == component_metadata["supplier"]["name"]
-    assert response_json["supplier"]["url"][0] == component_metadata["supplier"]["url"]
+    assert response_json["supplier"]["url"][0] == component_metadata["supplier"]["url"][0]
     assert "address" not in response_json["supplier"]  # cyclonedx 1.5 does not have address field
     assert "contact" in response_json["supplier"]
 
@@ -465,7 +465,7 @@ def test_metadata_enrichment_on_no_component_in_metadata(
     component_metadata = {
         "supplier": {
             "name": "Test supplier",
-            "url": "http://supply.org",
+            "url": ["http://supply.org"],
             "address": "1234, Test Street, Test City, Test Country",
             "contacts": [{"name": "C1", "email": "c1@contacts.org", "phone": "2356236236"}],
         },
@@ -596,3 +596,150 @@ def test_get_dashboard_summary_authenticated_with_data(
         assert second_latest_upload["component_name"] == sample_component.name
         assert second_latest_upload["sbom_name"] == "Test SBOM 1"
         assert second_latest_upload["sbom_version"] == "1.0"
+
+
+@pytest.mark.django_db
+def test_component_metadata_license_expressions(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that the component metadata API accepts license expressions."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Test license expressions with operators
+    component_metadata = {
+        "supplier": {"contacts": []},
+        "authors": [],
+        "licenses": ["Apache-2.0 WITH Commons-Clause", "MIT OR GPL-3.0", "BSD-3-Clause"],
+        "lifecycle_phase": "pre-build",
+    }
+
+    response = client.put(
+        url,
+        json.dumps(component_metadata),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify license expressions are preserved
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data["licenses"]) == 3
+    assert "Apache-2.0 WITH Commons-Clause" in response_data["licenses"]
+    assert "MIT OR GPL-3.0" in response_data["licenses"]
+    assert "BSD-3-Clause" in response_data["licenses"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url_input,expected_output", [
+    ("https://jdoe.org", ["https://jdoe.org"]),  # Single string should be converted to array
+    (["https://jdoe.org"], ["https://jdoe.org"]),  # Array should remain array
+    (["https://jdoe.org", "https://backup.org"], ["https://jdoe.org", "https://backup.org"]),  # Multiple URLs
+])
+def test_component_metadata_supplier_url_handling(sample_component: Component, sample_access_token: AccessToken, url_input, expected_output):  # noqa: F811
+    """Test that supplier URL handling works correctly for both string and array inputs."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Test with different URL input formats
+    metadata_with_url = {
+        "supplier": {
+            "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
+            "name": "Foo Bar Inc",
+            "url": url_input
+        },
+        "authors": [],
+        "licenses": ["Apache-2.0"],
+        "lifecycle_phase": None
+    }
+
+    response = client.put(
+        url,
+        json.dumps(metadata_with_url),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify URL was handled correctly
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["supplier"]["url"] == expected_output
+    assert response_data["supplier"]["name"] == "Foo Bar Inc"
+    assert len(response_data["supplier"]["contacts"]) == 1
+    assert response_data["supplier"]["contacts"][0]["name"] == "John Doe"
+
+
+@pytest.mark.django_db
+def test_component_metadata_author_information(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
+    """Test that author information can be saved and retrieved correctly."""
+    client = Client()
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    # Test with complete author information
+    metadata_with_authors = {
+        "supplier": {
+            "contacts": [],
+            "name": None,
+            "url": None,
+            "address": None
+        },
+        "authors": [
+            {"name": "John Doe", "email": "john@example.com", "phone": "123-456-7890"},
+            {"name": "Jane Smith", "email": "jane@example.com", "phone": ""},  # Empty phone should work
+            {"name": "Bob Wilson", "email": "", "phone": "987-654-3210"}  # Empty email should work
+        ],
+        "licenses": ["MIT"],
+        "lifecycle_phase": None
+    }
+
+    response = client.put(
+        url,
+        json.dumps(metadata_with_authors),
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+
+    # Get metadata and verify authors were saved correctly
+    response = client.get(
+        url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data["authors"]) == 3
+
+    # Verify first author
+    assert response_data["authors"][0]["name"] == "John Doe"
+    assert response_data["authors"][0]["email"] == "john@example.com"
+    assert response_data["authors"][0]["phone"] == "123-456-7890"
+
+    # Verify second author (empty phone)
+    assert response_data["authors"][1]["name"] == "Jane Smith"
+    assert response_data["authors"][1]["email"] == "jane@example.com"
+    assert "phone" not in response_data["authors"][1] or response_data["authors"][1]["phone"] == ""
+
+    # Verify third author (empty email)
+    assert response_data["authors"][2]["name"] == "Bob Wilson"
+    assert "email" not in response_data["authors"][2] or response_data["authors"][2]["email"] == ""
+    assert response_data["authors"][2]["phone"] == "987-654-3210"

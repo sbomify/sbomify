@@ -14,7 +14,7 @@ export interface ContactInfo {
 
 export interface SupplierInfo {
   name: string | null;
-  url: string | null;
+  url: string[] | null;
   address: string | null;
   contacts: ContactInfo[];
 }

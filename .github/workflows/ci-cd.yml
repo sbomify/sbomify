@@ -118,6 +118,32 @@ jobs:
           echo "## Test Results for ${{ matrix.group }} Tests" >> $GITHUB_STEP_SUMMARY
           poetry run pytest -k "${{ matrix.group }}" | tee -a $GITHUB_STEP_SUMMARY
 
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install JS dependencies
+        run: bun install
+
+      - name: Run Frontend Tests
+        run: |
+          echo "## Frontend Test Results" >> $GITHUB_STEP_SUMMARY
+          bun test | tee -a $GITHUB_STEP_SUMMARY
+
   docker-build:
     name: Docker Build Test
     runs-on: ubuntu-latest
@@ -156,7 +182,7 @@ jobs:
 
   deploy-staging:
     name: Deploy to Staging
-    needs: [code-quality, tests, docker-build]
+    needs: [code-quality, tests, frontend-tests, docker-build]
     runs-on: ubuntu-latest
     if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
     steps:
@@ -180,7 +206,7 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     if: ${{ success() && github.event_name == 'release' && github.event.action == 'published' }}
-    needs: [code-quality, tests, docker-build]
+    needs: [code-quality, tests, frontend-tests, docker-build]
     steps:
       - uses: actions/checkout@v4
 

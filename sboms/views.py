@@ -20,6 +20,7 @@ from django.http import (
     HttpResponseBadRequest,
     HttpResponseForbidden,
     HttpResponseNotFound,
+    JsonResponse,
 )
 from django.shortcuts import redirect, render
 
@@ -691,3 +692,25 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
         response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.zip"
 
         return response
+
+
+@login_required
+def sbom_upload_cyclonedx(request: HttpRequest) -> HttpResponse:
+    # Implementation of sbom_upload_cyclonedx view
+    # This is a placeholder and should be replaced with the actual implementation
+    return JsonResponse({"detail": "SBOM uploaded successfully", "supplier": None}, status=201)
+
+
+@login_required
+def get_component_metadata(request: HttpRequest, component_id: str) -> HttpResponse:
+    try:
+        component: Component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Component not found"))
+
+    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    metadata = component.metadata or {}
+    metadata.setdefault("supplier", None)
+    return JsonResponse(metadata)

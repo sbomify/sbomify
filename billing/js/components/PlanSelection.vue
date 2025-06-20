@@ -55,10 +55,10 @@
 
               <div class="d-grid gap-2">
                 <div v-if="planKey === 'business'" class="btn-group mb-3" role="group" aria-label="Billing period">
-                  <input type="radio" class="btn-check" name="billing_period" value="monthly" id="monthly" v-model="billingPeriod">
+                  <input id="monthly" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="monthly">
                   <label class="btn btn-outline-secondary" for="monthly">Monthly ($199/mo)</label>
 
-                  <input type="radio" class="btn-check" name="billing_period" value="annual" id="annual" v-model="billingPeriod">
+                  <input id="annual" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="annual">
                   <label class="btn btn-outline-secondary" for="annual">Annual ($159/mo)</label>
                 </div>
                 <div v-else class="billing-period-spacer mb-3"></div>
@@ -88,6 +88,7 @@
 import { ref, onMounted } from 'vue';
 import $axios from '../../../core/js/utils';
 import { showSuccess, showError, showConfirmation } from '../../../core/js/alerts';
+import { AxiosError } from 'axios';
 
 interface Plan {
   key: string;
@@ -183,8 +184,12 @@ async function handlePlanSelection(plan: Plan) {
       showSuccess('Plan updated successfully');
       emit('plan-selected');
     }
-  } catch (error: any) {
-    showError(error.response?.data?.detail || 'Failed to change plan');
+    } catch (error) {
+    if (error instanceof AxiosError) {
+      showError(error.response?.data?.detail || 'Failed to change plan');
+    } else {
+      showError('Failed to change plan');
+    }
     console.error('Error changing plan:', error);
   }
 }
