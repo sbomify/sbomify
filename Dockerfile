@@ -18,7 +18,7 @@ COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --production
 
 # Copy source files
 COPY core/js/ ./core/js/
