@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sbomify"
-version = "0.12.0"
+version = "0.12.1"
 description = "sbomify - the SBOM hub"
 authors = ["sbomify <hello@sbomify.com>"]
 readme = "README.md"
