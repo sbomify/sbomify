@@ -73,8 +73,11 @@ class ProjectSBOMBuilder:
     This goes through all components and their associated SBOMs and
     creates a single SBOM for the project.
 
-    Sample output (CycloneDX 1.6):
+    The builder supports two usage patterns:
+    - Initialize with project: ProjectSBOMBuilder(project).build(target_folder)
+    - Pass project at build time: ProjectSBOMBuilder().build(project, target_folder)
 
+    Sample output (CycloneDX 1.6):
     {
       "bomFormat": "CycloneDX",
       "specVersion": "1.6",
@@ -139,7 +142,16 @@ class ProjectSBOMBuilder:
                 log.warning(f"SBOM for component {pc.component.id} not found")
                 continue
 
-            component = self.get_component_metadata(sbom_path.name, json.loads(sbom_path.read_text()))
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except json.JSONDecodeError as e:
+                log.error(f"Invalid JSON in SBOM file {sbom_path.name}: {e}")
+                continue
+            except Exception as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            component = self.get_component_metadata(sbom_path.name, sbom_data)
             if component is None:
                 log.warning(f"Failed to get component from SBOM {sbom_path}")
                 continue

@@ -100,7 +100,15 @@ class SupplierSchema(BaseModel):
     @field_validator("url", mode="before")
     @classmethod
     def convert_url_to_list(cls, v):
-        """Convert string URL to list format for compatibility with frontend."""
+        """
+        Convert string URL to list format for compatibility with frontend.
+
+        This validator automatically handles both input formats:
+        - String input: "https://example.com" → ["https://example.com"]
+        - List input: ["https://example.com"] → ["https://example.com"] (unchanged)
+
+        This ensures backward compatibility while supporting multiple URLs.
+        """
         if isinstance(v, str):
             return [v]
         return v

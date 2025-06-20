@@ -638,18 +638,23 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
 
 
 @pytest.mark.django_db
-def test_component_metadata_supplier_url_string_converted_to_array(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
-    """Test that sending supplier URL as string gets automatically converted to array."""
+@pytest.mark.parametrize("url_input,expected_output", [
+    ("https://jdoe.org", ["https://jdoe.org"]),  # Single string should be converted to array
+    (["https://jdoe.org"], ["https://jdoe.org"]),  # Array should remain array
+    (["https://jdoe.org", "https://backup.org"], ["https://jdoe.org", "https://backup.org"]),  # Multiple URLs
+])
+def test_component_metadata_supplier_url_handling(sample_component: Component, sample_access_token: AccessToken, url_input, expected_output):  # noqa: F811
+    """Test that supplier URL handling works correctly for both string and array inputs."""
     client = Client()
 
     url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
 
-    # This should now work - URL as string should be converted to array
-    metadata_with_string_url = {
+    # Test with different URL input formats
+    metadata_with_url = {
         "supplier": {
             "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
             "name": "Foo Bar Inc",
-            "url": "https://jdoe.org"  # Single string should be converted to array
+            "url": url_input
         },
         "authors": [],
         "licenses": ["Apache-2.0"],
@@ -658,14 +663,14 @@ def test_component_metadata_supplier_url_string_converted_to_array(sample_compon
 
     response = client.put(
         url,
-        json.dumps(metadata_with_string_url),
+        json.dumps(metadata_with_url),
         content_type="application/json",
         headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
     )
 
     assert response.status_code == 204
 
-    # Get metadata and verify URL was converted to array
+    # Get metadata and verify URL was handled correctly
     response = client.get(
         url,
         content_type="application/json",
@@ -674,51 +679,10 @@ def test_component_metadata_supplier_url_string_converted_to_array(sample_compon
 
     assert response.status_code == 200
     response_data = response.json()
-    assert response_data["supplier"]["url"] == ["https://jdoe.org"]  # Should be converted to array
+    assert response_data["supplier"]["url"] == expected_output
     assert response_data["supplier"]["name"] == "Foo Bar Inc"
     assert len(response_data["supplier"]["contacts"]) == 1
     assert response_data["supplier"]["contacts"][0]["name"] == "John Doe"
-
-
-@pytest.mark.django_db
-def test_component_metadata_supplier_url_as_string_should_work(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
-    """Test that after the fix, supplier URL can be sent as string and gets converted to array."""
-    client = Client()
-
-    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
-
-    # This should work after our fix - backend should accept string and convert to array
-    metadata_with_string_url = {
-        "supplier": {
-            "contacts": [{"name": "John Doe", "email": "jdoe@example.com", "phone": ""}],
-            "name": "Foo Bar Inc",
-            "url": "https://jdoe.org"  # Single string should be converted to array
-        },
-        "authors": [],
-        "licenses": ["Apache-2.0"],
-        "lifecycle_phase": None
-    }
-
-    response = client.put(
-        url,
-        json.dumps(metadata_with_string_url),
-        content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
-    )
-
-    assert response.status_code == 204
-
-    # Get metadata and verify URL was converted to array
-    response = client.get(
-        url,
-        content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
-    )
-
-    assert response.status_code == 200
-    response_data = response.json()
-    assert response_data["supplier"]["url"] == ["https://jdoe.org"]  # Should be converted to array
-    assert response_data["supplier"]["name"] == "Foo Bar Inc"
 
 
 @pytest.mark.django_db
