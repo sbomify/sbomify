@@ -6,14 +6,17 @@
         v-for="(tag, index) in licenseTags"
         :key="`tag-${index}`"
         class="license-tag"
-        :class="{ 'invalid': tag.isInvalid }"
+        :class="{ 'invalid': tag.isInvalid, 'custom': tag.isCustom }"
+        :title="tag.isCustom ? 'Click to edit custom license' : ''"
+        @click="tag.isCustom ? editCustomLicense(index) : null"
       >
-        <span class="license-tag-text">{{ tag.value }}</span>
+        <span class="license-tag-text">{{ tag.displayValue }}</span>
+        <span v-if="tag.isCustom" class="custom-icon">⚙️</span>
         <button
           type="button"
           class="license-tag-remove"
           title="Remove license"
-          @click="removeTag(index)"
+          @click.stop="removeTag(index)"
         >
           <span aria-hidden="true">&times;</span>
         </button>
@@ -35,6 +38,14 @@
             @focus="showSuggestions = true"
             @blur="handleBlur"
           >
+          <button
+            type="button"
+            class="btn btn-secondary add-custom-btn"
+            title="Add custom license"
+            @click="showCustomLicenseForm = true"
+          >
+            + Custom
+          </button>
           <button
             type="button"
             class="btn btn-primary add-license-btn"
@@ -64,21 +75,39 @@
       </div>
     </div>
 
-    <!-- Custom License Form -->
-    <div v-if="unknownTokens.length > 0" class="custom-license-form">
-      <div class="alert alert-info">
-        <h5>Unknown License Detected</h5>
-        <p>The following license identifier is not recognized: <span class="badge">{{ unknownTokens[0] }}</span></p>
-        <p>Please provide additional information to register this custom license.</p>
+    <!-- Custom License Form/Modal -->
+    <div v-if="showCustomLicenseForm || unknownTokens.length > 0" class="custom-license-form">
+      <div v-if="unknownTokens.length > 0" class="alert alert-info unknown-license-alert">
+        <div class="alert-content">
+          <h5 class="alert-title">Unknown License Detected</h5>
+          <div class="alert-body">
+            <p class="alert-description">The following license identifier is not recognized: <span class="badge">{{ unknownTokens[0] }}</span></p>
+            <p class="alert-description">Please provide additional information to register this custom license.</p>
+          </div>
+        </div>
+      </div>
+      <div v-else class="alert alert-info custom-license-alert">
+        <div class="alert-content">
+          <h5 class="alert-title">Add Custom License</h5>
+          <p class="alert-description">Create a custom license with detailed information.</p>
+        </div>
       </div>
       <div class="card">
         <div class="card-header">
-          <h6>Register Custom License: {{ unknownTokens[0] }}</h6>
+          <h6>{{ editingCustomLicense ? 'Edit' : 'Create' }} Custom License</h6>
+                    <button
+            type="button"
+            class="btn-close"
+            aria-label="Close"
+            @click="closeCustomLicenseForm"
+          >
+            &times;
+          </button>
         </div>
         <div class="card-body">
           <form @submit.prevent="submitCustomLicense">
-            <div class="row">
-              <div class="col-md-6">
+            <div class="form-row">
+              <div class="form-col">
                 <div class="form-group">
                   <label class="form-label">License Name <span class="text-danger">*</span></label>
                   <input
@@ -94,7 +123,7 @@
                   </div>
                 </div>
               </div>
-              <div class="col-md-6">
+              <div class="form-col">
                 <div class="form-group">
                   <label class="form-label">License URL</label>
                   <input
@@ -123,9 +152,20 @@
                 {{ validationErrors.text }}
               </div>
             </div>
-            <div class="mt-3">
-              <button type="submit" class="btn btn-primary" :disabled="!customLicense.name">
-                Save License Information
+                        <div class="form-actions">
+              <button
+                type="submit"
+                class="btn btn-primary"
+                :disabled="!customLicense.name"
+              >
+                {{ editingCustomLicense ? 'Update' : 'Add' }} License
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="closeCustomLicenseForm"
+              >
+                Cancel
               </button>
             </div>
           </form>
@@ -135,7 +175,7 @@
 
     <!-- Success Message -->
     <div v-if="showCustomLicenseSuccess" class="alert alert-success mt-3">
-      Custom license information saved successfully!
+      Custom license {{ editingCustomLicense ? 'updated' : 'added' }} successfully!
     </div>
 
     <!-- General validation errors from props -->
@@ -154,7 +194,7 @@ import { AxiosError } from 'axios'
 interface LicenseInfo {
   key: string;
   name: string;
-  category?: string | null; // Make category optional since SPDX licenses don't have it
+  category?: string | null;
   origin: string;
   url?: string;
 }
@@ -168,8 +208,10 @@ interface ValidationResponse {
 }
 
 interface LicenseTag {
-  value: string;
+  value: string | CustomLicense;
+  displayValue: string;
   isInvalid?: boolean;
+  isCustom: boolean;
 }
 
 interface Props {
@@ -184,6 +226,9 @@ const emit = defineEmits(['update:modelValue'])
 const licenseExpression = ref('')
 const validationError = ref('')
 const showCustomLicenseSuccess = ref(false)
+const showCustomLicenseForm = ref(false)
+const editingCustomLicense = ref(false)
+const editingIndex = ref(-1)
 const validationErrors = ref<Record<string, string>>(props.validationErrors || {})
 const licenseTags = ref<LicenseTag[]>([])
 
@@ -278,17 +323,34 @@ async function loadLicenses() {
 }
 onMounted(loadLicenses)
 
-// Initialize tags from props
-if (props.modelValue && props.modelValue.length > 0) {
-  licenseTags.value = props.modelValue.map(lic => ({
-    value: typeof lic === 'string' ? lic : (lic.name || ''),
-    isInvalid: false
-  })).filter(tag => tag.value.length > 0)
-  licenseExpression.value = ''
-} else {
-  licenseTags.value = []
-  licenseExpression.value = ''
+function initializeTags() {
+  if (props.modelValue && props.modelValue.length > 0) {
+    licenseTags.value = props.modelValue.map(lic => {
+      if (typeof lic === 'string') {
+        return {
+          value: lic,
+          displayValue: lic,
+          isInvalid: false,
+          isCustom: false
+        }
+      } else {
+        return {
+          value: lic,
+          displayValue: lic.name || 'Unnamed License',
+          isInvalid: false,
+          isCustom: true
+        }
+      }
+    }).filter(tag => tag.displayValue.length > 0)
+    licenseExpression.value = ''
+  } else {
+    licenseTags.value = []
+    licenseExpression.value = ''
+  }
 }
+
+// Initialize tags from props
+initializeTags()
 
 function onInput() {
   showSuggestions.value = true
@@ -296,8 +358,15 @@ function onInput() {
 
 function addCurrentExpression() {
   const expression = licenseExpression.value.trim()
-  if (expression && !licenseTags.value.some(tag => tag.value === expression)) {
-    licenseTags.value.push({ value: expression })
+  if (expression && !licenseTags.value.some(tag =>
+    (typeof tag.value === 'string' ? tag.value : tag.value.name) === expression
+  )) {
+    licenseTags.value.push({
+      value: expression,
+      displayValue: expression,
+      isInvalid: false,
+      isCustom: false
+    })
     licenseExpression.value = ''
     updateModelValue()
     validateTag(expression, licenseTags.value.length - 1)
@@ -310,9 +379,9 @@ function removeTag(index: number) {
 }
 
 function updateModelValue() {
-  const allLicenses: string[] = []
+  const allLicenses: (string | CustomLicense)[] = []
 
-  // Add all tags
+  // Add all tags - preserve the original type
   licenseTags.value.forEach(tag => {
     allLicenses.push(tag.value)
   })
@@ -347,6 +416,31 @@ async function validateTag(tagValue: string, tagIndex: number) {
     if (licenseTags.value[tagIndex]) {
       licenseTags.value[tagIndex].isInvalid = true
     }
+  }
+}
+
+function editCustomLicense(index: number) {
+  const tag = licenseTags.value[index]
+  if (tag.isCustom && typeof tag.value === 'object') {
+    editingCustomLicense.value = true
+    editingIndex.value = index
+    customLicense.name = tag.value.name || ''
+    customLicense.url = tag.value.url || ''
+    customLicense.text = tag.value.text || ''
+    showCustomLicenseForm.value = true
+  }
+}
+
+function closeCustomLicenseForm() {
+  showCustomLicenseForm.value = false
+  editingCustomLicense.value = false
+  editingIndex.value = -1
+  customLicense.name = ''
+  customLicense.url = ''
+  customLicense.text = ''
+  customLicense.key = ''
+  if (!props.validationErrors) {
+    validationErrors.value = {}
   }
 }
 
@@ -461,6 +555,7 @@ watch(
       customLicense.name = ''
       customLicense.url = ''
       customLicense.text = ''
+      showCustomLicenseForm.value = true
       // Only clear validation errors if they're not from props
       if (!props.validationErrors) {
         validationErrors.value = {}
@@ -476,14 +571,31 @@ watch(() => props.modelValue, (newValue) => {
     licenseTags.value = []
     licenseExpression.value = ''
   } else {
-    const newTags = newValue.map(lic => ({
-      value: typeof lic === 'string' ? lic : (lic.name || ''),
-      isInvalid: false
-    })).filter(tag => tag.value.length > 0)
+    const newTags = newValue.map(lic => {
+      if (typeof lic === 'string') {
+        return {
+          value: lic,
+          displayValue: lic,
+          isInvalid: false,
+          isCustom: false
+        }
+      } else {
+        return {
+          value: lic,
+          displayValue: lic.name || 'Unnamed License',
+          isInvalid: false,
+          isCustom: true
+        }
+      }
+    }).filter(tag => tag.displayValue.length > 0)
 
     // Only update if different to avoid infinite loops
-    const currentTagValues = licenseTags.value.map(tag => tag.value).join(',')
-    const newTagValues = newTags.map(tag => tag.value).join(',')
+    const currentTagValues = licenseTags.value.map(tag =>
+      typeof tag.value === 'string' ? tag.value : JSON.stringify(tag.value)
+    ).join(',')
+    const newTagValues = newTags.map(tag =>
+      typeof tag.value === 'string' ? tag.value : JSON.stringify(tag.value)
+    ).join(',')
 
     if (currentTagValues !== newTagValues) {
       licenseTags.value = newTags
@@ -522,18 +634,6 @@ watch(licenseExpression, async (expr) => {
   }, 300) // 300ms debounce
 })
 
-// Initialize tags from props
-if (props.modelValue && props.modelValue.length > 0) {
-  licenseTags.value = props.modelValue.map(lic => ({
-    value: typeof lic === 'string' ? lic : (lic.name || ''),
-    isInvalid: false
-  })).filter(tag => tag.value.length > 0)
-  licenseExpression.value = ''
-} else {
-  licenseTags.value = []
-  licenseExpression.value = ''
-}
-
 // Clean up timer on component unmount
 onBeforeUnmount(() => {
   if (debounceTimer) {
@@ -564,18 +664,43 @@ async function submitCustomLicense() {
     if (!props.validationErrors) {
       validationErrors.value = {}
     }
-    await $axios.post('/api/v1/licensing/custom-licenses', {
-      key: customLicense.key,
+
+    const customLicenseData: CustomLicense = {
       name: customLicense.name,
-      url: customLicense.url,
-      text: customLicense.text,
-    })
+      url: customLicense.url || null,
+      text: customLicense.text || null,
+    }
+
+    if (editingCustomLicense.value && editingIndex.value >= 0) {
+      // Update existing custom license
+      licenseTags.value[editingIndex.value] = {
+        value: customLicenseData,
+        displayValue: customLicenseData.name || 'Unnamed License',
+        isInvalid: false,
+        isCustom: true
+      }
+    } else {
+      // Add new custom license
+      licenseTags.value.push({
+        value: customLicenseData,
+        displayValue: customLicenseData.name || 'Unnamed License',
+        isInvalid: false,
+        isCustom: true
+      })
+    }
+
+    updateModelValue()
     showCustomLicenseSuccess.value = true
+    closeCustomLicenseForm()
+
     setTimeout(() => {
       showCustomLicenseSuccess.value = false
     }, 3000)
-    // Revalidate the expression to update the unknown tokens
-    await validateExpression()
+
+    // If this was an unknown token, revalidate the expression
+    if (unknownTokens.value.length > 0) {
+      await validateExpression()
+    }
   } catch (error) {
     if (error instanceof AxiosError && error.response?.data?.detail) {
       validationErrors.value = error.response.data.detail
@@ -595,13 +720,13 @@ async function submitCustomLicense() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem;
-  border: 1px solid #dee2e6;
-  border-radius: 0.25rem;
-  background-color: #f8f9fa;
-  min-height: 2.5rem;
-  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background-color: #f9fafb;
+  min-height: 3rem;
+  align-items: center;
   align-content: flex-start;
 }
 
@@ -623,6 +748,11 @@ async function submitCustomLicense() {
   background-color: #dc3545;
 }
 
+.license-tag.custom {
+  background-color: #6f42c1;
+  cursor: pointer;
+}
+
 .license-tag:hover {
   background-color: #0b5ed7;
   transform: translateY(-1px);
@@ -633,12 +763,21 @@ async function submitCustomLicense() {
   background-color: #bb2d3b;
 }
 
+.license-tag.custom:hover {
+  background-color: #5a2d91;
+}
+
 .license-tag-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+.custom-icon {
+  font-size: 0.75rem;
+  opacity: 0.8;
 }
 
 .license-tag-remove {
@@ -668,26 +807,54 @@ async function submitCustomLicense() {
   outline-offset: 1px;
 }
 
+.license-expression-input {
+  margin-bottom: 0;
+}
+
 .license-input-container {
   position: relative;
 }
 
 .input-with-button {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
+  gap: 0.75rem;
+  align-items: stretch;
+  margin-bottom: 1.5rem;
 }
 
 .input-with-button .form-control {
   flex: 1;
+  height: 2.75rem;
+}
+
+.add-custom-btn {
+  white-space: nowrap;
+  padding: 0;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+  flex-shrink: 0;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+  height: 2.75rem;
+  min-width: 7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .add-license-btn {
   white-space: nowrap;
-  padding: 0.375rem 0.75rem;
+  padding: 0;
   font-size: 0.875rem;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   flex-shrink: 0;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+  height: 2.75rem;
+  min-width: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .license-suggestions {
@@ -703,6 +870,7 @@ async function submitCustomLicense() {
   border-radius: 0.25rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
 .license-suggestion {
   padding: 0.75rem 1rem;
   cursor: pointer;
@@ -711,22 +879,27 @@ async function submitCustomLicense() {
   flex-direction: column;
   gap: 0.25rem;
 }
+
 .license-suggestion:last-child {
   border-bottom: none;
 }
+
 .license-suggestion:hover,
 .license-suggestion.active {
   background-color: #f8f9fa;
 }
+
 .license-suggestion .license-name {
   font-weight: 500;
   color: #212529;
 }
+
 .license-suggestion .license-key {
   font-size: 0.875rem;
   color: #6c757d;
   font-family: monospace;
 }
+
 .license-suggestion .license-category {
   font-size: 0.75rem;
   color: #6c757d;
@@ -736,35 +909,172 @@ async function submitCustomLicense() {
   border-radius: 0.25rem;
   display: inline-block;
 }
+
 .license-suggestion .license-category.operator {
   background-color: #d1ecf1;
   color: #0c5460;
   font-weight: 500;
 }
+
 .custom-license-form {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
 }
+
 .alert {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid;
 }
+
+.custom-license-alert .alert-content,
+.unknown-license-alert .alert-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.alert-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #374151;
+}
+
+.alert-description {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.alert-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.alert-body p {
+  margin: 0;
+}
+
 .card {
   background-color: #fff;
   border: 1px solid #dee2e6;
-  border-radius: 0.25rem;
-  padding: 1.25rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-.form-group {
-  margin-bottom: 1rem;
+
+.card-header {
+  padding: 1.25rem 1.5rem;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  border-radius: 0.5rem 0.5rem 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.form-label {
-  font-weight: 500;
+
+.card-header h6 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
   color: #495057;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-close:hover {
+  color: #374151;
+  background-color: #f3f4f6;
+}
+
+.btn-close:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.form-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+.form-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #374151;
   margin-bottom: 0.5rem;
   display: block;
+  font-size: 0.875rem;
+  letter-spacing: 0.025em;
 }
+
+.form-control {
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d1d5db;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  box-sizing: border-box;
+}
+
+.form-control:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+.form-control::placeholder {
+  color: #9ca3af;
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 120px;
+  padding: 1rem;
+}
+
 .text-danger {
   color: #dc3545;
 }
+
 .badge {
   padding: 0.25em 0.5em;
   font-size: 0.875em;
@@ -773,29 +1083,79 @@ async function submitCustomLicense() {
   background-color: #0dcaf0;
   border-radius: 0.25rem;
 }
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.btn {
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  min-height: 2.5rem;
+  box-sizing: border-box;
+}
+
 .btn-primary {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+  background-color: #3b82f6;
+  border-color: #3b82f6;
   color: #fff;
 }
+
 .btn-primary:hover {
-  background-color: #0b5ed7;
-  border-color: #0a58ca;
+  background-color: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.25);
 }
+
 .btn-primary:focus {
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  outline: none;
 }
+
 .btn-primary:disabled {
-  background-color: #0b5ed7;
-  border-color: #0a58ca;
-  opacity: 0.75;
+  background-color: #9ca3af;
+  border-color: #9ca3af;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
+
+.btn-secondary {
+  background-color: #6b7280;
+  border-color: #6b7280;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+  border-color: #4b5563;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(107, 114, 128, 0.25);
+}
+
 .alert-info {
   background-color: #cff4fc;
   border-color: #b6effb;
   color: #055160;
 }
+
 .alert-success {
   background-color: #d1e7dd;
   border-color: #badbcc;

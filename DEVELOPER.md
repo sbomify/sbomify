@@ -80,4 +80,4 @@ Follow these principles and standards to ensure smooth development and maintain 
 #### TypeScript
 
 - Linting: `bun run lint`
-- Tests: `bun vitest`
+- Tests: `bun test`
