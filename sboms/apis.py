@@ -3,7 +3,7 @@ import logging
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
-from ninja import Query, Router
+from ninja import File, Query, Router, UploadedFile
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
 from pydantic import ValidationError
@@ -529,3 +529,153 @@ def get_dashboard_summary(request: HttpRequest, component_id: str | None = Query
         total_components=total_components,
         latest_uploads=latest_uploads_data,
     )
+
+
+@router.post(
+    "/upload-file/{component_id}",
+    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=django_auth,
+)
+def sbom_upload_file(
+    request: HttpRequest,
+    component_id: str,
+    sbom_file: UploadedFile = File(...),
+):
+    """Upload SBOM file (CycloneDX or SPDX format) for a component."""
+    try:
+        import json
+
+        component = Component.objects.filter(id=component_id).first()
+        if component is None:
+            return 404, {"detail": "Component not found"}
+
+        if not verify_item_access(request, component, ["owner", "admin"]):
+            return 403, {"detail": "Forbidden"}
+
+        # Read file content
+        file_content = sbom_file.read()
+
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024
+        if len(file_content) > max_size:
+            return 400, {"detail": "File size must be less than 10MB"}
+
+        try:
+            sbom_data = json.loads(file_content.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return 400, {"detail": "Invalid JSON file or encoding"}
+
+        # Determine format and process accordingly
+        if "spdxVersion" in sbom_data:
+            # SPDX format
+            try:
+                payload = SPDXSchema(**sbom_data)
+
+                s3 = S3Client("SBOMS")
+                filename = s3.upload_sbom(file_content)
+
+                sbom_dict = obj_extract(
+                    obj_in=payload,
+                    fields=[
+                        ExtractSpec("name", required=True),
+                    ],
+                )
+
+                sbom_dict["format"] = "spdx"
+                sbom_dict["sbom_filename"] = filename
+                sbom_dict["component"] = component
+                sbom_dict["source"] = "manual_upload"
+                sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
+
+                # Error message constants
+                NO_PACKAGES_ERROR = "No packages found in SPDX document"
+                NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
+
+                if not payload.packages:
+                    return 400, {"detail": NO_PACKAGES_ERROR}
+
+                # Find the primary package
+                package: SPDXPackage | None = None
+
+                # First check documentDescribes
+                if hasattr(payload, "documentDescribes") and payload.documentDescribes:
+                    described_ref: str = payload.documentDescribes[0]
+                    for pkg in payload.packages:
+                        if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
+                            package = pkg
+                            break
+
+                # Fall back to name matching
+                if not package:
+                    for pkg in payload.packages:
+                        if pkg.name == payload.name:
+                            package = pkg
+                            break
+
+                if not package:
+                    return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
+
+                sbom_dict["version"] = package.version
+
+                with transaction.atomic():
+                    sbom = SBOM(**sbom_dict)
+                    sbom.save()
+
+                # Trigger vulnerability scan
+                scan_sbom_for_vulnerabilities.send_with_options(args=[sbom.id], delay=30000)
+
+                return 201, {"id": sbom.id}
+
+            except ValidationError as e:
+                return 400, {"detail": f"Invalid SPDX format: {str(e)}"}
+
+        elif "specVersion" in sbom_data:
+            # CycloneDX format
+            try:
+                spec_version = sbom_data.get("specVersion", "1.5")
+                if spec_version == "1.5":
+                    payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+                elif spec_version == "1.6":
+                    payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+                else:
+                    return 400, {"detail": f"Unsupported CycloneDX specVersion: {spec_version}"}
+
+                s3 = S3Client("SBOMS")
+                filename = s3.upload_sbom(file_content)
+
+                sbom_dict = obj_extract(
+                    obj_in=payload,
+                    fields=[
+                        ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                        ExtractSpec("metadata.component.version", required=False, rename_to="version"),
+                        ExtractSpec("specVersion", required=True, rename_to="format_version"),
+                    ],
+                )
+
+                # Version if present is a Version class and needs to be converted to string.
+                if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
+                    sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
+
+                sbom_dict["format"] = "cyclonedx"
+                sbom_dict["sbom_filename"] = filename
+                sbom_dict["component"] = component
+                sbom_dict["source"] = "manual_upload"
+
+                with transaction.atomic():
+                    sbom = SBOM(**sbom_dict)
+                    sbom.save()
+
+                # Trigger vulnerability scan
+                scan_sbom_for_vulnerabilities.send_with_options(args=[sbom.id], delay=30000)
+
+                return 201, {"id": sbom.id}
+
+            except ValidationError as e:
+                return 400, {"detail": f"Invalid CycloneDX format: {str(e)}"}
+
+        else:
+            return 400, {"detail": "Unrecognized SBOM format. Must be SPDX or CycloneDX."}
+
+    except Exception as e:
+        log.error(f"Error processing file upload: {str(e)}")
+        return 400, {"detail": str(e)}

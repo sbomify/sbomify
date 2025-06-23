@@ -49,114 +49,36 @@ APP_BASE_URL - Base URL for the application
   {% if has_crud_permissions %}
   <div class="row">
     <div class="col-12">
-      <div class="vc-ci-cd-info" data-component-id="{{ component.id }}"></div>
+      <div class="vc-ci-cd-info" data-component-id="{{ component.id }}" data-component-name="{{ component.name }}"></div>
     </div>
   </div>
   {% endif %}
 
-  <div class="card mt-3">
-    <div class="card-body">
-      <h4 class="d-flex justify-content-between align-items-center mb-4" data-bs-toggle="collapse" data-bs-target="#sbomsCollapse" style="cursor: pointer;">
-        SBOMs
-        <i class="fas" :class="{ 'fa-chevron-down': $('#sbomsCollapse').hasClass('show'), 'fa-chevron-right': !$('#sbomsCollapse').hasClass('show') }"></i>
-      </h4>
-      <div class="collapse show" id="sbomsCollapse">
-        <div class="data-table">
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Artifact Type</th>
-                <th scope="col">Format</th>
-                <th scope="col">Version</th>
-                <th scope="col">NTIA Compliant</th>
-                <th scope="col">Created</th>
-                <th scope="col">Download</th>
-                <th scope="col">Vulnerabilities</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for item_data in sboms_data %}
-              {% with sbom=item_data.sbom has_report=item_data.has_vulnerabilities_report %}
-              <tr>
-                <td>
-                  <a href="{% url 'sboms:sbom_details' sbom.id %}" title="Details" class="icon-link">
-                  {{ sbom.name }}
-                  </a>
-                </td>
-                <td>SBOM</td>
-                <td>
-                  {% if sbom.format == 'spdx'%}
-                    SPDX
-                  {% endif %}
-                  {% if sbom.format == 'cyclonedx' %}
-                    CycloneDX
-                  {% endif %}
-                  {{ sbom.format_version }}
-                </td>
-                <td title="{{ sbom.version }}">{{ sbom.version|truncatechars:20 }}</td>
-                <td> N/A </td>
-                <td>{{ sbom.created_at }}</td>
-                <td>
-                  <a href="{% url 'sboms:sbom_download' sbom.id %}" title="Download" class="btn btn-secondary">
-                    Download
-                  </a>
-                </td>
-                <td>
-                  <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" title="Vulnerabilities" class="btn btn-sm btn-warning {% if not has_report %}disabled{% endif %}">
-                    <i class="fas fa-shield-alt"></i> View
-                  </a>
-                </td>
-              </tr>
-              {% endwith %}
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  {% if has_crud_permissions %}
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="vc-sbom-upload" data-component-id="{{ component.id }}"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row mt-3">
+    <div class="col-12">
+      {{ sboms_data|json_script:"sboms-data" }}
+      <div class="vc-sboms-table" data-sboms-data-element-id="sboms-data"></div>
     </div>
   </div>
 
-  {% if has_crud_permissions %}
-  <div class="card mt-3">
-    <div class="card-body">
-      <h4 class="d-flex justify-content-between align-items-center mb-4" data-bs-toggle="collapse" data-bs-target="#deleteCollapse" style="cursor: pointer;">
-        Danger Zone
-        <i class="fas" :class="{ 'fa-chevron-down': $('#deleteCollapse').hasClass('show'), 'fa-chevron-right': !$('#deleteCollapse').hasClass('show') }"></i>
-      </h4>
-      <div class="collapse" id="deleteCollapse">
-        {% if is_owner %}
-        <div class="mb-4">
-          <h6 class="mb-3">Transfer Component to Team</h6>
-          <form action="{% url 'sboms:transfer_component' component.id %}" method="post" class="row row-cols-md-auto">
-            {% csrf_token %}
-            <div class="col">
-              <label for="team_key">Team</label>
-            </div>
-            <div class="col">
-              <select name="team_key" id="team_key" class="form-control">
-                {% for team_key, team in request.session.user_teams.items %}
-                <option value="{{ team_key }}">{{ team.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col">
-              <input type="submit" class="btn btn-warning" value="Transfer Component" />
-            </div>
-          </form>
-        </div>
-        {% endif %}
-
-        <div>
-          <h6 class="mb-3">Delete Component</h6>
-          <a class="btn btn-danger" id="del_{{ component.id }}" href="{% url 'sboms:delete_component' component.id %}">Delete Component</a>
-          <span class="vc-confirm-action"
-            data-target-element-id="del_{{ component.id }}"
-            data-item-name="{{ component.name }}"
-            data-item-type="component"
-            data-confirmation-message="Are you sure you want to delete the component {{ component.name }}?">
-          </span>
-        </div>
+    {% if has_crud_permissions %}
+  <div class="row mt-3">
+    <div class="col-12">
+      {{ request.session.user_teams|json_script:"user-teams-data" }}
+      <div class="vc-danger-zone"
+        data-component-id="{{ component.id }}"
+        data-component-name="{{ component.name }}"
+        data-is-owner="{% if is_owner %}true{% else %}false{% endif %}"
+        data-user-teams-element-id="user-teams-data"
+        data-csrf-token="{{ csrf_token }}">
       </div>
     </div>
   </div>
@@ -167,35 +89,4 @@ APP_BASE_URL - Base URL for the application
 {% block scripts %}
   {% vite_asset 'core/js/main.ts' %}
   {% vite_asset 'sboms/js/main.ts' %}
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Add collapse event listeners to handle chevron rotation
-      document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(element) {
-        const targetId = element.getAttribute('data-bs-target');
-        const target = document.querySelector(targetId);
-        const icon = element.querySelector('i') || element.closest('.card-title').querySelector('i');
-
-        if (target && icon) {
-          target.addEventListener('show.bs.collapse', function() {
-            icon.classList.remove('fa-chevron-right');
-            icon.classList.add('fa-chevron-down');
-          });
-
-          target.addEventListener('hide.bs.collapse', function() {
-            icon.classList.remove('fa-chevron-down');
-            icon.classList.add('fa-chevron-right');
-          });
-
-          // Set initial state
-          if (target.classList.contains('show')) {
-            icon.classList.remove('fa-chevron-right');
-            icon.classList.add('fa-chevron-down');
-          } else {
-            icon.classList.remove('fa-chevron-down');
-            icon.classList.add('fa-chevron-right');
-          }
-        }
-      });
-    });
-  </script>
 {% endblock %}

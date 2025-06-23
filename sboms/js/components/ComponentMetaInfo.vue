@@ -1,32 +1,26 @@
 <template>
-  <div class="container-fluid p-0">
-    <div class="row">
-      <div class="col-12">
-        <ComponentMetaInfoDisplay
-          v-if="!isEditing"
-          :key="infoComponentKey"
-          :componentId="props.componentId"
-          :showEditButton="allowEdit"
-          @edit="isEditing = true"
-          @copy="selectingCopyComponent = true"
-        />
-        <ComponentMetaInfoEditor
-          v-else
-          :componentId="props.componentId"
-          @closeEditor="isEditing=false"
-        />
-      </div>
-    </div>
+  <ComponentMetaInfoDisplay
+    v-if="!isEditing"
+    :key="infoComponentKey"
+    :componentId="props.componentId"
+    :showEditButton="allowEdit"
+    @edit="isEditing = true"
+    @copy="selectingCopyComponent = true"
+  />
+  <ComponentMetaInfoEditor
+    v-else
+    :componentId="props.componentId"
+    @closeEditor="isEditing=false"
+  />
 
-    <ItemSelectModal
-      v-if="selectingCopyComponent"
-      v-model="copyComponentId"
-      item-type="component"
-      :exclude-items="[props.componentId]"
-      @canceled="clearCopyComponentMetadata()"
-      @selected="copyComponentMetadata()"
-    />
-  </div>
+  <ItemSelectModal
+    v-if="selectingCopyComponent"
+    v-model="copyComponentId"
+    item-type="component"
+    :exclude-items="[props.componentId]"
+    @canceled="clearCopyComponentMetadata()"
+    @selected="copyComponentMetadata()"
+  />
 </template>
 
 <script setup lang="ts">

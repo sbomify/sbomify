@@ -730,6 +730,57 @@ def test_sbom_download_project_private_authorized(
 
 
 @pytest.mark.django_db
+def test_component_details_json_serialization(
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    sample_user,  # noqa: F811
+):
+    """Test that component details views properly serialize SBOM objects for JSON output without errors.
+
+    This test ensures that the JSON serialization fix for SBOM objects in component detail views
+    works correctly, preventing the "Object of type SBOM is not JSON serializable" error.
+    """
+    # Associate the SBOM with the component
+    sample_sbom.component = sample_component
+    sample_sbom.save()
+
+    client = Client()
+    client.force_login(sample_user)
+
+    # Set up session with team access
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    # Test private component details view
+    private_uri = reverse("sboms:component_details", kwargs={"component_id": sample_component.id})
+    response = client.get(private_uri)
+
+    # Should render successfully without JSON serialization errors
+    assert response.status_code == 200
+
+    # Basic content check - component name should be present
+    content = response.content.decode()
+    assert sample_component.name in content
+
+    # Make component public for public view test
+    sample_component.is_public = True
+    sample_component.save()
+
+    # Test public component details view
+    public_uri = reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id})
+    response = client.get(public_uri)
+
+    # Should render successfully without JSON serialization errors
+    assert response.status_code == 200
+
+    # Basic content check - component name should be present
+    content = response.content.decode()
+    assert sample_component.name in content
+
+    # The main test is that both views render without JSON serialization errors
+    # If we get here with status 200, the JSON serialization fix is working
+
+
+@pytest.mark.django_db
 class TestDuplicateNames:
     """Test handling of duplicate names for products, projects, and components."""
 

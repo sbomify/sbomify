@@ -7,6 +7,7 @@ import ConfirmAction from './components/ConfirmAction.vue';
 import DashboardStats from '../../sboms/js/components/DashboardStats.vue';
 import CopyToken from './components/CopyToken.vue';
 import SiteNotifications from './components/SiteNotifications.vue';
+import StandardCard from './components/StandardCard.vue';
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -15,6 +16,7 @@ mountVueComponent('vc-confirm-action', ConfirmAction);
 mountVueComponent('vc-dashboard-stats', DashboardStats);
 mountVueComponent('vc-copy-token', CopyToken);
 mountVueComponent('vc-site-notifications', SiteNotifications);
+mountVueComponent('vc-standard-card', StandardCard);
 
 // Declare the global feather variable
 declare global {

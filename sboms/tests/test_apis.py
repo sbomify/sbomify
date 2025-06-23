@@ -814,3 +814,133 @@ def test_component_metadata_author_information(sample_component: Component, samp
     assert response_data["authors"][2]["name"] == "Bob Wilson"
     assert "email" not in response_data["authors"][2] or response_data["authors"][2]["email"] == ""
     assert response_data["authors"][2]["phone"] == "987-654-3210"
+
+
+@pytest.mark.django_db
+def test_sbom_upload_file_cyclonedx(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    mocker.patch("boto3.resource")
+    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.cdx.json"
+
+    client = Client()
+    client.force_login(sample_user)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+    with open(test_file_path, "rb") as f:
+        response = client.post(url, data={"sbom_file": f}, format="multipart")
+
+    # Assert the response status code and data
+    assert response.status_code == 201
+    assert "id" in response.json()
+
+    # Verify SBOM was uploaded
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.component.id == sample_component.id
+    assert sbom.format == "cyclonedx"
+    assert sbom.source == "manual_upload"
+    assert patched_upload_data_as_file.call_count == 1
+    assert SBOM.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_sbom_upload_file_spdx(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    mocker.patch("boto3.resource")
+    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
+
+    client = Client()
+    client.force_login(sample_user)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+    with open(test_file_path, "rb") as f:
+        response = client.post(url, data={"sbom_file": f}, format="multipart")
+
+    # Assert the response status code and data
+    assert response.status_code == 201
+    assert "id" in response.json()
+
+    # Verify SBOM was uploaded
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.component.id == sample_component.id
+    assert sbom.format == "spdx"
+    assert sbom.source == "manual_upload"
+    assert patched_upload_data_as_file.call_count == 1
+    assert SBOM.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_sbom_upload_file_invalid_format(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    client = Client()
+    client.force_login(sample_user)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+    # Create a simple text file with invalid JSON
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    invalid_file = SimpleUploadedFile("test.json", b"invalid json content", content_type="application/json")
+
+    response = client.post(url, data={"sbom_file": invalid_file}, format="multipart")
+
+    # Assert error response
+    assert response.status_code == 400
+    assert "Invalid JSON" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_sbom_upload_file_unauthorized(
+    sample_component: Component,  # noqa: F811
+):
+    client = Client()
+    # Don't log in user
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    test_file = SimpleUploadedFile("test.json", b'{"test": "data"}', content_type="application/json")
+
+    response = client.post(url, data={"sbom_file": test_file}, format="multipart")
+
+    # Assert unauthorized response
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_sbom_upload_file_too_large(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    client = Client()
+    client.force_login(sample_user)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+
+    # Create a file that's too large (11MB)
+    large_content = b"x" * (11 * 1024 * 1024)
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    large_file = SimpleUploadedFile("large.json", large_content, content_type="application/json")
+
+    response = client.post(url, data={"sbom_file": large_file}, format="multipart")
+
+    # Assert error response
+    assert response.status_code == 400
+    assert "File size must be less than 10MB" in response.json()["detail"]

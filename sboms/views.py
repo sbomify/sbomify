@@ -421,10 +421,34 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
         redis_client = redis.from_url(settings.REDIS_WORKER_URL)
         for sbom_item in sboms_queryset:
             keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
-            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": bool(keys)})
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                    },
+                    "has_vulnerabilities_report": bool(keys),
+                }
+            )
     except redis.exceptions.ConnectionError:
         for sbom_item in sboms_queryset:
-            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": False})
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                    },
+                    "has_vulnerabilities_report": False,
+                }
+            )
         # No messages.error for public view, just log or fail silently
         # logger.warning("Could not connect to Redis in public component view.")
 
@@ -457,11 +481,35 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
         redis_client = redis.from_url(settings.REDIS_WORKER_URL)
         for sbom_item in sboms_queryset:
             keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
-            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": bool(keys)})
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                    },
+                    "has_vulnerabilities_report": bool(keys),
+                }
+            )
     except redis.exceptions.ConnectionError:
         # If Redis is down, assume no reports are available for simplicity
         for sbom_item in sboms_queryset:
-            sboms_with_vuln_status.append({"sbom": sbom_item, "has_vulnerabilities_report": False})
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                    },
+                    "has_vulnerabilities_report": False,
+                }
+            )
         messages.error(
             request, "Could not connect to Redis to check for vulnerability reports. Status may be inaccurate."
         )

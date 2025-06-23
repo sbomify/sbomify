@@ -1,225 +1,201 @@
 <template>
-  <div class="container-fluid p-0">
-    <div class="row">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-body">
-            <div class="mb-4">
-              <h4 class="text-muted d-flex justify-content-between align-items-center" style="cursor: pointer;" @click="toggleExpand">
-                CI/CD Integration
-                <div class="d-flex align-items-center">
-                  <svg v-if="!isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  <svg v-if="isExpanded" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                </div>
-              </h4>
-              <p v-if="isExpanded" class="text-muted">Follow these steps to integrate SBOM generation into your CI/CD pipeline.</p>
+  <StandardCard
+    title="CI/CD Integration"
+    :collapsible="true"
+    :default-expanded="true"
+    storage-key="cicd-integration"
+  >
+    <template #info-notice>
+      <strong>Automate SBOM generation:</strong> Follow these steps to integrate SBOM generation into your CI/CD pipeline. For manual uploads, use the Upload SBOM section above.
+    </template>
+
+    <div class="nav-tabs-container">
+      <!-- Tab navigation -->
+      <ul class="nav nav-tabs" role="tablist">
+        <li v-for="tab in tabs" :key="tab.id" class="nav-item" role="presentation">
+          <button class="nav-link" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">
+            <i :class="tab.icon"></i>
+            {{ tab.name }}
+          </button>
+        </li>
+      </ul>
+
+      <!-- Tab content -->
+      <div class="tab-content mt-4">
+        <!-- Platform-specific notices -->
+        <div v-if="activeTab === 'gitlab'" class="info-notice mb-3">
+          <i class="fas fa-info-circle text-info me-2"></i>
+          <div>
+            <strong>Note:</strong> GitLab CI requires Docker-in-Docker (DinD) service for Docker image scanning. The configuration above includes the necessary DinD setup.
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'bitbucket'" class="info-notice mb-3">
+          <i class="fas fa-info-circle text-info me-2"></i>
+          <div>
+            <strong>Note:</strong> Bitbucket Pipelines provides built-in Docker support. The configuration above includes the necessary Docker service setup.
+          </div>
+        </div>
+
+        <!-- Configuration content -->
+        <div class="tab-pane active">
+          <!-- Source Selector -->
+          <div class="source-selector mb-3">
+            <label for="source-select" class="form-label">SBOM Source</label>
+            <select id="source-select" v-model="sourceType" class="form-select">
+              <option value="sbom">Existing SBOM file</option>
+              <option value="lock">Generate from lock file</option>
+              <option value="docker">Generate from Docker image</option>
+            </select>
+          </div>
+
+          <!-- Configuration Options -->
+          <div class="config-options">
+            <div class="config-option">
+              <div class="form-check">
+                <input id="augment" v-model="config.augment" type="checkbox" class="form-check-input">
+                <label for="augment" class="form-check-label">
+                  Augment
+                  <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
+                     title="Add component metadata from the Component Metadata section above to provide additional context about your software">i</span>
+                </label>
+              </div>
+            </div>
+            <div class="config-option">
+              <div class="form-check">
+                <input id="enrich" v-model="config.enrich" type="checkbox" class="form-check-input">
+                <label for="enrich" class="form-check-label">
+                  Enrich
+                  <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
+                     title="Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources">i</span>
+                </label>
+              </div>
             </div>
 
-            <div v-if="isExpanded" class="nav-tabs-container">
-              <!-- Tab navigation -->
-              <ul class="nav nav-tabs" role="tablist">
-                <li v-for="tab in tabs" :key="tab.id" class="nav-item" role="presentation">
-                  <button class="nav-link" :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">
-                    <i :class="tab.icon"></i>
-                    {{ tab.name }}
-                  </button>
-                </li>
-              </ul>
+            <div class="config-option">
+              <div class="form-check">
+                <input id="output-file" v-model="config.outputFile" type="checkbox" class="form-check-input">
+                <label for="output-file" class="form-check-label">
+                  Save SBOM to file
+                  <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
+                     title="Save the generated SBOM to a local file in addition to uploading it">i</span>
+                </label>
+              </div>
+            </div>
+          </div>
 
-              <!-- Tab content -->
-              <div class="tab-content mt-4">
-                <div v-if="activeTab === 'gitlab'" class="mb-3">
-                  <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="fa-solid fa-triangle-exclamation text-warning"></i>
-                    <span class="text-warning fw-medium">Note:</span>
-                    <span>GitLab CI requires Docker-in-Docker (DinD) service for Docker image scanning. The configuration above includes the necessary DinD setup.</span>
-                  </div>
-                </div>
+          <!-- Token requirement notice -->
+          <div class="info-notice mb-3">
+            <i class="fas fa-key text-info me-2"></i>
+            <div>
+              <strong>Required:</strong> Before using any CI integration, create a secret named <code>SBOMIFY_TOKEN</code> containing your API token. You can find your token in your account settings.
+            </div>
+          </div>
 
-                <div v-if="activeTab === 'bitbucket'" class="mb-3">
-                  <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="fas fa-info-circle text-info"></i>
-                    <span class="text-info fw-medium">Note:</span>
-                    <span>Bitbucket Pipelines provides built-in Docker support. The configuration above includes the necessary Docker service setup.</span>
-                  </div>
-                </div>
+          <!-- Tabs -->
+          <div class="nav-tabs-container">
+            <ul class="nav nav-tabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button id="github-tab" class="nav-link active" data-bs-toggle="tab" data-bs-target="#github"
+                        type="button" role="tab" aria-controls="github" aria-selected="true"
+                        @click="handleTabClick('github')">
+                  <i class="fab fa-github me-1"></i>GitHub
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button id="gitlab-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#gitlab"
+                        type="button" role="tab" aria-controls="gitlab" aria-selected="false"
+                        @click="handleTabClick('gitlab')">
+                  <i class="fab fa-gitlab me-1"></i>GitLab
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button id="bitbucket-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#bitbucket"
+                        type="button" role="tab" aria-controls="bitbucket" aria-selected="false"
+                        @click="handleTabClick('bitbucket')">
+                  <i class="fab fa-bitbucket me-1"></i>Bitbucket
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button id="docker-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#docker"
+                        type="button" role="tab" aria-controls="docker" aria-selected="false"
+                        @click="handleTabClick('docker')">
+                  <i class="fab fa-docker me-1"></i>Docker
+                </button>
+              </li>
+            </ul>
 
-                <!-- Configuration content -->
-                <div class="tab-pane active">
-                  <!-- Source Selector -->
-                  <div class="source-selector mb-3">
-                    <label for="source-select" class="form-label">SBOM Source</label>
-                    <select id="source-select" v-model="sourceType" class="form-select">
-                      <option value="sbom">Existing SBOM file</option>
-                      <option value="lock">Generate from lock file</option>
-                      <option value="docker">Generate from Docker image</option>
-                    </select>
-                  </div>
-
-                  <!-- Configuration Options -->
-                  <div class="config-options">
-                    <div class="config-option">
-                      <div class="form-check">
-                        <input id="augment" v-model="config.augment" type="checkbox" class="form-check-input">
-                        <label for="augment" class="form-check-label">
-                          Augment
-                          <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
-                             title="Add component metadata from the Component Metadata section above to provide additional context about your software">i</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="config-option">
-                      <div class="form-check">
-                        <input id="enrich" v-model="config.enrich" type="checkbox" class="form-check-input">
-                        <label for="enrich" class="form-check-label">
-                          Enrich
-                          <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
-                             title="Automatically improve SBOM quality by adding additional data like licenses from package registries and other sources">i</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="config-option">
-                      <div class="form-check">
-                        <input id="override-meta" v-model="config.overrideMeta" type="checkbox" class="form-check-input">
-                        <label for="override-meta" class="form-check-label">
-                          Override SBOM metadata
-                          <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
-                             title="Override default SBOM metadata with custom values for organization-specific information">i</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="config-option">
-                      <div class="form-check">
-                        <input id="output-file" v-model="config.outputFile" type="checkbox" class="form-check-input">
-                        <label for="output-file" class="form-check-label">
-                          Save SBOM to file
-                          <span class="info-icon" data-bs-toggle="tooltip" data-bs-placement="top"
-                             title="Save the generated SBOM to a local file in addition to uploading it">i</span>
-                        </label>
-                      </div>
+            <div class="tab-content">
+              <!-- GitHub Tab -->
+              <div id="github" class="tab-pane fade show active" role="tabpanel" aria-labelledby="github-tab">
+                <template v-if="activeTab === 'github'">
+                  <div class="code-block">
+                    <pre><code ref="githubCode" class="language-yaml hljs"></code></pre>
+                    <div class="copy-btn">
+                      <CopyableValue :value="githubContent" title="Copy GitHub workflow" hide-value />
                     </div>
                   </div>
+                </template>
+              </div>
 
-                  <!-- Token requirement note -->
-                  <div class="mb-3 d-flex align-items-center">
-                    <i class="fa-solid fa-key me-2 text-info"></i>
+              <!-- GitLab Tab -->
+              <div id="gitlab" class="tab-pane fade" role="tabpanel" aria-labelledby="gitlab-tab">
+                <template v-if="activeTab === 'gitlab'">
+                  <div class="code-block">
+                    <pre><code ref="gitlabCode" class="language-yaml hljs"></code></pre>
+                    <div class="copy-btn">
+                      <CopyableValue :value="gitlabContent" title="Copy GitLab CI config" hide-value />
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Bitbucket Tab -->
+              <div id="bitbucket" class="tab-pane fade" role="tabpanel" aria-labelledby="bitbucket-tab">
+                <template v-if="activeTab === 'bitbucket'">
+                  <div class="code-block">
+                    <pre><code ref="bitbucketCode" class="language-yaml hljs"></code></pre>
+                    <div class="copy-btn">
+                      <CopyableValue :value="bitbucketContent" title="Copy Bitbucket pipeline" hide-value />
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Docker Tab -->
+              <div id="docker" class="tab-pane fade" role="tabpanel" aria-labelledby="docker-tab">
+                <template v-if="sourceType === 'docker'">
+                  <!-- GitHub note -->
+                  <div v-if="activeTab === 'github'" class="info-notice mb-3">
+                    <i class="fas fa-info-circle text-info me-2"></i>
                     <div>
-                      <strong>Required:</strong> Before using any CI integration, create a secret named <code>SBOMIFY_TOKEN</code> containing your API token. You can find your token in your account settings.
+                      <strong>Note:</strong> For Docker image scanning in GitHub Actions, the action will use GitHub's built-in Docker support. No additional configuration is needed.
                     </div>
                   </div>
 
-                  <!-- Tabs -->
-                  <div class="nav-tabs-container">
-                    <ul class="nav nav-tabs" role="tablist">
-                      <li class="nav-item" role="presentation">
-                        <button id="github-tab" class="nav-link active" data-bs-toggle="tab" data-bs-target="#github"
-                                type="button" role="tab" aria-controls="github" aria-selected="true"
-                                @click="handleTabClick('github')">
-                          <i class="fab fa-github me-1"></i>GitHub
-                        </button>
-                      </li>
-                      <li class="nav-item" role="presentation">
-                        <button id="gitlab-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#gitlab"
-                                type="button" role="tab" aria-controls="gitlab" aria-selected="false"
-                                @click="handleTabClick('gitlab')">
-                          <i class="fab fa-gitlab me-1"></i>GitLab
-                        </button>
-                      </li>
-                      <li class="nav-item" role="presentation">
-                        <button id="bitbucket-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#bitbucket"
-                                type="button" role="tab" aria-controls="bitbucket" aria-selected="false"
-                                @click="handleTabClick('bitbucket')">
-                          <i class="fab fa-bitbucket me-1"></i>Bitbucket
-                        </button>
-                      </li>
-                      <li class="nav-item" role="presentation">
-                        <button id="docker-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#docker"
-                                type="button" role="tab" aria-controls="docker" aria-selected="false"
-                                @click="handleTabClick('docker')">
-                          <i class="fab fa-docker me-1"></i>Docker
-                        </button>
-                      </li>
-                    </ul>
-
-                    <div class="tab-content">
-                      <!-- GitHub Tab -->
-                      <div id="github" class="tab-pane fade show active" role="tabpanel" aria-labelledby="github-tab">
-                        <template v-if="activeTab === 'github'">
-                          <div class="code-block">
-                            <pre><code ref="githubCode" class="language-yaml hljs"></code></pre>
-                            <div class="copy-btn">
-                              <CopyableValue :value="githubContent" title="Copy GitHub workflow" hide-value />
-                            </div>
-                          </div>
-                        </template>
-                      </div>
-
-                      <!-- GitLab Tab -->
-                      <div id="gitlab" class="tab-pane fade" role="tabpanel" aria-labelledby="gitlab-tab">
-                        <template v-if="activeTab === 'gitlab'">
-                          <div class="code-block">
-                            <pre><code ref="gitlabCode" class="language-yaml hljs"></code></pre>
-                            <div class="copy-btn">
-                              <CopyableValue :value="gitlabContent" title="Copy GitLab CI config" hide-value />
-                            </div>
-                          </div>
-                        </template>
-                      </div>
-
-                      <!-- Bitbucket Tab -->
-                      <div id="bitbucket" class="tab-pane fade" role="tabpanel" aria-labelledby="bitbucket-tab">
-                        <template v-if="activeTab === 'bitbucket'">
-                          <div class="code-block">
-                            <pre><code ref="bitbucketCode" class="language-yaml hljs"></code></pre>
-                            <div class="copy-btn">
-                              <CopyableValue :value="bitbucketContent" title="Copy Bitbucket pipeline" hide-value />
-                            </div>
-                          </div>
-                        </template>
-                      </div>
-
-                      <!-- Docker Tab -->
-                      <div id="docker" class="tab-pane fade" role="tabpanel" aria-labelledby="docker-tab">
-                        <template v-if="sourceType === 'docker'">
-                          <!-- GitHub note -->
-                          <div v-if="activeTab === 'github'" class="alert alert-info mb-3 d-flex align-items-center">
-                            <div class="alert-icon me-3">
-                              <i class="fas fa-info-circle"></i>
-                            </div>
-                            <div class="alert-content">
-                              <strong>Note:</strong> For Docker image scanning in GitHub Actions, the action will use GitHub's built-in Docker support. No additional configuration is needed.
-                            </div>
-                          </div>
-
-                          <!-- Docker CLI note -->
-                          <div v-if="activeTab === 'docker'" class="alert alert-info mb-3 d-flex align-items-center">
-                            <div class="alert-icon me-3">
-                              <i class="fas fa-info-circle"></i>
-                            </div>
-                            <div class="alert-content">
-                              <strong>Note:</strong> For local Docker scanning, the Docker socket is mounted automatically when using Docker CLI.
-                            </div>
-                          </div>
-                        </template>
-                        <template v-if="activeTab === 'docker'">
-                          <div class="code-block">
-                            <pre><code ref="dockerCode" class="language-shell hljs"></code></pre>
-                            <div class="copy-btn">
-                              <CopyableValue :value="dockerContent" title="Copy Docker command" hide-value />
-                            </div>
-                          </div>
-                        </template>
-                      </div>
+                  <!-- Docker CLI note -->
+                  <div v-if="activeTab === 'docker'" class="info-notice mb-3">
+                    <i class="fas fa-info-circle text-info me-2"></i>
+                    <div>
+                      <strong>Note:</strong> For local Docker scanning, the Docker socket is mounted automatically when using Docker CLI.
                     </div>
                   </div>
-                </div>
+                </template>
+                <template v-if="activeTab === 'docker'">
+                  <div class="code-block">
+                    <pre><code ref="dockerCode" class="language-shell hljs"></code></pre>
+                    <div class="copy-btn">
+                      <CopyableValue :value="dockerContent" title="Copy Docker command" hide-value />
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </StandardCard>
 </template>
 
 <script setup lang="ts">
@@ -229,6 +205,7 @@ import yaml from 'highlight.js/lib/languages/yaml';
 import bash from 'highlight.js/lib/languages/bash';
 import 'highlight.js/styles/github-dark.css';
 import CopyableValue from '../../../core/js/components/CopyableValue.vue';
+import StandardCard from '../../../core/js/components/StandardCard.vue';
 
 interface BootstrapTooltipOptions {
   placement?: 'top' | 'bottom' | 'left' | 'right';
@@ -262,15 +239,14 @@ hljs.registerLanguage('bash', bash);
 
 interface Props {
   componentId: string;
+  componentName: string;
 }
 
 const props = defineProps<Props>();
-const isExpanded = ref(true);  // Start expanded by default
-const sourceType = ref('sbom');
+const sourceType = ref('lock');
 const config = ref({
   augment: true,
   enrich: true,
-  overrideMeta: false,
   outputFile: true
 });
 
@@ -300,13 +276,15 @@ const generateGithubYaml = () => {
 
   yaml.push('        env:',
             `          TOKEN: \${{ secrets.SBOMIFY_TOKEN }}`,
-            `          COMPONENT_ID: '${props.componentId}'`);
+            `          COMPONENT_ID: '${props.componentId}'`,
+            `          COMPONENT_NAME: '${props.componentName}'`,
+            `          COMPONENT_VERSION: \${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}`);
 
-  // Add source-specific configuration
-  switch (sourceType.value) {
-    case 'sbom':
-      yaml.push(`          SBOM_FILE: 'path/to/sbom.json'`);
-      break;
+          // Add source-specific configuration
+        switch (sourceType.value) {
+          case 'sbom':
+            yaml.push(`          SBOM_FILE: 'path/to/sbom.cdx.json'`);
+            break;
     case 'lock':
       yaml.push(`          LOCK_FILE: 'poetry.lock'              # Or package-lock.json, Gemfile.lock, etc.`);
       break;
@@ -318,8 +296,7 @@ const generateGithubYaml = () => {
   // Add boolean configurations
   if (config.value.augment) yaml.push('          AUGMENT: true');
   if (config.value.enrich) yaml.push('          ENRICH: true');
-  if (config.value.overrideMeta) yaml.push('          OVERRIDE_SBOM_METADATA: true');
-  if (config.value.outputFile) yaml.push('          OUTPUT_FILE: sbom.json');
+  if (config.value.outputFile) yaml.push('          OUTPUT_FILE: sbom.cdx.json');
 
   return yaml.join('\n');
 };
@@ -342,12 +319,14 @@ const generateGitlabYaml = () => {
 
   yaml.push('  variables:',
             `    TOKEN: \$SBOMIFY_TOKEN`,
-            `    COMPONENT_ID: '${props.componentId}'`);
+            `    COMPONENT_ID: '${props.componentId}'`,
+            `    COMPONENT_NAME: '${props.componentName}'`,
+            `    COMPONENT_VERSION: \${CI_COMMIT_TAG:-\$CI_COMMIT_REF_NAME-\$CI_COMMIT_SHORT_SHA}`);
 
-  switch (sourceType.value) {
-    case 'sbom':
-      yaml.push(`    SBOM_FILE: 'path/to/sbom.json'`);
-      break;
+          switch (sourceType.value) {
+          case 'sbom':
+            yaml.push(`    SBOM_FILE: 'path/to/sbom.cdx.json'`);
+            break;
     case 'lock':
       yaml.push(`    LOCK_FILE: 'poetry.lock'              # Or package-lock.json, Gemfile.lock, etc.`);
       break;
@@ -358,8 +337,7 @@ const generateGitlabYaml = () => {
 
   if (config.value.augment) yaml.push('    AUGMENT: true');
   if (config.value.enrich) yaml.push('    ENRICH: true');
-  if (config.value.overrideMeta) yaml.push('    OVERRIDE_SBOM_METADATA: true');
-  if (config.value.outputFile) yaml.push('    OUTPUT_FILE: sbom.json');
+  if (config.value.outputFile) yaml.push('    OUTPUT_FILE: sbom.cdx.json');
 
   yaml.push('  script:', '    - /entrypoint.sh');
 
@@ -385,12 +363,14 @@ const generateBitbucketYaml = () => {
             '          - /entrypoint.sh',
             '        env:',
             `          TOKEN: \$SBOMIFY_TOKEN`,
-            `          COMPONENT_ID: '${props.componentId}'`);
+            `          COMPONENT_ID: '${props.componentId}'`,
+            `          COMPONENT_NAME: '${props.componentName}'`,
+            `          COMPONENT_VERSION: \${BITBUCKET_TAG:-\$BITBUCKET_BRANCH-\$BITBUCKET_COMMIT}`);
 
-  switch (sourceType.value) {
-    case 'sbom':
-      yaml.push(`          SBOM_FILE: 'path/to/sbom.json'`);
-      break;
+          switch (sourceType.value) {
+          case 'sbom':
+            yaml.push(`          SBOM_FILE: 'path/to/sbom.cdx.json'`);
+            break;
     case 'lock':
       yaml.push(`          LOCK_FILE: 'poetry.lock'              # Or package-lock.json, Gemfile.lock, etc.`);
       break;
@@ -401,14 +381,14 @@ const generateBitbucketYaml = () => {
 
   if (config.value.augment) yaml.push('          AUGMENT: true');
   if (config.value.enrich) yaml.push('          ENRICH: true');
-  if (config.value.overrideMeta) yaml.push('          OVERRIDE_SBOM_METADATA: true');
-  if (config.value.outputFile) yaml.push('          OUTPUT_FILE: sbom.json');
+  if (config.value.outputFile) yaml.push('          OUTPUT_FILE: sbom.cdx.json');
 
   return yaml.join('\n');
 };
 
 const generateDockerCommand = () => {
   const cmd = [
+    '# Set your component version (e.g., export VERSION=v1.0.0)',
     '# Pull and run the sbomify action container',
     'docker run -it --rm \\'
   ];
@@ -418,13 +398,15 @@ const generateDockerCommand = () => {
   }
 
   cmd.push('  -e TOKEN=$SBOMIFY_TOKEN \\',
-          `  -e COMPONENT_ID=${props.componentId} \\`);
+          `  -e COMPONENT_ID=${props.componentId} \\`,
+          `  -e COMPONENT_NAME=${props.componentName} \\`,
+          '  -e COMPONENT_VERSION=$VERSION \\');
 
-  switch (sourceType.value) {
-    case 'sbom':
-      cmd.push('  -v $(pwd)/path/to/sbom.json:/sbom.json \\',
-              '  -e SBOM_FILE=/sbom.json \\');
-      break;
+          switch (sourceType.value) {
+          case 'sbom':
+            cmd.push('  -v $(pwd)/path/to/sbom.cdx.json:/sbom.cdx.json \\',
+                    '  -e SBOM_FILE=/sbom.cdx.json \\');
+            break;
     case 'lock':
       cmd.push('  -v $(pwd)/poetry.lock:/app/poetry.lock \\',
               '  -e LOCK_FILE=/app/poetry.lock \\');
@@ -436,8 +418,7 @@ const generateDockerCommand = () => {
 
   if (config.value.augment) cmd.push('  -e AUGMENT=true \\');
   if (config.value.enrich) cmd.push('  -e ENRICH=true \\');
-  if (config.value.overrideMeta) cmd.push('  -e OVERRIDE_SBOM_METADATA=true \\');
-  if (config.value.outputFile) cmd.push('  -e OUTPUT_FILE=sbom.json \\');
+  if (config.value.outputFile) cmd.push('  -e OUTPUT_FILE=sbom.cdx.json \\');
 
   cmd.push('  sbomifyhub/sbomify-action');
 
@@ -473,17 +454,7 @@ const updateHighlighting = () => {
   }
 };
 
-const toggleExpand = () => {
-  isExpanded.value = !isExpanded.value;
-  // Update highlighting when expanded
-  if (isExpanded.value) {
-    nextTick(() => {
-      updateHighlighting();
-    });
-  }
-};
-
-// Initialize clipboard and highlighting
+// Initialize highlighting and tooltips
 onMounted(() => {
   nextTick(() => {
     updateHighlighting();
@@ -654,27 +625,26 @@ watch(sourceType, () => {});
   cursor: help;
 }
 
-.alert {
-  border: none;
-  border-radius: 0.5rem;
-  padding: 1rem;
+/* Info notice styling for consistent notifications */
+.info-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: rgba(13, 110, 253, 0.1);
+  border: 1px solid rgba(13, 110, 253, 0.2);
+  border-radius: 0.375rem;
   font-size: 0.875rem;
   line-height: 1.5;
-  margin: 0;
+  color: #495057;
 }
 
-.alert-warning {
-  background-color: rgba(255, 171, 0, 0.1);
-  color: #93700c;
-}
-
-.alert-icon {
-  font-size: 1.25rem;
-  color: #f59e0b;
+.info-notice i {
   flex-shrink: 0;
+  margin-top: 0.125rem;
 }
 
-.alert-content {
+.info-notice div {
   flex-grow: 1;
 }
 
@@ -758,18 +728,8 @@ watch(sourceType, () => {});
   font-weight: bold;
 }
 
-.card {
-  border: 1px solid #dee2e6;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-  background: #fff;
-}
-
-.card-body {
-  padding: 1.5rem;
-}
-
-.container-fluid {
-  padding: 1rem;
+/* Container for CI/CD content */
+.nav-tabs-container {
+  width: 100%;
 }
 </style>

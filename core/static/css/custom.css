@@ -181,3 +181,93 @@
   font-size: 0.875rem;
   margin: 0;
 }
+
+/* ========================================
+   STANDARDIZED CARD STYLES
+   ======================================== */
+
+/* All cards should have consistent spacing */
+.card {
+  margin-bottom: 1.5rem;
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+/* Standardize all card headers */
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  padding: 1rem 1.25rem;
+}
+
+/* Standardize all card titles */
+.card-title {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: #2c3e50 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Standardize card body padding */
+.card-body {
+  padding: 1.25rem;
+}
+
+/* Collapsible card headers should have hover effect */
+.card-header[data-bs-toggle="collapse"] {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.card-header[data-bs-toggle="collapse"]:hover {
+  background-color: #e9ecef;
+}
+
+/* Consistent chevron styling for collapsible cards */
+.card-header .fas.fa-chevron-right,
+.card-header .fas.fa-chevron-down {
+  transition: transform 0.2s ease;
+  color: #6c757d;
+}
+
+/* Standardized info notice styling */
+.augmentation-notice {
+  font-size: 0.9rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border-left: 3px solid #4f46e5;
+  margin-bottom: 1rem;
+}
+
+.augmentation-notice i {
+  font-size: 1rem;
+  color: #4f46e5;
+}
+
+.augmentation-notice a {
+  color: #4f46e5 !important;
+  text-decoration: none;
+}
+
+.augmentation-notice a:hover {
+  text-decoration: underline;
+}
+
+/* Ensure consistent spacing between cards */
+.row .col-12 .card:last-child {
+  margin-bottom: 0;
+}
+
+/* Consistent button styling in cards */
+.card .btn {
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+/* Remove inconsistent mt-3 margin - cards should be consistently spaced */
+.card.mt-3 {
+  margin-top: 1.5rem !important;
+}
