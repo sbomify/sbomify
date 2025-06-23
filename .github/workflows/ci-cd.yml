@@ -237,6 +237,8 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
+          COMPONENT_NAME: 'sbomify-backend'
+          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
           LOCK_FILE: 'poetry.lock'
           AUGMENT: true
           UPLOAD: true
@@ -246,6 +248,8 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
+          COMPONENT_NAME: 'sbomify-frontend'
+          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
           LOCK_FILE: 'bun.lock'
           AUGMENT: true
           UPLOAD: true

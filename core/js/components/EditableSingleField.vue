@@ -36,27 +36,18 @@
   const oldValue = fieldValue.value;
   const errorMessage = ref('');
 
-  // const updateField = async () => {
-  //   let url = import.meta.env.VITE_API_BASE_URL + '/rename/' + props.itemType + '/' + props.itemId;
-  //   const response = await axios.patch(url, { name: props.itemValue });
-  //   console.log(response.data);
-  // }
 
-  const updateField = async () => {
+
+    const updateField = async () => {
     errorMessage.value = ''
 
-    const apiUrl = '/rename/' + props.itemType + '/' + props.itemId;
+    const apiUrl = '/api/v1/rename/' + props.itemType + '/' + props.itemId;
     const data = {
       name: fieldValue.value
     }
 
-    // $axios.headers['X-CSRFToken'] = Cookies.get('csrftoken');
-    // $axios.defaults.headers.common['X-CSRFToken'] = Cookies.get('csrftoken');
-
     try {
       const response = await $axios.patch(apiUrl, data)
-
-      console.log(response)
 
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);
@@ -64,7 +55,6 @@
 
       isEditing.value = false;
     } catch (error) {
-      // console.log(error)
       fieldValue.value = oldValue;
       errorMessage.value = 'Error updating field. ' + (error as Error).message;
     }
