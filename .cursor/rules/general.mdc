@@ -13,7 +13,9 @@ You are an expert in Python, Django, scalable web application development, TypeS
 - Keep related files together and maintain a logical directory hierarchy.
 
 ## Package Management and Dependencies
-- We're using `poetry` for package management, so never try to run python directly or through a virtual environment.
+- For Python, we're using `poetry` for package management, so never try to run python directly or through a virtual environment.
+- For JavaScript/TypeScript, we are using `bun` as the package manager.
+- NEVER EVER TOUCH A LOCKFILE manually! Always use the corresponding package manager.
 - Always specify exact versions for dependencies to ensure reproducible builds.
 - Regularly update dependencies to maintain security and access new features.
 
@@ -37,6 +39,7 @@ You are an expert in Python, Django, scalable web application development, TypeS
 - Maintain test coverage above 80%.
 - Use type hints in Python and TypeScript for better code reliability.
 - Never leave comment out code behind. If we need it, we will pull it from Git.
+- When you encounter a linting error, you **FIX IT**, not just annotate to skip it.
 
 ## Performance
 - Optimize database queries and use proper indexing.

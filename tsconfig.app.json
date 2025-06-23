@@ -25,7 +25,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node", "bun-types"]
   },
   "exclude": ["node_modules", "dist", "build", "docker", "__pycache__", "static", "staticfiles", "sbomify"],
   "include": ["**/js/*.ts", "**/js/*.js", "**/js/*.vue", "**/js/**/*.vue"]

@@ -9,5 +9,7 @@ urlpatterns: list[URLPattern] = [
     path("select-plan/<str:team_key>", views.select_plan, name="select_plan"),
     path("billing-redirect/<str:team_key>", views.billing_redirect, name="billing_redirect"),
     path("return", views.billing_return, name="billing_return"),
+    path("checkout/success/", views.checkout_success, name="checkout_success"),
+    path("checkout/cancel/", views.checkout_cancel, name="checkout_cancel"),
     path("webhook/", views.stripe_webhook, name="webhook"),
 ]
