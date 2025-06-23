@@ -6,7 +6,16 @@ import logging
 import time
 
 from django.core.cache import cache
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseTooManyRequests
+from django.http import HttpResponse, HttpResponseForbidden
+
+# Try to import HttpResponseTooManyRequests, fallback if not available
+try:
+    from django.http import HttpResponseTooManyRequests
+except ImportError:
+    # Create a custom response class for older Django versions
+    class HttpResponseTooManyRequests(HttpResponse):
+        status_code = 429
+
 
 from .stripe_client import StripeClient, StripeError
 
