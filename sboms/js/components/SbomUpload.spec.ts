@@ -60,35 +60,25 @@ describe('SbomUpload Business Logic', () => {
     })
   })
 
-  describe('Upload State Management', () => {
-    test('should track upload states correctly', () => {
-      type UploadState = 'idle' | 'uploading' | 'success' | 'error'
-      let uploadState: UploadState = 'idle'
-      let uploadMessage = ''
+  describe('Notification System', () => {
+    test('should handle notification states correctly', () => {
+      type NotificationType = 'success' | 'error' | 'warning' | 'info'
 
-      const setUploadState = (state: UploadState, message: string = '') => {
-        uploadState = state
-        uploadMessage = message
+      const mockNotifications: Array<{ type: NotificationType; message: string }> = []
+
+      const showNotification = (type: NotificationType, message: string) => {
+        mockNotifications.push({ type, message })
       }
 
-      expect(uploadState).toBe('idle')
-      expect(uploadMessage).toBe('')
+      // Test success notification
+      showNotification('success', 'SBOM uploaded successfully!')
+      expect(mockNotifications).toHaveLength(1)
+      expect(mockNotifications[0]).toEqual({ type: 'success', message: 'SBOM uploaded successfully!' })
 
-      setUploadState('uploading', 'Uploading...')
-      expect(uploadState).toBe('uploading')
-      expect(uploadMessage).toBe('Uploading...')
-
-      setUploadState('success', 'Upload successful!')
-      expect(uploadState).toBe('success')
-      expect(uploadMessage).toBe('Upload successful!')
-
-      setUploadState('error', 'Upload failed')
-      expect(uploadState).toBe('error')
-      expect(uploadMessage).toBe('Upload failed')
-
-      setUploadState('idle')
-      expect(uploadState).toBe('idle')
-      expect(uploadMessage).toBe('')
+      // Test error notification
+      showNotification('error', 'Upload failed')
+      expect(mockNotifications).toHaveLength(2)
+      expect(mockNotifications[1]).toEqual({ type: 'error', message: 'Upload failed' })
     })
 
     test('should manage drag state', () => {

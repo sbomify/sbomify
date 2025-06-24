@@ -1,4 +1,21 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test'
+
+// Type definitions for tests
+interface Sbom {
+  id: string
+  name: string
+  format?: string
+  format_version?: string
+  version?: string
+  created_at?: string
+}
+
+interface SbomData {
+  sbom: Sbom
+  has_vulnerabilities_report: boolean
+}
+
+
 
 // Mock DOM environment for testing
 const mockSessionStorage = {
@@ -378,6 +395,468 @@ describe('SbomsTable Business Logic', () => {
       expect(emptyResult.hasData).toBe(false)
       expect(emptyResult.hasError).toBe(false)
       expect(emptyResult.data).toHaveLength(0)
+    })
+  })
+
+  describe('Delete Modal Functionality', () => {
+    test('should manage modal state correctly', () => {
+      // Mock modal state management
+      let showDeleteModal = false
+      let sbomToDelete: Sbom | null = null
+      let isDeleting: string | null = null
+
+      const confirmDelete = (sbom: Sbom): void => {
+        sbomToDelete = sbom
+        showDeleteModal = true
+      }
+
+      const cancelDelete = (): void => {
+        if (isDeleting) return // Prevent canceling during deletion
+        showDeleteModal = false
+        sbomToDelete = null
+      }
+
+      const testSbom = {
+        id: 'sbom-1',
+        name: 'test-sbom',
+        format: 'spdx',
+        format_version: '2.3',
+        version: '1.0.0',
+        created_at: '2024-01-01T00:00:00Z'
+      }
+
+      // Test opening modal
+      expect(showDeleteModal).toBe(false)
+      expect(sbomToDelete).toBe(null)
+
+      confirmDelete(testSbom)
+      expect(showDeleteModal).toBe(true)
+      expect(sbomToDelete).toBe(testSbom)
+
+      // Test closing modal
+      cancelDelete()
+      expect(showDeleteModal).toBe(false)
+      expect(sbomToDelete).toBe(null)
+
+      // Test preventing close during deletion
+      confirmDelete(testSbom)
+      isDeleting = 'sbom-1'
+      cancelDelete() // Should not close
+      expect(showDeleteModal).toBe(true)
+      expect(sbomToDelete).toBe(testSbom)
+
+      // Clear deleting state and try again
+      isDeleting = null
+      cancelDelete()
+      expect(showDeleteModal).toBe(false)
+      expect(sbomToDelete).toBe(null)
+    })
+
+    test('should handle keyboard navigation', () => {
+      let modalClosed = false
+      let deleteTriggered = false
+
+      const handleKeydown = (event: { key: string; preventDefault: () => void }): void => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          modalClosed = true
+        } else if (event.key === 'Enter') {
+          event.preventDefault()
+          deleteTriggered = true
+        }
+      }
+
+            // Test Escape key
+      const escapeEvent = {
+        key: 'Escape',
+        preventDefault: mock()
+      }
+      handleKeydown(escapeEvent)
+      expect(modalClosed).toBe(true)
+      expect(escapeEvent.preventDefault).toHaveBeenCalled()
+
+      // Reset and test Enter key
+      modalClosed = false
+      deleteTriggered = false
+      const enterEvent = {
+        key: 'Enter',
+        preventDefault: mock()
+      }
+      handleKeydown(enterEvent)
+      expect(deleteTriggered).toBe(true)
+      expect(enterEvent.preventDefault).toHaveBeenCalled()
+
+      // Test other keys (should do nothing)
+      modalClosed = false
+      deleteTriggered = false
+      const otherEvent = {
+        key: 'Tab',
+        preventDefault: mock()
+      }
+      handleKeydown(otherEvent)
+      expect(modalClosed).toBe(false)
+      expect(deleteTriggered).toBe(false)
+      expect(otherEvent.preventDefault).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Delete API Integration', () => {
+    test('should handle successful deletion', async () => {
+      // Mock API and utilities
+      const mockAxios = {
+        delete: mock()
+      }
+      mockAxios.delete.mockResolvedValue({ status: 204 })
+
+      const mockShowSuccess = mock()
+      const mockShowError = mock()
+
+      let sbomsData = [
+        {
+          sbom: {
+            id: 'sbom-1',
+            name: 'test-sbom-1',
+            format: 'spdx',
+            format_version: '2.3',
+            version: '1.0.0',
+            created_at: '2024-01-01T00:00:00Z'
+          },
+          has_vulnerabilities_report: true
+        },
+        {
+          sbom: {
+            id: 'sbom-2',
+            name: 'test-sbom-2',
+            format: 'cyclonedx',
+            format_version: '1.6',
+            version: '2.0.0',
+            created_at: '2024-01-02T00:00:00Z'
+          },
+          has_vulnerabilities_report: false
+        }
+      ]
+
+      let showDeleteModal = true
+      let sbomToDelete = sbomsData[0].sbom
+      let isDeleting: string | null = null
+
+      const deleteSbom = async (): Promise<void> => {
+        if (!sbomToDelete) return
+
+        isDeleting = sbomToDelete.id
+
+        try {
+          await mockAxios.delete(`/api/v1/sboms/sbom/${sbomToDelete.id}`)
+
+          // Remove the deleted SBOM from the list
+          sbomsData = sbomsData.filter(
+            item => item.sbom.id !== sbomToDelete!.id
+          )
+
+          mockShowSuccess(`SBOM "${sbomToDelete.name}" deleted successfully`)
+
+          // Clear deleting state before closing modal
+          isDeleting = null
+          showDeleteModal = false
+          sbomToDelete = null
+        } catch (err: unknown) {
+          let errorMessage = 'Failed to delete SBOM'
+          if (err && typeof err === 'object' && 'response' in err) {
+            const apiError = err as { response?: { data?: { detail?: string } } }
+            if (apiError.response?.data?.detail) {
+              errorMessage = apiError.response.data.detail
+            }
+          }
+          mockShowError(errorMessage)
+          isDeleting = null
+        }
+      }
+
+      // Execute deletion
+      await deleteSbom()
+
+      // Verify API call
+      expect(mockAxios.delete).toHaveBeenCalledWith('/api/v1/sboms/sbom/sbom-1')
+
+      // Verify success message
+      expect(mockShowSuccess).toHaveBeenCalledWith('SBOM "test-sbom-1" deleted successfully')
+
+      // Verify SBOM removal
+      expect(sbomsData).toHaveLength(1)
+      expect(sbomsData[0].sbom.id).toBe('sbom-2')
+
+      // Verify modal closed
+      expect(showDeleteModal).toBe(false)
+      expect(sbomToDelete).toBe(null)
+      expect(isDeleting).toBe(null)
+    })
+
+    test('should handle deletion errors', async () => {
+      const mockAxios = {
+        delete: mock(() => Promise.reject({
+          response: { data: { detail: 'Permission denied' } }
+        }))
+      }
+      const mockShowSuccess = mock()
+      const mockShowError = mock()
+
+      let sbomsData = [
+        {
+          sbom: {
+            id: 'sbom-1',
+            name: 'test-sbom-1',
+            format: 'spdx',
+            format_version: '2.3',
+            version: '1.0.0',
+            created_at: '2024-01-01T00:00:00Z'
+          },
+          has_vulnerabilities_report: true
+        }
+      ]
+
+      let showDeleteModal = true
+      let sbomToDelete = sbomsData[0].sbom
+      let isDeleting: string | null = null
+
+      const deleteSbom = async (): Promise<void> => {
+        if (!sbomToDelete) return
+
+        isDeleting = sbomToDelete.id
+
+        try {
+          await mockAxios.delete(`/api/v1/sboms/sbom/${sbomToDelete.id}`)
+
+          // Remove the deleted SBOM from the list
+          sbomsData = sbomsData.filter(
+            item => item.sbom.id !== sbomToDelete!.id
+          )
+
+          mockShowSuccess(`SBOM "${sbomToDelete.name}" deleted successfully`)
+
+          // Clear deleting state before closing modal
+          isDeleting = null
+          showDeleteModal = false
+          sbomToDelete = null
+        } catch (err: unknown) {
+          let errorMessage = 'Failed to delete SBOM'
+          if (err && typeof err === 'object' && 'response' in err) {
+            const apiError = err as { response?: { data?: { detail?: string } } }
+            if (apiError.response?.data?.detail) {
+              errorMessage = apiError.response.data.detail
+            }
+          }
+          mockShowError(errorMessage)
+          isDeleting = null
+        }
+      }
+
+      // Execute deletion
+      await deleteSbom()
+
+      // Verify API call
+      expect(mockAxios.delete).toHaveBeenCalledWith('/api/v1/sboms/sbom/sbom-1')
+
+      // Verify error message
+      expect(mockShowError).toHaveBeenCalledWith('Permission denied')
+
+      // Verify SBOM not removed
+      expect(sbomsData).toHaveLength(1)
+      expect(sbomsData[0].sbom.id).toBe('sbom-1')
+
+      // Verify modal still open (since deletion failed)
+      expect(showDeleteModal).toBe(true)
+      expect(sbomToDelete).not.toBe(null)
+      expect(isDeleting).toBe(null) // Should be cleared even on error
+    })
+
+    test('should handle non-response errors', async () => {
+      const mockAxios = {
+        delete: mock(() => Promise.reject(new Error('Network error')))
+      }
+      const mockShowError = mock()
+
+      let sbomToDelete = {
+        id: 'sbom-1',
+        name: 'test-sbom-1'
+      }
+      let isDeleting: string | null = null
+
+      const deleteSbom = async (): Promise<void> => {
+        if (!sbomToDelete) return
+
+        isDeleting = sbomToDelete.id
+
+        try {
+          await mockAxios.delete(`/api/v1/sboms/sbom/${sbomToDelete.id}`)
+          // ... success logic
+        } catch (err: unknown) {
+          let errorMessage = 'Failed to delete SBOM'
+          if (err && typeof err === 'object' && 'response' in err) {
+            const apiError = err as { response?: { data?: { detail?: string } } }
+            if (apiError.response?.data?.detail) {
+              errorMessage = apiError.response.data.detail
+            }
+          }
+          mockShowError(errorMessage)
+          isDeleting = null
+        }
+      }
+
+      await deleteSbom()
+
+      expect(mockShowError).toHaveBeenCalledWith('Failed to delete SBOM')
+      expect(isDeleting).toBe(null)
+    })
+  })
+
+  describe('Permission Management', () => {
+    test('should correctly parse CRUD permissions', () => {
+      const hasCrudPermissions = (permissionString?: string): boolean => {
+        return permissionString === 'true'
+      }
+
+      expect(hasCrudPermissions('true')).toBe(true)
+      expect(hasCrudPermissions('false')).toBe(false)
+      expect(hasCrudPermissions('')).toBe(false)
+      expect(hasCrudPermissions(undefined)).toBe(false)
+      expect(hasCrudPermissions('TRUE')).toBe(false) // Case sensitive
+      expect(hasCrudPermissions('1')).toBe(false)
+    })
+
+    test('should determine UI element visibility based on permissions', () => {
+      const shouldShowActions = (hasCrud: boolean): boolean => hasCrud
+      const shouldShowDeleteButton = (hasCrud: boolean): boolean => hasCrud
+
+      // With permissions
+      expect(shouldShowActions(true)).toBe(true)
+      expect(shouldShowDeleteButton(true)).toBe(true)
+
+      // Without permissions
+      expect(shouldShowActions(false)).toBe(false)
+      expect(shouldShowDeleteButton(false)).toBe(false)
+    })
+  })
+
+  describe('Loading State Management', () => {
+    test('should manage deletion loading states', () => {
+      let isDeleting: string | null = null
+
+      const startDeleting = (sbomId: string): void => {
+        isDeleting = sbomId
+      }
+
+      const stopDeleting = (): void => {
+        isDeleting = null
+      }
+
+      const isCurrentlyDeleting = (sbomId: string): boolean => {
+        return isDeleting === sbomId
+      }
+
+      // Initial state
+      expect(isDeleting).toBe(null)
+      expect(isCurrentlyDeleting('sbom-1')).toBe(false)
+
+      // Start deleting
+      startDeleting('sbom-1')
+      expect(isDeleting).toBe('sbom-1')
+      expect(isCurrentlyDeleting('sbom-1')).toBe(true)
+      expect(isCurrentlyDeleting('sbom-2')).toBe(false)
+
+      // Stop deleting
+      stopDeleting()
+      expect(isDeleting).toBe(null)
+      expect(isCurrentlyDeleting('sbom-1')).toBe(false)
+    })
+
+    test('should determine button states during loading', () => {
+      const getButtonState = (sbomId: string, isDeleting: string | null) => ({
+        disabled: isDeleting === sbomId,
+        showSpinner: isDeleting === sbomId,
+        showTrashIcon: isDeleting !== sbomId
+      })
+
+      // Not deleting
+      let state = getButtonState('sbom-1', null)
+      expect(state.disabled).toBe(false)
+      expect(state.showSpinner).toBe(false)
+      expect(state.showTrashIcon).toBe(true)
+
+      // Deleting this SBOM
+      state = getButtonState('sbom-1', 'sbom-1')
+      expect(state.disabled).toBe(true)
+      expect(state.showSpinner).toBe(true)
+      expect(state.showTrashIcon).toBe(false)
+
+      // Deleting different SBOM
+      state = getButtonState('sbom-1', 'sbom-2')
+      expect(state.disabled).toBe(false)
+      expect(state.showSpinner).toBe(false)
+      expect(state.showTrashIcon).toBe(true)
+    })
+  })
+
+  describe('Data List Management', () => {
+    test('should remove items from list correctly', () => {
+      let sbomsData = [
+        { sbom: { id: 'sbom-1', name: 'SBOM 1' } },
+        { sbom: { id: 'sbom-2', name: 'SBOM 2' } },
+        { sbom: { id: 'sbom-3', name: 'SBOM 3' } }
+      ]
+
+      const removeFromList = (sbomId: string) => {
+        sbomsData = sbomsData.filter(item => item.sbom.id !== sbomId)
+      }
+
+      expect(sbomsData).toHaveLength(3)
+
+      // Remove middle item
+      removeFromList('sbom-2')
+      expect(sbomsData).toHaveLength(2)
+      expect(sbomsData.map(item => item.sbom.id)).toEqual(['sbom-1', 'sbom-3'])
+
+      // Remove first item
+      removeFromList('sbom-1')
+      expect(sbomsData).toHaveLength(1)
+      expect(sbomsData[0].sbom.id).toBe('sbom-3')
+
+      // Remove last item
+      removeFromList('sbom-3')
+      expect(sbomsData).toHaveLength(0)
+
+      // Try to remove from empty list (should not error)
+      removeFromList('non-existent')
+      expect(sbomsData).toHaveLength(0)
+    })
+
+    test('should handle empty state after all deletions', () => {
+      let sbomsData: SbomData[] = []
+
+      const hasData = (): boolean => sbomsData.length > 0
+      const shouldShowEmptyState = (): boolean => !hasData()
+
+      expect(hasData()).toBe(false)
+      expect(shouldShowEmptyState()).toBe(true)
+
+      // Add some data
+      sbomsData = [{
+        sbom: {
+          id: 'sbom-1',
+          name: 'Test SBOM',
+          format: 'cyclonedx',
+          format_version: '1.6',
+          version: '1.0.0',
+          created_at: '2024-01-01T00:00:00Z'
+        },
+        has_vulnerabilities_report: false
+      }]
+      expect(hasData()).toBe(true)
+      expect(shouldShowEmptyState()).toBe(false)
+
+      // Remove all data
+      sbomsData = []
+      expect(hasData()).toBe(false)
+      expect(shouldShowEmptyState()).toBe(true)
     })
   })
 })

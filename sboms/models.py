@@ -129,3 +129,12 @@ class SBOM(models.Model):
     @property
     def public_access_allowed(self) -> bool:
         return self.component.is_public
+
+    @property
+    def source_display(self) -> str:
+        """Return a user-friendly display name for the source."""
+        source_display_map = {
+            "api": "API",
+            "manual_upload": "Manual Upload",
+        }
+        return source_display_map.get(self.source, self.source or "Unknown")

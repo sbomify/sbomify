@@ -43,40 +43,22 @@
           <p class="mt-2">Uploading and processing SBOM...</p>
         </div>
       </div>
-
-      <div v-if="uploadResult" class="mt-3">
-        <div v-if="uploadResult.success" class="alert alert-success">
-          <i class="fas fa-check-circle me-2"></i>
-          SBOM uploaded successfully!
-          <a :href="uploadResult.sbomUrl" class="alert-link">View SBOM details</a>
-        </div>
-        <div v-if="!uploadResult.success" class="alert alert-danger">
-          <i class="fas fa-exclamation-triangle me-2"></i>
-          Upload failed: {{ uploadResult.error }}
-        </div>
-      </div>
   </StandardCard>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
+import { showSuccess, showError } from '../../../core/js/alerts'
 
 interface Props {
   componentId: string
-}
-
-interface UploadResult {
-  success: boolean
-  error?: string
-  sbomUrl?: string
 }
 
 const props = defineProps<Props>()
 
 const isDragOver = ref(false)
 const isUploading = ref(false)
-const uploadResult = ref<UploadResult | null>(null)
 const fileInput = ref<HTMLInputElement>()
 
 const validateFile = (file: File): string | null => {
@@ -101,12 +83,11 @@ const validateFile = (file: File): string | null => {
 const uploadFile = async (file: File): Promise<void> => {
   const validationError = validateFile(file)
   if (validationError) {
-    uploadResult.value = { success: false, error: validationError }
+    showError(validationError)
     return
   }
 
   isUploading.value = true
-  uploadResult.value = null
 
   try {
     const formData = new FormData()
@@ -124,25 +105,16 @@ const uploadFile = async (file: File): Promise<void> => {
     const data = await response.json()
 
     if (response.ok) {
-      uploadResult.value = {
-        success: true,
-        sbomUrl: `/sboms/sbom/${data.id}`
-      }
+      showSuccess('SBOM uploaded successfully!')
       // Refresh the page after 2 seconds to show the new SBOM
       setTimeout(() => {
         window.location.reload()
       }, 2000)
     } else {
-      uploadResult.value = {
-        success: false,
-        error: data.detail || 'Upload failed'
-      }
+      showError(data.detail || 'Upload failed')
     }
     } catch {
-    uploadResult.value = {
-      success: false,
-      error: 'Network error occurred. Please try again.'
-    }
+    showError('Network error occurred. Please try again.')
   } finally {
     isUploading.value = false
   }

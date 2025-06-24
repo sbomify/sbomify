@@ -186,24 +186,24 @@ describe('DangerZone Business Logic', () => {
   describe('URL Generation', () => {
     test('should generate correct component URLs', () => {
       const generateComponentUrls = (componentId: string) => ({
-        transfer: `/components/${componentId}/transfer/`,
-        delete: `/components/${componentId}/delete/`
+        transfer: `/component/${componentId}/transfer`,
+        delete: `/component/${componentId}/delete`
       })
 
       const urls = generateComponentUrls('comp-123')
-      expect(urls.transfer).toBe('/components/comp-123/transfer/')
-      expect(urls.delete).toBe('/components/comp-123/delete/')
+      expect(urls.transfer).toBe('/component/comp-123/transfer')
+      expect(urls.delete).toBe('/component/comp-123/delete')
     })
 
     test('should handle special characters in component ID', () => {
       const generateComponentUrls = (componentId: string) => ({
-        transfer: `/components/${componentId}/transfer/`,
-        delete: `/components/${componentId}/delete/`
+        transfer: `/component/${componentId}/transfer`,
+        delete: `/component/${componentId}/delete`
       })
 
       const urls = generateComponentUrls('comp-with-dashes_123')
-      expect(urls.transfer).toBe('/components/comp-with-dashes_123/transfer/')
-      expect(urls.delete).toBe('/components/comp-with-dashes_123/delete/')
+      expect(urls.transfer).toBe('/component/comp-with-dashes_123/transfer')
+      expect(urls.delete).toBe('/component/comp-with-dashes_123/delete')
     })
   })
 
