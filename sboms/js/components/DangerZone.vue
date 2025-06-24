@@ -1,6 +1,7 @@
 <template>
   <StandardCard
     title="Danger Zone"
+    variant="dangerzone"
     :collapsible="true"
     :defaultExpanded="false"
     storageKey="danger-zone"
@@ -141,25 +142,46 @@ onMounted(() => {
 /* Section Layout */
 .danger-section {
   padding: 1.5rem;
-  border-radius: 12px;
+  margin: 0 -2px;
+  border-radius: 0;
   background: #fafafa;
-  border: 1px solid #e5e5e5;
+  border: none;
+  border-bottom: 1px solid #e5e5e5;
   transition: all 0.2s ease;
 }
 
+.danger-section:last-child {
+  border-bottom: none;
+  border-radius: 0 0 0.75rem 0.75rem !important;
+  overflow: hidden;
+  margin-bottom: -2px;
+}
+
+.danger-section:first-child:last-child {
+  border-radius: 0 0 0.75rem 0.75rem !important;
+  overflow: hidden;
+  margin-bottom: -2px;
+}
+
 .danger-section:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: #f5f5f5;
 }
 
 .transfer-section {
   background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%);
-  border-color: #f59e0b;
+  border-bottom-color: #f59e0b;
 }
 
 .delete-section {
   background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  border-color: #ef4444;
+  border-bottom-color: #ef4444;
+}
+
+.delete-section:last-child,
+.transfer-section:last-child {
+  border-radius: 0 0 0.75rem 0.75rem !important;
+  overflow: hidden;
+  margin-bottom: -2px;
 }
 
 /* Section Header */
@@ -215,7 +237,7 @@ onMounted(() => {
 .section-divider {
   height: 1px;
   background: linear-gradient(90deg, transparent, #d1d5db, transparent);
-  margin: 1.5rem 0;
+  margin: 0;
 }
 
 /* Form Styling */
@@ -324,6 +346,7 @@ onMounted(() => {
 @media (max-width: 768px) {
   .danger-section {
     padding: 1rem;
+    margin: 0 -2px;
   }
 
   .section-header {
@@ -346,10 +369,7 @@ onMounted(() => {
     min-width: unset;
   }
 
-  .transfer-btn {
-    width: 100%;
-  }
-
+  .transfer-btn,
   .delete-btn {
     width: 100%;
   }

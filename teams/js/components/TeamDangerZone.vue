@@ -4,38 +4,38 @@
     variant="dangerzone"
     :collapsible="true"
     :defaultExpanded="false"
-    storageKey="project-danger-zone"
+    storageKey="team-danger-zone"
     infoIcon="fas fa-exclamation-triangle"
   >
-    <!-- Delete Project Section -->
+    <!-- Delete Team Section -->
     <div class="danger-section delete-section">
       <div class="section-header">
         <div class="section-icon delete-icon">
           <i class="fas fa-trash-alt"></i>
         </div>
         <div class="section-content">
-          <h6 class="section-title">Delete Project</h6>
-          <p class="section-description">Permanently remove this project and all associated data</p>
+          <h6 class="section-title">Delete Workspace</h6>
+          <p class="section-description">Permanently remove this workspace and all associated data</p>
         </div>
       </div>
       <button
-        :id="`del_${projectId}`"
+        :id="`del_${teamKey}`"
         class="btn btn-danger modern-btn delete-btn"
         @click.prevent="showDeleteConfirmation"
       >
         <i class="fas fa-trash-alt me-2"></i>
-        Delete Project
+        Delete Workspace
       </button>
     </div>
 
     <!-- Delete Confirmation Modal -->
     <DeleteConfirmationModal
       v-model:show="showConfirmModal"
-      title="Delete Project"
-      message="Are you sure you want to delete the project"
-      :item-name="projectName"
-      warning-message="This action cannot be undone and will permanently remove the project from the system."
-      confirm-text="Delete Project"
+      title="Delete Workspace"
+      message="Are you sure you want to delete the workspace"
+      :item-name="teamName"
+      warning-message="This action cannot be undone and will permanently remove the workspace from the system."
+      confirm-text="Delete Workspace"
       @confirm="handleDeleteConfirm"
       @cancel="hideDeleteConfirmation"
     />
@@ -48,8 +48,8 @@ import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 
 const props = defineProps<{
-  projectId: string
-  projectName: string
+  teamKey: string
+  teamName: string
   csrfToken: string
 }>()
 
@@ -65,7 +65,7 @@ const hideDeleteConfirmation = (): void => {
 
 const handleDeleteConfirm = (): void => {
   // Navigate to the delete URL
-  window.location.href = `/project/${props.projectId}/delete`
+  window.location.href = `/workspace/delete/${props.teamKey}`
 }
 </script>
 
@@ -166,65 +166,45 @@ const handleDeleteConfirm = (): void => {
   white-space: nowrap;
 }
 
+.modern-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .delete-btn {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   color: white;
   box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-  margin-top: 0.5rem;
 }
 
 .delete-btn:hover {
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-  color: white;
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
 }
 
-.modern-btn:active {
+.delete-btn:active {
   transform: translateY(0);
-}
-
-.modern-btn i {
-  font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .danger-section {
-    padding: 1rem;
-    margin: 0 -2px;
-  }
-
   .section-header {
+    flex-direction: column;
+    align-items: flex-start;
     gap: 0.75rem;
-    margin-bottom: 1rem;
   }
 
   .section-icon {
-    width: 2rem;
-    height: 2rem;
-    font-size: 1rem;
+    align-self: flex-start;
   }
 
-  .delete-btn {
+  .modern-btn {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.85rem;
     width: 100%;
+    justify-content: center;
   }
-}
-
-/* Accessibility improvements */
-.modern-btn:focus {
-  outline: 2px solid transparent;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-}
-
-.modern-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.modern-btn:disabled:hover {
-  transform: none;
-  box-shadow: none;
 }
 </style>

@@ -13,6 +13,7 @@ import DashboardStats from './components/DashboardStats.vue';
 import SbomsTable from './components/SbomsTable.vue';
 import DangerZone from './components/DangerZone.vue';
 import ProjectDangerZone from './components/ProjectDangerZone.vue';
+import ProductDangerZone from './components/ProductDangerZone.vue';
 
 mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -26,3 +27,4 @@ mountVueComponent('vc-dashboard-stats', DashboardStats);
 mountVueComponent('vc-sboms-table', SbomsTable);
 mountVueComponent('vc-danger-zone', DangerZone);
 mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
+mountVueComponent('vc-product-danger-zone', ProductDangerZone);

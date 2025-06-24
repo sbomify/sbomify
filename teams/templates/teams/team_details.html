@@ -140,21 +140,20 @@
   </div>
   {% endif %}
 
-  <div class="col-sm-12 col-md-3">
-    <a id="del_{{ team.key }}" href="{% url 'teams:delete_team' team.key %}" title="Delete team" class="btn btn-danger">
-      Delete Team
-    </a>
-    <span class="vc-confirm-action"
-      data-target-element-id="del_{{ team.key }}"
-      data-item-name="{{ team.name }}"
-      data-item-type="workspace"
-      data-confirmation-message="Are you sure you want to delete the workspace {{ team.name }}?">
-    </span>
+  {% if request.session.current_team.role == "owner" %}
+  <div class="col-12">
+    <div class="vc-team-danger-zone"
+      data-team-key="{{ team.key }}"
+      data-team-name="{{ team.name }}"
+      data-csrf-token="{{ csrf_token }}">
+    </div>
   </div>
+  {% endif %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
   {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'teams/js/main.ts' %}
 {% endblock %}

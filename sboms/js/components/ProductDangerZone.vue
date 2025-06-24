@@ -4,38 +4,38 @@
     variant="dangerzone"
     :collapsible="true"
     :defaultExpanded="false"
-    storageKey="project-danger-zone"
+    storageKey="product-danger-zone"
     infoIcon="fas fa-exclamation-triangle"
   >
-    <!-- Delete Project Section -->
+    <!-- Delete Product Section -->
     <div class="danger-section delete-section">
       <div class="section-header">
         <div class="section-icon delete-icon">
           <i class="fas fa-trash-alt"></i>
         </div>
         <div class="section-content">
-          <h6 class="section-title">Delete Project</h6>
-          <p class="section-description">Permanently remove this project and all associated data</p>
+          <h6 class="section-title">Delete Product</h6>
+          <p class="section-description">Permanently remove this product and all associated data</p>
         </div>
       </div>
       <button
-        :id="`del_${projectId}`"
+        :id="`del_${productId}`"
         class="btn btn-danger modern-btn delete-btn"
         @click.prevent="showDeleteConfirmation"
       >
         <i class="fas fa-trash-alt me-2"></i>
-        Delete Project
+        Delete Product
       </button>
     </div>
 
     <!-- Delete Confirmation Modal -->
     <DeleteConfirmationModal
       v-model:show="showConfirmModal"
-      title="Delete Project"
-      message="Are you sure you want to delete the project"
-      :item-name="projectName"
-      warning-message="This action cannot be undone and will permanently remove the project from the system."
-      confirm-text="Delete Project"
+      title="Delete Product"
+      message="Are you sure you want to delete the product"
+      :item-name="productName"
+      warning-message="This action cannot be undone and will permanently remove the product from the system."
+      confirm-text="Delete Product"
       @confirm="handleDeleteConfirm"
       @cancel="hideDeleteConfirmation"
     />
@@ -48,8 +48,8 @@ import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 
 const props = defineProps<{
-  projectId: string
-  projectName: string
+  productId: string
+  productName: string
   csrfToken: string
 }>()
 
@@ -65,7 +65,7 @@ const hideDeleteConfirmation = (): void => {
 
 const handleDeleteConfirm = (): void => {
   // Navigate to the delete URL
-  window.location.href = `/project/${props.projectId}/delete`
+  window.location.href = `/product/${props.productId}/delete`
 }
 </script>
 

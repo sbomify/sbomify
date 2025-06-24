@@ -13,7 +13,7 @@
             :style="collapsible ? 'cursor: pointer;' : ''"
             @click="collapsible ? toggleCollapse() : null"
           >
-            {{ title }}
+            <i v-if="infoIcon && variant === 'dangerzone'" :class="infoIcon" class="me-2"></i>{{ title }}
             <i v-if="collapsible" class="fas ms-2" :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
           </h4>
           <div v-if="hasHeaderActions" class="header-actions">
@@ -57,7 +57,7 @@ interface Props {
   defaultExpanded?: boolean
   infoIcon?: string
   storageKey?: string
-  variant?: 'default' | 'stats' | 'plan' | 'modal' | 'settings'
+  variant?: 'default' | 'stats' | 'plan' | 'modal' | 'settings' | 'dangerzone'
   size?: 'small' | 'medium' | 'large'
   emphasis?: boolean
   centerContent?: boolean
@@ -128,6 +128,14 @@ const cardClasses = computed(() => {
     case 'settings':
       classes.push('settings-card')
       break
+    case 'dangerzone':
+      classes.push('dangerzone-card')
+      break
+  }
+
+  // Collapsible state class
+  if (props.collapsible && !isExpanded.value) {
+    classes.push('card-collapsed')
   }
 
   // Shadow classes
@@ -425,6 +433,55 @@ const toggleCollapse = () => {
 .settings-card .card-body {
   background: #ffffff;
 }
+
+/* Variant: Dangerzone Card */
+.dangerzone-card {
+  border: 2px solid #ef4444 !important;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15) !important;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.dangerzone-card:hover {
+  border-color: #dc2626 !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2) !important;
+}
+
+.dangerzone-card .card-header {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
+  border-bottom: 2px solid #fecaca !important;
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+/* When collapsed, the header should have bottom rounded corners */
+.dangerzone-card .card-body.collapse:not(.show) {
+  display: none;
+}
+
+/* When collapsed, the header should have bottom rounded corners */
+.dangerzone-card.card-collapsed .card-header {
+  border-radius: 0.75rem !important;
+  border-bottom: none !important;
+}
+
+.dangerzone-card .card-title {
+  color: #dc2626 !important;
+  display: flex;
+  align-items: center;
+}
+
+.dangerzone-card .card-title i {
+  color: #ef4444 !important;
+  margin-right: 0.5rem;
+}
+
+.dangerzone-card .card-body {
+  background: #ffffff;
+  padding: 0;
+}
+
+/* Note: Section-specific styling is handled in individual dangerzone components due to scoped CSS */
 
 /* Collapsible animation */
 .collapse {

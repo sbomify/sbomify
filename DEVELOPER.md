@@ -67,6 +67,34 @@ The main card component with multiple variants:
 </StandardCard>
 ```
 
+**DangerZone Card**
+For dangerous actions like deletions and transfers:
+
+```vue
+<StandardCard
+  title="Danger Zone"
+  variant="dangerzone"
+  :collapsible="true"
+  :defaultExpanded="false"
+  storageKey="danger-zone"
+  infoIcon="fas fa-exclamation-triangle">
+  <div class="danger-section delete-section">
+    <div class="section-header">
+      <div class="section-icon delete-icon">
+        <i class="fas fa-trash-alt"></i>
+      </div>
+      <div class="section-content">
+        <h6 class="section-title">Delete Item</h6>
+        <p class="section-description">Permanently remove this item</p>
+      </div>
+    </div>
+    <button class="btn btn-danger modern-btn delete-btn">
+      <i class="fas fa-trash-alt me-2"></i>Delete
+    </button>
+  </div>
+</StandardCard>
+```
+
 **StatCard (`vc-stat-card`)**
 Specialized for displaying statistics and metrics:
 
@@ -126,6 +154,35 @@ For dashboard tables and lists:
 </div>
 ```
 
+**DangerZone Card Structure**
+For dangerous actions that require special styling:
+
+```html
+<div class="card dangerzone-card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="fas fa-exclamation-triangle me-2"></i>Danger Zone
+    </h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="danger-section delete-section">
+      <div class="section-header">
+        <div class="section-icon delete-icon">
+          <i class="fas fa-trash-alt"></i>
+        </div>
+        <div class="section-content">
+          <h6 class="section-title">Delete Item</h6>
+          <p class="section-description">Permanently remove this item</p>
+        </div>
+      </div>
+      <button class="btn btn-danger modern-btn delete-btn">
+        <i class="fas fa-trash-alt me-2"></i>Delete
+      </button>
+    </div>
+  </div>
+</div>
+```
+
 ### CSS Classes and Variants
 
 **Card Variants:**
@@ -134,12 +191,27 @@ For dashboard tables and lists:
 - `dashboard-card`: For dashboard tables and lists
 - `data-table`: For cards containing tables
 - `modal-card`: For modal-style cards
+- `dangerzone-card`: For dangerous actions (deletions, transfers, etc.)
 
 **Shadow Options (data attributes):**
 
 - `data-shadow="sm"`: Small shadow
 - `data-shadow="md"`: Medium shadow
 - `data-shadow="lg"`: Large shadow
+
+**DangerZone CSS Classes:**
+
+- `danger-section`: Base class for danger zone sections
+- `delete-section`: Red-themed section for delete actions
+- `transfer-section`: Orange-themed section for transfer actions
+- `section-header`: Container for section icon and content
+- `section-icon`: Icon container (use `delete-icon` or `transfer-icon`)
+- `section-content`: Text content container
+- `section-title`: Section heading
+- `section-description`: Section description text
+- `modern-btn`: Modern button styling
+- `delete-btn`: Red button for delete actions
+- `transfer-btn`: Orange button for transfer actions
 
 ### Migration Guide
 
@@ -177,6 +249,28 @@ For dashboard tables and lists:
 </StandardCard>
 ```
 
+**DangerZone Migration (Vue Component):**
+
+```vue
+<!-- Before: Custom danger zone styling -->
+<div class="card border-danger">
+  <div class="card-header bg-danger text-white">
+    <h5>Danger Zone</h5>
+  </div>
+  <!-- Content -->
+</div>
+
+<!-- After: StandardCard with dangerzone variant -->
+<StandardCard
+  title="Danger Zone"
+  variant="dangerzone"
+  :collapsible="true"
+  :defaultExpanded="false"
+  infoIcon="fas fa-exclamation-triangle">
+  <!-- Content -->
+</StandardCard>
+```
+
 ### Best Practices
 
 1. **Django Templates**: Use HTML structure with proper CSS classes
@@ -184,14 +278,31 @@ For dashboard tables and lists:
 3. Choose the appropriate variant for your use case
 4. Use StatCard for metrics and dashboard stats
 5. Use PlanCard for pricing/billing displays
-6. Leverage slots for complex header actions or custom content
-7. Maintain consistent shadow and spacing usage
+6. **Use DangerZone Cards for destructive actions**:
+   - Always use `variant="dangerzone"` for delete, transfer, or other potentially destructive operations
+   - Include appropriate warning icons (`fas fa-exclamation-triangle` in header)
+   - Use collapsible behavior (`defaultExpanded="false"`) to prevent accidental clicks
+   - Structure content in `danger-section` divs with proper semantic classes
+7. Leverage slots for complex header actions or custom content
+8. Maintain consistent shadow and spacing usage
+
+### Implemented DangerZone Components
+
+The following dangerzone components are available and use the `variant="dangerzone"` theming:
+
+- **Components**: `vc-danger-zone` (transfer + delete functionality)
+- **Projects**: `vc-project-danger-zone` (delete only)
+- **Products**: `vc-product-danger-zone` (delete only)
+- **Teams/Workspaces**: `vc-team-danger-zone` (delete only)
+
+Each component implements collapsible behavior, confirmation modals, and consistent styling patterns.
 
 ### Important Notes
 
 - Vue components (`vc-standard-card`, `vc-stat-card`, etc.) only work within Vue applications
 - Django templates are server-rendered and require HTML structure
 - Both approaches use the same underlying CSS for consistent styling
+- **DangerZone Cards**: The `dangerzone` variant provides card-level theming (red border, warning header), while section content styling is handled by individual components due to CSS scoping
 - Always test functionality after making changes to ensure cards render correctly
 
 ## Development Standards
