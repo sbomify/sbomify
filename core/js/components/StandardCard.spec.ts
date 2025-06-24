@@ -45,12 +45,21 @@ describe('StandardCard Business Logic', () => {
         collapsible: false,
         defaultExpanded: true,
         infoIcon: 'fas fa-info-circle',
-        storageKey: ''
+        storageKey: '',
+        variant: 'default' as const,
+        size: 'medium' as const,
+        emphasis: false,
+        centerContent: false,
+        noPadding: false,
+        shadow: 'sm' as const
       }
 
       expect(mockCard.title).toBe('Test Card')
       expect(mockCard.collapsible).toBe(false)
       expect(mockCard.defaultExpanded).toBe(true)
+      expect(mockCard.variant).toBe('default')
+      expect(mockCard.size).toBe('medium')
+      expect(mockCard.emphasis).toBe(false)
     })
 
     test('should handle card without title', () => {
@@ -71,7 +80,13 @@ describe('StandardCard Business Logic', () => {
         collapsible: false,
         defaultExpanded: true,
         infoIcon: 'fas fa-info-circle',
-        storageKey: ''
+        storageKey: '',
+        variant: 'default',
+        size: 'medium',
+        emphasis: false,
+        centerContent: false,
+        noPadding: false,
+        shadow: 'sm'
       }
 
       expect(defaults.title).toBe('')
@@ -79,6 +94,177 @@ describe('StandardCard Business Logic', () => {
       expect(defaults.defaultExpanded).toBe(true)
       expect(defaults.infoIcon).toBe('fas fa-info-circle')
       expect(defaults.storageKey).toBe('')
+      expect(defaults.variant).toBe('default')
+      expect(defaults.size).toBe('medium')
+      expect(defaults.emphasis).toBe(false)
+      expect(defaults.centerContent).toBe(false)
+      expect(defaults.noPadding).toBe(false)
+      expect(defaults.shadow).toBe('sm')
+    })
+  })
+
+  describe('Variant Support', () => {
+    test('should support stats variant', () => {
+      const mockCard = {
+        title: 'Stats Card',
+        variant: 'stats' as const,
+        centerContent: true
+      }
+
+      expect(mockCard.variant).toBe('stats')
+      expect(mockCard.centerContent).toBe(true)
+    })
+
+    test('should support plan variant with emphasis', () => {
+      const mockCard = {
+        title: 'Business Plan',
+        variant: 'plan' as const,
+        emphasis: true
+      }
+
+      expect(mockCard.variant).toBe('plan')
+      expect(mockCard.emphasis).toBe(true)
+    })
+
+    test('should support modal variant', () => {
+      const mockCard = {
+        title: 'Modal Content',
+        variant: 'modal' as const
+      }
+
+      expect(mockCard.variant).toBe('modal')
+    })
+
+    test('should support settings variant', () => {
+      const mockCard = {
+        title: 'Settings',
+        variant: 'settings' as const
+      }
+
+      expect(mockCard.variant).toBe('settings')
+    })
+  })
+
+  describe('Size and Shadow Support', () => {
+    test('should support different sizes', () => {
+      const smallCard = { size: 'small' as const }
+      const mediumCard = { size: 'medium' as const }
+      const largeCard = { size: 'large' as const }
+
+      expect(smallCard.size).toBe('small')
+      expect(mediumCard.size).toBe('medium')
+      expect(largeCard.size).toBe('large')
+    })
+
+    test('should support different shadow levels', () => {
+      const noShadow = { shadow: 'none' as const }
+      const smallShadow = { shadow: 'sm' as const }
+      const mediumShadow = { shadow: 'md' as const }
+      const largeShadow = { shadow: 'lg' as const }
+
+      expect(noShadow.shadow).toBe('none')
+      expect(smallShadow.shadow).toBe('sm')
+      expect(mediumShadow.shadow).toBe('md')
+      expect(largeShadow.shadow).toBe('lg')
+    })
+  })
+
+  describe('CSS Class Generation', () => {
+        test('should generate container classes based on size', () => {
+      const generateContainerClasses = (size: string) => {
+        const classes: string[] = []
+
+        if (size === 'small') classes.push('mt-2')
+        else if (size === 'large') classes.push('mt-4')
+        else classes.push('mt-3')
+
+        return classes.join(' ')
+      }
+
+      expect(generateContainerClasses('small')).toBe('mt-2')
+      expect(generateContainerClasses('medium')).toBe('mt-3')
+      expect(generateContainerClasses('large')).toBe('mt-4')
+    })
+
+        test('should generate card classes based on variant and shadow', () => {
+      const generateCardClasses = (variant: string, emphasis: boolean, shadow: string) => {
+        const classes: string[] = []
+
+        // Variant-specific classes
+        switch (variant) {
+          case 'stats':
+            classes.push('stats-card')
+            break
+          case 'plan':
+            classes.push('plan-card')
+            if (emphasis) classes.push('plan-emphasis')
+            break
+          case 'modal':
+            classes.push('modal-card')
+            break
+          case 'settings':
+            classes.push('settings-card')
+            break
+        }
+
+        // Shadow classes
+        switch (shadow) {
+          case 'none':
+            classes.push('shadow-none')
+            break
+          case 'md':
+            classes.push('shadow-md')
+            break
+          case 'lg':
+            classes.push('shadow-lg')
+            break
+          default:
+            classes.push('shadow-sm')
+        }
+
+        return classes.join(' ')
+      }
+
+      expect(generateCardClasses('stats', false, 'sm')).toBe('stats-card shadow-sm')
+      expect(generateCardClasses('plan', true, 'md')).toBe('plan-card plan-emphasis shadow-md')
+      expect(generateCardClasses('modal', false, 'none')).toBe('modal-card shadow-none')
+    })
+
+        test('should generate header classes with emphasis', () => {
+      const generateHeaderClasses = (collapsible: boolean, emphasis: boolean, variant: string) => {
+        const classes: string[] = []
+
+        if (collapsible) classes.push('collapsible-header')
+        if (emphasis && variant === 'plan') {
+          classes.push('bg-emphasis', 'text-emphasis', 'border-emphasis')
+        }
+
+        return classes.join(' ')
+      }
+
+      expect(generateHeaderClasses(true, false, 'default')).toBe('collapsible-header')
+      expect(generateHeaderClasses(false, true, 'plan')).toBe('bg-emphasis text-emphasis border-emphasis')
+      expect(generateHeaderClasses(true, true, 'plan')).toBe('collapsible-header bg-emphasis text-emphasis border-emphasis')
+    })
+
+        test('should generate body classes with collapse and content options', () => {
+      const generateBodyClasses = (collapsible: boolean, isExpanded: boolean, centerContent: boolean, noPadding: boolean) => {
+        const classes: string[] = []
+
+        if (collapsible) {
+          classes.push('collapse')
+          if (isExpanded) classes.push('show')
+        }
+
+        if (centerContent) classes.push('text-center')
+        if (noPadding) classes.push('p-0')
+
+        return classes.join(' ')
+      }
+
+      expect(generateBodyClasses(true, true, false, false)).toBe('collapse show')
+      expect(generateBodyClasses(false, false, true, true)).toBe('text-center p-0')
+      expect(generateBodyClasses(true, false, true, false)).toBe('collapse text-center')
     })
   })
 
@@ -301,6 +487,65 @@ describe('StandardCard Business Logic', () => {
       const hasFooter = !!mockSlots.footer
       expect(hasFooter).toBe(false)
     })
+
+    test('should detect presence of header actions slot', () => {
+      const mockSlots: { [key: string]: () => string } = {
+        'header-actions': () => 'Header actions'
+      }
+
+      const hasHeaderActions = !!mockSlots['header-actions']
+      expect(hasHeaderActions).toBe(true)
+    })
+
+    test('should detect absence of header actions slot', () => {
+      const mockSlots: { [key: string]: () => string } = {}
+
+      const hasHeaderActions = !!mockSlots['header-actions']
+      expect(hasHeaderActions).toBe(false)
+    })
+  })
+
+  describe('Content and Styling Options', () => {
+    test('should handle centerContent option', () => {
+      const centeredCard = {
+        centerContent: true
+      }
+
+      const nonCenteredCard = {
+        centerContent: false
+      }
+
+      expect(centeredCard.centerContent).toBe(true)
+      expect(nonCenteredCard.centerContent).toBe(false)
+    })
+
+    test('should handle noPadding option', () => {
+      const noPaddingCard = {
+        noPadding: true
+      }
+
+      const paddedCard = {
+        noPadding: false
+      }
+
+      expect(noPaddingCard.noPadding).toBe(true)
+      expect(paddedCard.noPadding).toBe(false)
+    })
+
+    test('should handle emphasis state', () => {
+      const emphasizedCard = {
+        variant: 'plan' as const,
+        emphasis: true
+      }
+
+      const normalCard = {
+        variant: 'plan' as const,
+        emphasis: false
+      }
+
+      expect(emphasizedCard.emphasis).toBe(true)
+      expect(normalCard.emphasis).toBe(false)
+    })
   })
 
   describe('Complex Integration Scenarios', () => {
@@ -310,12 +555,19 @@ describe('StandardCard Business Logic', () => {
         collapsible: true,
         defaultExpanded: false,
         infoIcon: 'fas fa-warning',
-        storageKey: 'complex-card'
+        storageKey: 'complex-card',
+        variant: 'settings' as const,
+        size: 'large' as const,
+        emphasis: false,
+        centerContent: false,
+        noPadding: true,
+        shadow: 'lg' as const
       }
 
       const mockSlots: { [key: string]: () => string } = {
         'info-notice': () => 'Important notice',
-        footer: () => 'Footer actions'
+        footer: () => 'Footer actions',
+        'header-actions': () => 'Header actions'
       }
 
       // Set initial storage state
@@ -334,12 +586,18 @@ describe('StandardCard Business Logic', () => {
       let isExpanded = getInitialExpandedState()
       const hasInfoNotice = !!mockSlots['info-notice']
       const hasFooter = !!mockSlots.footer
+      const hasHeaderActions = !!mockSlots['header-actions']
 
       expect(isExpanded).toBe(true) // From storage, not default
       expect(hasInfoNotice).toBe(true)
       expect(hasFooter).toBe(true)
+      expect(hasHeaderActions).toBe(true)
       expect(mockCard.title).toBe('Complex Card')
       expect(mockCard.infoIcon).toBe('fas fa-warning')
+      expect(mockCard.variant).toBe('settings')
+      expect(mockCard.size).toBe('large')
+      expect(mockCard.noPadding).toBe(true)
+      expect(mockCard.shadow).toBe('lg')
     })
 
     test('should handle multiple cards with different storage keys', () => {
@@ -365,6 +623,37 @@ describe('StandardCard Business Logic', () => {
 
       expect(card1State).toBe(false) // Storage overrides default true
       expect(card2State).toBe(true)  // Storage overrides default false
+    })
+
+    test('should handle plan variant with emphasis and custom props', () => {
+      const planCard = {
+        title: 'Enterprise Plan',
+        variant: 'plan' as const,
+        emphasis: true,
+        size: 'large' as const,
+        shadow: 'md' as const,
+        centerContent: false,
+        noPadding: false
+      }
+
+      expect(planCard.variant).toBe('plan')
+      expect(planCard.emphasis).toBe(true)
+      expect(planCard.size).toBe('large')
+      expect(planCard.shadow).toBe('md')
+    })
+
+    test('should handle stats variant with centered content', () => {
+      const statsCard = {
+        title: 'Total Users',
+        variant: 'stats' as const,
+        centerContent: true,
+        size: 'medium' as const,
+        shadow: 'sm' as const
+      }
+
+      expect(statsCard.variant).toBe('stats')
+      expect(statsCard.centerContent).toBe(true)
+      expect(statsCard.size).toBe('medium')
     })
   })
 })

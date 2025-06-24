@@ -1,112 +1,107 @@
 <template>
-  <div class="card">
-    <div class="card-body">
-      <div class="component-metadata-header d-flex justify-content-between align-items-start mb-4">
-        <div>
-          <h4 class="mb-2">Component Metadata</h4>
-          <div class="augmentation-notice d-flex align-items-center">
-                         <i class="fa-regular fa-lightbulb me-2" style="color: #4f46e5;"></i>
-                         <span class="text-muted">
-               Enable the <a href="#" class="text-decoration-none" style="color: #4f46e5;">Augmentation</a> feature to include this metadata in your SBOM
-             </span>
-          </div>
-        </div>
-
-      </div>
+  <StandardCard
+    title="Component Metadata"
+    variant="settings"
+    size="large"
+    shadow="md"
+  >
+    <template #info-notice>
+      <strong>Augmentation:</strong> Enable the <a href="#" class="text-decoration-none" style="color: #4f46e5;">Augmentation</a> feature to include this metadata in your SBOM
+    </template>
 
       <div>
         <div class="container-fluid p-0">
           <div class="row">
             <div class="col-sm-12 col-lg-6">
-              <div class="card">
-                <div class="card-header">
-                  <h4 class="card-title">
-                    Supplier Information
-                    <i class="fa-regular fa-circle-question help-icon">
-                      <span class="tooltiptext">Organization that supplied or manufactured the component</span>
-                    </i>
-                  </h4>
-                </div>
-                <div class="card-body">
-                  <SupplierEditor
-                    v-model="metadata.supplier"
-                    :validation-errors="validationErrors.supplier"
-                    @update:modelValue="validateSupplier"
-                  />
-                </div>
-              </div>
+              <StandardCard
+                variant="settings"
+                shadow="sm"
+              >
+                <template #title>
+                  Supplier Information
+                  <i class="fa-regular fa-circle-question help-icon">
+                    <span class="tooltiptext">Organization that supplied or manufactured the component</span>
+                  </i>
+                </template>
+
+                <SupplierEditor
+                  v-model="metadata.supplier"
+                  :validation-errors="validationErrors.supplier"
+                  @update:modelValue="validateSupplier"
+                />
+              </StandardCard>
             </div>
 
             <div class="col-12 col-lg-6">
-              <div class="card">
-                <div class="card-header">
-                  <h4 class="card-title">
-                    Lifecycle Phase
-                    <i class="fa-regular fa-circle-question help-icon">
-                      <span class="tooltiptext">Current phase in the component's lifecycle</span>
-                    </i>
-                  </h4>
-                </div>
-                <div class="card-body">
-                  <div class="form-group">
-                    <select
-                      v-model="metadata.lifecycle_phase"
-                      class="form-select"
-                      :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
+              <StandardCard
+                variant="settings"
+                shadow="sm"
+              >
+                <template #title>
+                  Lifecycle Phase
+                  <i class="fa-regular fa-circle-question help-icon">
+                    <span class="tooltiptext">Current phase in the component's lifecycle</span>
+                  </i>
+                </template>
+
+                <div class="form-group">
+                  <select
+                    v-model="metadata.lifecycle_phase"
+                    class="form-select"
+                    :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
+                  >
+                    <option :value="null">Select a phase...</option>
+                    <option
+                      v-for="phase in orderedLifecyclePhases"
+                      :key="phase.value"
+                      :value="phase.value"
                     >
-                      <option :value="null">Select a phase...</option>
-                      <option
-                        v-for="phase in orderedLifecyclePhases"
-                        :key="phase.value"
-                        :value="phase.value"
-                      >
-                        {{ phase.label }}
-                      </option>
-                    </select>
-                    <div v-if="validationErrors.lifecycle_phase" class="invalid-feedback">
-                      {{ validationErrors.lifecycle_phase }}
-                    </div>
+                      {{ phase.label }}
+                    </option>
+                  </select>
+                  <div v-if="validationErrors.lifecycle_phase" class="invalid-feedback">
+                    {{ validationErrors.lifecycle_phase }}
                   </div>
                 </div>
-              </div>
+              </StandardCard>
 
-              <div class="card">
-                <div class="card-header">
-                  <h4 class="card-title">
-                    Licenses
-                    <i class="fa-regular fa-circle-question help-icon">
-                      <span class="tooltiptext">Software licenses that apply to this component</span>
-                    </i>
-                  </h4>
-                </div>
-                <div class="card-body">
-                  <LicensesEditor
-                    v-model="metadata.licenses"
-                    :validation-errors="validationErrors.licenses"
-                    :validationResponse="{ status: 200, unknown_tokens: [] }"
-                    @update:modelValue="validateLicenses"
-                  />
-                </div>
-              </div>
+              <StandardCard
+                variant="settings"
+                shadow="sm"
+              >
+                <template #title>
+                  Licenses
+                  <i class="fa-regular fa-circle-question help-icon">
+                    <span class="tooltiptext">Software licenses that apply to this component</span>
+                  </i>
+                </template>
 
-              <div class="card">
-                <div class="card-header">
-                  <h4 class="card-title">
-                    Authors
-                    <i class="fa-regular fa-circle-question help-icon">
-                      <span class="tooltiptext">People who contributed to this component</span>
-                    </i>
-                  </h4>
-                </div>
-                <div class="card-body">
-                  <ContactsEditor
-                    v-model="metadata.authors"
-                    contact-type="author"
-                    :validation-errors="validationErrors.authors"
-                    @update:modelValue="validateAuthors"
-                  />
-                </div>
-              </div>
+                <LicensesEditor
+                  v-model="metadata.licenses"
+                  :validation-errors="validationErrors.licenses"
+                  :validationResponse="{ status: 200, unknown_tokens: [] }"
+                  @update:modelValue="validateLicenses"
+                />
+              </StandardCard>
+
+              <StandardCard
+                variant="settings"
+                shadow="sm"
+              >
+                <template #title>
+                  Authors
+                  <i class="fa-regular fa-circle-question help-icon">
+                    <span class="tooltiptext">People who contributed to this component</span>
+                  </i>
+                </template>
+
+                <ContactsEditor
+                  v-model="metadata.authors"
+                  contact-type="author"
+                  :validation-errors="validationErrors.authors"
+                  @update:modelValue="validateAuthors"
+                />
+              </StandardCard>
             </div>
           </div>
 
@@ -136,8 +131,7 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
+  </StandardCard>
 </template>
 
 <script setup lang="ts">
@@ -148,6 +142,7 @@
   import SupplierEditor from './SupplierEditor.vue';
   import LicensesEditor from './LicensesEditor.vue';
   import ContactsEditor from './ContactsEditor.vue';
+  import StandardCard from '../../../core/js/components/StandardCard.vue';
   import { showSuccess, showError } from '../../../core/js/alerts';
 
   interface Props {
