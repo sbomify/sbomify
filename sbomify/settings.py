@@ -34,6 +34,9 @@ API_VERSION = "v1"
 # This is used for the SBOM analysis results cache
 OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS = int(os.environ.get("OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS", 7 * 24 * 3600))
 
+# OSV Scanner subprocess timeout in seconds (default: 5 minutes, less than Dramatiq's 6-minute time limit)
+OSV_SCANNER_TIMEOUT_SECONDS = int(os.environ.get("OSV_SCANNER_TIMEOUT_SECONDS", 300))
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
