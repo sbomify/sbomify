@@ -8,6 +8,8 @@ import DashboardStats from '../../sboms/js/components/DashboardStats.vue';
 import CopyToken from './components/CopyToken.vue';
 import SiteNotifications from './components/SiteNotifications.vue';
 import StandardCard from './components/StandardCard.vue';
+import StatCard from './components/StatCard.vue';
+import PlanCard from './components/PlanCard.vue';
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -17,6 +19,8 @@ mountVueComponent('vc-dashboard-stats', DashboardStats);
 mountVueComponent('vc-copy-token', CopyToken);
 mountVueComponent('vc-site-notifications', SiteNotifications);
 mountVueComponent('vc-standard-card', StandardCard);
+mountVueComponent('vc-stat-card', StatCard);
+mountVueComponent('vc-plan-card', PlanCard);
 
 // Declare the global feather variable
 declare global {

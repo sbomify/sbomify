@@ -4,80 +4,52 @@
 
     <div class="row mb-4">
       <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="card-title mb-0">Current Usage</h5>
-          </div>
-          <div class="card-body">
-            <p class="mb-0">
-              Products: {{ usage.products }},
-              Projects: {{ usage.projects }},
-              Components: {{ usage.components }}
-            </p>
-          </div>
-        </div>
+        <StandardCard title="Current Usage" variant="stats">
+          <p class="mb-0">
+            Products: {{ usage.products }},
+            Projects: {{ usage.projects }},
+            Components: {{ usage.components }}
+          </p>
+        </StandardCard>
       </div>
     </div>
 
     <div class="row row-cols-1 row-cols-md-3 mb-3 text-center">
       <template v-for="planKey in ['community', 'business', 'enterprise']" :key="planKey">
         <div class="col">
-          <div
+          <PlanCard
             v-if="getPlan(planKey)"
-            class="card mb-4 rounded-3 shadow-sm"
-            :class="{ 'border-emphasis': isCurrentPlan(getPlan(planKey)!) }"
+            :plan-name="getPlan(planKey)!.name"
+            :price="getPlanPrice(planKey)"
+            :price-period="getPlanPricePeriod(planKey)"
+            :description="getPlan(planKey)!.description"
+            :features="getPlanFeatures(planKey)"
+            :is-current-plan="isCurrentPlan(getPlan(planKey)!)"
+            :button-text="getButtonText(getPlan(planKey)!)"
+            :button-disabled="!canSelectPlan(getPlan(planKey)!)"
+            :warning-message="canDowngrade(getPlan(planKey)!).can ? '' : canDowngrade(getPlan(planKey)!).message"
+            @action="handlePlanSelection(getPlan(planKey)!)"
           >
-            <div
-              class="card-header py-3"
-              :class="{ 'bg-emphasis text-emphasis border-emphasis': isCurrentPlan(getPlan(planKey)!) }"
-            >
-              <h4 class="my-0 fw-normal card-title">{{ getPlan(planKey)!.name }}</h4>
-            </div>
-            <div class="card-body">
-              <h1 class="card-title pricing-card-title">
-                <template v-if="planKey === 'community'">Free</template>
-                <template v-else-if="planKey === 'business'">
-                  $199<small class="text-body-secondary fw-light">/mo</small>
-                </template>
-                <template v-else>Contact Us</template>
-              </h1>
-              <p class="mt-3 mb-4">{{ getPlan(planKey)!.description }}</p>
+            <template v-if="planKey === 'business'" #form-controls>
+              <div class="btn-group mb-3" role="group" aria-label="Billing period">
+                <input id="monthly" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="monthly">
+                <label class="btn btn-outline-secondary" for="monthly">Monthly ($199/mo)</label>
 
-              <ul class="list-unstyled mt-3 mb-4">
-                <li>{{ getPlan(planKey)!.max_products ? getPlan(planKey)!.max_products : 'Unlimited' }} Products</li>
-                <li>{{ getPlan(planKey)!.max_projects ? getPlan(planKey)!.max_projects : 'Unlimited' }} Projects</li>
-                <li>{{ getPlan(planKey)!.max_components ? getPlan(planKey)!.max_components : 'Unlimited' }} Components</li>
-              </ul>
-
-              <div v-if="!canDowngrade(getPlan(planKey)!).can" class="alert alert-warning mb-3" role="alert">
-                {{ canDowngrade(getPlan(planKey)!).message }}
+                <input id="annual" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="annual">
+                <label class="btn btn-outline-secondary" for="annual">Annual ($159/mo)</label>
               </div>
+            </template>
 
-              <div class="d-grid gap-2">
-                <div v-if="planKey === 'business'" class="btn-group mb-3" role="group" aria-label="Billing period">
-                  <input id="monthly" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="monthly">
-                  <label class="btn btn-outline-secondary" for="monthly">Monthly ($199/mo)</label>
-
-                  <input id="annual" v-model="billingPeriod" type="radio" class="btn-check" name="billing_period" value="annual">
-                  <label class="btn btn-outline-secondary" for="annual">Annual ($159/mo)</label>
-                </div>
-                <div v-else class="billing-period-spacer mb-3"></div>
-
-                <button
-                  type="button"
-                  class="w-100 btn"
-                  :class="{
-                    'btn-secondary': !isCurrentPlan(getPlan(planKey)!),
-                    'btn-outline-secondary': isCurrentPlan(getPlan(planKey)!)
-                  }"
-                  :disabled="isCurrentPlan(getPlan(planKey)!)"
-                  @click="handlePlanSelection(getPlan(planKey)!)"
-                >
-                  {{ getButtonText(getPlan(planKey)!) }}
-                </button>
-              </div>
-            </div>
-          </div>
+            <template v-if="planKey === 'business'" #pricing>
+              <template v-if="billingPeriod === 'monthly'">
+                $199<small class="text-body-secondary fw-light">/mo</small>
+              </template>
+              <template v-else>
+                $159<small class="text-body-secondary fw-light">/mo</small>
+                <div class="text-success small">Save 20% annually</div>
+              </template>
+            </template>
+          </PlanCard>
         </div>
       </template>
     </div>
@@ -89,6 +61,8 @@ import { ref, onMounted } from 'vue';
 import $axios from '../../../core/js/utils';
 import { showSuccess, showError, showConfirmation } from '../../../core/js/alerts';
 import { AxiosError } from 'axios';
+import StandardCard from '../../../core/js/components/StandardCard.vue';
+import PlanCard from '../../../core/js/components/PlanCard.vue';
 
 interface Plan {
   key: string;
@@ -106,6 +80,11 @@ interface Usage {
   current_plan: string | null;
 }
 
+interface PlanFeature {
+  key: string;
+  label: string;
+}
+
 const props = defineProps<{
   initialTeamKey?: string;
 }>();
@@ -117,7 +96,49 @@ const usage = ref<Usage>({ products: 0, projects: 0, components: 0, current_plan
 const currentPlan = ref<string | null>(null);
 const billingPeriod = ref('monthly');
 
-function canDowngrade(plan: Plan) {
+const getPlan = (key: string): Plan | undefined => {
+  return plans.value.find(p => p.key === key);
+};
+
+const getPlanPrice = (planKey: string): number => {
+  switch (planKey) {
+    case 'community':
+      return 0;
+    case 'business':
+      return billingPeriod.value === 'monthly' ? 199 : 159;
+    case 'enterprise':
+      return -1; // Contact us pricing
+    default:
+      return 0;
+  }
+};
+
+const getPlanPricePeriod = (planKey: string): string => {
+  if (planKey === 'enterprise') return '';
+  return '/mo';
+};
+
+const getPlanFeatures = (planKey: string): PlanFeature[] => {
+  const plan = getPlan(planKey);
+  if (!plan) return [];
+
+  return [
+    {
+      key: 'products',
+      label: `${plan.max_products ? plan.max_products : 'Unlimited'} Products`
+    },
+    {
+      key: 'projects',
+      label: `${plan.max_projects ? plan.max_projects : 'Unlimited'} Projects`
+    },
+    {
+      key: 'components',
+      label: `${plan.max_components ? plan.max_components : 'Unlimited'} Components`
+    }
+  ];
+};
+
+const canDowngrade = (plan: Plan) => {
   // If it's the current plan, always allow
   if (plan.key === currentPlan.value) {
     return { can: true, message: '' };
@@ -147,7 +168,27 @@ function canDowngrade(plan: Plan) {
   }
 
   return { can: true, message: '' };
-}
+};
+
+const canSelectPlan = (plan: Plan): boolean => {
+  return canDowngrade(plan).can;
+};
+
+const isCurrentPlan = (plan: Plan): boolean => {
+  return plan.key === currentPlan.value;
+};
+
+const getButtonText = (plan: Plan): string => {
+  if (plan.key === currentPlan.value) {
+    return 'Current Plan';
+  } else if (!currentPlan.value && plan.key === 'community') {
+    return 'Select Plan';
+  } else if (plan.key === 'enterprise') {
+    return 'Contact Sales';
+  } else {
+    return currentPlan.value ? 'Change Plan' : 'Select Plan';
+  }
+};
 
 async function handlePlanSelection(plan: Plan) {
   try {
@@ -184,7 +225,7 @@ async function handlePlanSelection(plan: Plan) {
       showSuccess('Plan updated successfully');
       emit('plan-selected');
     }
-    } catch (error) {
+  } catch (error) {
     if (error instanceof AxiosError) {
       showError(error.response?.data?.detail || 'Failed to change plan');
     } else {
@@ -192,26 +233,6 @@ async function handlePlanSelection(plan: Plan) {
     }
     console.error('Error changing plan:', error);
   }
-}
-
-function getButtonText(plan: Plan) {
-  if (plan.key === currentPlan.value) {
-    return 'Current Plan';
-  } else if (!currentPlan.value && plan.key === 'community') {
-    return 'Select Plan';
-  } else if (plan.key === 'enterprise') {
-    return 'Contact Sales';
-  } else {
-    return currentPlan.value ? 'Change Plan' : 'Select Plan';
-  }
-}
-
-function isCurrentPlan(plan: Plan) {
-  return plan.key === currentPlan.value;
-}
-
-function getPlan(key: string): Plan | undefined {
-  return plans.value.find(p => p.key === key);
 }
 
 onMounted(async () => {
@@ -232,80 +253,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.card {
-  border: 1px solid #dee2e6;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.card-header {
-  background: #f8f9fa;
-  border-bottom: 1px solid #eaecef;
-  padding: 1.25rem;
-  border-radius: 8px 8px 0 0;
-}
-
-.card-body {
-  padding: 1.25rem;
-}
-
-/* Specific styles for plan cards */
-.row-cols-md-3 .card-body {
-  display: flex;
-  flex-direction: column;
-  min-height: 400px;
-}
-
-.card-title {
-  color: #2c3e50;
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  border: none;
-  color: #fff;
-}
-
-.btn-secondary:hover {
-  background: #5c636a;
-  transform: translateY(-1px);
-  color: #fff;
-}
-
-.btn-outline-secondary {
-  color: #6c757d;
-  border-color: #6c757d;
-}
-
-.btn-outline-secondary:hover {
-  background: #6c757d;
-  color: #fff;
-  transform: translateY(-1px);
-}
-
-.border-emphasis {
-  border-color: #6c757d !important;
-}
-
-.bg-emphasis {
-  background-color: #6c757d !important;
-}
-
-.text-emphasis {
-  color: #fff !important;
-}
-
-/* Add styles for the billing period buttons */
+/* Enhanced button styles for billing period selection */
 .btn-group .btn-outline-secondary {
   background-color: transparent;
   color: #6c757d;
@@ -317,73 +265,20 @@ onMounted(async () => {
   color: #fff;
 }
 
-/* Add styles for the card headers */
-.card-header.bg-emphasis .card-title {
-  color: #fff;
-}
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
 
-.pricing-card-title {
-  color: #2c3e50;
-  font-size: 2.5rem;
-  font-weight: 600;
-}
+  .btn-group .btn {
+    border-radius: 0.375rem !important;
+    margin-bottom: 0.5rem;
+  }
 
-/* Add exact height for the billing period spacer to match the btn-group */
-.billing-period-spacer {
-  height: 58px;
-  margin-top: 10px;
-}
-
-/* Push buttons to bottom of card */
-.d-grid {
-  margin-top: auto;
-}
-
-/* Add consistent spacing for plan features */
-.list-unstyled {
-  margin: 1.5rem 0;
-  flex-grow: 1;
-}
-
-/* SweetAlert2 custom styling */
-:global(.swal-modal) {
-  font-family: inherit;
-}
-
-:global(.swal-confirm-button),
-:global(.swal-cancel-button) {
-  padding: 0.75rem 1.5rem;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  margin: 0 0.5rem;
-}
-
-:global(.swal-actions) {
-  margin-top: 1.5rem;
-  gap: 1rem;
-}
-
-:global(.swal-confirm-button) {
-  background: #6c757d;
-  border: none;
-  color: #fff;
-}
-
-:global(.swal-confirm-button:hover) {
-  background: #5c636a;
-  transform: translateY(-1px);
-}
-
-:global(.swal-cancel-button) {
-  color: #6c757d;
-  border: 1px solid #6c757d;
-  background: transparent;
-}
-
-:global(.swal-cancel-button:hover) {
-  background: #6c757d;
-  color: #fff;
-  transform: translateY(-1px);
+  .btn-group .btn:last-child {
+    margin-bottom: 0;
+  }
 }
 </style>

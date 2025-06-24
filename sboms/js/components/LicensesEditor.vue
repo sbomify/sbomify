@@ -92,10 +92,13 @@
           <p class="alert-description">Create a custom license with detailed information.</p>
         </div>
       </div>
-      <div class="card">
-        <div class="card-header">
-          <h6>{{ editingCustomLicense ? 'Edit' : 'Create' }} Custom License</h6>
-                    <button
+      <StandardCard
+        :title="(editingCustomLicense ? 'Edit' : 'Create') + ' Custom License'"
+        variant="modal"
+        shadow="md"
+      >
+        <template #header-actions>
+          <button
             type="button"
             class="btn-close"
             aria-label="Close"
@@ -103,8 +106,7 @@
           >
             &times;
           </button>
-        </div>
-        <div class="card-body">
+        </template>
           <form @submit.prevent="submitCustomLicense">
             <div class="form-row">
               <div class="form-col">
@@ -169,8 +171,7 @@
               </button>
             </div>
           </form>
-        </div>
-      </div>
+      </StandardCard>
     </div>
 
     <!-- Success Message -->
@@ -190,6 +191,7 @@ import { ref, reactive, computed, watch, onMounted, nextTick, onBeforeUnmount } 
 import type { CustomLicense } from '../type_defs'
 import $axios from '../../../core/js/utils'
 import { AxiosError } from 'axios'
+import StandardCard from '../../../core/js/components/StandardCard.vue'
 
 interface LicenseInfo {
   key: string;
