@@ -496,18 +496,48 @@ def get_cyclonedx_component_metadata(
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_dashboard_summary(request: HttpRequest, component_id: str | None = Query(None)):
-    """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
+def get_dashboard_summary(
+    request: HttpRequest,
+    component_id: str | None = Query(None),
+    product_id: str | None = Query(None),
+    project_id: str | None = Query(None),
+):
+    """Retrieve a summary of SBOM statistics and latest uploads for the user's teams.
+
+    Optional query parameters allow filtering the stats for a specific product,
+    project or component.
+    """
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required."}
 
     user_teams_qs = Team.objects.filter(member__user=request.user)
 
-    total_products = Product.objects.filter(team__in=user_teams_qs).count()
-    total_projects = Project.objects.filter(team__in=user_teams_qs).count()
-    total_components = Component.objects.filter(team__in=user_teams_qs).count()
-
     latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
+
+    total_products = None
+    total_projects = None
+    total_components = None
+
+    if product_id:
+        product = get_object_or_404(Product, pk=product_id, team__in=user_teams_qs)
+        total_projects = product.projects.filter(team__in=user_teams_qs).count()
+        total_components = (
+            Component.objects.filter(
+                projectcomponent__project__productproject__product=product,
+                team__in=user_teams_qs,
+            )
+            .distinct()
+            .count()
+        )
+        latest_sboms_qs = latest_sboms_qs.filter(component__projectcomponent__project__productproject__product=product)
+    elif project_id:
+        project = get_object_or_404(Project, pk=project_id, team__in=user_teams_qs)
+        total_components = project.components.filter(team__in=user_teams_qs).count()
+        latest_sboms_qs = latest_sboms_qs.filter(component__projectcomponent__project=project)
+    else:
+        total_products = Product.objects.filter(team__in=user_teams_qs).count()
+        total_projects = Project.objects.filter(team__in=user_teams_qs).count()
+        total_components = Component.objects.filter(team__in=user_teams_qs).count()
 
     if component_id:
         latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)

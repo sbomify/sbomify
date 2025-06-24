@@ -49,8 +49,8 @@ export interface DashboardSBOMUploadInfo {
 }
 
 export interface DashboardStats {
-  total_products: number;
-  total_projects: number;
-  total_components: number;
+  total_products: number | null;
+  total_projects: number | null;
+  total_components: number | null;
   latest_uploads: DashboardSBOMUploadInfo[];
 }

@@ -603,6 +603,98 @@ def test_get_dashboard_summary_authenticated_with_data(
 
 
 @pytest.mark.django_db
+def test_get_dashboard_summary_product_filter(
+    sample_user: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_product: Product,  # noqa: F811
+    sample_project: Project,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    client: Client,
+    sample_team_with_owner_member,  # noqa: F811
+):
+    """Stats filtered by product should only count that product's items."""
+    sample_component.team = sample_team_with_owner_member.team
+    sample_component.save()
+    sample_sbom.component = sample_component
+    sample_sbom.save()
+
+    # Extra project/component not part of the product
+    other_project = Project.objects.create(name="Other", team=sample_team_with_owner_member.team)
+    other_component = Component.objects.create(name="Other", team=sample_team_with_owner_member.team)
+    ProjectComponent.objects.create(project=other_project, component=other_component)
+    SBOM.objects.create(name="Other SBOM", version="1", component=other_component, format="cyclonedx", sbom_filename="o.json", source="test")
+
+    url = reverse("api-1:get_dashboard_summary") + f"?product_id={sample_product.id}"
+    response = client.get(
+        url,
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_products"] is None
+    assert data["total_projects"] == sample_product.projects.count()
+
+    expected_components = Component.objects.filter(
+        projectcomponent__project__productproject__product=sample_product,
+        team=sample_team_with_owner_member.team,
+    ).distinct().count()
+    assert data["total_components"] == expected_components
+    assert all(
+        ProjectComponent.objects.filter(
+            project__productproject__product=sample_product,
+            component__name=upload["component_name"],
+        ).exists()
+        for upload in data["latest_uploads"]
+    )
+
+
+@pytest.mark.django_db
+def test_get_dashboard_summary_project_filter(
+    sample_user: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_project: Project,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    client: Client,
+    sample_team_with_owner_member,  # noqa: F811
+):
+    """Stats filtered by project should only count that project's components."""
+    sample_component.team = sample_team_with_owner_member.team
+    sample_component.save()
+    sample_sbom.component = sample_component
+    sample_sbom.save()
+
+    other_component = Component.objects.create(name="Other2", team=sample_team_with_owner_member.team)
+    ProjectComponent.objects.create(project=sample_project, component=other_component)
+    SBOM.objects.create(name="Other2 SBOM", version="1", component=other_component, format="cyclonedx", sbom_filename="o2.json", source="test")
+
+    url = reverse("api-1:get_dashboard_summary") + f"?project_id={sample_project.id}"
+    response = client.get(
+        url,
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_products"] is None
+    assert data["total_projects"] is None
+    assert data["total_components"] == sample_project.components.count()
+    assert all(
+        ProjectComponent.objects.filter(
+            project=sample_project,
+            component__name=upload["component_name"],
+        ).exists()
+        for upload in data["latest_uploads"]
+    )
+
+
+@pytest.mark.django_db
 def test_component_metadata_license_expressions(sample_component: Component, sample_access_token: AccessToken):  # noqa: F811
     """Test that the component metadata API accepts license expressions."""
     client = Client()

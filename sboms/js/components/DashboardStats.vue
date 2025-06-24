@@ -65,9 +65,9 @@ const isLoading = ref(true);
 const errorMessage = ref<string | null>(null);
 
 const stats = ref<DashboardStats>({
-  total_products: 0,
-  total_projects: 0,
-  total_components: 0,
+  total_products: null,
+  total_projects: null,
+  total_components: null,
   latest_uploads: [],
 });
 
@@ -86,8 +86,8 @@ const getStats = async () => {
 
   let apiUrl = '/api/v1/sboms/dashboard/summary/';
 
-  if (props.itemType === 'component' && props.itemId) {
-    apiUrl += `?component_id=${props.itemId}`;
+  if (props.itemType && props.itemId) {
+    apiUrl += `?${props.itemType}_id=${props.itemId}`;
   }
 
   try {
