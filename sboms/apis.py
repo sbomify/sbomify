@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
@@ -679,3 +680,34 @@ def sbom_upload_file(
     except Exception as e:
         log.error(f"Error processing file upload: {str(e)}")
         return 400, {"detail": str(e)}
+
+
+@router.delete(
+    "/sbom/{sbom_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def delete_sbom(request: HttpRequest, sbom_id: str):
+    """Delete an SBOM by ID."""
+    try:
+        sbom = SBOM.objects.get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
+
+    # Check if user has permission to delete this SBOM (must be owner/admin of component)
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Only owners or admins of the component can delete SBOMs"}
+
+    # Delete the SBOM file from S3 if it exists
+    if sbom.sbom_filename:
+        try:
+            s3 = S3Client("SBOMS")
+            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
+        except Exception as e:
+            log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {str(e)}")
+            # Continue with database deletion even if S3 deletion fails
+
+    # Delete the SBOM record from database
+    sbom.delete()
+
+    return 204, None

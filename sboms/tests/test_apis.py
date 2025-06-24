@@ -944,3 +944,71 @@ def test_sbom_upload_file_too_large(
     # Assert error response
     assert response.status_code == 400
     assert "File size must be less than 10MB" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_delete_sbom_api(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test SBOM deletion via API endpoint."""
+    mocker.patch("boto3.resource")
+    mock_delete_object = mocker.patch("core.object_store.S3Client.delete_object")
+
+    client = Client()
+
+    # Test unauthorized access (no token)
+    url = reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id})
+    response = client.delete(url)
+    assert response.status_code == 401
+
+    # Test with valid token and permissions
+    response = client.delete(
+        url,
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+
+    assert response.status_code == 204
+    assert SBOM.objects.filter(id=sample_sbom.id).count() == 0
+
+    # Verify S3 file deletion was attempted
+    mock_delete_object.assert_called_once()
+
+    # Test deleting non-existent SBOM
+    response = client.delete(
+        url,
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_delete_sbom_api_forbidden(
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test SBOM deletion with insufficient permissions."""
+    mocker.patch("boto3.resource")
+
+    # Create a different user and access token without permissions
+    from django.contrib.auth import get_user_model
+
+    from access_tokens.models import AccessToken
+    from access_tokens.utils import create_personal_access_token
+
+    User = get_user_model()
+    other_user = User.objects.create_user(username="otheruser", password="password")
+    token_str = create_personal_access_token(other_user)
+    other_token = AccessToken.objects.create(user=other_user, encoded_token=token_str, description="Test Token")
+
+    client = Client()
+    url = reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id})
+
+    response = client.delete(
+        url,
+        headers={"Authorization": f"Bearer {other_token.encoded_token}"},
+    )
+
+    assert response.status_code == 403
+    assert SBOM.objects.filter(id=sample_sbom.id).count() == 1  # SBOM should still exist

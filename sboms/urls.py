@@ -54,7 +54,7 @@ urlpatterns: list[URLPattern] = [
         name="delete_component",
     ),
     path(
-        "transfer-component/<str:component_id>",
+        "component/<str:component_id>/transfer",
         views.transfer_component_to_team,
         name="transfer_component",
     ),
