@@ -134,12 +134,14 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
         raise  # Re-raise to allow Dramatiq to handle retries
 
 
-@dramatiq.actor(queue_name="sbom_vulnerability_scanning", max_retries=3, time_limit=300000, store_results=True)
+@dramatiq.actor(queue_name="sbom_vulnerability_scanning", max_retries=3, time_limit=360000, store_results=True)
 @retry(
     retry=retry_if_exception_type((OperationalError, ConnectionError, subprocess.CalledProcessError)),
     wait=wait_exponential(multiplier=1, min=1, max=10),  # Start with 1s, max 10s
     stop=stop_after_delay(60),  # Stop after 60s total
     before_sleep=before_sleep_log(logger, logging.WARNING),
+    # Note: subprocess.TimeoutExpired is not included in retry_if_exception_type
+    # because timeouts are handled gracefully and should not be retried
 )
 def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
     """
@@ -225,7 +227,10 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         logger.debug(f"[OSV_SCAN] Executing command: {scan_command_str}")
 
         try:
-            process = subprocess.run(scan_command, capture_output=True, text=True)
+            # Use timeout to prevent hanging scans
+            process = subprocess.run(
+                scan_command, capture_output=True, text=True, timeout=settings.OSV_SCANNER_TIMEOUT_SECONDS
+            )
 
             stderr_content = process.stderr.strip() if process.stderr else ""
 
@@ -271,6 +276,31 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
                 ex=settings.OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS,  # Use setting here
             )
             logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Scan results for SBOM ID {sbom_id} stored in Redis")
+
+        except subprocess.TimeoutExpired:
+            logger.error(
+                f"[TASK_scan_sbom_for_vulnerabilities] OSV scanner timed out after "
+                f"{settings.OSV_SCANNER_TIMEOUT_SECONDS} seconds for SBOM ID {sbom_id}. Command: {scan_command_str}",
+                exc_info=True,
+            )
+            # Store timeout error in Redis so the UI can display it
+            error_data = {
+                "error": "Vulnerability scan timed out",
+                "details": (
+                    f"The scan exceeded the maximum allowed time of {settings.OSV_SCANNER_TIMEOUT_SECONDS} seconds. "
+                    f"This may indicate a very large SBOM or slow network connectivity to vulnerability databases."
+                ),
+                "timeout_seconds": settings.OSV_SCANNER_TIMEOUT_SECONDS,
+                "sbom_filename": sbom_instance.sbom_filename if sbom_instance else None,
+            }
+            redis_client = dramatiq.get_broker().client
+            redis_client.set(
+                f"osv_scan_result:{sbom_id}:{datetime.now(timezone.utc).isoformat()}",
+                json.dumps(error_data),
+                ex=settings.OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS,
+            )
+            # Return error instead of raising to prevent retries on timeout
+            return error_data
 
         finally:
             # 5. Clean up temporary file
