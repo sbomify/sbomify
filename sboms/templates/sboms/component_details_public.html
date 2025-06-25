@@ -9,6 +9,8 @@ sboms - List of SBOM objects without data and packages fields
 {% load static %}
 {% load django_vite %}
 
+{% block title %}Component: {{ component.name }}{% endblock %}
+
 {% block main %}
   <main class="content public-page mb-4">
     <div class="brand" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};">
