@@ -34,20 +34,21 @@ class TestCriticalPaths:
         }
         session.save()
 
-        # 1. Create component via form submission
+        # 1. Create component via API
         response = client.post(
-            reverse("sboms:components_dashboard"),
-            {
+            reverse("api-1:create_component"),
+            data=json.dumps({
                 "name": "E2E Test Component"
-            }
+            }),
+            content_type="application/json"
         )
-        assert response.status_code == 302
-        assert response.url == reverse("sboms:components_dashboard")
+        assert response.status_code == 201
+        component_data = response.json()
 
         # Get the created component
         from sboms.models import Component
-        component = Component.objects.filter(name="E2E Test Component", team_id=team.id).first()
-        assert component is not None
+        component = Component.objects.get(id=component_data["id"])
+        assert component.name == "E2E Test Component"
 
         # 2. View component details
         response = client.get(
@@ -135,6 +136,44 @@ class TestCriticalPaths:
             reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id})
         )
         assert response.status_code == 200
+
+        # 4. Test billing plan restrictions
+        client.login(username=sample_user.username, password="test")  # nosec B106
+
+        # Create community plan
+        community_plan = BillingPlan.objects.create(
+            key="community",
+            name="Community",
+            description="Free plan",
+            max_products=1,
+            max_projects=1,
+            max_components=5,
+        )
+
+        # Switch team to community plan
+        team.billing_plan = community_plan.key
+        team.save()
+
+        # Set session again
+        session = client.session
+        session["current_team"] = {
+            "id": team.id,
+            "key": team.key,
+            "role": "owner"
+        }
+        session.save()
+
+        # 5. Try to make component private on community plan - should fail
+        response = client.patch(
+            reverse("api-1:patch_item_public_status", kwargs={
+                "item_type": "component",
+                "item_id": sample_component.id
+            }),
+            data=json.dumps({"is_public": False}),
+            content_type="application/json"
+        )
+        assert response.status_code == 403
+        assert "Community plan users cannot make items private" in response.json()["detail"]
 
     def test_create_and_copy_token(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test creating and copying an access token."""

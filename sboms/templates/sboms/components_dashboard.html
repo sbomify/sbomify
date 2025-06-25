@@ -20,109 +20,39 @@
         </div>
       </div>
       <div class="card-body">
-        {% if components|length == 0 %}
-          <div class="dashboard-empty">
-            <p class="mb-0">No components added</p>
+        <div id="components-loading" class="dashboard-empty">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
           </div>
-        {% else %}
+          <p class="mb-0 mt-2">Loading components...</p>
+        </div>
+        <div id="components-empty" class="dashboard-empty" style="display: none;">
+          <p class="mb-0">No components added</p>
+        </div>
+        <div id="components-table-container" style="display: none;">
           <table class="table dashboard-table">
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Projects</th>
+                <th>SBOMs</th>
                 <th class="text-center">Public?</th>
               </tr>
             </thead>
-            <tbody>
-              {% for component in components %}
-                <tr>
-                  <td>
-                    <a href="{% url 'sboms:component_details' component.id %}" class="text-primary text-decoration-none">
-                      {{ component.name }}
-                    </a>
-                  </td>
-                  <td>
-                    {% for project in component.projects.all %}
-                      <span class="badge bg-secondary-subtle text-secondary me-1 mb-1">{{ project.name }}</span>
-                    {% endfor %}
-                  </td>
-                  <td class="text-center">
-                    {% if component.is_public %}
-                      <span class="badge bg-success-subtle text-success">Public</span>
-                    {% else %}
-                      <span class="badge bg-secondary-subtle text-secondary">Private</span>
-                    {% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
+            <tbody id="components-table-body">
+              <!-- Components will be populated here -->
             </tbody>
           </table>
-        {% endif %}
+        </div>
+        <div id="components-error" class="alert alert-danger" style="display: none;">
+          <p class="mb-0">Failed to load components. Please try refreshing the page.</p>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 {% if has_crud_permissions %}
-{# Add Component Modal #}
-<div class="modal fade" id="addComponentModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="addComponentModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0">
-      <div class="modal-header border-bottom-0 pb-0">
-        <h4 class="modal-title text-secondary" id="addComponentModalLabel">Add Component</h4>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body pt-3">
-        <form action="{% url 'sboms:components_dashboard' %}"
-              method="post"
-              class="needs-validation"
-              novalidate
-              data-component="component-form"
-              data-ajax-form="true"
-              data-submit-url="{% url 'sboms:components_dashboard' %}"
-              data-csrf-token="{{ csrf_token }}"
-              data-has-errors="{% if new_component_form.errors %}true{% else %}false{% endif %}">
-          {% csrf_token %}
-          {% for field in new_component_form %}
-            <div class="mb-4">
-              {% if field|is_checkbox %}
-                <div class="form-check">
-                  {{ field|add_class:'form-check-input' }}
-                  <label class="form-check-label" for="{{ field.id_for_label }}">
-                    {{ field.label }}
-                  </label>
-                </div>
-              {% else %}
-                <label class="form-label text-secondary fw-medium" for="{{ field.id_for_label }}">
-                  {{ field.label }}
-                  {% if field.field.required %}
-                    <span class="text-danger">*</span>
-                  {% endif %}
-                </label>
-                {{ field|add_class:'form-control form-control-lg'|attr:"autofocus:autofocus" }}
-                {% if field.help_text %}
-                  <div class="form-text">{{ field.help_text }}</div>
-                {% endif %}
-                {% if field.errors %}
-                  <div class="invalid-feedback d-block">
-                    {{ field.errors|join:", " }}
-                  </div>
-                {% endif %}
-              {% endif %}
-              <div class="invalid-feedback">
-                Please provide a valid {{ field.label|lower }}.
-              </div>
-            </div>
-          {% endfor %}
-          <div class="d-flex justify-content-end gap-2 mt-4">
-            <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-lg btn-primary px-4">Create Component</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="vc-add-component-form"></div>
 
 {# Delete Confirmation Modal #}
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
@@ -155,103 +85,74 @@
 
 {% block scripts %}
   {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'sboms/js/main.ts' %}
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Handle modal with form errors
-      const form = document.querySelector('form[data-ajax-form="true"]');
-      const hasErrors = form && form.dataset.hasErrors === 'true';
-
-      if (hasErrors) {
-        var addComponentModal = new bootstrap.Modal(document.getElementById('addComponentModal'));
-        addComponentModal.show();
-      }
-
-      // Handle modal shown event and AJAX form setup
-      const addComponentModal = document.getElementById('addComponentModal');
-      addComponentModal.addEventListener('shown.bs.modal', function () {
-        const firstInput = this.querySelector('input[type="text"]');
-        if (firstInput) {
-          firstInput.focus();
-        }
-
-        // Setup AJAX form submission (do this when modal is shown)
-        const form = this.querySelector('form[data-ajax-form="true"]');
-        if (form && !form.hasAttribute('data-ajax-setup')) {
-          // Mark as setup to avoid duplicate listeners
-          form.setAttribute('data-ajax-setup', 'true');
-
-          form.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const formData = new FormData(form);
-            const submitButton = form.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            const submitUrl = form.dataset.submitUrl;
-
-            // Show loading state
-            submitButton.disabled = true;
-            submitButton.textContent = 'Creating...';
-
-            fetch(submitUrl, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-              }
-            })
-            .then(response => {
-              if (response.ok) {
-                // Show success notification before reload
-                if (typeof window.showSuccess === 'function') {
-                  window.showSuccess('Component created successfully!');
-                  // Short delay to let user see the notification
-                  setTimeout(() => window.location.reload(), 800);
-                } else {
-                  window.location.reload();
-                }
-              } else {
-                return response.json().then(data => {
-                  throw new Error(data.error || 'An error occurred');
-                });
-              }
-            })
-            .catch(error => {
-              // Use standardized notification system
-              if (typeof window.showError === 'function') {
-                window.showError(error.message);
-              } else {
-                alert(error.message); // Fallback
-              }
-              submitButton.disabled = false;
-              submitButton.textContent = originalText;
-            });
-          });
-
-          // Handle form submission on Enter
-          form.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              form.dispatchEvent(new Event('submit'));
-            }
-          });
-        }
-      });
-
-      // Handle delete confirmation
-      const deleteConfirmModal = document.getElementById('deleteConfirmModal');
-      const deleteButtons = document.querySelectorAll('[data-bs-target="#deleteConfirmModal"]');
-      const confirmButton = deleteConfirmModal.querySelector('.delete-confirm-btn');
-      const componentNameElement = deleteConfirmModal.querySelector('.component-name');
-
-      deleteButtons.forEach(button => {
-        button.addEventListener('click', function() {
-          const componentName = this.getAttribute('data-component-name');
-          const deleteUrl = this.getAttribute('data-delete-url');
-          componentNameElement.textContent = componentName;
-          confirmButton.href = deleteUrl;
-        });
-      });
+      loadComponents();
     });
+
+    async function loadComponents() {
+      try {
+        const response = await fetch('/api/v1/components');
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const components = await response.json();
+
+        document.getElementById('components-loading').style.display = 'none';
+
+        if (components.length === 0) {
+          document.getElementById('components-empty').style.display = 'block';
+        } else {
+          displayComponents(components);
+          document.getElementById('components-table-container').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading components:', error);
+        document.getElementById('components-loading').style.display = 'none';
+        document.getElementById('components-error').style.display = 'block';
+      }
+    }
+
+    function displayComponents(components) {
+      const tbody = document.getElementById('components-table-body');
+      tbody.innerHTML = '';
+
+      components.forEach(component => {
+        const row = document.createElement('tr');
+
+        // SBOMs count - use sbom_count from API response
+        const sbomsCount = component.sbom_count || 0;
+        const sbomsText = sbomsCount === 1 ? '1 SBOM' : `${sbomsCount} SBOMs`;
+
+        // Public/Private badge
+        const publicBadge = component.is_public
+          ? '<span class="badge bg-success-subtle text-success">Public</span>'
+          : '<span class="badge bg-secondary-subtle text-secondary">Private</span>';
+
+        row.innerHTML = `
+          <td>
+            <a href="/component/${component.id}/" class="text-primary text-decoration-none">
+              ${escapeHtml(component.name)}
+            </a>
+          </td>
+          <td>${sbomsText}</td>
+          <td class="text-center">${publicBadge}</td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Refresh components after successful creation
+    window.refreshComponents = loadComponents;
   </script>
 {% endblock %}

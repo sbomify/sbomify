@@ -14,6 +14,9 @@ import SbomsTable from './components/SbomsTable.vue';
 import DangerZone from './components/DangerZone.vue';
 import ProjectDangerZone from './components/ProjectDangerZone.vue';
 import ProductDangerZone from './components/ProductDangerZone.vue';
+import AddProductForm from './components/AddProductForm.vue';
+import AddProjectForm from './components/AddProjectForm.vue';
+import AddComponentForm from './components/AddComponentForm.vue';
 
 mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -28,3 +31,6 @@ mountVueComponent('vc-sboms-table', SbomsTable);
 mountVueComponent('vc-danger-zone', DangerZone);
 mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
 mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+mountVueComponent('vc-add-product-form', AddProductForm);
+mountVueComponent('vc-add-project-form', AddProjectForm);
+mountVueComponent('vc-add-component-form', AddComponentForm);

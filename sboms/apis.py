@@ -196,6 +196,21 @@ def patch_item_public_status(request, item_type: str, item_id: str, payload: Pub
     if isinstance(result, tuple):
         return result
 
+    # Check billing plan restrictions when trying to make items private
+    if not payload.is_public:
+        # Get the team from the item
+        team = result.team
+
+        # Only enforce billing restrictions if billing is enabled
+        from billing.config import is_billing_enabled
+
+        if is_billing_enabled() and team.billing_plan == "community":
+            return 403, {
+                "detail": (
+                    "Community plan users cannot make items private. " "Upgrade to a paid plan to enable private items."
+                )
+            }
+
     result.is_public = payload.is_public
     result.save()
 

@@ -5,7 +5,7 @@ description = "sbomify - the SBOM hub"
 authors = ["sbomify <hello@sbomify.com>"]
 readme = "README.md"
 homepage = "https://sbomify.com"
-repository = "https://github.com/sbomify/backend"
+repository = "https://github.com/sbomify/sbomify"
 
 [tool.poetry.dependencies]
 python = "^3.10"

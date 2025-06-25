@@ -6,6 +6,8 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from access_tokens.auth import PersonalAccessTokenAuth
+from billing.config import is_billing_enabled
+from billing.models import BillingPlan
 from core.object_store import S3Client
 from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
@@ -97,9 +99,27 @@ def _build_item_response(item, item_type: str):
 
     if item_type == "product":
         base_response["project_count"] = item.projects.count()
+        # Include actual projects data for frontend
+        base_response["projects"] = [
+            {
+                "id": project.id,
+                "name": project.name,
+                "is_public": project.is_public,
+            }
+            for project in item.projects.all()
+        ]
     elif item_type == "project":
         base_response["component_count"] = item.components.count()
         base_response["metadata"] = item.metadata
+        # Include actual components data for frontend
+        base_response["components"] = [
+            {
+                "id": component.id,
+                "name": component.name,
+                "is_public": component.is_public,
+            }
+            for component in item.components.all()
+        ]
     elif item_type == "component":
         base_response["sbom_count"] = item.sbom_set.count()
         base_response["metadata"] = item.metadata
@@ -171,6 +191,53 @@ def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
     return result
 
 
+def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str]:
+    """
+    Check if team has reached billing limits for the given resource type.
+
+    Returns:
+        (can_create, error_message): Tuple of boolean and error message
+    """
+    if not is_billing_enabled():
+        return True, ""
+
+    try:
+        team = Team.objects.get(id=team_id)
+    except Team.DoesNotExist:
+        return False, "Team not found"
+
+    if not team.billing_plan:
+        return False, "No active billing plan"
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+    except BillingPlan.DoesNotExist:
+        return False, "Invalid billing plan"
+
+    # Get current count and limits
+    if resource_type == "product":
+        current_count = Product.objects.filter(team_id=team_id).count()
+        max_allowed = plan.max_products
+    elif resource_type == "project":
+        current_count = Project.objects.filter(team_id=team_id).count()
+        max_allowed = plan.max_projects
+    elif resource_type == "component":
+        current_count = Component.objects.filter(team_id=team_id).count()
+        max_allowed = plan.max_components
+    else:
+        return False, f"Invalid resource type: {resource_type}"
+
+    # Enterprise plan or None (unlimited) values have no limits
+    if plan.key == "enterprise" or max_allowed is None:
+        return True, ""
+
+    # Check if limit is reached
+    if current_count >= max_allowed:
+        return False, f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
+
+    return True, ""
+
+
 # =============================================================================
 # PRODUCT CRUD ENDPOINTS
 # =============================================================================
@@ -185,6 +252,11 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
+
+    # Check billing limits
+    can_create, error_msg = _check_billing_limits(team_id, "product")
+    if not can_create:
+        return 403, {"detail": error_msg}
 
     try:
         # Check if user has permission to create products in this team
@@ -402,6 +474,11 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
+
+    # Check billing limits
+    can_create, error_msg = _check_billing_limits(team_id, "project")
+    if not can_create:
+        return 403, {"detail": error_msg}
 
     try:
         # Check if user has permission to create projects in this team
@@ -621,6 +698,11 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
+
+    # Check billing limits
+    can_create, error_msg = _check_billing_limits(team_id, "component")
+    if not can_create:
+        return 403, {"detail": error_msg}
 
     try:
         # Check if user has permission to create components in this team

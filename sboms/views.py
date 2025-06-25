@@ -14,7 +14,7 @@ import redis
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
@@ -24,14 +24,12 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 
-from billing.billing_processing import check_billing_limits
 from core.errors import error_response
 from core.object_store import S3Client
 from core.utils import get_current_team_id, token_to_number
 from teams.schemas import BrandingInfo
 
 # from .decorators import validate_role_in_current_team
-from .forms import NewComponentForm, NewProductForm, NewProjectForm
 from .models import SBOM, Component, Product, Project
 from .utils import get_project_sbom_package, verify_item_access
 
@@ -39,53 +37,13 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
-@check_billing_limits("product")
 def products_dashboard(request: HttpRequest) -> HttpResponse:
-    team_id = get_current_team_id(request)
-    if team_id is None:
-        return error_response(request, HttpResponseBadRequest("No current team selected"))
-
-    if request.method == "POST":
-        form = NewProductForm(request.POST)
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    product = Product(
-                        name=form.cleaned_data["name"],
-                        team_id=team_id,
-                    )
-                    product.save()
-
-                messages.add_message(
-                    request,
-                    messages.INFO,
-                    f"Product {product.name} created",
-                )
-
-                return redirect("sboms:products_dashboard")
-            except IntegrityError:
-                form.add_error("name", "A product with this name already exists in this team")
-                return render(
-                    request,
-                    "sboms/products_dashboard.html",
-                    {
-                        "products": Product.objects.filter(team_id=team_id).all(),
-                        "new_product_form": form,
-                        "has_crud_permissions": request.session.get("current_team").get("role") in ("owner", "admin"),
-                    },
-                )
-
-    products = Product.objects.filter(team_id=team_id).all()
-    new_product_form = NewProductForm()
-
     has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
 
     return render(
         request,
         "sboms/products_dashboard.html",
         {
-            "products": products,
-            "new_product_form": new_product_form,
             "has_crud_permissions": has_crud_permissions,
         },
     )
@@ -168,74 +126,13 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
 
 
 @login_required
-def delete_product(request: HttpRequest, product_id: str) -> HttpResponse:
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for owners or admins of the product"))
-
-    product.delete()
-
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Product {product.name} deleted",
-    )
-
-    return redirect("sboms:products_dashboard")
-
-
-@login_required
-@check_billing_limits("project")
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
-    team_id = get_current_team_id(request)
-    if team_id is None:
-        return error_response(request, HttpResponseBadRequest("No current team selected"))
-
-    if request.method == "POST":
-        form = NewProjectForm(request.POST)
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    project = Project(
-                        team_id=team_id,
-                        name=form.cleaned_data["name"],
-                    )
-                    project.save()
-
-                messages.add_message(
-                    request,
-                    messages.INFO,
-                    f"Project {project.name} created",
-                )
-
-                return redirect("sboms:projects_dashboard")
-            except IntegrityError:
-                form.add_error("name", "A project with this name already exists in this team")
-                return render(
-                    request,
-                    "sboms/projects_dashboard.html",
-                    {
-                        "projects": Project.objects.filter(team_id=team_id).all(),
-                        "new_project_form": form,
-                        "has_crud_permissions": request.session.get("current_team").get("role") in ("owner", "admin"),
-                    },
-                )
-
-    projects = Project.objects.filter(team_id=team_id).all()
-    new_project_form = NewProjectForm()
-
     has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
 
     return render(
         request,
         "sboms/projects_dashboard.html",
         {
-            "projects": projects,
-            "new_project_form": new_project_form,
             "has_crud_permissions": has_crud_permissions,
         },
     )
@@ -325,80 +222,13 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
 
 @login_required
-def delete_project(request: HttpRequest, project_id: str) -> HttpResponse:
-    try:
-        project: Project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Project not found"))
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for owners or admins of the project"))
-
-    project.delete()
-
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Project {project.name} deleted",
-    )
-
-    return redirect("sboms:projects_dashboard")
-
-
-@login_required
-@check_billing_limits("component")
 def components_dashboard(request: HttpRequest) -> HttpResponse:
-    team_id = get_current_team_id(request)
-    if team_id is None:
-        return error_response(request, HttpResponseBadRequest("No current team selected"))
-
-    if request.method == "POST":
-        form = NewComponentForm(request.POST)
-        if not form.is_valid():
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Invalid form data",
-            )
-            return redirect("sboms:components_dashboard")
-        else:
-            try:
-                with transaction.atomic():
-                    component = Component(
-                        team_id=team_id,
-                        name=form.cleaned_data["name"],
-                    )
-                    component.save()
-
-                messages.add_message(
-                    request,
-                    messages.INFO,
-                    f"Component {component.name} created",
-                )
-                return redirect("sboms:components_dashboard")
-            except IntegrityError:
-                form.add_error("name", "A component with this name already exists in this team")
-                return render(
-                    request,
-                    "sboms/components_dashboard.html",
-                    {
-                        "components": Component.objects.filter(team_id=team_id).all(),
-                        "new_component_form": form,
-                        "has_crud_permissions": request.session.get("current_team").get("role") in ("owner", "admin"),
-                        "APP_BASE_URL": settings.APP_BASE_URL,
-                    },
-                )
-
-    new_component_form = NewComponentForm()
-    components = Component.objects.filter(team_id=team_id).all()
     has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
 
     return render(
         request,
         "sboms/components_dashboard.html",
         {
-            "components": components,
-            "new_component_form": new_component_form,
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
         },
@@ -526,27 +356,6 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
             "current_team": request.session.get("current_team", {}),
         },
     )
-
-
-@login_required
-def delete_component(request: HttpRequest, component_id: str) -> HttpResponse:
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    if not verify_item_access(request, component, ["owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for owners or admins of the component"))
-
-    component.delete()
-
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Component {component.name} deleted",
-    )
-
-    return redirect("sboms:components_dashboard")
 
 
 @login_required
