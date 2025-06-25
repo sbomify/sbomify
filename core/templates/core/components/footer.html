@@ -9,7 +9,7 @@
           <a href="https://sbomify.com" class="text-decoration-none">
             <strong class="text-primary">sbomify</strong>
           </a>
-          <span class="ms-1">&copy; {% now "Y" %}</span>
+          <span class="ms-1">v{{ app_version }} &copy; {% now "Y" %}</span>
         </span>
       </div>
       <div class="col-lg-6 text-lg-end text-center">
@@ -23,7 +23,7 @@
   </div>
 </footer>
 {% else %}
-{% cache 3600 'footer' %}
+{% cache 3600 'footer' app_version %}
 <footer class="footer mt-auto py-3 border-top">
   <div class="container-fluid">
     <div class="row align-items-center">
@@ -32,7 +32,7 @@
           <a href="https://sbomify.com" class="text-decoration-none">
             <strong class="text-primary">sbomify</strong>
           </a>
-          <span class="ms-1">&copy; {% now "Y" %}</span>
+          <span class="ms-1">v{{ app_version }} &copy; {% now "Y" %}</span>
         </span>
       </div>
       <div class="col-lg-6 text-lg-end text-center">
