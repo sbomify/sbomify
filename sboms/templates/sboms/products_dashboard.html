@@ -19,198 +19,137 @@
         </div>
       </div>
       <div class="card-body">
-        {% if products|length == 0 %}
-          <div class="dashboard-empty">
-            <p class="mb-0">No products added</p>
+        <div id="products-loading" class="dashboard-empty">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
           </div>
-        {% else %}
-        <table class="table dashboard-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Projects</th>
-              <th class="text-center">Public?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for product in products %}
+          <p class="mb-0 mt-2">Loading products...</p>
+        </div>
+        <div id="products-empty" class="dashboard-empty" style="display: none;">
+          <p class="mb-0">No products added</p>
+        </div>
+        <div id="products-table-container" style="display: none;">
+          <table class="table dashboard-table">
+            <thead>
               <tr>
-                <td>
-                  <a href="{% url 'sboms:product_details' product.id %}" class="text-primary text-decoration-none">
-                    {{ product.name }}
-                  </a>
-                </td>
-                <td>
-                  {% for project in product.projects.all %}
-                    <a href="{% url 'sboms:project_details' project.id %}" title="Details" class="icon-link">
-                      <span class="badge bg-secondary-subtle text-secondary me-1 mb-1">{{ project.name }}</span>
-                    </a>
-                  {% endfor %}
-                </td>
-                <td class="text-center">
-                  {% if product.is_public %}
-                    <span class="badge bg-success-subtle text-success">Public</span>
-                  {% else %}
-                    <span class="badge bg-secondary-subtle text-secondary">Private</span>
-                  {% endif %}
-                </td>
+                <th>Name</th>
+                <th>Projects</th>
+                <th class="text-center">Public?</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% endif %}
+            </thead>
+            <tbody id="products-table-body">
+              <!-- Products will be populated here -->
+            </tbody>
+          </table>
+        </div>
+        <div id="products-error" class="alert alert-danger" style="display: none;">
+          <p class="mb-0">Failed to load products. Please try refreshing the page.</p>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 {% if has_crud_permissions %}
-<div class="modal fade" id="addProductModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0">
-      <div class="modal-header border-bottom-0 pb-0">
-        <h4 class="modal-title text-secondary" id="addProductModalLabel">Add Product</h4>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body pt-3">
-        <form action="{% url 'sboms:products_dashboard' %}"
-              method="post"
-              class="needs-validation"
-              novalidate
-              data-component="product-form"
-              data-ajax-form="true"
-              data-submit-url="{% url 'sboms:products_dashboard' %}"
-              data-csrf-token="{{ csrf_token }}"
-              data-has-errors="{% if new_product_form.errors %}true{% else %}false{% endif %}">
-          {% csrf_token %}
-          {% for field in new_product_form %}
-            <div class="mb-4">
-              {% if field|is_checkbox %}
-                <div class="form-check">
-                  {{ field|add_class:'form-check-input' }}
-                  <label class="form-check-label" for="{{ field.id_for_label }}">
-                    {{ field.label }}
-                  </label>
-                </div>
-              {% else %}
-                <label class="form-label text-secondary fw-medium" for="{{ field.id_for_label }}">
-                  {{ field.label }}
-                  {% if field.field.required %}
-                    <span class="text-danger">*</span>
-                  {% endif %}
-                </label>
-                {{ field|add_class:'form-control form-control-lg'|attr:"autofocus:autofocus" }}
-                {% if field.help_text %}
-                  <div class="form-text">{{ field.help_text }}</div>
-                {% endif %}
-                {% if field.errors %}
-                  <div class="invalid-feedback d-block">
-                    {{ field.errors|join:", " }}
-                  </div>
-                {% endif %}
-              {% endif %}
-              <div class="invalid-feedback">
-                Please provide a valid {{ field.label|lower }}.
-              </div>
-            </div>
-          {% endfor %}
-          <div class="d-flex justify-content-end gap-2 mt-4">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-primary px-4">Create Product</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="vc-add-product-form"></div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
   {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'sboms/js/main.ts' %}
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Handle modal with form errors
-      const form = document.querySelector('form[data-ajax-form="true"]');
-      const hasErrors = form && form.dataset.hasErrors === 'true';
-
-      if (hasErrors) {
-        var addProductModal = new bootstrap.Modal(document.getElementById('addProductModal'));
-        addProductModal.show();
-      }
-
-      // Handle modal shown event and AJAX form setup
-      const addProductModal = document.getElementById('addProductModal');
-      addProductModal.addEventListener('shown.bs.modal', function () {
-        const firstInput = this.querySelector('input[type="text"]');
-        if (firstInput) {
-          firstInput.focus();
-        }
-
-        // Setup AJAX form submission (do this when modal is shown)
-        const form = this.querySelector('form[data-ajax-form="true"]');
-        if (form && !form.hasAttribute('data-ajax-setup')) {
-          // Mark as setup to avoid duplicate listeners
-          form.setAttribute('data-ajax-setup', 'true');
-
-          form.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const formData = new FormData(form);
-            const submitButton = form.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            const submitUrl = form.dataset.submitUrl;
-
-            // Show loading state
-            submitButton.disabled = true;
-            submitButton.textContent = 'Creating...';
-
-            fetch(submitUrl, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-              }
-            })
-            .then(response => {
-              if (response.ok) {
-                // Show success notification before reload
-                if (typeof window.showSuccess === 'function') {
-                  window.showSuccess('Product created successfully!');
-                  // Short delay to let user see the notification
-                  setTimeout(() => window.location.reload(), 800);
-                } else {
-                  window.location.reload();
-                }
-              } else {
-                return response.json().then(data => {
-                  throw new Error(data.error || 'An error occurred');
-                });
-              }
-            })
-            .catch(error => {
-              // Use standardized notification system
-              if (typeof window.showError === 'function') {
-                window.showError(error.message);
-              } else {
-                alert(error.message); // Fallback
-              }
-              submitButton.disabled = false;
-              submitButton.textContent = originalText;
-            });
-          });
-
-          // Handle form submission on Enter
-          form.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              form.dispatchEvent(new Event('submit'));
-            }
-          });
-        }
-      });
+      loadProducts();
     });
+
+    async function loadProducts() {
+      try {
+        const response = await fetch('/api/v1/products');
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const products = await response.json();
+
+        document.getElementById('products-loading').style.display = 'none';
+
+        if (products.length === 0) {
+          document.getElementById('products-empty').style.display = 'block';
+        } else {
+          displayProducts(products);
+          document.getElementById('products-table-container').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error loading products:', error);
+        document.getElementById('products-loading').style.display = 'none';
+        document.getElementById('products-error').style.display = 'block';
+      }
+    }
+
+    function displayProducts(products) {
+      const tbody = document.getElementById('products-table-body');
+      tbody.innerHTML = '';
+
+      products.forEach(product => {
+        const row = document.createElement('tr');
+
+        // Projects badges
+        const projectsBadges = product.projects.map(project =>
+          `<a href="/project/${project.id}/" title="Details" class="icon-link">
+            <span class="badge bg-secondary-subtle text-secondary me-1 mb-1">${escapeHtml(project.name)}</span>
+          </a>`
+        ).join('');
+
+        // Public/Private badge
+        const publicBadge = product.is_public
+          ? '<span class="badge bg-success-subtle text-success">Public</span>'
+          : '<span class="badge bg-secondary-subtle text-secondary">Private</span>';
+
+        row.innerHTML = `
+          <td>
+            <a href="/product/${product.id}/" class="text-primary text-decoration-none">
+              ${escapeHtml(product.name)}
+            </a>
+          </td>
+          <td>${projectsBadges}</td>
+          <td class="text-center">${publicBadge}</td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Listen for refresh events from Vue components
+    const setupEventListeners = () => {
+      if (window.eventBus && window.EVENTS) {
+        window.eventBus.on(window.EVENTS.REFRESH_PRODUCTS, loadProducts);
+        return true;
+      }
+      return false;
+    };
+
+    // Try to set up event listeners immediately, or wait for eventBus to be available
+    if (!setupEventListeners()) {
+      let attempts = 0;
+      const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
+      const waitForEventBus = setInterval(() => {
+        attempts++;
+        if (setupEventListeners()) {
+          clearInterval(waitForEventBus);
+        } else if (attempts >= maxAttempts) {
+          console.warn('EventBus not available after 5 seconds, refresh functionality may not work');
+          clearInterval(waitForEventBus);
+        }
+      }, 100);
+    }
   </script>
 {% endblock %}
 

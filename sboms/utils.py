@@ -270,3 +270,71 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
         CycloneDXSupportedVersion.v1_6: cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
     }
     return module_map[spec_version]
+
+
+def create_default_component_metadata(user, team_id: int, custom_metadata: dict = None) -> dict:
+    """
+    Create default metadata for a component.
+
+    Args:
+        user: The user creating the component
+        team_id: The team ID
+        custom_metadata: Optional custom metadata to merge with defaults
+
+    Returns:
+        dict: The component metadata
+    """
+    from allauth.socialaccount.models import SocialAccount
+
+    # Get user and team information
+    social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
+    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+
+    # Only populate if we have actual user metadata
+    default_metadata = {}
+
+    # Only add supplier info if we have company data from Keycloak
+    company_name = user_metadata.get("company")
+    if company_name:
+        supplier_url = user_metadata.get("supplier_url")
+        default_metadata["supplier"] = {"name": company_name, "url": [supplier_url] if supplier_url else None}
+        default_metadata["organization"] = {
+            "name": company_name,
+            "contact": {
+                "name": f"{user.first_name} {user.last_name}".strip(),
+                "email": user.email,
+            },
+        }
+
+    # Add author and supplier info if we have a real user name and email
+    if user.first_name and user.last_name and user.email:
+        user_name = f"{user.first_name} {user.last_name}".strip()
+
+        default_metadata["authors"] = [
+            {
+                "name": user_name,
+                "email": user.email,
+            }
+        ]
+
+        # If no company-specific supplier was set above, use user info
+        if "supplier" not in default_metadata:
+            default_metadata["supplier"] = {"name": user_name, "url": None}
+
+    # If custom metadata is provided, merge it with defaults
+    if custom_metadata:
+        component_metadata = custom_metadata.copy()
+
+        # Add default author/organization info if not provided
+        if "authors" not in component_metadata:
+            component_metadata["authors"] = default_metadata["authors"]
+
+        if "organization" not in component_metadata:
+            component_metadata["organization"] = default_metadata["organization"]
+
+        if "supplier" not in component_metadata:
+            component_metadata["supplier"] = default_metadata["supplier"]
+
+        return component_metadata
+
+    return default_metadata

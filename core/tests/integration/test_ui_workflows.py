@@ -42,8 +42,10 @@ class TestUIWorkflows:
         assert "latest_uploads" in data
         assert isinstance(data["latest_uploads"], list)
 
-    def test_progressive_enhancement(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that forms work without JavaScript and have API fallback"""
+    def test_api_first_architecture(self, client: Client, sample_user, sample_team_with_owner_member):
+        """Test that the new API-first architecture works correctly"""
+        import json
+
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
 
@@ -67,22 +69,24 @@ class TestUIWorkflows:
         }
         session.save()
 
-        # Test form submission without JS
+        # Test API-based component creation
         response = client.post(
-            reverse("sboms:components_dashboard"),
-            {
+            reverse("api-1:create_component"),
+            data=json.dumps({
                 "name": "Test Component",
-            }
+            }),
+            content_type="application/json"
         )
 
-        # Should redirect on success
-        assert response.status_code == 302
-        assert response.url == reverse("sboms:components_dashboard")
+        # Should return JSON success response
+        assert response.status_code == 201
+        component_data = response.json()
+        assert component_data["name"] == "Test Component"
 
         # Verify component was created
         from sboms.models import Component
-        component = Component.objects.filter(name="Test Component", team_id=team.id).first()
-        assert component is not None
+        component = Component.objects.get(id=component_data["id"])
+        assert component.name == "Test Component"
 
         # Test metadata API endpoint with AJAX
         response = client.get(
@@ -129,29 +133,33 @@ class TestUIWorkflows:
         assert 'data-bs-target="#addComponentModal"' in content
         assert "Add Component" in content
 
-        # Verify the modal form exists with autofocus
-        assert 'id="addComponentModal"' in content
-        assert "autofocus" in content
+        # Verify the Vue component mount point exists
+        assert 'class="vc-add-component-form"' in content
 
-        # Submit the form with a random component name
+        # Test API-based component creation (what the Vue component does)
+        import json
         component_name = "Test Component 123"
         response = client.post(
-            reverse("sboms:components_dashboard"),
-            {
+            reverse("api-1:create_component"),
+            data=json.dumps({
                 "name": component_name,
-            },
-            follow=True  # Follow the redirect
+            }),
+            content_type="application/json"
         )
 
-        # Verify we were redirected back to the dashboard
-        assert response.status_code == 200
-        assert response.redirect_chain[-1][0] == reverse("sboms:components_dashboard")
+        # Verify API response
+        assert response.status_code == 201
+        component_data = response.json()
+        assert component_data["name"] == component_name
 
         # Verify the component was created
         from sboms.models import Component
-        component = Component.objects.filter(name=component_name, team_id=team.id).first()
-        assert component is not None
+        component = Component.objects.get(id=component_data["id"])
+        assert component.name == component_name
 
-        # Verify the component appears in the dashboard
-        content = response.content.decode()
-        assert component_name in content
+        # Verify the component appears in the API list
+        response = client.get(reverse("api-1:list_components"))
+        assert response.status_code == 200
+        components_data = response.json()
+        component_names = [c["name"] for c in components_data]
+        assert component_name in component_names

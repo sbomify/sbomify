@@ -7,6 +7,7 @@ from django.db import transaction
 
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
+from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
@@ -69,9 +70,31 @@ SAMPLE_SBOM_DATA = {
 
 
 @pytest.fixture
+def sample_billing_plan() -> Generator[BillingPlan, Any, None]:
+    """Create a test billing plan with reasonable limits."""
+    plan = BillingPlan.objects.create(
+        key="test_plan",
+        name="Test Plan",
+        max_products=10,
+        max_projects=10,
+        max_components=10
+    )
+
+    yield plan
+
+    plan.delete()
+
+
+@pytest.fixture
 def sample_product(
     sample_team_with_owner_member: Member,  # noqa: F811
+    sample_billing_plan: BillingPlan,  # noqa: F811
 ) -> Generator[Product, Any, None]:
+    # Set up billing plan for the team
+    team = sample_team_with_owner_member.team
+    team.billing_plan = sample_billing_plan.key
+    team.save()
+
     product = Product(team_id=sample_team_with_owner_member.team_id, name="test product")
     product.save()
 

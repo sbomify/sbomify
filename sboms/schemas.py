@@ -366,6 +366,15 @@ class ProductResponseSchema(BaseModel):
     created_at: datetime
     is_public: bool
     project_count: int | None = None
+    projects: list["ProjectSummarySchema"] | None = None
+
+
+class ProjectSummarySchema(BaseModel):
+    """Summary schema for projects when included in other responses."""
+
+    id: str
+    name: str
+    is_public: bool
 
 
 class ProjectCreateSchema(BaseModel):
@@ -401,6 +410,15 @@ class ProjectResponseSchema(BaseModel):
     is_public: bool
     metadata: dict
     component_count: int | None = None
+    components: list[ComponentSummarySchema] | None = None
+
+
+class ComponentSummarySchema(BaseModel):
+    """Summary schema for components when included in other responses."""
+
+    id: str
+    name: str
+    is_public: bool
 
 
 class ComponentCreateSchema(BaseModel):

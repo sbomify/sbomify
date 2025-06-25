@@ -6,6 +6,6 @@ def version_context(request):
     try:
         app_version = version("sbomify")
     except PackageNotFoundError:
-        app_version = "0.13.0"  # Fallback to current version from pyproject.toml
+        app_version = None  # Don't show version if package not found
 
     return {"app_version": app_version}

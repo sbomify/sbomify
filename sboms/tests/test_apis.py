@@ -6,11 +6,12 @@ import pathlib
 
 import pytest
 from django.http import HttpResponse
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
 from access_tokens.models import AccessToken
+from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
@@ -1127,3 +1128,209 @@ def test_get_dashboard_summary_with_project_filter(
     assert data["total_projects"] == 1  # Just the queried project
     assert data["total_components"] == 2  # component1a, component1b
     assert len(data["latest_uploads"]) == 1  # Only SBOM from project1
+
+
+@pytest.mark.django_db
+def test_patch_public_status_billing_plan_restrictions(
+    sample_product: Product,  # noqa: F811
+    sample_project: Project,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    """Test that billing plan restrictions are enforced for public status toggling."""
+    client = Client()
+
+    # Create billing plans
+    community_plan = BillingPlan.objects.create(
+        key="community",
+        name="Community",
+        description="Free plan",
+        max_products=1,
+        max_projects=1,
+        max_components=5,
+    )
+
+    business_plan = BillingPlan.objects.create(
+        key="business",
+        name="Business",
+        description="Pro plan",
+        max_products=5,
+        max_projects=10,
+        max_components=200,
+    )
+
+    # Set up session with team access
+    team = sample_product.team
+    setup_test_session(client, team, team.members.first())
+
+    # Test URLs for all item types
+    component_uri = reverse(
+        "api-1:patch_item_public_status",
+        kwargs={"item_type": "component", "item_id": sample_component.id},
+    )
+
+    project_uri = reverse(
+        "api-1:patch_item_public_status",
+        kwargs={"item_type": "project", "item_id": sample_project.id},
+    )
+
+    product_uri = reverse(
+        "api-1:patch_item_public_status",
+        kwargs={"item_type": "product", "item_id": sample_product.id},
+    )
+
+    # Test 1: Community plan users cannot make items private
+    team.billing_plan = community_plan.key
+    team.save()
+
+    # Try to make component private - should fail
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json"
+    )
+    assert response.status_code == 403
+    assert "Community plan users cannot make items private" in response.json()["detail"]
+
+    # Try to make project private - should fail
+    response = client.patch(
+        project_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json"
+    )
+    assert response.status_code == 403
+    assert "Community plan users cannot make items private" in response.json()["detail"]
+
+    # Try to make product private - should fail
+    response = client.patch(
+        product_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json"
+    )
+    assert response.status_code == 403
+    assert "Community plan users cannot make items private" in response.json()["detail"]
+
+    # Test 2: Community plan users can make items public (should succeed)
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": True}),
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
+
+    # Test 3: Business plan users can make items private
+    team.billing_plan = business_plan.key
+    team.save()
+
+    # Should succeed for all item types
+    for uri, item_name in [(component_uri, "component"), (project_uri, "project"), (product_uri, "product")]:
+        response = client.patch(
+            uri,
+            json.dumps({"is_public": False}),
+            content_type="application/json"
+        )
+        assert response.status_code == 200, f"Failed for {item_name}: {response.content}"
+        assert response.json()["is_public"] is False
+
+        # And back to public
+        response = client.patch(
+            uri,
+            json.dumps({"is_public": True}),
+            content_type="application/json"
+        )
+        assert response.status_code == 200
+        assert response.json()["is_public"] is True
+
+    # Test 4: Teams without billing plan can make items private (fallback behavior)
+    team.billing_plan = None
+    team.save()
+
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is False
+
+
+@pytest.mark.django_db
+def test_patch_public_status_enterprise_plan_unrestricted(
+    sample_component: Component,  # noqa: F811
+):
+    """Test that enterprise plan users have no restrictions on public status."""
+    client = Client()
+
+    # Create enterprise plan
+    enterprise_plan = BillingPlan.objects.create(
+        key="enterprise",
+        name="Enterprise",
+        description="Enterprise plan",
+        max_products=None,
+        max_projects=None,
+        max_components=None,
+    )
+
+    # Set up session
+    team = sample_component.team
+    team.billing_plan = enterprise_plan.key
+    team.save()
+
+    setup_test_session(client, team, team.members.first())
+
+    component_uri = reverse(
+        "api-1:patch_item_public_status",
+        kwargs={"item_type": "component", "item_id": sample_component.id},
+    )
+
+    # Enterprise users should be able to make items private
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is False
+
+    # And back to public
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": True}),
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
+
+
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_community_plan_restriction_bypassed_when_billing_disabled(sample_component, sample_access_token):
+    """Test that community plan restrictions are bypassed when billing is disabled."""
+    client = Client()
+    url = reverse("api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id})
+
+    # Set team to community plan
+    sample_component.team.billing_plan = "community"
+    sample_component.team.save()
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    from .test_views import setup_test_session
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    # Should be able to make item private even on community plan when billing is disabled
+    response = client.patch(
+        url,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_public"] is False
+
+    # Verify in database
+    sample_component.refresh_from_db()
+    assert sample_component.is_public is False
