@@ -10,6 +10,8 @@ remaining_components: Queryset of components that are not part of the product
 {% load widget_tweaks %}
 {% load django_vite %}
 
+{% block title %}sbomify Project: {{ project.name }}{% endblock %}
+
 {% block content %}
 
   {% if has_crud_permissions %}

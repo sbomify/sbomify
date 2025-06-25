@@ -7,6 +7,8 @@ project: Project object
 {% load widget_tweaks %}
 {% load django_vite %}
 
+{% block title %}Project: {{ project.name }}{% endblock %}
+
 {% block main %}
   <main class="content public-page mb-4">
     <div class="brand" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};">
