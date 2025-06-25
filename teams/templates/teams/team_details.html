@@ -97,14 +97,16 @@
               <td>{{ invitation.expires_at }}</td>
               <td class="border-left text-center">
                 <div class="actions">
-                  <span>
-                    <a id="del_{{ invitation.id }}" href="{% url 'teams:team_invitation_delete' invitation.id %}">
-                      <i class="text-danger" data-feather="trash"></i>
-                    </a>
-                    <span class="vc-confirm-action"
-                      data-target-element-id="del_{{ invitation.id }}"
-                      data-confirmation-message="Are you sure you want to delete this invitation?">
-                    </span>
+                  <a id="del_{{ invitation.id }}" href="{% url 'teams:team_invitation_delete' invitation.id %}"
+                     title="Delete invitation"
+                     class="text-danger">
+                    <i data-feather="trash"></i>
+                  </a>
+                  <span class="vc-confirm-action"
+                    data-target-element-id="del_{{ invitation.id }}"
+                    data-item-name="{{ invitation.email }}"
+                    data-item-type="invitation"
+                    data-confirmation-message="Are you sure you want to delete this invitation for {{ invitation.email }}?">
                   </span>
                 </div>
               </td>
@@ -145,7 +147,8 @@
     <div class="vc-team-danger-zone"
       data-team-key="{{ team.key }}"
       data-team-name="{{ team.name }}"
-      data-csrf-token="{{ csrf_token }}">
+      data-csrf-token="{{ csrf_token }}"
+      data-is-default-team="{{ is_default_team|yesno:'true,false' }}">
     </div>
   </div>
   {% endif %}
