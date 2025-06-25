@@ -58,7 +58,12 @@ def user_settings(request: HttpRequest) -> HttpResponse:
             )
 
     access_tokens = AccessToken.objects.filter(user=request.user).only("id", "description", "created_at").all()
-    context["access_tokens"] = access_tokens
+    # Serialize access tokens for Vue component
+    access_tokens_data = [
+        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        for token in access_tokens
+    ]
+    context["access_tokens"] = access_tokens_data
     return render(request, "core/settings.html", context)
 
 

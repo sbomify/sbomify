@@ -31,7 +31,6 @@
                 <th>Name</th>
                 <th>Projects</th>
                 <th class="text-center">Public?</th>
-                <th class="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -52,24 +51,6 @@
                       <span class="badge bg-success-subtle text-success">Public</span>
                     {% else %}
                       <span class="badge bg-secondary-subtle text-secondary">Private</span>
-                    {% endif %}
-                  </td>
-                  <td class="text-center">
-                    {% if has_crud_permissions %}
-                      <div class="actions">
-                        <a id="del_{{ component.id }}"
-                           href="{% url 'sboms:delete_component' component.id %}"
-                           title="Delete"
-                           class="text-danger">
-                          <i data-feather="trash-2"></i>
-                        </a>
-                        <span class="vc-confirm-action"
-                          data-target-element-id="del_{{ component.id }}"
-                          data-item-name="{{ component.name }}"
-                          data-item-type="component"
-                          data-confirmation-message="Are you sure you want to delete the component {{ component.name }}?">
-                        </span>
-                      </div>
                     {% endif %}
                   </td>
                 </tr>

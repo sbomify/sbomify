@@ -8,19 +8,25 @@
     infoIcon="fas fa-exclamation-triangle"
   >
     <!-- Delete Team Section -->
-    <div class="danger-section delete-section">
+    <div class="danger-section delete-section" :class="{ 'warning-section': isDefaultTeam }">
       <div class="section-header">
-        <div class="section-icon delete-icon">
-          <i class="fas fa-trash-alt"></i>
-        </div>
+                  <div class="section-icon" :class="isDefaultTeam ? 'warning-icon' : 'delete-icon'">
+            <i :class="isDefaultTeam ? 'fas fa-exclamation-triangle' : 'fas fa-trash-alt'"></i>
+          </div>
         <div class="section-content">
           <h6 class="section-title">Delete Workspace</h6>
-          <p class="section-description">Permanently remove this workspace and all associated data</p>
+          <p v-if="!isDefaultTeam" class="section-description">Permanently remove this workspace and all associated data</p>
+          <p v-else class="section-description">
+            <i class="fas fa-exclamation-triangle me-1 text-warning"></i>
+            Cannot delete the default workspace. Please set another workspace as default first.
+          </p>
         </div>
       </div>
       <button
         :id="`del_${teamKey}`"
         class="btn btn-danger modern-btn delete-btn"
+        :disabled="isDefaultTeam"
+        :class="{ 'disabled-btn': isDefaultTeam }"
         @click.prevent="showDeleteConfirmation"
       >
         <i class="fas fa-trash-alt me-2"></i>
@@ -43,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 
@@ -51,11 +57,18 @@ const props = defineProps<{
   teamKey: string
   teamName: string
   csrfToken: string
+  isDefaultTeam: string
 }>()
 
 const showConfirmModal = ref(false)
 
+// Convert string to boolean
+const isDefaultTeam = computed(() => props.isDefaultTeam === 'true')
+
 const showDeleteConfirmation = (): void => {
+  if (isDefaultTeam.value) {
+    return // Don't show modal for default teams
+  }
   showConfirmModal.value = true
 }
 
@@ -107,6 +120,11 @@ const handleDeleteConfirm = (): void => {
   margin-bottom: -2px;
 }
 
+.warning-section {
+  background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%) !important;
+  border-bottom-color: #f59e0b !important;
+}
+
 /* Section Header */
 .section-header {
   display: flex;
@@ -132,6 +150,12 @@ const handleDeleteConfirm = (): void => {
   box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
 
+.warning-icon {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
 .section-content {
   flex: 1;
 }
@@ -149,6 +173,8 @@ const handleDeleteConfirm = (): void => {
   margin: 0;
   line-height: 1.4;
 }
+
+
 
 /* Modern Buttons */
 .modern-btn {
@@ -186,6 +212,19 @@ const handleDeleteConfirm = (): void => {
 .delete-btn:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.disabled-btn {
+  background: linear-gradient(135deg, #9ca3af, #6b7280) !important;
+  color: #d1d5db !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+.disabled-btn:hover {
+  background: linear-gradient(135deg, #9ca3af, #6b7280) !important;
+  transform: none !important;
+  box-shadow: 0 2px 4px rgba(156, 163, 175, 0.3) !important;
 }
 
 /* Responsive Design */

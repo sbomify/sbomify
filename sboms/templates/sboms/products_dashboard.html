@@ -30,7 +30,6 @@
               <th>Name</th>
               <th>Projects</th>
               <th class="text-center">Public?</th>
-              <th class="text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -54,24 +53,6 @@
                   {% else %}
                     <span class="badge bg-secondary-subtle text-secondary">Private</span>
                   {% endif %}
-                </td>
-                <td class="text-center">
-                  <div class="actions">
-                    {% if has_crud_permissions %}
-                    <a id="del_{{ product.id }}"
-                       href="{% url 'sboms:delete_product' product.id %}"
-                       title="Delete"
-                       class="text-danger">
-                      <i data-feather="trash-2"></i>
-                    </a>
-                    <span class="vc-confirm-action"
-                      data-target-element-id="del_{{ product.id }}"
-                      data-item-name="{{ product.name }}"
-                      data-item-type="product"
-                      data-confirmation-message="Are you sure you want to delete the product {{ product.name }}?">
-                    </span>
-                    {% endif %}
-                  </div>
                 </td>
               </tr>
             {% endfor %}

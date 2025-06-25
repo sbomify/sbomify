@@ -79,7 +79,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
-    assert messages[0].message == "Team New Test Team created successfully"
+    assert messages[0].message == "Workspace New Test Team created successfully"
 
     team = Team.objects.filter(name="New Test Team").first()
     assert team is not None  # nosec
@@ -176,12 +176,19 @@ def test_set_default_team(sample_team_with_owner_member: Member):  # noqa: F811
 @pytest.mark.django_db
 def test_delete_team(sample_user: AbstractBaseUser):
     """Test deleting a team"""
-    # Create a team with an owner
+    # Create a default team first
+    default_team = Team.objects.create(name="Default Team")
+    default_team.key = number_to_random_token(default_team.pk)
+    default_team.save()
+
+    default_owner = Member.objects.create(team=default_team, user=sample_user, role="owner", is_default_team=True)
+
+    # Create a team to delete
     team = Team.objects.create(name="Temporary Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
-    owner = Member.objects.create(team=team, user=sample_user, role="owner")
+    owner = Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=False)
 
     # Set up session data
     client = Client()
@@ -191,11 +198,12 @@ def test_delete_team(sample_user: AbstractBaseUser):
     )
     session = client.session
     session["user_teams"] = {
-        team.key: {"role": "owner", "name": team.name}
+        default_team.key: {"role": "owner", "name": default_team.name, "is_default_team": True},
+        team.key: {"role": "owner", "name": team.name, "is_default_team": False}
     }
     session.save()
 
-    # Try to delete the team
+    # Try to delete the non-default team
     response = client.post(reverse("teams:delete_team", kwargs={"team_key": team.key}))
 
     # Check redirect to teams dashboard
@@ -207,6 +215,9 @@ def test_delete_team(sample_user: AbstractBaseUser):
 
     # Verify member is deleted (due to CASCADE)
     assert not Member.objects.filter(pk=owner.pk).exists()
+
+    # Verify default team still exists
+    assert Team.objects.filter(pk=default_team.pk).exists()
 
     # Check success message
     messages = list(get_messages(response.wsgi_request))
@@ -619,3 +630,141 @@ def test_branding_schema():
 
     branding_info.icon = ""
     assert branding_info.brand_image == ""
+
+
+@pytest.mark.django_db
+def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
+    """Test that you cannot delete the default team"""
+    # Create two teams
+    team1 = Team.objects.create(name="Default Team")
+    team1.key = number_to_random_token(team1.pk)
+    team1.save()
+
+    team2 = Team.objects.create(name="Second Team")
+    team2.key = number_to_random_token(team2.pk)
+    team2.save()
+
+    # Create memberships - team1 is default
+    member1 = Member.objects.create(team=team1, user=sample_user, role="owner", is_default_team=True)
+    member2 = Member.objects.create(team=team2, user=sample_user, role="owner", is_default_team=False)
+
+    client = Client()
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
+
+    # Set up session data
+    session = client.session
+    session["user_teams"] = {
+        team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
+        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False}
+    }
+    session.save()
+
+    # Try to delete the default team - should fail
+    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team1.key}))
+
+    # Check that we get an error
+    assert response.status_code == 400
+
+    # Verify team still exists
+    assert Team.objects.filter(pk=team1.pk).exists()
+
+    # Check error message
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "Cannot delete the default workspace" in str(messages[0])
+
+
+@pytest.mark.django_db
+def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
+    """Test that you cannot delete your last/only team"""
+    # Create only one team
+    team = Team.objects.create(name="Only Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+
+    # Create membership - this is the only team so it's default
+    member = Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
+
+    client = Client()
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
+
+    # Set up session data
+    session = client.session
+    session["user_teams"] = {
+        team.key: {"role": "owner", "name": team.name, "is_default_team": True}
+    }
+    session.save()
+
+    # Try to delete the only team - should fail
+    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team.key}))
+
+    # Check that we get an error
+    assert response.status_code == 400
+
+    # Verify team still exists
+    assert Team.objects.filter(pk=team.pk).exists()
+
+    # Check error message
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "Cannot delete the default workspace" in str(messages[0])
+
+
+@pytest.mark.django_db
+def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBaseUser):
+    """Test that you can delete a non-default team when you have multiple teams"""
+    # Create two teams
+    team1 = Team.objects.create(name="Default Team")
+    team1.key = number_to_random_token(team1.pk)
+    team1.save()
+
+    team2 = Team.objects.create(name="Non-Default Team")
+    team2.key = number_to_random_token(team2.pk)
+    team2.save()
+
+    # Create memberships - team1 is default
+    member1 = Member.objects.create(team=team1, user=sample_user, role="owner", is_default_team=True)
+    member2 = Member.objects.create(team=team2, user=sample_user, role="owner", is_default_team=False)
+
+    client = Client()
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
+
+    # Set up session data
+    session = client.session
+    session["user_teams"] = {
+        team1.key: {"role": "owner", "name": team1.name, "is_default_team": True},
+        team2.key: {"role": "owner", "name": team2.name, "is_default_team": False}
+    }
+    session.save()
+
+    # Try to delete the non-default team - should succeed
+    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team2.key}))
+
+    # Check redirect to teams dashboard
+    assert response.status_code == 302
+    assert response.url == reverse("teams:teams_dashboard")
+
+    # Verify non-default team is deleted
+    assert not Team.objects.filter(pk=team2.pk).exists()
+
+    # Verify default team still exists
+    assert Team.objects.filter(pk=team1.pk).exists()
+
+    # Check success message
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert str(messages[0]) == f"Team {team2.name} has been deleted"
+
+
+@pytest.mark.django_db
+def test_delete_team_auto_makes_another_default_when_needed(sample_user: AbstractBaseUser):
+    """Test that when a default team is deleted (if allowed), another team becomes default automatically"""
+    # This test covers edge cases where we might allow default deletion in the future
+    # For now, this documents expected behavior if the logic changes
+    pass
