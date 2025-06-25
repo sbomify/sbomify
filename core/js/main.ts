@@ -11,8 +11,10 @@ import StandardCard from './components/StandardCard.vue';
 import StatCard from './components/StatCard.vue';
 import PlanCard from './components/PlanCard.vue';
 
+
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
+
 mountVueComponent('vc-copyable-value', CopyableValue);
 mountVueComponent('vc-confirm-action', ConfirmAction);
 mountVueComponent('vc-dashboard-stats', DashboardStats);

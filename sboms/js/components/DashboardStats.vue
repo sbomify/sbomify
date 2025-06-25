@@ -1,9 +1,10 @@
 <template>
   <div class="container-fluid p-0">
-    <div v-if="props.itemType !== 'component'" class="row">
-      <div v-if="shouldShowStat('total_products')" :class="sizeClasses">
+    <div class="row">
+      <!-- Products: Show on main dashboard and product pages -->
+      <div v-if="shouldShowProducts" :class="sizeClasses">
         <StatCard
-          title="Total Products"
+          :title="getProductTitle()"
           :value="stats.total_products"
           :loading="isLoading"
           :error="errorMessage"
@@ -12,9 +13,10 @@
         />
       </div>
 
-      <div v-if="shouldShowStat('total_projects')" :class="sizeClasses">
+      <!-- Projects: Show on main dashboard, product pages, and project pages -->
+      <div v-if="shouldShowProjects" :class="sizeClasses">
         <StatCard
-          title="Total Projects"
+          :title="getProjectTitle()"
           :value="stats.total_projects"
           :loading="isLoading"
           :error="errorMessage"
@@ -23,9 +25,10 @@
         />
       </div>
 
-      <div v-if="shouldShowStat('total_components')" :class="sizeClasses">
+      <!-- Components: Show on main dashboard, product pages, project pages, and component pages -->
+      <div v-if="shouldShowComponents" :class="sizeClasses">
         <StatCard
-          title="Total Components"
+          :title="getComponentTitle()"
           :value="stats.total_components"
           :loading="isLoading"
           :error="errorMessage"
@@ -71,13 +74,42 @@ const stats = ref<DashboardStats>({
   latest_uploads: [],
 });
 
-const shouldShowStat = (statKey: keyof DashboardStats) => {
-  // Show if not loading and stat is not null
-  if (isLoading.value) return true; // Show loading state
-  if (errorMessage.value) return true; // Show error state
+// Determine what stats to show based on context
+const shouldShowProducts = computed(() => {
+  // Only show products on main dashboard (no specific item context)
+  return !props.itemType;
+});
 
-  const statValue = stats.value[statKey];
-  return statValue !== null && statValue !== undefined;
+const shouldShowProjects = computed(() => {
+  // Show projects on main dashboard and when viewing a specific product
+  return !props.itemType || props.itemType === 'product';
+});
+
+const shouldShowComponents = computed(() => {
+  // Show components on main dashboard, product pages, and project pages
+  // Don't show on component pages since it would always be 1
+  return !props.itemType || props.itemType === 'product' || props.itemType === 'project';
+});
+
+// Dynamic titles based on context
+const getProductTitle = () => {
+  return 'Total Products';
+};
+
+const getProjectTitle = () => {
+  if (props.itemType === 'product') {
+    return 'Projects in Product';
+  }
+  return 'Total Projects';
+};
+
+const getComponentTitle = () => {
+  if (props.itemType === 'product') {
+    return 'Components in Product';
+  } else if (props.itemType === 'project') {
+    return 'Components in Project';
+  }
+  return 'Total Components';
 };
 
 const getStats = async () => {
@@ -85,9 +117,19 @@ const getStats = async () => {
   errorMessage.value = null;
 
   let apiUrl = '/api/v1/sboms/dashboard/summary/';
+  const params = new URLSearchParams();
 
-  if (props.itemType === 'component' && props.itemId) {
-    apiUrl += `?component_id=${props.itemId}`;
+  // Add appropriate filter parameters based on context
+  if (props.itemType === 'product' && props.itemId) {
+    params.append('product_id', props.itemId);
+  } else if (props.itemType === 'project' && props.itemId) {
+    params.append('project_id', props.itemId);
+  } else if (props.itemType === 'component' && props.itemId) {
+    params.append('component_id', props.itemId);
+  }
+
+  if (params.toString()) {
+    apiUrl += `?${params.toString()}`;
   }
 
   try {

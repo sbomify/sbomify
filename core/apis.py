@@ -3,6 +3,7 @@ from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import Field, Router, Schema
 from ninja.security import django_auth
+from pydantic import BaseModel
 
 from access_tokens.auth import PersonalAccessTokenAuth
 from core.object_store import S3Client
@@ -40,6 +41,20 @@ class RenameItemSchema(Schema):
         str_strip_whitespace = True
 
     name: str = Field(..., max_length=255, min_length=1)
+
+
+# Creation schemas
+class CreateItemRequest(BaseModel):
+    name: str
+
+
+class CreateItemResponse(BaseModel):
+    id: str
+
+
+class CreateProjectRequest(BaseModel):
+    name: str
+    product_id: str
 
 
 router = Router(tags=["core"], auth=(PersonalAccessTokenAuth(), django_auth))
