@@ -84,6 +84,8 @@
 import { ref, onMounted } from 'vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
+import $axios from '../../../core/js/utils'
+import { showSuccess, showError } from '../../../core/js/alerts'
 
 interface Team {
   name: string
@@ -109,9 +111,21 @@ const hideDeleteConfirmation = (): void => {
   showConfirmModal.value = false
 }
 
-const handleDeleteConfirm = (): void => {
-  // Navigate to the delete URL
-  window.location.href = `/component/${props.componentId}/delete`
+const handleDeleteConfirm = async (): Promise<void> => {
+  try {
+    const response = await $axios.delete(`/api/v1/components/${props.componentId}`)
+
+    if (response.status === 204) {
+      showSuccess('Component deleted successfully!')
+      // Redirect to components dashboard after successful deletion
+      window.location.href = '/components/'
+    }
+  } catch (error) {
+    console.error('Error deleting component:', error)
+    showError('Failed to delete component. Please try again.')
+  } finally {
+    hideDeleteConfirmation()
+  }
 }
 
 const parseProps = (): void => {
