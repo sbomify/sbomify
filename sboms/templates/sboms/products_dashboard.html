@@ -139,73 +139,77 @@
         addProductModal.show();
       }
 
-      // Handle modal shown event
+      // Handle modal shown event and AJAX form setup
       const addProductModal = document.getElementById('addProductModal');
       addProductModal.addEventListener('shown.bs.modal', function () {
         const firstInput = this.querySelector('input[type="text"]');
         if (firstInput) {
           firstInput.focus();
         }
-      });
 
-      // Handle AJAX form submission
-      if (form) {
-        form.addEventListener('submit', function(e) {
-          e.preventDefault();
+        // Setup AJAX form submission (do this when modal is shown)
+        const form = this.querySelector('form[data-ajax-form="true"]');
+        if (form && !form.hasAttribute('data-ajax-setup')) {
+          // Mark as setup to avoid duplicate listeners
+          form.setAttribute('data-ajax-setup', 'true');
 
-          const formData = new FormData(form);
-          const submitButton = form.querySelector('button[type="submit"]');
-          const originalText = submitButton.textContent;
-          const submitUrl = form.dataset.submitUrl;
-
-          // Show loading state
-          submitButton.disabled = true;
-          submitButton.textContent = 'Creating...';
-
-          fetch(submitUrl, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest',
-              'Accept': 'application/json'
-            }
-          })
-          .then(response => {
-            if (response.ok) {
-              // Show success notification before reload
-              if (typeof window.showSuccess === 'function') {
-                window.showSuccess('Product created successfully!');
-                // Short delay to let user see the notification
-                setTimeout(() => window.location.reload(), 800);
-              } else {
-                window.location.reload();
-              }
-            } else {
-              return response.json().then(data => {
-                throw new Error(data.error || 'An error occurred');
-              });
-            }
-          })
-          .catch(error => {
-            // Use standardized notification system
-            if (typeof window.showError === 'function') {
-              window.showError(error.message);
-            } else {
-              alert(error.message); // Fallback
-            }
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
-          });
-        });
-
-        // Handle form submission on Enter
-        form.addEventListener('keypress', function(e) {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          form.addEventListener('submit', function(e) {
             e.preventDefault();
-            form.dispatchEvent(new Event('submit'));
-          }
-        });
-      }
+
+            const formData = new FormData(form);
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalText = submitButton.textContent;
+            const submitUrl = form.dataset.submitUrl;
+
+            // Show loading state
+            submitButton.disabled = true;
+            submitButton.textContent = 'Creating...';
+
+            fetch(submitUrl, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+              }
+            })
+            .then(response => {
+              if (response.ok) {
+                // Show success notification before reload
+                if (typeof window.showSuccess === 'function') {
+                  window.showSuccess('Product created successfully!');
+                  // Short delay to let user see the notification
+                  setTimeout(() => window.location.reload(), 800);
+                } else {
+                  window.location.reload();
+                }
+              } else {
+                return response.json().then(data => {
+                  throw new Error(data.error || 'An error occurred');
+                });
+              }
+            })
+            .catch(error => {
+              // Use standardized notification system
+              if (typeof window.showError === 'function') {
+                window.showError(error.message);
+              } else {
+                alert(error.message); // Fallback
+              }
+              submitButton.disabled = false;
+              submitButton.textContent = originalText;
+            });
+          });
+
+          // Handle form submission on Enter
+          form.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              form.dispatchEvent(new Event('submit'));
+            }
+          });
+        }
+      });
     });
   </script>
 {% endblock %}

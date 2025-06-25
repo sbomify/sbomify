@@ -89,6 +89,7 @@ def check_billing_limits(resource_type: str):
                     request.headers.get("Accept") == "application/json"
                     or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
                 )
+
                 if is_ajax:
                     return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
 
