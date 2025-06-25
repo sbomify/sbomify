@@ -33,7 +33,7 @@ from sboms.utils import verify_item_access
 from teams.models import Team
 from teams.utils import get_user_teams
 
-from .schemas import ErrorResponse
+from .schemas import ErrorCode, ErrorResponse
 
 log = getLogger(__name__)
 
@@ -66,25 +66,9 @@ item_type_map = {"team": Team, "component": Component, "project": Project, "prod
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
     """Get the current user's team ID from the session."""
-    session = request.session
-    current_team = session.get("current_team")
+    from core.utils import get_team_id_from_session
 
-    if current_team:
-        # Handle different session key formats
-        if "team_id" in current_team:
-            return current_team["team_id"]
-        elif "id" in current_team:
-            return current_team["id"]
-        elif "key" in current_team:
-            # Convert token to team ID
-            from core.utils import token_to_number
-
-            try:
-                return str(token_to_number(current_team["key"]))
-            except (ValueError, TypeError):
-                return None
-
-    return None
+    return get_team_id_from_session(request)
 
 
 def _build_item_response(item, item_type: str):
@@ -138,7 +122,7 @@ def _build_item_response(item, item_type: str):
 )
 def rename_item(request, item_type: str, item_id: str, payload: RenameItemSchema):
     if item_type not in item_type_map:
-        return 400, {"detail": "Invalid item type"}
+        return 400, {"detail": "Invalid item type", "error_code": ErrorCode.INVALID_DATA}
 
     Model = item_type_map[item_type]
 
@@ -150,10 +134,10 @@ def rename_item(request, item_type: str, item_id: str, payload: RenameItemSchema
         permissions_required = ["owner", "admin"]
 
     if rec is None:
-        return 404, {"detail": "Not found"}
+        return 404, {"detail": "Not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, rec, permissions_required):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     rec.name = payload.name
     rec.save()
@@ -191,28 +175,28 @@ def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
     return result
 
 
-def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str]:
+def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
 
     Returns:
-        (can_create, error_message): Tuple of boolean and error message
+        (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
     if not is_billing_enabled():
-        return True, ""
+        return True, "", None
 
     try:
         team = Team.objects.get(id=team_id)
     except Team.DoesNotExist:
-        return False, "Team not found"
+        return False, "Team not found", ErrorCode.TEAM_NOT_FOUND
 
     if not team.billing_plan:
-        return False, "No active billing plan"
+        return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
     except BillingPlan.DoesNotExist:
-        return False, "Invalid billing plan"
+        return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
 
     # Get current count and limits
     if resource_type == "product":
@@ -225,17 +209,21 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str]:
         current_count = Component.objects.filter(team_id=team_id).count()
         max_allowed = plan.max_components
     else:
-        return False, f"Invalid resource type: {resource_type}"
+        return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
 
     # Enterprise plan or None (unlimited) values have no limits
     if plan.key == "enterprise" or max_allowed is None:
-        return True, ""
+        return True, "", None
 
     # Check if limit is reached
     if current_count >= max_allowed:
-        return False, f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
+        return (
+            False,
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
 
-    return True, ""
+    return True, "", None
 
 
 # =============================================================================
@@ -251,18 +239,18 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
     """Create a new product."""
     team_id = _get_user_team_id(request)
     if not team_id:
-        return 403, {"detail": "No current team selected"}
+        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
     # Check billing limits
-    can_create, error_msg = _check_billing_limits(team_id, "product")
+    can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
     if not can_create:
-        return 403, {"detail": error_msg}
+        return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
         # Check if user has permission to create products in this team
         team = Team.objects.get(id=team_id)
         if not verify_item_access(request, team, ["owner", "admin"]):
-            return 403, {"detail": "Only owners and admins can create products"}
+            return 403, {"detail": "Only owners and admins can create products", "error_code": ErrorCode.FORBIDDEN}
 
         with transaction.atomic():
             product = Product.objects.create(
@@ -273,12 +261,15 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
         return 201, _build_item_response(product, "product")
 
     except IntegrityError:
-        return 400, {"detail": "A product with this name already exists in this team"}
+        return 400, {
+            "detail": "A product with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found"}
+        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating product: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -473,18 +464,18 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
     """Create a new project."""
     team_id = _get_user_team_id(request)
     if not team_id:
-        return 403, {"detail": "No current team selected"}
+        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
     # Check billing limits
-    can_create, error_msg = _check_billing_limits(team_id, "project")
+    can_create, error_msg, error_code = _check_billing_limits(team_id, "project")
     if not can_create:
-        return 403, {"detail": error_msg}
+        return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
         # Check if user has permission to create projects in this team
         team = Team.objects.get(id=team_id)
         if not verify_item_access(request, team, ["owner", "admin"]):
-            return 403, {"detail": "Only owners and admins can create projects"}
+            return 403, {"detail": "Only owners and admins can create projects", "error_code": ErrorCode.FORBIDDEN}
 
         with transaction.atomic():
             project = Project.objects.create(
@@ -496,7 +487,10 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
         return 201, _build_item_response(project, "project")
 
     except IntegrityError:
-        return 400, {"detail": "A project with this name already exists in this team"}
+        return 400, {
+            "detail": "A project with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Team.DoesNotExist:
         return 403, {"detail": "Team not found"}
     except Exception as e:
@@ -697,18 +691,18 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
     """Create a new component."""
     team_id = _get_user_team_id(request)
     if not team_id:
-        return 403, {"detail": "No current team selected"}
+        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
     # Check billing limits
-    can_create, error_msg = _check_billing_limits(team_id, "component")
+    can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
     if not can_create:
-        return 403, {"detail": error_msg}
+        return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
         # Check if user has permission to create components in this team
         team = Team.objects.get(id=team_id)
         if not verify_item_access(request, team, ["owner", "admin"]):
-            return 403, {"detail": "Only owners and admins can create components"}
+            return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
 
         with transaction.atomic():
             component = Component.objects.create(
@@ -720,12 +714,15 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
         return 201, _build_item_response(component, "component")
 
     except IntegrityError:
-        return 400, {"detail": "A component with this name already exists in this team"}
+        return 400, {
+            "detail": "A component with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found"}
+        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating component: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(

@@ -1,6 +1,5 @@
 import logging
 
-from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
@@ -71,54 +70,12 @@ def create_component(request: HttpRequest, payload: CreateComponentRequest):
         except Project.DoesNotExist:
             return 400, {"detail": "Project not found or does not belong to your team"}
 
-            # Build component metadata
-        if payload.metadata:
-            # Use provided metadata merged with defaults
-            component_metadata = payload.metadata.copy()
+            # Build component metadata using utility function
+        from .utils import create_default_component_metadata
 
-            # Add default author/organization info if not provided
-            if "author" not in component_metadata:
-                component_metadata["author"] = {
-                    "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                    "email": request.user.email,
-                }
-
-            if "organization" not in component_metadata:
-                social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
-                user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
-                team = Team.objects.get(id=team_id)
-                company_name = user_metadata.get("company", team.name)
-
-                component_metadata["organization"] = {
-                    "name": company_name,
-                    "contact": {
-                        "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                        "email": request.user.email,
-                    },
-                }
-        else:
-            # Use default metadata
-            social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
-            user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
-
-            team = Team.objects.get(id=team_id)
-            company_name = user_metadata.get("company", team.name)
-            supplier_url = user_metadata.get("supplier_url")
-
-            component_metadata = {
-                "organization": {
-                    "name": company_name,
-                    "contact": {
-                        "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                        "email": request.user.email,
-                    },
-                },
-                "supplier": {"name": company_name, "url": [supplier_url] if supplier_url else None},
-                "author": {
-                    "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                    "email": request.user.email,
-                },
-            }
+        component_metadata = create_default_component_metadata(
+            user=request.user, team_id=team_id, custom_metadata=payload.metadata
+        )
 
         # Create the component with metadata
         component = Component.objects.create(

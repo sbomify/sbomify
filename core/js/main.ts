@@ -2,6 +2,7 @@ import 'vite/modulepreload-polyfill';
 
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
+import { eventBus, EVENTS } from './utils';
 import EditableSingleField from './components/EditableSingleField.vue';
 import CopyableValue from './components/CopyableValue.vue';
 import ConfirmAction from './components/ConfirmAction.vue';
@@ -32,8 +33,14 @@ declare global {
     feather: {
       replace(): void;
     };
+    eventBus: typeof eventBus;
+    EVENTS: typeof EVENTS;
   }
 }
+
+// Make eventBus available globally for inline scripts
+window.eventBus = eventBus;
+window.EVENTS = EVENTS;
 
 // Handle modal UX improvements
 document.addEventListener('DOMContentLoaded', function() {

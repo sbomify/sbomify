@@ -102,7 +102,7 @@ def test_rename_item_permission_denied(
 
     # All item types should return 403 when user has guest role
     assert response.status_code == 403
-    assert response.json() == {"detail": "Forbidden"}
+    assert response.json() == {"detail": "Forbidden", "error_code": "FORBIDDEN"}
 
 
 @pytest.mark.django_db
@@ -123,4 +123,4 @@ def test_rename_item_invalid_type(sample_user: AnonymousUser, sample_team: Team)
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Invalid item type"}
+    assert response.json() == {"detail": "Invalid item type", "error_code": "INVALID_DATA"}

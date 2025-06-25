@@ -42,13 +42,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { showSuccess, showError } from '../../../core/js/alerts'
-
-// Extend window type to include refresh functions
-declare global {
-  interface Window {
-    refreshProjects?: () => void;
-  }
-}
+import { eventBus, EVENTS } from '../../../core/js/utils'
 
 const projectName = ref('')
 const isLoading = ref(false)
@@ -84,16 +78,11 @@ const createProject = async () => {
       showSuccess('Project created successfully!')
       resetForm()
       closeModal()
-      // Refresh the projects list
-      if (typeof window.refreshProjects === 'function') {
-        window.refreshProjects()
-      }
+      // Emit event to refresh the projects list
+      eventBus.emit(EVENTS.REFRESH_PROJECTS)
     } else {
-      errorMessage.value = data.detail || 'An error occurred'
-      if (response.status === 403 && data.detail?.includes('maximum')) {
-        // This is a billing limit error - show it as a global error too
-        showError(data.detail)
-      }
+      // Show all API errors as global notifications for consistency (same style as success)
+      showError(data.detail || 'An error occurred while creating the project')
     }
   } catch (error) {
     console.error('Error creating project:', error)

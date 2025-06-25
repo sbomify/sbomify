@@ -173,3 +173,38 @@ def generate_id() -> str:
             base62 = string.ascii_letters[letter_idx] + base62[1:]
 
         return base62
+
+
+def get_team_id_from_session(request) -> str | None:
+    """
+    Standardized way to get team ID from request session.
+
+    This function handles the different session key formats that may exist
+    and provides consistent team ID retrieval across the application.
+
+    Args:
+        request: The HTTP request object
+
+    Returns:
+        str | None: The team ID as string, or None if not found
+    """
+    session = request.session
+    current_team = session.get("current_team")
+
+    if not current_team:
+        return None
+
+    # Handle different session key formats
+    if "team_id" in current_team:
+        return str(current_team["team_id"])
+    elif "id" in current_team:
+        return str(current_team["id"])
+    elif "key" in current_team:
+        # Convert token to team ID
+        try:
+            team_id = token_to_number(current_team["key"])
+            return str(team_id)
+        except (ValueError, TypeError):
+            return None
+
+    return None

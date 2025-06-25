@@ -270,3 +270,61 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
         CycloneDXSupportedVersion.v1_6: cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
     }
     return module_map[spec_version]
+
+
+def create_default_component_metadata(user, team_id: int, custom_metadata: dict = None) -> dict:
+    """
+    Create default metadata for a component.
+
+    Args:
+        user: The user creating the component
+        team_id: The team ID
+        custom_metadata: Optional custom metadata to merge with defaults
+
+    Returns:
+        dict: The component metadata
+    """
+    from allauth.socialaccount.models import SocialAccount
+
+    from teams.models import Team
+
+    # Get user and team information
+    social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
+    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+    team = Team.objects.get(id=team_id)
+    company_name = user_metadata.get("company", team.name)
+    supplier_url = user_metadata.get("supplier_url")
+
+    # Create default metadata
+    default_metadata = {
+        "organization": {
+            "name": company_name,
+            "contact": {
+                "name": f"{user.first_name} {user.last_name}".strip(),
+                "email": user.email,
+            },
+        },
+        "supplier": {"name": company_name, "url": [supplier_url] if supplier_url else None},
+        "author": {
+            "name": f"{user.first_name} {user.last_name}".strip(),
+            "email": user.email,
+        },
+    }
+
+    # If custom metadata is provided, merge it with defaults
+    if custom_metadata:
+        component_metadata = custom_metadata.copy()
+
+        # Add default author/organization info if not provided
+        if "author" not in component_metadata:
+            component_metadata["author"] = default_metadata["author"]
+
+        if "organization" not in component_metadata:
+            component_metadata["organization"] = default_metadata["organization"]
+
+        if "supplier" not in component_metadata:
+            component_metadata["supplier"] = default_metadata["supplier"]
+
+        return component_metadata
+
+    return default_metadata

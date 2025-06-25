@@ -42,13 +42,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { showSuccess, showError } from '../../../core/js/alerts'
-
-// Extend window type to include refresh functions
-declare global {
-  interface Window {
-    refreshComponents?: () => void;
-  }
-}
+import { eventBus, EVENTS } from '../../../core/js/utils'
 
 const componentName = ref('')
 const isLoading = ref(false)
@@ -84,16 +78,11 @@ const createComponent = async () => {
       showSuccess('Component created successfully!')
       resetForm()
       closeModal()
-      // Refresh the components list
-      if (typeof window.refreshComponents === 'function') {
-        window.refreshComponents()
-      }
+      // Emit event to refresh the components list
+      eventBus.emit(EVENTS.REFRESH_COMPONENTS)
     } else {
-      errorMessage.value = data.detail || 'An error occurred'
-      if (response.status === 403 && data.detail?.includes('maximum')) {
-        // This is a billing limit error - show it as a global error too
-        showError(data.detail)
-      }
+      // Show all API errors as global notifications for consistency (same style as success)
+      showError(data.detail || 'An error occurred while creating the component')
     }
   } catch (error) {
     console.error('Error creating component:', error)

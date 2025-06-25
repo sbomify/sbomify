@@ -153,6 +153,28 @@
     }
 
     // Refresh components after successful creation
-    window.refreshComponents = loadComponents;
+    // Listen for refresh events from Vue components
+    const setupEventListeners = () => {
+      if (window.eventBus && window.EVENTS) {
+        window.eventBus.on(window.EVENTS.REFRESH_COMPONENTS, loadComponents);
+        return true;
+      }
+      return false;
+    };
+
+    // Try to set up event listeners immediately, or wait for eventBus to be available
+    if (!setupEventListeners()) {
+      let attempts = 0;
+      const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
+      const waitForEventBus = setInterval(() => {
+        attempts++;
+        if (setupEventListeners()) {
+          clearInterval(waitForEventBus);
+        } else if (attempts >= maxAttempts) {
+          console.warn('EventBus not available after 5 seconds, refresh functionality may not work');
+          clearInterval(waitForEventBus);
+        }
+      }, 100);
+    }
   </script>
 {% endblock %}

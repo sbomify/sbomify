@@ -1,10 +1,32 @@
 from django.urls import path
 from django.urls.resolvers import URLPattern
+from django.views.generic import RedirectView
 
 from . import views
 
 app_name = "sboms"
 urlpatterns: list[URLPattern] = [
+    # Backward compatibility redirects for URLs that now have trailing slashes
+    path("products", RedirectView.as_view(pattern_name="sboms:products_dashboard", permanent=True)),
+    path("projects", RedirectView.as_view(pattern_name="sboms:projects_dashboard", permanent=True)),
+    path("components", RedirectView.as_view(pattern_name="sboms:components_dashboard", permanent=True)),
+    path("product/<str:product_id>", RedirectView.as_view(pattern_name="sboms:product_details", permanent=True)),
+    path("project/<str:project_id>", RedirectView.as_view(pattern_name="sboms:project_details", permanent=True)),
+    path("component/<str:component_id>", RedirectView.as_view(pattern_name="sboms:component_details", permanent=True)),
+    path(
+        "public/product/<str:product_id>",
+        RedirectView.as_view(pattern_name="sboms:product_details_public", permanent=True),
+    ),
+    path(
+        "public/project/<str:project_id>",
+        RedirectView.as_view(pattern_name="sboms:project_details_public", permanent=True),
+    ),
+    path(
+        "public/component/<str:component_id>",
+        RedirectView.as_view(pattern_name="sboms:component_details_public", permanent=True),
+    ),
+    path("sbom/<str:sbom_id>", RedirectView.as_view(pattern_name="sboms:sbom_details", permanent=True)),
+    path("public/sbom/<str:sbom_id>", RedirectView.as_view(pattern_name="sboms:sbom_details_public", permanent=True)),
     path("products/", views.products_dashboard, name="products_dashboard"),
     path(
         "product/<str:product_id>/",

@@ -42,13 +42,7 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { showSuccess, showError } from '../../../core/js/alerts'
-
-// Extend window type to include refresh functions
-declare global {
-  interface Window {
-    refreshProducts?: () => void;
-  }
-}
+import { eventBus, EVENTS } from '../../../core/js/utils'
 
 const productName = ref('')
 const isLoading = ref(false)
@@ -83,16 +77,11 @@ const createProduct = async () => {
       showSuccess('Product created successfully!')
       resetForm()
       closeModal()
-      // Refresh the products list
-      if (typeof window.refreshProducts === 'function') {
-        window.refreshProducts()
-      }
+      // Emit event to refresh the products list
+      eventBus.emit(EVENTS.REFRESH_PRODUCTS)
     } else {
-      errorMessage.value = data.detail || 'An error occurred'
-      if (response.status === 403 && data.detail?.includes('maximum')) {
-        // This is a billing limit error - show it as a global error too
-        showError(data.detail)
-      }
+      // Show all API errors as global notifications for consistency (same style as success)
+      showError(data.detail || 'An error occurred while creating the product')
     }
   } catch (error) {
     console.error('Error creating product:', error)
