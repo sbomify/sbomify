@@ -1,18 +1,19 @@
 import logging
 
+from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from ninja import File, Query, Router, UploadedFile
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
-from core.utils import ExtractSpec, dict_update, obj_extract
+from core.utils import ExtractSpec, dict_update, get_current_team_id, obj_extract
 from sbomify.tasks import scan_sbom_for_vulnerabilities
 from teams.models import Team
 from teams.utils import get_user_teams
@@ -42,6 +43,115 @@ log = logging.getLogger(__name__)
 router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 item_type_map = {"component": Component, "project": Project, "product": Product}
+
+
+# Component creation schema
+class CreateComponentRequest(BaseModel):
+    name: str
+    project_id: str
+    metadata: dict | None = None
+
+
+# Component creation response schema
+class CreateComponentResponse(BaseModel):
+    id: str
+
+
+@router.post(
+    "/component/",
+    response={201: CreateComponentResponse, 400: ErrorResponse, 403: ErrorResponse},
+)
+def create_component(request: HttpRequest, payload: CreateComponentRequest):
+    """Create a new component."""
+    try:
+        team_id = get_current_team_id(request)
+        if team_id is None:
+            return 400, {"detail": "No current team selected"}
+
+        # Verify the project exists and belongs to the team
+        try:
+            project = Project.objects.get(id=payload.project_id, team_id=team_id)
+        except Project.DoesNotExist:
+            return 400, {"detail": "Project not found or does not belong to your team"}
+
+            # Build component metadata
+        if payload.metadata:
+            # Use provided metadata merged with defaults
+            component_metadata = payload.metadata.copy()
+
+            # Add default author/organization info if not provided
+            if "author" not in component_metadata:
+                component_metadata["author"] = {
+                    "name": f"{request.user.first_name} {request.user.last_name}".strip(),
+                    "email": request.user.email,
+                }
+
+            if "organization" not in component_metadata:
+                social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
+                user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+                team = Team.objects.get(id=team_id)
+                company_name = user_metadata.get("company", team.name)
+
+                component_metadata["organization"] = {
+                    "name": company_name,
+                    "contact": {
+                        "name": f"{request.user.first_name} {request.user.last_name}".strip(),
+                        "email": request.user.email,
+                    },
+                }
+        else:
+            # Use default metadata
+            social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
+            user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+
+            team = Team.objects.get(id=team_id)
+            company_name = user_metadata.get("company", team.name)
+            supplier_url = user_metadata.get("supplier_url")
+
+            component_metadata = {
+                "organization": {
+                    "name": company_name,
+                    "contact": {
+                        "name": f"{request.user.first_name} {request.user.last_name}".strip(),
+                        "email": request.user.email,
+                    },
+                },
+                "supplier": {"name": company_name, "url": [supplier_url] if supplier_url else None},
+                "author": {
+                    "name": f"{request.user.first_name} {request.user.last_name}".strip(),
+                    "email": request.user.email,
+                },
+            }
+
+        # Create the component with metadata
+        component = Component.objects.create(
+            name=payload.name,
+            team_id=team_id,
+            metadata=component_metadata,
+        )
+
+        # Link the component to the project
+        project.components.add(component)
+
+        # If this is the first component created by the team, mark wizard as completed
+        team = Team.objects.get(id=team_id)
+        if not team.has_completed_wizard:
+            team.has_completed_wizard = True
+            team.save()
+
+            # Update session to reflect completed wizard
+            current_team_session = request.session.get("current_team", {})
+            current_team_session["has_completed_wizard"] = True
+            request.session["current_team"] = current_team_session
+            request.session.modified = True
+
+        return 201, {"id": component.id}
+
+    except IntegrityError:
+        return 400, {"detail": f"A component with the name '{payload.name}' already exists in your team."}
+    except Exception as e:
+        log.error(f"Error creating component: {e}")
+        return 400, {"detail": str(e)}
 
 
 def _public_api_item_access_checks(request, item_type: str, item_id: str):
@@ -496,22 +606,47 @@ def get_cyclonedx_component_metadata(
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_dashboard_summary(request: HttpRequest, component_id: str | None = Query(None)):
+def get_dashboard_summary(
+    request: HttpRequest,
+    component_id: str | None = Query(None),
+    product_id: str | None = Query(None),
+    project_id: str | None = Query(None),
+):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required."}
 
     user_teams_qs = Team.objects.filter(member__user=request.user)
 
-    total_products = Product.objects.filter(team__in=user_teams_qs).count()
-    total_projects = Project.objects.filter(team__in=user_teams_qs).count()
-    total_components = Component.objects.filter(team__in=user_teams_qs).count()
-
+    # Base querysets for the user's teams
+    products_qs = Product.objects.filter(team__in=user_teams_qs)
+    projects_qs = Project.objects.filter(team__in=user_teams_qs)
+    components_qs = Component.objects.filter(team__in=user_teams_qs)
     latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
 
-    if component_id:
+    # Apply context-specific filtering
+    if product_id:
+        # When viewing a product, show projects and components within that product
+        products_qs = products_qs.filter(id=product_id)
+        projects_qs = projects_qs.filter(products__id=product_id)
+        components_qs = components_qs.filter(projects__products__id=product_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
+    elif project_id:
+        # When viewing a project, show components within that project
+        projects_qs = projects_qs.filter(id=project_id)
+        components_qs = components_qs.filter(projects__id=project_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
+    elif component_id:
+        # When viewing a component, filter SBOMs for that component only
+        components_qs = components_qs.filter(id=component_id)
         latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
 
+    # Get counts
+    total_products = products_qs.count()
+    total_projects = projects_qs.count()
+    total_components = components_qs.count()
+
+    # Get latest uploads
     latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
 
     latest_uploads_data = [

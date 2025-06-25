@@ -1012,3 +1012,118 @@ def test_delete_sbom_api_forbidden(
 
     assert response.status_code == 403
     assert SBOM.objects.filter(id=sample_sbom.id).count() == 1  # SBOM should still exist
+
+
+@pytest.mark.django_db
+def test_get_dashboard_summary_with_product_filter(
+    sample_user: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_team_with_owner_member,  # noqa: F811
+    client: Client,
+):
+    """Test that product filtering works correctly in dashboard summary."""
+    from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+
+    team = sample_team_with_owner_member.team
+
+    # Create test data
+    # Product 1 with 2 projects and 3 components
+    product1 = Product.objects.create(name="Product 1", team=team)
+    project1a = Project.objects.create(name="Project 1A", team=team)
+    project1b = Project.objects.create(name="Project 1B", team=team)
+    component1a = Component.objects.create(name="Component 1A", team=team)
+    component1b = Component.objects.create(name="Component 1B", team=team)
+    component1c = Component.objects.create(name="Component 1C", team=team)
+
+    # Link product to projects
+    ProductProject.objects.create(product=product1, project=project1a)
+    ProductProject.objects.create(product=product1, project=project1b)
+
+    # Link projects to components
+    ProjectComponent.objects.create(project=project1a, component=component1a)
+    ProjectComponent.objects.create(project=project1a, component=component1b)
+    ProjectComponent.objects.create(project=project1b, component=component1c)
+
+    # Product 2 with 1 project and 1 component (should be excluded from filtered results)
+    product2 = Product.objects.create(name="Product 2", team=team)
+    project2 = Project.objects.create(name="Project 2", team=team)
+    component2 = Component.objects.create(name="Component 2", team=team)
+    ProductProject.objects.create(product=product2, project=project2)
+    ProjectComponent.objects.create(project=project2, component=component2)
+
+    # Create an SBOM for one of the components in product1
+    SBOM.objects.create(
+        name="Test SBOM",
+        version="1.0",
+        component=component1a,
+        format="cyclonedx",
+        sbom_filename="test.json",
+        source="test",
+    )
+
+    url = reverse("api-1:get_dashboard_summary")
+    response = client.get(
+        f"{url}?product_id={product1.id}",
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should show projects and components within product1 only
+    assert data["total_products"] == 1  # Just the queried product
+    assert data["total_projects"] == 2  # project1a, project1b
+    assert data["total_components"] == 3  # component1a, component1b, component1c
+    assert len(data["latest_uploads"]) == 1  # Only SBOM from product1
+
+
+@pytest.mark.django_db
+def test_get_dashboard_summary_with_project_filter(
+    sample_user: Member,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_team_with_owner_member,  # noqa: F811
+    client: Client,
+):
+    """Test that project filtering works correctly in dashboard summary."""
+    from sboms.models import SBOM, Component, Project, ProjectComponent
+
+    team = sample_team_with_owner_member.team
+
+    # Create test data
+    project1 = Project.objects.create(name="Project 1", team=team)
+    project2 = Project.objects.create(name="Project 2", team=team)
+
+    # Project 1 has 2 components
+    component1a = Component.objects.create(name="Component 1A", team=team)
+    component1b = Component.objects.create(name="Component 1B", team=team)
+    ProjectComponent.objects.create(project=project1, component=component1a)
+    ProjectComponent.objects.create(project=project1, component=component1b)
+
+    # Project 2 has 1 component (should be excluded from filtered results)
+    component2 = Component.objects.create(name="Component 2", team=team)
+    ProjectComponent.objects.create(project=project2, component=component2)
+
+    # Create an SBOM for one of the components in project1
+    SBOM.objects.create(
+        name="Test SBOM",
+        version="1.0",
+        component=component1a,
+        format="cyclonedx",
+        sbom_filename="test.json",
+        source="test",
+    )
+
+    url = reverse("api-1:get_dashboard_summary")
+    response = client.get(
+        f"{url}?project_id={project1.id}",
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should show components within project1 only
+    assert data["total_products"] == 0  # Products not filtered when viewing project
+    assert data["total_projects"] == 1  # Just the queried project
+    assert data["total_components"] == 2  # component1a, component1b
+    assert len(data["latest_uploads"]) == 1  # Only SBOM from project1
