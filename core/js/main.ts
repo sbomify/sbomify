@@ -1,6 +1,7 @@
 import 'vite/modulepreload-polyfill';
 
 import mountVueComponent from './common_vue';
+import './alerts-global'; // Ensure alerts are available globally
 import EditableSingleField from './components/EditableSingleField.vue';
 import CopyableValue from './components/CopyableValue.vue';
 import ConfirmAction from './components/ConfirmAction.vue';

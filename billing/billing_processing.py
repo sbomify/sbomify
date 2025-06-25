@@ -7,7 +7,7 @@ from functools import wraps
 
 import stripe
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -82,9 +82,18 @@ def check_billing_limits(resource_type: str):
 
             # Check if limit is reached
             if current_count >= max_allowed:
-                return HttpResponseForbidden(
-                    f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
+                error_message = f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
+
+                # Return JSON response for AJAX requests
+                is_ajax = (
+                    request.headers.get("Accept") == "application/json"
+                    or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
                 )
+                if is_ajax:
+                    return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
+
+                # Traditional response for non-AJAX requests
+                return HttpResponseForbidden(error_message)
 
             return view_func(request, *args, **kwargs)
 

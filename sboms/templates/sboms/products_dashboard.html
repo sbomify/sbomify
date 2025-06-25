@@ -77,7 +77,11 @@
               method="post"
               class="needs-validation"
               novalidate
-              data-component="product-form">
+              data-component="product-form"
+              data-ajax-form="true"
+              data-submit-url="{% url 'sboms:products_dashboard' %}"
+              data-csrf-token="{{ csrf_token }}"
+              data-has-errors="{% if new_product_form.errors %}true{% else %}false{% endif %}">
           {% csrf_token %}
           {% for field in new_product_form %}
             <div class="mb-4">
@@ -126,29 +130,82 @@
   {% vite_asset 'core/js/main.ts' %}
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      {% if new_product_form.errors %}
+      // Handle modal with form errors
+      const form = document.querySelector('form[data-ajax-form="true"]');
+      const hasErrors = form && form.dataset.hasErrors === 'true';
+
+      if (hasErrors) {
         var addProductModal = new bootstrap.Modal(document.getElementById('addProductModal'));
         addProductModal.show();
-      {% endif %}
+      }
 
       // Handle modal shown event
       const addProductModal = document.getElementById('addProductModal');
       addProductModal.addEventListener('shown.bs.modal', function () {
-        // Focus the first input field
         const firstInput = this.querySelector('input[type="text"]');
         if (firstInput) {
           firstInput.focus();
         }
       });
 
-      // Handle form submission on Enter
-      const form = addProductModal.querySelector('form');
-      form.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
+      // Handle AJAX form submission
+      if (form) {
+        form.addEventListener('submit', function(e) {
           e.preventDefault();
-          form.submit();
-        }
-      });
+
+          const formData = new FormData(form);
+          const submitButton = form.querySelector('button[type="submit"]');
+          const originalText = submitButton.textContent;
+          const submitUrl = form.dataset.submitUrl;
+
+          // Show loading state
+          submitButton.disabled = true;
+          submitButton.textContent = 'Creating...';
+
+          fetch(submitUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json'
+            }
+          })
+          .then(response => {
+            if (response.ok) {
+              // Show success notification before reload
+              if (typeof window.showSuccess === 'function') {
+                window.showSuccess('Product created successfully!');
+                // Short delay to let user see the notification
+                setTimeout(() => window.location.reload(), 800);
+              } else {
+                window.location.reload();
+              }
+            } else {
+              return response.json().then(data => {
+                throw new Error(data.error || 'An error occurred');
+              });
+            }
+          })
+          .catch(error => {
+            // Use standardized notification system
+            if (typeof window.showError === 'function') {
+              window.showError(error.message);
+            } else {
+              alert(error.message); // Fallback
+            }
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+          });
+        });
+
+        // Handle form submission on Enter
+        form.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+          }
+        });
+      }
     });
   </script>
 {% endblock %}
