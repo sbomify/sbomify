@@ -27,7 +27,7 @@ describe('EditableSingleField Business Logic', () => {
   const createMockResponse = <T>(data: T, status = 200): MockAxiosResponse<T> => ({
     data,
     status,
-    statusText: 'OK',
+    statusText: status >= 400 ? 'Error' : 'OK',
     headers: {},
     config: {}
   })
@@ -40,7 +40,7 @@ describe('EditableSingleField Business Logic', () => {
   describe('Component Rename Functionality', () => {
     it('should make correct API call to rename component', async () => {
       const newName = 'New Component Name'
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -53,7 +53,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should make correct API call to rename team', async () => {
       const newName = 'New Team Name'
-      const apiUrl = `/api/v1/rename/team/${mockTeamId}`
+      const apiUrl = `/api/v1/teams/${mockTeamId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -66,7 +66,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should make correct API call to rename project', async () => {
       const newName = 'New Project Name'
-      const apiUrl = `/api/v1/rename/project/${mockProjectId}`
+      const apiUrl = `/api/v1/projects/${mockProjectId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -79,7 +79,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should make correct API call to rename product', async () => {
       const newName = 'New Product Name'
-      const apiUrl = `/api/v1/rename/product/${mockProductId}`
+      const apiUrl = `/api/v1/products/${mockProductId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -92,7 +92,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle successful rename response', async () => {
       const newName = 'Renamed Component'
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -106,7 +106,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle API errors gracefully', async () => {
       const newName = 'Invalid Name'
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: newName }
 
       const errorResponse = {
@@ -132,7 +132,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle 404 errors when item not found', async () => {
       const newName = 'New Name'
-      const apiUrl = `/api/v1/rename/component/non-existent-id`
+      const apiUrl = `/api/v1/components/non-existent-id`
       const data = { name: newName }
 
       const notFoundError = {
@@ -158,7 +158,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle 403 errors when user lacks permissions', async () => {
       const newName = 'New Name'
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: newName }
 
       const forbiddenError = {
@@ -186,22 +186,37 @@ describe('EditableSingleField Business Logic', () => {
   describe('URL Construction', () => {
     it('should construct correct API URL for different item types', () => {
       const testCases = [
-        { itemType: 'component', itemId: mockComponentId, expected: `/api/v1/rename/component/${mockComponentId}` },
-        { itemType: 'team', itemId: mockTeamId, expected: `/api/v1/rename/team/${mockTeamId}` },
-        { itemType: 'project', itemId: mockProjectId, expected: `/api/v1/rename/project/${mockProjectId}` },
-        { itemType: 'product', itemId: mockProductId, expected: `/api/v1/rename/product/${mockProductId}` }
+        { itemType: 'component', itemId: mockComponentId, expected: `/api/v1/components/${mockComponentId}` },
+        { itemType: 'team', itemId: mockTeamId, expected: `/api/v1/teams/${mockTeamId}` },
+        { itemType: 'project', itemId: mockProjectId, expected: `/api/v1/projects/${mockProjectId}` },
+        { itemType: 'product', itemId: mockProductId, expected: `/api/v1/products/${mockProductId}` }
       ]
 
       testCases.forEach(({ itemType, itemId, expected }) => {
-        const apiUrl = `/api/v1/rename/${itemType}/${itemId}`
+        let apiUrl: string;
+        switch (itemType) {
+          case 'team':
+            apiUrl = `/api/v1/teams/${itemId}`;
+            break;
+          case 'component':
+            apiUrl = `/api/v1/components/${itemId}`;
+            break;
+          case 'project':
+            apiUrl = `/api/v1/projects/${itemId}`;
+            break;
+          case 'product':
+            apiUrl = `/api/v1/products/${itemId}`;
+            break;
+          default:
+            apiUrl = '';
+        }
         expect(apiUrl).toBe(expected)
       })
     })
 
     it('should include api/v1 prefix in URL', () => {
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       expect(apiUrl).toMatch(/^\/api\/v1\//)
-      expect(apiUrl).toContain('/api/v1/rename/')
     })
   })
 
@@ -209,7 +224,7 @@ describe('EditableSingleField Business Logic', () => {
     it('should send correct payload structure', async () => {
       const newName = 'Test Component'
       const expectedPayload = { name: newName }
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
 
@@ -223,7 +238,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle empty name gracefully', async () => {
       const emptyName = ''
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: emptyName }
 
       const validationError = {
@@ -249,7 +264,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle special characters in name', async () => {
       const specialName = 'Component-with_special.chars@123'
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: specialName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -264,7 +279,7 @@ describe('EditableSingleField Business Logic', () => {
   describe('Network Error Handling', () => {
     it('should handle network connectivity errors', async () => {
       const networkError = new Error('Network Error')
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockRejectedValueOnce(networkError)
@@ -282,7 +297,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should handle timeout errors', async () => {
       const timeoutError = new Error('Request timeout')
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockRejectedValueOnce(timeoutError)
@@ -301,7 +316,7 @@ describe('EditableSingleField Business Logic', () => {
 
   describe('Status Code Validation', () => {
     it('should accept 200 status codes', async () => {
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 200))
@@ -314,7 +329,7 @@ describe('EditableSingleField Business Logic', () => {
     })
 
     it('should accept 204 status codes', async () => {
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -327,7 +342,7 @@ describe('EditableSingleField Business Logic', () => {
     })
 
     it('should reject 400+ status codes', async () => {
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 400))
@@ -340,7 +355,7 @@ describe('EditableSingleField Business Logic', () => {
     })
 
     it('should reject 500+ status codes', async () => {
-      const apiUrl = `/api/v1/rename/component/${mockComponentId}`
+      const apiUrl = `/api/v1/components/${mockComponentId}`
       const data = { name: 'New Name' }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 500))
