@@ -46,6 +46,8 @@
 import { ref } from 'vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
+import $axios from '../../../core/js/utils'
+import { showSuccess, showError } from '../../../core/js/alerts'
 
 const props = defineProps<{
   productId: string
@@ -63,9 +65,21 @@ const hideDeleteConfirmation = (): void => {
   showConfirmModal.value = false
 }
 
-const handleDeleteConfirm = (): void => {
-  // Navigate to the delete URL
-  window.location.href = `/product/${props.productId}/delete`
+const handleDeleteConfirm = async (): Promise<void> => {
+  try {
+    const response = await $axios.delete(`/api/v1/products/${props.productId}`)
+
+    if (response.status === 204) {
+      showSuccess('Product deleted successfully!')
+      // Redirect to products dashboard after successful deletion
+      window.location.href = '/products/'
+    }
+  } catch (error) {
+    console.error('Error deleting product:', error)
+    showError('Failed to delete product. Please try again.')
+  } finally {
+    hideDeleteConfirmation()
+  }
 }
 </script>
 

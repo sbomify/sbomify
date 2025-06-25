@@ -30,6 +30,12 @@ stripe_client = StripeClient()
 
 # Create your views here.
 @login_required
+def enterprise_contact(request: HttpRequest) -> HttpResponse:
+    """Display enterprise contact information page."""
+    return render(request, "billing/enterprise_contact.html")
+
+
+@login_required
 def select_plan(request: HttpRequest, team_key: str):
     "Display plan selection page"
     team = get_object_or_404(Team, key=team_key)
