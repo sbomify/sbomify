@@ -7,7 +7,6 @@ from sbomify.logging import getLogger
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
 
-from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -475,30 +474,18 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     product = Product.objects.get(id=product_id)
                     project = Project.objects.get(id=project_id)
 
-                    # Get Keycloak user metadata
-                    social_account = SocialAccount.objects.filter(user=request.user, provider="keycloak").first()
-                    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
-                    company_name = user_metadata.get("company", team.name)
-                    supplier_url = user_metadata.get("supplier_url")
+                    # Build component metadata using utility function
+                    from sboms.utils import create_default_component_metadata
+
+                    component_metadata = create_default_component_metadata(
+                        user=request.user, team_id=team.id, custom_metadata=None
+                    )
 
                     # Create the component
                     component = Component.objects.create(
                         name=form.cleaned_data["name"],
                         team=team,
-                        metadata={
-                            "organization": {
-                                "name": company_name,
-                                "contact": {
-                                    "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                                    "email": request.user.email,
-                                },
-                            },
-                            "supplier": {"name": company_name, "url": [supplier_url] if supplier_url else None},
-                            "author": {
-                                "name": f"{request.user.first_name} {request.user.last_name}".strip(),
-                                "email": request.user.email,
-                            },
-                        },
+                        metadata=component_metadata,
                     )
 
                     # Link the project to the product
