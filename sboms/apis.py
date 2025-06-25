@@ -16,7 +16,6 @@ from core.schemas import ErrorResponse
 from core.utils import ExtractSpec, dict_update, get_current_team_id, obj_extract
 from sbomify.tasks import scan_sbom_for_vulnerabilities
 from teams.models import Team
-from teams.utils import get_user_teams
 
 from .models import SBOM, Component, Product, Project
 from .schemas import (
@@ -27,12 +26,10 @@ from .schemas import (
     CycloneDXSupportedVersion,
     DashboardSBOMUploadInfo,
     DashboardStatsResponse,
-    ItemTypes,
     PublicStatusSchema,
     SBOMUploadRequest,
     SPDXPackage,
     SPDXSchema,
-    UserItemsResponse,
     cdx15,
     cdx16,
 )
@@ -203,36 +200,6 @@ def patch_item_public_status(request, item_type: str, item_id: str, payload: Pub
     result.save()
 
     return {"is_public": result.is_public}
-
-
-@router.get(
-    "/user-items/{item_type}",
-    response={
-        200: list[UserItemsResponse],
-        400: ErrorResponse,
-    },
-)
-def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
-    "Get all items of a sepecifc type (across all teams) that belong to the current user."
-    user_teams = get_user_teams(user=request.user, include_team_id=True)
-    Model = item_type_map[item_type]
-
-    result = []
-    team_id_to_key = {v["team_id"]: k for k, v in user_teams.items() if "team_id" in v}
-    item_records = Model.objects.filter(team_id__in=team_id_to_key.keys())
-
-    for item in item_records:
-        team_key = team_id_to_key[item.team_id]
-        result.append(
-            UserItemsResponse(
-                team_key=team_key,
-                team_name=user_teams[team_key]["name"],
-                item_key=item.id,
-                item_name=item.name,
-            )
-        )
-
-    return result
 
 
 @router.post(

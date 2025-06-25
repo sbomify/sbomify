@@ -62,7 +62,7 @@
     return props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1);
   });
 
-  const apiUrl = '/api/v1/sboms/user-items/' + props.itemType;
+  const apiUrl = '/api/v1/user-items/' + props.itemType;
 
   const getUserItems = async () => {
     try {
