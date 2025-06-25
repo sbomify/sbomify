@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import File, Router
 from ninja.files import UploadedFile
@@ -14,7 +15,7 @@ from core.utils import token_to_number
 from sbomify.logging import getLogger
 
 from .models import Member, Team
-from .schemas import BrandingInfo, BrandingInfoWithUrls
+from .schemas import BrandingInfo, BrandingInfoWithUrls, TeamPatchSchema, TeamResponseSchema, TeamUpdateSchema
 
 logger = getLogger(__name__)
 
@@ -142,3 +143,86 @@ def upload_branding_file(
         "logo_url": current_branding.brand_logo_url,
     }
     return 200, BrandingInfoWithUrls(**response_data)
+
+
+@router.put(
+    "/{team_key}",
+    response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
+    """Update team information."""
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 400, {"detail": "Invalid team key"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team information"}
+
+    try:
+        with transaction.atomic():
+            team.name = payload.name
+            team.save()
+
+        return 200, TeamResponseSchema(
+            key=team.key,
+            name=team.name,
+            created_at=team.created_at.isoformat(),
+            has_completed_wizard=team.has_completed_wizard,
+            billing_plan=team.billing_plan,
+        )
+
+    except IntegrityError:
+        return 400, {"detail": "A team with this name already exists"}
+    except Exception as e:
+        logger.error(f"Error updating team {team_key}: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.patch(
+    "/{team_key}",
+    response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
+    """Partially update team information."""
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 400, {"detail": "Invalid team key"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team information"}
+
+    try:
+        with transaction.atomic():
+            # Only update fields that were provided
+            update_data = payload.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(team, field, value)
+            team.save()
+
+        return 200, TeamResponseSchema(
+            key=team.key,
+            name=team.name,
+            created_at=team.created_at.isoformat(),
+            has_completed_wizard=team.has_completed_wizard,
+            billing_plan=team.billing_plan,
+        )
+
+    except IntegrityError:
+        return 400, {"detail": "A team with this name already exists"}
+    except Exception as e:
+        logger.error(f"Error updating team {team_key}: {e}")
+        return 400, {"detail": str(e)}

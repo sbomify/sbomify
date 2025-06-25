@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
-from ninja import Field, Router, Schema
+from ninja import Router
 from ninja.security import django_auth
 from pydantic import BaseModel
 
@@ -36,13 +36,6 @@ from teams.utils import get_user_teams
 from .schemas import ErrorCode, ErrorResponse
 
 log = getLogger(__name__)
-
-
-class RenameItemSchema(Schema):
-    class Config(Schema.Config):
-        str_strip_whitespace = True
-
-    name: str = Field(..., max_length=255, min_length=1)
 
 
 # Creation schemas
@@ -109,40 +102,6 @@ def _build_item_response(item, item_type: str):
         base_response["metadata"] = item.metadata
 
     return base_response
-
-
-@router.patch(
-    "/rename/{item_type}/{item_id}",
-    response={
-        204: None,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def rename_item(request, item_type: str, item_id: str, payload: RenameItemSchema):
-    if item_type not in item_type_map:
-        return 400, {"detail": "Invalid item type", "error_code": ErrorCode.INVALID_DATA}
-
-    Model = item_type_map[item_type]
-
-    if item_type == "team":
-        rec = Team.objects.filter(key=item_id).first()
-        permissions_required = ["owner"]
-    else:
-        rec = Model.objects.filter(id=item_id).first()
-        permissions_required = ["owner", "admin"]
-
-    if rec is None:
-        return 404, {"detail": "Not found", "error_code": ErrorCode.NOT_FOUND}
-
-    if not verify_item_access(request, rec, permissions_required):
-        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
-
-    rec.name = payload.name
-    rec.save()
-
-    return 204, None
 
 
 @router.get(

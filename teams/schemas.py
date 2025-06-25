@@ -1,5 +1,33 @@
 from django.conf import settings
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class TeamUpdateSchema(BaseModel):
+    """Schema for updating team information."""
+
+    class Config:
+        str_strip_whitespace = True
+
+    name: str = Field(..., max_length=255, min_length=1)
+
+
+class TeamPatchSchema(BaseModel):
+    """Schema for partially updating team information."""
+
+    class Config:
+        str_strip_whitespace = True
+
+    name: str | None = Field(None, max_length=255, min_length=1)
+
+
+class TeamResponseSchema(BaseModel):
+    """Schema for team response data."""
+
+    key: str
+    name: str
+    created_at: str
+    has_completed_wizard: bool
+    billing_plan: str | None
 
 
 class BrandingInfo(BaseModel):

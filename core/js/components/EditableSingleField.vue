@@ -41,13 +41,30 @@
     const updateField = async () => {
     errorMessage.value = ''
 
-    const apiUrl = '/api/v1/rename/' + props.itemType + '/' + props.itemId;
-    const data = {
-      name: fieldValue.value
+    // Use proper CRUD endpoints instead of generic rename endpoint
+    let apiUrl: string;
+    const data = { name: fieldValue.value };
+
+    switch (props.itemType) {
+      case 'team':
+        apiUrl = `/api/v1/teams/${props.itemId}`;
+        break;
+      case 'component':
+        apiUrl = `/api/v1/components/${props.itemId}`;
+        break;
+      case 'project':
+        apiUrl = `/api/v1/projects/${props.itemId}`;
+        break;
+      case 'product':
+        apiUrl = `/api/v1/products/${props.itemId}`;
+        break;
+      default:
+        errorMessage.value = 'Unknown item type';
+        return;
     }
 
     try {
-      const response = await $axios.patch(apiUrl, data)
+      const response = await $axios.patch(apiUrl, data);
 
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);
