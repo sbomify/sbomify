@@ -24,13 +24,14 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 
+# from .decorators import validate_role_in_current_team
+from catalog.models import Component, Product, Project
 from core.errors import error_response
 from core.object_store import S3Client
 from core.utils import get_current_team_id, token_to_number
 from teams.schemas import BrandingInfo
 
-# from .decorators import validate_role_in_current_team
-from .models import SBOM, Component, Product, Project
+from .models import SBOM
 from .utils import get_project_sbom_package, verify_item_access
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,8 @@ from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
 
-from ..models import SBOM, Component, Product, Project
+from catalog.models import Component, Product, Project
+from ..models import SBOM
 from .fixtures import (  # noqa: F401
     sample_access_token,
     sample_component,

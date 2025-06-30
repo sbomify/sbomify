@@ -1,11 +1,6 @@
 from django.apps import apps
 from django.db import models
 
-from catalog.models import Component as CatalogComponent
-from catalog.models import Product as CatalogProduct
-from catalog.models import ProductProject as CatalogProductProject
-from catalog.models import Project as CatalogProject
-from catalog.models import ProjectComponent as CatalogProjectComponent
 from core.utils import generate_id
 
 
@@ -58,50 +53,3 @@ class SBOM(models.Model):
             "manual_upload": "Manual Upload",
         }
         return source_display_map.get(self.source, self.source or "Unknown")
-
-
-# =============================================================================
-# BACKWARD COMPATIBILITY PROXY MODELS
-# =============================================================================
-# These proxy models provide backward compatibility during the migration
-# from sboms to catalog app. They will be removed after the migration is complete.
-
-
-class Product(CatalogProduct):
-    """Backward compatibility proxy for catalog.models.Product."""
-
-    class Meta:
-        proxy = True
-
-
-class Project(CatalogProject):
-    """Backward compatibility proxy for catalog.models.Project."""
-
-    class Meta:
-        proxy = True
-
-
-class Component(CatalogComponent):
-    """Backward compatibility proxy for catalog.models.Component."""
-
-    class Meta:
-        proxy = True
-
-    @property
-    def latest_sbom(self) -> "SBOM":
-        """Backward compatibility property for getting the latest SBOM."""
-        return self.sbom_set.order_by("-created_at").first()
-
-
-class ProductProject(CatalogProductProject):
-    """Backward compatibility proxy for catalog.models.ProductProject."""
-
-    class Meta:
-        proxy = True
-
-
-class ProjectComponent(CatalogProjectComponent):
-    """Backward compatibility proxy for catalog.models.ProjectComponent."""
-
-    class Meta:
-        proxy = True

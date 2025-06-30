@@ -12,7 +12,8 @@ from core.tests.fixtures import sample_user  # noqa: F401
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
 
-from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from catalog.models import Component, Product, ProductProject, Project, ProjectComponent
+from ..models import SBOM
 from ..schemas import SPDXSchema
 
 SAMPLE_SBOM_DATA = {
