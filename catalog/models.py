@@ -5,6 +5,11 @@ from core.utils import generate_id
 from teams.models import Team
 
 
+class ComponentType(models.TextChoices):
+    SBOM = "sbom", "SBOM"
+    # Future example: DOCUMENT = 'doc', 'Document'
+
+
 class Product(models.Model):
     class Meta:
         db_table = "sboms_products"  # Keep exact table name
@@ -56,6 +61,7 @@ class Component(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
     metadata = models.JSONField(default=dict)
+    component_type = models.CharField(max_length=20, choices=ComponentType.choices, default=ComponentType.SBOM)
     projects = models.ManyToManyField(Project, through="catalog.ProjectComponent")
 
     def __str__(self) -> str:
