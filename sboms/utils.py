@@ -10,10 +10,11 @@ from uuid import uuid4
 
 from django.http import HttpRequest
 
+from catalog.models import Component, Product, Project
 from sbomify import logging
 from teams.models import Member, Team
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .versioning import CycloneDXSupportedVersion
