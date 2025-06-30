@@ -8,15 +8,11 @@ from pydantic import BaseModel
 from access_tokens.auth import PersonalAccessTokenAuth
 from billing.config import is_billing_enabled
 from billing.models import BillingPlan
-from core.object_store import S3Client
-from sbomify.logging import getLogger
-from sboms.models import Component, Product, Project
-from sboms.schemas import (
+from catalog.schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
     ComponentResponseSchema,
     ComponentUpdateSchema,
-    ItemTypes,
     ProductCreateSchema,
     ProductPatchSchema,
     ProductProjectLinkSchema,
@@ -27,8 +23,11 @@ from sboms.schemas import (
     ProjectPatchSchema,
     ProjectResponseSchema,
     ProjectUpdateSchema,
-    UserItemsResponse,
 )
+from core.object_store import S3Client
+from sbomify.logging import getLogger
+from sboms.models import Component, Product, Project
+from sboms.schemas import ItemTypes, UserItemsResponse
 from sboms.utils import verify_item_access
 from teams.models import Team
 from teams.utils import get_user_teams
