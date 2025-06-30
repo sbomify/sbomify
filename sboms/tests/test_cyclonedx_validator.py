@@ -2,13 +2,9 @@ import pytest
 
 from sboms.cyclonedx_validator import (
     CycloneDXValidator,
-    CycloneDXValidationError,
-    SBOMVersionError,
     SBOMSchemaError,
-    CycloneDXSchemaError,
+    SBOMVersionError,
 )
-from sboms.versioning import CycloneDXSupportedVersion
-from sboms.tests.test_sbom_schemas import sample_cyclonedx_schema_dict
 
 
 def test_validate_valid_1_5_sbom(sample_cyclonedx_schema_dict):

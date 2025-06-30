@@ -6,8 +6,8 @@ from ninja import Router
 from ninja.security import django_auth
 
 from access_tokens.auth import PersonalAccessTokenAuth
+from catalog.models import Component, Product, Project
 from core.schemas import ErrorResponse
-from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from .models import BillingPlan

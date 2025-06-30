@@ -14,7 +14,7 @@ from django.http import HttpResponseForbidden
 from billing import billing_processing
 from billing.models import BillingPlan
 from teams.models import Member, Team
-from sboms.models import Product, Project, Component
+from catalog.models import Product, Project, Component
 from sbomify.logging import getLogger
 from ..stripe_client import StripeClient, StripeError
 from core.utils import number_to_random_token

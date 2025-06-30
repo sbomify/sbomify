@@ -93,11 +93,7 @@ def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: A
 
     # Properly format form data and set content type
     form_data = urlencode({"description": "Guest Token"})
-    response = client.post(
-        reverse("core:settings"),
-        form_data,
-        content_type="application/x-www-form-urlencoded"
-    )
+    response = client.post(reverse("core:settings"), form_data, content_type="application/x-www-form-urlencoded")
 
     # Verify successful token creation
     assert response.status_code == 200
@@ -109,10 +105,7 @@ def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: A
 
     # Switch to sample user and try to delete
     client.logout()
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"],
-        password=os.environ["DJANGO_TEST_PASSWORD"]
-    )
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     response = client.post(reverse("core:delete_access_token", kwargs={"token_id": guest_token.id}))
     assert response.status_code == 403

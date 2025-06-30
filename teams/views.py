@@ -22,9 +22,9 @@ from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET
 
+from catalog.models import Component, Product, Project
 from core.errors import error_response
 from core.utils import number_to_random_token, token_to_number
-from sboms.models import Component, Product, Project
 
 from .forms import (
     InviteUserForm,

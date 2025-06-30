@@ -16,66 +16,50 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan",
-            name="E2E Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 1. Create component via API
         response = client.post(
             reverse("api-1:create_component"),
-            data=json.dumps({
-                "name": "E2E Test Component"
-            }),
-            content_type="application/json"
+            data=json.dumps({"name": "E2E Test Component"}),
+            content_type="application/json",
         )
         assert response.status_code == 201
         component_data = response.json()
 
         # Get the created component
-        from sboms.models import Component
+        from catalog.models import Component
+
         component = Component.objects.get(id=component_data["id"])
         assert component.name == "E2E Test Component"
 
         # 2. View component details
-        response = client.get(
-            reverse("sboms:component_details", kwargs={"component_id": component.id})
-        )
+        response = client.get(reverse("sboms:component_details", kwargs={"component_id": component.id}))
         content = response.content.decode()
         assert response.status_code == 200
         assert "E2E Test Component" in content
 
         # 3. Update component metadata via API
-        metadata = {
-            "supplier": {
-                "name": "Updated Supplier",
-                "url": ["http://example.com"]
-            }
-        }
+        metadata = {"supplier": {"name": "Updated Supplier", "url": ["http://example.com"]}}
         response = client.put(
             reverse("api-1:get_component_metadata", kwargs={"component_id": component.id}),
             data=json.dumps(metadata),
-            content_type="application/json"
+            content_type="application/json",
         )
         assert response.status_code == 204
 
         # 4. Verify metadata update via API
         response = client.get(
             reverse("api-1:get_component_metadata", kwargs={"component_id": component.id}),
-            content_type="application/json"
+            content_type="application/json",
         )
         assert response.status_code == 200
         data = response.json()
@@ -91,11 +75,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan",
-            name="E2E Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
@@ -105,36 +85,27 @@ class TestCriticalPaths:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 1. View initial state
-        response = client.get(
-            reverse("sboms:component_details", kwargs={"component_id": sample_component.id})
-        )
+        response = client.get(reverse("sboms:component_details", kwargs={"component_id": sample_component.id}))
         assert response.status_code == 200
 
         # 2. Toggle public status via API
         response = client.patch(
-            reverse("api-1:patch_item_public_status", kwargs={
-                "item_type": "component",
-                "item_id": sample_component.id
-            }),
+            reverse(
+                "api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id}
+            ),
             data=json.dumps({"is_public": True}),
-            content_type="application/json"
+            content_type="application/json",
         )
         assert response.status_code == 200
         assert response.json()["is_public"] is True
 
         # 3. Verify public access
         client.logout()
-        response = client.get(
-            reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id})
-        )
+        response = client.get(reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id}))
         assert response.status_code == 200
 
         # 4. Test billing plan restrictions
@@ -156,21 +127,16 @@ class TestCriticalPaths:
 
         # Set session again
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # 5. Try to make component private on community plan - should fail
         response = client.patch(
-            reverse("api-1:patch_item_public_status", kwargs={
-                "item_type": "component",
-                "item_id": sample_component.id
-            }),
+            reverse(
+                "api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id}
+            ),
             data=json.dumps({"is_public": False}),
-            content_type="application/json"
+            content_type="application/json",
         )
         assert response.status_code == 403
         assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -182,30 +148,18 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan",
-            name="E2E Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Create a new token
-        response = client.post(
-            reverse("core:settings"),
-            {"description": "Test Token"},
-            follow=True
-        )
+        response = client.post(reverse("core:settings"), {"description": "Test Token"}, follow=True)
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content
@@ -220,11 +174,9 @@ class TestCriticalPaths:
 
         # Delete the token
         from access_tokens.models import AccessToken
+
         token = AccessToken.objects.get(description="Test Token")
-        response = client.post(
-            reverse("core:delete_access_token", kwargs={"token_id": token.id}),
-            follow=True
-        )
+        response = client.post(reverse("core:delete_access_token", kwargs={"token_id": token.id}), follow=True)
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" not in content
@@ -236,11 +188,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan",
-            name="E2E Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
@@ -251,11 +199,7 @@ class TestCriticalPaths:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Test core pages

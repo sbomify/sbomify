@@ -11,7 +11,8 @@ from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils.html import format_html
 
-from sboms.models import SBOM, Component, Product, Project
+from catalog.models import Component, Product, Project
+from sboms.models import SBOM
 from teams.models import Member, Team
 
 from .models import User

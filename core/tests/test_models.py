@@ -1,6 +1,6 @@
 import pytest
-from django.contrib.auth.base_user import AbstractBaseUser
 from allauth.socialaccount.models import SocialAccount
+from django.contrib.auth.base_user import AbstractBaseUser
 
 from teams.models import get_team_name_for_user
 
@@ -25,12 +25,9 @@ class TestUser:
             extra_data={
                 "user_metadata": {
                     "company": "Test Company",
-                    "supplier_contact": {
-                        "name": "Test Supplier",
-                        "email": "test@supplier.com"
-                    }
+                    "supplier_contact": {"name": "Test Supplier", "email": "test@supplier.com"},
                 }
-            }
+            },
         )
         social_auth.save()
 
@@ -46,12 +43,9 @@ class TestUser:
             extra_data={
                 "user_metadata": {
                     "company": "Test Company",
-                    "supplier_contact": {
-                        "name": "Test Supplier",
-                        "email": "test@supplier.com"
-                    }
+                    "supplier_contact": {"name": "Test Supplier", "email": "test@supplier.com"},
                 }
-            }
+            },
         )
         social_auth.save()
 

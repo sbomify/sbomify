@@ -1,19 +1,21 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.http import HttpRequest
-from allauth.socialaccount.models import SocialLogin, SocialAccount
-from core.adapters import CustomSocialAccountAdapter
 from django.test import RequestFactory
 
+from core.adapters import CustomSocialAccountAdapter
+
 User = get_user_model()
+
 
 @pytest.fixture
 def adapter():
     return CustomSocialAccountAdapter()
 
+
 @pytest.fixture
 def mock_request():
     return RequestFactory().get("/")
+
 
 @pytest.fixture
 def mock_sociallogin():
@@ -29,6 +31,7 @@ def mock_sociallogin():
 
     return DummySocialLogin()
 
+
 @pytest.mark.django_db
 class TestCustomSocialAccountAdapter:
     def test_populate_user_with_keycloak_data(self, adapter, mock_request, mock_sociallogin):
@@ -39,7 +42,7 @@ class TestCustomSocialAccountAdapter:
             "email_verified": True,
             "given_name": "John",
             "family_name": "Doe",
-            "preferred_username": "johndoe"
+            "preferred_username": "johndoe",
         }
 
         # Populate user
@@ -56,12 +59,7 @@ class TestCustomSocialAccountAdapter:
     def test_populate_user_without_preferred_username(self, adapter, mock_request, mock_sociallogin):
         """Test username generation when preferred_username is not provided."""
         # Mock Keycloak data without preferred_username
-        data = {
-            "email": "test@example.com",
-            "email_verified": True,
-            "given_name": "John",
-            "family_name": "Doe"
-        }
+        data = {"email": "test@example.com", "email_verified": True, "given_name": "John", "family_name": "Doe"}
 
         # Populate user
         user = adapter.populate_user(mock_request, mock_sociallogin, data)
@@ -72,18 +70,10 @@ class TestCustomSocialAccountAdapter:
     def test_populate_user_with_duplicate_username(self, adapter, mock_request, mock_sociallogin):
         """Test username generation handles duplicates."""
         # Create existing user with the username that would be generated
-        existing_user = User.objects.create(
-            username="test.example.com",
-            email="existing@example.com"
-        )
+        existing_user = User.objects.create(username="test.example.com", email="existing@example.com")
 
         # Mock Keycloak data
-        data = {
-            "email": "test@example.com",
-            "email_verified": True,
-            "given_name": "John",
-            "family_name": "Doe"
-        }
+        data = {"email": "test@example.com", "email_verified": True, "given_name": "John", "family_name": "Doe"}
 
         # Populate user
         user = adapter.populate_user(mock_request, mock_sociallogin, data)
@@ -94,10 +84,7 @@ class TestCustomSocialAccountAdapter:
     def test_pre_social_login_existing_user(self, adapter, mock_request, mock_sociallogin):
         """Test connecting to existing user with same email."""
         # Create existing user
-        existing_user = User.objects.create(
-            username="existing",
-            email="test@example.com"
-        )
+        existing_user = User.objects.create(username="existing", email="test@example.com")
 
         # Set up social login with same email
         mock_sociallogin.user.email = "test@example.com"
@@ -125,13 +112,14 @@ class TestCustomSocialAccountAdapter:
         """Test that auto signup is always allowed."""
         assert adapter.is_auto_signup_allowed(mock_request, mock_sociallogin) is True
 
+
 def test_populate_user_with_given_name_family_name(adapter, mock_request, mock_sociallogin):
     data = {
         "email": "test@example.com",
         "email_verified": True,
         "given_name": "John",
         "family_name": "Doe",
-        "preferred_username": "johndoe"
+        "preferred_username": "johndoe",
     }
     user = adapter.populate_user(mock_request, mock_sociallogin, data)
     assert user.first_name == "John"
@@ -141,13 +129,14 @@ def test_populate_user_with_given_name_family_name(adapter, mock_request, mock_s
     assert user.email_verified is True
     assert user.is_active is True
 
+
 def test_populate_user_with_first_name_last_name(adapter, mock_request, mock_sociallogin):
     data = {
         "email": "test2@example.com",
         "email_verified": True,
         "first_name": "Jane",
         "last_name": "Smith",
-        "preferred_username": "janesmith"
+        "preferred_username": "janesmith",
     }
     user = adapter.populate_user(mock_request, mock_sociallogin, data)
     assert user.first_name == "Jane"

@@ -26,6 +26,7 @@ alwaysApply: false
 - Use the pytest-mock plugin for mocking.
 - All tests should be fully annotated and should contain docstrings.
 - Run tests and often to verify that you haven't broken anything.
+- Always use `poetry run` to invoke Python commands, including `python manage.py`, `ruff`, etc.
 - Make sure to use `ruff` to lint your code base frequently.
 - ALWAYS run `ruff check` and `ruff format` after making any changes to Python files.
 - If `ruff` reports any issues, fix them with the `--fix` variable in ruff before manually trying to fix them. Do this before proceeding with other changes.

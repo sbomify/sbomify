@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from sboms.models import Component, Product, Project
+from catalog.models import Component, Product, Project
 from teams.models import Team
 
 

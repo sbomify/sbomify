@@ -1,4 +1,9 @@
-"""Tests for SBOM CRUD API endpoints (Product, Project, Component)."""
+"""Tests for SBOM CRUD API endpoints (Product, Project, Component).
+
+TODO: REVIEW AFTER MIGRATION - Many of these CRUD tests are testing basic
+Product/Project/Component functionality that should eventually be moved to
+catalog app tests. The SBOM-specific functionality should remain here.
+"""
 
 from __future__ import annotations
 
@@ -1094,6 +1099,7 @@ def test_patch_component_empty_body(
 # BUSINESS LOGIC TESTS (Moved from View Tests)
 # =============================================================================
 
+
 @pytest.mark.django_db
 class TestDeleteOperationsAPI:
     """Test delete operations via API (migrated from view tests)."""
@@ -1350,13 +1356,16 @@ class TestBillingPlanLimitsAPI:
         team = sample_team_with_owner_member.team
 
         # Set up limited billing plan
-        plan = self._setup_team_with_plan(team, {
-            "key": "limited_product_plan",
-            "name": "Limited Product Plan",
-            "max_products": 2,
-            "max_projects": 10,
-            "max_components": 10
-        })
+        plan = self._setup_team_with_plan(
+            team,
+            {
+                "key": "limited_product_plan",
+                "name": "Limited Product Plan",
+                "max_products": 2,
+                "max_projects": 10,
+                "max_components": 10,
+            },
+        )
 
         # Set up authentication and session
         assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1397,13 +1406,16 @@ class TestBillingPlanLimitsAPI:
         team = sample_team_with_owner_member.team
 
         # Set up limited billing plan
-        plan = self._setup_team_with_plan(team, {
-            "key": "limited_project_plan",
-            "name": "Limited Project Plan",
-            "max_products": 10,
-            "max_projects": 1,
-            "max_components": 10
-        })
+        plan = self._setup_team_with_plan(
+            team,
+            {
+                "key": "limited_project_plan",
+                "name": "Limited Project Plan",
+                "max_products": 10,
+                "max_projects": 1,
+                "max_components": 10,
+            },
+        )
 
         # Set up authentication and session
         assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1443,13 +1455,16 @@ class TestBillingPlanLimitsAPI:
         team = sample_team_with_owner_member.team
 
         # Set up limited billing plan
-        plan = self._setup_team_with_plan(team, {
-            "key": "limited_component_plan",
-            "name": "Limited Component Plan",
-            "max_products": 10,
-            "max_projects": 10,
-            "max_components": 3
-        })
+        plan = self._setup_team_with_plan(
+            team,
+            {
+                "key": "limited_component_plan",
+                "name": "Limited Component Plan",
+                "max_products": 10,
+                "max_projects": 10,
+                "max_components": 3,
+            },
+        )
 
         # Set up authentication and session
         assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1490,13 +1505,16 @@ class TestBillingPlanLimitsAPI:
         team = sample_team_with_owner_member.team
 
         # Set up unlimited billing plan
-        self._setup_team_with_plan(team, {
-            "key": "unlimited",
-            "name": "Unlimited Plan",
-            "max_products": None,
-            "max_projects": None,
-            "max_components": None
-        })
+        self._setup_team_with_plan(
+            team,
+            {
+                "key": "unlimited",
+                "name": "Unlimited Plan",
+                "max_products": None,
+                "max_projects": None,
+                "max_components": None,
+            },
+        )
 
         # Set up authentication and session
         assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])

@@ -36,7 +36,7 @@ class TestS3Client:
             region_name=settings.AWS_REGION,
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
             aws_access_key_id="test-key",
-            aws_secret_access_key="test-secret"
+            aws_secret_access_key="test-secret",
         )
 
     def test_upload_media_success(self, mock_s3):
@@ -47,10 +47,7 @@ class TestS3Client:
 
         client.upload_media("test_object", test_data)
 
-        mock_bucket.put_object.assert_called_once_with(
-            Key="test_object",
-            Body=test_data
-        )
+        mock_bucket.put_object.assert_called_once_with(Key="test_object", Body=test_data)
         assert mock_s3.Bucket.call_args[0][0] == settings.AWS_MEDIA_STORAGE_BUCKET_NAME
 
     def test_upload_sbom_success(self, mock_s3):
@@ -72,10 +69,7 @@ class TestS3Client:
         # Create mock body with read() method using unittest.mock.Mock
         mock_body = Mock()
         mock_body.read.return_value = b"test_data"
-        mock_object.get.return_value = {
-            "Body": mock_body,
-            "ResponseMetadata": {"HTTPStatusCode": 200}
-        }
+        mock_object.get.return_value = {"Body": mock_body, "ResponseMetadata": {"HTTPStatusCode": 200}}
 
         data = client.get_sbom_data("test_object")
 
@@ -92,11 +86,14 @@ class TestS3Client:
         mock_object.delete.assert_called_once()
         mock_s3.Object.assert_called_with("test_bucket", "test_object")
 
-    @pytest.mark.parametrize("method,args", [
-        # Test MEDIA client trying to call SBOMS-only methods
-        ("upload_sbom", (b"data",)),
-        ("get_sbom_data", ("test",)),
-    ])
+    @pytest.mark.parametrize(
+        "method,args",
+        [
+            # Test MEDIA client trying to call SBOMS-only methods
+            ("upload_sbom", (b"data",)),
+            ("get_sbom_data", ("test",)),
+        ],
+    )
     def test_bucket_type_validation(self, method: str, args: tuple, mock_s3):
         """Test methods validate bucket type before operation"""
         client = S3Client("MEDIA")
@@ -117,8 +114,7 @@ class TestS3Client:
         """Test ClientError propagation"""
         client = S3Client("MEDIA")
         mock_s3.Bucket.return_value.put_object.side_effect = ClientError(
-            error_response={"Error": {"Code": 403}},
-            operation_name="PutObject"
+            error_response={"Error": {"Code": 403}}, operation_name="PutObject"
         )
 
         with pytest.raises(ClientError):

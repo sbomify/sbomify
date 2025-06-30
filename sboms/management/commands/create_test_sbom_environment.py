@@ -8,9 +8,10 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.http import HttpRequest
 
+from catalog.models import Component, Product, ProductProject, Project, ProjectComponent
 from core.object_store import S3Client
 from sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
-from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sboms.models import SBOM
 from sboms.schemas import SPDXSchema, cdx15, cdx16
 from teams.models import Team
 
