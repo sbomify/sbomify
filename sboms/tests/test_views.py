@@ -21,7 +21,8 @@ from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
 from teams.models import Member, Team
 
-from ..models import SBOM, Component, Product, Project
+from catalog.models import Component, Product, Project
+from ..models import SBOM
 from .fixtures import (
     sample_access_token,  # noqa: F401
     sample_component,  # noqa: F401

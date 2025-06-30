@@ -1,8 +1,5 @@
 from django.contrib import admin
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM
 
-admin.site.register(Product)
-admin.site.register(Project)
-admin.site.register(Component)
 admin.site.register(SBOM)

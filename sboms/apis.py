@@ -10,13 +10,14 @@ from ninja.security import django_auth
 from pydantic import BaseModel, ValidationError
 
 from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
+from catalog.models import Component, Product, Project
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
 from core.utils import ExtractSpec, dict_update, get_current_team_id, obj_extract
 from sbomify.tasks import scan_sbom_for_vulnerabilities
 from teams.models import Team
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM
 from .schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,

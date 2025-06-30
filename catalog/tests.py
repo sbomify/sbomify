@@ -10,7 +10,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 
-from catalog.models import Component, Product, ProductProject, Project, ProjectComponent
+from catalog.models import Component, ComponentType, Product, ProductProject, Project, ProjectComponent
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Team
 
@@ -140,6 +140,7 @@ class TestCatalogModelCreation:
         assert component.team == team
         assert component.is_public is False  # Default value
         assert component.metadata == {}  # Default value
+        assert component.component_type == ComponentType.SBOM  # Default value
         assert component.created_at is not None
         assert str(component) == "Test Component"
         assert len(component.id) == 12  # Generated ID length
@@ -555,3 +556,75 @@ class TestCatalogDataIntegrity:
         assert private_product in private_products
         assert public_product not in private_products
         assert private_product not in public_products
+
+
+@pytest.mark.django_db
+class TestCatalogComponentType:
+    """Test component type field functionality."""
+
+    def test_default_component_type(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that component_type defaults to SBOM."""
+        team = sample_team_with_owner_member.team
+
+        component = Component.objects.create(name="Test Component", team=team)
+
+        assert component.component_type == ComponentType.SBOM
+        assert component.component_type == 'sbom'
+
+    def test_explicit_component_type(self, sample_team_with_owner_member):  # noqa: F811
+        """Test setting component_type explicitly."""
+        team = sample_team_with_owner_member.team
+
+        component = Component.objects.create(
+            name="Test Component",
+            team=team,
+            component_type=ComponentType.SBOM
+        )
+
+        assert component.component_type == ComponentType.SBOM
+        assert component.component_type == 'sbom'
+
+    def test_component_type_choices(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that ComponentType choices work correctly."""
+        # Test enum values
+        assert ComponentType.SBOM == 'sbom'
+        assert ComponentType.SBOM.label == 'SBOM'
+
+        # Test choices list
+        choices = ComponentType.choices
+        assert ('sbom', 'SBOM') in choices
+
+    def test_component_type_validation(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that invalid component types are rejected."""
+        team = sample_team_with_owner_member.team
+
+        # Test with invalid choice
+        component = Component(
+            name="Test Component",
+            team=team,
+            component_type="invalid_type"
+        )
+
+        with pytest.raises(ValidationError) as exc:
+            component.full_clean()
+
+        assert 'component_type' in str(exc.value)
+
+    def test_component_type_filtering(self, sample_team_with_owner_member):  # noqa: F811
+        """Test filtering components by type."""
+        team = sample_team_with_owner_member.team
+
+        # Create components with different types
+        sbom_component = Component.objects.create(
+            name="SBOM Component",
+            team=team,
+            component_type=ComponentType.SBOM
+        )
+
+        # Test filtering
+        sbom_components = Component.objects.filter(component_type=ComponentType.SBOM)
+        assert sbom_component in sbom_components
+
+        # Test filtering by string value
+        sbom_components_str = Component.objects.filter(component_type='sbom')
+        assert sbom_component in sbom_components_str
