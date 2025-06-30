@@ -3,6 +3,8 @@ description: Django
 globs: *.py *.html
 alwaysApply: false
 ---
+Pre-requisite: Read [python.mdc](mdc:.cursor/rules/python.mdc)
+
 # Django Guidelines
 
 - Write clear, technical responses with precise Django examples.

@@ -207,6 +207,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("sboms", "0031_remove_project_components_alter_sbom_component_and_more"),
+        ("catalog", "0004_alter_component_options_alter_product_options_and_more"),
     ]
 
     operations = [
