@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "core",
     "teams",
     "sboms",
+    "catalog",
     "access_tokens",
     "billing",
     "notifications",

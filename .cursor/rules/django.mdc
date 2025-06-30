@@ -14,6 +14,7 @@ alwaysApply: false
 - Use Django’s built-in user model and authentication framework for user management.
 - Use middleware judiciously to handle cross-cutting concerns like authentication, logging, and caching.
 - Assume all migrations have been run. Never edit an existing migration file.
+- When working with migrations, you must use `--settings=sbomify.test_settings` for this to work locally.
 
 ## Django Error Handling and Validation
 - Implement error handling at the view level and use Django's built-in error handling mechanisms.
@@ -21,7 +22,7 @@ alwaysApply: false
 - Customize error pages (e.g., 404, 500) to improve user experience and provide helpful information.
 - Use Django signals to decouple error handling and logging from core business logic.
 
-## Djanog Dependencies
+## Django Dependencies
 - Django
 - Django Ninja (for API development)
 - Celery (for background tasks)
