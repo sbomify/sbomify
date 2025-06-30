@@ -33,28 +33,32 @@ def forwards_func(apps, schema_editor):
         # If neither exists, that's also fine - nothing to do
 
     # CRITICAL SAFEGUARD: Validate SBOM-Component relationships after ContentType migration
-    SBOM = apps.get_model("sboms", "SBOM")
-    if SBOM.objects.exists():
-        # Count SBOMs before migration
-        sbom_count_before = SBOM.objects.count()
+    try:
+        SBOM = apps.get_model("sboms", "SBOM")
+        if SBOM.objects.exists():
+            # Count SBOMs before migration
+            sbom_count_before = SBOM.objects.count()
 
-        # Count SBOMs that can access their components
-        accessible_sboms = 0
-        for sbom in SBOM.objects.all():
-            try:
-                # This will fail if the FK relationship is broken
-                if sbom.component_id:
-                    accessible_sboms += 1
-            except Exception as e:
-                # Log the error but don't fail the migration
-                print(f"WARNING: SBOM {sbom.id} has broken component relationship: {e}")
+            # Count SBOMs that can access their components
+            accessible_sboms = 0
+            for sbom in SBOM.objects.all():
+                try:
+                    # This will fail if the FK relationship is broken
+                    if sbom.component_id:
+                        accessible_sboms += 1
+                except Exception as e:
+                    # Log the error but don't fail the migration
+                    print(f"WARNING: SBOM {sbom.id} has broken component relationship: {e}")
 
-        print(f"ContentType Migration Validation:")
-        print(f"- Total SBOMs: {sbom_count_before}")
-        print(f"- SBOMs with accessible components: {accessible_sboms}")
+            print(f"ContentType Migration Validation:")
+            print(f"- Total SBOMs: {sbom_count_before}")
+            print(f"- SBOMs with accessible components: {accessible_sboms}")
 
-        if accessible_sboms < sbom_count_before:
-            print(f"WARNING: {sbom_count_before - accessible_sboms} SBOMs may have broken component relationships!")
+            if accessible_sboms < sbom_count_before:
+                print(f"WARNING: {sbom_count_before - accessible_sboms} SBOMs may have broken component relationships!")
+    except LookupError:
+        # sboms app doesn't exist (fresh install) - skip validation
+        pass
 
 
 def reverse_func(apps, schema_editor):

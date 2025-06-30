@@ -14,11 +14,11 @@ class Product(models.Model):
     class Meta:
         db_table = "sboms_products"  # Keep exact table name
         managed = True  # Now Django manages these tables
-        # unique_together = ("team", "name")  # Temporarily disabled due to nullable team
+        unique_together = ("team", "name")  # Re-enable unique constraint
         ordering = ["name"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_products", null=True)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_products")
     name = models.CharField(max_length=255, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
@@ -32,11 +32,11 @@ class Project(models.Model):
     class Meta:
         db_table = "sboms_projects"
         managed = True
-        # unique_together = ("team", "name")  # Temporarily disabled due to nullable team
+        unique_together = ("team", "name")  # Re-enable unique constraint
         ordering = ["name"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_projects", null=True)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_projects")
     name = models.CharField(max_length=255, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
@@ -52,11 +52,11 @@ class Component(models.Model):
     class Meta:
         db_table = "sboms_components"
         managed = True
-        # unique_together = ("team", "name")  # Temporarily disabled due to nullable team
+        unique_together = ("team", "name")  # Re-enable unique constraint
         ordering = ["name"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_components", null=True)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="catalog_components")
     name = models.CharField(max_length=255, blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
@@ -74,11 +74,11 @@ class ProductProject(models.Model):
     class Meta:
         db_table = "sboms_products_projects"
         managed = True
-        # unique_together = ("product", "project")  # Temporarily disabled due to nullable fields
+        unique_together = ("product", "project")  # Re-enable unique constraint
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
 
     def __str__(self) -> str:
         return f"{self.product_id} - {self.project_id}"
@@ -88,11 +88,11 @@ class ProjectComponent(models.Model):
     class Meta:
         db_table = "sboms_projects_components"
         managed = True
-        # unique_together = ("project", "component")  # Temporarily disabled due to nullable fields
+        unique_together = ("project", "component")  # Re-enable unique constraint
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True)
-    component = models.ForeignKey(Component, on_delete=models.CASCADE, null=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    component = models.ForeignKey(Component, on_delete=models.CASCADE)
 
     def __str__(self) -> str:
         return f"{self.project_id} - {self.component_id}"
