@@ -1,3 +1,10 @@
+"""Views tests for sboms app.
+
+TODO: REVIEW AFTER MIGRATION - Many of these view tests are testing basic
+Product/Project/Component dashboard and detail views that should eventually
+be moved to catalog app. SBOM-specific views should remain here.
+"""
+
 from __future__ import annotations
 
 import os

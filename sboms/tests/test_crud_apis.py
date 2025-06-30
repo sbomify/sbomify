@@ -1,4 +1,9 @@
-"""Tests for SBOM CRUD API endpoints (Product, Project, Component)."""
+"""Tests for SBOM CRUD API endpoints (Product, Project, Component).
+
+TODO: REVIEW AFTER MIGRATION - Many of these CRUD tests are testing basic
+Product/Project/Component functionality that should eventually be moved to
+catalog app tests. The SBOM-specific functionality should remain here.
+"""
 
 from __future__ import annotations
 

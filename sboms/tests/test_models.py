@@ -5,6 +5,8 @@ from sboms.models import Component, Product, Project
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
 
+# TODO: DELETE AFTER MIGRATION - These tests have been duplicated in catalog/tests.py
+# This entire file should be removed once the migration to catalog app is complete
 @pytest.mark.django_db
 class TestUniqueConstraints:
     def test_duplicate_project_name_in_same_team(self, sample_team_with_owner_member):  # noqa: F811
