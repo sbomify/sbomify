@@ -5,7 +5,7 @@ from django.http import HttpRequest, HttpResponse
 
 from billing.billing_processing import can_downgrade_to_plan, check_billing_limits
 from billing.models import BillingPlan
-from sboms.models import Component, Product, Project, ProductProject, ProjectComponent
+from catalog.models import Component, Product, Project, ProductProject, ProjectComponent
 from teams.models import Team
 
 from .fixtures import (  # noqa: F401

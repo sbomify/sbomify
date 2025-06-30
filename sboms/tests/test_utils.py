@@ -8,7 +8,7 @@ from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
 from sboms.utils import ProjectSBOMBuilder, verify_item_access
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from teams.models import Team, Member
+from teams.models import Member, Team
 
 from .fixtures import (
     sample_access_token,  # noqa: F401
@@ -38,11 +38,7 @@ def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: 
 
     # Set up session data
     mock_request.session["user_teams"] = {
-        sample_team.key: {
-            "role": member.role,
-            "name": sample_team.name,
-            "is_default_team": member.is_default_team
-        }
+        sample_team.key: {"role": member.role, "name": sample_team.name, "is_default_team": member.is_default_team}
     }
     return mock_request
 

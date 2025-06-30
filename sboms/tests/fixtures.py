@@ -73,11 +73,7 @@ SAMPLE_SBOM_DATA = {
 def sample_billing_plan() -> Generator[BillingPlan, Any, None]:
     """Create a test billing plan with reasonable limits."""
     plan = BillingPlan.objects.create(
-        key="test_plan",
-        name="Test Plan",
-        max_products=10,
-        max_projects=10,
-        max_components=10
+        key="test_plan", name="Test Plan", max_products=10, max_projects=10, max_components=10
     )
 
     yield plan
@@ -145,7 +141,6 @@ def sample_sbom(
     sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ) -> Generator[SBOM, Any, None]:
-
     spdx_paylaod = SPDXSchema(**SAMPLE_SBOM_DATA)
     package = spdx_paylaod.packages[0]
 

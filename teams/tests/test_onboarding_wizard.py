@@ -1,12 +1,12 @@
 import pytest
+from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib.messages import get_messages
-from django.db import transaction, IntegrityError
+from django.db import IntegrityError, transaction
 from django.test import Client
 from django.urls import reverse
-from allauth.socialaccount.models import SocialAccount
 
-from sboms.models import Component, Product, Project
+from catalog.models import Component, Product, Project
 from teams.models import Team
 
 
@@ -26,15 +26,13 @@ class TestOnboardingWizard:
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session["wizard_step"] = "product"
         session.save()
 
         # Step 1: Create Product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Product"})
         assert response.status_code == 302
         assert response.url == reverse("teams:onboarding_wizard")
 
@@ -50,9 +48,7 @@ class TestOnboardingWizard:
         session["wizard_step"] = "project"
         session.save()
 
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Project"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Project"})
         assert response.status_code == 302
         assert response.url == reverse("teams:onboarding_wizard")
 
@@ -68,9 +64,7 @@ class TestOnboardingWizard:
         session["wizard_step"] = "component"
         session.save()
 
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Component"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Component"})
         assert response.status_code == 302
         assert response.url == reverse("teams:onboarding_wizard")
 
@@ -95,12 +89,7 @@ class TestOnboardingWizard:
         social_account = SocialAccount.objects.create(
             user=sample_user,
             provider="keycloak",
-            extra_data={
-                "user_metadata": {
-                    "company": "Acme Corp",
-                    "supplier_url": "https://acme.example.com"
-                }
-            }
+            extra_data={"user_metadata": {"company": "Acme Corp", "supplier_url": "https://acme.example.com"}},
         )
         social_account.save()
 
@@ -110,15 +99,13 @@ class TestOnboardingWizard:
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session["wizard_step"] = "product"
         session.save()
 
         # Step 1: Create Product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Product"})
         assert response.status_code == 302
 
         # Step 2: Create Project
@@ -126,9 +113,7 @@ class TestOnboardingWizard:
         session["wizard_step"] = "project"
         session.save()
 
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Project"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Project"})
         assert response.status_code == 302
 
         # Step 3: Create Component
@@ -136,9 +121,7 @@ class TestOnboardingWizard:
         session["wizard_step"] = "component"
         session.save()
 
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Component"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Component"})
         assert response.status_code == 302
 
         # Verify component metadata
@@ -155,15 +138,13 @@ class TestOnboardingWizard:
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session["wizard_step"] = "product"
         session.save()
 
         # Create first product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Product"})
         assert response.status_code == 302
 
         # Try to create duplicate product
@@ -173,9 +154,7 @@ class TestOnboardingWizard:
 
         # Catch IntegrityError and rollback transaction so we can continue assertions
         try:
-            response = client.post(reverse("teams:onboarding_wizard"), {
-                "name": "Test Product"
-            })
+            response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Product"})
         except IntegrityError:
             transaction.set_rollback(True)
             # Optionally, re-render the form or check for error message in the response
@@ -195,16 +174,14 @@ class TestOnboardingWizard:
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session["wizard_step"] = "component"  # Try to jump to last step
         session.save()
 
         with transaction.atomic():
             # Try to create component without previous steps
-            response = client.post(reverse("teams:onboarding_wizard"), {
-                "name": "Test Component"
-            })
+            response = client.post(reverse("teams:onboarding_wizard"), {"name": "Test Component"})
             assert response.status_code == 302
             messages = list(get_messages(response.wsgi_request))
             assert any("The product or project from previous steps no longer exists" in str(m) for m in messages)
@@ -217,7 +194,7 @@ class TestOnboardingWizard:
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session.save()
 

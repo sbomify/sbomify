@@ -15,7 +15,6 @@ from django.http import HttpResponse
 from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
-from django.contrib.messages import get_messages
 
 from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
@@ -57,19 +56,14 @@ def setup_test_session(client: Client, team: Team, user) -> None:
     # Set up session data with team ID for API compatibility
     session = client.session
     session["user_teams"] = {
-        team.key: {
-            "role": role,
-            "name": team.name,
-            "is_default_team": member.is_default_team,
-            "team_id": team.id
-        }
+        team.key: {"role": role, "name": team.name, "is_default_team": member.is_default_team, "team_id": team.id}
     }
     session["current_team"] = {
         "key": team.key,
         "role": role,
         "name": team.name,
         "is_default_team": member.is_default_team,
-        "id": team.id  # Add team ID for API endpoints
+        "id": team.id,  # Add team ID for API endpoints
     }
     session.save()
 
@@ -82,11 +76,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
 
     # Setup billing plan
     BillingPlan.objects.create(
-        key="dashboard_test_plan",
-        name="Dashboard Test Plan",
-        max_components=10,
-        max_products=10,
-        max_projects=10
+        key="dashboard_test_plan", name="Dashboard Test Plan", max_components=10, max_products=10, max_projects=10
     )
     team.billing_plan = "dashboard_test_plan"
     team.key = number_to_random_token(team.id)
@@ -107,11 +97,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
     # Authenticate with team context
     client.force_login(team.members.first())
     session = client.session
-    session["current_team"] = {
-        "id": team.id,
-        "role": "owner",
-        "key": team.key
-    }
+    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
     # Test authenticated access
@@ -402,9 +388,7 @@ def test_adding_and_removing_components_to_projects(
     assert sample_component in sample_project.components.all()
 
     # Test removing component
-    response = client.post(
-        uri + "?action=remove_components", {"component_" + sample_component.id: sample_component.id}
-    )
+    response = client.post(uri + "?action=remove_components", {"component_" + sample_component.id: sample_component.id})
     assert response.status_code == 302
     assert response.url == uri
 
@@ -438,9 +422,7 @@ def test_adding_and_removing_projects_to_products(
     assert sample_project in sample_product.projects.all()
 
     # Test removing project
-    response = client.post(
-        uri + "?action=remove_projects", {"project_" + sample_project.id: sample_project.id}
-    )
+    response = client.post(uri + "?action=remove_projects", {"project_" + sample_project.id: sample_project.id})
     assert response.status_code == 302
     assert response.url == uri
 

@@ -17,10 +17,12 @@ class TestBaseTemplate:
         assert 'class="sidebar js-sidebar"' in content
 
         # Test user info is present in dropdown
-        assert any([
-            f"<strong>{sample_user.username}</strong>" in content,
-            '<a class="dropdown-item" href="/logout">Log out</a>' in content
-        ])
+        assert any(
+            [
+                f"<strong>{sample_user.username}</strong>" in content,
+                '<a class="dropdown-item" href="/logout">Log out</a>' in content,
+            ]
+        )
 
         # Test basic structure
         assert "<!doctype html>" in content.lower()

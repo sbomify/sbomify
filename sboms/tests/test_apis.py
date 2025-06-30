@@ -1023,7 +1023,8 @@ def test_get_dashboard_summary_with_product_filter(
     client: Client,
 ):
     """Test that product filtering works correctly in dashboard summary."""
-    from sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+    from catalog.models import Component, Product, ProductProject, Project, ProjectComponent
+    from sboms.models import SBOM
 
     team = sample_team_with_owner_member.team
 
@@ -1086,7 +1087,8 @@ def test_get_dashboard_summary_with_project_filter(
     client: Client,
 ):
     """Test that project filtering works correctly in dashboard summary."""
-    from sboms.models import SBOM, Component, Project, ProjectComponent
+    from catalog.models import Component, Project, ProjectComponent
+    from sboms.models import SBOM
 
     team = sample_team_with_owner_member.team
 
@@ -1183,38 +1185,22 @@ def test_patch_public_status_billing_plan_restrictions(
     team.save()
 
     # Try to make component private - should fail
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
 
     # Try to make project private - should fail
-    response = client.patch(
-        project_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(project_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
 
     # Try to make product private - should fail
-    response = client.patch(
-        product_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(product_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
 
     # Test 2: Community plan users can make items public (should succeed)
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": True}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
@@ -1224,20 +1210,12 @@ def test_patch_public_status_billing_plan_restrictions(
 
     # Should succeed for all item types
     for uri, item_name in [(component_uri, "component"), (project_uri, "project"), (product_uri, "product")]:
-        response = client.patch(
-            uri,
-            json.dumps({"is_public": False}),
-            content_type="application/json"
-        )
+        response = client.patch(uri, json.dumps({"is_public": False}), content_type="application/json")
         assert response.status_code == 200, f"Failed for {item_name}: {response.content}"
         assert response.json()["is_public"] is False
 
         # And back to public
-        response = client.patch(
-            uri,
-            json.dumps({"is_public": True}),
-            content_type="application/json"
-        )
+        response = client.patch(uri, json.dumps({"is_public": True}), content_type="application/json")
         assert response.status_code == 200
         assert response.json()["is_public"] is True
 
@@ -1245,11 +1223,7 @@ def test_patch_public_status_billing_plan_restrictions(
     team.billing_plan = None
     team.save()
 
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is False
 
@@ -1284,24 +1258,14 @@ def test_patch_public_status_enterprise_plan_unrestricted(
     )
 
     # Enterprise users should be able to make items private
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is False
 
     # And back to public
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": True}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
-
-
 
 
 @pytest.mark.django_db
@@ -1318,6 +1282,7 @@ def test_community_plan_restriction_bypassed_when_billing_disabled(sample_compon
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     from .test_views import setup_test_session
+
     setup_test_session(client, sample_component.team, sample_component.team.members.first())
 
     # Should be able to make item private even on community plan when billing is disabled

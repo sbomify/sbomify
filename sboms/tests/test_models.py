@@ -1,7 +1,7 @@
 import pytest
 from django.db import IntegrityError, transaction
 
-from sboms.models import Component, Product, Project
+from catalog.models import Component, Product, Project
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
 
@@ -14,21 +14,15 @@ class TestUniqueConstraints:
         team = sample_team_with_owner_member.team
 
         # First project succeeds
-        project = Project.objects.create(
-            name="Project 1",
-            team=team
-        )
+        project = Project.objects.create(name="Project 1", team=team)
 
         # Second project with same name fails
         with pytest.raises(IntegrityError) as exc, transaction.atomic():
-            Project.objects.create(
-                name="Project 1",
-                team=team
-            )
-        assert any(msg in str(exc.value) for msg in [
-            "duplicate key value violates unique constraint",
-            "UNIQUE constraint failed"
-        ])
+            Project.objects.create(name="Project 1", team=team)
+        assert any(
+            msg in str(exc.value)
+            for msg in ["duplicate key value violates unique constraint", "UNIQUE constraint failed"]
+        )
 
         # Clean up
         project.delete()
@@ -38,21 +32,15 @@ class TestUniqueConstraints:
         team = sample_team_with_owner_member.team
 
         # First product succeeds
-        product = Product.objects.create(
-            name="Product 1",
-            team=team
-        )
+        product = Product.objects.create(name="Product 1", team=team)
 
         # Second product with same name fails
         with pytest.raises(IntegrityError) as exc, transaction.atomic():
-            Product.objects.create(
-                name="Product 1",
-                team=team
-            )
-        assert any(msg in str(exc.value) for msg in [
-            "duplicate key value violates unique constraint",
-            "UNIQUE constraint failed"
-        ])
+            Product.objects.create(name="Product 1", team=team)
+        assert any(
+            msg in str(exc.value)
+            for msg in ["duplicate key value violates unique constraint", "UNIQUE constraint failed"]
+        )
 
         # Clean up
         product.delete()
@@ -62,21 +50,15 @@ class TestUniqueConstraints:
         team = sample_team_with_owner_member.team
 
         # First component succeeds
-        component = Component.objects.create(
-            name="Component 1",
-            team=team
-        )
+        component = Component.objects.create(name="Component 1", team=team)
 
         # Second component with same name fails
         with pytest.raises(IntegrityError) as exc, transaction.atomic():
-            Component.objects.create(
-                name="Component 1",
-                team=team
-            )
-        assert any(msg in str(exc.value) for msg in [
-            "duplicate key value violates unique constraint",
-            "UNIQUE constraint failed"
-        ])
+            Component.objects.create(name="Component 1", team=team)
+        assert any(
+            msg in str(exc.value)
+            for msg in ["duplicate key value violates unique constraint", "UNIQUE constraint failed"]
+        )
 
         # Clean up
         component.delete()

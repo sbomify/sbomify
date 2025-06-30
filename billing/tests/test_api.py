@@ -18,7 +18,8 @@ from billing.tests.fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
-from sboms.models import SBOM, Component
+from catalog.models import Component
+from sboms.models import SBOM
 
 # Import SBOM-related fixtures from sboms app
 from sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401

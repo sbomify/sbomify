@@ -1,12 +1,13 @@
 import pytest
 
+from sboms.versioning import CycloneDXSupportedVersion
+
 from ..schemas import (
     CustomLicenseSchema,
     SPDXPackage,
     SPDXSchema,
     get_cyclonedx_module,
 )
-from sboms.versioning import CycloneDXSupportedVersion
 
 
 @pytest.fixture

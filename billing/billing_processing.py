@@ -10,8 +10,8 @@ from django.conf import settings
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
+from catalog.models import Component, Product, Project
 from sbomify.logging import getLogger
-from sboms.models import Component, Product, Project
 from teams.models import Member, Team
 
 from . import email_notifications

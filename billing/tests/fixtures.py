@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
-from sboms.models import Component, Product, ProductProject, Project, ProjectComponent
+from catalog.models import Component, Product, ProductProject, Project, ProjectComponent
 from teams.models import Member, Team
 
 

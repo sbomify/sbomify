@@ -14,9 +14,9 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from catalog.models import Component, Product, Project
 from core.errors import error_response
 from sbomify.logging import getLogger
-from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from . import billing_processing
