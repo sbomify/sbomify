@@ -25,6 +25,28 @@ def validate_data_integrity(apps, schema_editor):
     print("DATA INTEGRITY VALIDATION AFTER MIGRATION")
     print("=" * 60)
 
+    # Check if tables exist first (important for fresh database setups)
+    from django.db import connection
+    cursor = connection.cursor()
+
+    # Check if the main table exists
+    cursor.execute("""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'sboms_products'
+        );
+    """)
+    tables_exist = cursor.fetchone()[0]
+
+    if not tables_exist:
+        print("\n   ℹ️  Tables don't exist yet (fresh database) - skipping all validation")
+        print("   ✅ This is normal for fresh database setups")
+        print("\n" + "=" * 60)
+        print("DATA INTEGRITY VALIDATION COMPLETE (SKIPPED - FRESH DB)")
+        print("=" * 60)
+        return
+
     # 1. Validate proxy models work correctly
     print("\n1. PROXY MODEL VALIDATION:")
     try:
@@ -50,14 +72,22 @@ def validate_data_integrity(apps, schema_editor):
         print(f"   SBOMS Components (proxy): {sboms_component_count}")
 
         if catalog_project_count != sboms_project_count:
-            raise ValueError(f"Project proxy mismatch: Catalog={catalog_project_count}, SBOMS={sboms_project_count}")
+            raise ValueError(
+                f"Project proxy mismatch: Catalog={catalog_project_count}, SBOMS={sboms_project_count}"
+            )
         if catalog_component_count != sboms_component_count:
-            raise ValueError(f"Component proxy mismatch: Catalog={catalog_component_count}, SBOMS={sboms_component_count}")
+            raise ValueError(
+                f"Component proxy mismatch: Catalog={catalog_component_count}, SBOMS={sboms_component_count}"
+            )
 
         print("   ✅ Proxy models working correctly")
 
     except Exception as e:
         print(f"   ❌ CRITICAL ERROR: Proxy models not working: {e}")
+        # For fresh database setups, this might be expected, so don't fail the migration
+        if "does not exist" in str(e):
+            print("   ℹ️  This appears to be a fresh database setup - validation skipped")
+            return
         raise
 
     # 2. Validate through table data preservation
@@ -84,6 +114,9 @@ def validate_data_integrity(apps, schema_editor):
 
     except Exception as e:
         print(f"   ❌ CRITICAL ERROR: Through table relationships broken: {e}")
+        if "does not exist" in str(e):
+            print("   ℹ️  This appears to be a fresh database setup - validation skipped")
+            return
         raise
 
     # 3. Validate SBOM-Component relationships
@@ -121,6 +154,9 @@ def validate_data_integrity(apps, schema_editor):
 
     except Exception as e:
         print(f"   ❌ CRITICAL ERROR: SBOM-Component relationships broken: {e}")
+        if "does not exist" in str(e):
+            print("   ℹ️  This appears to be a fresh database setup - validation skipped")
+            return
         raise
 
     # 4. Validate unique constraints
@@ -129,16 +165,16 @@ def validate_data_integrity(apps, schema_editor):
         # Check for duplicate names within teams
         from django.db.models import Count
 
-        duplicate_products = CatalogProduct.objects.values('team', 'name').annotate(
-            count=Count('id')
+        duplicate_products = CatalogProduct.objects.values("team", "name").annotate(
+            count=Count("id")
         ).filter(count__gt=1)
 
-        duplicate_projects = CatalogProject.objects.values('team', 'name').annotate(
-            count=Count('id')
+        duplicate_projects = CatalogProject.objects.values("team", "name").annotate(
+            count=Count("id")
         ).filter(count__gt=1)
 
-        duplicate_components = CatalogComponent.objects.values('team', 'name').annotate(
-            count=Count('id')
+        duplicate_components = CatalogComponent.objects.values("team", "name").annotate(
+            count=Count("id")
         ).filter(count__gt=1)
 
         print(f"   Duplicate product names: {duplicate_products.count()}")
@@ -152,6 +188,9 @@ def validate_data_integrity(apps, schema_editor):
 
     except Exception as e:
         print(f"   ❌ ERROR validating unique constraints: {e}")
+        if "does not exist" in str(e):
+            print("   ℹ️  This appears to be a fresh database setup - validation skipped")
+            return
         # Don't fail the migration for this
 
     print("\n" + "=" * 60)

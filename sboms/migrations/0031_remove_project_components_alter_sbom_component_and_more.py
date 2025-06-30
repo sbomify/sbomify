@@ -12,10 +12,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name="project",
-            name="components",
-        ),
+        # First, update the SBOM model to reference catalog.Component
         migrations.AlterField(
             model_name="sbom",
             name="component",
@@ -23,117 +20,137 @@ class Migration(migrations.Migration):
                 on_delete=django.db.models.deletion.CASCADE, to="catalog.component"
             ),
         ),
-        migrations.RemoveField(
-            model_name="projectcomponent",
-            name="component",
-        ),
-        migrations.AlterUniqueTogether(
-            name="product",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="product",
-            name="projects",
-        ),
-        migrations.RemoveField(
-            model_name="product",
-            name="team",
-        ),
-        migrations.RemoveField(
-            model_name="project",
-            name="products",
-        ),
-        migrations.RemoveField(
-            model_name="productproject",
-            name="product",
-        ),
-        migrations.AlterUniqueTogether(
-            name="productproject",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="productproject",
-            name="project",
-        ),
-        migrations.AlterUniqueTogether(
-            name="project",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="project",
-            name="team",
-        ),
-        migrations.RemoveField(
-            model_name="projectcomponent",
-            name="project",
-        ),
-        migrations.AlterUniqueTogether(
-            name="projectcomponent",
-            unique_together=None,
-        ),
-        migrations.DeleteModel(
-            name="Component",
-        ),
-        migrations.DeleteModel(
-            name="Product",
-        ),
-        migrations.DeleteModel(
-            name="ProductProject",
-        ),
-        migrations.DeleteModel(
-            name="Project",
-        ),
-        migrations.DeleteModel(
-            name="ProjectComponent",
-        ),
-        migrations.CreateModel(
-            name="Component",
-            fields=[],
-            options={
-                "proxy": True,
-                "indexes": [],
-                "constraints": [],
-            },
-            bases=("catalog.component",),
-        ),
-        migrations.CreateModel(
-            name="Product",
-            fields=[],
-            options={
-                "proxy": True,
-                "indexes": [],
-                "constraints": [],
-            },
-            bases=("catalog.product",),
-        ),
-        migrations.CreateModel(
-            name="ProductProject",
-            fields=[],
-            options={
-                "proxy": True,
-                "indexes": [],
-                "constraints": [],
-            },
-            bases=("catalog.productproject",),
-        ),
-        migrations.CreateModel(
-            name="Project",
-            fields=[],
-            options={
-                "proxy": True,
-                "indexes": [],
-                "constraints": [],
-            },
-            bases=("catalog.project",),
-        ),
-        migrations.CreateModel(
-            name="ProjectComponent",
-            fields=[],
-            options={
-                "proxy": True,
-                "indexes": [],
-                "constraints": [],
-            },
-            bases=("catalog.projectcomponent",),
+
+        # Use SeparateDatabaseAndState to handle the model transition
+        # Database operations: Nothing (catalog app now manages the tables)
+        # State operations: Remove old models and create proxy models
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # No database operations - catalog app manages the tables now
+            ],
+            state_operations=[
+                # Clear all unique_together constraints first before removing fields
+                migrations.AlterUniqueTogether(
+                    name="product",
+                    unique_together=None,
+                ),
+                migrations.AlterUniqueTogether(
+                    name="productproject",
+                    unique_together=None,
+                ),
+                migrations.AlterUniqueTogether(
+                    name="project",
+                    unique_together=None,
+                ),
+                migrations.AlterUniqueTogether(
+                    name="projectcomponent",
+                    unique_together=None,
+                ),
+                # Remove all fields from the old models
+                migrations.RemoveField(
+                    model_name="project",
+                    name="components",
+                ),
+                migrations.RemoveField(
+                    model_name="projectcomponent",
+                    name="component",
+                ),
+                migrations.RemoveField(
+                    model_name="product",
+                    name="projects",
+                ),
+                migrations.RemoveField(
+                    model_name="product",
+                    name="team",
+                ),
+                migrations.RemoveField(
+                    model_name="project",
+                    name="products",
+                ),
+                migrations.RemoveField(
+                    model_name="productproject",
+                    name="product",
+                ),
+                migrations.RemoveField(
+                    model_name="productproject",
+                    name="project",
+                ),
+                migrations.RemoveField(
+                    model_name="project",
+                    name="team",
+                ),
+                migrations.RemoveField(
+                    model_name="projectcomponent",
+                    name="project",
+                ),
+                # Remove the old model definitions from Django's state
+                # (but don't delete the database tables - catalog app manages them now)
+                migrations.DeleteModel(
+                    name="Component",
+                ),
+                migrations.DeleteModel(
+                    name="Product",
+                ),
+                migrations.DeleteModel(
+                    name="ProductProject",
+                ),
+                migrations.DeleteModel(
+                    name="Project",
+                ),
+                migrations.DeleteModel(
+                    name="ProjectComponent",
+                ),
+                # Create new proxy models that point to catalog models
+                migrations.CreateModel(
+                    name="Component",
+                    fields=[],
+                    options={
+                        "proxy": True,
+                        "indexes": [],
+                        "constraints": [],
+                    },
+                    bases=("catalog.component",),
+                ),
+                migrations.CreateModel(
+                    name="Product",
+                    fields=[],
+                    options={
+                        "proxy": True,
+                        "indexes": [],
+                        "constraints": [],
+                    },
+                    bases=("catalog.product",),
+                ),
+                migrations.CreateModel(
+                    name="ProductProject",
+                    fields=[],
+                    options={
+                        "proxy": True,
+                        "indexes": [],
+                        "constraints": [],
+                    },
+                    bases=("catalog.productproject",),
+                ),
+                migrations.CreateModel(
+                    name="Project",
+                    fields=[],
+                    options={
+                        "proxy": True,
+                        "indexes": [],
+                        "constraints": [],
+                    },
+                    bases=("catalog.project",),
+                ),
+                migrations.CreateModel(
+                    name="ProjectComponent",
+                    fields=[],
+                    options={
+                        "proxy": True,
+                        "indexes": [],
+                        "constraints": [],
+                    },
+                    bases=("catalog.projectcomponent",),
+                ),
+            ],
         ),
     ]
