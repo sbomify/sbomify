@@ -104,17 +104,15 @@ def sample_project(
     sample_product: Product,  # noqa: F811
 ) -> Generator[Project, Any, None]:
     with transaction.atomic():
-        project = Project(product=sample_product, name="test project", team_id=sample_product.team_id)
+        project = Project(name="test project", team_id=sample_product.team_id)
         project.save()
 
-        product_project = ProductProject(product=sample_product, project=project)
-        product_project.save()
+        # Use many-to-many relationship
+        sample_product.projects.add(project)
 
     yield project
 
-    with transaction.atomic():
-        product_project.delete()
-        project.delete()
+    project.delete()
 
 
 @pytest.fixture
@@ -122,17 +120,15 @@ def sample_component(
     sample_project: Project,  # noqa: F811
 ) -> Generator[Component, Any, None]:
     with transaction.atomic():
-        component = Component(project=sample_project, name="test component", team_id=sample_project.team_id)
+        component = Component(name="test component", team_id=sample_project.team_id)
         component.save()
 
-        project_component = ProjectComponent(project=sample_project, component=component)
-        project_component.save()
+        # Use many-to-many relationship
+        sample_project.components.add(component)
 
     yield component
 
-    with transaction.atomic():
-        project_component.delete()
-        component.delete()
+    component.delete()
 
 
 @pytest.fixture

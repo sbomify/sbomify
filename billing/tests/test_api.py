@@ -81,12 +81,12 @@ def test_get_usage(
     client.force_login(sample_user)
 
     # Create some test data
-    product = team_with_business_plan.product_set.create(name="Test Product")
-    project = product.project_set.create(
+    product = team_with_business_plan.catalog_products.create(name="Test Product")
+    project = product.projects.create(
         name="Test Project",
         team=team_with_business_plan,  # Add the team reference
     )
-    project.component_set.create(
+    project.components.create(
         name="Test Component",
         team=team_with_business_plan,  # Add the team reference
     )

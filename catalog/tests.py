@@ -509,12 +509,12 @@ class TestCatalogModelEdgeCases:
         assert ProductProject._meta.db_table == "sboms_products_projects"
         assert ProjectComponent._meta.db_table == "sboms_projects_components"
 
-        # Test managed=False
-        assert Product._meta.managed is False
-        assert Project._meta.managed is False
-        assert Component._meta.managed is False
-        assert ProductProject._meta.managed is False
-        assert ProjectComponent._meta.managed is False
+        # Test managed=True
+        assert Product._meta.managed is True
+        assert Project._meta.managed is True
+        assert Component._meta.managed is True
+        assert ProductProject._meta.managed is True
+        assert ProjectComponent._meta.managed is True
 
 
 @pytest.mark.django_db

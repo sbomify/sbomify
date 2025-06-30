@@ -135,11 +135,11 @@ class ProjectSBOMBuilder:
 
         # components section
         self.sbom.components = []
-        for pc in project.projectcomponent_set.all():
-            sbom_path = self.download_component_sbom(pc.component)
-            log.info(f"Downloaded SBOM for component {pc.component.id} to {sbom_path}")
+        for component in project.components.all():
+            sbom_path = self.download_component_sbom(component)
+            log.info(f"Downloaded SBOM for component {component.id} to {sbom_path}")
             if sbom_path is None:
-                log.warning(f"SBOM for component {pc.component.id} not found")
+                log.warning(f"SBOM for component {component.id} not found")
                 continue
 
             try:
@@ -171,7 +171,7 @@ class ProjectSBOMBuilder:
         """
         from core.object_store import S3Client
 
-        sboms = component.sboms.all()
+        sboms = component.sbom_set.all()
 
         # TODO: For now, we download the first SBOM.
         # In the future, we need to support multiple SBOMs for a single component

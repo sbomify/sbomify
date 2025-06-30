@@ -8,7 +8,7 @@ from teams.models import Team
 class Product(models.Model):
     class Meta:
         db_table = "sboms_products"  # Keep exact table name
-        managed = False  # Don't manage table yet
+        managed = True  # Now Django manages these tables
         unique_together = ("team", "name")
         ordering = ["name"]
 
@@ -26,7 +26,7 @@ class Product(models.Model):
 class Project(models.Model):
     class Meta:
         db_table = "sboms_projects"
-        managed = False
+        managed = True
         unique_together = ("team", "name")
         ordering = ["name"]
 
@@ -46,7 +46,7 @@ class Project(models.Model):
 class Component(models.Model):
     class Meta:
         db_table = "sboms_components"
-        managed = False
+        managed = True
         unique_together = ("team", "name")
         ordering = ["name"]
 
@@ -67,7 +67,7 @@ class Component(models.Model):
 class ProductProject(models.Model):
     class Meta:
         db_table = "sboms_products_projects"
-        managed = False
+        managed = True
         unique_together = ("product", "project")
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
@@ -81,7 +81,7 @@ class ProductProject(models.Model):
 class ProjectComponent(models.Model):
     class Meta:
         db_table = "sboms_projects_components"
-        managed = False
+        managed = True
         unique_together = ("project", "component")
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
