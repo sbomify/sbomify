@@ -1,5 +1,5 @@
-# Migration to sync Django's model state with existing database schema
-# This tells Django about fields that already exist in production
+# Migration to add missing component_type field and sync Django state
+# Some fields exist in production (team_id), others don't (component_type)
 
 import django.db.models.deletion
 from django.db import migrations, models
@@ -12,15 +12,16 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Use SeparateDatabaseAndState to handle existing production schema
+        # Actually add component_type field (doesn't exist in production)
+        migrations.AddField(
+            model_name="component",
+            name="component_type",
+            field=models.CharField(choices=[("sbom", "SBOM")], default="sbom", max_length=20),
+        ),
+        # Use SeparateDatabaseAndState for fields that already exist in production
         migrations.SeparateDatabaseAndState(
             state_operations=[
-                # These tell Django about the fields without running SQL
-                migrations.AddField(
-                    model_name="component",
-                    name="component_type",
-                    field=models.CharField(choices=[("sbom", "SBOM")], default="sbom", max_length=20),
-                ),
+                # These tell Django about fields that already exist
                 migrations.AddField(
                     model_name="component",
                     name="team",
@@ -101,7 +102,7 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-            # Empty database operations - no actual SQL runs
+            # Empty database operations - these fields already exist
             database_operations=[],
         ),
     ]
