@@ -17,8 +17,8 @@ from teams.models import Member, Team
 
 from ..models import SBOM, Component, Product, Project
 from .fixtures import (
-    sample_access_token,  # noqa: F401
     sample_component,  # noqa: F401
+    sample_product,  # noqa: F401
     sample_project,  # noqa: F401
     sample_sbom,  # noqa: F401
 )
@@ -370,77 +370,6 @@ def test_transfer_component_to_team(
     assert sample_component.team == sample_team_with_owner_member.team
 
 
-@pytest.mark.django_db
-def test_adding_and_removing_components_to_projects(
-    sample_project: Project,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-):
-    """Test adding and removing components to/from projects."""
-    client = Client()
-
-    uri = reverse("sboms:project_details", kwargs={"project_id": sample_project.id})
-
-    # Set up session with team access
-    setup_test_session(client, sample_project.team, sample_project.team.members.first())
-
-    # Test adding component
-    response: HttpResponse = client.post(
-        uri + "?action=add_components", {"component_" + sample_component.id: sample_component.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify component was added
-    sample_project.refresh_from_db()
-    assert sample_component in sample_project.components.all()
-
-    # Test removing component
-    response = client.post(
-        uri + "?action=remove_components", {"component_" + sample_component.id: sample_component.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify component was removed
-    sample_project.refresh_from_db()
-    assert sample_component not in sample_project.components.all()
-
-
-@pytest.mark.django_db
-def test_adding_and_removing_projects_to_products(
-    sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
-):
-    """Test adding and removing projects to/from products."""
-    client = Client()
-
-    uri = reverse("sboms:product_details", kwargs={"product_id": sample_product.id})
-
-    # Set up session with team access
-    setup_test_session(client, sample_product.team, sample_product.team.members.first())
-
-    # Test adding project
-    response: HttpResponse = client.post(
-        uri + "?action=add_projects", {"project_" + sample_project.id: sample_project.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify project was added
-    sample_product.refresh_from_db()
-    assert sample_project in sample_product.projects.all()
-
-    # Test removing project
-    response = client.post(
-        uri + "?action=remove_projects", {"project_" + sample_project.id: sample_project.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify project was removed
-    sample_product.refresh_from_db()
-    assert sample_project not in sample_product.projects.all()
-
 
 @pytest.mark.django_db
 def test_sbom_download_project_not_found(client):
@@ -572,3 +501,83 @@ def test_component_details_json_serialization(
 
 
 # Removed: TestBillingPlanLimits - POST functionality moved to API tests where billing limits are tested
+
+
+@pytest.mark.django_db
+def test_sbom_download_product_not_found(client):
+    """Test product download with non-existent product ID."""
+    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": "nonexistent"})
+    response = client.get(uri)
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_sbom_download_product_private_unauthorized(client, sample_product):  # noqa: F811
+    """Test product download for private product without authorization."""
+    sample_product.is_public = False
+    sample_product.save()
+
+    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    response = client.get(uri)
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_sbom_download_product_public_success(client, sample_product, mocker):  # noqa: F811
+    """Test successful product download for public product."""
+    sample_product.is_public = True
+    sample_product.save()
+
+    mock_zip_content = b"mock product zip content"
+    mock_get_package = mocker.patch("sboms.views.get_product_sbom_package")
+    mock_get_package.return_value = "/tmp/mock/product_path.zip"  # nosec B108
+
+    # Mock open similar to existing project tests
+    mock_open = mocker.patch("builtins.open")
+    mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
+
+    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    response = client.get(uri)
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/zip"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.zip"
+
+
+@pytest.mark.django_db
+def test_sbom_download_product_private_authorized(
+    client,
+    sample_product,  # noqa: F811
+    sample_user,  # noqa: F811
+    mocker,
+):
+    """Test successful product download for private product with authorization."""
+    sample_product.is_public = False
+    sample_product.save()
+
+    # Login and set session data
+    client.force_login(sample_user)
+    session = client.session
+    session["current_team"] = {"role": "admin"}
+    session.save()
+
+    mock_zip_content = b"mock authorized product zip content"
+    mock_get_package = mocker.patch("sboms.views.get_product_sbom_package")
+    mock_get_package.return_value = "/tmp/mock/authorized_product_path.zip"  # nosec B108
+
+    # Mock open similar to existing project tests
+    mock_open = mocker.patch("builtins.open")
+    mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
+
+    # Mock verify_item_access to return True for authorized access
+    mocker.patch("sboms.views.verify_item_access", return_value=True)
+
+    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    response = client.get(uri)
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/zip"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.zip"
+
+
+

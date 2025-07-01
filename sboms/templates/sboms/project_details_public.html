@@ -21,9 +21,22 @@ project: Project object
     <div class="pp-content-container">
       <div class="pp-content-bg" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};"></div>
       <div class="pp-content">
-        <h3 class="page-title" style="color: {{ brand.accent_color|default:'#7c8b9d' }};">
-          Project: {{ project.name }}
-        </h3>
+        <div class="page-header mb-4">
+          <div class="d-flex align-items-center gap-3 mb-2">
+            <h1 class="page-title mb-0" style="color: {{ brand.accent_color|default:'#7c8b9d' }};">
+              {{ project.name }}
+            </h1>
+          </div>
+          <div class="text-muted">
+            <small class="me-3">
+              <i class="fas fa-project-diagram me-1"></i>Project
+            </small>
+            <small>
+              <i class="fas fa-fingerprint me-1"></i>
+              <span class="vc-copyable-value" data-value="{{ project.id }}">{{ project.id }}</span>
+            </small>
+          </div>
+        </div>
 
         <div class="row">
           <div class="col-12 col-lg-6">
@@ -80,7 +93,7 @@ project: Project object
     <div class="credits">
       Powered by <a href="https://sbomify.com"><img src="/static/img/sbomify.svg" alt="sbomify logo" /></a>
     </div>
-	</main>
+        </main>
 {% endblock %}
 
 {% block scripts %}

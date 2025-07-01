@@ -19,10 +19,8 @@ from sboms.schemas import (
     ItemTypes,
     ProductCreateSchema,
     ProductPatchSchema,
-    ProductProjectLinkSchema,
     ProductResponseSchema,
     ProductUpdateSchema,
-    ProjectComponentLinkSchema,
     ProjectCreateSchema,
     ProjectPatchSchema,
     ProjectResponseSchema,
@@ -311,8 +309,53 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
     try:
         with transaction.atomic():
-            # Only update fields that were provided
+            # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
+            project_ids = update_data.pop("project_ids", None)
+
+            # Validate public/private constraints before making changes
+            new_is_public = update_data.get("is_public", product.is_public)
+
+            # If making product public, check if it has private projects
+            if new_is_public and not product.is_public:
+                private_projects = product.projects.filter(is_public=False)
+                if private_projects.exists():
+                    project_names = ", ".join(private_projects.values_list("name", flat=True))
+                    return 400, {
+                        "detail": (
+                            f"Cannot make product public because it contains private projects: {project_names}. "
+                            "Please make all projects public first."
+                        )
+                    }
+
+            # If updating project relationships, validate constraints
+            if project_ids is not None:
+                # Verify all projects exist and belong to the same team
+                projects = Project.objects.filter(id__in=project_ids, team_id=product.team_id)
+                if len(projects) != len(project_ids):
+                    return 400, {"detail": "Some projects were not found or don't belong to this team"}
+
+                # Verify access to all projects
+                for project in projects:
+                    if not verify_item_access(request, project, ["owner", "admin"]):
+                        return 403, {"detail": f"No permission to modify project {project.name}"}
+
+                # If product is (or will be) public, ensure no private projects are being assigned
+                if new_is_public:
+                    private_projects = [p for p in projects if not p.is_public]
+                    if private_projects:
+                        project_names = ", ".join([p.name for p in private_projects])
+                        return 400, {
+                            "detail": (
+                                f"Cannot assign private projects to a public product: {project_names}. "
+                                "Please make these projects public first or keep the product private."
+                            )
+                        }
+
+                # Update relationships
+                product.projects.set(projects)
+
+            # Update simple fields
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
@@ -345,68 +388,6 @@ def delete_product(request: HttpRequest, product_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.post(
-    "/products/{product_id}/projects",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-)
-def link_projects_to_product(request: HttpRequest, product_id: str, payload: ProductProjectLinkSchema):
-    """Link projects to a product."""
-    try:
-        product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can link projects to products"}
-
-    try:
-        projects = Project.objects.filter(id__in=payload.project_ids, team_id=product.team_id)
-
-        # Verify access to all projects
-        for project in projects:
-            if not verify_item_access(request, project, ["owner", "admin"]):
-                return 403, {"detail": f"No permission to link project {project.name}"}
-
-        with transaction.atomic():
-            product.projects.add(*projects)
-
-        return 204, None
-    except Exception as e:
-        log.error(f"Error linking projects to product {product_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.delete(
-    "/products/{product_id}/projects",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-)
-def unlink_projects_from_product(request: HttpRequest, product_id: str, payload: ProductProjectLinkSchema):
-    """Unlink projects from a product."""
-    try:
-        product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can unlink projects from products"}
-
-    try:
-        projects = Project.objects.filter(id__in=payload.project_ids, team_id=product.team_id)
-
-        # Verify access to all projects
-        for project in projects:
-            if not verify_item_access(request, project, ["owner", "admin"]):
-                return 403, {"detail": f"No permission to unlink project {project.name}"}
-
-        with transaction.atomic():
-            product.projects.remove(*projects)
-
-        return 204, None
-    except Exception as e:
-        log.error(f"Error unlinking projects from product {product_id}: {e}")
         return 400, {"detail": str(e)}
 
 
@@ -538,8 +519,65 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 
     try:
         with transaction.atomic():
-            # Only update fields that were provided
+            # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
+            component_ids = update_data.pop("component_ids", None)
+
+            # Validate public/private constraints before making changes
+            new_is_public = update_data.get("is_public", project.is_public)
+
+            # If making project public, check if it has private components
+            if new_is_public and not project.is_public:
+                private_components = project.components.filter(is_public=False)
+                if private_components.exists():
+                    component_names = ", ".join(private_components.values_list("name", flat=True))
+                    return 400, {
+                        "detail": (
+                            f"Cannot make project public because it contains private components: {component_names}. "
+                            "Please make all components public first."
+                        )
+                    }
+
+            # If making project private, check if it's assigned to any public products
+            if not new_is_public and project.is_public:
+                public_products = project.product_set.filter(is_public=True)
+                if public_products.exists():
+                    product_names = ", ".join(public_products.values_list("name", flat=True))
+                    return 400, {
+                        "detail": (
+                            f"Cannot make project private because it's assigned to public products: {product_names}. "
+                            "Please remove it from these products first or make the products private."
+                        )
+                    }
+
+            # If updating component relationships, validate constraints
+            if component_ids is not None:
+                # Verify all components exist and belong to the same team
+                components = Component.objects.filter(id__in=component_ids, team_id=project.team_id)
+                if len(components) != len(component_ids):
+                    return 400, {"detail": "Some components were not found or don't belong to this team"}
+
+                # Verify access to all components
+                for component in components:
+                    if not verify_item_access(request, component, ["owner", "admin"]):
+                        return 403, {"detail": f"No permission to modify component {component.name}"}
+
+                # If project is (or will be) public, ensure no private components are being assigned
+                if new_is_public:
+                    private_components = [c for c in components if not c.is_public]
+                    if private_components:
+                        component_names = ", ".join([c.name for c in private_components])
+                        return 400, {
+                            "detail": (
+                                f"Cannot assign private components to a public project: {component_names}. "
+                                "Please make these components public first or keep the project private."
+                            )
+                        }
+
+                # Update relationships
+                project.components.set(components)
+
+            # Update simple fields
             for field, value in update_data.items():
                 setattr(project, field, value)
             project.save()
@@ -572,68 +610,6 @@ def delete_project(request: HttpRequest, project_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting project {project_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.post(
-    "/projects/{project_id}/components",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-)
-def link_components_to_project(request: HttpRequest, project_id: str, payload: ProjectComponentLinkSchema):
-    """Link components to a project."""
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can link components to projects"}
-
-    try:
-        components = Component.objects.filter(id__in=payload.component_ids, team_id=project.team_id)
-
-        # Verify access to all components
-        for component in components:
-            if not verify_item_access(request, component, ["owner", "admin"]):
-                return 403, {"detail": f"No permission to link component {component.name}"}
-
-        with transaction.atomic():
-            project.components.add(*components)
-
-        return 204, None
-    except Exception as e:
-        log.error(f"Error linking components to project {project_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.delete(
-    "/projects/{project_id}/components",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-)
-def unlink_components_from_project(request: HttpRequest, project_id: str, payload: ProjectComponentLinkSchema):
-    """Unlink components from a project."""
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can unlink components from projects"}
-
-    try:
-        components = Component.objects.filter(id__in=payload.component_ids, team_id=project.team_id)
-
-        # Verify access to all components
-        for component in components:
-            if not verify_item_access(request, component, ["owner", "admin"]):
-                return 403, {"detail": f"No permission to unlink component {component.name}"}
-
-        with transaction.atomic():
-            project.components.remove(*components)
-
-        return 204, None
-    except Exception as e:
-        log.error(f"Error unlinking components from project {project_id}: {e}")
         return 400, {"detail": str(e)}
 
 
@@ -765,8 +741,23 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
     try:
         with transaction.atomic():
-            # Only update fields that were provided
+            # Validate public/private constraints before making changes
             update_data = payload.model_dump(exclude_unset=True)
+            new_is_public = update_data.get("is_public", component.is_public)
+
+            # If making component private, check if it's assigned to any public projects
+            if not new_is_public and component.is_public:
+                public_projects = component.project_set.filter(is_public=True)
+                if public_projects.exists():
+                    project_names = ", ".join(public_projects.values_list("name", flat=True))
+                    return 400, {
+                        "detail": (
+                            f"Cannot make component private because it's assigned to public projects: {project_names}. "
+                            "Please remove it from these projects first or make the projects private."
+                        )
+                    }
+
+            # Only update fields that were provided
             for field, value in update_data.items():
                 setattr(component, field, value)
             component.save()

@@ -75,6 +75,11 @@ urlpatterns: list[URLPattern] = [
         views.sbom_download_project,
         name="sbom_download_project",
     ),
+    path(
+        "product/<str:product_id>/sbom/download",
+        views.sbom_download_product,
+        name="sbom_download_product",
+    ),
     path("sbom/<str:sbom_id>/", views.sbom_details_private, name="sbom_details"),
     path("public/sbom/<str:sbom_id>/", views.sbom_details_public, name="sbom_details_public"),
     path(

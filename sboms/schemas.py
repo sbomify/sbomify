@@ -355,6 +355,7 @@ class ProductPatchSchema(BaseModel):
 
     name: str | None = Field(None, max_length=255, min_length=1)
     is_public: bool | None = None
+    project_ids: list[str] | None = None
 
 
 class ProductResponseSchema(BaseModel):
@@ -398,6 +399,7 @@ class ProjectPatchSchema(BaseModel):
     name: str | None = Field(None, max_length=255, min_length=1)
     is_public: bool | None = None
     metadata: dict | None = None
+    component_ids: list[str] | None = None
 
 
 class ProjectResponseSchema(BaseModel):
