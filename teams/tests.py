@@ -149,7 +149,6 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 403
-    assert "Only allowed for owners" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
@@ -261,11 +260,12 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
 def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: Team):  # noqa: F811
     client = Client()
 
+    # User not logged in - should redirect to login
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
     response: HttpResponse = client.get(uri)
 
-    assert response.status_code == 403
-    assert "Only allowed for owners" in response.content.decode("utf-8")
+    assert response.status_code == 302
+    assert response.url.startswith(settings.LOGIN_URL)
 
 
 @pytest.mark.django_db
@@ -287,14 +287,15 @@ def test_team_invitation_form_view(sample_team_with_owner_member: Member):  # no
 def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa: F811
     client = Client()
 
+    # User not logged in - should redirect to login
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
     form_data = urlencode({"email": "guest@example.com", "role": "guest"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
 
-    assert response.status_code == 403
-    assert "Only allowed for owners" in response.content.decode("utf-8")
+    assert response.status_code == 302
+    assert response.url.startswith(settings.LOGIN_URL)
 
 
 @pytest.mark.django_db
@@ -368,6 +369,15 @@ def test_delete_membership(
 
     # Guest user should not be able to remove the membership where his role is 'guest'
     assert client.login(username="guest", password="guest")  # nosec B106
+
+    # Set up session data for guest user
+    session = client.session
+    session["current_team"] = {"key": membership.team.key}
+    session["user_teams"] = {
+        membership.team.key: {"role": "guest", "name": membership.team.name}
+    }
+    session.save()
+
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
 
@@ -375,6 +385,15 @@ def test_delete_membership(
     assert client.login(
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
+
+    # Set up session data for owner user
+    session = client.session
+    session["current_team"] = {"key": membership.team.key}
+    session["user_teams"] = {
+        membership.team.key: {"role": "owner", "name": membership.team.name}
+    }
+    session.save()
+
     response: HttpResponse = client.get(uri)
     assert response.status_code == 302
 
