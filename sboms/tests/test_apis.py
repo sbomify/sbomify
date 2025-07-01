@@ -34,33 +34,17 @@ def test_sbom_api_is_public(
 ):
     client = Client()
 
-    unknown_uri = reverse(
-        "api-1:get_item_public_status",
-        kwargs={"item_type": "unknown", "item_id": "random"},
-    )
+    # Use core API endpoints instead of removed public_status endpoints
+    component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_sbom.component.id})
+    project_uri = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
+    product_uri = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
 
-    component_uri = reverse(
-        "api-1:get_item_public_status",
-        kwargs={"item_type": "component", "item_id": sample_sbom.component.id},
-    )
-
-    project_uri = reverse(
-        "api-1:get_item_public_status",
-        kwargs={"item_type": "project", "item_id": sample_project.id},
-    )
-
-    product_uri = reverse(
-        "api-1:get_item_public_status",
-        kwargs={"item_type": "product", "item_id": sample_product.id},
-    )
+    component_get_uri = reverse("api-1:get_component", kwargs={"component_id": sample_sbom.component.id})
+    project_get_uri = reverse("api-1:get_project", kwargs={"project_id": sample_project.id})
+    product_get_uri = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
 
     # Set up session with team access
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
-
-    # Test for unknown type
-    response: HttpResponse = client.get(unknown_uri, content_type="application/json")
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid item type"
 
     # Make the component public
     response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
@@ -68,7 +52,7 @@ def test_sbom_api_is_public(
     assert response.json()["is_public"] is True
 
     # Verify component is public
-    response = client.get(component_uri, content_type="application/json")
+    response = client.get(component_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
@@ -78,7 +62,7 @@ def test_sbom_api_is_public(
     assert response.json()["is_public"] is True
 
     # Verify project is public
-    response = client.get(project_uri, content_type="application/json")
+    response = client.get(project_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
@@ -88,7 +72,7 @@ def test_sbom_api_is_public(
     assert response.json()["is_public"] is True
 
     # Verify product is public
-    response = client.get(product_uri, content_type="application/json")
+    response = client.get(product_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
@@ -312,20 +296,29 @@ def test_component_copy_metadata_api(
                 {"name": "B2", "email": "b2@example.com", "phone": ""},
             ],
             "licenses": ["MIT"],
-            "lifecycle_phase": "development",
+            "lifecycle_phase": "design",
         },
     )
 
-    url = reverse("api-1:copy_component_metadata")
-    payload = {
-        "source_component_id": another_component.id,
-        "target_component_id": sample_component.id,
-    }
+    # Use the new approach: GET source metadata + PATCH target
+    # First, get metadata from source component
+    source_url = reverse("api-1:get_component_metadata", kwargs={"component_id": another_component.id})
+    response = client.get(
+        source_url,
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+    )
+    assert response.status_code == 200
+    source_metadata = response.json()
 
-    # Call the '/sboms/component/copy-meta' API endpoint via HTTP PUT request
-    response = client.put(
-        url,
-        json.dumps(payload),
+    # Remove component-specific fields (id, name) that shouldn't be copied
+    metadata_to_copy = {k: v for k, v in source_metadata.items() if k not in ('id', 'name')}
+
+    # Then, patch the target component with the copied metadata
+    target_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        target_url,
+        json.dumps(metadata_to_copy),
         content_type="application/json",
         headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
     )
@@ -339,7 +332,7 @@ def test_component_copy_metadata_api(
     assert sample_component.metadata["supplier"]["contacts"][0]["name"] == "C2"
     assert sample_component.metadata["authors"][0]["name"] == "B1"
     assert sample_component.metadata["licenses"][0] == "MIT"
-    assert sample_component.metadata["lifecycle_phase"] == "development"
+    assert sample_component.metadata["lifecycle_phase"] == "design"
 
 
 @pytest.mark.django_db
@@ -1135,6 +1128,7 @@ def test_patch_public_status_billing_plan_restrictions(
     sample_product: Product,  # noqa: F811
     sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that billing plan restrictions are enforced for public status toggling."""
     client = Client()
@@ -1158,35 +1152,35 @@ def test_patch_public_status_billing_plan_restrictions(
         max_components=200,
     )
 
-    # Set up session with team access
+    # Set up authentication and session
     team = sample_product.team
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, team, team.members.first())
 
     # Test URLs for all item types
-    component_uri = reverse(
-        "api-1:patch_item_public_status",
-        kwargs={"item_type": "component", "item_id": sample_component.id},
-    )
-
-    project_uri = reverse(
-        "api-1:patch_item_public_status",
-        kwargs={"item_type": "project", "item_id": sample_project.id},
-    )
-
-    product_uri = reverse(
-        "api-1:patch_item_public_status",
-        kwargs={"item_type": "product", "item_id": sample_product.id},
-    )
+    component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
+    project_uri = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
+    product_uri = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
 
     # Test 1: Community plan users cannot make items private
     team.billing_plan = community_plan.key
     team.save()
 
+    # First, make all items public so we can test making them private
+    for uri in [component_uri, project_uri, product_uri]:
+        client.patch(
+            uri,
+            json.dumps({"is_public": True}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        )
+
     # Try to make component private - should fail
     response = client.patch(
         component_uri,
         json.dumps({"is_public": False}),
-        content_type="application/json"
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1195,7 +1189,8 @@ def test_patch_public_status_billing_plan_restrictions(
     response = client.patch(
         project_uri,
         json.dumps({"is_public": False}),
-        content_type="application/json"
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1204,7 +1199,8 @@ def test_patch_public_status_billing_plan_restrictions(
     response = client.patch(
         product_uri,
         json.dumps({"is_public": False}),
-        content_type="application/json"
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1213,7 +1209,8 @@ def test_patch_public_status_billing_plan_restrictions(
     response = client.patch(
         component_uri,
         json.dumps({"is_public": True}),
-        content_type="application/json"
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1222,24 +1219,64 @@ def test_patch_public_status_billing_plan_restrictions(
     team.billing_plan = business_plan.key
     team.save()
 
-    # Should succeed for all item types
-    for uri, item_name in [(component_uri, "component"), (project_uri, "project"), (product_uri, "product")]:
-        response = client.patch(
-            uri,
-            json.dumps({"is_public": False}),
-            content_type="application/json"
-        )
-        assert response.status_code == 200, f"Failed for {item_name}: {response.content}"
-        assert response.json()["is_public"] is False
+    # Need to handle hierarchy constraints: make product private first, then project, then component
+    # Product can be made private independently
+    response = client.patch(
+        product_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200, f"Failed for product: {response.content}"
+    assert response.json()["is_public"] is False
 
-        # And back to public
-        response = client.patch(
-            uri,
-            json.dumps({"is_public": True}),
-            content_type="application/json"
-        )
-        assert response.status_code == 200
-        assert response.json()["is_public"] is True
+    # Project can be made private independently
+    response = client.patch(
+        project_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200, f"Failed for project: {response.content}"
+    assert response.json()["is_public"] is False
+
+    # Now component can be made private since project is private
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200, f"Failed for component: {response.content}"
+    assert response.json()["is_public"] is False
+
+    # Test making them public again (reverse order)
+    response = client.patch(
+        component_uri,
+        json.dumps({"is_public": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
+
+    response = client.patch(
+        project_uri,
+        json.dumps({"is_public": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
+
+    response = client.patch(
+        product_uri,
+        json.dumps({"is_public": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is True
 
     # Test 4: Teams without billing plan can make items private (fallback behavior)
     team.billing_plan = None
@@ -1248,7 +1285,8 @@ def test_patch_public_status_billing_plan_restrictions(
     response = client.patch(
         component_uri,
         json.dumps({"is_public": False}),
-        content_type="application/json"
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1278,10 +1316,7 @@ def test_patch_public_status_enterprise_plan_unrestricted(
 
     setup_test_session(client, team, team.members.first())
 
-    component_uri = reverse(
-        "api-1:patch_item_public_status",
-        kwargs={"item_type": "component", "item_id": sample_component.id},
-    )
+    component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
 
     # Enterprise users should be able to make items private
     response = client.patch(
@@ -1309,7 +1344,7 @@ def test_patch_public_status_enterprise_plan_unrestricted(
 def test_community_plan_restriction_bypassed_when_billing_disabled(sample_component, sample_access_token):
     """Test that community plan restrictions are bypassed when billing is disabled."""
     client = Client()
-    url = reverse("api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id})
+    url = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
 
     # Set team to community plan
     sample_component.team.billing_plan = "community"

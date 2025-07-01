@@ -1,11 +1,12 @@
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Query, Router
+from ninja.decorators import decorate_view
 from ninja.security import django_auth
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from access_tokens.auth import PersonalAccessTokenAuth
+from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
 from billing.config import is_billing_enabled
 from billing.models import BillingPlan
 from core.object_store import S3Client
@@ -13,9 +14,13 @@ from sbomify.logging import getLogger
 from sboms.models import Component, Product, Project
 from sboms.schemas import (
     ComponentCreateSchema,
+    ComponentMetaData,
+    ComponentMetaDataPatch,
     ComponentPatchSchema,
     ComponentResponseSchema,
     ComponentUpdateSchema,
+    DashboardSBOMUploadInfo,
+    DashboardStatsResponse,
     ItemTypes,
     ProductCreateSchema,
     ProductPatchSchema,
@@ -316,6 +321,20 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", product.is_public)
 
+            # Check billing plan restrictions when trying to make items private
+            if not new_is_public and product.is_public:
+                # Get the team from the product
+                team = product.team
+
+                # Only enforce billing restrictions if billing is enabled
+                if is_billing_enabled() and team.billing_plan == "community":
+                    return 403, {
+                        "detail": (
+                            "Community plan users cannot make items private. "
+                            "Upgrade to a paid plan to enable private items."
+                        )
+                    }
+
             # If making product public, check if it has private projects
             if new_is_public and not product.is_public:
                 private_projects = product.projects.filter(is_public=False)
@@ -525,6 +544,20 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", project.is_public)
+
+            # Check billing plan restrictions when trying to make items private
+            if not new_is_public and project.is_public:
+                # Get the team from the project
+                team = project.team
+
+                # Only enforce billing restrictions if billing is enabled
+                if is_billing_enabled() and team.billing_plan == "community":
+                    return 403, {
+                        "detail": (
+                            "Community plan users cannot make items private. "
+                            "Upgrade to a paid plan to enable private items."
+                        )
+                    }
 
             # If making project public, check if it has private components
             if new_is_public and not project.is_public:
@@ -745,6 +778,20 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             update_data = payload.model_dump(exclude_unset=True)
             new_is_public = update_data.get("is_public", component.is_public)
 
+            # Check billing plan restrictions when trying to make items private
+            if not new_is_public and component.is_public:
+                # Get the team from the component
+                team = component.team
+
+                # Only enforce billing restrictions if billing is enabled
+                if is_billing_enabled() and team.billing_plan == "community":
+                    return 403, {
+                        "detail": (
+                            "Community plan users cannot make items private. "
+                            "Upgrade to a paid plan to enable private items."
+                        )
+                    }
+
             # If making component private, check if it's assigned to any public projects
             if not new_is_public and component.is_public:
                 public_projects = component.project_set.filter(is_public=True)
@@ -803,3 +850,182 @@ def delete_component(request: HttpRequest, component_id: str):
     except Exception as e:
         log.error(f"Error deleting component {component_id}: {e}")
         return 400, {"detail": str(e)}
+
+
+# =============================================================================
+# COMPONENT METADATA ENDPOINTS
+# =============================================================================
+
+
+@router.get(
+    "/components/{component_id}/metadata",
+    response={
+        200: ComponentMetaData,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    exclude_none=True,
+    auth=None,
+)
+@decorate_view(optional_auth)
+def get_component_metadata(request, component_id: str):
+    """Get metadata for a component."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found"}
+
+    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+        return 403, {"detail": "Forbidden"}
+
+    metadata = component.metadata or {}
+
+    # Remove extra fields from contacts and authors
+    def strip_extra_fields(obj_list):
+        allowed = {"name", "email", "phone"}
+        return [
+            {k: v for k, v in obj.items() if k in allowed and v is not None}
+            for obj in obj_list
+            if isinstance(obj, dict)
+        ]
+
+    supplier = metadata.get("supplier", {})
+    if "contacts" in supplier:
+        supplier["contacts"] = strip_extra_fields(supplier["contacts"])
+    metadata["supplier"] = supplier
+
+    if "authors" in metadata:
+        metadata["authors"] = strip_extra_fields(metadata["authors"])
+
+    # Include component id and name in the response
+    metadata["id"] = component.id
+    metadata["name"] = component.name
+
+    return metadata
+
+
+@router.patch(
+    "/components/{component_id}/metadata",
+    response={
+        204: None,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+)
+def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
+    """Partially update metadata for a component."""
+    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found"}
+
+    if not verify_item_access(request, component, ["owner", "admin"]):
+        return 403, {"detail": "Forbidden"}
+
+    try:
+        # Get existing metadata
+        existing_metadata = component.metadata or {}
+
+        # Convert incoming metadata to dict, excluding unset fields
+        meta_dict = metadata.model_dump(exclude_unset=True)
+
+        # Only process licenses if they were explicitly provided in the request
+        if "licenses" in meta_dict:
+            licenses = meta_dict.get("licenses", [])
+            if licenses is None:
+                licenses = []
+            meta_dict["licenses"] = licenses
+
+        # Merge with existing metadata
+        updated_metadata = {**existing_metadata, **meta_dict}
+
+        log.debug(f"Final metadata to be saved: {updated_metadata}")
+        component.metadata = updated_metadata
+        component.save()
+        return 204, None
+    except ValidationError as ve:
+        log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
+        log.error(f"Failed validation data: {metadata.model_dump()}")
+        return 422, {"detail": str(ve.errors())}
+    except Exception as e:
+        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
+        return 400, {"detail": str(e)}
+
+
+# =============================================================================
+# DASHBOARD ENDPOINTS
+# =============================================================================
+
+
+@router.get(
+    "/dashboard/summary",
+    response={200: DashboardStatsResponse, 403: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def get_dashboard_summary(
+    request: HttpRequest,
+    component_id: str | None = Query(None),
+    product_id: str | None = Query(None),
+    project_id: str | None = Query(None),
+):
+    """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required."}
+
+    user_teams_qs = Team.objects.filter(member__user=request.user)
+
+    # Base querysets for the user's teams
+    products_qs = Product.objects.filter(team__in=user_teams_qs)
+    projects_qs = Project.objects.filter(team__in=user_teams_qs)
+    components_qs = Component.objects.filter(team__in=user_teams_qs)
+
+    # Import SBOM here to avoid circular import
+    from sboms.models import SBOM
+
+    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
+
+    # Apply context-specific filtering
+    if product_id:
+        # When viewing a product, show projects and components within that product
+        products_qs = products_qs.filter(id=product_id)
+        projects_qs = projects_qs.filter(products__id=product_id)
+        components_qs = components_qs.filter(projects__products__id=product_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
+    elif project_id:
+        # When viewing a project, show components within that project
+        projects_qs = projects_qs.filter(id=project_id)
+        components_qs = components_qs.filter(projects__id=project_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
+    elif component_id:
+        # When viewing a component, filter SBOMs for that component only
+        components_qs = components_qs.filter(id=component_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
+
+    # Get counts
+    total_products = products_qs.count()
+    total_projects = projects_qs.count()
+    total_components = components_qs.count()
+
+    # Get latest uploads
+    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
+
+    latest_uploads_data = [
+        DashboardSBOMUploadInfo(
+            component_name=sbom.component.name,
+            sbom_name=sbom.name,
+            sbom_version=sbom.version,
+            created_at=sbom.created_at,
+        )
+        for sbom in latest_sboms_qs
+    ]
+
+    return 200, DashboardStatsResponse(
+        total_products=total_products,
+        total_projects=total_projects,
+        total_components=total_components,
+        latest_uploads=latest_uploads_data,
+    )

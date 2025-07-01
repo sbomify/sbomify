@@ -116,7 +116,7 @@ const getStats = async () => {
   isLoading.value = true;
   errorMessage.value = null;
 
-  let apiUrl = '/api/v1/sboms/dashboard/summary/';
+      let apiUrl = '/api/v1/dashboard/summary';
   const params = new URLSearchParams();
 
   // Add appropriate filter parameters based on context

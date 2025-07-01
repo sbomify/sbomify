@@ -328,7 +328,7 @@
     };
 
     try {
-      const response = await $axios.get(`/api/v1/sboms/component/${props.componentId}/meta`);
+      const response = await $axios.get(`/api/v1/components/${props.componentId}/metadata`);
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);
       }
@@ -423,7 +423,7 @@
         return;
       }
 
-      const response = await $axios.patch(`/api/v1/sboms/component/${props.componentId}/meta`, updatePayload)
+      const response = await $axios.patch(`/api/v1/components/${props.componentId}/metadata`, updatePayload)
 
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);

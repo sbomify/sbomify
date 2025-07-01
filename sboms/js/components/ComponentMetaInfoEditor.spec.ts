@@ -74,7 +74,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       mockAxios.get.mockResolvedValueOnce(createMockResponse(metadataWithNullLifecycle))
 
-      const response = await mockAxios.get(`/api/v1/sboms/component/${mockComponentId}/meta`)
+      const response = await mockAxios.get(`/api/v1/components/${mockComponentId}/metadata`)
 
       expect(response.data.lifecycle_phase).toBeNull()
       expect(response.status).toBe(200)
@@ -85,10 +85,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       const updatePayload = {
         lifecycle_phase: LifecyclePhase.Build
       }
-      await mockAxios.patch(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
+          await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, updatePayload)
 
-      expect(mockAxios.patch).toHaveBeenCalledWith(
-        `/api/v1/sboms/component/${mockComponentId}/meta`,
+    expect(mockAxios.patch).toHaveBeenCalledWith(
+      `/api/v1/components/${mockComponentId}/metadata`,
         updatePayload
       )
     })
@@ -106,10 +106,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         licenses: metadataWithNullLifecycle.licenses,
         lifecycle_phase: metadataWithNullLifecycle.lifecycle_phase
       }
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updatePayload)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
-        `/api/v1/sboms/component/${mockComponentId}/meta`,
+        `/api/v1/components/${mockComponentId}/metadata`,
         updatePayload
       )
       expect(updatePayload.lifecycle_phase).toBeNull()
@@ -132,10 +132,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
           lifecycle_phase: phase
         }
 
-        await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithPhase)
+        await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithPhase)
 
         expect(mockAxios.put).toHaveBeenCalledWith(
-          `/api/v1/sboms/component/${mockComponentId}/meta`,
+          `/api/v1/components/${mockComponentId}/metadata`,
           metadataWithPhase
         )
       }
@@ -157,10 +157,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         lifecycle_phase: LifecyclePhase.Operations
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithSupplier)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithSupplier)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
-        `/api/v1/sboms/component/${mockComponentId}/meta`,
+        `/api/v1/components/${mockComponentId}/metadata`,
         metadataWithSupplier
       )
 
@@ -229,9 +229,9 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
   describe('API Integration', () => {
     it('should get component metadata from correct endpoint', async () => {
-      await mockAxios.get(`/api/v1/sboms/component/${mockComponentId}/meta`)
+      await mockAxios.get(`/api/v1/components/${mockComponentId}/metadata`)
 
-      expect(mockAxios.get).toHaveBeenCalledWith(`/api/v1/sboms/component/${mockComponentId}/meta`)
+      expect(mockAxios.get).toHaveBeenCalledWith(`/api/v1/components/${mockComponentId}/metadata`)
       expect(mockAxios.get).toHaveBeenCalledTimes(1)
     })
 
@@ -241,10 +241,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         lifecycle_phase: LifecyclePhase.Build
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatedMetadata)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updatedMetadata)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
-        `/api/v1/sboms/component/${mockComponentId}/meta`,
+        `/api/v1/components/${mockComponentId}/metadata`,
         updatedMetadata
       )
       expect(mockAxios.put).toHaveBeenCalledTimes(1)
@@ -262,7 +262,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       mockAxios.put.mockRejectedValueOnce(errorResponse)
 
       try {
-        await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, mockMetadata)
+        await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, mockMetadata)
         expect(true).toBe(false) // Should not reach here
       } catch (error) {
         const errorData = error as typeof errorResponse
@@ -323,10 +323,10 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         }
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithMultipleUrls)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithMultipleUrls)
 
       expect(mockAxios.put).toHaveBeenCalledWith(
-        `/api/v1/sboms/component/${mockComponentId}/meta`,
+        `/api/v1/components/${mockComponentId}/metadata`,
         supplierWithMultipleUrls
       )
 
@@ -349,7 +349,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         }
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithEmptyUrls)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithEmptyUrls)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       const typedCallData = callData as ComponentMetaInfo
@@ -368,7 +368,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         }
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithNullUrl)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithNullUrl)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       const typedCallData = callData as ComponentMetaInfo
@@ -390,7 +390,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         }
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, supplierWithContactsAndUrls)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithContactsAndUrls)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       const typedCallData = callData as ComponentMetaInfo
@@ -412,7 +412,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         ]
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithAuthors)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithAuthors)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       expect(callData.authors).toHaveLength(3)
@@ -431,7 +431,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         ]
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithPartialAuthors)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithPartialAuthors)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       expect(callData.authors).toHaveLength(3)
@@ -453,7 +453,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         ]
       }
 
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, metadataWithMixedAuthors)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithMixedAuthors)
 
       const [, callData] = mockAxios.put.mock.calls[0]
       expect(callData.authors).toHaveLength(3)
@@ -551,7 +551,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         licenses: completeMetadata.licenses,
         lifecycle_phase: completeMetadata.lifecycle_phase
       }
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updatePayload)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updatePayload)
 
       const [, callData] = mockAxios.put.mock.calls[0]
 
@@ -589,7 +589,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         licenses: fullMetadata.licenses,
         lifecycle_phase: fullMetadata.lifecycle_phase
       }
-      await mockAxios.put(`/api/v1/sboms/component/${mockComponentId}/meta`, updateData)
+      await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updateData)
 
       const [, sentData] = mockAxios.put.mock.calls[0]
 

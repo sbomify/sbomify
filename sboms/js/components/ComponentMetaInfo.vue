@@ -51,25 +51,28 @@
   };
 
   const copyComponentMetadata = async () => {
-    // Copy metadata from copyComponentId to props.componentId
+    // Copy metadata from copyComponentId to props.componentId using GET + PATCH
     console.log("Copying metadata from " + copyComponentId.value + " to " + props.componentId);
 
-    const apiUrl = '/api/v1/sboms/component/copy-meta';
-    interface CopyMetaRequest {
-      source_component_id: string;
-      target_component_id: string;
-    }
-
-    const copyMetaReq: CopyMetaRequest = {
-      source_component_id: copyComponentId.value,
-      target_component_id: props.componentId
-    }
-
     try {
-      const response = await $axios.put(apiUrl, copyMetaReq)
+      // First, get metadata from source component
+      const sourceResponse = await $axios.get(`/api/v1/components/${copyComponentId.value}/metadata`);
 
-      if (response.status < 200 || response.status >= 300) {
-        throw new Error('Network response was not ok. ' + response.statusText);
+      if (sourceResponse.status < 200 || sourceResponse.status >= 300) {
+        throw new Error('Failed to get source metadata. ' + sourceResponse.statusText);
+      }
+
+      const sourceMetadata = sourceResponse.data;
+
+      // Remove component-specific fields (id, name) that shouldn't be copied
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, name, ...metadataToCopy } = sourceMetadata;
+
+      // Then, patch the target component with the copied metadata
+      const targetResponse = await $axios.patch(`/api/v1/components/${props.componentId}/metadata`, metadataToCopy);
+
+      if (targetResponse.status < 200 || targetResponse.status >= 300) {
+        throw new Error('Failed to update target metadata. ' + targetResponse.statusText);
       }
 
       // Show success message and refresh the display
@@ -79,7 +82,7 @@
     } catch (error) {
       console.log(error)
       if (isAxiosError(error)) {
-        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+        showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail}`);
       } else {
         showError('Failed to copy metadata');
       }
