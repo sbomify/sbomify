@@ -26,6 +26,7 @@ from core.errors import error_response
 from core.utils import number_to_random_token, token_to_number
 from sboms.models import Component, Product, Project
 
+from .decorators import validate_role_in_current_team
 from .forms import (
     InviteUserForm,
     OnboardingComponentForm,
@@ -107,11 +108,9 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@validate_role_in_current_team(["owner"])
 def team_details(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
-
-    if request.session.get("user_teams", {}).get(team_key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
 
     try:
         team = Team.objects.get(pk=team_id)
@@ -129,18 +128,12 @@ def team_details(request: HttpRequest, team_key: str):
 
 
 @login_required
+@validate_role_in_current_team(["owner", "admin"])
 def set_default_team(request: HttpRequest, membership_id: int):
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Membership not found"))
-
-    team_key = membership.team.key
-    if request.session.get("user_teams", {}).get(team_key, {}).get("role", "") not in (
-        "owner",
-        "admin",
-    ):
-        return error_response(request, HttpResponseForbidden("Cannot set team with guest membership as default"))
 
     with transaction.atomic():
         # Set is_default_team for all records in membership for the current user to False
@@ -156,14 +149,12 @@ def set_default_team(request: HttpRequest, membership_id: int):
 
 
 @login_required
+@validate_role_in_current_team(["owner"])
 def delete_member(request: HttpRequest, membership_id: int):
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Membership not found"))
-
-    if request.session.get("user_teams", {}).get(membership.team.key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
 
     # Verify that there is at least one more owner present for the team
     if membership.role == "owner":
@@ -190,11 +181,9 @@ def delete_member(request: HttpRequest, membership_id: int):
     return redirect("teams:team_details", team_key=membership.team.key)
 
 
-# @validate_role_in_current_team(['owner'])
+@login_required
+@validate_role_in_current_team(["owner"])
 def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
-    if request.session.get("user_teams", {}).get(team_key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
-
     team_id = token_to_number(team_key)
 
     if request.method == "POST":
@@ -288,14 +277,12 @@ def accept_invite(request: HttpRequest, invite_id: int) -> HttpResponseNotFound 
 
 
 @login_required
+@validate_role_in_current_team(["owner"])
 def delete_invite(request: HttpRequest, invitation_id: int):
     try:
         invitation = Invitation.objects.get(pk=invitation_id)
     except Invitation.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Membership not found"))
-
-    if request.session.get("user_teams", {}).get(invitation.team.key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
 
     messages.add_message(request, messages.INFO, f"Invitation for {invitation.email} deleted")
     invitation.delete()
@@ -304,11 +291,9 @@ def delete_invite(request: HttpRequest, invitation_id: int):
 
 
 @login_required
+@validate_role_in_current_team(["owner"])
 def team_settings(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
-
-    if request.session.get("user_teams", {}).get(team_key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
 
     try:
         team = Team.objects.get(pk=team_id)
@@ -324,12 +309,9 @@ def team_settings(request: HttpRequest, team_key: str):
 
 
 @login_required
+@validate_role_in_current_team(["owner"])
 def delete_team(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
-
-    # Check if user is owner
-    if request.session.get("user_teams", {}).get(team_key, {}).get("role", "") != "owner":
-        return error_response(request, HttpResponseForbidden("Only allowed for owners"))
 
     try:
         team = Team.objects.get(pk=team_id)
