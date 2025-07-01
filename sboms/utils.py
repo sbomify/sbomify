@@ -256,6 +256,42 @@ def get_project_sbom_package(project: Project, target_folder: Path) -> Path:
     return zip_path  # Return the zip file path instead of sbom_path
 
 
+def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
+    """
+    Generates a ZIP package containing all project SBOMs for a product.
+
+    Args:
+        product: The product to generate the SBOM package for
+        target_folder: The folder to save the package to
+
+    Returns:
+        Path to the generated ZIP package
+    """
+    # Create the main ZIP package for the product
+    product_zip_path = target_folder / f"{product.name}.cdx.zip"
+
+    with zipfile.ZipFile(product_zip_path, "w", zipfile.ZIP_DEFLATED) as product_zip:
+        # Iterate through all projects in the product
+        for project in product.projects.all():
+            # Create a temporary subfolder for each project
+            project_folder = target_folder / f"project_{project.id}"
+            project_folder.mkdir(exist_ok=True)
+
+            try:
+                # Generate project SBOM package
+                project_zip_path = get_project_sbom_package(project, project_folder)
+
+                # Add the project ZIP to the product ZIP with a meaningful name
+                archive_name = f"{project.name}.cdx.zip"
+                product_zip.write(project_zip_path, archive_name)
+
+            except Exception as e:
+                log.warning(f"Failed to generate SBOM package for project {project.id}: {e}")
+                continue
+
+    return product_zip_path
+
+
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     """Get the appropriate CycloneDX module for the given version.
 

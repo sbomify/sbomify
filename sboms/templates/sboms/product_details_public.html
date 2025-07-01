@@ -79,6 +79,13 @@ product: Product object
             </div>
           </div>
         </div>
+        <div class="row">
+          <div class="col-md-6 offset-md-3">
+            <a class="btn btn-outline-primary w-100" href="{% url 'sboms:sbom_download_product' product.id %}">
+              <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
+            </a>
+          </div>
+        </div>
       </div>
     </div>
     <div class="credits">

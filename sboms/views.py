@@ -31,7 +31,7 @@ from teams.schemas import BrandingInfo
 
 # from .decorators import validate_role_in_current_team
 from .models import SBOM, Component, Product, Project
-from .utils import get_project_sbom_package, verify_item_access
+from .utils import get_product_sbom_package, get_project_sbom_package, verify_item_access
 
 logger = logging.getLogger(__name__)
 
@@ -475,6 +475,28 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
 
         response = HttpResponse(open(sbom_zip_path, "rb").read(), content_type="application/zip")
         response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.zip"
+
+        return response
+
+
+def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
+    """
+    Download a zip file containing the SBOMs for all projects in a product.
+    """
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Product not found"))
+
+    if not product.is_public:
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        sbom_zip_path = get_product_sbom_package(product, Path(temp_dir))
+
+        response = HttpResponse(open(sbom_zip_path, "rb").read(), content_type="application/zip")
+        response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.zip"
 
         return response
 
