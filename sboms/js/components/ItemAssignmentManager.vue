@@ -3,201 +3,180 @@
     <div class="row g-4">
       <!-- Assigned Items -->
       <div class="col-lg-6">
-        <div class="card h-100">
-          <div class="card-header bg-light">
-            <div class="d-flex justify-content-between align-items-center">
-              <h5 class="mb-0">{{ getAssignedTitle() }}</h5>
-              <span class="badge bg-primary rounded-pill">{{ assignedItems.length }}</span>
+        <StandardCard
+          :title="getAssignedTitle()"
+          variant="default"
+          shadow="sm"
+        >
+          <template #header-actions>
+            <span class="badge bg-primary rounded-pill">{{ assignedItems.length }}</span>
+          </template>
+
+          <!-- Search for assigned items -->
+          <div class="mb-3 border-bottom pb-3">
+            <div class="input-group">
+              <span class="input-group-text">
+                <i class="fas fa-search text-muted"></i>
+              </span>
+              <input
+                v-model="assignedSearch"
+                type="text"
+                class="form-control"
+                :placeholder="`Search assigned ${childType}s...`"
+              />
             </div>
           </div>
-          <div class="card-body p-0">
-            <!-- Search for assigned items -->
-            <div class="p-3 border-bottom">
-              <div class="input-group">
-                <span class="input-group-text">
-                  <i class="fas fa-search text-muted"></i>
-                </span>
-                <input
-                  v-model="assignedSearch"
-                  type="text"
-                  class="form-control"
-                  :placeholder="`Search assigned ${childType}s...`"
-                />
-                <button
-                  v-if="selectedAssigned.length > 0 && hasCrudPermissions"
-                  class="btn btn-outline-danger"
-                  :disabled="isLoading"
-                  @click="removeSelected"
-                >
-                  <i class="fas fa-times me-1"></i>
-                  Remove ({{ selectedAssigned.length }})
-                </button>
-              </div>
+
+          <!-- Assigned items list -->
+          <div class="assigned-items-container" style="max-height: 400px; overflow-y: auto">
+            <div v-if="filteredAssignedItems.length === 0" class="text-center py-5 text-muted">
+              <i class="fas fa-inbox fa-2x mb-3 d-block text-muted opacity-50"></i>
+              <p class="mb-0">
+                {{
+                  assignedSearch
+                    ? `No ${childType}s match your search`
+                    : `No ${childType}s assigned yet`
+                }}
+              </p>
             </div>
 
-            <!-- Assigned items list -->
-            <div class="assigned-items-container" style="max-height: 400px; overflow-y: auto">
-              <div v-if="filteredAssignedItems.length === 0" class="text-center py-5 text-muted">
-                <i class="fas fa-inbox fa-2x mb-3 d-block text-muted opacity-50"></i>
-                <p class="mb-0">
-                  {{
-                    assignedSearch
-                      ? `No ${childType}s match your search`
-                      : `No ${childType}s assigned yet`
-                  }}
-                </p>
-              </div>
-
-              <div v-else>
-                <div
-                  v-for="item in filteredAssignedItems"
-                  :key="item.id"
-                  class="item-card assigned-item"
-                  :class="{
-                    selected: selectedAssigned.includes(item.id),
-                    dragging: draggedItem?.id === item.id,
-                  }"
-                  draggable="true"
-                  @click="toggleAssignedSelection(item.id)"
-                  @dragstart="startDrag(item, 'assigned')"
-                  @dragend="endDrag"
-                >
-                  <div class="d-flex align-items-center">
-                    <div v-if="hasCrudPermissions" class="form-check me-3">
-                      <input
-                        class="form-check-input"
-                        type="checkbox"
-                        :checked="selectedAssigned.includes(item.id)"
-                        @click.stop
-                        @change="toggleAssignedSelection(item.id)"
-                      />
-                    </div>
-
-                    <div class="flex-grow-1">
-                      <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                          <h6 class="mb-1">
-                            <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
-                              {{ item.name }}
-                            </a>
-                          </h6>
-                          <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                          <span v-if="item.is_public" class="badge bg-success-subtle text-success">
-                            <i class="fas fa-globe me-1"></i>Public
-                          </span>
-                          <span v-else class="badge bg-secondary-subtle text-secondary">
-                            <i class="fas fa-lock me-1"></i>Private
-                          </span>
-                          <i
-                            v-if="hasCrudPermissions"
-                            class="fas fa-grip-vertical text-muted drag-handle"
-                          ></i>
-                        </div>
+            <div v-else>
+              <div
+                v-for="item in filteredAssignedItems"
+                :key="item.id"
+                class="item-card assigned-item"
+              >
+                <div class="d-flex align-items-center">
+                  <div class="flex-grow-1 me-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 class="mb-1">
+                          <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
+                            {{ item.name }}
+                          </a>
+                        </h6>
+                        <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span v-if="item.is_public" class="badge bg-success-subtle text-success">
+                          <i class="fas fa-globe me-1"></i>Public
+                        </span>
+                        <span v-else class="badge bg-secondary-subtle text-secondary">
+                          <i class="fas fa-lock me-1"></i>Private
+                        </span>
                       </div>
                     </div>
                   </div>
+
+                  <button
+                    v-if="hasCrudPermissions"
+                    class="btn btn-sm btn-outline-danger remove-item-btn"
+                    :disabled="isLoading"
+                    :title="`Remove ${item.name} from ${parentType}`"
+                    @click.stop="removeSingleItem(item.id)"
+                  >
+                    <i class="fas fa-minus"></i>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </StandardCard>
       </div>
 
       <!-- Available Items -->
       <div v-if="hasCrudPermissions" class="col-lg-6">
-        <div class="card h-100">
-          <div class="card-header bg-light">
-            <div class="d-flex justify-content-between align-items-center">
-              <h5 class="mb-0">Available {{ childType === 'project' ? 'Projects' : 'Components' }}</h5>
-              <span class="badge bg-secondary rounded-pill">{{ availableItems.length }}</span>
+        <StandardCard
+          title="Available Items"
+          variant="default"
+          shadow="sm"
+        >
+          <template #header-actions>
+            <span class="badge bg-secondary rounded-pill">{{ availableItems.length }}</span>
+          </template>
+
+          <!-- Search for available items -->
+          <div class="mb-3 border-bottom pb-3">
+            <div class="input-group">
+              <span class="input-group-text">
+                <i class="fas fa-search text-muted"></i>
+              </span>
+              <input
+                v-model="availableSearch"
+                type="text"
+                class="form-control"
+                :placeholder="`Search available ${childType}s...`"
+              />
             </div>
           </div>
-          <div class="card-body p-0">
-            <!-- Search for available items -->
-            <div class="p-3 border-bottom">
-              <div class="input-group">
-                <span class="input-group-text">
-                  <i class="fas fa-search text-muted"></i>
-                </span>
-                <input
-                  v-model="availableSearch"
-                  type="text"
-                  class="form-control"
-                  :placeholder="`Search available ${childType}s...`"
-                />
-              </div>
+
+          <!-- Available items list -->
+          <div
+            class="available-items-container drop-zone"
+            :class="{ 'drag-over': isDragOver && dragSource === 'available' }"
+            style="max-height: 400px; overflow-y: auto"
+            @dragover.prevent="handleDragOver"
+            @dragleave="handleDragLeave"
+            @drop="handleDrop"
+          >
+            <div v-if="filteredAvailableItems.length === 0" class="text-center py-5 text-muted">
+              <i class="fas fa-plus-circle fa-2x mb-3 d-block text-muted opacity-50"></i>
+              <p class="mb-0">
+                {{
+                  availableSearch
+                    ? `No ${childType}s match your search`
+                    : `No ${childType}s available to add`
+                }}
+              </p>
             </div>
 
-            <!-- Available items list -->
-            <div
-              class="available-items-container drop-zone"
-              :class="{ 'drag-over': isDragOver && dragSource === 'assigned' }"
-              style="max-height: 400px; overflow-y: auto"
-              @dragover.prevent="handleDragOver"
-              @dragleave="handleDragLeave"
-              @drop="handleDrop"
-            >
-              <div v-if="filteredAvailableItems.length === 0" class="text-center py-5 text-muted">
-                <i class="fas fa-plus-circle fa-2x mb-3 d-block text-muted opacity-50"></i>
-                <p class="mb-0">
-                  {{
-                    availableSearch
-                      ? `No ${childType}s match your search`
-                      : `No ${childType}s available to add`
-                  }}
-                </p>
-              </div>
-
-              <div v-else>
-                <div
-                  v-for="item in filteredAvailableItems"
-                  :key="item.id"
-                  class="item-card available-item"
-                  :class="{
-                    dragging: draggedItem?.id === item.id,
-                  }"
-                  draggable="true"
-                  @dragstart="startDrag(item, 'available')"
-                  @dragend="endDrag"
-                >
-                  <div class="d-flex align-items-center">
-                    <div class="flex-grow-1 me-3">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 class="mb-1">
-                            <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
-                              {{ item.name }}
-                            </a>
-                          </h6>
-                          <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                          <span v-if="item.is_public" class="badge bg-success-subtle text-success">
-                            <i class="fas fa-globe me-1"></i>Public
-                          </span>
-                          <span v-else class="badge bg-secondary-subtle text-secondary">
-                            <i class="fas fa-lock me-1"></i>Private
-                          </span>
-                        </div>
+            <div v-else>
+              <div
+                v-for="item in filteredAvailableItems"
+                :key="item.id"
+                class="item-card available-item"
+                :class="{
+                  dragging: draggedItem?.id === item.id,
+                }"
+                draggable="true"
+                @dragstart="startDrag(item, 'available')"
+                @dragend="endDrag"
+              >
+                <div class="d-flex align-items-center">
+                  <div class="flex-grow-1 me-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 class="mb-1">
+                          <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
+                            {{ item.name }}
+                          </a>
+                        </h6>
+                        <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span v-if="item.is_public" class="badge bg-success-subtle text-success">
+                          <i class="fas fa-globe me-1"></i>Public
+                        </span>
+                        <span v-else class="badge bg-secondary-subtle text-secondary">
+                          <i class="fas fa-lock me-1"></i>Private
+                        </span>
                       </div>
                     </div>
-
-                    <button
-                      class="btn btn-sm btn-outline-primary add-item-btn"
-                      :disabled="isLoading"
-                      :title="`Add ${item.name} to ${parentType}`"
-                      @click.stop="addSingleItem(item.id)"
-                    >
-                      <i class="fas fa-plus"></i>
-                    </button>
                   </div>
+
+                  <button
+                    class="btn btn-sm btn-outline-primary add-item-btn"
+                    :disabled="isLoading"
+                    :title="`Add ${item.name} to ${parentType}`"
+                    @click.stop="addSingleItem(item.id)"
+                  >
+                    <i class="fas fa-plus"></i>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </StandardCard>
       </div>
     </div>
 
@@ -217,6 +196,7 @@
   import $axios from '../../../core/js/utils'
   import { showSuccess, showError } from '../../../core/js/alerts'
   import { isAxiosError } from 'axios'
+  import StandardCard from '../../../core/js/components/StandardCard.vue'
 
   interface AssignmentItem {
     id: string
@@ -250,11 +230,10 @@
   const availableItems = ref<AssignmentItem[]>(props.initialAvailable || [])
   const assignedSearch = ref('')
   const availableSearch = ref('')
-  const selectedAssigned = ref<string[]>([])
 
-  // Drag and drop state
+  // Drag and drop state (only for available -> assigned)
   const draggedItem = ref<AssignmentItem | null>(null)
-  const dragSource = ref<'assigned' | 'available' | null>(null)
+  const dragSource = ref<'available' | null>(null)
   const isDragOver = ref(false)
 
   // Computed properties
@@ -283,17 +262,6 @@
     } else {
       // For projects, we're managing components
       return `/component/${item.id}/`
-    }
-  }
-
-  const toggleAssignedSelection = (itemId: string) => {
-    if (!hasCrudPermissions.value) return
-
-    const index = selectedAssigned.value.indexOf(itemId)
-    if (index === -1) {
-      selectedAssigned.value.push(itemId)
-    } else {
-      selectedAssigned.value.splice(index, 1)
     }
   }
 
@@ -335,14 +303,12 @@
     }
   }
 
-  const removeSelected = async () => {
-    if (selectedAssigned.value.length === 0) return
-
+  const removeSingleItem = async (itemId: string) => {
     isLoading.value = true
     try {
-      // Get current assigned IDs and remove the selected ones
+      // Get current assigned IDs and remove the single item
       const currentAssignedIds = assignedItems.value.map(item => item.id)
-      const newAssignedIds = currentAssignedIds.filter(id => !selectedAssigned.value.includes(id))
+      const newAssignedIds = currentAssignedIds.filter(id => id !== itemId)
 
       const endpoint =
         props.parentType === 'product'
@@ -356,31 +322,27 @@
 
       await $axios.patch(endpoint, patchData)
 
-      // Move items from assigned to available
-      const itemsToMove = assignedItems.value.filter(item =>
-        selectedAssigned.value.includes(item.id)
-      )
-      availableItems.value.push(...itemsToMove)
-      assignedItems.value = assignedItems.value.filter(
-        item => !selectedAssigned.value.includes(item.id)
-      )
-
-      selectedAssigned.value = []
-      showSuccess(`${itemsToMove.length} ${childType.value}(s) removed successfully`)
+      // Move item from assigned to available
+      const itemToMove = assignedItems.value.find(item => item.id === itemId)
+      if (itemToMove) {
+        availableItems.value.push(itemToMove)
+        assignedItems.value = assignedItems.value.filter(item => item.id !== itemId)
+        showSuccess(`${itemToMove.name} removed successfully`)
+      }
     } catch (error) {
-      console.error('Error removing items:', error)
+      console.error('Error removing item:', error)
       if (isAxiosError(error)) {
-        showError(error.response?.data?.detail || `Failed to remove ${childType.value}s`)
+        showError(error.response?.data?.detail || `Failed to remove ${childType.value}`)
       } else {
-        showError(`Failed to remove ${childType.value}s`)
+        showError(`Failed to remove ${childType.value}`)
       }
     } finally {
       isLoading.value = false
     }
   }
 
-  // Drag and drop methods
-  const startDrag = (item: AssignmentItem, source: 'assigned' | 'available') => {
+  // Drag and drop methods (only for available -> assigned)
+  const startDrag = (item: AssignmentItem, source: 'available') => {
     draggedItem.value = item
     dragSource.value = source
   }
@@ -392,7 +354,7 @@
   }
 
   const handleDragOver = (event: DragEvent) => {
-    if (dragSource.value === 'assigned') {
+    if (dragSource.value === 'available') {
       event.preventDefault()
       isDragOver.value = true
     }
@@ -406,48 +368,13 @@
     event.preventDefault()
     isDragOver.value = false
 
-    if (!draggedItem.value || dragSource.value !== 'assigned') return
+    if (!draggedItem.value || dragSource.value !== 'available') return
 
-    // Move the dragged item from assigned to available
-    const itemToMove = draggedItem.value
-    assignedItems.value = assignedItems.value.filter(item => item.id !== itemToMove.id)
-    availableItems.value.push(itemToMove)
+    // Add the dragged item to assigned
+    await addSingleItem(draggedItem.value.id)
 
-    // Update via API
-    isLoading.value = true
-    try {
-      // Get updated assigned IDs after removing the dragged item
-      const newAssignedIds = assignedItems.value.map(item => item.id)
-
-      const endpoint =
-        props.parentType === 'product'
-          ? `/api/v1/products/${props.parentId}`
-          : `/api/v1/projects/${props.parentId}`
-
-      const patchData =
-        props.parentType === 'product'
-          ? { project_ids: newAssignedIds }
-          : { component_ids: newAssignedIds }
-
-      await $axios.patch(endpoint, patchData)
-
-      showSuccess(`${itemToMove.name} removed successfully`)
-    } catch (error) {
-      // Revert on error
-      availableItems.value = availableItems.value.filter(item => item.id !== itemToMove.id)
-      assignedItems.value.push(itemToMove)
-
-      console.error('Error removing item:', error)
-      if (isAxiosError(error)) {
-        showError(error.response?.data?.detail || `Failed to remove ${itemToMove.name}`)
-      } else {
-        showError(`Failed to remove ${itemToMove.name}`)
-      }
-    } finally {
-      isLoading.value = false
-      draggedItem.value = null
-      dragSource.value = null
-    }
+    draggedItem.value = null
+    dragSource.value = null
   }
 
   // Load data on mount if not provided via props
@@ -504,7 +431,6 @@
   .item-card {
     padding: 1rem;
     border-bottom: 1px solid #dee2e6;
-    cursor: pointer;
     transition: all 0.2s ease;
     user-select: none;
   }
@@ -517,22 +443,9 @@
     border-bottom: none;
   }
 
-  .item-card.selected {
-    background-color: #e3f2fd;
-    border-color: #2196f3;
-  }
-
   .item-card.dragging {
     opacity: 0.5;
     transform: rotate(2deg);
-  }
-
-  .drag-handle {
-    cursor: grab;
-  }
-
-  .drag-handle:active {
-    cursor: grabbing;
   }
 
   .drop-zone {
@@ -606,7 +519,8 @@
     background: #a8a8a8;
   }
 
-  .add-item-btn {
+  .add-item-btn,
+  .remove-item-btn {
     border-radius: 0.375rem;
     width: 32px;
     height: 32px;
@@ -614,10 +528,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .add-item-btn {
     border: 1px solid #0d6efd;
     background: white;
     color: #0d6efd;
-    transition: all 0.2s ease;
   }
 
   .add-item-btn:hover {
@@ -626,7 +543,20 @@
     transform: translateY(-1px);
   }
 
-  .add-item-btn:disabled {
+  .remove-item-btn {
+    border: 1px solid #dc3545;
+    background: white;
+    color: #dc3545;
+  }
+
+  .remove-item-btn:hover {
+    background: #dc3545;
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  .add-item-btn:disabled,
+  .remove-item-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
