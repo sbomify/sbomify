@@ -29,7 +29,6 @@ email-validator = "^2.2.0"
 stripe = "^11.4.1"
 python-keycloak = "^5.3.1"
 django-allauth = "^65.5.0"
-python-jose = "^3.4.0"
 dramatiq = {extras = ["redis", "watch"], version = "^1.17.1"}
 django-redis = ">=5.0.0"
 redis = ">=4.0.0"
