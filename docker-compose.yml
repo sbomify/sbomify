@@ -43,7 +43,7 @@ x-django-env: &django-env
 
 services:
   sbomify-db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     restart: always
     environment:
       # We can't use anchors here, since anchors are resolved *after* these values are set.

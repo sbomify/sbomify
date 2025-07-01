@@ -4,7 +4,6 @@ Template context:
 project: Project object
 APP_BASE_URL: Base URL for the application (for AJAX requests)
 has_crud_permissions: Boolean indicating if user has CRUD permissions
-remaining_components: Queryset of components that are not part of the product
 {% endcomment %}
 
 {% load widget_tweaks %}
@@ -14,154 +13,142 @@ remaining_components: Queryset of components that are not part of the product
 
 {% block content %}
 
-  {% if has_crud_permissions %}
-    <span class="vc-public-status-toggle" data-item-type="project" data-item-id="{{ project.id }}" data-public-url="{{ APP_BASE_URL }}{% url 'sboms:project_details_public' project.id %}"></span>
-  {% endif %}
+    <div class="page-header mb-4">
+    <div class="header-main mb-3">
+      <div class="title-section">
+        <h1 class="item-title">
+          {% if has_crud_permissions %}
+            <span class="vc-editable-single-field" data-item-type="project" data-item-id="{{ project.id }}" data-item-value="{{ project.name }}"></span>
+          {% else %}
+            {{ project.name }}
+          {% endif %}
+        </h1>
+        {% if has_crud_permissions %}
+        <div class="vc-public-status-toggle"
+             data-item-type="project"
+             data-item-id="{{ project.id }}"
+             data-public-url="{{ APP_BASE_URL }}{% url 'sboms:project_details_public' project.id %}"
+             data-inline="true">
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <span class="meta-item">
+        <i class="fas fa-project-diagram me-2 text-primary"></i>
+        <span class="meta-label">Project</span>
+      </span>
+      <span class="meta-divider">•</span>
+                  <span class="meta-item">
+        <span class="vc-copyable-value meta-id"
+              data-value="{{ project.id }}"
+              title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+      </span>
+    </div>
+  </div>
 
-  <h3 class="page-title">
-  Project:
-  {% if has_crud_permissions %}
-      <span class="vc-editable-single-field" data-item-type="project" data-item-id="{{ project.id }}" data-item-value="{{ project.name }}"></span>
-  {% else %}
-      {{ project.name }}
-  {% endif %}
-  </h3>
+  <style>
+    .page-header {
+      background: linear-gradient(135deg, #ffffff, #f8fafc);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-main {
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 1.5rem;
+    }
+
+    .title-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .item-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a202c;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 1rem;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .meta-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .meta-id {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.8rem;
+      background: #f1f5f9;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .meta-id:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+
+    .meta-divider {
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+      .title-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .item-title {
+        font-size: 1.5rem;
+      }
+
+      .header-meta {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+    }
+  </style>
 
   <div class="row">
-    <div class="col-12 col-lg-6">
+    <div class="col-12">
       <div class="vc-dashboard-stats" data-item-type="project" data-item-id="{{ project.id }}"></div>
     </div>
+  </div>
 
-    <div class="col-12 col-lg-6">
-      <div class="row align-items-center">
-        <div class="col-12">
-          <div class="card">
-          <h4 class="ps-3 pt-4 pb-0 mb-0">Project Components</h4>
-
-          <div class="card-body">
-            {% if project.components.all.count > 0 %}
-              <!-- Warn if any of the components present in this project are not public -->
-              {% if has_private_components %}
-                  <p class="text-danger">Some components in this project are not public. When generating SBOM for the project,
-                  SBOMs from the components below will not be included in the package.</p>
-
-                  <ul class="text-danger">
-                  {% for component in project.components.all %}
-                    {% if not component.is_public %}
-                    <li>{{ component.name }}</li>
-                    {% endif %}
-                  {% endfor %}
-                  </ul>
-
-              {% endif %}
-
-              <p>Components that are part of this project.</p>
-
-              {% if has_crud_permissions %}
-                <form action="{% url 'sboms:project_details' project.id %}?action=remove_components" method="post" class="row row-cols-md-auto">
-                    <div class="actions-bar">
-                    <button type="submit" class="btn btn-outline-secondary">Remove Selected Components</button>
-                    </div>
-                    {% csrf_token %}
-              {% endif %}
-
-              <table class="table">
-              <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Version</th>
-                  <th scope="col">Public?</th>
-              </tr>
-
-              {% for component in project.components.all %}
-                  <tr>
-                  <td>
-                      {% if has_crud_permissions %}
-                      <label class="form-check">
-                      <input class="form-check-input" type="checkbox" name="component_{{ component.id }}" value="{{ component.id }}">
-                      <span class="form-check-label">
-                          {{ component.name }}
-                      </span>
-                      </label>
-                      {% else %}
-                      {{ component.name }}
-                      {% endif %}
-                  </td>
-                  <td>
-                      {{ component.version }}
-                  </td>
-                  <td>
-                      {% if component.is_public %}
-                      <i class="align-middle text-success" data-feather="check"></i>
-                      {% endif %}
-                  </td>
-                  <td>
-                  </td>
-                  </tr>
-              {% endfor %}
-
-              </table>
-
-              {% if has_crud_permissions %}
-                </form>
-              {% endif %}
-            {% else %}
-              <p class="ps-1">No components added to the project yet.</p>
-            {% endif %}
-          </div>
-        </div>
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="vc-item-assignment-manager"
+        data-parent-type="project"
+        data-parent-id="{{ project.id }}"
+        data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}">
       </div>
-
-      {% if has_crud_permissions %}
-      <div class="row align-items-center">
-        <div class="col-12">
-          <div class="card">
-          <h4 class="ps-3 pt-4 pb-0 mb-0">Available Components</h4>
-
-          <div class="card-body">
-              {% if remaining_components.count > 0 %}
-              <p>Components that can be added to the project.</p>
-              <form action="{% url 'sboms:project_details' project.id %}?action=add_components" method="post" class="row row-cols-md-auto">
-              <div class="actions-bar">
-                  <button type="submit" class="btn btn-outline-secondary">Add Selected Components</button>
-              </div>
-              {% csrf_token %}
-              <table class="table">
-                  <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Version</th>
-                  <th scope="col">Public?</th>
-                  </tr>
-
-                  {% for component in remaining_components %}
-                  <tr>
-                      <td>
-                      <label class="form-check">
-                          <input class="form-check-input" type="checkbox" name="component_{{ component.id }}" value="{{ component.id }}">
-                          <span class="form-check-label">
-                          {{ component.name }}
-                          </span>
-                      </label>
-                      </td>
-                      <td>
-                      {{ component.version }}
-                      </td>
-                      <td>
-                      {% if component.is_public %}
-                      <i class="align-middle text-success" data-feather="check"></i>
-                      {% endif %}
-                      </td>
-                  </tr>
-                  {% endfor %}
-              </table>
-              </form>
-              {% else %}
-              <p class="ps-1">No components available to add to the project.</p>
-              {% endif %}
-          </div>
-          </div>
-        </div>
-      </div>
-      {% endif %}
     </div>
   </div>
 

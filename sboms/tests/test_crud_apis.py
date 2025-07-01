@@ -237,9 +237,9 @@ def test_link_projects_to_product(
     sample_project: Project,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test linking projects to a product."""
+    """Test linking projects to a product via PATCH operation."""
     client = Client()
-    url = reverse("api-1:link_projects_to_product", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
 
     # Ensure project is in same team
     sample_project.team = sample_product.team
@@ -251,14 +251,14 @@ def test_link_projects_to_product(
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
-    response = client.post(
+    response = client.patch(
         url,
         json.dumps(payload),
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 204
+    assert response.status_code == 200
 
     # Verify link in database
     assert sample_product.projects.filter(id=sample_project.id).exists()
@@ -270,7 +270,7 @@ def test_unlink_projects_from_product(
     sample_project: Project,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test unlinking projects from a product."""
+    """Test unlinking projects from a product via PATCH operation."""
     client = Client()
 
     # Ensure project is in same team and linked to product
@@ -278,21 +278,21 @@ def test_unlink_projects_from_product(
     sample_project.save()
     sample_product.projects.add(sample_project)
 
-    url = reverse("api-1:unlink_projects_from_product", kwargs={"product_id": sample_product.id})
-    payload = {"project_ids": [sample_project.id]}
+    url = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
+    payload = {"project_ids": []}  # Empty array to remove all projects
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
-    response = client.delete(
+    response = client.patch(
         url,
         json.dumps(payload),
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 204
+    assert response.status_code == 200
 
     # Verify unlink in database
     assert not sample_product.projects.filter(id=sample_project.id).exists()
@@ -453,9 +453,9 @@ def test_link_components_to_project(
     sample_component: Component,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test linking components to a project."""
+    """Test linking components to a project via PATCH operation."""
     client = Client()
-    url = reverse("api-1:link_components_to_project", kwargs={"project_id": sample_project.id})
+    url = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
 
     # Ensure component is in same team
     sample_component.team = sample_project.team
@@ -467,17 +467,51 @@ def test_link_components_to_project(
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, sample_project.team, sample_project.team.members.first())
 
-    response = client.post(
+    response = client.patch(
         url,
         json.dumps(payload),
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 204
+    assert response.status_code == 200
 
     # Verify link in database
     assert sample_project.components.filter(id=sample_component.id).exists()
+
+
+@pytest.mark.django_db
+def test_unlink_components_from_project(
+    sample_project: Project,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test unlinking components from a project via PATCH operation."""
+    client = Client()
+
+    # Ensure component is in same team and linked to project
+    sample_component.team = sample_project.team
+    sample_component.save()
+    sample_project.components.add(sample_component)
+
+    url = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
+    payload = {"component_ids": []}  # Empty array to remove all components
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_project.team, sample_project.team.members.first())
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+
+    # Verify unlink in database
+    assert not sample_project.components.filter(id=sample_component.id).exists()
 
 
 # =============================================================================

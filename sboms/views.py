@@ -26,7 +26,7 @@ from django.shortcuts import redirect, render
 
 from core.errors import error_response
 from core.object_store import S3Client
-from core.utils import get_current_team_id, token_to_number
+from core.utils import token_to_number
 from teams.schemas import BrandingInfo
 
 # from .decorators import validate_role_in_current_team
@@ -78,38 +78,6 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
     if not verify_item_access(request, product, ["guest", "owner", "admin"]):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    if request.method == "POST":
-        selected_project_ids = [v for k, v in request.POST.items() if k.startswith("project_")]
-        selected_projects = Project.objects.filter(id__in=selected_project_ids).all()
-
-        for selected_project in selected_projects:
-            if not verify_item_access(request, selected_project, ["owner", "admin"]):
-                return error_response(request, HttpResponseForbidden("You're not allowed to perform this operation"))
-
-        if request.GET.get("action", "") == "add_projects":
-            with transaction.atomic():
-                for selected_project in selected_projects:
-                    product.projects.add(selected_project)
-
-                product.save()
-                return redirect("sboms:product_details", product_id=product_id)
-
-        elif request.GET.get("action", "") == "remove_projects":
-            with transaction.atomic():
-                for selected_project in selected_projects:
-                    product.projects.remove(selected_project)
-
-                product.save()
-                return redirect("sboms:product_details", product_id=product_id)
-
-    product_projects_ids = product.projects.values_list("id", flat=True)
-
-    team_id = get_current_team_id(request)
-    if team_id is None:
-        return error_response(request, HttpResponseBadRequest("No current team selected"))
-
-    remaining_projects = Project.objects.filter(team_id=team_id).exclude(id__in=product_projects_ids).all()
-
     has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
 
     return render(
@@ -119,7 +87,6 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
             "product": product,
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
-            "remaining_projects": remaining_projects,
             "current_team": request.session.get("current_team", {}),
         },
     )
@@ -168,44 +135,7 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
     if not verify_item_access(request, project, ["guest", "owner", "admin"]):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    if request.method == "POST":
-        selected_component_ids = [v for k, v in request.POST.items() if k.startswith("component_")]
-        selected_components = Component.objects.filter(id__in=selected_component_ids).all()
-
-        for selected_component in selected_components:
-            if not verify_item_access(request, selected_component, ["owner", "admin"]):
-                return error_response(request, HttpResponseForbidden("You're not allowed to perform this operation"))
-
-        if request.GET.get("action", "") == "add_components":
-            with transaction.atomic():
-                for selected_component in selected_components:
-                    project.components.add(selected_component)
-
-                project.save()
-                return redirect("sboms:project_details", project_id=project_id)
-
-        elif request.GET.get("action", "") == "remove_components":
-            with transaction.atomic():
-                for selected_component in selected_components:
-                    project.components.remove(selected_component)
-
-                project.save()
-                return redirect("sboms:project_details", project_id=project_id)
-
-    project_components_ids = project.components.values_list("id", flat=True)
-
-    team_id = get_current_team_id(request)
-    if team_id is None:
-        return error_response(request, HttpResponseBadRequest("No current team selected"))
-
-    remaining_components = Component.objects.filter(team_id=team_id).exclude(id__in=project_components_ids).all()
-
     has_crud_permissions = verify_item_access(request, project, ["owner", "admin"])
-    has_private_components = False
-    for component in project.components.all():
-        if not component.is_public:
-            has_private_components = True
-            break
 
     return render(
         request,
@@ -214,8 +144,6 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
             "project": project,
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
-            "remaining_components": remaining_components,
-            "has_private_components": has_private_components,
             "current_team": request.session.get("current_team", {}),
         },
     )

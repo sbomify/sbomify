@@ -13,7 +13,7 @@
   <div class="col-12 align-self-center">
     <div class="card">
       <div class="card-body">
-        <h5 class="card-title">Upload SBOM file</h5>
+                        <h5 class="card-title">Upload SBOM File</h5>
         <form action="{% url 'sboms:sboms_dashboard' %}" method="post" enctype="multipart/form-data"  class="row row-cols-lg-auto g-3 align-items-center">
           {% csrf_token %}
           <div class="col-xs-12">
@@ -65,5 +65,3 @@
 </div>
 
 {% endblock %}
-
-

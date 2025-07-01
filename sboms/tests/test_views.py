@@ -17,7 +17,6 @@ from teams.models import Member, Team
 
 from ..models import SBOM, Component, Product, Project
 from .fixtures import (
-    sample_access_token,  # noqa: F401
     sample_component,  # noqa: F401
     sample_project,  # noqa: F401
     sample_sbom,  # noqa: F401
@@ -369,77 +368,6 @@ def test_transfer_component_to_team(
     sample_component.refresh_from_db()
     assert sample_component.team == sample_team_with_owner_member.team
 
-
-@pytest.mark.django_db
-def test_adding_and_removing_components_to_projects(
-    sample_project: Project,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-):
-    """Test adding and removing components to/from projects."""
-    client = Client()
-
-    uri = reverse("sboms:project_details", kwargs={"project_id": sample_project.id})
-
-    # Set up session with team access
-    setup_test_session(client, sample_project.team, sample_project.team.members.first())
-
-    # Test adding component
-    response: HttpResponse = client.post(
-        uri + "?action=add_components", {"component_" + sample_component.id: sample_component.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify component was added
-    sample_project.refresh_from_db()
-    assert sample_component in sample_project.components.all()
-
-    # Test removing component
-    response = client.post(
-        uri + "?action=remove_components", {"component_" + sample_component.id: sample_component.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify component was removed
-    sample_project.refresh_from_db()
-    assert sample_component not in sample_project.components.all()
-
-
-@pytest.mark.django_db
-def test_adding_and_removing_projects_to_products(
-    sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
-):
-    """Test adding and removing projects to/from products."""
-    client = Client()
-
-    uri = reverse("sboms:product_details", kwargs={"product_id": sample_product.id})
-
-    # Set up session with team access
-    setup_test_session(client, sample_product.team, sample_product.team.members.first())
-
-    # Test adding project
-    response: HttpResponse = client.post(
-        uri + "?action=add_projects", {"project_" + sample_project.id: sample_project.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify project was added
-    sample_product.refresh_from_db()
-    assert sample_project in sample_product.projects.all()
-
-    # Test removing project
-    response = client.post(
-        uri + "?action=remove_projects", {"project_" + sample_project.id: sample_project.id}
-    )
-    assert response.status_code == 302
-    assert response.url == uri
-
-    # Verify project was removed
-    sample_product.refresh_from_db()
-    assert sample_project not in sample_product.projects.all()
 
 
 @pytest.mark.django_db

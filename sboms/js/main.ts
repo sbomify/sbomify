@@ -1,36 +1,38 @@
-import 'vite/modulepreload-polyfill';
+import 'vite/modulepreload-polyfill'
 
-import mountVueComponent from '../../core/js/common_vue';
-import PublicStatusToggle from './components/PublicStatusToggle.vue';
-import EditableSingleField from '../../core/js/components/EditableSingleField.vue';
-import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
-import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
-import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
-import LicensesEditor from './components/LicensesEditor.vue';
-import CiCdInfo from './components/CiCdInfo.vue';
-import SbomUpload from './components/SbomUpload.vue';
-import DashboardStats from './components/DashboardStats.vue';
-import SbomsTable from './components/SbomsTable.vue';
-import DangerZone from './components/DangerZone.vue';
-import ProjectDangerZone from './components/ProjectDangerZone.vue';
-import ProductDangerZone from './components/ProductDangerZone.vue';
-import AddProductForm from './components/AddProductForm.vue';
-import AddProjectForm from './components/AddProjectForm.vue';
-import AddComponentForm from './components/AddComponentForm.vue';
+import mountVueComponent from '../../core/js/common_vue'
+import PublicStatusToggle from './components/PublicStatusToggle.vue'
+import EditableSingleField from '../../core/js/components/EditableSingleField.vue'
+import ComponentMetaInfo from './components/ComponentMetaInfo.vue'
+import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue'
+import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue'
+import LicensesEditor from './components/LicensesEditor.vue'
+import CiCdInfo from './components/CiCdInfo.vue'
+import SbomUpload from './components/SbomUpload.vue'
+import DashboardStats from './components/DashboardStats.vue'
+import SbomsTable from './components/SbomsTable.vue'
+import DangerZone from './components/DangerZone.vue'
+import ProjectDangerZone from './components/ProjectDangerZone.vue'
+import ProductDangerZone from './components/ProductDangerZone.vue'
+import AddProductForm from './components/AddProductForm.vue'
+import AddProjectForm from './components/AddProjectForm.vue'
+import AddComponentForm from './components/AddComponentForm.vue'
+import ItemAssignmentManager from './components/ItemAssignmentManager.vue'
 
-mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
-mountVueComponent('vc-editable-single-field', EditableSingleField);
-mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
-mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
-mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
-mountVueComponent('vc-licenses-editor', LicensesEditor);
-mountVueComponent('vc-ci-cd-info', CiCdInfo);
-mountVueComponent('vc-sbom-upload', SbomUpload);
-mountVueComponent('vc-dashboard-stats', DashboardStats);
-mountVueComponent('vc-sboms-table', SbomsTable);
-mountVueComponent('vc-danger-zone', DangerZone);
-mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
-mountVueComponent('vc-product-danger-zone', ProductDangerZone);
-mountVueComponent('vc-add-product-form', AddProductForm);
-mountVueComponent('vc-add-project-form', AddProjectForm);
-mountVueComponent('vc-add-component-form', AddComponentForm);
+mountVueComponent('vc-public-status-toggle', PublicStatusToggle)
+mountVueComponent('vc-editable-single-field', EditableSingleField)
+mountVueComponent('vc-component-meta-info', ComponentMetaInfo)
+mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor)
+mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay)
+mountVueComponent('vc-licenses-editor', LicensesEditor)
+mountVueComponent('vc-ci-cd-info', CiCdInfo)
+mountVueComponent('vc-sbom-upload', SbomUpload)
+mountVueComponent('vc-dashboard-stats', DashboardStats)
+mountVueComponent('vc-sboms-table', SbomsTable)
+mountVueComponent('vc-danger-zone', DangerZone)
+mountVueComponent('vc-project-danger-zone', ProjectDangerZone)
+mountVueComponent('vc-product-danger-zone', ProductDangerZone)
+mountVueComponent('vc-add-product-form', AddProductForm)
+mountVueComponent('vc-add-project-form', AddProjectForm)
+mountVueComponent('vc-add-component-form', AddComponentForm)
+mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager)
