@@ -2,137 +2,150 @@
 {% load widget_tweaks %}
 {% load form_helpers %}
 {% load django_vite %}
-
 {% block title %}sbomify Components{% endblock %}
-
-{% block content %}
-<div class="row align-items-center">
-  <div class="col-12">
-    <div class="card dashboard-card">
-      <div class="card-header">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5>Components</h5>
-          {% if has_crud_permissions %}
-            <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#addComponentModal">
-              Add Component
-            </button>
-          {% endif %}
-        </div>
-      </div>
-      <div class="card-body">
-        <div id="components-loading" class="dashboard-empty">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-          <p class="mb-0 mt-2">Loading components...</p>
-        </div>
-        <div id="components-empty" class="dashboard-empty" style="display: none;">
-          <p class="mb-0">No components added</p>
-        </div>
-        <div id="components-table-container" style="display: none;">
-          <table class="table dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>SBOMs</th>
-                <th class="text-center">Public?</th>
-              </tr>
-            </thead>
-            <tbody id="components-table-body">
-              <!-- Components will be populated here -->
-            </tbody>
-          </table>
-        </div>
-        <div id="components-error" class="alert alert-danger" style="display: none;">
-          <p class="mb-0">Failed to load components. Please try refreshing the page.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% if has_crud_permissions %}
-<div class="vc-add-component-form"></div>
-
-{# Delete Confirmation Modal #}
-<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0">
-      <div class="modal-header border-bottom-0 pb-0">
-        <h4 class="modal-title text-secondary" id="deleteConfirmModalLabel">Confirm Delete</h4>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body pt-3">
-        <div class="alert alert-danger bg-danger-subtle border-0">
-          <div class="d-flex align-items-center">
-            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-            <div>
-              <p class="mb-1">Are you sure you want to delete <strong class="component-name"></strong>?</p>
-              <p class="text-danger small mb-0">This action cannot be undone.</p>
-            </div>
-          </div>
-        </div>
-        <div class="d-flex justify-content-end gap-2 mt-4">
-          <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <a href="#" class="btn btn-lg btn-danger px-4 delete-confirm-btn">Delete Component</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block scripts %}
-  {% vite_asset 'core/js/main.ts' %}
-  {% vite_asset 'sboms/js/main.ts' %}
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      loadComponents();
-    });
-
-    async function loadComponents() {
-      try {
-        const response = await fetch('/api/v1/components');
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const components = await response.json();
-
-        document.getElementById('components-loading').style.display = 'none';
-
-        if (components.length === 0) {
-          document.getElementById('components-empty').style.display = 'block';
-        } else {
-          displayComponents(components);
-          document.getElementById('components-table-container').style.display = 'block';
-        }
-      } catch (error) {
-        console.error('Error loading components:', error);
-        document.getElementById('components-loading').style.display = 'none';
-        document.getElementById('components-error').style.display = 'block';
-      }
+{% block styles %}
+    <style>
+    .hidden {
+        display: none;
     }
+    </style>
+{% endblock %}
+{% block content %}
+    <div class="row align-items-center">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5>Components</h5>
+                        {% if has_crud_permissions %}
+                            <button class="btn btn-primary px-4"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#addComponentModal">Add Component</button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="components-loading" class="dashboard-empty">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mb-0 mt-2">Loading components...</p>
+                    </div>
+                    <div id="components-empty" class="dashboard-empty hidden">
+                        <p class="mb-0">No components added</p>
+                    </div>
+                    <div id="components-table-container" class="hidden">
+                        <table class="table dashboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>SBOMs</th>
+                                    <th class="text-center">Public?</th>
+                                </tr>
+                            </thead>
+                            <tbody id="components-table-body">
+                                <!-- Components will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="components-error" class="alert alert-danger hidden">
+                        <p class="mb-0">Failed to load components. Please try refreshing the page.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% if has_crud_permissions %}
+        <div class="vc-add-component-form"></div>
+        {# Delete Confirmation Modal #}
+        <div class="modal fade"
+             id="deleteConfirmModal"
+             tabindex="-1"
+             aria-labelledby="deleteConfirmModalLabel"
+             aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0">
+                    <div class="modal-header border-bottom-0 pb-0">
+                        <h4 class="modal-title text-secondary" id="deleteConfirmModalLabel">Confirm Delete</h4>
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body pt-3">
+                        <div class="alert alert-danger bg-danger-subtle border-0">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+                                <div>
+                                    <p class="mb-1">
+                                        Are you sure you want to delete <strong class="component-name"></strong>?
+                                    </p>
+                                    <p class="text-danger small mb-0">This action cannot be undone.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <button type="button"
+                                    class="btn btn-lg btn-outline-secondary"
+                                    data-bs-dismiss="modal">Cancel</button>
+                            <a href="#" class="btn btn-lg btn-danger px-4 delete-confirm-btn">Delete Component</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% vite_asset 'sboms/js/main.ts' %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadComponents();
+        });
 
-    function displayComponents(components) {
-      const tbody = document.getElementById('components-table-body');
-      tbody.innerHTML = '';
+        async function loadComponents() {
+            try {
+                const response = await fetch('/api/v1/components');
 
-      components.forEach(component => {
-        const row = document.createElement('tr');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
 
-        // SBOMs count - use sbom_count from API response
-        const sbomsCount = component.sbom_count || 0;
-        const sbomsText = sbomsCount === 1 ? '1 SBOM' : `${sbomsCount} SBOMs`;
+                const components = await response.json();
 
-        // Public/Private badge
-        const publicBadge = component.is_public
-          ? '<span class="badge bg-success-subtle text-success">Public</span>'
-          : '<span class="badge bg-secondary-subtle text-secondary">Private</span>';
+                document.getElementById('components-loading').style.display = 'none';
 
-        row.innerHTML = `
+                if (components.length === 0) {
+                    document.getElementById('components-empty').classList.remove('hidden');
+                } else {
+                    displayComponents(components);
+                    document.getElementById('components-table-container').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading components:', error);
+                document.getElementById('components-loading').style.display = 'none';
+                document.getElementById('components-error').classList.remove('hidden');
+            }
+        }
+
+        function displayComponents(components) {
+            const tbody = document.getElementById('components-table-body');
+            tbody.innerHTML = '';
+
+            components.forEach(component => {
+                const row = document.createElement('tr');
+
+                // SBOMs count - use sbom_count from API response
+                const sbomsCount = component.sbom_count || 0;
+                const sbomsText = sbomsCount === 1 ? '1 SBOM' : `${sbomsCount} SBOMs`;
+
+                // Public/Private badge
+                const publicBadge = component.is_public ?
+                    '<span class="badge bg-success-subtle text-success">Public</span>' :
+                    '<span class="badge bg-secondary-subtle text-secondary">Private</span>';
+
+                row.innerHTML = `
           <td>
             <a href="/component/${component.id}/" class="text-primary text-decoration-none">
               ${escapeHtml(component.name)}
@@ -142,39 +155,39 @@
           <td class="text-center">${publicBadge}</td>
         `;
 
-        tbody.appendChild(row);
-      });
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // Refresh components after successful creation
-    // Listen for refresh events from Vue components
-    const setupEventListeners = () => {
-      if (window.eventBus && window.EVENTS) {
-        window.eventBus.on(window.EVENTS.REFRESH_COMPONENTS, loadComponents);
-        return true;
-      }
-      return false;
-    };
-
-    // Try to set up event listeners immediately, or wait for eventBus to be available
-    if (!setupEventListeners()) {
-      let attempts = 0;
-      const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
-      const waitForEventBus = setInterval(() => {
-        attempts++;
-        if (setupEventListeners()) {
-          clearInterval(waitForEventBus);
-        } else if (attempts >= maxAttempts) {
-          console.warn('EventBus not available after 5 seconds, refresh functionality may not work');
-          clearInterval(waitForEventBus);
+                tbody.appendChild(row);
+            });
         }
-      }, 100);
-    }
-  </script>
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Refresh components after successful creation
+        // Listen for refresh events from Vue components
+        const setupEventListeners = () => {
+            if (window.eventBus && window.EVENTS) {
+                window.eventBus.on(window.EVENTS.REFRESH_COMPONENTS, loadComponents);
+                return true;
+            }
+            return false;
+        };
+
+        // Try to set up event listeners immediately, or wait for eventBus to be available
+        if (!setupEventListeners()) {
+            let attempts = 0;
+            const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
+            const waitForEventBus = setInterval(() => {
+                attempts++;
+                if (setupEventListeners()) {
+                    clearInterval(waitForEventBus);
+                } else if (attempts >= maxAttempts) {
+                    console.warn('EventBus not available after 5 seconds, refresh functionality may not work');
+                    clearInterval(waitForEventBus);
+                }
+            }, 100);
+        }
+    </script>
 {% endblock %}

@@ -366,3 +366,77 @@
 .card.mt-3 {
   margin-top: 1.5rem !important;
 }
+
+/* Login logo styling */
+.login-logo {
+  max-width: 200px;
+}
+
+/* Sidebar fixed width styling */
+.sidebar-fixed-width {
+  width: 16.666667%;
+  min-width: 200px;
+}
+
+/* Version link styling */
+.version-link {
+  color: #3b7ddd !important;
+  text-decoration: none;
+}
+
+.version-link:hover {
+  text-decoration: underline;
+}
+
+/* Login card styling */
+.login-card {
+  max-width: 600px;
+  margin: 3rem auto;
+}
+
+/* ========================================
+   RESPONSIVE LOGO STYLES FOR RETINA/HIGH-DPI
+   ======================================== */
+
+.sidebar-logo {
+  height: 1.875rem; /* 30px base size */
+  width: auto; /* Maintain aspect ratio */
+  max-width: 7.5rem; /* 120px max width */
+
+  /* Ensure crisp rendering on all devices */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+
+  /* Smooth scaling for different pixel densities */
+  transition: transform 0.2s ease;
+}
+
+/* For high-DPI displays (retina screens) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .sidebar-logo {
+    /* Slightly larger on retina to maintain visual weight */
+    height: 2rem; /* 32px on retina */
+    max-width: 8rem; /* 128px max width on retina */
+  }
+}
+
+/* For extra high-DPI displays */
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 288dpi) {
+  .sidebar-logo {
+    height: 2.125rem; /* 34px on 3x displays */
+    max-width: 8.5rem; /* 136px max width */
+  }
+}
+
+/* Responsive adjustments for different viewport sizes */
+@media (max-width: 768px) {
+  .sidebar-logo {
+    height: 1.75rem; /* Slightly smaller on mobile */
+    max-width: 7rem;
+  }
+}
+
+/* Hover effect for better interactivity */
+.sidebar-brand:hover .sidebar-logo {
+  transform: scale(1.05);
+}

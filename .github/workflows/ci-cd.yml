@@ -60,6 +60,22 @@ jobs:
           echo "## Code Quality Results" >> $GITHUB_STEP_SUMMARY
           echo "All pre-commit hooks passed successfully." >> $GITHUB_STEP_SUMMARY
 
+      - name: Run Django template linting
+        run: |
+          echo "Running Django template linting with djlint..."
+
+          # Run format check
+          echo "Checking template formatting..."
+          poetry run djlint . --extension=html.j2 --check
+
+          # Run linting
+          echo "Running template linting..."
+          poetry run djlint . --extension=html.j2 --lint
+
+          # Add results to GitHub step summary
+          echo "## Django Template Linting Results" >> $GITHUB_STEP_SUMMARY
+          echo "Django template linting and format checking completed successfully." >> $GITHUB_STEP_SUMMARY
+
   tests:
     name: Run Tests
     runs-on: ubuntu-latest

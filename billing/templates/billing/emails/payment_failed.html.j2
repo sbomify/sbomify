@@ -1,23 +1,19 @@
 {% extends "core/emails/base.html.j2" %}
-
 {% block content %}
-<h2>Payment Failed</h2>
-
-<p>Dear {{ user_name }},</p>
-
-<p>We were unable to process your payment for team '{{ team_name }}'. This was attempt {{ attempt_count }}.
-We will try again on {{ next_payment_attempt }}.</p>
-
-<p>To avoid service interruption, please update your payment information:</p>
-
-<p>
-    <a href="{{ action_url }}" class="button">Update Payment Information</a>
-</p>
-
-<p>If you have any questions, please contact our support team.</p>
-
-<p>
-    Best regards,<br>
-    The sbomify Team
-</p>
+    <h2>Payment Failed</h2>
+    <p>Dear {{ user_name }},</p>
+    <p>
+        We were unable to process your payment for team '{{ team_name }}'. This was attempt {{ attempt_count }}.
+        We will try again on {{ next_payment_attempt }}.
+    </p>
+    <p>To avoid service interruption, please update your payment information:</p>
+    <p>
+        <a href="{{ action_url }}" class="button">Update Payment Information</a>
+    </p>
+    <p>If you have any questions, please contact our support team.</p>
+    <p>
+        Best regards,
+        <br>
+        The sbomify Team
+    </p>
 {% endblock %}

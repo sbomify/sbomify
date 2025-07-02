@@ -1,194 +1,196 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
-
 {% block extrastyle %}
-{{ block.super }}
-<style>
-    .stats-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        padding: 20px;
-    }
-    .stats-card {
-        background: white;
-        padding: 20px;
-        border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-    }
-    .chart-container {
-        position: relative;
-        height: 300px;
-        width: 100%;
-    }
-    .breadcrumbs {
-        margin: 20px;
-    }
-    .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        color: #666;
-    }
-    .error-message {
-        color: #ba2121;
-        text-align: center;
-        padding: 20px;
-    }
-</style>
+    {{ block.super }}
+    <style>
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .stats-card {
+            background: white;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .chart-canvas {
+            max-height: 300px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .breadcrumbs {
+            margin: 20px;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+        }
+
+        .error-message {
+            color: #ba2121;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
 {% endblock %}
-
 {% block content %}
-<div class="breadcrumbs">
-    <a href="{% url 'admin:index' %}">Home</a> &rsaquo; System Dashboard
-</div>
-
-{% if stats.error %}
-<div class="error-message">
-    <h3>Error Loading Dashboard</h3>
-    <p>{{ stats.error }}</p>
-</div>
-{% else %}
-<div class="stats-container">
-    <div class="stats-card">
-        <h3>Users &amp; Teams</h3>
-        <div class="chart-container">
-            <div class="loading">Loading chart...</div>
-            <canvas id="usersTeamsChart" style="display: none;"></canvas>
-        </div>
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">Home</a> › System Dashboard
     </div>
-
-    <div class="stats-card">
-        <h3>Users per Team</h3>
-        <div class="chart-container">
-            <div class="loading">Loading chart...</div>
-            <canvas id="usersPerTeamChart" style="display: none;"></canvas>
+    {% if stats.error %}
+        <div class="error-message">
+            <h3>Error Loading Dashboard</h3>
+            <p>{{ stats.error }}</p>
         </div>
-    </div>
-
-    <div class="stats-card">
-        <h3>Components Overview</h3>
-        <div class="chart-container">
-            <div class="loading">Loading chart...</div>
-            <canvas id="componentsChart" style="display: none;"></canvas>
+    {% else %}
+        <div class="stats-container">
+            <div class="stats-card">
+                <h3>Users &amp; Teams</h3>
+                <div class="chart-container">
+                    <div class="loading">Loading chart...</div>
+                    <canvas id="usersTeamsChart" class="chart-canvas hidden"></canvas>
+                </div>
+            </div>
+            <div class="stats-card">
+                <h3>Users per Team</h3>
+                <div class="chart-container">
+                    <div class="loading">Loading chart...</div>
+                    <canvas id="usersPerTeamChart" class="chart-canvas hidden"></canvas>
+                </div>
+            </div>
+            <div class="stats-card">
+                <h3>Components Overview</h3>
+                <div class="chart-container">
+                    <div class="loading">Loading chart...</div>
+                    <canvas id="componentsChart" class="chart-canvas hidden"></canvas>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    function showChart(canvasId) {
-        const canvas = document.getElementById(canvasId);
-        const loading = canvas.previousElementSibling;
-        canvas.style.display = 'block';
-        loading.style.display = 'none';
-    }
-
-    function handleChartError(canvasId, error) {
-        const container = document.getElementById(canvasId).parentElement;
-        container.innerHTML = `<div class="error-message">Error loading chart: ${error}</div>`;
-    }
-
-    try {
-        // Users & Teams Bar Chart
-        const usersTeamsChart = new Chart(document.getElementById('usersTeamsChart'), {
-            type: 'bar',
-            data: {
-                labels: ['Users', 'Teams'],
-                datasets: [{
-                    label: 'Count',
-                    data: [{{ stats.users }}, {{ stats.teams }}],
-                    backgroundColor: ['#36a2eb', '#ff6384']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                function showChart(canvasId) {
+                    const canvas = document.getElementById(canvasId);
+                    const loading = canvas.previousElementSibling;
+                    canvas.classList.remove('hidden');
+                    loading.style.display = 'none';
                 }
-            }
-        });
-        showChart('usersTeamsChart');
 
-        // Users per Team Chart
-        const usersPerTeamChart = new Chart(document.getElementById('usersPerTeamChart'), {
-            type: 'bar',
-            data: {
-                labels: [{% for team in stats.users_per_team %}'{{ team.name }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
-                datasets: [{
-                    label: 'Users',
-                    data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
-                    backgroundColor: '#4bc0c0'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
+                function handleChartError(canvasId, error) {
+                    const container = document.getElementById(canvasId).parentElement;
+                    container.innerHTML = `<div class="error-message">Error loading chart: ${error}</div>`;
                 }
-            }
-        });
-        showChart('usersPerTeamChart');
 
-        // Components Overview Bar Chart
-        const componentsChart = new Chart(document.getElementById('componentsChart'), {
-            type: 'bar',
-            data: {
-                labels: ['Products', 'Projects', 'Components', 'SBOMs'],
-                datasets: [{
-                    label: 'Count',
-                    data: [
-                        {{ stats.products }},
-                        {{ stats.projects }},
-                        {{ stats.components }},
-                        {{ stats.sboms }}
-                    ],
-                    backgroundColor: [
-                        '#ff6384',
-                        '#36a2eb',
-                        '#ffcd56',
-                        '#4bc0c0'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                try {
+                    // Users & Teams Bar Chart
+                    const usersTeamsChart = new Chart(document.getElementById('usersTeamsChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['Users', 'Teams'],
+                            datasets: [{
+                                label: 'Count',
+                                data: [{{ stats.users }}, {{ stats.teams }}],
+                                backgroundColor: ['#36a2eb', '#ff6384']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-            }
-        });
-        showChart('componentsChart');
-    } catch (error) {
-        console.error('Error initializing charts:', error);
-        document.querySelector('.stats-container').innerHTML = `
+                    });
+                    showChart('usersTeamsChart');
+
+                    // Users per Team Chart
+                    const usersPerTeamChart = new Chart(document.getElementById('usersPerTeamChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: [{% for team in stats.users_per_team %}'{{ team.name }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                            datasets: [{
+                                label: 'Users',
+                                data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                                backgroundColor: '#4bc0c0'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    showChart('usersPerTeamChart');
+
+                    // Components Overview Bar Chart
+                    const componentsChart = new Chart(document.getElementById('componentsChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['Products', 'Projects', 'Components', 'SBOMs'],
+                            datasets: [{
+                                label: 'Count',
+                                data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}],
+                                backgroundColor: [
+                                    '#ff6384',
+                                    '#36a2eb',
+                                    '#ffcd56',
+                                    '#4bc0c0'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    showChart('componentsChart');
+                } catch (error) {
+                    console.error('Error initializing charts:', error);
+                    document.querySelector('.stats-container').innerHTML = `
             <div class="error-message">
                 <h3>Error Loading Dashboard</h3>
                 <p>There was an error loading the dashboard charts. Please try refreshing the page.</p>
             </div>
         `;
-    }
-});
-</script>
-{% endif %}
+                }
+            });
+        </script>
+    {% endif %}
 {% endblock %}

@@ -1,21 +1,18 @@
 {% extends "core/emails/base.html.j2" %}
-
 {% block content %}
-<h2>Payment Past Due</h2>
-
-<p>Dear {{ user_name }},</p>
-
-<p>Your subscription payment for team '{{ team_name }}' is past due. Please update your payment information
-to avoid any service interruption.</p>
-
-<p>
-    <a href="{{ action_url }}" class="button">Update Payment Information</a>
-</p>
-
-<p>If you have any questions, please contact our support team.</p>
-
-<p>
-    Best regards,<br>
-    The sbomify Team
-</p>
+    <h2>Payment Past Due</h2>
+    <p>Dear {{ user_name }},</p>
+    <p>
+        Your subscription payment for team '{{ team_name }}' is past due. Please update your payment information
+        to avoid any service interruption.
+    </p>
+    <p>
+        <a href="{{ action_url }}" class="button">Update Payment Information</a>
+    </p>
+    <p>If you have any questions, please contact our support team.</p>
+    <p>
+        Best regards,
+        <br>
+        The sbomify Team
+    </p>
 {% endblock %}

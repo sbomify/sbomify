@@ -1,7 +1,8 @@
 {% load static %}
-
 {# Sidebar navigation component #}
-<nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar" style="width: 16.666667%; min-width: 200px;" data-component="sidebar">
+<nav id="sidebar"
+     class="col-md-3 col-lg-2 d-md-block bg-light sidebar sidebar-fixed-width"
+     data-component="sidebar">
     <div class="position-sticky pt-3">
         {# Team selector #}
         <div class="mb-4 px-3" data-component="team-selector">
@@ -10,14 +11,11 @@
                     {% for team_key, team in request.session.user_teams.items %}
                         <option value="{{ team_key }}"
                                 {% if request.session.current_team.key == team_key %}selected{% endif %}
-                                data-role="{{ team.role }}">
-                            {{ team.name }}
-                        </option>
+                                data-role="{{ team.role }}">{{ team.name }}</option>
                     {% endfor %}
                 </select>
             {% endif %}
         </div>
-
         {# Main navigation #}
         <ul class="nav flex-column" data-component="main-nav">
             <li class="nav-item">
@@ -61,7 +59,6 @@
                 </a>
             </li>
         </ul>
-
         {# Team settings - only show for team owners #}
         {% if request.session.current_team.role == 'owner' %}
             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">

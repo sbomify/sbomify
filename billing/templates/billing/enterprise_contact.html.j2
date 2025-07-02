@@ -1,211 +1,193 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load static %}
 {% load widget_tweaks %}
-
 {% block title %}sbomify Enterprise Contact{% endblock %}
-
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="text-center mb-5">
-                <h1 class="mb-3">Enterprise Plan Inquiry</h1>
-                <p class="lead text-muted">
-                    Let's discuss how sbomify Enterprise can meet your organization's specific needs for SBOM management, compliance, and security.
-                </p>
-            </div>
-
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="text-center mb-5">
+                    <h1 class="mb-3">Enterprise Plan Inquiry</h1>
+                    <p class="lead text-muted">
+                        Let's discuss how sbomify Enterprise can meet your organization's specific needs for SBOM management, compliance, and security.
+                    </p>
+                </div>
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show"
+                             role="alert">
+                            {{ message }}
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="alert"
+                                    aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            <!-- Company Information Section -->
+                            <div class="mb-4">
+                                <h5 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-building me-2 text-primary"></i>Company Information
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label for="{{ form.company_name.id_for_label }}"
+                                               class="form-label required">{{ form.company_name.label }}</label>
+                                        {% render_field form.company_name %}
+                                        {% if form.company_name.errors %}
+                                            <div class="invalid-feedback d-block">{{ form.company_name.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.company_size.id_for_label }}"
+                                               class="form-label required">{{ form.company_size.label }}</label>
+                                        {% render_field form.company_size %}
+                                        {% if form.company_size.errors %}
+                                            <div class="invalid-feedback d-block">{{ form.company_size.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.industry.id_for_label }}" class="form-label">{{ form.industry.label }}</label>
+                                        {% render_field form.industry %}
+                                        {% if form.industry.errors %}<div class="invalid-feedback d-block">{{ form.industry.errors.0 }}</div>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Contact Information Section -->
+                            <div class="mb-4">
+                                <h5 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-user me-2 text-primary"></i>Contact Information
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.first_name.id_for_label }}" class="form-label required">{{ form.first_name.label }}</label>
+                                        {% render_field form.first_name %}
+                                        {% if form.first_name.errors %}<div class="invalid-feedback d-block">{{ form.first_name.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.last_name.id_for_label }}" class="form-label required">{{ form.last_name.label }}</label>
+                                        {% render_field form.last_name %}
+                                        {% if form.last_name.errors %}<div class="invalid-feedback d-block">{{ form.last_name.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.email.id_for_label }}" class="form-label required">{{ form.email.label }}</label>
+                                        {% render_field form.email %}
+                                        {% if form.email.errors %}<div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.phone.id_for_label }}" class="form-label">{{ form.phone.label }}</label>
+                                        {% render_field form.phone %}
+                                        {% if form.phone.errors %}<div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-12 mb-3">
+                                        <label for="{{ form.job_title.id_for_label }}" class="form-label">{{ form.job_title.label }}</label>
+                                        {% render_field form.job_title %}
+                                        {% if form.job_title.errors %}<div class="invalid-feedback d-block">{{ form.job_title.errors.0 }}</div>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Project Details Section -->
+                            <div class="mb-4">
+                                <h5 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-project-diagram me-2 text-primary"></i>Project Details
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.primary_use_case.id_for_label }}"
+                                               class="form-label required">{{ form.primary_use_case.label }}</label>
+                                        {% render_field form.primary_use_case %}
+                                        {% if form.primary_use_case.errors %}
+                                            <div class="invalid-feedback d-block">{{ form.primary_use_case.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.timeline.id_for_label }}" class="form-label">{{ form.timeline.label }}</label>
+                                        {% render_field form.timeline %}
+                                        {% if form.timeline.errors %}<div class="invalid-feedback d-block">{{ form.timeline.errors.0 }}</div>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Message Section -->
+                            <div class="mb-4">
+                                <h5 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-comment-alt me-2 text-primary"></i>Tell Us More
+                                </h5>
+                                <div class="mb-3">
+                                    <label for="{{ form.message.id_for_label }}" class="form-label required">{{ form.message.label }}</label>
+                                    {% render_field form.message %}
+                                    {% if form.message.errors %}<div class="invalid-feedback d-block">{{ form.message.errors.0 }}</div>{% endif %}
+                                    <div class="form-text">
+                                        Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Consent Section -->
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    {% render_field form.newsletter_signup %}
+                                    <label class="form-check-label"
+                                           for="{{ form.newsletter_signup.id_for_label }}">
+                                        {{ form.newsletter_signup.label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- Submit Button -->
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="{% url 'core:dashboard' %}"
+                                   class="btn btn-outline-secondary me-md-2">
+                                    <i class="fas fa-arrow-left me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="fas fa-paper-plane me-2"></i>Send Inquiry
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                {% endfor %}
-            {% endif %}
-
-            <div class="card shadow-sm">
-                <div class="card-body p-4">
-                    <form method="post" novalidate>
-                        {% csrf_token %}
-
-                        <!-- Company Information Section -->
-                        <div class="mb-4">
-                            <h5 class="border-bottom pb-2 mb-3">
-                                <i class="fas fa-building me-2 text-primary"></i>Company Information
-                            </h5>
-                            <div class="row">
-                                <div class="col-md-12 mb-3">
-                                    <label for="{{ form.company_name.id_for_label }}" class="form-label required">{{ form.company_name.label }}</label>
-                                    {% render_field form.company_name %}
-                                    {% if form.company_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.company_name.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.company_size.id_for_label }}" class="form-label required">{{ form.company_size.label }}</label>
-                                    {% render_field form.company_size %}
-                                    {% if form.company_size.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.company_size.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.industry.id_for_label }}" class="form-label">{{ form.industry.label }}</label>
-                                    {% render_field form.industry %}
-                                    {% if form.industry.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.industry.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Contact Information Section -->
-                        <div class="mb-4">
-                            <h5 class="border-bottom pb-2 mb-3">
-                                <i class="fas fa-user me-2 text-primary"></i>Contact Information
-                            </h5>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.first_name.id_for_label }}" class="form-label required">{{ form.first_name.label }}</label>
-                                    {% render_field form.first_name %}
-                                    {% if form.first_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.first_name.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.last_name.id_for_label }}" class="form-label required">{{ form.last_name.label }}</label>
-                                    {% render_field form.last_name %}
-                                    {% if form.last_name.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.last_name.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.email.id_for_label }}" class="form-label required">{{ form.email.label }}</label>
-                                    {% render_field form.email %}
-                                    {% if form.email.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.phone.id_for_label }}" class="form-label">{{ form.phone.label }}</label>
-                                    {% render_field form.phone %}
-                                    {% if form.phone.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-12 mb-3">
-                                    <label for="{{ form.job_title.id_for_label }}" class="form-label">{{ form.job_title.label }}</label>
-                                    {% render_field form.job_title %}
-                                    {% if form.job_title.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.job_title.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Project Details Section -->
-                        <div class="mb-4">
-                            <h5 class="border-bottom pb-2 mb-3">
-                                <i class="fas fa-project-diagram me-2 text-primary"></i>Project Details
-                            </h5>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.primary_use_case.id_for_label }}" class="form-label required">{{ form.primary_use_case.label }}</label>
-                                    {% render_field form.primary_use_case %}
-                                    {% if form.primary_use_case.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.primary_use_case.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.timeline.id_for_label }}" class="form-label">{{ form.timeline.label }}</label>
-                                    {% render_field form.timeline %}
-                                    {% if form.timeline.errors %}
-                                        <div class="invalid-feedback d-block">{{ form.timeline.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Message Section -->
-                        <div class="mb-4">
-                            <h5 class="border-bottom pb-2 mb-3">
-                                <i class="fas fa-comment-alt me-2 text-primary"></i>Tell Us More
-                            </h5>
-                            <div class="mb-3">
-                                <label for="{{ form.message.id_for_label }}" class="form-label required">{{ form.message.label }}</label>
-                                {% render_field form.message %}
-                                {% if form.message.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.message.errors.0 }}</div>
-                                {% endif %}
-                                <div class="form-text">
-                                    Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Consent Section -->
-                        <div class="mb-4">
-                            <div class="form-check">
-                                {% render_field form.newsletter_signup %}
-                                <label class="form-check-label" for="{{ form.newsletter_signup.id_for_label }}">
-                                    {{ form.newsletter_signup.label }}
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary me-md-2">
-                                <i class="fas fa-arrow-left me-2"></i>Cancel
-                            </a>
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="fas fa-paper-plane me-2"></i>Send Inquiry
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
         </div>
     </div>
-</div>
+    <style>
+        .required:after {
+            content: " *";
+            color: #dc3545;
+        }
 
-<style>
-.required:after {
-    content: " *";
-    color: #dc3545;
-}
+        .form-label {
+            font-weight: 500;
+            color: #374151;
+        }
 
-.form-label {
-    font-weight: 500;
-    color: #374151;
-}
+        .border-bottom {
+            border-color: #e5e7eb !important;
+        }
 
-.border-bottom {
-    border-color: #e5e7eb !important;
-}
+        .card {
+            border: none;
+            border-radius: 12px;
+        }
 
-.card {
-    border: none;
-    border-radius: 12px;
-}
+        .form-control:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+        }
 
-.form-control:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
-}
+        .btn-primary {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+        }
 
-.btn-primary {
-    background-color: #3b82f6;
-    border-color: #3b82f6;
-}
+        .btn-primary:hover {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
 
-.btn-primary:hover {
-    background-color: #2563eb;
-    border-color: #2563eb;
-}
-
-.text-primary {
-    color: #3b82f6 !important;
-}
-</style>
+        .text-primary {
+            color: #3b82f6 !important;
+        }
+    </style>
 {% endblock %}

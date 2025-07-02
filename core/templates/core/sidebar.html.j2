@@ -1,57 +1,51 @@
 {% load static %}
-
 <nav id="sidebar" class="sidebar js-sidebar">
-  <div class="sidebar-content js-simplebar">
-    <a class="sidebar-brand" href="{% url 'core:dashboard' %}">
-      <img src="{% static 'img/sbomify.svg' %}" alt="Logo" class="align-middle" />
-    </a>
-
-    {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-    <ul class="sidebar-nav">
-      {% if not request.session.current_team.has_completed_wizard %}
-      <li class="sidebar-item">
-        <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
-          <i class="align-middle" data-feather="play-circle"></i>
-          <span class="align-middle pt-1">Get Started</span>
-          <span class="badge bg-primary-subtle text-primary ms-auto">New</span>
+    <div class="sidebar-content js-simplebar">
+        <a class="sidebar-brand" href="{% url 'core:dashboard' %}">
+            <img src="{% static 'img/sbomify.svg' %}"
+                 alt="Logo"
+                 class="align-middle sidebar-logo"
+                 width="120"
+                 height="30" />
         </a>
-      </li>
-      <li class="sidebar-header">Navigation</li>
-      {% endif %}
-
-      <li class="sidebar-item {% if current_view_name == 'core:dashboard' %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'core:dashboard' %}">
-          <i class="align-middle" data-feather="sliders"></i> <span class="align-middle pt-1">Dashboard</span>
-        </a>
-      </li>
-
-      <li class="sidebar-item {% if current_view_name == 'teams:teams_dashboard' %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'teams:teams_dashboard' %}">
-          <i class="align-middle" data-feather="users"></i> <span class="align-middle pt-1">Workspace</span>
-        </a>
-      </li>
-
-      <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
-          <i class="align-middle" data-feather="folder-plus"></i> <span class="align-middle pt-1">Products</span>
-        </a>
-      </li>
-
-      <li class="sidebar-item {% if 'core:project' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'core:projects_dashboard' %}">
-          <i class="align-middle" data-feather="folder"></i> <span class="align-middle pt-1">Projects</span>
-        </a>
-      </li>
-
-      <li class="sidebar-item {% if 'core:component' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'core:components_dashboard' %}">
-          <i class="align-middle" data-feather="file-text"></i> <span class="align-middle pt-1">Components</span>
-        </a>
-      </li>
-
-    </ul>
-    {% endwith %}
-
-  </div>
+        {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
+            <ul class="sidebar-nav">
+                {% if not request.session.current_team.has_completed_wizard %}
+                    <li class="sidebar-item">
+                        <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
+                            <i class="align-middle" data-feather="play-circle"></i>
+                            <span class="align-middle pt-1">Get Started</span>
+                            <span class="badge bg-primary-subtle text-primary ms-auto">New</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-header">Navigation</li>
+                {% endif %}
+                <li class="sidebar-item {% if current_view_name == 'core:dashboard' %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'core:dashboard' %}">
+                        <i class="align-middle" data-feather="sliders"></i> <span class="align-middle pt-1">Dashboard</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {% if current_view_name == 'teams:teams_dashboard' %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'teams:teams_dashboard' %}">
+                        <i class="align-middle" data-feather="users"></i> <span class="align-middle pt-1">Workspace</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
+                        <i class="align-middle" data-feather="folder-plus"></i> <span class="align-middle pt-1">Products</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {% if 'core:project' in current_view_name %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'core:projects_dashboard' %}">
+                        <i class="align-middle" data-feather="folder"></i> <span class="align-middle pt-1">Projects</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {% if 'core:component' in current_view_name %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'core:components_dashboard' %}">
+                        <i class="align-middle" data-feather="file-text"></i> <span class="align-middle pt-1">Components</span>
+                    </a>
+                </li>
+            </ul>
+        {% endwith %}
+    </div>
 </nav>
-
