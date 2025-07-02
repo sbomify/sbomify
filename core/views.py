@@ -220,7 +220,8 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def products_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,
@@ -276,7 +277,8 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
 
 @login_required
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,
@@ -333,7 +335,8 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
 @login_required
 def components_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,

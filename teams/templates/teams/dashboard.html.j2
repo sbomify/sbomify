@@ -49,7 +49,7 @@
                         <div class="form-group">
                             <label for="{{ add_team_form.name.id_for_label }}">{{ add_team_form.name.label }}</label>
                             {{ add_team_form.name|add_class:'form-control mb-3'|attr:"tabindex:1" }}
-                            {% for error in add_team_form.email.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
+                            {% for error in add_team_form.name.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
                         </div>
                         <div class="col col-12 text-end form-group">
                             <input type="submit"
@@ -67,27 +67,15 @@
     {% vite_asset 'teams/js/main.ts' %}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            {
-                %
-                if add_team_form.errors %
-            }
-            var addWorkspaceModal = new bootstrap.Modal(document.getElementById('addWorkspaceModal'));
-            addWorkspaceModal.show();
-            {
-                %
-                for field, errors in add_team_form.errors.items %
-            } {
-                %
-                for error in errors %
-            }
-            window.showError('{{ error }}');
-            {
-                % endfor %
-            } {
-                % endfor %
-            } {
-                % endif %
-            }
+            {% if add_team_form.errors %}
+                var addWorkspaceModal = new bootstrap.Modal(document.getElementById('addWorkspaceModal'));
+                addWorkspaceModal.show();
+                {% for field, errors in add_team_form.errors.items %}
+                    {% for error in errors %}
+                        window.showError('{{ error }}');
+                    {% endfor %}
+                {% endfor %}
+            {% endif %}
 
             // Handle modal shown event
             const addWorkspaceModal = document.getElementById('addWorkspaceModal');

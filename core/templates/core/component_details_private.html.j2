@@ -165,7 +165,7 @@ APP_BASE_URL - Base URL for the application
             {{ sboms_data|json_script:"sboms-data" }}
             <div class="vc-sboms-table"
                  data-sboms-data-element-id="sboms-data"
-                 data-has-crud-permissions="{% if has_crud_permissions %} true {% else %} false {% endif %}"></div>
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
     {% if has_crud_permissions %}

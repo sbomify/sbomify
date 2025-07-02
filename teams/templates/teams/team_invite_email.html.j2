@@ -21,13 +21,14 @@
         <h1>You've been invited to join a team!</h1>
         <p>Hello,</p>
         <p>
-            {{ user.get_full_name|default:user.email }} has invited you to join the team <strong>{{ invitation.team.name }}</strong> on sbomify.
+            {{ user.get_full_name|default:user.email }} has invited you to join the team <strong>{{ team.name }}</strong> on sbomify.
         </p>
         <p>
-            <a href="{{ invitation_url }}" class="invite-button">Accept Invitation</a>
+            <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.id %}"
+               class="invite-button">Accept Invitation</a>
         </p>
         <p>If you can't click the button above, copy and paste this link into your browser:</p>
-        <p>{{ invitation_url }}</p>
+        <p>{{ base_url }}{% url 'teams:accept_invite' invitation.id %}</p>
         <p>This invitation will expire on {{ invitation.expires_at|date:"F d, Y" }}.</p>
         <p>
             Best regards,

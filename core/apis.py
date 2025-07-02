@@ -64,10 +64,22 @@ item_type_map = {"team": Team, "component": Component, "project": Project, "prod
 
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
-    """Get the current user's team ID from the session."""
+    """Get the current user's team ID from the session or fall back to user's first team."""
     from core.utils import get_team_id_from_session
+    from teams.models import Team
 
-    return get_team_id_from_session(request)
+    # First try session-based team (for web UI)
+    team_id = get_team_id_from_session(request)
+    if team_id:
+        return team_id
+
+    # Fall back to user's first team (for API calls with bearer tokens)
+    if request.user and request.user.is_authenticated:
+        first_team = Team.objects.filter(member__user=request.user).first()
+        if first_team:
+            return str(first_team.id)
+
+    return None
 
 
 def _build_item_response(item, item_type: str):

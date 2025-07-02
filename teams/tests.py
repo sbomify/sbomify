@@ -87,6 +87,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     assert len(team.key) > 0  # nosec
 
 
+
 @pytest.mark.django_db
 def test_only_logged_in_users_are_allowed_to_switch_teams(
     sample_team_with_owner_member: Member,  # noqa: F811
