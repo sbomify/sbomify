@@ -1,0 +1,18 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load form_helpers %}
+{% load django_vite %}
+{% block title %}sbomify Projects{% endblock %}
+{% block content %}
+    <div class="row align-items-center">
+        <div class="col-12">
+            <div class="vc-projects-list"
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        </div>
+    </div>
+    {% if has_crud_permissions %}<div class="vc-add-project-form"></div>{% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

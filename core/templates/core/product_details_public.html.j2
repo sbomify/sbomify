@@ -1,0 +1,137 @@
+{% extends "core/base.html.j2" %}
+{% comment %}
+Template context:
+product: Product object
+{% endcomment %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+{% block title %}Product: {{ product.name }}{% endblock %}
+{% block styles %}
+    <style>
+    .brand-logo {
+        height: 3rem;
+        max-width: 12rem;
+        width: auto;
+        object-fit: contain;
+    }
+
+    .credits-logo {
+        height: 1.25rem;
+        width: auto;
+        max-width: 5rem;
+        object-fit: contain;
+    }
+
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+        .brand-logo {
+            height: 3.25rem;
+            max-width: 13rem;
+        }
+        .credits-logo {
+            height: 1.375rem;
+            max-width: 5.5rem;
+        }
+    }
+    </style>
+{% endblock %}
+{% block main %}
+    <main class="content public-page mb-4">
+        <div class="brand"
+             style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}">
+            {% if brand.brand_image %}
+                <img src="{{ brand.brand_image }}"
+                     alt="{{ brand.name }}"
+                     class="brand-logo"
+                     width="192"
+                     height="48">
+            {% else %}
+                <img src="/static/img/sbomify.svg"
+                     alt="sbomify logo"
+                     class="brand-logo"
+                     width="192"
+                     height="48">
+            {% endif %}
+        </div>
+        <div class="pp-content-container">
+            <div class="pp-content-bg"
+                 style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}"></div>
+            <div class="pp-content">
+                <div class="page-header mb-4">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        <h1 class="page-title mb-0"
+                            style="color: {{ brand.accent_color|default:'#7c8b9d' }}">{{ product.name }}</h1>
+                    </div>
+                    <div class="text-muted">
+                        <small class="me-3">
+                            <i class="fas fa-box me-1"></i>Product
+                        </small>
+                        <small>
+                            <i class="fas fa-fingerprint me-1"></i>
+                            <span class="vc-copyable-value" data-value="{{ product.id }}">{{ product.id }}</span>
+                        </small>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12 col-lg-6">
+                        <div class="vc-dashboard-stats"
+                             data-item-type="product"
+                             data-item-id="{{ product.id }}"></div>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="row pp-main">
+                            <div class="col-12">
+                                <h4 style="color: {{ brand.accent_color|default:'#7c8b9d' }};">Product Projects</h4>
+                                <div class="card data-table">
+                                    <div class="card-body">
+                                        {% if product.projects.all.count > 0 %}
+                                            <p>Projects that are part of this product.</p>
+                                            <table class="table">
+                                                <tr>
+                                                    <th scope="col">Name</th>
+                                                </tr>
+                                                {% for project in product.projects.all %}
+                                                    <tr>
+                                                        <td>
+                                                            {% if project.is_public %}
+                                                                <a href="{% url 'core:project_details_public' project.id %}">{{ project.name }}</a>
+                                                            {% else %}
+                                                                {{ project.name }}
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </table>
+                                        {% else %}
+                                            <p class="p-3 mb-0">No projects added to the product yet.</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 offset-md-3">
+                        <a class="btn btn-outline-primary w-100"
+                           href="{% url 'core:sbom_download_product' product.id %}">
+                            <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="credits">
+            Powered by <a href="https://sbomify.com">
+            <img src="/static/img/sbomify.svg"
+                 alt="sbomify logo"
+                 class="credits-logo"
+                 width="80"
+                 height="20" />
+        </a>
+    </div>
+</main>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

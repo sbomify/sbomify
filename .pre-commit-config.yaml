@@ -59,3 +59,17 @@ repos:
         language: system
         pass_filenames: false
         files: \.py$
+
+      - id: djlint-check
+        name: djlint format check
+        entry: poetry run djlint . --extension=html.j2 --check
+        language: system
+        pass_filenames: false
+        files: \.html\.j2$
+
+      - id: djlint-lint
+        name: djlint
+        entry: poetry run djlint . --extension=html.j2 --lint
+        language: system
+        pass_filenames: false
+        files: \.html\.j2$

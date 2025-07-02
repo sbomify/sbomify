@@ -24,7 +24,7 @@ def send_billing_email(team: Team, member: Member, subject: str, template_name: 
     try:
         # Render email content from template
         try:
-            html_message = render_to_string(f"billing/emails/{template_name}.html", context)
+            html_message = render_to_string(f"billing/emails/{template_name}.html.j2", context)
             plain_message = render_to_string(f"billing/emails/{template_name}.txt", context)
         except Exception as e:
             logger.error(f"Failed to render email template {template_name}: {str(e)}")

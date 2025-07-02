@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="description" content="sbomify new user welcome notification">
+        <meta name="keywords" content="sbomify, welcome, new user, notification">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to sbomify</title>
+    </head>
+    <body>
+        <h1>Welcome to sbomify!</h1>
+        <p>Thank you for joining our platform. We're excited to have you on board.</p>
+        <p>
+            {% if user.first_name %}
+                Hello {{ user.first_name }},
+            {% else %}
+                Hello {{ user.email }},
+            {% endif %}
+        </p>
+        <p>We're excited to have you join the sbomify community. Your account has been successfully created.</p>
+        <p>Feel free to reach out if you have any questions.</p>
+        <p>
+            Best regards,
+            <br>
+            The sbomify Team
+        </p>
+    </body>
+</html>

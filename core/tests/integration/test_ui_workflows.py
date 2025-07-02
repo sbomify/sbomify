@@ -129,12 +129,9 @@ class TestUIWorkflows:
         assert response.status_code == 200
         content = response.content.decode()
 
-        # Verify the Add Component button exists
-        assert 'data-bs-target="#addComponentModal"' in content
-        assert "Add Component" in content
-
-        # Verify the Vue component mount point exists
+        # Verify the Vue component mount point exists for the add form
         assert 'class="vc-add-component-form"' in content
+        assert 'class="vc-components-list"' in content
 
         # Test API-based component creation (what the Vue component does)
         import json

@@ -12,11 +12,8 @@ from pytest_mock.plugin import MockerFixture
 
 from access_tokens.models import AccessToken
 from billing.models import BillingPlan
-from core.tests.fixtures import sample_user  # noqa: F401
-from teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from teams.models import Member
-
 from core.models import Component, Product, Project
+from core.tests.fixtures import sample_user  # noqa: F401
 from sboms.tests.fixtures import (  # noqa: F401
     sample_access_token,
     sample_billing_plan,
@@ -25,6 +22,8 @@ from sboms.tests.fixtures import (  # noqa: F401
     sample_project,
 )
 from sboms.tests.test_views import setup_test_session
+from teams.fixtures import sample_team_with_owner_member  # noqa: F401
+from teams.models import Member
 
 # =============================================================================
 # PRODUCT CRUD TESTS
@@ -694,14 +693,14 @@ def test_crud_operations_require_authentication():
 
 
 @pytest.mark.django_db
-def test_crud_operations_require_team_access(
+def test_crud_operations_require_billing_plan(
     sample_access_token: AccessToken,  # noqa: F811
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    """Test that CRUD operations require proper team access."""
+    """Test that CRUD operations require an active billing plan when using access tokens."""
     client = Client()
 
-    # Set up authentication but no team session
+    # Set up authentication but no team session - API will fall back to user's first team
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     # Explicitly clear any team session data that might have been set up
@@ -716,15 +715,9 @@ def test_crud_operations_require_team_access(
         reverse("api-1:create_component"),
     ]
 
-    list_urls = [
-        reverse("api-1:list_products"),
-        reverse("api-1:list_projects"),
-        reverse("api-1:list_components"),
-    ]
-
     payload = {"name": "Test Item"}
 
-    # Test create operations
+    # Test create operations - these require billing plan validation
     for url in create_urls:
         response = client.post(
             url,
@@ -733,16 +726,7 @@ def test_crud_operations_require_team_access(
             HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
         )
         assert response.status_code == 403
-        assert "No current team selected" in response.json()["detail"]
-
-    # Test list operations
-    for url in list_urls:
-        response = client.get(
-            url,
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-        )
-        assert response.status_code == 403
-        assert "No current team selected" in response.json()["detail"]
+        assert "No active billing plan" in response.json()["detail"]
 
 
 # =============================================================================

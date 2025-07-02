@@ -1,0 +1,26 @@
+<div class="nav-item dropdown">
+    <a class="nav-icon dropdown-toggle d-inline-block d-sm-none"
+       href="#"
+       data-bs-toggle="dropdown">
+        <i class="align-middle" data-feather="users"></i>
+    </a>
+    {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
+        <a class="nav-link dropdown-toggle d-none d-sm-inline-block"
+           href="#"
+           data-bs-toggle="dropdown">
+            <span class="text-dark">
+                {% if request.session.current_team %}
+                    {{ request.session.current_team.name }}
+                {% else %}
+                    - No Team -
+                {% endif %}
+            </span>
+        </a>
+        <div class="dropdown-menu">
+            {% for t_key, t_info in request.session.user_teams.items %}
+                <a class="dropdown-item {% if t_key == request.session.current_team.key %}active{% endif %}"
+                   href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">{{ t_info.name }}</a>
+            {% endfor %}
+        </div>
+    {% endwith %}
+</div>

@@ -24,6 +24,10 @@ import AddProductForm from './components/AddProductForm.vue';
 import AddProjectForm from './components/AddProjectForm.vue';
 import AddComponentForm from './components/AddComponentForm.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
+import ItemsListTable from './components/ItemsListTable.vue';
+import ProductsList from './components/ProductsList.vue';
+import ProjectsList from './components/ProjectsList.vue';
+import ComponentsList from './components/ComponentsList.vue';
 
 
 // Initialize Vue components
@@ -48,6 +52,10 @@ mountVueComponent('vc-add-product-form', AddProductForm);
 mountVueComponent('vc-add-project-form', AddProjectForm);
 mountVueComponent('vc-add-component-form', AddComponentForm);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
+mountVueComponent('vc-items-list-table', ItemsListTable);
+mountVueComponent('vc-products-list', ProductsList);
+mountVueComponent('vc-projects-list', ProjectsList);
+mountVueComponent('vc-components-list', ComponentsList);
 
 // Declare the global feather variable
 declare global {

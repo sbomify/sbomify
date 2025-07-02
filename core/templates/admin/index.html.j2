@@ -1,0 +1,30 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+{% block content %}
+    {{ block.super }}
+    <div class="module">
+        <table>
+            <caption>
+                <a href="{% url 'admin:admin_dashboard' %}" class="section">System Dashboard</a>
+            </caption>
+            <tr>
+                <th scope="row">
+                    <a href="{% url 'admin:admin_dashboard' %}">View System Analytics</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+    </div>
+{% endblock %}
+{% block sidebar %}
+    {{ block.super }}
+    <div class="module">
+        <h2>{% trans 'Analytics' %}</h2>
+        <ul class="actionlist">
+            <li>
+                <a href="{% url 'admin:admin_dashboard' %}" class="addlink">System Dashboard</a>
+            </li>
+        </ul>
+    </div>
+{% endblock %}

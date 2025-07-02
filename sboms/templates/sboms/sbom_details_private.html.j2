@@ -1,0 +1,45 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load static %}
+{% block title %}sbomify SBOM Details{% endblock %}
+{% block content %}
+    <h3>SBOM: {{ sbom.name }}</h3>
+    <div class="row">
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Metadata</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        Uploaded on: {{ sbom.created_at }}
+                        <br />
+                        Source: {{ sbom.source_display }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Comment</h5>
+                </div>
+                <div class="card-body">{{ sbom.data.creationInfo.comment }}</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <!--<div class="float-end pt-3" style="width: 150px; height: 100px; background-color:grey; color:azure; text-align:center; text-weight: bold">
+        LOGO<br />
+        Placeholder
+      </div> -->
+        </div>
+    </div>
+    <a href="{% url 'sboms:sbom_download' sbom.id %}"
+       class="btn btn-success float-end">
+        <i class="fas fa-download"></i> Download SBOM
+    </a>
+    <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}"
+       class="btn btn-warning float-end me-2">
+        <i class="fas fa-shield-alt"></i> View Vulnerabilities
+    </a>
+{% endblock %}

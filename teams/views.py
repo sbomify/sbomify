@@ -104,7 +104,7 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
     ]
 
     context["memberships"] = teams_data
-    return render(request, "teams/dashboard.html", context)
+    return render(request, "teams/dashboard.html.j2", context)
 
 
 @login_required
@@ -122,7 +122,7 @@ def team_details(request: HttpRequest, team_key: str):
 
     return render(
         request,
-        "teams/team_details.html",
+        "teams/team_details.html.j2",
         {"team": team, "APP_BASE_URL": settings.APP_BASE_URL, "is_default_team": is_default_team},
     )
 
@@ -228,7 +228,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[invite_user_form.cleaned_data["email"]],
                 message=render_to_string("teams/team_invite_email.txt", context),
-                html_message=render_to_string("teams/team_invite_email.html", context),
+                html_message=render_to_string("teams/team_invite_email.html.j2", context),
             )
 
             messages.add_message(request, messages.INFO, f"Invite sent to {invite_user_form.cleaned_data['email']}")
@@ -237,7 +237,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
     else:
         invite_user_form = InviteUserForm()
 
-    return render(request, "teams/invite.html", {"invite_user_form": invite_user_form, "team_key": team_key})
+    return render(request, "teams/invite.html.j2", {"invite_user_form": invite_user_form, "team_key": team_key})
 
 
 @login_required
@@ -303,7 +303,7 @@ def team_settings(request: HttpRequest, team_key: str):
     branding_info = BrandingInfo(**team.branding_info)
     return render(
         request,
-        "teams/team_settings.html",
+        "teams/team_settings.html.j2",
         {"team": team, "branding_info": branding_info, "APP_BASE_URL": settings.APP_BASE_URL},
     )
 
@@ -512,7 +512,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
             # Clean up session
             for key in ["wizard_step", "wizard_product_id", "wizard_project_id", "wizard_component_id"]:
                 request.session.pop(key, None)
-            return render(request, "core/components/onboarding_wizard.html", context)
+            return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     context["form"] = form
-    return render(request, "core/components/onboarding_wizard.html", context)
+    return render(request, "core/components/onboarding_wizard.html.j2", context)

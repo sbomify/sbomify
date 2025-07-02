@@ -144,7 +144,7 @@ For immediate questions, contact us at hello@sbomify.com
 
         form = EnterpriseContactForm(initial=initial_data)
 
-    return render(request, "billing/enterprise_contact.html", {"form": form})
+    return render(request, "billing/enterprise_contact.html.j2", {"form": form})
 
 
 @login_required
@@ -188,7 +188,7 @@ def select_plan(request: HttpRequest, team_key: str):
 
         elif plan.key == "enterprise":
             # Just show the contact information page
-            return render(request, "billing/enterprise_contact.html", {"team_key": team_key})
+            return render(request, "billing/enterprise_contact.html.j2", {"team_key": team_key})
 
         elif plan.key == "business":
             # Store the selection in session for use in billing_redirect
@@ -212,7 +212,7 @@ def select_plan(request: HttpRequest, team_key: str):
 
     return render(
         request,
-        "billing/select_plan.html",
+        "billing/select_plan.html.j2",
         {
             "plans": plans,
             "team_key": team_key,
@@ -408,13 +408,13 @@ def redirect_to_stripe_checkout(request, plan_key):
 @require_http_methods(["GET"])
 def checkout_success(request):
     """Handle successful checkout completion."""
-    return render(request, "billing/checkout_success.html")
+    return render(request, "billing/checkout_success.html.j2")
 
 
 @require_http_methods(["GET"])
 def checkout_cancel(request):
     """Handle cancelled checkout."""
-    return render(request, "billing/checkout_cancel.html")
+    return render(request, "billing/checkout_cancel.html.j2")
 
 
 @csrf_exempt

@@ -47,13 +47,13 @@ def home(request: HttpRequest) -> HttpResponse:
 
 def keycloak_login(request: HttpRequest) -> HttpResponse:
     """Render the Allauth default login page on /login."""
-    return render(request, "account/login.html")
+    return render(request, "account/login.html.j2")
 
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     context = {"current_team": request.session.get("current_team", {})}
-    return render(request, "core/dashboard.html", context)
+    return render(request, "core/dashboard.html.j2", context)
 
 
 @login_required
@@ -86,7 +86,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
         for token in access_tokens
     ]
     context["access_tokens"] = access_tokens_data
-    return render(request, "core/settings.html", context)
+    return render(request, "core/settings.html.j2", context)
 
 
 @login_required
@@ -127,7 +127,7 @@ def login_error(request: HttpRequest) -> HttpResponse:
     error_description = request.GET.get("error_description", "No additional information available")
 
     context = {"error_message": error_message, "error_description": error_description}
-    return render(request, "socialaccount/authentication_error.html", context)
+    return render(request, "socialaccount/authentication_error.html.j2", context)
 
 
 def keycloak_webhook(request: HttpRequest) -> HttpResponse:
@@ -220,11 +220,12 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def products_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,
-        "core/products_dashboard.html",
+        "core/products_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
         },
@@ -244,7 +245,7 @@ def product_details_public(request: HttpRequest, product_id: str) -> HttpRespons
     branding_info = BrandingInfo(**product.team.branding_info)
     return render(
         request,
-        "core/product_details_public.html",
+        "core/product_details_public.html.j2",
         {"product": product, "brand": branding_info},
     )
 
@@ -264,7 +265,7 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
 
     return render(
         request,
-        "core/product_details_private.html",
+        "core/product_details_private.html.j2",
         {
             "product": product,
             "has_crud_permissions": has_crud_permissions,
@@ -276,11 +277,12 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
 
 @login_required
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,
-        "core/projects_dashboard.html",
+        "core/projects_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
         },
@@ -301,7 +303,7 @@ def project_details_public(request: HttpRequest, project_id: str) -> HttpRespons
 
     return render(
         request,
-        "core/project_details_public.html",
+        "core/project_details_public.html.j2",
         {"project": project, "brand": branding_info},
     )
 
@@ -321,7 +323,7 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
     return render(
         request,
-        "core/project_details_private.html",
+        "core/project_details_private.html.j2",
         {
             "project": project,
             "has_crud_permissions": has_crud_permissions,
@@ -333,11 +335,12 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
 @login_required
 def components_dashboard(request: HttpRequest) -> HttpResponse:
-    has_crud_permissions = request.session.get("current_team").get("role") in ("owner", "admin")
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
     return render(
         request,
-        "core/components_dashboard.html",
+        "core/components_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
@@ -396,7 +399,7 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
 
     return render(
         request,
-        "core/component_details_public.html",
+        "core/component_details_public.html.j2",
         {"component": component, "sboms_data": sboms_with_vuln_status, "brand": branding_info},  # Changed from "sboms"
     )
 
@@ -456,7 +459,7 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
 
     return render(
         request,
-        "core/component_details_private.html",
+        "core/component_details_private.html.j2",
         {
             "component": component,
             "has_crud_permissions": has_crud_permissions,

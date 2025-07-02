@@ -95,7 +95,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
                 message=render_to_string("teams/new_user_email.txt", context),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
-                html_message=render_to_string("teams/new_user_email.html", context),
+                html_message=render_to_string("teams/new_user_email.html.j2", context),
             )
         except Exception as e:
             log.error(f"Failed to create trial subscription for team {team.key} [fallback]: {str(e)}")

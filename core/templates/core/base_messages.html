@@ -1,9 +1,0 @@
-{% load django_vite %}
-
-<!-- Hidden container for Django messages -->
-<div id="django-messages" style="display: none;"
-     data-messages="{% for message in messages %}{{ message.tags }}:{{ message }}{% if not forloop.last %}|{% endif %}{% endfor %}">
-</div>
-
-<!-- Load the message handling script -->
-{% vite_asset 'core/js/django-messages.ts' %}

@@ -8,7 +8,6 @@ from django.http import HttpResponse
 from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
-from django.contrib.messages import get_messages
 
 from billing.models import BillingPlan
 from core.tests.fixtures import sample_user  # noqa: F401
@@ -132,10 +131,10 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:products_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Add Product button for owners
+    # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert "Add Product" in content
-    assert 'data-bs-target="#addProductModal"' in content
+    assert 'class="vc-products-list"' in content
+    assert 'class="vc-add-product-form"' in content
 
 
 # Removed: test_create_product - POST functionality moved to API tests
@@ -161,10 +160,10 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:projects_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Add Project button for owners
+    # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert "Add Project" in content
-    assert 'data-bs-target="#addProjectModal"' in content
+    assert 'class="vc-projects-list"' in content
+    assert 'class="vc-add-project-form"' in content
 
 
 # Removed: test_create_project - POST functionality moved to API tests
@@ -190,10 +189,10 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     response = client.get(reverse("core:components_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Add Component button for owners
+    # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert "Add Component" in content
-    assert 'data-bs-target="#addComponentModal"' in content
+    assert 'class="vc-components-list"' in content
+    assert 'class="vc-add-component-form"' in content
 
 
 # Removed: test_create_component - POST functionality moved to API tests
@@ -289,7 +288,7 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
         assert response.status_code == 404
         assert quote(response.request["PATH_INFO"]) == uri
         # The response should use our custom 404 template which includes the messages component
-        assert "core/components/messages.html" in [t.name for t in response.templates]
+        assert "core/components/messages.html.j2" in [t.name for t in response.templates]
 
 
 @pytest.mark.django_db
