@@ -62,7 +62,7 @@ product: Product object
                           <tr>
                             <td>
                               {% if project.is_public %}
-                                <a href="{% url 'sboms:project_details_public' project.id %}">{{ project.name }}</a>
+                                <a href="{% url 'core:project_details_public' project.id %}">{{ project.name }}</a>
                               {% else %}
                                 {{ project.name }}
                               {% endif %}
@@ -81,7 +81,7 @@ product: Product object
         </div>
         <div class="row">
           <div class="col-md-6 offset-md-3">
-            <a class="btn btn-outline-primary w-100" href="{% url 'sboms:sbom_download_product' product.id %}">
+            <a class="btn btn-outline-primary w-100" href="{% url 'core:sbom_download_product' product.id %}">
               <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
             </a>
           </div>

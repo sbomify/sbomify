@@ -27,7 +27,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
         <div class="vc-public-status-toggle"
              data-item-type="project"
              data-item-id="{{ project.id }}"
-             data-public-url="{{ APP_BASE_URL }}{% url 'sboms:project_details_public' project.id %}"
+             data-public-url="{{ APP_BASE_URL }}{% url 'core:project_details_public' project.id %}"
              data-inline="true">
         </div>
         {% endif %}
@@ -232,7 +232,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
           </div>
           <div class="card-body text-center">
             <p class="text-muted mb-3">Download all SBOMs associated with this project as a ZIP archive</p>
-            <a class="btn btn-primary download-btn" href="{% url 'sboms:sbom_download_project' project.id %}">
+                            <a class="btn btn-primary download-btn" href="{% url 'core:sbom_download_project' project.id %}">
               <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
             </a>
           </div>

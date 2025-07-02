@@ -60,7 +60,7 @@ project: Project object
                           <tr>
                             <td>
                               {% if component.is_public %}
-                                <a href="{% url 'sboms:component_details_public' component.id %}">{{ component.name }}</a>
+                                <a href="{% url 'core:component_details_public' component.id %}">{{ component.name }}</a>
                               {% else %}
                                 {{ component.name }}
                               {% endif %}
@@ -79,7 +79,7 @@ project: Project object
         </div>
         <div class="row">
           <div class="col-md-6 offset-md-3">
-            <a class="btn btn-outline-primary w-100" href="{% url 'sboms:sbom_download_project' project.id %}">
+            <a class="btn btn-outline-primary w-100" href="{% url 'core:sbom_download_project' project.id %}">
               <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
             </a>
           </div>
