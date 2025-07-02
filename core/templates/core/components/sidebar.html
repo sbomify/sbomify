@@ -38,7 +38,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link sidebar-item d-flex align-items-center {% if 'products' in request.path %}active{% endif %}"
-                   href="{% url 'sboms:products_dashboard' %}"
+                   href="{% url 'core:products_dashboard' %}"
                    data-nav-item="products">
                     <i class="bi bi-box me-2"></i>
                     <span>Products</span>
@@ -46,7 +46,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link sidebar-item d-flex align-items-center {% if 'projects' in request.path %}active{% endif %}"
-                   href="{% url 'sboms:projects_dashboard' %}"
+                   href="{% url 'core:projects_dashboard' %}"
                    data-nav-item="projects">
                     <i class="bi bi-kanban me-2"></i>
                     <span>Projects</span>
@@ -54,7 +54,7 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link sidebar-item d-flex align-items-center {% if 'components' in request.path %}active{% endif %}"
-                   href="{% url 'sboms:components_dashboard' %}"
+                   href="{% url 'core:components_dashboard' %}"
                    data-nav-item="components">
                     <i class="bi bi-puzzle me-2"></i>
                     <span>Components</span>

@@ -208,3 +208,62 @@ def get_team_id_from_session(request) -> str | None:
             return None
 
     return None
+
+
+def verify_item_access(
+    request: HttpRequest,
+    item: Any,  # Team | Product | Project | Component | SBOM
+    allowed_roles: list | None,
+) -> bool:
+    """
+    Verify if the user has access to the item based on the allowed roles.
+
+    This function works with any model that has a team relationship.
+    For Team objects, it uses the team directly.
+    For other objects, it looks for team_id or team.key attributes.
+    """
+    if not request.user.is_authenticated:
+        return False
+
+    team_id = None
+    team_key = None
+
+    # Import here to avoid circular imports
+    from teams.models import Member
+
+    # Handle Team objects directly
+    if hasattr(item, "_meta") and item._meta.label == "teams.Team":
+        team_id = item.id
+        team_key = item.key
+    # Handle objects with team relationship
+    elif hasattr(item, "team_id"):
+        team_id = item.team_id
+        if hasattr(item, "team"):
+            team_key = item.team.key
+    elif hasattr(item, "team"):
+        team_id = item.team.id if hasattr(item.team, "id") else None
+        team_key = item.team.key if hasattr(item.team, "key") else None
+    # Handle SBOM objects (component.team relationship)
+    elif hasattr(item, "component") and hasattr(item.component, "team_id"):
+        team_id = item.component.team_id
+        team_key = item.component.team.key
+
+    # Check session data first
+    if team_key and "user_teams" in request.session:
+        team_data = request.session["user_teams"].get(team_key)
+        if team_data and "role" in team_data:
+            # If no roles are specified, any role is allowed
+            if allowed_roles is None:
+                return True
+            return team_data["role"] in allowed_roles
+
+    # Fall back to database check
+    if team_id:
+        member = Member.objects.filter(user=request.user, team_id=team_id).first()
+        if member:
+            # If no roles are specified, any role is allowed
+            if allowed_roles is None:
+                return True
+            return member.role in allowed_roles
+
+    return False

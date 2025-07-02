@@ -1,8 +1,6 @@
 from django.contrib import admin
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM
 
-admin.site.register(Product)
-admin.site.register(Project)
-admin.site.register(Component)
+# Product, Project, Component admin moved to core app
 admin.site.register(SBOM)

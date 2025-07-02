@@ -11,10 +11,10 @@ from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils.html import format_html
 
-from sboms.models import SBOM, Component, Product, Project
+from sboms.models import SBOM  # SBOM still lives in sboms app
 from teams.models import Member, Team
 
-from .models import User
+from .models import Component, Product, Project, User
 
 logger = logging.getLogger(__name__)
 

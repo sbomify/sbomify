@@ -29,7 +29,7 @@ APP_BASE_URL - Base URL for the application
         <div class="vc-public-status-toggle"
              data-item-type="component"
              data-item-id="{{ component.id }}"
-             data-public-url="{{ APP_BASE_URL }}{% url 'sboms:component_details_public' component.id %}"
+             data-public-url="{{ APP_BASE_URL }}{% url 'core:component_details_public' component.id %}"
              data-inline="true">
         </div>
         {% endif %}

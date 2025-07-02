@@ -13,7 +13,7 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from core.apis import get_component_metadata, patch_component_metadata
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
-from core.utils import ExtractSpec, dict_update, obj_extract
+from core.utils import ExtractSpec, dict_update, obj_extract, verify_item_access
 from sbomify.tasks import scan_sbom_for_vulnerabilities
 
 from .models import SBOM, Component, Product, Project
@@ -26,7 +26,6 @@ from .schemas import (
     cdx15,
     cdx16,
 )
-from .utils import verify_item_access
 
 log = logging.getLogger(__name__)
 

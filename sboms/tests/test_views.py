@@ -86,9 +86,9 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
     team.save()
 
     uris = [
-        reverse("sboms:products_dashboard"),
-        reverse("sboms:projects_dashboard"),
-        reverse("sboms:components_dashboard"),
+        reverse("core:products_dashboard"),
+        reverse("core:projects_dashboard"),
+        reverse("core:components_dashboard"),
     ]
 
     # Test unauthenticated access
@@ -129,7 +129,7 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
-    response = client.get(reverse("sboms:products_dashboard"))
+    response = client.get(reverse("core:products_dashboard"))
     assert response.status_code == 200
 
     # Check that the page contains the Add Product button for owners
@@ -158,7 +158,7 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
     session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
-    response = client.get(reverse("sboms:projects_dashboard"))
+    response = client.get(reverse("core:projects_dashboard"))
     assert response.status_code == 200
 
     # Check that the page contains the Add Project button for owners
@@ -187,7 +187,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
-    response = client.get(reverse("sboms:components_dashboard"))
+    response = client.get(reverse("core:components_dashboard"))
     assert response.status_code == 200
 
     # Check that the page contains the Add Component button for owners
@@ -216,9 +216,9 @@ def test_details_page_only_accessible_when_logged_in(
     client = Client()
 
     uris = [
-        reverse("sboms:product_details", kwargs={"product_id": sample_product.id}),
-        reverse("sboms:project_details", kwargs={"project_id": sample_project.id}),
-        reverse("sboms:component_details", kwargs={"component_id": sample_component.id}),
+        reverse("core:product_details", kwargs={"product_id": sample_product.id}),
+        reverse("core:project_details", kwargs={"project_id": sample_project.id}),
+        reverse("core:component_details", kwargs={"component_id": sample_component.id}),
         reverse("sboms:sbom_details", kwargs={"sbom_id": sample_sbom.id}),
     ]
 
@@ -255,9 +255,9 @@ def test_public_pages_accessibility(
     sample_component.save()
 
     uris = [
-        reverse("sboms:product_details_public", kwargs={"product_id": sample_product.id}),
-        reverse("sboms:project_details_public", kwargs={"project_id": sample_project.id}),
-        reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id}),
+        reverse("core:product_details_public", kwargs={"product_id": sample_product.id}),
+        reverse("core:project_details_public", kwargs={"project_id": sample_project.id}),
+        reverse("core:component_details_public", kwargs={"component_id": sample_component.id}),
         reverse("sboms:sbom_details_public", kwargs={"sbom_id": sample_sbom.id}),
     ]
 
@@ -273,9 +273,9 @@ def test_public_pages_accessibility(
 @pytest.mark.django_db
 def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
     uris = [
-        reverse("sboms:product_details", kwargs={"product_id": -1}),
-        reverse("sboms:project_details", kwargs={"project_id": -1}),
-        reverse("sboms:component_details", kwargs={"component_id": -1}),
+        reverse("core:product_details", kwargs={"product_id": -1}),
+        reverse("core:project_details", kwargs={"project_id": -1}),
+        reverse("core:component_details", kwargs={"component_id": -1}),
         reverse("sboms:sbom_details", kwargs={"sbom_id": -1}),
     ]
 
@@ -356,7 +356,7 @@ def test_transfer_component_to_team(
     """Test transferring a component to another team."""
     client = Client()
 
-    uri = reverse("sboms:transfer_component", kwargs={"component_id": sample_component.id})
+    uri = reverse("core:transfer_component", kwargs={"component_id": sample_component.id})
 
     # Set up session with team access
     setup_test_session(client, sample_component.team, sample_component.team.members.first())
@@ -373,7 +373,7 @@ def test_transfer_component_to_team(
 
 @pytest.mark.django_db
 def test_sbom_download_project_not_found(client):
-    uri = reverse("sboms:sbom_download_project", kwargs={"project_id": "-1"})
+    uri = reverse("core:sbom_download_project", kwargs={"project_id": "-1"})
     response = client.get(uri)
     assert response.status_code == 404
 
@@ -383,7 +383,7 @@ def test_sbom_download_project_private_unauthorized(client, sample_project):  # 
     sample_project.is_public = False
     sample_project.save()
 
-    uri = reverse("sboms:sbom_download_project", kwargs={"project_id": sample_project.id})
+    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
     response = client.get(uri)
     assert response.status_code == 403
 
@@ -394,7 +394,7 @@ def test_sbom_download_project_public_success(client, sample_project, mocker):  
     sample_project.save()
 
     mock_zip_content = b"mock zip content"
-    mock_get_package = mocker.patch("sboms.views.get_project_sbom_package")
+    mock_get_package = mocker.patch("core.views.get_project_sbom_package")
     # Fix: Return a string path instead of a Path object with read_bytes
     mock_get_package.return_value = "/tmp/mock/path.zip"  # nosec B108
 
@@ -402,7 +402,7 @@ def test_sbom_download_project_public_success(client, sample_project, mocker):  
     mock_open = mocker.patch("builtins.open")
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
-    uri = reverse("sboms:sbom_download_project", kwargs={"project_id": sample_project.id})
+    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
     response = client.get(uri)
 
     assert response.status_code == 200
@@ -427,7 +427,7 @@ def test_sbom_download_project_private_authorized(
     session.save()
 
     mock_zip_content = b"mock zip content"
-    mock_get_package = mocker.patch("sboms.views.get_project_sbom_package")
+    mock_get_package = mocker.patch("core.views.get_project_sbom_package")
     # Fix: Return a string path instead of a Path object with read_bytes
     mock_get_package.return_value = "/tmp/mock/path.zip"  # nosec B108
 
@@ -436,9 +436,9 @@ def test_sbom_download_project_private_authorized(
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
     # Mock verify_item_access to return True for authorized access
-    mocker.patch("sboms.views.verify_item_access", return_value=True)
+    mocker.patch("core.views.verify_item_access", return_value=True)
 
-    uri = reverse("sboms:sbom_download_project", kwargs={"project_id": sample_project.id})
+    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
     response = client.get(uri)
 
     assert response.status_code == 200
@@ -468,7 +468,7 @@ def test_component_details_json_serialization(
     setup_test_session(client, sample_component.team, sample_component.team.members.first())
 
     # Test private component details view
-    private_uri = reverse("sboms:component_details", kwargs={"component_id": sample_component.id})
+    private_uri = reverse("core:component_details", kwargs={"component_id": sample_component.id})
     response = client.get(private_uri)
 
     # Should render successfully without JSON serialization errors
@@ -483,7 +483,7 @@ def test_component_details_json_serialization(
     sample_component.save()
 
     # Test public component details view
-    public_uri = reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id})
+    public_uri = reverse("core:component_details_public", kwargs={"component_id": sample_component.id})
     response = client.get(public_uri)
 
     # Should render successfully without JSON serialization errors
@@ -506,7 +506,7 @@ def test_component_details_json_serialization(
 @pytest.mark.django_db
 def test_sbom_download_product_not_found(client):
     """Test product download with non-existent product ID."""
-    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": "nonexistent"})
+    uri = reverse("core:sbom_download_product", kwargs={"product_id": "nonexistent"})
     response = client.get(uri)
     assert response.status_code == 404
 
@@ -517,7 +517,7 @@ def test_sbom_download_product_private_unauthorized(client, sample_product):  # 
     sample_product.is_public = False
     sample_product.save()
 
-    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    uri = reverse("core:sbom_download_product", kwargs={"product_id": sample_product.id})
     response = client.get(uri)
     assert response.status_code == 403
 
@@ -529,14 +529,14 @@ def test_sbom_download_product_public_success(client, sample_product, mocker):  
     sample_product.save()
 
     mock_zip_content = b"mock product zip content"
-    mock_get_package = mocker.patch("sboms.views.get_product_sbom_package")
+    mock_get_package = mocker.patch("core.views.get_product_sbom_package")
     mock_get_package.return_value = "/tmp/mock/product_path.zip"  # nosec B108
 
     # Mock open similar to existing project tests
     mock_open = mocker.patch("builtins.open")
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
-    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    uri = reverse("core:sbom_download_product", kwargs={"product_id": sample_product.id})
     response = client.get(uri)
 
     assert response.status_code == 200
@@ -562,7 +562,7 @@ def test_sbom_download_product_private_authorized(
     session.save()
 
     mock_zip_content = b"mock authorized product zip content"
-    mock_get_package = mocker.patch("sboms.views.get_product_sbom_package")
+    mock_get_package = mocker.patch("core.views.get_product_sbom_package")
     mock_get_package.return_value = "/tmp/mock/authorized_product_path.zip"  # nosec B108
 
     # Mock open similar to existing project tests
@@ -570,9 +570,9 @@ def test_sbom_download_product_private_authorized(
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
     # Mock verify_item_access to return True for authorized access
-    mocker.patch("sboms.views.verify_item_access", return_value=True)
+    mocker.patch("core.views.verify_item_access", return_value=True)
 
-    uri = reverse("sboms:sbom_download_product", kwargs={"product_id": sample_product.id})
+    uri = reverse("core:sbom_download_product", kwargs={"product_id": sample_product.id})
     response = client.get(uri)
 
     assert response.status_code == 200

@@ -1,33 +1,33 @@
 {% extends "core/dashboard_base.html" %}
 {% comment %}
 Template context:
-project: Project object
+product: Product object
 APP_BASE_URL: Base URL for the application (for AJAX requests)
 has_crud_permissions: Boolean indicating if user has CRUD permissions
 {% endcomment %}
 
 {% load widget_tweaks %}
+{% load static %}
 {% load django_vite %}
 
-{% block title %}sbomify Project: {{ project.name }}{% endblock %}
+{% block title %}sbomify Product: {{ product.name }}{% endblock %}
 
 {% block content %}
-
     <div class="page-header mb-4">
     <div class="header-main mb-3">
       <div class="title-section">
         <h1 class="item-title">
           {% if has_crud_permissions %}
-            <span class="vc-editable-single-field" data-item-type="project" data-item-id="{{ project.id }}" data-item-value="{{ project.name }}"></span>
+            <span class="vc-editable-single-field" data-item-type="product" data-item-id="{{ product.id }}" data-item-value="{{ product.name }}"></span>
           {% else %}
-            {{ project.name }}
+            {{ product.name }}
           {% endif %}
         </h1>
         {% if has_crud_permissions %}
         <div class="vc-public-status-toggle"
-             data-item-type="project"
-             data-item-id="{{ project.id }}"
-             data-public-url="{{ APP_BASE_URL }}{% url 'sboms:project_details_public' project.id %}"
+             data-item-type="product"
+             data-item-id="{{ product.id }}"
+             data-public-url="{{ APP_BASE_URL }}{% url 'core:product_details_public' product.id %}"
              data-inline="true">
         </div>
         {% endif %}
@@ -35,14 +35,14 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     </div>
     <div class="header-meta">
       <span class="meta-item">
-        <i class="fas fa-project-diagram me-2 text-primary"></i>
-        <span class="meta-label">Project</span>
+        <i class="fas fa-box me-2 text-primary"></i>
+        <span class="meta-label">Product</span>
       </span>
       <span class="meta-divider">•</span>
                   <span class="meta-item">
         <span class="vc-copyable-value meta-id"
-              data-value="{{ project.id }}"
-              title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+              data-value="{{ product.id }}"
+              title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
       </span>
     </div>
   </div>
@@ -207,15 +207,15 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
 
   <div class="row">
     <div class="col-12">
-      <div class="vc-dashboard-stats" data-item-type="project" data-item-id="{{ project.id }}"></div>
+      <div class="vc-dashboard-stats" data-item-type="product" data-item-id="{{ product.id }}"></div>
     </div>
   </div>
 
   <div class="row mt-3">
     <div class="col-12">
       <div class="vc-item-assignment-manager"
-        data-parent-type="project"
-        data-parent-id="{{ project.id }}"
+        data-parent-type="product"
+        data-parent-id="{{ product.id }}"
         data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}">
       </div>
     </div>
@@ -231,9 +231,9 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
             </h4>
           </div>
           <div class="card-body text-center">
-            <p class="text-muted mb-3">Download all SBOMs associated with this project as a ZIP archive</p>
-            <a class="btn btn-primary download-btn" href="{% url 'sboms:sbom_download_project' project.id %}">
-              <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
+            <p class="text-muted mb-3">Download all SBOMs from projects in this product as a ZIP archive</p>
+                            <a class="btn btn-primary download-btn" href="{% url 'core:sbom_download_product' product.id %}">
+              <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
             </a>
           </div>
         </div>
@@ -244,9 +244,9 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
   {% if has_crud_permissions %}
   <div class="row mt-3">
     <div class="col-12">
-      <div class="vc-project-danger-zone"
-        data-project-id="{{ project.id }}"
-        data-project-name="{{ project.name }}"
+      <div class="vc-product-danger-zone"
+        data-product-id="{{ product.id }}"
+        data-product-name="{{ product.name }}"
         data-csrf-token="{{ csrf_token }}">
       </div>
     </div>

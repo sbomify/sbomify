@@ -138,10 +138,10 @@
   import $axios from '../../../core/js/utils';
   import { isAxiosError } from 'axios';
   import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-  import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage } from '../type_defs.d.ts';
-  import SupplierEditor from './SupplierEditor.vue';
-  import LicensesEditor from './LicensesEditor.vue';
-  import ContactsEditor from './ContactsEditor.vue';
+  import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage } from '../type_defs';
+  import SupplierEditor from '../../../sboms/js/components/SupplierEditor.vue';
+  import LicensesEditor from '../../../sboms/js/components/LicensesEditor.vue';
+  import ContactsEditor from '../../../sboms/js/components/ContactsEditor.vue';
   import StandardCard from '../../../core/js/components/StandardCard.vue';
   import { showSuccess, showError } from '../../../core/js/alerts';
 
@@ -224,7 +224,7 @@
 
     // Validate URLs if provided (now supporting arrays)
     if (supplier.url && Array.isArray(supplier.url)) {
-      supplier.url.forEach((url, index) => {
+      supplier.url.forEach((url: string, index: number) => {
         if (url && !isValidUrl(url)) {
           errors[`url${index}`] = `URL ${index + 1}: Please enter a valid URL`;
         }

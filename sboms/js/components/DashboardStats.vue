@@ -47,7 +47,7 @@ import { ref, onMounted, computed } from 'vue';
 import { showError } from '../../../core/js/alerts';
 import StatCard from '../../../core/js/components/StatCard.vue';
 
-import type { DashboardStats } from '../type_defs.d.ts';
+import type { DashboardStats } from '../../../core/js/type_defs.d.ts';
 
 const props = defineProps<{
   size?: 'small' | 'large';

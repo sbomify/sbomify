@@ -69,9 +69,9 @@
           </div>
 
           <button v-if="isPublic"
-                  @click="copyToClipboard"
                   class="copy-url-btn"
-                  title="Copy public URL">
+                  title="Copy public URL"
+                  @click="copyToClipboard">
             <i class="fas fa-copy"></i>
             <span class="copy-text">Copy URL</span>
           </button>

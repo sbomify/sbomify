@@ -31,20 +31,20 @@
         </a>
       </li>
 
-      <li class="sidebar-item {% if 'sboms:product' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'sboms:products_dashboard' %}">
+      <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
+        <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
           <i class="align-middle" data-feather="folder-plus"></i> <span class="align-middle pt-1">Products</span>
         </a>
       </li>
 
-      <li class="sidebar-item {% if 'sboms:project' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'sboms:projects_dashboard' %}">
+      <li class="sidebar-item {% if 'core:project' in current_view_name %}active{% endif %}">
+        <a class="sidebar-link" href="{% url 'core:projects_dashboard' %}">
           <i class="align-middle" data-feather="folder"></i> <span class="align-middle pt-1">Projects</span>
         </a>
       </li>
 
-      <li class="sidebar-item {% if 'sboms:component' in current_view_name %}active{% endif %}">
-        <a class="sidebar-link" href="{% url 'sboms:components_dashboard' %}">
+      <li class="sidebar-item {% if 'core:component' in current_view_name %}active{% endif %}">
+        <a class="sidebar-link" href="{% url 'core:components_dashboard' %}">
           <i class="align-middle" data-feather="file-text"></i> <span class="align-middle pt-1">Components</span>
         </a>
       </li>

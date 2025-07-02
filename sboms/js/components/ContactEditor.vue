@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import type { ContactInfo } from '../type_defs';
+import type { ContactInfo } from '../../../core/js/type_defs.d.ts';
 
 
 interface Props {

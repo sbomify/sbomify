@@ -1,13 +1,4 @@
-export enum LifecyclePhase {
-  Design = "design",
-  PreBuild = "pre-build",
-  Build = "build",
-  PostBuild = "post-build",
-  Operations = "operations",
-  Discovery = "discovery",
-  Decommission = "decommission"
-}
-
+// LifecyclePhase enum moved to core/js/enums.ts
 
 export enum License {
   field_0BSD = "0BSD",

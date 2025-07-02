@@ -13,6 +13,17 @@ import StandardCard from './components/StandardCard.vue';
 import StatCard from './components/StatCard.vue';
 import PlanCard from './components/PlanCard.vue';
 import AccessTokensList from './components/AccessTokensList.vue';
+import PublicStatusToggle from './components/PublicStatusToggle.vue';
+import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
+import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
+import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
+import DangerZone from './components/DangerZone.vue';
+import ProjectDangerZone from './components/ProjectDangerZone.vue';
+import ProductDangerZone from './components/ProductDangerZone.vue';
+import AddProductForm from './components/AddProductForm.vue';
+import AddProjectForm from './components/AddProjectForm.vue';
+import AddComponentForm from './components/AddComponentForm.vue';
+import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 
 
 // Initialize Vue components
@@ -26,6 +37,17 @@ mountVueComponent('vc-standard-card', StandardCard);
 mountVueComponent('vc-stat-card', StatCard);
 mountVueComponent('vc-plan-card', PlanCard);
 mountVueComponent('vc-access-tokens-list', AccessTokensList);
+mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
+mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
+mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
+mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
+mountVueComponent('vc-danger-zone', DangerZone);
+mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
+mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+mountVueComponent('vc-add-product-form', AddProductForm);
+mountVueComponent('vc-add-project-form', AddProjectForm);
+mountVueComponent('vc-add-component-form', AddComponentForm);
+mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 
 // Declare the global feather variable
 declare global {
