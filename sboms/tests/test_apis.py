@@ -1282,6 +1282,28 @@ def test_patch_public_status_billing_plan_restrictions(
     team.billing_plan = None
     team.save()
 
+    # Need to handle hierarchy constraints: make product private first, then project, then component
+    # Product can be made private independently
+    response = client.patch(
+        product_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is False
+
+    # Project can be made private independently
+    response = client.patch(
+        project_uri,
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+    )
+    assert response.status_code == 200
+    assert response.json()["is_public"] is False
+
+    # Now component can be made private since project is private
     response = client.patch(
         component_uri,
         json.dumps({"is_public": False}),
