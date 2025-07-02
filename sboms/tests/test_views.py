@@ -289,7 +289,7 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
         assert response.status_code == 404
         assert quote(response.request["PATH_INFO"]) == uri
         # The response should use our custom 404 template which includes the messages component
-        assert "core/components/messages.html" in [t.name for t in response.templates]
+        assert "core/components/messages.html.j2" in [t.name for t in response.templates]
 
 
 @pytest.mark.django_db

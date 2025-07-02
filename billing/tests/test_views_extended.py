@@ -172,7 +172,7 @@ class TestCheckoutViews:
         response = self.client.get(reverse("billing:checkout_success"))
 
         assert response.status_code == 200
-        assert "billing/checkout_success.html" in [t.name for t in response.templates]
+        assert "billing/checkout_success.html.j2" in [t.name for t in response.templates]
 
     def test_checkout_cancel_view(self, sample_user: AbstractBaseUser):  # noqa: F811
         """Test checkout cancel view."""
@@ -181,7 +181,7 @@ class TestCheckoutViews:
         response = self.client.get(reverse("billing:checkout_cancel"))
 
         assert response.status_code == 200
-        assert "billing/checkout_cancel.html" in [t.name for t in response.templates]
+        assert "billing/checkout_cancel.html.j2" in [t.name for t in response.templates]
 
     def test_checkout_success_accessible_without_login(self):
         """Test checkout success is accessible without authentication (for Stripe callbacks)."""
@@ -390,7 +390,7 @@ class TestEnterpriseContactView:
         )
 
         assert response.status_code == 200
-        assert "billing/enterprise_contact.html" in [t.name for t in response.templates]
+        assert "billing/enterprise_contact.html.j2" in [t.name for t in response.templates]
         assert response.context["team_key"] == team_with_business_plan.key
 
 

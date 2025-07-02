@@ -1,0 +1,96 @@
+{% load static %}
+{% load django_vite %}
+{% load cache %}
+{% load schema_tags %}
+
+<!doctype html>
+<html lang="en">
+
+<head>
+  {% block head %}
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Software Bill of Materials management">
+	<meta name="keywords" content="SBOM SBOMs software bill of materials security">
+
+	<!-- Favicon -->
+	<link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/favicons/apple-touch-icon.png' %}">
+	<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/favicon-32x32.png' %}">
+	<link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/favicon-16x16.png' %}">
+	<link rel="icon" type="image/svg+xml" href="{% static 'img/favicons/favicon.svg' %}">
+	<link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+
+	<!-- Schema.org metadata -->
+	{% schema_org_metadata %}
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="{{ request.build_absolute_uri }}">
+	<meta property="og:title" content="{% block og_title %}sbomify - Software Bill of Materials Management{% endblock %}">
+	<meta property="og:description" content="{% block og_description %}Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify.{% endblock %}">
+	<meta property="og:image" content="{% static 'img/favicons/android-chrome-512x512.png' %}">
+
+	<!-- Twitter -->
+	<meta property="twitter:card" content="summary_large_image">
+	<meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+	<meta property="twitter:title" content="{% block twitter_title %}sbomify - Software Bill of Materials Management{% endblock %}">
+	<meta property="twitter:description" content="{% block twitter_description %}Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify.{% endblock %}">
+	<meta property="twitter:image" content="{% static 'img/favicons/android-chrome-512x512.png' %}">
+
+	<link rel="preconnect" href="https://fonts.gstatic.com">
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+	<link href="{% static 'css/light.css' %}" rel="stylesheet">
+	<link href="{% static 'site.css' %}" rel="stylesheet">
+	<link href="{% static 'css/custom.css' %}" rel="stylesheet">
+
+	<title>{% block title %}sbomify{% endblock %}</title>
+
+	{% endblock %}
+	{% vite_hmr_client %}
+</head>
+
+<body data-theme="default" data-layout="fluid" data-sidebar-position="left" data-sidebar-layout="default">
+  {% block main %}
+    {% if request.user.is_authenticated %}
+      {% cache 300 'header' request.user.id %}
+          {% include "core/components/topnav.html.j2" %}
+      {% endcache %}
+    {% endif %}
+
+    <div class="container-fluid">
+      {% if request.user.is_authenticated %}
+        <div class="row">
+          {% cache 300 'sidebar' request.user.id request.session.current_team.id %}
+              {% include "core/components/sidebar.html.j2" %}
+          {% endcache %}
+          <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="messages-container">
+                {% include "core/components/messages.html.j2" %}
+            </div>
+      {% else %}
+        <div class="row justify-content-center">
+          <div class="col-md-6 col-lg-4 mt-5">
+            <div class="text-center mb-4">
+              <img src="{% static 'img/logo.svg' %}" alt="sbomify Logo" class="img-fluid mb-3" style="max-width: 200px;">
+            </div>
+            <div class="messages-container">
+              {% include "core/components/messages.html.j2" %}
+            </div>
+      {% endif %}
+          {% block content %}{% endblock %}
+      {% if request.user.is_authenticated %}
+          </main>
+      {% endif %}
+        </div>
+    </div>
+  {% endblock %}
+
+  <script src="{% static 'js/app.js' %}"></script>
+
+  {% block scripts %}{% endblock %}
+  {% vite_asset 'core/js/main.ts' %}
+</body>
+
+</html>

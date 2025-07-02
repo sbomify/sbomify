@@ -1,0 +1,53 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+
+{% block title %}sbomify Team Invite{% endblock %}
+
+{% block content %}
+<div class="page-invite">
+  <a href="javascript:history.back()" class="back-btn btn btn-link text-decoration-none mb-3">
+    <i data-feather="chevron-left"></i>
+  </a>
+  <div class="d-flex flex-column justify-content-center align-items-center">
+    <div class="invite-form">
+      <h3 class="page-title">Invite User</h3>
+      <div class="card w-100">
+        <div class="card-body">
+          <form action="{% url 'teams:invite_user' team_key %}" method="post">
+            {% csrf_token %}
+            {% for hidden in invite_user_form.hidden_fields %}
+              {{ hidden }}
+            {% endfor %}
+            <div class="form-group">
+              <label for="{{ invite_user_form.email.id_for_label }}">{{ invite_user_form.email.label }}</label>
+              {{ invite_user_form.email|add_class:'form-control mb-3' }}
+              {% for error in invite_user_form.email.errors %}
+                <span class="help-block">{{ error }}</span>
+              {% endfor %}
+            </div>
+            <div class="form-group">
+              <label for="{{ invite_user_form.role.id_for_label }}">{{ invite_user_form.role.label }}</label>
+              {{ invite_user_form.role|add_class:'form-select mb-3' }}
+              {% for error in invite_user_form.role.errors %}
+                <span class="help-block">{{ error }}</span>
+              {% endfor %}
+              <ul class="invite-notes mb-4">
+                <li class="mb-2"><strong>Owner</strong> has full control include removing team, inviting other users etc.</li>
+                <li class="mb-2"><strong>Admin</strong> can create projects, upload/manage SBOMs.</li>
+                <li class="mb-2"><strong>Guest</strong> has read-only access. Can view projects, SBOMs.</li>
+              </ul>
+            </div>
+
+            <div class="col col-12 text-end form-group">
+              <input type="submit" class="btn btn-primary" value="Invite to team" />
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+

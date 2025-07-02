@@ -1,0 +1,261 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% comment %}
+Template context:
+product: Product object
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+has_crud_permissions: Boolean indicating if user has CRUD permissions
+{% endcomment %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+
+{% block title %}sbomify Product: {{ product.name }}{% endblock %}
+
+{% block content %}
+    <div class="page-header mb-4">
+    <div class="header-main mb-3">
+      <div class="title-section">
+        <h1 class="item-title">
+          {% if has_crud_permissions %}
+            <span class="vc-editable-single-field" data-item-type="product" data-item-id="{{ product.id }}" data-item-value="{{ product.name }}"></span>
+          {% else %}
+            {{ product.name }}
+          {% endif %}
+        </h1>
+        {% if has_crud_permissions %}
+        <div class="vc-public-status-toggle"
+             data-item-type="product"
+             data-item-id="{{ product.id }}"
+             data-public-url="{{ APP_BASE_URL }}{% url 'core:product_details_public' product.id %}"
+             data-inline="true">
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-meta">
+      <span class="meta-item">
+        <i class="fas fa-box me-2 text-primary"></i>
+        <span class="meta-label">Product</span>
+      </span>
+      <span class="meta-divider">•</span>
+                  <span class="meta-item">
+        <span class="vc-copyable-value meta-id"
+              data-value="{{ product.id }}"
+              title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
+      </span>
+    </div>
+  </div>
+
+  <style>
+    .page-header {
+      background: linear-gradient(135deg, #ffffff, #f8fafc);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-main {
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 1.5rem;
+    }
+
+    .title-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .item-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a202c;
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 1rem;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .meta-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .meta-id {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.8rem;
+      background: #f1f5f9;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .meta-id:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+
+    .meta-divider {
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+      .title-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .item-title {
+        font-size: 1.5rem;
+      }
+
+      .header-meta {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+    }
+
+    /* Download Card Styling */
+    .standard-card {
+      margin-bottom: 1rem;
+    }
+
+    .download-card {
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      border-radius: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .download-card:hover {
+      border-color: #d1d5db;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+
+    .download-card .card-header {
+      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+      border-bottom: 1px solid #e5e7eb;
+      padding: 1rem 1.25rem;
+      border-radius: 0.5rem 0.5rem 0 0;
+    }
+
+    .download-card .card-title {
+      color: #374151;
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+    }
+
+    .download-card .card-title i {
+      color: #6366f1;
+    }
+
+    .download-card .card-body {
+      padding: 1.5rem 1.25rem;
+      background: #ffffff;
+    }
+
+    .download-btn {
+      padding: 0.75rem 1.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    .download-btn:hover {
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+      color: white;
+      text-decoration: none;
+    }
+
+    .download-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="vc-dashboard-stats" data-item-type="product" data-item-id="{{ product.id }}"></div>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="vc-item-assignment-manager"
+        data-parent-type="product"
+        data-parent-id="{{ product.id }}"
+        data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}">
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="standard-card">
+        <div class="card download-card shadow-sm">
+          <div class="card-header">
+            <h4 class="card-title mb-0">
+              <i class="fas fa-download me-2"></i>Export Data
+            </h4>
+          </div>
+          <div class="card-body text-center">
+            <p class="text-muted mb-3">Download all SBOMs from projects in this product as a ZIP archive</p>
+                            <a class="btn btn-primary download-btn" href="{% url 'core:sbom_download_product' product.id %}">
+              <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if has_crud_permissions %}
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="vc-product-danger-zone"
+        data-product-id="{{ product.id }}"
+        data-product-name="{{ product.name }}"
+        data-csrf-token="{{ csrf_token }}">
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+{% endblock%}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+  {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

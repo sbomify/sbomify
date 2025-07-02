@@ -111,7 +111,7 @@ class DashboardView(admin.AdminSite):
             "app_label": "core",
             "has_permission": True,
         }
-        return TemplateResponse(request, "admin/dashboard.html", context)
+        return TemplateResponse(request, "admin/dashboard.html.j2", context)
 
     def get_social_accounts(self, obj):
         accounts = obj.socialaccount_set.all()

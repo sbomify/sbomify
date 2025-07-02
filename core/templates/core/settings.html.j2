@@ -1,0 +1,81 @@
+{% extends "./dashboard_base.html.j2" %}
+{% load django_vite %}
+{% load widget_tweaks %}
+{% block title %}sbomify Settings{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Settings</h1>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card settings-card" data-shadow="md">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Access Tokens</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" class="row g-3 align-items-center">
+          {% csrf_token %}
+          {% for field in create_access_token_form %}
+            <div class="form-group col-4 mt-2">
+              <div>
+                <label class="mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field|add_class:'form-control mb-3' }}
+              </div>
+              {% for error in field.errors %}
+                <span class="help-block">{{ error }}</span>
+              {% endfor %}
+            </div>
+          {% endfor %}
+          <div class="col-4">
+            <input type="submit" class="btn btn-primary" value="Generate New Access Token" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if new_encoded_access_token %}
+<div class="row">
+  <div class="col-12">
+    <div class="card settings-card" data-shadow="md">
+      <div class="card-body">
+        <p class="mt-4">
+          Your new access token is displayed below. Please copy it and store in a safe place as it will only be displayed once.
+        </p>
+        <div class="row">
+          <div class="token-display" id="new-access-token-display">
+            <div class="token-heading px-3 py-1 d-flex align-items-center justify-content-between">
+              <span>New Access Token</span>
+              <div class="vc-copy-token"></div>
+            </div>
+            <code id="access-token" class="p-3" style="display: block">{{ new_encoded_access_token }}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-12">
+    <div class="card settings-card data-table" data-shadow="md">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Your Access Tokens</h5>
+      </div>
+      <div class="card-body">
+        {{ access_tokens|json_script:"access-tokens-data" }}
+        <div class="vc-access-tokens-list"
+             data-tokens-data-element-id="access-tokens-data"
+             data-csrf-token="{{ csrf_token }}">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'core/js/main.ts' %}
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "core/base.html.j2" %}
+{% comment %}
+Template context:
+component - Component object
+sboms - List of SBOM objects without data and packages fields
+{% endcomment %}
+
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+
+{% block title %}Component: {{ component.name }}{% endblock %}
+
+{% block main %}
+  <main class="content public-page mb-4">
+    <div class="brand" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};">
+      {% if brand.brand_image %}
+        <img src="{{ brand.brand_image }}" alt="{{ brand.name }}">
+      {% else %}
+        <img src="/static/img/sbomify.svg" alt="sbomify logo">
+      {% endif %}
+    </div>
+    <div class="pp-content-container">
+      <div class="pp-content-bg" style="background-color: {{ brand.brand_color|default:'#DCDCDC' }};"></div>
+      <div class="pp-content">
+        <div class="page-header mb-4">
+          <div class="d-flex align-items-center gap-3 mb-2">
+            <h1 class="page-title mb-0" style="color: {{ brand.accent_color|default:'#7c8b9d' }};">
+              {{ component.name }}
+            </h1>
+          </div>
+          <div class="text-muted">
+            <small class="me-3">
+              <i class="fas fa-cube me-1"></i>Component
+            </small>
+            <small>
+              <i class="fas fa-fingerprint me-1"></i>
+              <span class="vc-copyable-value" data-value="{{ component.id }}">{{ component.id }}</span>
+            </small>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-12 col-lg-6">
+            <div class="vc-dashboard-stats" data-item-type="component" data-item-id="{{ component.id }}"></div>
+          </div>
+        </div>
+
+        <div class="vc-component-meta-info" data-component-id="{{ component.id }}"></div>
+
+        <div class="row pp-main">
+          <div class="col-12">
+            <h4 class="p-1" style="color: {{ brand.accent_color|default:'#7c8b9d' }};">SBOMs</h4>
+            <div class="card data-table">
+              <div class="card-body">
+                {% if sboms.all.count > 0 %}
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Artifact Type</th>
+                        <th scope="col">Format</th>
+                        <th scope="col">Version</th>
+                        <th scope="col">NTIA Compliant</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Vulnerabilities</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item_data in sboms_data %}
+                      {% with sbom=item_data.sbom has_report=item_data.has_vulnerabilities_report %}
+                      <tr>
+                        <td>
+                          <a href="{% url 'sboms:sbom_details_public' sbom.id %}" title="Details" class="icon-link">
+                          {{ sbom.name }}
+                          </a>
+                        </td>
+                        <td>SBOM</td>
+                        <td>{{ sbom.format }} {{ sbom.format_version }}</td>
+                        <td title="{{ sbom.version }}">{{ sbom.version|truncatechars:20 }}</td>
+                        <td> N/A </td>
+                        <td>{{ sbom.created_at }}</td>
+                        <td>
+                          <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}" title="Vulnerabilities" class="btn btn-sm btn-warning {% if not has_report %}disabled{% endif %}">
+                            <i class="fas fa-shield-alt"></i> View
+                          </a>
+                        </td>
+                        <td>
+                          <a href="{% url 'sboms:sbom_download' sbom.id %}" title="Download" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-download"></i>
+                          </a>
+                        </td>
+                      </tr>
+                      {% endwith %}
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <p class="p-3 mb-0">No SBOMs found.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <div class="credits">
+      Powered by <a href="https://sbomify.com"><img src="/static/img/sbomify.svg" alt="sbomify logo" /></a>
+    </div>
+        </main>
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'sboms/js/main.ts' %}
+{% endblock %}

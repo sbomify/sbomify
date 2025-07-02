@@ -1,0 +1,37 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load django_vite %}
+
+{% block title %}sbomify Team Settings: {{ team.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-9">
+    <h3 class="page-title">
+      Settings for team: {{ team.name }}
+    </h3>
+  </div>
+  <div class="col-3 text-end">
+
+    <a class="dropdown-item" href="{% url 'teams:team_details' team.key %}"><i class="align-middle me-1" data-feather="arrow-left"></i> Back to Team</a>
+  </div>
+</div>
+
+
+<div class="page-branding row align-items-center">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="p-1 text-black">Branding</h4>
+        <p class="mb-4">Set default brand elements to determine how public SBOMs appear.</p>
+        <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {% vite_asset 'teams/js/main.ts' %}
+{% endblock %}

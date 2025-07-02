@@ -1,0 +1,120 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+
+{% block title %}sbomify SBOM Vulnerabilities{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+  <h3 class="page-title">Vulnerabilities for SBOM: {{ sbom.name }}</h3>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Scan Results</h5>
+          {% if scan_timestamp %}
+          <small class="text-muted">Last scanned: {{ scan_timestamp }}</small>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          {% if vulnerabilities %}
+            {% if vulnerabilities.results %}
+              {% for result in vulnerabilities.results %}
+          <div class="mb-4">
+            <h5>Source: {{ result.source.file_path }}</h5>
+            {% if result.packages %}
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr>
+                  <th>Package Name</th>
+                  <th>Version</th>
+                  <th>Ecosystem</th>
+                  <th>Vulnerabilities</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for pkg_vuln_info in result.packages %}
+                <tr>
+                  <td>{{ pkg_vuln_info.package.name }}</td>
+                  <td>{{ pkg_vuln_info.package.version }}</td>
+                  <td>{{ pkg_vuln_info.package.ecosystem }}</td>
+                  <td>
+                    {% if pkg_vuln_info.vulnerabilities %}
+                    <ul class="list-unstyled mb-0">
+                      {% for vuln in pkg_vuln_info.vulnerabilities %}
+                      <li>
+                        <a href="https://osv.dev/vulnerability/{{ vuln.id }}" target="_blank">{{ vuln.id }}</a>
+                        {% if vuln.aliases %}(Aliases: {{ vuln.aliases|join:", " }}){% endif %}
+                        <p class="small text-muted mb-1">
+                          {{ vuln.summary|default_if_none:vuln.details|truncatewords:30 }}
+                        </p>
+                        {% if vuln.affected %}
+                          {% for affected_pkg in vuln.affected %}
+                            {% if affected_pkg.ranges %}
+                              Severity:
+                              {% for range_item in affected_pkg.ranges %}
+                                {% for sev in range_item.database_specific.severity %}
+                                  <span class="badge bg-danger">{{ sev }}</span>
+                                {% endfor %}
+                              {% endfor %}
+                            {% endif %}
+                          {% endfor %}
+                        {% endif %}
+                      </li>
+                      {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span class="text-success">No vulnerabilities found for this package.</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="text-info">
+              No packages with vulnerability information found in this result.
+            </p>
+            {% endif %}
+          </div>
+          <hr />
+          {% endfor %}
+          {% else %}
+            <p class="text-info">
+              Vulnerability scan data found, but no specific results or packages identified. The SBOM
+              might be empty or not analyzable by the scanner.
+            </p>
+          {% endif %}
+          {% elif error_message %}
+          <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error!</h4>
+            <p>{{ error_message }}</p>
+            {% if error_details %}
+            <hr />
+            <p class="mb-0"><strong>Details:</strong> {{ error_details }}</p>
+            {% endif %}
+          </div>
+          {% else %}
+          <p class="text-warning">
+            No vulnerability scan data found for this SBOM, or the scan is still in progress. Please
+            try again later.
+          </p>
+          <p>
+            <small>Note: Scans are performed asynchronously. If you just uploaded this SBOM, the scan
+              might not be complete yet.</small>
+          </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <a href="{% url 'sboms:sbom_details' sbom.id %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to SBOM Details
+    </a>
+  </div>
+</div>
+{% endblock %}

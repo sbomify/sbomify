@@ -151,7 +151,7 @@ def test_send_billing_email(team):
             )
             assert mock_render.call_count == 2
             mock_render.assert_has_calls([
-                mock.call(f"billing/emails/{template}.html", context),
+                mock.call(f"billing/emails/{template}.html.j2", context),
                 mock.call(f"billing/emails/{template}.txt", context),
             ])
 

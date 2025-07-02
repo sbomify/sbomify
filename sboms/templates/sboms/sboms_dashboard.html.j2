@@ -1,0 +1,67 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load form_helpers %}
+{% load django_vite %}
+
+{% block title %}sbomify SBOMs{% endblock %}
+
+{% block content %}
+<h3 class="page-title">SBOMs</h3>
+
+{% if has_crud_permissions %}
+<div class="row align-items-center">
+  <div class="col-12 align-self-center">
+    <div class="card">
+      <div class="card-body">
+                        <h5 class="card-title">Upload SBOM File</h5>
+        <form action="{% url 'sboms:sboms_dashboard' %}" method="post" enctype="multipart/form-data"  class="row row-cols-lg-auto g-3 align-items-center">
+          {% csrf_token %}
+          <div class="col-xs-12">
+            {{ sbom_upload_form.sbom_file }}
+          </div>
+          <div class="col-xs-12">
+            <input type="submit" class="btn btn-primary" value="Upload" />
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row align-items-center">
+  <div class="col-12 align-self-center">
+    <div class="card data-table">
+      <div class="card-body">
+        <table class="table">
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Version</th>
+            <th scope="col">Public?</th>
+            <th scope="col" class="border-left">Actions</th>
+          </tr>
+
+          {% for sbom in sboms %}
+            <tr>
+              <td>
+                <a href="{% url 'sboms:sbom_details' sbom.id %}" title="Details" class="icon-link">
+                {{ sbom.name }}
+                </a>
+              </td>
+              <td>{{ sbom.version }}</td>
+              <td>
+                {% if sbom.public_access_allowed %}
+                <i class="align-middle text-success" data-feather="check"></i>
+                {% endif %}
+              </td>
+              <td class="border-left">
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

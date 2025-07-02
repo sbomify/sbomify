@@ -47,7 +47,7 @@ def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
 
     return render(
         request,
-        "sboms/sbom_details_public.html",
+        "sboms/sbom_details_public.html.j2",
         {"sbom": sbom, "brand": branding_info},
     )
 
@@ -64,7 +64,7 @@ def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
 
     return render(
         request,
-        "sboms/sbom_details_private.html",
+        "sboms/sbom_details_private.html.j2",
         {"sbom": sbom, "APP_BASE_URL": settings.APP_BASE_URL},
     )
 
@@ -132,7 +132,7 @@ def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
 
     return render(
         request,
-        "sboms/sbom_vulnerabilities.html",
+        "sboms/sbom_vulnerabilities.html.j2",
         {
             "sbom": sbom,
             "vulnerabilities": vulnerabilities_data,
