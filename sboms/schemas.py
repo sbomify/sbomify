@@ -36,22 +36,7 @@ class DashboardStatsResponse(Schema):
     latest_uploads: list[DashboardSBOMUploadInfo]
 
 
-class ItemTypes(str, Enum):
-    component = "component"
-    project = "project"
-    product = "product"
-
-
-class UserItemsResponse(BaseModel):
-    team_key: str
-    team_name: str
-    item_key: str
-    item_name: str
-
-
-class CopyComponentMetadataRequest(BaseModel):
-    source_component_id: str
-    target_component_id: str
+# Import core schemas to avoid duplication
 
 
 class CycloneDXSupportedVersion(str, Enum):

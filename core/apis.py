@@ -10,13 +10,13 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_
 from billing.config import is_billing_enabled
 from billing.models import BillingPlan
 from core.object_store import S3Client
+from core.schemas import ItemTypes
+from core.utils import verify_item_access
 from sbomify.logging import getLogger
 from sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
-    ItemTypes,
 )
-from sboms.utils import verify_item_access
 from teams.models import Team
 from teams.utils import get_user_teams
 

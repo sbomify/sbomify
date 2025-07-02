@@ -22,11 +22,11 @@ from django.shortcuts import render
 
 from core.errors import error_response
 from core.object_store import S3Client
+from core.utils import verify_item_access
 from teams.schemas import BrandingInfo
 
 # from .decorators import validate_role_in_current_team
 from .models import SBOM
-from .utils import verify_item_access
 
 logger = logging.getLogger(__name__)
 

@@ -45,7 +45,7 @@ class TestCriticalPaths:
         assert component["name"] == "E2E Test Component"
 
         # 3. View component details (web interface)
-        response = client.get(reverse("sboms:component_details", kwargs={"component_id": component["id"]}))
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component["id"]}))
         content = response.content.decode()
         assert response.status_code == 200
         assert "E2E Test Component" in content
@@ -92,7 +92,7 @@ class TestCriticalPaths:
         session.save()
 
         # 1. View initial state
-        response = client.get(reverse("sboms:component_details", kwargs={"component_id": sample_component.id}))
+        response = client.get(reverse("core:component_details", kwargs={"component_id": sample_component.id}))
         assert response.status_code == 200
 
         # 2. Toggle public status via API
@@ -106,7 +106,7 @@ class TestCriticalPaths:
 
         # 3. Verify public access
         client.logout()
-        response = client.get(reverse("sboms:component_details_public", kwargs={"component_id": sample_component.id}))
+        response = client.get(reverse("core:component_details_public", kwargs={"component_id": sample_component.id}))
         assert response.status_code == 200
 
         # 4. Test billing plan restrictions
@@ -206,10 +206,10 @@ class TestCriticalPaths:
         assert "sbomify Settings" in response.content.decode()
 
         # Test sboms pages
-        response = client.get(reverse("sboms:components_dashboard"))
+        response = client.get(reverse("core:components_dashboard"))
         assert "sbomify Components" in response.content.decode()
 
-        response = client.get(reverse("sboms:component_details", kwargs={"component_id": component.id}))
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
         assert f"sbomify Component: {component.name}" in response.content.decode()
 
         # Test teams pages

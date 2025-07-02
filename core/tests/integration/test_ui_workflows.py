@@ -125,7 +125,7 @@ class TestUIWorkflows:
         session.save()
 
         # First, verify we can access the components dashboard
-        response = client.get(reverse("sboms:components_dashboard"))
+        response = client.get(reverse("core:components_dashboard"))
         assert response.status_code == 200
         content = response.content.decode()
 

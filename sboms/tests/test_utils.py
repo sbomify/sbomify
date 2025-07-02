@@ -6,7 +6,8 @@ from django.http import HttpRequest
 
 from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token
-from sboms.utils import ProjectSBOMBuilder, verify_item_access
+from core.utils import verify_item_access
+from sboms.utils import ProjectSBOMBuilder
 from teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from teams.models import Team, Member
 

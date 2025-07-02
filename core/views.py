@@ -27,9 +27,9 @@ from django.urls import reverse
 
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
-from core.utils import token_to_number
+from core.utils import token_to_number, verify_item_access
 from sboms.models import SBOM  # SBOM still lives in sboms app
-from sboms.utils import get_product_sbom_package, get_project_sbom_package, verify_item_access
+from sboms.utils import get_product_sbom_package, get_project_sbom_package
 from teams.schemas import BrandingInfo
 
 from .errors import error_response
