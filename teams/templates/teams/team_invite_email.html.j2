@@ -21,7 +21,7 @@
         <h1>You've been invited to join a team!</h1>
         <p>Hello,</p>
         <p>
-            {{ invitation.inviter.get_full_name|default:invitation.inviter.email }} has invited you to join the team <strong>{{ invitation.team.name }}</strong> on sbomify.
+            {{ user.get_full_name|default:user.email }} has invited you to join the team <strong>{{ invitation.team.name }}</strong> on sbomify.
         </p>
         <p>
             <a href="{{ invitation_url }}" class="invite-button">Accept Invitation</a>
