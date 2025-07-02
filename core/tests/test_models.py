@@ -1,60 +1,80 @@
 import pytest
-from django.contrib.auth.base_user import AbstractBaseUser
-from allauth.socialaccount.models import SocialAccount
+from django.db import IntegrityError, transaction
 
-from teams.models import get_team_name_for_user
+from core.models import Component, Product, Project
+from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
 
 @pytest.mark.django_db
-class TestUser:
-    def test_default_team_name(self, sample_user: AbstractBaseUser):
-        sample_user.first_name = ""
-        sample_user.save()
-        assert get_team_name_for_user(sample_user) == "testuser's Workspace"
+class TestUniqueConstraints:
+    def test_duplicate_project_name_in_same_team(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that duplicate project names in the same team raise IntegrityError."""
+        team = sample_team_with_owner_member.team
 
-    def test_team_name_with_first_name(self, sample_user: AbstractBaseUser):
-        sample_user.first_name = "John"
-        sample_user.save()
-        assert get_team_name_for_user(sample_user) == "John's Workspace"
-
-    def test_user_with_social_auth(self, sample_user):
-        """Test user with social auth."""
-        social_auth = SocialAccount.objects.create(
-            user=sample_user,
-            provider="keycloak",
-            extra_data={
-                "user_metadata": {
-                    "company": "Test Company",
-                    "supplier_contact": {
-                        "name": "Test Supplier",
-                        "email": "test@supplier.com"
-                    }
-                }
-            }
+        # First project succeeds
+        project = Project.objects.create(
+            name="Project 1",
+            team=team
         )
-        social_auth.save()
 
-        # Test that the user has social auth
-        assert SocialAccount.objects.filter(user=sample_user).exists()
-        assert SocialAccount.objects.filter(user=sample_user, provider="keycloak").exists()
+        # Second project with same name fails
+        with pytest.raises(IntegrityError) as exc, transaction.atomic():
+            Project.objects.create(
+                name="Project 1",
+                team=team
+            )
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
 
-    def test_user_with_multiple_social_auths(self, sample_user):
-        """Test user with multiple social auths."""
-        social_auth = SocialAccount.objects.create(
-            user=sample_user,
-            provider="keycloak",
-            extra_data={
-                "user_metadata": {
-                    "company": "Test Company",
-                    "supplier_contact": {
-                        "name": "Test Supplier",
-                        "email": "test@supplier.com"
-                    }
-                }
-            }
+        # Clean up
+        project.delete()
+
+    def test_duplicate_product_name_in_same_team(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that duplicate product names in the same team raise IntegrityError."""
+        team = sample_team_with_owner_member.team
+
+        # First product succeeds
+        product = Product.objects.create(
+            name="Product 1",
+            team=team
         )
-        social_auth.save()
 
-        # Test that the user has social auth
-        assert SocialAccount.objects.filter(user=sample_user).exists()
-        assert SocialAccount.objects.filter(user=sample_user, provider="keycloak").exists()
+        # Second product with same name fails
+        with pytest.raises(IntegrityError) as exc, transaction.atomic():
+            Product.objects.create(
+                name="Product 1",
+                team=team
+            )
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
+
+        # Clean up
+        product.delete()
+
+    def test_duplicate_component_name_in_same_team(self, sample_team_with_owner_member):  # noqa: F811
+        """Test that duplicate component names in the same team raise IntegrityError."""
+        team = sample_team_with_owner_member.team
+
+        # First component succeeds
+        component = Component.objects.create(
+            name="Component 1",
+            team=team
+        )
+
+        # Second component with same name fails
+        with pytest.raises(IntegrityError) as exc, transaction.atomic():
+            Component.objects.create(
+                name="Component 1",
+                team=team
+            )
+        assert any(msg in str(exc.value) for msg in [
+            "duplicate key value violates unique constraint",
+            "UNIQUE constraint failed"
+        ])
+
+        # Clean up
+        component.delete()

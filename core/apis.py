@@ -11,17 +11,25 @@ from billing.config import is_billing_enabled
 from billing.models import BillingPlan
 from core.object_store import S3Client
 from sbomify.logging import getLogger
-from sboms.models import Component, Product, Project
 from sboms.schemas import (
-    ComponentCreateSchema,
     ComponentMetaData,
     ComponentMetaDataPatch,
+    ItemTypes,
+)
+from sboms.utils import verify_item_access
+from teams.models import Team
+from teams.utils import get_user_teams
+
+from .models import Component, Product, Project
+from .schemas import (
+    ComponentCreateSchema,
     ComponentPatchSchema,
     ComponentResponseSchema,
     ComponentUpdateSchema,
     DashboardSBOMUploadInfo,
     DashboardStatsResponse,
-    ItemTypes,
+    ErrorCode,
+    ErrorResponse,
     ProductCreateSchema,
     ProductPatchSchema,
     ProductResponseSchema,
@@ -32,11 +40,6 @@ from sboms.schemas import (
     ProjectUpdateSchema,
     UserItemsResponse,
 )
-from sboms.utils import verify_item_access
-from teams.models import Team
-from teams.utils import get_user_teams
-
-from .schemas import ErrorCode, ErrorResponse
 
 log = getLogger(__name__)
 

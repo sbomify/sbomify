@@ -4,6 +4,10 @@ from django.db import models
 from core.utils import generate_id
 from teams.models import Team
 
+# LEGACY MODELS - kept here for data persistence only
+# All logic has been moved to core app with proxy models
+# Do not add new functionality here - use core.models instead
+
 
 class Product(models.Model):
     class Meta:

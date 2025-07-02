@@ -73,7 +73,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import type { SupplierInfo } from '../type_defs.d.ts';
+import type { SupplierInfo } from '../../../core/js/type_defs.d.ts';
 import ContactsEditor from './ContactsEditor.vue';
 
 interface Props {

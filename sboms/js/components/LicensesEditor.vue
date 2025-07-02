@@ -188,7 +188,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue'
-import type { CustomLicense } from '../type_defs'
+import type { CustomLicense } from '../../../core/js/type_defs.d.ts'
 import $axios from '../../../core/js/utils'
 import { AxiosError } from 'axios'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
