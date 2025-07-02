@@ -52,8 +52,8 @@ class TestCriticalPaths:
 
         # 4. Update component metadata via API
         metadata = {"supplier": {"name": "Updated Supplier", "url": ["http://example.com"]}}
-        response = client.put(
-            reverse("api-1:get_component_metadata", kwargs={"component_id": component["id"]}),
+        response = client.patch(
+            reverse("api-1:patch_component_metadata", kwargs={"component_id": component["id"]}),
             data=json.dumps(metadata),
             content_type="application/json",
         )
@@ -97,9 +97,7 @@ class TestCriticalPaths:
 
         # 2. Toggle public status via API
         response = client.patch(
-            reverse(
-                "api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id}
-            ),
+            reverse("api-1:patch_component", kwargs={"component_id": sample_component.id}),
             data=json.dumps({"is_public": True}),
             content_type="application/json",
         )
@@ -135,9 +133,7 @@ class TestCriticalPaths:
 
         # 5. Try to make component private on community plan - should fail
         response = client.patch(
-            reverse(
-                "api-1:patch_item_public_status", kwargs={"item_type": "component", "item_id": sample_component.id}
-            ),
+            reverse("api-1:patch_component", kwargs={"component_id": sample_component.id}),
             data=json.dumps({"is_public": False}),
             content_type="application/json",
         )

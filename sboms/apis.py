@@ -1,31 +1,25 @@
 import logging
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from ninja import File, Query, Router, UploadedFile
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
-from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
+from access_tokens.auth import PersonalAccessTokenAuth, optional_auth
+from core.apis import get_component_metadata, patch_component_metadata
 from core.object_store import S3Client
 from core.schemas import ErrorResponse
-from core.utils import ExtractSpec, dict_update, get_current_team_id, obj_extract
+from core.utils import ExtractSpec, dict_update, obj_extract
 from sbomify.tasks import scan_sbom_for_vulnerabilities
-from teams.models import Team
 
 from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
-    ComponentMetaDataPatch,
-    ComponentMetaDataUpdate,
-    CopyComponentMetadataRequest,
     CycloneDXSupportedVersion,
-    DashboardSBOMUploadInfo,
-    DashboardStatsResponse,
-    PublicStatusSchema,
     SBOMUploadRequest,
     SPDXPackage,
     SPDXSchema,
@@ -41,71 +35,10 @@ router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
 item_type_map = {"component": Component, "project": Project, "product": Product}
 
 
-# Component creation schema
-class CreateComponentRequest(BaseModel):
-    name: str
-    project_id: str
-    metadata: dict | None = None
+# Removed duplicate component creation endpoint - use /api/v1/components instead
 
 
-# Component creation response schema
-class CreateComponentResponse(BaseModel):
-    id: str
-
-
-@router.post(
-    "/component/",
-    response={201: CreateComponentResponse, 400: ErrorResponse, 403: ErrorResponse},
-)
-def create_component(request: HttpRequest, payload: CreateComponentRequest):
-    """Create a new component."""
-    try:
-        team_id = get_current_team_id(request)
-        if team_id is None:
-            return 400, {"detail": "No current team selected"}
-
-        # Verify the project exists and belongs to the team
-        try:
-            project = Project.objects.get(id=payload.project_id, team_id=team_id)
-        except Project.DoesNotExist:
-            return 400, {"detail": "Project not found or does not belong to your team"}
-
-            # Build component metadata using utility function
-        from .utils import create_default_component_metadata
-
-        component_metadata = create_default_component_metadata(
-            user=request.user, team_id=team_id, custom_metadata=payload.metadata
-        )
-
-        # Create the component with metadata
-        component = Component.objects.create(
-            name=payload.name,
-            team_id=team_id,
-            metadata=component_metadata,
-        )
-
-        # Link the component to the project
-        project.components.add(component)
-
-        # If this is the first component created by the team, mark wizard as completed
-        team = Team.objects.get(id=team_id)
-        if not team.has_completed_wizard:
-            team.has_completed_wizard = True
-            team.save()
-
-            # Update session to reflect completed wizard
-            current_team_session = request.session.get("current_team", {})
-            current_team_session["has_completed_wizard"] = True
-            request.session["current_team"] = current_team_session
-            request.session.modified = True
-
-        return 201, {"id": component.id}
-
-    except IntegrityError:
-        return 400, {"detail": f"A component with the name '{payload.name}' already exists in your team."}
-    except Exception as e:
-        log.error(f"Error creating component: {e}")
-        return 400, {"detail": str(e)}
+# Removed duplicate public_status endpoints - use core API PATCH endpoints with is_public field instead
 
 
 def _public_api_item_access_checks(request, item_type: str, item_id: str):
@@ -120,58 +53,6 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
         return 403, {"detail": "Forbidden"}
 
     return rec
-
-
-@router.get(
-    "/{item_type}/{item_id}/public_status",
-    response={
-        200: PublicStatusSchema,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def get_item_public_status(request, item_type: str, item_id: str):
-    result = _public_api_item_access_checks(request, item_type, item_id)
-    if isinstance(result, tuple):
-        return result
-
-    return {"is_public": result.is_public}
-
-
-@router.patch(
-    "/{item_type}/{item_id}/public_status",
-    response={
-        200: PublicStatusSchema,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def patch_item_public_status(request, item_type: str, item_id: str, payload: PublicStatusSchema):
-    result = _public_api_item_access_checks(request, item_type, item_id)
-    if isinstance(result, tuple):
-        return result
-
-    # Check billing plan restrictions when trying to make items private
-    if not payload.is_public:
-        # Get the team from the item
-        team = result.team
-
-        # Only enforce billing restrictions if billing is enabled
-        from billing.config import is_billing_enabled
-
-        if is_billing_enabled() and team.billing_plan == "community":
-            return 403, {
-                "detail": (
-                    "Community plan users cannot make items private. " "Upgrade to a paid plan to enable private items."
-                )
-            }
-
-    result.is_public = payload.is_public
-    result.save()
-
-    return {"is_public": result.is_public}
 
 
 @router.post(
@@ -305,157 +186,10 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         return 400, {"detail": str(e)}
 
 
-@router.get(
-    "/component/{component_id}/meta",
-    response={
-        200: ComponentMetaData,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-    exclude_none=True,
-    auth=None,
-)
-@decorate_view(optional_auth)
-def get_component_metadata(request, component_id: str):
-    result = _public_api_item_access_checks(request, "component", component_id)
-    if isinstance(result, tuple):
-        return result
-
-    metadata = result.metadata or {}
-
-    # Remove extra fields from contacts and authors
-    def strip_extra_fields(obj_list):
-        allowed = {"name", "email", "phone"}
-        return [
-            {k: v for k, v in obj.items() if k in allowed and v is not None}
-            for obj in obj_list
-            if isinstance(obj, dict)
-        ]
-
-    supplier = metadata.get("supplier", {})
-    if "contacts" in supplier:
-        supplier["contacts"] = strip_extra_fields(supplier["contacts"])
-    metadata["supplier"] = supplier
-
-    if "authors" in metadata:
-        metadata["authors"] = strip_extra_fields(metadata["authors"])
-
-    # Include component id and name in the response
-    metadata["id"] = result.id
-    metadata["name"] = result.name
-
-    return metadata
+# Moved component metadata endpoints to core API at /api/v1/components/{id}/metadata
 
 
-@router.put(
-    "/component/{component_id}/meta",
-    response={
-        204: None,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def update_component_metadata(request, component_id: str, metadata: ComponentMetaDataUpdate):
-    "Update metadata for a component."
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
-    try:
-        result = _public_api_item_access_checks(request, "component", component_id)
-        if isinstance(result, tuple):
-            return result
-
-        # Convert to dict and validate licenses
-        meta_dict = metadata.model_dump()
-        licenses = meta_dict.get("licenses", [])
-        if licenses is None:
-            licenses = []
-        meta_dict["licenses"] = licenses
-
-        log.debug(f"Final metadata to be saved: {meta_dict}")
-        result.metadata = meta_dict
-        result.save()
-        return 204, None
-    except ValidationError as ve:
-        log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
-        log.error(f"Failed validation data: {metadata.model_dump()}")
-        return 422, {"detail": str(ve.errors())}
-    except Exception as e:
-        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": str(e)}
-
-
-@router.patch(
-    "/component/{component_id}/meta",
-    response={
-        204: None,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
-    "Partially update metadata for a component."
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
-    try:
-        result = _public_api_item_access_checks(request, "component", component_id)
-        if isinstance(result, tuple):
-            return result
-
-        # Get existing metadata
-        existing_metadata = result.metadata or {}
-
-        # Convert incoming metadata to dict, excluding unset fields
-        meta_dict = metadata.model_dump(exclude_unset=True)
-
-        # Only process licenses if they were explicitly provided in the request
-        if "licenses" in meta_dict:
-            licenses = meta_dict.get("licenses", [])
-            if licenses is None:
-                licenses = []
-            meta_dict["licenses"] = licenses
-
-        # Merge with existing metadata
-        updated_metadata = {**existing_metadata, **meta_dict}
-
-        log.debug(f"Final metadata to be saved: {updated_metadata}")
-        result.metadata = updated_metadata
-        result.save()
-        return 204, None
-    except ValidationError as ve:
-        log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
-        log.error(f"Failed validation data: {metadata.model_dump()}")
-        return 422, {"detail": str(ve.errors())}
-    except Exception as e:
-        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": str(e)}
-
-
-@router.put(
-    "/component/copy-meta",
-    response={
-        204: None,
-        400: ErrorResponse,
-        403: ErrorResponse,
-        404: ErrorResponse,
-    },
-)
-def copy_component_metadata(request, copy_request: CopyComponentMetadataRequest):
-    "Copy metadata from one component to another."
-
-    source_component = get_object_or_404(Component, pk=copy_request.source_component_id)
-    target_component = get_object_or_404(Component, pk=copy_request.target_component_id)
-
-    if not verify_item_access(request, source_component, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
-
-    if not verify_item_access(request, target_component, ["owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
-
-    target_component.metadata = source_component.metadata
-    target_component.save()
-
-    return 204, None
+# Removed redundant copy-meta endpoint - use GET source metadata + PATCH target instead
 
 
 @router.post(
@@ -539,71 +273,7 @@ def get_cyclonedx_component_metadata(
     return 200, final_metadata
 
 
-@router.get(
-    "/dashboard/summary/",
-    response={200: DashboardStatsResponse, 403: ErrorResponse},
-    auth=None,
-)
-@decorate_view(optional_token_auth)
-def get_dashboard_summary(
-    request: HttpRequest,
-    component_id: str | None = Query(None),
-    product_id: str | None = Query(None),
-    project_id: str | None = Query(None),
-):
-    """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required."}
-
-    user_teams_qs = Team.objects.filter(member__user=request.user)
-
-    # Base querysets for the user's teams
-    products_qs = Product.objects.filter(team__in=user_teams_qs)
-    projects_qs = Project.objects.filter(team__in=user_teams_qs)
-    components_qs = Component.objects.filter(team__in=user_teams_qs)
-    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
-
-    # Apply context-specific filtering
-    if product_id:
-        # When viewing a product, show projects and components within that product
-        products_qs = products_qs.filter(id=product_id)
-        projects_qs = projects_qs.filter(products__id=product_id)
-        components_qs = components_qs.filter(projects__products__id=product_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
-    elif project_id:
-        # When viewing a project, show components within that project
-        projects_qs = projects_qs.filter(id=project_id)
-        components_qs = components_qs.filter(projects__id=project_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
-    elif component_id:
-        # When viewing a component, filter SBOMs for that component only
-        components_qs = components_qs.filter(id=component_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
-
-    # Get counts
-    total_products = products_qs.count()
-    total_projects = projects_qs.count()
-    total_components = components_qs.count()
-
-    # Get latest uploads
-    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
-
-    latest_uploads_data = [
-        DashboardSBOMUploadInfo(
-            component_name=sbom.component.name,
-            sbom_name=sbom.name,
-            sbom_version=sbom.version,
-            created_at=sbom.created_at,
-        )
-        for sbom in latest_sboms_qs
-    ]
-
-    return 200, DashboardStatsResponse(
-        total_products=total_products,
-        total_projects=total_projects,
-        total_components=total_components,
-        latest_uploads=latest_uploads_data,
-    )
+# Moved dashboard summary endpoint to core API at /api/v1/dashboard/summary
 
 
 @router.post(
@@ -754,6 +424,34 @@ def sbom_upload_file(
     except Exception as e:
         log.error(f"Error processing file upload: {str(e)}")
         return 400, {"detail": str(e)}
+
+
+# =============================================================================
+# BACKWARD COMPATIBILITY ALIASES
+# =============================================================================
+
+# Register the same functions under the old routes for backward compatibility
+router.get(
+    "/component/{component_id}/meta",
+    response={
+        200: ComponentMetaData,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    exclude_none=True,
+    auth=None,
+)(decorate_view(optional_auth)(get_component_metadata))
+
+router.patch(
+    "/component/{component_id}/meta",
+    response={
+        204: None,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+)(patch_component_metadata)
 
 
 @router.delete(

@@ -153,7 +153,7 @@
     message: null,
   });
 
-  const apiUrl = '/api/v1/sboms/component/' + props.componentId + '/meta';
+  const apiUrl = '/api/v1/components/' + props.componentId + '/metadata';
 
   const formatLifecyclePhase = (phase: string): string => {
     // Special case for pre/post-build to keep the hyphen
