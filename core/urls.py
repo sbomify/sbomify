@@ -64,9 +64,19 @@ urlpatterns = [
         name="component_details",
     ),
     path(
+        "component/<str:component_id>/detailed/",
+        views.component_detailed_private,
+        name="component_detailed",
+    ),
+    path(
         "public/component/<str:component_id>/",
         views.component_details_public,
         name="component_details_public",
+    ),
+    path(
+        "public/component/<str:component_id>/detailed/",
+        views.component_detailed_public,
+        name="component_detailed_public",
     ),
     path(
         "component/<str:component_id>/transfer",

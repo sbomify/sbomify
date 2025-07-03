@@ -112,12 +112,14 @@ def _build_item_response(item, item_type: str):
                 "id": component.id,
                 "name": component.name,
                 "is_public": component.is_public,
+                "component_type": component.component_type,
             }
             for component in item.components.all()
         ]
     elif item_type == "component":
         base_response["sbom_count"] = item.sbom_set.count()
         base_response["metadata"] = item.metadata
+        base_response["component_type"] = item.component_type
 
     return base_response
 
@@ -691,6 +693,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
             component = Component.objects.create(
                 name=payload.name,
                 team_id=team_id,
+                component_type=payload.component_type,
                 metadata=payload.metadata,
             )
 
@@ -760,6 +763,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
     try:
         with transaction.atomic():
             component.name = payload.name
+            component.component_type = payload.component_type
             component.is_public = payload.is_public
             component.metadata = payload.metadata
             component.save()

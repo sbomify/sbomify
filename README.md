@@ -4,11 +4,36 @@
 
 [![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/product/eP_4dk8ixV)
 
-sbomify is a Software Bill of Materials (SBOM) management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs, allowing you to share them with stakeholders or make them publicly accessible.
+sbomify is a Software Bill of Materials (SBOM) and document management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs and related documentation, allowing you to share them with stakeholders or make them publicly accessible.
 
 The sbomify backend integrates with our [github actions module](https://github.com/sbomify/github-action) to automatically generate SBOMs from lock files and docker files.
 
 For more information, see [sbomify.com](https://sbomify.com).
+
+## Features
+
+### SBOM Management
+
+- Support for both CycloneDX and SPDX SBOM formats
+- Upload SBOMs via web interface or API
+- Vulnerability scanning integration
+- Public and private access controls
+- Team-based organization
+
+### Document Management
+
+- Upload and manage document artifacts (specifications, manuals, reports, compliance documents, etc.)
+- Associate documents with software components
+- Version control for documents
+- Secure storage with configurable S3 buckets
+- Public and private document sharing
+
+### Organization
+
+- **Components**: Core entities that can contain either SBOMs or documents
+- **Projects**: Group related components together
+- **Products**: Organize multiple projects
+- **Teams**: Control access and permissions
 
 ## Roadmap and Goals
 
@@ -104,6 +129,14 @@ The API documentation is available at:
 
 - Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
 - OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+
+The API provides endpoints for managing:
+
+- **SBOMs**: Upload, retrieve, and manage Software Bill of Materials
+- **Documents**: Upload, retrieve, and manage document artifacts
+- **Components**: Manage components that contain SBOMs or documents
+- **Projects & Products**: Organize and group components
+- **Teams**: User management and access control
 
 These endpoints are available when running the development server.
 
@@ -241,13 +274,47 @@ development, we use Minio as a local S3 replacement.
   - Make sure Minio is running via Docker:
     `docker compose up sbomify-minio sbomify-createbuckets -d`
   - Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
-  - The required buckets (`sbomify-media` and `sbomify-sboms`) will be created
+  - The required buckets (`sbomify-media`, `sbomify-sboms`, and optionally `sbomify-documents`) will be created
     automatically
+
+##### Storage Buckets
+
+The application uses separate S3 buckets for different types of content:
+
+- **Media Bucket**: User avatars, team logos, and other media assets
+- **SBOMs Bucket**: Software Bill of Materials files
+- **Documents Bucket**: Document artifacts (specifications, manuals, reports, compliance documents, etc.)
+  - If not configured separately, documents will use the SBOMs bucket automatically
+  - For production, it's recommended to use a separate bucket for better organization and access control
 
 You can access the Minio console at:
 
 - `http://localhost:9001`
 - Default credentials: minioadmin/minioadmin
+
+##### Production Storage Configuration
+
+For production deployments, you can configure separate S3 buckets for documents:
+
+```bash
+# Optional: Configure dedicated documents bucket (recommended for production)
+export AWS_DOCUMENTS_ACCESS_KEY_ID="your-documents-access-key"
+export AWS_DOCUMENTS_SECRET_ACCESS_KEY="your-documents-secret-key"
+export AWS_DOCUMENTS_STORAGE_BUCKET_NAME="your-documents-bucket"
+export AWS_DOCUMENTS_STORAGE_BUCKET_URL="https://your-documents-bucket.s3.region.amazonaws.com"
+
+# If not configured, documents will automatically use the SBOMs bucket
+export AWS_SBOMS_ACCESS_KEY_ID="your-sboms-access-key"
+export AWS_SBOMS_SECRET_ACCESS_KEY="your-sboms-secret-key"
+export AWS_SBOMS_STORAGE_BUCKET_NAME="your-sboms-bucket"
+export AWS_SBOMS_STORAGE_BUCKET_URL="https://your-sboms-bucket.s3.region.amazonaws.com"
+```
+
+Benefits of separate buckets:
+
+- **Security**: Different access policies for SBOMs vs documents
+- **Organization**: Clear separation of content types
+- **Backup**: Independent backup strategies for different data types
 
 ### Running test cases
 

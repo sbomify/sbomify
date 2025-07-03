@@ -24,14 +24,14 @@
             <th scope="col">Version</th>
             <th scope="col">NTIA Compliant</th>
             <th scope="col">Created</th>
-            <th scope="col">Vulnerabilities</th>
+            <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
             <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="itemData in parsedSbomsData" :key="itemData.sbom.id">
             <td>
-              <a :href="`/sbom/${itemData.sbom.id}`" title="Details" class="icon-link">
+              <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
                 {{ itemData.sbom.name }}
               </a>
             </td>
@@ -47,7 +47,7 @@
             </td>
             <td>N/A</td>
             <td>{{ formatDate(itemData.sbom.created_at) }}</td>
-            <td>
+            <td v-if="!isPublicView">
               <a
                 :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
                 title="Vulnerabilities"
@@ -58,7 +58,7 @@
             </td>
             <td>
               <div class="d-flex gap-1">
-                <a :href="`/sbom/download/${itemData.sbom.id}`" title="Download" class="btn btn-sm btn-secondary">
+                <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-sm btn-secondary">
                   <i class="fas fa-download"></i>
                 </a>
                 <button
@@ -119,6 +119,7 @@ const props = defineProps<{
   sbomsDataElementId?: string
   componentId?: string
   hasCrudPermissions?: string
+  isPublicView?: string
 }>()
 
 const parsedSbomsData = ref<SbomData[]>([])
@@ -129,6 +130,27 @@ const isDeleting = ref<string | null>(null)
 
 const hasData = computed(() => parsedSbomsData.value.length > 0)
 const hasCrudPermissions = computed(() => props.hasCrudPermissions === 'true')
+const isPublicView = computed(() => props.isPublicView === 'true')
+
+const getSbomDetailUrl = (sbomId: string): string => {
+  // For the new URL structure, we need the component ID
+  if (props.componentId) {
+    if (isPublicView.value) {
+      return `/public/component/${props.componentId}/detailed/`
+    }
+    return `/component/${props.componentId}/detailed/`
+  }
+
+  // Fallback to old URLs if component ID not available
+  if (isPublicView.value) {
+    return `/public/sbom/${sbomId}/`
+  }
+  return `/sbom/${sbomId}/`
+}
+
+const getSbomDownloadUrl = (sbomId: string): string => {
+  return `/sbom/download/${sbomId}`
+}
 
 const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text

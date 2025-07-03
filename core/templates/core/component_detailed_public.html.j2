@@ -1,0 +1,153 @@
+{% extends "core/base.html.j2" %}
+{% comment %}
+Template context:
+component: Component object
+sbom: SBOM object (if component_type is SBOM)
+document: Document object (if component_type is DOCUMENT)
+brand: BrandingInfo object
+{% endcomment %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+{% block title %}
+    {% if component.component_type == 'sbom' %}
+        SBOM: {{ sbom.name }}
+    {% elif component.component_type == 'document' %}
+        Document: {{ document.name }}
+    {% else %}
+        Component Details
+    {% endif %}
+{% endblock %}
+{% block styles %}
+    <style>
+    .brand-logo {
+        height: 3rem;
+        max-width: 12rem;
+        width: auto;
+        object-fit: contain;
+    }
+
+    .credits-logo {
+        height: 1.25rem;
+        width: auto;
+        max-width: 5rem;
+        object-fit: contain;
+    }
+
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+        .brand-logo {
+            height: 3.25rem;
+            max-width: 13rem;
+        }
+        .credits-logo {
+            height: 1.375rem;
+            max-width: 5.5rem;
+        }
+    }
+    </style>
+{% endblock %}
+{% block main %}
+    <main class="content public-page mb-4">
+        <div class="brand"
+             style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}">
+            {% if brand.brand_image %}
+                <img src="{{ brand.brand_image }}"
+                     alt="{{ brand.name }}"
+                     class="brand-logo"
+                     width="192"
+                     height="48">
+            {% else %}
+                <img src="/static/img/sbomify.svg"
+                     alt="sbomify logo"
+                     class="brand-logo"
+                     width="192"
+                     height="48">
+            {% endif %}
+        </div>
+        <div class="pp-content-container">
+            <div class="pp-content-bg"
+                 style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}"></div>
+            <div class="pp-content">
+                <div class="page-header mb-4">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        {% if component.component_type == 'sbom' %}
+                            <h1 class="page-title mb-0"
+                                style="color: {{ brand.accent_color|default:'#7c8b9d' }}">
+                                <i class="fas fa-file-code me-2"></i>{{ sbom.name }}
+                            </h1>
+                        {% elif component.component_type == 'document' %}
+                            <h1 class="page-title mb-0"
+                                style="color: {{ brand.accent_color|default:'#7c8b9d' }}">
+                                <i class="fas fa-file-alt me-2"></i>{{ document.name }}
+                            </h1>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted">
+                        <small class="me-3">
+                            <i class="fas fa-cube me-1"></i>
+                            <a href="/public/component/{{ component.id }}/"
+                               style="color: {{ brand.accent_color|default:'#7c8b9d' }};
+                                      text-decoration: none">{{ component.name }}</a>
+                        </small>
+                        {% if component.component_type == 'sbom' %}
+                            <small class="me-3">
+                                <i class="fas fa-tag me-1"></i>
+                                {% if sbom.format == 'cyclonedx' %}
+                                    CycloneDX
+                                {% elif sbom.format == 'spdx' %}
+                                    SPDX
+                                {% else %}
+                                    {{ sbom.format|upper }}
+                                {% endif %}
+                                {{ sbom.format_version }}
+                            </small>
+                            {% if sbom.version %}
+                                <small>
+                                    <i class="fas fa-code-branch me-1"></i>{{ sbom.version }}
+                                </small>
+                            {% endif %}
+                        {% elif component.component_type == 'document' %}
+                            <small class="me-3">
+                                <i class="fas fa-tag me-1"></i>{{ document.document_type|default:"Document" }}
+                            </small>
+                            {% if document.version %}
+                                <small>
+                                    <i class="fas fa-code-branch me-1"></i>{{ document.version }}
+                                </small>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% if component.component_type == 'sbom' %}
+                    <!-- SBOM Download Button -->
+                    <a href="/sbom/download/{{ sbom.id }}" class="btn btn-success float-end">
+                        <i class="fas fa-download"></i> Download SBOM
+                    </a>
+                {% elif component.component_type == 'document' %}
+                    <!-- Document Download Button -->
+                    <a href="/documents/download/{{ document.id }}"
+                       class="btn btn-success float-end">
+                        <i class="fas fa-download"></i> Download Document
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="credits">
+            Powered by <a href="https://sbomify.com">
+            <img src="/static/img/sbomify.svg"
+                 alt="sbomify logo"
+                 class="credits-logo"
+                 width="80"
+                 height="20" />
+        </a>
+    </div>
+</main>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% if component.component_type == 'sbom' %}
+        {% vite_asset 'sboms/js/main.ts' %}
+    {% elif component.component_type == 'document' %}
+        {% vite_asset 'documents/js/main.ts' %}
+    {% endif %}
+{% endblock %}

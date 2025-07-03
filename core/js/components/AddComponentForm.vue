@@ -26,6 +26,24 @@
                 {{ errorMessage }}
               </div>
             </div>
+            <div class="mb-4">
+              <label class="form-label text-secondary fw-medium" for="componentType">
+                Type
+                <span class="text-danger">*</span>
+              </label>
+              <select
+                id="componentType"
+                v-model="componentType"
+                class="form-select form-select-lg"
+                required
+              >
+                <option value="sbom">SBOM</option>
+                <option value="document">Document</option>
+              </select>
+              <div class="form-text">
+                Choose the type of component you're creating
+              </div>
+            </div>
             <div class="d-flex justify-content-end gap-2 mt-4">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
               <button type="submit" class="btn btn-primary px-4" :disabled="isLoading">
@@ -45,6 +63,7 @@ import { showSuccess, showError } from '../../../core/js/alerts'
 import { eventBus, EVENTS } from '../../../core/js/utils'
 
 const componentName = ref('')
+const componentType = ref('sbom')  // Default to SBOM
 const isLoading = ref(false)
 const errorMessage = ref('')
 const nameInput = ref<HTMLInputElement>()
@@ -68,6 +87,7 @@ const createComponent = async () => {
       },
       body: JSON.stringify({
         name: componentName.value.trim(),
+        component_type: componentType.value,
         metadata: {}
       })
     })
@@ -95,6 +115,7 @@ const createComponent = async () => {
 
 const resetForm = () => {
   componentName.value = ''
+  componentType.value = 'sbom'  // Reset to default
   errorMessage.value = ''
   isLoading.value = false
 }

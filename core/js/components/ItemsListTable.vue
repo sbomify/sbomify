@@ -39,6 +39,7 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th v-if="itemType === 'component'">Type</th>
             <th>{{ getRelationshipColumnHeader() }}</th>
             <th class="text-center">Public?</th>
           </tr>
@@ -53,7 +54,12 @@
                 {{ item.name }}
               </a>
             </td>
-                                      <td>
+            <td v-if="itemType === 'component'">
+              <span class="badge bg-info-subtle text-info">
+                {{ getComponentTypeDisplayName((item as Component).component_type) }}
+              </span>
+            </td>
+            <td>
                <div v-if="itemType === 'product'">
                  <span v-if="(item as Product).projects.length === 0" class="text-muted">
                    No projects
@@ -89,13 +95,22 @@
                    >
                      <span class="badge bg-secondary-subtle text-secondary">
                        {{ component.name }}
+                       <small class="ms-1 text-muted">({{ getComponentTypeDisplayName(component.component_type) }})</small>
                      </span>
                    </a>
                  </div>
                </div>
 
                <div v-else-if="itemType === 'component'">
-                 <span>{{ getSbomCountText(item as Component) }}</span>
+                 <span v-if="(item as Component).component_type === 'sbom'">
+                   {{ getSbomCountText(item as Component) }}
+                 </span>
+                 <span v-else-if="(item as Component).component_type === 'document'" class="text-muted">
+                   Document
+                 </span>
+                 <span v-else class="text-muted">
+                   -
+                 </span>
                </div>
 
                <span v-else>-</span>
@@ -137,16 +152,17 @@ interface BaseItem {
 }
 
 interface Product extends BaseItem {
-  projects: Array<{ id: string; name: string; is_public: boolean }>
+  projects: Array<{ id: string; name: string; is_public: boolean; component_type?: string }>
   project_count?: number
 }
 
 interface Project extends BaseItem {
-  components: Array<{ id: string; name: string; is_public: boolean }>
+  components: Array<{ id: string; name: string; is_public: boolean; component_type: string }>
   component_count?: number
 }
 
 interface Component extends BaseItem {
+  component_type: string
   sbom_count?: number
 }
 
@@ -206,9 +222,20 @@ const getRelationshipColumnHeader = (): string => {
     case 'project':
       return 'Components'
     case 'component':
-      return 'SBOMs'
+      return 'Content'
     default:
       return 'Related'
+  }
+}
+
+const getComponentTypeDisplayName = (componentType: string): string => {
+  switch (componentType) {
+    case 'sbom':
+      return 'SBOM'
+    case 'document':
+      return 'Document'
+    default:
+      return 'Unknown'
   }
 }
 

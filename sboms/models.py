@@ -10,6 +10,8 @@ from teams.models import Team
 
 
 class Product(models.Model):
+    """Legacy Product model for data persistence only."""
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_products"
         unique_together = ("team", "name")
@@ -27,6 +29,8 @@ class Product(models.Model):
 
 
 class Project(models.Model):
+    """Legacy Project model for data persistence only."""
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_projects"
         unique_together = ("team", "name")
@@ -46,6 +50,8 @@ class Project(models.Model):
 
 
 class ProductProject(models.Model):
+    """Legacy ProductProject through model for data persistence only."""
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_products_projects"
         unique_together = ("product", "project")
@@ -59,6 +65,18 @@ class ProductProject(models.Model):
 
 
 class Component(models.Model):
+    """Legacy Component model for data persistence only.
+
+    Represents a component which can be of different types such as SBOM or Document.
+    All business logic has been moved to core app with proxy models.
+    """
+
+    class ComponentType(models.TextChoices):
+        """Enumeration of available component types."""
+
+        SBOM = "sbom", "SBOM"
+        DOCUMENT = "document", "Document"
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_components"
         unique_together = ("team", "name")
@@ -67,6 +85,12 @@ class Component(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, blank=False)
+    component_type = models.CharField(
+        max_length=20,
+        choices=ComponentType.choices,
+        default=ComponentType.SBOM,
+        help_text="Type of component (SBOM, Document, etc.)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
     metadata = models.JSONField(default=dict)
@@ -76,11 +100,18 @@ class Component(models.Model):
         return f"{self.name}"
 
     @property
-    def latest_sbom(self) -> "SBOM":
+    def latest_sbom(self) -> "SBOM | None":
+        """Get the latest SBOM for this component.
+
+        Returns:
+            The most recent SBOM object or None if no SBOMs exist.
+        """
         return self.sbom_set.order_by("-created_at").first()
 
 
 class ProjectComponent(models.Model):
+    """Legacy ProjectComponent through model for data persistence only."""
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_projects_components"
         unique_together = ("project", "component")
@@ -94,8 +125,7 @@ class ProjectComponent(models.Model):
 
 
 class SBOM(models.Model):
-    """
-    Represents a Software Bill of Materials document.
+    """Represents a Software Bill of Materials document.
 
     License Data Handling Note (2025-05-29):
     Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)
@@ -132,11 +162,20 @@ class SBOM(models.Model):
 
     @property
     def public_access_allowed(self) -> bool:
+        """Check if public access is allowed for this SBOM.
+
+        Returns:
+            True if the component is public, False otherwise.
+        """
         return self.component.is_public
 
     @property
     def source_display(self) -> str:
-        """Return a user-friendly display name for the source."""
+        """Return a user-friendly display name for the source.
+
+        Returns:
+            A human-readable string representing the SBOM source.
+        """
         source_display_map = {
             "api": "API",
             "manual_upload": "Manual Upload",

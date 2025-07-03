@@ -52,30 +52,6 @@
             <div class="pp-content-bg"
                  style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}"></div>
             <div class="pp-content">
-                <div class="row">
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">Metadata</h5>
-                            </div>
-                            <div class="card-body">
-                                <p>
-                                    Uploaded on: {{ sbom.created_at }}
-                                    <br />
-                                    Source: {{ sbom.source_display }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">Comment</h5>
-                            </div>
-                            <div class="card-body">{{ sbom.data.creationInfo.comment }}</div>
-                        </div>
-                    </div>
-                </div>
                 <a href="{% url 'sboms:sbom_download' sbom.id %}"
                    class="btn btn-success float-end">
                     <i class="fas fa-download"></i> Download SBOM
