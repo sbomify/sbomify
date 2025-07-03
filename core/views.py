@@ -28,6 +28,7 @@ from django.urls import reverse
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
 from core.utils import token_to_number, verify_item_access
+from documents.models import Document
 from sboms.models import SBOM  # SBOM still lives in sboms app
 from sboms.utils import get_product_sbom_package, get_project_sbom_package
 from teams.schemas import BrandingInfo
@@ -358,50 +359,73 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
     if not component.is_public:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
-    sboms_with_vuln_status = []
-    try:
-        redis_client = redis.from_url(settings.REDIS_WORKER_URL)
-        for sbom_item in sboms_queryset:
-            keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
-            sboms_with_vuln_status.append(
-                {
-                    "sbom": {
-                        "id": str(sbom_item.id),
-                        "name": sbom_item.name,
-                        "format": sbom_item.format,
-                        "format_version": sbom_item.format_version,
-                        "version": sbom_item.version,
-                        "created_at": sbom_item.created_at.isoformat(),
-                    },
-                    "has_vulnerabilities_report": bool(keys),
-                }
-            )
-    except redis.exceptions.ConnectionError:
-        for sbom_item in sboms_queryset:
-            sboms_with_vuln_status.append(
-                {
-                    "sbom": {
-                        "id": str(sbom_item.id),
-                        "name": sbom_item.name,
-                        "format": sbom_item.format,
-                        "format_version": sbom_item.format_version,
-                        "version": sbom_item.version,
-                        "created_at": sbom_item.created_at.isoformat(),
-                    },
-                    "has_vulnerabilities_report": False,
-                }
-            )
-        # No messages.error for public view, just log or fail silently
-        # logger.warning("Could not connect to Redis in public component view.")
-
     branding_info = BrandingInfo(**component.team.branding_info)
+    context = {
+        "component": component,
+        "brand": branding_info,
+    }
 
-    return render(
-        request,
-        "core/component_details_public.html.j2",
-        {"component": component, "sboms_data": sboms_with_vuln_status, "brand": branding_info},  # Changed from "sboms"
-    )
+    if component.component_type == Component.ComponentType.SBOM:
+        # Handle SBOM components
+        sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+        sboms_with_vuln_status = []
+        try:
+            redis_client = redis.from_url(settings.REDIS_WORKER_URL)
+            for sbom_item in sboms_queryset:
+                keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+                sboms_with_vuln_status.append(
+                    {
+                        "sbom": {
+                            "id": str(sbom_item.id),
+                            "name": sbom_item.name,
+                            "format": sbom_item.format,
+                            "format_version": sbom_item.format_version,
+                            "version": sbom_item.version,
+                            "created_at": sbom_item.created_at.isoformat(),
+                        },
+                        "has_vulnerabilities_report": bool(keys),
+                    }
+                )
+        except redis.exceptions.ConnectionError:
+            for sbom_item in sboms_queryset:
+                sboms_with_vuln_status.append(
+                    {
+                        "sbom": {
+                            "id": str(sbom_item.id),
+                            "name": sbom_item.name,
+                            "format": sbom_item.format,
+                            "format_version": sbom_item.format_version,
+                            "version": sbom_item.version,
+                            "created_at": sbom_item.created_at.isoformat(),
+                        },
+                        "has_vulnerabilities_report": False,
+                    }
+                )
+            # No messages.error for public view, just log or fail silently
+            # logger.warning("Could not connect to Redis in public component view.")
+        context["sboms_data"] = sboms_with_vuln_status
+
+    elif component.component_type == Component.ComponentType.DOCUMENT:
+        # Handle document components
+        documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
+        documents_data = []
+        for document_item in documents_queryset:
+            documents_data.append(
+                {
+                    "document": {
+                        "id": str(document_item.id),
+                        "name": document_item.name,
+                        "version": document_item.version,
+                        "document_type": document_item.document_type,
+                        "content_type": document_item.content_type,
+                        "file_size": document_item.file_size,
+                        "created_at": document_item.created_at.isoformat(),
+                    }
+                }
+            )
+        context["documents_data"] = documents_data
+
+    return render(request, "core/component_details_public.html.j2", context)
 
 
 @login_required
@@ -418,57 +442,77 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
     has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
     is_owner = verify_item_access(request, component, ["owner"])
 
-    sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
-    sboms_with_vuln_status = []
-    try:
-        redis_client = redis.from_url(settings.REDIS_WORKER_URL)
-        for sbom_item in sboms_queryset:
-            keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
-            sboms_with_vuln_status.append(
-                {
-                    "sbom": {
-                        "id": str(sbom_item.id),
-                        "name": sbom_item.name,
-                        "format": sbom_item.format,
-                        "format_version": sbom_item.format_version,
-                        "version": sbom_item.version,
-                        "created_at": sbom_item.created_at.isoformat(),
-                    },
-                    "has_vulnerabilities_report": bool(keys),
-                }
-            )
-    except redis.exceptions.ConnectionError:
-        # If Redis is down, assume no reports are available for simplicity
-        for sbom_item in sboms_queryset:
-            sboms_with_vuln_status.append(
-                {
-                    "sbom": {
-                        "id": str(sbom_item.id),
-                        "name": sbom_item.name,
-                        "format": sbom_item.format,
-                        "format_version": sbom_item.format_version,
-                        "version": sbom_item.version,
-                        "created_at": sbom_item.created_at.isoformat(),
-                    },
-                    "has_vulnerabilities_report": False,
-                }
-            )
-        messages.error(
-            request, "Could not connect to Redis to check for vulnerability reports. Status may be inaccurate."
-        )
+    context = {
+        "component": component,
+        "has_crud_permissions": has_crud_permissions,
+        "is_owner": is_owner,
+        "APP_BASE_URL": settings.APP_BASE_URL,
+        "current_team": request.session.get("current_team", {}),
+    }
 
-    return render(
-        request,
-        "core/component_details_private.html.j2",
-        {
-            "component": component,
-            "has_crud_permissions": has_crud_permissions,
-            "is_owner": is_owner,
-            "sboms_data": sboms_with_vuln_status,  # Changed from "sboms"
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-        },
-    )
+    if component.component_type == Component.ComponentType.SBOM:
+        # Handle SBOM components
+        sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+        sboms_with_vuln_status = []
+        try:
+            redis_client = redis.from_url(settings.REDIS_WORKER_URL)
+            for sbom_item in sboms_queryset:
+                keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+                sboms_with_vuln_status.append(
+                    {
+                        "sbom": {
+                            "id": str(sbom_item.id),
+                            "name": sbom_item.name,
+                            "format": sbom_item.format,
+                            "format_version": sbom_item.format_version,
+                            "version": sbom_item.version,
+                            "created_at": sbom_item.created_at.isoformat(),
+                        },
+                        "has_vulnerabilities_report": bool(keys),
+                    }
+                )
+        except redis.exceptions.ConnectionError:
+            # If Redis is down, assume no reports are available for simplicity
+            for sbom_item in sboms_queryset:
+                sboms_with_vuln_status.append(
+                    {
+                        "sbom": {
+                            "id": str(sbom_item.id),
+                            "name": sbom_item.name,
+                            "format": sbom_item.format,
+                            "format_version": sbom_item.format_version,
+                            "version": sbom_item.version,
+                            "created_at": sbom_item.created_at.isoformat(),
+                        },
+                        "has_vulnerabilities_report": False,
+                    }
+                )
+            messages.error(
+                request, "Could not connect to Redis to check for vulnerability reports. Status may be inaccurate."
+            )
+        context["sboms_data"] = sboms_with_vuln_status
+
+    elif component.component_type == Component.ComponentType.DOCUMENT:
+        # Handle document components
+        documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
+        documents_data = []
+        for document_item in documents_queryset:
+            documents_data.append(
+                {
+                    "document": {
+                        "id": str(document_item.id),
+                        "name": document_item.name,
+                        "version": document_item.version,
+                        "document_type": document_item.document_type,
+                        "content_type": document_item.content_type,
+                        "file_size": document_item.file_size,
+                        "created_at": document_item.created_at.isoformat(),
+                    }
+                }
+            )
+        context["documents_data"] = documents_data
+
+    return render(request, "core/component_details_private.html.j2", context)
 
 
 @login_required
@@ -553,6 +597,96 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.zip"
 
         return response
+
+
+def component_detailed_public(request: HttpRequest, component_id: str) -> HttpResponse:
+    """Public detailed view for components - shows SBOM or document details"""
+    try:
+        component: Component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Component not found"))
+
+    # Verify access
+    if not component.is_public:
+        return error_response(request, HttpResponseNotFound("Component not found"))
+
+    branding_info = BrandingInfo(**component.team.branding_info)
+
+    if component.component_type == Component.ComponentType.SBOM:
+        # For SBOM components, find the primary/latest SBOM and show detailed view
+        sbom = SBOM.objects.filter(component_id=component_id).order_by("-created_at").first()
+        if not sbom:
+            return error_response(request, HttpResponseNotFound("No SBOM found for this component"))
+
+        return render(
+            request,
+            "core/component_detailed_public.html.j2",
+            {
+                "component": component,
+                "sbom": sbom,
+                "brand": branding_info,
+            },
+        )
+
+    elif component.component_type == Component.ComponentType.DOCUMENT:
+        # For document components, show document details
+        document = Document.objects.filter(component_id=component_id).order_by("-created_at").first()
+        if not document:
+            return error_response(request, HttpResponseNotFound("No document found for this component"))
+
+        return render(
+            request,
+            "core/component_detailed_public.html.j2",
+            {
+                "component": component,
+                "document": document,
+                "brand": branding_info,
+            },
+        )
+
+    return error_response(request, HttpResponseNotFound("Unknown component type"))
+
+
+@login_required
+def component_detailed_private(request: HttpRequest, component_id: str) -> HttpResponse:
+    """Private detailed view for components - shows SBOM or document details"""
+    try:
+        component: Component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Component not found"))
+
+    # Verify access
+    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
+
+    context = {
+        "component": component,
+        "has_crud_permissions": has_crud_permissions,
+        "APP_BASE_URL": settings.APP_BASE_URL,
+        "current_team": request.session.get("current_team", {}),
+    }
+
+    if component.component_type == Component.ComponentType.SBOM:
+        # For SBOM components, find the primary/latest SBOM and show detailed view
+        sbom = SBOM.objects.filter(component_id=component_id).order_by("-created_at").first()
+        if not sbom:
+            return error_response(request, HttpResponseNotFound("No SBOM found for this component"))
+
+        context["sbom"] = sbom
+        return render(request, "core/component_detailed_private.html.j2", context)
+
+    elif component.component_type == Component.ComponentType.DOCUMENT:
+        # For document components, show document details
+        document = Document.objects.filter(component_id=component_id).order_by("-created_at").first()
+        if not document:
+            return error_response(request, HttpResponseNotFound("No document found for this component"))
+
+        context["document"] = document
+        return render(request, "core/component_detailed_private.html.j2", context)
+
+    return error_response(request, HttpResponseNotFound("Unknown component type"))
 
 
 @login_required

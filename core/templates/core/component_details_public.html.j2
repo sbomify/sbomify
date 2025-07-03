@@ -67,9 +67,8 @@ sboms - List of SBOM objects without data and packages fields
                         <small class="me-3">
                             <i class="fas fa-cube me-1"></i>Component
                         </small>
-                        <small>
-                            <i class="fas fa-fingerprint me-1"></i>
-                            <span class="vc-copyable-value" data-value="{{ component.id }}">{{ component.id }}</span>
+                        <small class="me-3">
+                            <i class="fas fa-tag me-1"></i>{{ component.get_component_type_display }}
                         </small>
                     </div>
                 </div>
@@ -80,66 +79,27 @@ sboms - List of SBOM objects without data and packages fields
                              data-item-id="{{ component.id }}"></div>
                     </div>
                 </div>
-                <div class="vc-component-meta-info" data-component-id="{{ component.id }}"></div>
-                <div class="row pp-main">
-                    <div class="col-12">
-                        <h4 class="p-1" style="color: {{ brand.accent_color|default:'#7c8b9d' }}">SBOMs</h4>
-                        <div class="card data-table">
-                            <div class="card-body">
-                                {% if sboms.all.count > 0 %}
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Name</th>
-                                                <th scope="col">Artifact Type</th>
-                                                <th scope="col">Format</th>
-                                                <th scope="col">Version</th>
-                                                <th scope="col">NTIA Compliant</th>
-                                                <th scope="col">Created</th>
-                                                <th scope="col">Vulnerabilities</th>
-                                                <th scope="col">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for item_data in sboms_data %}
-                                                {% with sbom=item_data.sbom has_report=item_data.has_vulnerabilities_report %}
-                                                    <tr>
-                                                        <td>
-                                                            <a href="{% url 'sboms:sbom_details_public' sbom.id %}"
-                                                               title="Details"
-                                                               class="icon-link">{{ sbom.name }}</a>
-                                                        </td>
-                                                        <td>SBOM</td>
-                                                        <td>{{ sbom.format }} {{ sbom.format_version }}</td>
-                                                        <td title="{{ sbom.version }}">{{ sbom.version|truncatechars:20 }}</td>
-                                                        <td>N/A</td>
-                                                        <td>{{ sbom.created_at }}</td>
-                                                        <td>
-                                                            <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}"
-                                                               title="Vulnerabilities"
-                                                               class="btn btn-sm btn-warning {% if not has_report %}disabled{% endif %}">
-                                                                <i class="fas fa-shield-alt"></i> View
-                                                            </a>
-                                                        </td>
-                                                        <td>
-                                                            <a href="{% url 'sboms:sbom_download' sbom.id %}"
-                                                               title="Download"
-                                                               class="btn btn-sm btn-secondary">
-                                                                <i class="fas fa-download"></i>
-                                                            </a>
-                                                        </td>
-                                                    </tr>
-                                                {% endwith %}
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                {% else %}
-                                    <p class="p-3 mb-0">No SBOMs found.</p>
-                                {% endif %}
-                            </div>
+                {% if component.component_type == 'sbom' %}
+                    <div class="row pp-main">
+                        <div class="col-12">
+                            {{ sboms_data|json_script:"sboms-data" }}
+                            <div class="vc-sboms-table"
+                                 data-sboms-data-element-id="sboms-data"
+                                 data-component-id="{{ component.id }}"
+                                 data-has-crud-permissions="false"
+                                 data-is-public-view="true"></div>
                         </div>
                     </div>
-                </div>
+                {% elif component.component_type == 'document' %}
+                    <div class="row pp-main">
+                        <div class="col-12">
+                            {{ documents_data|json_script:"documents-data" }}
+                            <div class="vc-documents-table"
+                                 data-documents-data-element-id="documents-data"
+                                 data-has-crud-permissions="false"></div>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
         <div class="credits">
@@ -154,5 +114,10 @@ sboms - List of SBOM objects without data and packages fields
 </main>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sboms/js/main.ts' %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% if component.component_type == 'sbom' %}
+        {% vite_asset 'sboms/js/main.ts' %}
+    {% elif component.component_type == 'document' %}
+        {% vite_asset 'documents/js/main.ts' %}
+    {% endif %}
 {% endblock %}

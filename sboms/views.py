@@ -18,7 +18,7 @@ from django.http import (
     HttpResponseNotFound,
     JsonResponse,
 )
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from core.errors import error_response
 from core.object_store import S3Client
@@ -176,3 +176,34 @@ def sbom_upload_cyclonedx(request: HttpRequest) -> HttpResponse:
 
 
 # Component metadata view moved to core app
+
+
+@login_required
+def redirect_sbom_to_component_detailed(request: HttpRequest, sbom_id: str) -> HttpResponse:
+    """Redirect old SBOM URLs to new component detailed URLs"""
+    try:
+        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("SBOM not found"))
+
+    # Check access for private view
+    if not verify_item_access(request, sbom, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    # Redirect to new component detailed URL
+    return redirect("core:component_detailed", component_id=sbom.component_id)
+
+
+def redirect_sbom_to_component_detailed_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
+    """Redirect old public SBOM URLs to new component detailed public URLs"""
+    try:
+        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("SBOM not found"))
+
+    # Check public access
+    if not sbom.public_access_allowed:
+        return error_response(request, HttpResponseNotFound("SBOM not found"))
+
+    # Redirect to new component detailed public URL
+    return redirect("core:component_detailed_public", component_id=sbom.component_id)

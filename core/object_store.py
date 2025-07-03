@@ -13,7 +13,7 @@ from django.conf import settings
 
 
 class S3Client:
-    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS"]):
+    def __init__(self, bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]):
         self.bucket_type = bucket_type
         access_key = getattr(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID")
         secret_key = getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY")
@@ -52,6 +52,21 @@ class S3Client:
             raise ValueError("This method is only for SBOMS bucket")
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
+    def upload_document(self, data: bytes) -> str:
+        if self.bucket_type != "DOCUMENTS":
+            raise ValueError("This method is only for DOCUMENTS bucket")
+
+        object_name = hashlib.sha256(data).hexdigest() + ".bin"
+        self.upload_data_as_file(settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, object_name, data)
+
+        return object_name
+
+    def get_document_data(self, object_name: str) -> bytes:
+        if self.bucket_type != "DOCUMENTS":
+            raise ValueError("This method is only for DOCUMENTS bucket")
+
+        return self.get_file_data(settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, object_name)
 
     def upload_file(self, bucket_name, file_path, object_name):
         try:

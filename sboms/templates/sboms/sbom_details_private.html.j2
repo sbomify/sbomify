@@ -1,45 +1,151 @@
 {% extends "core/dashboard_base.html.j2" %}
+{% comment %}
+Template context:
+sbom: SBOM object with metadata and data
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+{% endcomment %}
 {% load widget_tweaks %}
 {% load static %}
-{% block title %}sbomify SBOM Details{% endblock %}
+{% load django_vite %}
+{% block title %}SBOM: {{ sbom.name }}{% endblock %}
 {% block content %}
-    <h3>SBOM: {{ sbom.name }}</h3>
-    <div class="row">
-        <div class="col-12 col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Metadata</h5>
-                </div>
-                <div class="card-body">
-                    <p>
-                        Uploaded on: {{ sbom.created_at }}
-                        <br />
-                        Source: {{ sbom.source_display }}
-                    </p>
-                </div>
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="fas fa-file-code me-3 text-primary"></i>
+                    {{ sbom.name }}
+                </h1>
             </div>
         </div>
-        <div class="col-12 col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Comment</h5>
-                </div>
-                <div class="card-body">{{ sbom.data.creationInfo.comment }}</div>
-            </div>
-        </div>
-        <div class="col-12 col-md-6 col-lg-4">
-            <!--<div class="float-end pt-3" style="width: 150px; height: 100px; background-color:grey; color:azure; text-align:center; text-weight: bold">
-        LOGO<br />
-        Placeholder
-      </div> -->
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-file-alt me-2 text-primary"></i>
+                <span class="meta-label">SBOM</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <span class="meta-label">Format:</span>
+                <span class="badge bg-success-subtle text-success ms-1">
+                    {% if sbom.format == 'cyclonedx' %}
+                        CycloneDX
+                    {% elif sbom.format == 'spdx' %}
+                        SPDX
+                    {% else %}
+                        {{ sbom.format|upper }}
+                    {% endif %}
+                    {{ sbom.format_version }}
+                </span>
+            </span>
+            {% if sbom.version %}
+                <span class="meta-divider">•</span>
+                <span class="meta-item">
+                    <span class="meta-label">Version:</span>
+                    <span class="ms-1">{{ sbom.version }}</span>
+                </span>
+            {% endif %}
         </div>
     </div>
-    <a href="{% url 'sboms:sbom_download' sbom.id %}"
-       class="btn btn-success float-end">
-        <i class="fas fa-download"></i> Download SBOM
-    </a>
-    <a href="{% url 'sboms:sbom_vulnerabilities' sbom.id %}"
-       class="btn btn-warning float-end me-2">
-        <i class="fas fa-shield-alt"></i> View Vulnerabilities
-    </a>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+    <div class="row">
+        <div class="col-12 col-lg-8">
+            <div class="row">
+                <div class="col-12 col-md-6">
+                    <div class="vc-sbom-metadata-card"
+                         data-sbom-id="{{ sbom.id }}"
+                         data-sbom-name="{{ sbom.name }}"
+                         data-created-at="{{ sbom.created_at }}"
+                         data-source-display="{{ sbom.source_display }}"
+                         data-format="{{ sbom.format }}"
+                         data-format-version="{{ sbom.format_version }}"
+                         data-version="{{ sbom.version|default:'' }}"></div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="vc-sbom-comment-card"
+                         data-comment="{{ sbom.data.creationInfo.comment|default:'' }}"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

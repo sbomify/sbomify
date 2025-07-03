@@ -43,6 +43,14 @@ class ErrorResponse(BaseModel):
         use_enum_values = True
 
 
+# Component type choices matching the model
+class ComponentType(str, Enum):
+    """Available component types."""
+
+    SBOM = "sbom"
+    DOCUMENT = "document"
+
+
 # Product/Project/Component schemas moved from sboms
 class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
@@ -128,12 +136,14 @@ class ComponentSummarySchema(BaseModel):
     id: str
     name: str
     is_public: bool
+    component_type: ComponentType
 
 
 class ComponentCreateSchema(BaseModel):
     """Schema for creating a new Component."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    component_type: ComponentType = ComponentType.SBOM
     metadata: dict = Field(default_factory=dict)
 
 
@@ -141,6 +151,7 @@ class ComponentUpdateSchema(BaseModel):
     """Schema for updating a Component."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    component_type: ComponentType = ComponentType.SBOM
     is_public: bool = False
     metadata: dict = Field(default_factory=dict)
 
@@ -149,6 +160,7 @@ class ComponentPatchSchema(BaseModel):
     """Schema for partially updating a Component using PATCH."""
 
     name: str | None = Field(None, max_length=255, min_length=1)
+    component_type: ComponentType | None = None
     is_public: bool | None = None
     metadata: dict | None = None
 
@@ -161,6 +173,7 @@ class ComponentResponseSchema(BaseModel):
     team_id: str
     created_at: datetime
     is_public: bool
+    component_type: ComponentType
     metadata: dict
     sbom_count: int | None = None
 

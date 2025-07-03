@@ -232,9 +232,14 @@ def test_details_page_only_accessible_when_logged_in(
 
     # Test authenticated access
     for uri in uris:
-        response: HttpResponse = client.get(uri)
+        response: HttpResponse = client.get(uri, follow=True)
         assert response.status_code == 200
-        assert quote(response.request["PATH_INFO"]) == uri
+        # For the SBOM redirect case, check that we end up at the component detailed page
+        if "sbom" in uri:
+            assert "component" in response.request["PATH_INFO"]
+            assert "detailed" in response.request["PATH_INFO"]
+        else:
+            assert quote(response.request["PATH_INFO"]) == uri
 
 
 @pytest.mark.django_db

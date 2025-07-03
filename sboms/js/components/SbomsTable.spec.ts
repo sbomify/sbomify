@@ -298,6 +298,29 @@ describe('SbomsTable Business Logic', () => {
       expect(urls.download).toBe('/sboms/test-sbom-123/download/')
       expect(urls.vulnerabilities).toBe('/sboms/test-sbom-123/vulnerabilities/')
     })
+
+    test('should generate correct URLs for public vs private views', () => {
+      const getSbomDetailUrl = (sbomId: string, isPublic: boolean): string => {
+        if (isPublic) {
+          return `/public/sbom/${sbomId}/`
+        }
+        return `/sbom/${sbomId}/`
+      }
+
+      const getSbomDownloadUrl = (sbomId: string): string => {
+        return `/sbom/download/${sbomId}`
+      }
+
+      const sbomId = 'test-sbom-456'
+
+      // Test private URLs
+      expect(getSbomDetailUrl(sbomId, false)).toBe('/sbom/test-sbom-456/')
+      expect(getSbomDownloadUrl(sbomId)).toBe('/sbom/download/test-sbom-456')
+
+      // Test public URLs
+      expect(getSbomDetailUrl(sbomId, true)).toBe('/public/sbom/test-sbom-456/')
+      expect(getSbomDownloadUrl(sbomId)).toBe('/sbom/download/test-sbom-456') // Same for both
+    })
   })
 
   describe('Vulnerability Button State', () => {

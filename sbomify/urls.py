@@ -28,6 +28,7 @@ urlpatterns = [
     path("", include("core.urls")),
     path("workspace/", include("teams.urls")),
     path("", include("sboms.urls")),
+    path("", include("documents.urls")),
     path("billing/", include("billing.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string

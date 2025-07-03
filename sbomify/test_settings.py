@@ -62,6 +62,10 @@ AWS_SBOMS_ACCESS_KEY_ID = "test-key"  # nosec B105
 AWS_SBOMS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
 AWS_SBOMS_STORAGE_BUCKET_NAME = "test-sboms-bucket"
 AWS_SBOMS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-sboms-bucket"
+AWS_DOCUMENTS_ACCESS_KEY_ID = "test-key"  # nosec B105
+AWS_DOCUMENTS_SECRET_ACCESS_KEY = "test-secret"  # nosec B105
+AWS_DOCUMENTS_STORAGE_BUCKET_NAME = "test-documents-bucket"
+AWS_DOCUMENTS_STORAGE_BUCKET_URL = "http://test-s3.localhost/test-documents-bucket"
 
 APP_BASE_URL = "http://localhost:8001"
 

@@ -40,6 +40,11 @@ APP_BASE_URL - Base URL for the application
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
+                <i class="fas fa-tag me-2 text-info"></i>
+                <span class="meta-label">{{ component.get_component_type_display }}</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
                 <span class="vc-copyable-value meta-id"
                       data-value="{{ component.id }}"
                       title="Component ID: {{ component.id }} (click to copy)">{{ component.id }}</span>
@@ -141,9 +146,11 @@ APP_BASE_URL - Base URL for the application
                  data-item-id="{{ component.id }}"></div>
         </div>
     </div>
-    <div class="vc-component-meta-info"
-         data-component-id="{{ component.id }}"
-         {% if has_crud_permissions %}data-allow-edit{% endif %}></div>
+    {% if component.component_type == 'sbom' %}
+        <div class="vc-component-meta-info"
+             data-component-id="{{ component.id }}"
+             {% if has_crud_permissions %}data-allow-edit{% endif %}></div>
+    {% endif %}
     {% if has_crud_permissions %}
         <div class="row">
             <div class="col-12">
@@ -153,21 +160,40 @@ APP_BASE_URL - Base URL for the application
             </div>
         </div>
     {% endif %}
-    {% if has_crud_permissions %}
+    {% if component.component_type == 'sbom' %}
+        {% if has_crud_permissions %}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="vc-sbom-upload" data-component-id="{{ component.id }}"></div>
+                </div>
+            </div>
+        {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-sbom-upload" data-component-id="{{ component.id }}"></div>
+                {{ sboms_data|json_script:"sboms-data" }}
+                <div class="vc-sboms-table"
+                     data-sboms-data-element-id="sboms-data"
+                     data-component-id="{{ component.id }}"
+                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            </div>
+        </div>
+    {% elif component.component_type == 'document' %}
+        {% if has_crud_permissions %}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="vc-document-upload" data-component-id="{{ component.id }}"></div>
+                </div>
+            </div>
+        {% endif %}
+        <div class="row mt-3">
+            <div class="col-12">
+                {{ documents_data|json_script:"documents-data" }}
+                <div class="vc-documents-table"
+                     data-documents-data-element-id="documents-data"
+                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
             </div>
         </div>
     {% endif %}
-    <div class="row mt-3">
-        <div class="col-12">
-            {{ sboms_data|json_script:"sboms-data" }}
-            <div class="vc-sboms-table"
-                 data-sboms-data-element-id="sboms-data"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
-        </div>
-    </div>
     {% if has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
@@ -184,5 +210,9 @@ APP_BASE_URL - Base URL for the application
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
+    {% if component.component_type == 'sbom' %}
+        {% vite_asset 'sboms/js/main.ts' %}
+    {% elif component.component_type == 'document' %}
+        {% vite_asset 'documents/js/main.ts' %}
+    {% endif %}
 {% endblock %}
