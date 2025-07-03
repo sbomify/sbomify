@@ -7,7 +7,7 @@
     storage-key="document-upload"
   >
     <template #info-notice>
-      <strong>Document Upload:</strong> Upload documents like specifications, manuals, reports, or any file related to your component. You can specify a version and description during upload.
+      <strong>Document Upload:</strong> Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload.
     </template>
 
     <div class="mb-3">
@@ -34,6 +34,7 @@
         <option value="readme">README</option>
         <option value="changelog">Changelog</option>
         <option value="documentation">Documentation</option>
+        <option value="compliance">Compliance</option>
         <option value="other">Other</option>
       </select>
     </div>
@@ -50,13 +51,13 @@
     </div>
 
     <div class="upload-area"
-         :class="{ 'drag-over': isDragOver, 'uploading': isUploading }"
+         :class="{ 'drag-over': isDragOver, 'file-selected': selectedFile && !isUploading }"
          @drop="handleDrop"
          @dragover.prevent="isDragOver = true"
          @dragleave="isDragOver = false"
          @dragenter.prevent>
 
-      <div v-if="!isUploading" class="upload-content">
+      <div v-if="!selectedFile && !isUploading" class="upload-content">
         <div class="upload-icon">
           <i class="fas fa-cloud-upload-alt"></i>
         </div>
@@ -76,6 +77,24 @@
         </p>
       </div>
 
+      <div v-if="selectedFile && !isUploading" class="file-selected-content">
+        <div class="file-icon">
+          <i class="fas fa-file-alt"></i>
+        </div>
+        <div class="file-info">
+          <p class="file-name">{{ selectedFile.name }}</p>
+          <p class="file-size">{{ formatFileSize(selectedFile.size) }}</p>
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          @click="clearSelectedFile"
+          title="Remove file"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
       <div v-if="isUploading" class="upload-progress">
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">Uploading...</span>
@@ -83,11 +102,36 @@
         <p class="mt-2">Uploading and processing document...</p>
       </div>
     </div>
+
+    <div v-if="selectedFile && !isUploading" class="d-flex justify-content-between align-items-center mt-3">
+      <div class="text-muted small">
+        <i class="fas fa-info-circle"></i>
+        Review your document details and click "Save Document" to upload.
+      </div>
+      <div>
+        <button
+          type="button"
+          class="btn btn-outline-secondary me-2"
+          @click="clearSelectedFile"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          @click="saveDocument"
+          :disabled="!isFormValid"
+        >
+          <i class="fas fa-save me-1"></i>
+          Save Document
+        </button>
+      </div>
+    </div>
   </StandardCard>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import { showSuccess, showError } from '../../../core/js/alerts'
 
@@ -99,10 +143,23 @@ const props = defineProps<Props>()
 
 const isDragOver = ref(false)
 const isUploading = ref(false)
+const selectedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement>()
 const documentVersion = ref('1.0')
 const documentType = ref('')
 const documentDescription = ref('')
+
+const isFormValid = computed(() => {
+  return selectedFile.value && documentVersion.value.trim().length > 0
+})
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
 
 const validateFile = (file: File): string | null => {
   // Check file size (max 50MB)
@@ -114,8 +171,20 @@ const validateFile = (file: File): string | null => {
   return null
 }
 
-const uploadFile = async (file: File): Promise<void> => {
-  const validationError = validateFile(file)
+const clearSelectedFile = (): void => {
+  selectedFile.value = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const saveDocument = async (): Promise<void> => {
+  if (!selectedFile.value) {
+    showError('Please select a file to upload')
+    return
+  }
+
+  const validationError = validateFile(selectedFile.value)
   if (validationError) {
     showError(validationError)
     return
@@ -130,7 +199,7 @@ const uploadFile = async (file: File): Promise<void> => {
 
   try {
     const formData = new FormData()
-    formData.append('document_file', file)
+    formData.append('document_file', selectedFile.value)
     formData.append('component_id', props.componentId)
     formData.append('version', documentVersion.value.trim())
     if (documentType.value) {
@@ -156,6 +225,7 @@ const uploadFile = async (file: File): Promise<void> => {
       documentVersion.value = '1.0'
       documentType.value = ''
       documentDescription.value = ''
+      selectedFile.value = null
       if (fileInput.value) {
         fileInput.value.value = ''
       }
@@ -179,7 +249,13 @@ const handleDrop = (event: DragEvent): void => {
 
   const files = event.dataTransfer?.files
   if (files && files.length > 0) {
-    uploadFile(files[0])
+    const file = files[0]
+    const validationError = validateFile(file)
+    if (validationError) {
+      showError(validationError)
+      return
+    }
+    selectedFile.value = file
   }
 }
 
@@ -187,7 +263,13 @@ const handleFileSelect = (event: Event): void => {
   const target = event.target as HTMLInputElement
   const files = target.files
   if (files && files.length > 0) {
-    uploadFile(files[0])
+    const file = files[0]
+    const validationError = validateFile(file)
+    if (validationError) {
+      showError(validationError)
+      return
+    }
+    selectedFile.value = file
   }
 }
 
@@ -220,6 +302,12 @@ const getCsrfToken = (): string => {
 .upload-area.drag-over {
   border-color: #3b82f6;
   background-color: #eff6ff;
+}
+
+.upload-area.file-selected {
+  border-color: #22c55e;
+  background-color: #f0fdf4;
+  cursor: default;
 }
 
 .upload-area.uploading {
@@ -256,6 +344,38 @@ const getCsrfToken = (): string => {
 .upload-hint {
   font-size: 0.875rem;
   color: #94a3b8;
+  margin-bottom: 0;
+}
+
+.file-selected-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.file-icon {
+  font-size: 2rem;
+  color: #22c55e;
+}
+
+.file-info {
+  flex-grow: 1;
+  text-align: left;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.file-size {
+  font-size: 0.875rem;
+  color: #6b7280;
   margin-bottom: 0;
 }
 

@@ -123,6 +123,7 @@
                   <option value="readme">README</option>
                   <option value="changelog">Changelog</option>
                   <option value="documentation">Documentation</option>
+                  <option value="compliance">Compliance</option>
                   <option value="other">Other</option>
                 </select>
               </div>

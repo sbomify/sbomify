@@ -26,7 +26,7 @@ class Document(models.Model):
 
     # Additional document-specific fields
     document_type = models.CharField(
-        max_length=100, blank=True, help_text="Type of document (e.g., specification, manual, report)"
+        max_length=100, blank=True, help_text="Type of document (e.g., specification, manual, report, compliance)"
     )
     description = models.TextField(blank=True)
     content_type = models.CharField(max_length=100, blank=True)  # MIME type

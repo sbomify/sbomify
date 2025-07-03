@@ -22,7 +22,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ### Document Management
 
-- Upload and manage document artifacts (specifications, manuals, reports, etc.)
+- Upload and manage document artifacts (specifications, manuals, reports, compliance documents, etc.)
 - Associate documents with software components
 - Version control for documents
 - Secure storage with configurable S3 buckets
@@ -283,7 +283,7 @@ The application uses separate S3 buckets for different types of content:
 
 - **Media Bucket**: User avatars, team logos, and other media assets
 - **SBOMs Bucket**: Software Bill of Materials files
-- **Documents Bucket**: Document artifacts (specifications, manuals, reports, etc.)
+- **Documents Bucket**: Document artifacts (specifications, manuals, reports, compliance documents, etc.)
   - If not configured separately, documents will use the SBOMs bucket automatically
   - For production, it's recommended to use a separate bucket for better organization and access control
 
