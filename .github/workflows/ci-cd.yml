@@ -257,6 +257,7 @@ jobs:
           COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
           LOCK_FILE: 'poetry.lock'
           AUGMENT: true
+          ENRICH: true
           UPLOAD: true
 
       - name: Upload frontend SBOM
@@ -267,5 +268,6 @@ jobs:
           COMPONENT_NAME: 'sbomify-frontend'
           COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
           LOCK_FILE: 'bun.lock'
+          ENRICH: true
           AUGMENT: true
           UPLOAD: true
