@@ -192,10 +192,12 @@
 
 /* Public Header */
 .public-header {
-    background: var(--brand-color);
-    padding: 1.5rem 0 3rem 0;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+    padding: 2rem 0;
     position: relative;
     overflow: hidden;
+    border-bottom: 1px solid var(--border-color);
+    border-top: 3px solid var(--brand-color);
 }
 
 .public-header::before {
@@ -205,19 +207,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.05) 100%);
-    pointer-events: none;
-}
-
-.public-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 4rem;
-    background: linear-gradient(180deg, transparent 0%, var(--bg-secondary) 100%);
-    transform: translateY(50%);
+    background: linear-gradient(135deg, transparent 0%, rgba(var(--brand-color-rgb), 0.03) 100%);
     pointer-events: none;
 }
 
@@ -242,14 +232,14 @@
     max-width: 12rem;
     width: auto;
     object-fit: contain;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
 }
 
 .brand-name {
     font-size: 1.5rem;
     font-weight: 600;
-    color: var(--text-primary);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    color: var(--brand-color);
+    text-shadow: none;
 }
 
 /* Main Content */
@@ -297,7 +287,7 @@
 
 .footer-brand-name {
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--brand-color);
 }
 
 .footer-powered-by a {
@@ -314,7 +304,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
     .public-header {
-        padding: 1rem 0;
+        padding: 1.5rem 0;
     }
 
     .public-header-container,
@@ -325,11 +315,12 @@
 
     .brand-section {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
 
     .brand-logo {
         height: 2.5rem;
+        max-width: 10rem;
     }
 
     .brand-name {
@@ -339,6 +330,35 @@
     .footer-content {
         flex-direction: column;
         text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .public-header {
+        padding: 1rem 0;
+    }
+
+    .public-header-container,
+    .public-content-container,
+    .public-footer-container {
+        padding: 0 0.75rem;
+    }
+
+    .brand-section {
+        gap: 0.5rem;
+    }
+
+    .brand-logo {
+        height: 2rem;
+        max-width: 8rem;
+    }
+
+    .brand-name {
+        font-size: 1.125rem;
+    }
+
+    .public-content-container {
+        padding: 1.5rem 0.75rem;
     }
 }
 

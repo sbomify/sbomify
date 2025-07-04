@@ -402,17 +402,11 @@ const handleAction = (action: QuickAction) => {
   flex: 1;
   position: relative;
   background-color: var(--bg-secondary);
-  margin-top: -2rem;
+  margin-top: 0;
 }
 
 .content-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 6rem;
-  background: linear-gradient(180deg, rgba(var(--brand-color-rgb), 0.08) 0%, transparent 100%);
-  border-radius: 0 0 2rem 2rem;
+  display: none;
 }
 
 .content-container {
@@ -440,6 +434,7 @@ const handleAction = (action: QuickAction) => {
   padding: 2rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02);
   border: 1px solid rgba(var(--brand-color-rgb), 0.1);
+  border-left: 4px solid var(--brand-color);
 }
 
 .page-header-content {
