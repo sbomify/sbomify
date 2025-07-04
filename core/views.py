@@ -243,11 +243,14 @@ def product_details_public(request: HttpRequest, product_id: str) -> HttpRespons
     if not product.is_public:
         return error_response(request, HttpResponseNotFound("Product not found"))
 
+    # Check if there are any SBOMs available for download
+    has_downloadable_content = SBOM.objects.filter(component__projects__products=product).exists()
+
     branding_info = BrandingInfo(**product.team.branding_info)
     return render(
         request,
         "core/product_details_public.html.j2",
-        {"product": product, "brand": branding_info},
+        {"product": product, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
     )
 
 
@@ -300,12 +303,15 @@ def project_details_public(request: HttpRequest, project_id: str) -> HttpRespons
     if not project.is_public:
         return error_response(request, HttpResponseNotFound("Project not found"))
 
+    # Check if there are any SBOMs available for download
+    has_downloadable_content = SBOM.objects.filter(component__projects=project).exists()
+
     branding_info = BrandingInfo(**project.team.branding_info)
 
     return render(
         request,
         "core/project_details_public.html.j2",
-        {"project": project, "brand": branding_info},
+        {"project": project, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
     )
 
 
@@ -355,16 +361,16 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    # Verify access to project
     if not component.is_public:
-        return error_response(request, HttpResponseNotFound("Component not found"))
+        return error_response(request, HttpResponseForbidden("Component is not public"))
 
-    branding_info = BrandingInfo(**component.team.branding_info)
     context = {
         "component": component,
-        "brand": branding_info,
+        "brand": BrandingInfo(**component.team.branding_info),
+        "APP_BASE_URL": settings.APP_BASE_URL,
     }
 
+    # Add component-specific data based on type
     if component.component_type == Component.ComponentType.SBOM:
         # Handle SBOM components
         sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
@@ -402,11 +408,11 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                     }
                 )
             # No messages.error for public view, just log or fail silently
-            # logger.warning("Could not connect to Redis in public component view.")
+            logger.warning("Could not connect to Redis in public component view.")
         context["sboms_data"] = sboms_with_vuln_status
 
     elif component.component_type == Component.ComponentType.DOCUMENT:
-        # Handle document components
+        # Handle Document components
         documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
         documents_data = []
         for document_item in documents_queryset:
@@ -415,10 +421,10 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                     "document": {
                         "id": str(document_item.id),
                         "name": document_item.name,
-                        "version": document_item.version,
                         "document_type": document_item.document_type,
                         "content_type": document_item.content_type,
                         "file_size": document_item.file_size,
+                        "version": document_item.version,
                         "created_at": document_item.created_at.isoformat(),
                     }
                 }
@@ -557,7 +563,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
 
 def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse:
     """
-    Download a zip file containing the SBOMs for all components in a project.
+    Download the aggregated SBOM file for all components in a project.
     """
     try:
         project = Project.objects.get(pk=project_id)
@@ -569,17 +575,17 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_zip_path = get_project_sbom_package(project, Path(temp_dir))
+        sbom_path = get_project_sbom_package(project, Path(temp_dir))
 
-        response = HttpResponse(open(sbom_zip_path, "rb").read(), content_type="application/zip")
-        response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.zip"
+        response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+        response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
 
         return response
 
 
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
     """
-    Download a zip file containing the SBOMs for all projects in a product.
+    Download the aggregated SBOM file for all projects in a product.
     """
     try:
         product = Product.objects.get(pk=product_id)
@@ -591,10 +597,10 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_zip_path = get_product_sbom_package(product, Path(temp_dir))
+        sbom_path = get_product_sbom_package(product, Path(temp_dir))
 
-        response = HttpResponse(open(sbom_zip_path, "rb").read(), content_type="application/zip")
-        response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.zip"
+        response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+        response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
 
         return response
 

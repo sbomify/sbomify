@@ -6,6 +6,7 @@ from django.shortcuts import render
 from core.errors import error_response
 from core.object_store import S3Client
 from core.utils import verify_item_access
+from teams.schemas import BrandingInfo
 
 from .models import Document
 
@@ -36,10 +37,12 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
     if not document.public_access_allowed:
         return error_response(request, HttpResponseForbidden("Document is not public"))
 
+    branding_info = BrandingInfo(**document.component.team.branding_info)
+
     return render(
         request,
         "documents/document_details_public.html.j2",
-        {"document": document, "APP_BASE_URL": settings.APP_BASE_URL},
+        {"document": document, "brand": branding_info, "APP_BASE_URL": settings.APP_BASE_URL},
     )
 
 

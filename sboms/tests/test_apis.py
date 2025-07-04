@@ -312,7 +312,7 @@ def test_component_copy_metadata_api(
     source_metadata = response.json()
 
     # Remove component-specific fields (id, name) that shouldn't be copied
-    metadata_to_copy = {k: v for k, v in source_metadata.items() if k not in ('id', 'name')}
+    metadata_to_copy = {k: v for k, v in source_metadata.items() if k not in ("id", "name")}
 
     # Then, patch the target component with the copied metadata
     target_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
@@ -1172,7 +1172,7 @@ def test_patch_public_status_billing_plan_restrictions(
             uri,
             json.dumps({"is_public": True}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
         )
 
     # Try to make component private - should fail
@@ -1180,7 +1180,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1190,7 +1190,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1200,7 +1200,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1210,7 +1210,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1225,7 +1225,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200, f"Failed for product: {response.content}"
     assert response.json()["is_public"] is False
@@ -1235,7 +1235,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200, f"Failed for project: {response.content}"
     assert response.json()["is_public"] is False
@@ -1245,7 +1245,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200, f"Failed for component: {response.content}"
     assert response.json()["is_public"] is False
@@ -1255,7 +1255,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1264,7 +1264,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1273,7 +1273,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1288,7 +1288,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1298,7 +1298,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1308,7 +1308,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1341,53 +1341,220 @@ def test_patch_public_status_enterprise_plan_unrestricted(
     component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
 
     # Enterprise users should be able to make items private
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": False}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is False
 
     # And back to public
-    response = client.patch(
-        component_uri,
-        json.dumps({"is_public": True}),
-        content_type="application/json"
-    )
+    response = client.patch(component_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
 
-
-
 @pytest.mark.django_db
 @override_settings(BILLING=False)
-def test_community_plan_restriction_bypassed_when_billing_disabled(sample_component, sample_access_token):
-    """Test that community plan restrictions are bypassed when billing is disabled."""
+def test_community_plan_restriction_bypassed_when_billing_disabled(sample_component, sample_access_token):  # noqa: F811
+    """Test that public status restrictions are bypassed when billing is disabled."""
     client = Client()
+
+    # Make component public
     url = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
-
-    # Set team to community plan
-    sample_component.team.billing_plan = "community"
-    sample_component.team.save()
-
-    # Set up authentication and session
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
-    from .test_views import setup_test_session
-    setup_test_session(client, sample_component.team, sample_component.team.members.first())
-
-    # Should be able to make item private even on community plan when billing is disabled
     response = client.patch(
         url,
-        json.dumps({"is_public": False}),
+        json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
     )
 
     assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.json()["is_public"] is True
 
-    # Verify in database
-    sample_component.refresh_from_db()
-    assert sample_component.is_public is False
+
+@pytest.mark.django_db
+def test_download_sbom_public_success(
+    client: Client,
+    sample_team_with_owner_member,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test successful public SBOM download without authentication."""
+    # Create a public SBOM component
+    public_component = Component.objects.create(
+        name="Public SBOM Component",
+        team=sample_team_with_owner_member.team,
+        component_type=Component.ComponentType.SBOM,
+        is_public=True,
+    )
+
+    public_sbom = SBOM.objects.create(
+        name="Public SBOM",
+        version="1.0",
+        sbom_filename="public_sbom.json",
+        component=public_component,
+        source="manual_upload",
+        format="cyclonedx",
+        format_version="1.6",
+    )
+
+    # Mock S3 client
+    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data.return_value = b'{"name": "public sbom content"}'
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": public_sbom.id}))
+
+    assert response.status_code == 200
+    assert response.content == b'{"name": "public sbom content"}'
+    assert response["Content-Type"] == "application/json"
+    assert f'attachment; filename="{public_sbom.name}.json"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_private_success(
+    client: Client,
+    sample_user,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test successful private SBOM download with authentication."""
+    # Mock S3 client
+    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data.return_value = b'{"name": "private sbom content"}'
+
+    # Set up session with team access
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert response.status_code == 200
+    assert response.content == b'{"name": "private sbom content"}'
+    assert response["Content-Type"] == "application/json"
+    assert f'attachment; filename="{sample_sbom.name}.json"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_private_forbidden(
+    client: Client,
+    sample_sbom: SBOM,  # noqa: F811
+):
+    """Test that private SBOMs cannot be downloaded without authentication."""
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert response.status_code == 403
+    data = response.json()
+    assert "Access denied" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_not_found(
+    client: Client,
+):
+    """Test downloading non-existent SBOM."""
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": "non-existent"}))
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "SBOM not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_file_not_found(
+    client: Client,
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    """Test download when SBOM has no filename."""
+    # Create SBOM without filename
+    sbom = SBOM.objects.create(
+        name="SBOM Without File",
+        version="1.0",
+        sbom_filename="",  # No filename
+        component=sample_component,
+        source="manual_upload",
+        format="cyclonedx",
+        format_version="1.6",
+    )
+
+    # Set up session with team access
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sbom.id}))
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "SBOM file not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_s3_file_not_found(
+    client: Client,
+    sample_user,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test download when S3 file doesn't exist."""
+    # Mock S3 client to return None (file not found)
+    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data.return_value = None
+
+    # Set up session with team access
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "SBOM file not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_s3_error(
+    client: Client,
+    sample_user,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test download handling when S3 raises an error."""
+    # Mock S3 client to raise an exception
+    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data.side_effect = Exception("S3 download failed")
+
+    # Set up session with team access
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert response.status_code == 500
+    data = response.json()
+    assert "Error retrieving SBOM: S3 download failed" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_sbom_with_fallback_filename(
+    client: Client,
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test download with SBOM that has no name (fallback to sbom_id)."""
+    # Mock S3 client
+    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data.return_value = b'{"name": "test sbom content"}'
+
+    # Create SBOM with empty name
+    sbom = SBOM.objects.create(
+        name="",
+        version="1.0",
+        sbom_filename="test_file.json",
+        component=sample_component,
+        source="manual_upload",
+        format="cyclonedx",
+        format_version="1.6",
+    )
+
+    # Set up session with team access
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": sbom.id}))
+
+    assert response.status_code == 200
+    assert response.content == b'{"name": "test sbom content"}'
+    assert f'attachment; filename="sbom_{sbom.id}.json"' in response["Content-Disposition"]

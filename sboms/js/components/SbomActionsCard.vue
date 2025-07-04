@@ -49,7 +49,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const downloadUrl = computed(() => `/sbom/download/${props.sbomId}`)
+const downloadUrl = computed(() => `/api/v1/sboms/${props.sbomId}/download`)
 const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities`)
 </script>
 
