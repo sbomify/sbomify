@@ -192,8 +192,8 @@ import PublicProductProjects from './PublicProductProjects.vue'
 import PublicProjectComponents from './PublicProjectComponents.vue'
 import PublicDownloadCard from './PublicDownloadCard.vue'
 import PublicCard from './PublicCard.vue'
-import DocumentsTable from '../../../documents/js/components/DocumentsTable.vue'
-import SbomsTable from '../../../sboms/js/components/SbomsTable.vue'
+import DocumentsTable from '@/documents/js/components/DocumentsTable.vue'
+import SbomsTable from '@/sboms/js/components/SbomsTable.vue'
 
 interface QuickAction {
   id: string
