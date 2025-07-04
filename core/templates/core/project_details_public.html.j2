@@ -1,136 +1,41 @@
-{% extends "core/base.html.j2" %}
+{% extends "core/public_base.html.j2" %}
 {% comment %}
 Template context:
 project: Project object
+brand: BrandingInfo object
 {% endcomment %}
 {% load widget_tweaks %}
 {% load django_vite %}
-{% block title %}Project: {{ project.name }}{% endblock %}
-{% block styles %}
-    <style>
-    .brand-logo {
-        height: 3rem;
-        max-width: 12rem;
-        width: auto;
-        object-fit: contain;
-    }
-
-    .credits-logo {
-        height: 1.25rem;
-        width: auto;
-        max-width: 5rem;
-        object-fit: contain;
-    }
-
-    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-        .brand-logo {
-            height: 3.25rem;
-            max-width: 13rem;
-        }
-        .credits-logo {
-            height: 1.375rem;
-            max-width: 5.5rem;
-        }
-    }
-    </style>
+{% load breadcrumb_tags %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block meta_description %}
+    {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
 {% endblock %}
-{% block main %}
-    <main class="content public-page mb-4">
-        <div class="brand"
-             style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}">
-            {% if brand.brand_image %}
-                <img src="{{ brand.brand_image }}"
-                     alt="{{ brand.name }}"
-                     class="brand-logo"
-                     width="192"
-                     height="48">
-            {% else %}
-                <img src="/static/img/sbomify.svg"
-                     alt="sbomify logo"
-                     class="brand-logo"
-                     width="192"
-                     height="48">
-            {% endif %}
-        </div>
-        <div class="pp-content-container">
-            <div class="pp-content-bg"
-                 style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}"></div>
-            <div class="pp-content">
-                <div class="page-header mb-4">
-                    <div class="d-flex align-items-center gap-3 mb-2">
-                        <h1 class="page-title mb-0"
-                            style="color: {{ brand.accent_color|default:'#7c8b9d' }}">{{ project.name }}</h1>
-                    </div>
-                    <div class="text-muted">
-                        <small class="me-3">
-                            <i class="fas fa-project-diagram me-1"></i>Project
-                        </small>
-                        <small>
-                            <i class="fas fa-fingerprint me-1"></i>
-                            <span class="vc-copyable-value" data-value="{{ project.id }}">{{ project.id }}</span>
-                        </small>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-12 col-lg-6">
-                        <div class="vc-dashboard-stats"
-                             data-item-type="project"
-                             data-item-id="{{ project.id }}"></div>
-                    </div>
-                    <div class="col-12 col-lg-6">
-                        <div class="row pp-main">
-                            <div class="col-12">
-                                <h4 style="color: {{ brand.accent_color|default:'#7c8b9d' }};">Project Components</h4>
-                                <div class="card data-table">
-                                    <div class="card-body">
-                                        {% if project.components.all.count > 0 %}
-                                            <p>Components that are part of this project.</p>
-                                            <table class="table">
-                                                <tr>
-                                                    <th scope="col">Name</th>
-                                                </tr>
-                                                {% for component in project.components.all %}
-                                                    <tr>
-                                                        <td>
-                                                            {% if component.is_public %}
-                                                                <a href="{% url 'core:component_details_public' component.id %}">{{ component.name }}</a>
-                                                            {% else %}
-                                                                {{ component.name }}
-                                                            {% endif %}
-                                                        </td>
-                                                    </tr>
-                                                {% endfor %}
-                                            </table>
-                                        {% else %}
-                                            <p class="p-3 mb-0">No components added to the project yet.</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 offset-md-3">
-                        <a class="btn btn-outline-primary w-100"
-                           href="{% url 'core:sbom_download_project' project.id %}">
-                            <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="credits">
-            Powered by <a href="https://sbomify.com">
-            <img src="/static/img/sbomify.svg"
-                 alt="sbomify logo"
-                 class="credits-logo"
-                 width="80"
-                 height="20" />
-        </a>
+{% block breadcrumb %}
+    {% breadcrumb project 'project' %}
+{% endblock %}
+{% block content %}
+    <div class="vc-public-page-layout"
+         data-title="{{ project.name }}"
+         data-title-icon="fas fa-project-diagram"
+         data-page-type="project"
+         data-item-id="{{ project.id }}"
+         {% if has_downloadable_content %} data-download-url="/api/v1/projects/{{ project.id }}/download" data-download-title="Download Project SBOM" data-download-button-text="Download SBOM" data-download-description="Download aggregated SBOM for this project" data-download-icon="fas fa-download" {% endif %}>
+        <template data-slot="subtitle">
+            <span class="meta-badge meta-badge--primary">
+                <i class="fas fa-project-diagram"></i>
+                Project
+            </span>
+            <span class="meta-badge meta-badge--secondary">
+                <i class="fas fa-fingerprint"></i>
+                <span class="vc-copyable-value"
+                      data-value="{{ project.id }}"
+                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+            </span>
+        </template>
     </div>
-</main>
 {% endblock %}
 {% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
     {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

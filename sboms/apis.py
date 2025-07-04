@@ -2,7 +2,7 @@ import logging
 
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import File, Query, Router, UploadedFile
 from ninja.decorators import decorate_view
@@ -275,6 +275,45 @@ def get_cyclonedx_component_metadata(
 # Moved dashboard summary endpoint to core API at /api/v1/dashboard/summary
 
 
+@router.get(
+    "/{sbom_id}/download",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public SBOMs
+)
+def download_sbom(request: HttpRequest, sbom_id: str):
+    """Download an SBOM file."""
+    try:
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
+
+    # Check access permissions
+    if sbom.public_access_allowed or (
+        request.user.is_authenticated and verify_item_access(request, sbom.component, ["guest", "owner", "admin"])
+    ):
+        if not sbom.sbom_filename:
+            return 404, {"detail": "SBOM file not found"}
+
+        try:
+            s3 = S3Client("SBOMS")
+            sbom_data = s3.get_sbom_data(sbom.sbom_filename)
+
+            if sbom_data:
+                response = HttpResponse(sbom_data, content_type="application/json")
+                # Use SBOM name for filename
+                filename = f"{sbom.name}.json" if sbom.name else f"sbom_{sbom.id}.json"
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+            else:
+                return 404, {"detail": "SBOM file not found"}
+
+        except Exception as e:
+            log.error(f"Error retrieving SBOM {sbom_id}: {e}")
+            return 500, {"detail": f"Error retrieving SBOM: {str(e)}"}
+    else:
+        return 403, {"detail": "Access denied"}
+
+
 @router.post(
     "/upload-file/{component_id}",
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
@@ -440,6 +479,7 @@ router.get(
     },
     exclude_none=True,
     auth=None,
+    operation_id="sboms_get_component_metadata",
 )(decorate_view(optional_auth)(get_component_metadata))
 
 router.patch(
@@ -450,6 +490,7 @@ router.patch(
         403: ErrorResponse,
         404: ErrorResponse,
     },
+    operation_id="sboms_patch_component_metadata",
 )(patch_component_metadata)
 
 

@@ -24,7 +24,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const downloadUrl = computed(() => {
-  return `/sbom/download-project/${props.projectId}/`
+      return `/api/v1/projects/${props.projectId}/download`
 })
 </script>
 

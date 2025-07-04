@@ -227,10 +227,10 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                         </h4>
                     </div>
                     <div class="card-body text-center">
-                        <p class="text-muted mb-3">Download all SBOMs from projects in this product as a ZIP archive</p>
+                        <p class="text-muted mb-3">Download aggregated SBOM containing all components from projects in this product</p>
                         <a class="btn btn-primary download-btn"
-                           href="{% url 'core:sbom_download_product' product.id %}">
-                            <i class="fas fa-download me-2"></i>Download Product SBOMs as Zip file
+                           href="/api/v1/products/{{ product.id }}/download">
+                            <i class="fas fa-download me-2"></i>Download Product SBOM
                         </a>
                     </div>
                 </div>
