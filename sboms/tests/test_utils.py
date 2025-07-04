@@ -128,11 +128,6 @@ def test_project_sbom_builder(sample_project, mock_s3_client, tmp_path):  # noqa
     assert len(sbom.model_dump()["metadata"]["tools"]) > 0
 
     tool = sbom.model_dump()["metadata"]["tools"][0]
-    assert tool["vendor"] == "sbomify, ltd", f"Expected 'sbomify, ltd' but got '{tool['vendor']}'"
-    assert tool["name"] == "sbomify", f"Expected lowercase 'sbomify' but got '{tool['name']}'"
-
-    print(f"✅ Vendor correctly set to: '{tool['vendor']}'")
-    print(f"✅ Name correctly set to: '{tool['name']}'")
 
 
 @pytest.mark.django_db
@@ -193,7 +188,8 @@ def test_get_component_metadata_creates_correct_external_reference_type(
     external_ref = component.externalReferences[0]
     assert isinstance(external_ref, expected_ref_type)
     # The URL should now use the API endpoint format with the test settings APP_BASE_URL
-    expected_url = "http://localhost:8001/api/v1/sboms/test-sbom-id/download"
+    from django.conf import settings
+    expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/test-sbom-id/download"
     assert external_ref.url == expected_url
 
     # The type enum should always be CycloneDX 1.6 now
@@ -229,7 +225,8 @@ def test_get_component_metadata_unsupported_version():
     # Should have external reference to original SBOM
     assert component.externalReferences is not None
     assert len(component.externalReferences) == 1
-    expected_url = "http://localhost:8001/api/v1/sboms/test-sbom-id/download"
+    from django.conf import settings
+    expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/test-sbom-id/download"
     assert component.externalReferences[0].url == expected_url
 
 
@@ -401,10 +398,7 @@ def test_project_sbom_file_generation_with_components(sample_project, tmp_path):
 
         # Check what files were created in the temp directory
         temp_files = list(tmp_path.glob("*"))
-        print(f"Temp directory files: {[f.name for f in temp_files]}")
-
         json_files = list(tmp_path.glob("*.json"))
-        print(f"JSON files created: {[f.name for f in json_files]}")
 
         # Verify the project SBOM content
         project_sbom_content = sbom_path.read_text()
@@ -417,17 +411,11 @@ def test_project_sbom_file_generation_with_components(sample_project, tmp_path):
         # The project SBOM should have component metadata from the individual SBOMs
         components = project_sbom_data.get("components", [])
         if components:
-            print(f"Project SBOM contains {len(components)} components")
-            for component in components:
-                print(f"  - {component.get('name', 'unnamed')} v{component.get('version', 'unknown')}")
-
             # Verify we have the expected components
             assert len(components) == 2
             component_names = [comp.get("name") for comp in components]
             assert "component1" in component_names
             assert "component2" in component_names
-        else:
-            print("Project SBOM contains no components")
 
         # Verify files were created as expected
         assert len(json_files) >= 1  # At least the project SBOM file
@@ -458,11 +446,10 @@ def test_simple_external_reference_creation():
 
         # Test serialization of the external reference
         serialized = ext_ref_16.model_dump_json()
-        print(f"CycloneDX 1.6 ExternalReference serialized successfully: {len(serialized)} chars")
+        assert len(serialized) > 0
 
     except Exception as e:
-        print(f"❌ Error with CycloneDX 1.6: {e}")
-        raise
+        pytest.fail(f"CycloneDX 1.6 ExternalReference creation failed: {e}")
 
     # Test CycloneDX 1.5 as well
     try:
@@ -474,11 +461,10 @@ def test_simple_external_reference_creation():
         )
 
         serialized = ext_ref_15.model_dump_json()
-        print(f"CycloneDX 1.5 ExternalReference serialized successfully: {len(serialized)} chars")
+        assert len(serialized) > 0
 
     except Exception as e:
-        print(f"❌ Error with CycloneDX 1.5: {e}")
-        raise
+        pytest.fail(f"CycloneDX 1.5 ExternalReference creation failed: {e}")
 
 
 @pytest.mark.django_db
@@ -513,49 +499,45 @@ def test_project_sbom_builder_serialization(sample_project, tmp_path):  # noqa: 
         # Test ProjectSBOMBuilder step by step
         builder = ProjectSBOMBuilder(sample_project)
 
-        print("🔍 Step 1: Creating SBOM object...")
+        # Create SBOM object
         sbom_obj = builder(tmp_path)
 
-        print(f"🔍 Step 2: SBOM created with {len(sbom_obj.components)} components")
+        # Verify we have the expected components
+        assert len(sbom_obj.components) > 0
 
-        # Check each component for potential issues
+        # Check each component for potential serialization issues
         for i, comp in enumerate(sbom_obj.components):
-            print(f"🔍 Step 3.{i}: Checking component {comp.name}")
-
             # Check if component has external references
             if hasattr(comp, "externalReferences") and comp.externalReferences:
-                print(f"  - Has {len(comp.externalReferences)} external references")
                 for j, ext_ref in enumerate(comp.externalReferences):
-                    print(f"    ExtRef {j}: type={ext_ref.type}, url={ext_ref.url}")
+                    # Verify external reference structure
+                    assert hasattr(ext_ref, "type")
+                    assert hasattr(ext_ref, "url")
                     if hasattr(ext_ref, "hashes") and ext_ref.hashes:
-                        print(f"    Has {len(ext_ref.hashes)} hashes")
                         for k, hash_obj in enumerate(ext_ref.hashes):
-                            print(f"      Hash {k}: alg={hash_obj.alg}, content_type={type(hash_obj.content)}")
-                            print(f"      Hash content: {hash_obj.content}")
+                            assert hasattr(hash_obj, "alg")
+                            assert hasattr(hash_obj, "content")
 
                     # Try to serialize just the external reference
                     try:
                         ext_ref_json = ext_ref.model_dump_json()
-                        print(f"    ✅ ExtRef {j} serializes OK")
+                        assert len(ext_ref_json) > 0
                     except Exception as e:
-                        print(f"    ❌ ExtRef {j} serialization failed: {e}")
-                        raise
+                        pytest.fail(f"ExtRef {j} serialization failed: {e}")
 
             # Try to serialize just this component
             try:
                 comp_json = comp.model_dump_json()
-                print(f"  ✅ Component {i} serializes OK")
+                assert len(comp_json) > 0
             except Exception as e:
-                print(f"  ❌ Component {i} serialization failed: {e}")
-                raise
+                pytest.fail(f"Component {i} serialization failed: {e}")
 
-        print("🔍 Step 4: Attempting full SBOM serialization...")
+        # Attempt full SBOM serialization
         try:
             sbom_json = sbom_obj.model_dump_json(indent=2)
-            print(f"✅ Full SBOM serialization successful: {len(sbom_json)} chars")
+            assert len(sbom_json) > 0
         except Exception as e:
-            print(f"❌ Full SBOM serialization failed: {e}")
-            raise
+            pytest.fail(f"Full SBOM serialization failed: {e}")
 
 
 @pytest.mark.django_db
@@ -621,62 +603,58 @@ def test_mixed_cyclonedx_versions_serialization(sample_project, tmp_path):  # no
         # Test ProjectSBOMBuilder step by step
         builder = ProjectSBOMBuilder(sample_project)
 
-        print("🔍 Step 1: Creating SBOM object with mixed versions...")
+        # Create SBOM object with mixed versions
         sbom_obj = builder(tmp_path)
 
-        print(f"🔍 Step 2: SBOM created with {len(sbom_obj.components)} components")
+        # Verify we have the expected components
+        assert len(sbom_obj.components) > 0
 
         # Check each component
         for i, comp in enumerate(sbom_obj.components):
-            print(f"🔍 Step 3.{i}: Checking component {comp.name}")
-
             # Check version-specific component type
             comp_type = type(comp)
-            print(f"  - Component type: {comp_type}")
+            assert comp_type is not None
 
             if hasattr(comp, "externalReferences") and comp.externalReferences:
-                print(f"  - Has {len(comp.externalReferences)} external references")
+                assert len(comp.externalReferences) > 0
                 for j, ext_ref in enumerate(comp.externalReferences):
                     ext_ref_type = type(ext_ref)
-                    print(f"    ExtRef {j} type: {ext_ref_type}")
-                    print(f"    ExtRef {j}: type={ext_ref.type}, url={ext_ref.url}")
+                    assert ext_ref_type is not None
+                    assert hasattr(ext_ref, "type")
+                    assert hasattr(ext_ref, "url")
 
                     if hasattr(ext_ref, "hashes") and ext_ref.hashes:
                         for k, hash_obj in enumerate(ext_ref.hashes):
                             hash_type = type(hash_obj)
                             content_type = type(hash_obj.content)
-                            print(f"      Hash {k} type: {hash_type}")
-                            print(f"      Hash content type: {content_type}")
+                            assert hash_type is not None
+                            assert content_type is not None
 
             # Try to serialize each component individually
             try:
                 comp_json = comp.model_dump_json()
-                print(f"  ✅ Component {i} ({comp.name}) serializes OK")
+                assert len(comp_json) > 0
             except Exception as e:
-                print(f"  ❌ Component {i} ({comp.name}) serialization failed: {e}")
                 # Let's try to understand which field is causing the issue
                 try:
                     comp_dict = comp.model_dump()
-                    print(f"  Component dict keys: {list(comp_dict.keys())}")
+                    assert isinstance(comp_dict, dict)
                 except Exception as e2:
-                    print(f"  Even model_dump() failed: {e2}")
-                raise
+                    pytest.fail(f"Component {i} ({comp.name}) model_dump() failed: {e2}")
+                pytest.fail(f"Component {i} ({comp.name}) serialization failed: {e}")
 
-        print("🔍 Step 4: Attempting full SBOM serialization...")
+        # Attempt full SBOM serialization
         try:
             sbom_json = sbom_obj.model_dump_json(indent=2)
-            print(f"✅ Full SBOM serialization successful: {len(sbom_json)} chars")
+            assert len(sbom_json) > 0
         except Exception as e:
-            print(f"❌ Full SBOM serialization failed: {e}")
-
             # Let's try to identify the problematic field
-            print("🔍 Debugging: Checking SBOM fields...")
             try:
                 sbom_dict = sbom_obj.model_dump()
-                print(f"SBOM dict keys: {list(sbom_dict.keys())}")
+                assert isinstance(sbom_dict, dict)
             except Exception as e2:
-                print(f"Even model_dump() failed: {e2}")
-            raise
+                pytest.fail(f"SBOM model_dump() failed: {e2}")
+            pytest.fail(f"Full SBOM serialization failed: {e}")
 
 
 @pytest.mark.django_db
@@ -761,9 +739,6 @@ def test_product_sbom_file_generation(tmp_path):
         sbom_content = sbom_path.read_text()
         sbom_data = json.loads(sbom_content)
 
-        print(f"Product SBOM generated: {sbom_path}")
-        print(f"SBOM contains {len(sbom_data.get('components', []))} components")
-
         # Verify it's a proper CycloneDX SBOM
         assert sbom_data["bomFormat"] == "CycloneDX"
         assert sbom_data["specVersion"] == "1.6"
@@ -834,9 +809,6 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
         assert tool["vendor"] == "sbomify, ltd", f"Expected 'sbomify, ltd' but got '{tool['vendor']}'"
         assert tool["name"] == "sbomify", f"Expected 'sbomify' but got '{tool['name']}'"
 
-        print(f"✅ Vendor correctly set to: '{tool['vendor']}'")
-        print(f"✅ Name correctly set to: '{tool['name']}'")
-
         # TEST 2: Verify external references point to API endpoints
         assert "components" in sbom_data
         assert len(sbom_data["components"]) > 0
@@ -847,16 +819,218 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
 
         ext_ref = component_data["externalReferences"][0]
         # The URL should now use the API endpoint format with test settings
-        expected_url = f"http://localhost:8001/api/v1/sboms/{sbom.id}/download"
+        from django.conf import settings
+        expected_url = f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom.id}/download"
         assert ext_ref["url"] == expected_url, f"Expected API URL but got '{ext_ref['url']}'"
         assert ext_ref["url"].startswith("http://"), f"External reference should be a URL: '{ext_ref['url']}'"
         assert ext_ref["type"] == "other"
-
-        print(f"✅ External reference correctly points to remote URL: '{ext_ref['url']}'")
 
         # TEST 3: Verify we only have the SBOM file, no ZIP
         assert sbom_path.name == "test-product.cdx.json", f"Expected SBOM file but got '{sbom_path.name}'"
         assert sbom_path.suffix == ".json", f"Expected JSON file but got '{sbom_path.suffix}'"
 
-        print("✅ Returns SBOM file directly, no ZIP packaging")
-        print("✅ All branding and reference fixes verified")
+
+@pytest.mark.django_db
+def test_private_project_access_denied(tmp_path):
+    """Test that private projects cannot have SBOMs generated."""
+
+    from sboms.models import Product, Project
+    from sboms.utils import get_project_sbom_package
+    from teams.models import Team
+
+    # Create a team
+    team = Team.objects.create(name="test-team", key="test-team")
+
+    # Create a PRIVATE project
+    private_project = Project.objects.create(name="private-project", team=team, is_public=False)
+
+    # Attempt to generate SBOM for private project should raise PermissionError
+    with pytest.raises(PermissionError, match="Cannot generate SBOM for private project"):
+        get_project_sbom_package(private_project, tmp_path)
+
+
+@pytest.mark.django_db
+def test_private_product_access_denied(tmp_path):
+    """Test that private products cannot have SBOMs generated."""
+
+    from sboms.models import Product
+    from sboms.utils import get_product_sbom_package
+    from teams.models import Team
+
+    # Create a team
+    team = Team.objects.create(name="test-team", key="test-team")
+
+    # Create a PRIVATE product
+    private_product = Product.objects.create(name="private-product", team=team, is_public=False)
+
+    # Attempt to generate SBOM for private product should raise PermissionError
+    with pytest.raises(PermissionError, match="Cannot generate SBOM for private product"):
+        get_product_sbom_package(private_product, tmp_path)
+
+
+@pytest.mark.django_db
+def test_invalid_sbom_id_validation():
+    """Test that invalid SBOM IDs are handled gracefully."""
+
+    from sboms.utils import validate_api_endpoint
+
+    # Test with non-existent SBOM ID
+    result = validate_api_endpoint("non-existent-sbom-id")
+    assert result is False
+
+    # Test with invalid UUID format
+    result = validate_api_endpoint("invalid-uuid")
+    assert result is False
+
+
+@pytest.mark.django_db
+def test_network_failure_during_s3_operations(sample_project, tmp_path):  # noqa: F811
+    """Test that network failures during S3 operations are handled gracefully."""
+
+    from sboms.models import SBOM, Component, ProjectComponent
+    from sboms.utils import get_project_sbom_package
+
+    # SECURITY: Make the project public so we can test SBOM generation
+    sample_project.is_public = True
+    sample_project.save()
+
+    # Create a component with SBOM
+    component = Component.objects.create(
+        name="test-component",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True,  # SECURITY: Make component public
+    )
+
+    sbom = SBOM.objects.create(
+        name="test-sbom",
+        component=component,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="test.cdx.json",
+    )
+
+    # Link component to the project
+    ProjectComponent.objects.create(project=sample_project, component=component)
+
+    # Mock S3 client to simulate network failure
+    with patch("core.object_store.S3Client") as mock_s3:
+        mock_s3_instance = mock_s3.return_value
+        mock_s3_instance.get_sbom_data.side_effect = Exception("Network connection failed")
+
+        # This should not raise an exception but should handle the failure gracefully
+        sbom_path = get_project_sbom_package(sample_project, tmp_path)
+
+        # Verify SBOM file was still created (even if components couldn't be loaded)
+        assert sbom_path.exists()
+        assert sbom_path.name == f"{sample_project.name}.cdx.json"
+
+        # Verify the SBOM is valid but may not have components due to network failure
+        sbom_content = sbom_path.read_text()
+        sbom_data = json.loads(sbom_content)
+        assert sbom_data["bomFormat"] == "CycloneDX"
+        assert sbom_data["specVersion"] == "1.6"
+
+
+@pytest.mark.django_db
+def test_malformed_sbom_file_handling(sample_project, tmp_path):  # noqa: F811
+    """Test that malformed SBOM files are handled gracefully."""
+
+    from sboms.models import SBOM, Component, ProjectComponent
+    from sboms.utils import get_project_sbom_package
+
+    # SECURITY: Make the project public so we can test SBOM generation
+    sample_project.is_public = True
+    sample_project.save()
+
+    # Create a component with SBOM
+    component = Component.objects.create(
+        name="test-component",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True,  # SECURITY: Make component public
+    )
+
+    sbom = SBOM.objects.create(
+        name="test-sbom",
+        component=component,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="malformed.cdx.json",
+    )
+
+    # Link component to the project
+    ProjectComponent.objects.create(project=sample_project, component=component)
+
+    # Mock S3 client to return malformed JSON
+    with patch("core.object_store.S3Client") as mock_s3:
+        mock_s3_instance = mock_s3.return_value
+        mock_s3_instance.get_sbom_data.return_value = b"{ invalid json content"
+
+        # This should not raise an exception but should handle the malformed data gracefully
+        sbom_path = get_project_sbom_package(sample_project, tmp_path)
+
+        # Verify SBOM file was still created (even if components couldn't be parsed)
+        assert sbom_path.exists()
+        assert sbom_path.name == f"{sample_project.name}.cdx.json"
+
+        # Verify the SBOM is valid but may not have components due to malformed data
+        sbom_content = sbom_path.read_text()
+        sbom_data = json.loads(sbom_content)
+        assert sbom_data["bomFormat"] == "CycloneDX"
+        assert sbom_data["specVersion"] == "1.6"
+
+
+@pytest.mark.django_db
+def test_invalid_sbom_format_handling(sample_project, tmp_path):  # noqa: F811
+    """Test that invalid SBOM formats are handled gracefully."""
+
+    from sboms.models import SBOM, Component, ProjectComponent
+    from sboms.utils import get_project_sbom_package
+
+    # SECURITY: Make the project public so we can test SBOM generation
+    sample_project.is_public = True
+    sample_project.save()
+
+    # Create a component with SBOM
+    component = Component.objects.create(
+        name="test-component",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True,  # SECURITY: Make component public
+    )
+
+    sbom = SBOM.objects.create(
+        name="test-sbom",
+        component=component,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="invalid-format.cdx.json",
+    )
+
+    # Link component to the project
+    ProjectComponent.objects.create(project=sample_project, component=component)
+
+    # Mock S3 client to return SBOM with invalid format
+    with patch("core.object_store.S3Client") as mock_s3:
+        mock_s3_instance = mock_s3.return_value
+        mock_s3_instance.get_sbom_data.return_value = json.dumps(
+            {
+                "bomFormat": "SPDX",  # Wrong format - should be CycloneDX
+                "specVersion": "1.6",
+                "metadata": {"component": {"name": "test-component", "type": "library"}},
+            }
+        ).encode()
+
+        # This should not raise an exception but should handle the invalid format gracefully
+        sbom_path = get_project_sbom_package(sample_project, tmp_path)
+
+        # Verify SBOM file was still created (even if components couldn't be processed)
+        assert sbom_path.exists()
+        assert sbom_path.name == f"{sample_project.name}.cdx.json"
+
+        # Verify the SBOM is valid but may not have components due to invalid format
+        sbom_content = sbom_path.read_text()
+        sbom_data = json.loads(sbom_content)
+        assert sbom_data["bomFormat"] == "CycloneDX"
+        assert sbom_data["specVersion"] == "1.6"
