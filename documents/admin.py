@@ -88,12 +88,12 @@ class DocumentAdmin(admin.ModelAdmin):
             return format_html('<span style="color: #666;">Unknown</span>')
 
         # Convert bytes to human readable format
-        size = obj.file_size
+        size = float(obj.file_size)
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024.0:
-                return format_html('<span style="color: #417690;">{:.1f} {}</span>', size, unit)
+                return format_html('<span style="color: #417690;">{} {}</span>', f"{size:.1f}", unit)
             size /= 1024.0
-        return format_html('<span style="color: #417690;">{:.1f} TB</span>', size)
+        return format_html('<span style="color: #417690;">{} TB</span>', f"{size:.1f}")
 
     file_size_formatted.short_description = "File Size"
 

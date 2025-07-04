@@ -14,7 +14,8 @@ from django.utils.html import format_html
 from documents.admin import DocumentAdmin
 from documents.models import Document
 from sboms.models import SBOM  # SBOM still lives in sboms app
-from teams.models import Member, Team
+from teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
+from teams.models import Invitation, Member, Team
 
 from .models import Component, Product, Project, User
 
@@ -234,8 +235,9 @@ admin_site = DashboardView(name="admin")
 
 # Register all models with our custom admin site
 admin_site.register(User, CustomUserAdmin)
-admin_site.register(Team)
-admin_site.register(Member)
+admin_site.register(Team, TeamAdmin)
+admin_site.register(Member, MemberAdmin)
+admin_site.register(Invitation, InvitationAdmin)
 admin_site.register(Product)
 admin_site.register(Project)
 admin_site.register(Component)
