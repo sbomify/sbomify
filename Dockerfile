@@ -25,6 +25,7 @@ COPY core/js/ ./core/js/
 COPY sboms/js/ ./sboms/js/
 COPY teams/js/ ./teams/js/
 COPY billing/js/ ./billing/js/
+COPY documents/js/ ./documents/js/
 
 # Run the build for production - assumes output is to 'staticfiles' directory
 RUN bun run build
@@ -45,6 +46,7 @@ COPY core/js/ ./core/js/
 COPY sboms/js/ ./sboms/js/
 COPY teams/js/ ./teams/js/
 COPY billing/js/ ./billing/js/
+COPY documents/js/ ./documents/js/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
