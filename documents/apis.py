@@ -2,7 +2,7 @@ import logging
 import mimetypes
 
 from django.db import transaction
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja import File, Router, UploadedFile
 from ninja.security import django_auth
 
@@ -202,6 +202,42 @@ def get_document(request: HttpRequest, document_id: str):
         "file_size": document.file_size,
         "source_display": document.source_display,
     }
+
+
+@router.get(
+    "/{document_id}/download",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public documents
+)
+def download_document(request: HttpRequest, document_id: str):
+    """Download a document file."""
+    try:
+        document = Document.objects.select_related("component").get(pk=document_id)
+    except Document.DoesNotExist:
+        return 404, {"detail": "Document not found"}
+
+    # Check access permissions
+    if document.public_access_allowed or (
+        request.user.is_authenticated and verify_item_access(request, document.component, ["guest", "owner", "admin"])
+    ):
+        try:
+            s3 = S3Client("DOCUMENTS")
+            document_data = s3.get_document_data(document.document_filename)
+
+            if document_data:
+                response = HttpResponse(document_data, content_type=document.content_type or "application/octet-stream")
+                # Use original filename if available, otherwise use document name
+                filename = document.name if document.name else f"document_{document.id}"
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+            else:
+                return 404, {"detail": "Document file not found"}
+
+        except Exception as e:
+            log.error(f"Error retrieving document {document_id}: {e}")
+            return 500, {"detail": f"Error retrieving document: {str(e)}"}
+    else:
+        return 403, {"detail": "Access denied"}
 
 
 @router.delete(

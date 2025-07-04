@@ -1,71 +1,84 @@
-{% extends "core/base.html.j2" %}
+{% extends "core/public_base.html.j2" %}
 {% load widget_tweaks %}
 {% load static %}
-{% block title %}SBOM Details{% endblock %}
-{% block styles %}
+{% load django_vite %}
+{% load breadcrumb_tags %}
+{% block title %}{{ sbom.name }}{% endblock %}
+{% block meta_description %}
+    {{ sbom.name }} - SBOM (Software Bill of Materials) file.
+    {% if sbom.format == 'cyclonedx' %}
+        CycloneDX
+    {% elif sbom.format == 'spdx' %}
+        SPDX
+    {% else %}
+        {{ sbom.format|upper }}
+    {% endif %}
+    {{ sbom.format_version }} format. Download and view this SBOM.
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb sbom.component 'component' %}
+{% endblock %}
+{% block content %}
+    <div class="vc-public-page-layout"
+         data-title="{{ sbom.name }}"
+         data-title-icon="fas fa-file-code"
+         data-page-type="sbom"
+         data-item-id="{{ sbom.id }}"
+         data-download-url="/api/v1/sboms/{{ sbom.id }}/download"
+         data-download-title="Download SBOM"
+         data-download-button-text="Download SBOM"
+         data-download-description="Download this SBOM file"
+         data-download-icon="fas fa-download">
+        <template data-slot="subtitle">
+            <small class="component-link">
+                <i class="fas fa-cube me-1"></i>
+                <a href="{% url 'core:component_details_public' sbom.component.id %}"
+                   class="component-breadcrumb-link">{{ sbom.component.name }}</a>
+            </small>
+            <small class="sbom-format">
+                <i class="fas fa-tag me-1"></i>
+                {% if sbom.format == 'cyclonedx' %}
+                    CycloneDX
+                {% elif sbom.format == 'spdx' %}
+                    SPDX
+                {% else %}
+                    {{ sbom.format|upper }}
+                {% endif %}
+                {{ sbom.format_version }}
+            </small>
+            {% if sbom.version %}
+                <small class="sbom-version">
+                    <i class="fas fa-code-branch me-1"></i>{{ sbom.version }}
+                </small>
+            {% endif %}
+        </template>
+    </div>
+{% endblock %}
+{% block extra_css %}
     <style>
-    .brand-logo {
-        height: 3rem;
-        max-width: 12rem;
-        width: auto;
-        object-fit: contain;
-    }
+.component-breadcrumb-link {
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
 
-    .credits-logo {
-        height: 1.25rem;
-        width: auto;
-        max-width: 5rem;
-        object-fit: contain;
-    }
+.component-breadcrumb-link:hover {
+    color: var(--accent-color-dark);
+    text-decoration: underline;
+}
 
-    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-        .brand-logo {
-            height: 3.25rem;
-            max-width: 13rem;
-        }
-        .credits-logo {
-            height: 1.375rem;
-            max-width: 5.5rem;
-        }
-    }
+.component-link,
+.sbom-format,
+.sbom-version {
+    margin-right: 1rem;
+}
+
+.sbom-version:last-child {
+    margin-right: 0;
+}
     </style>
 {% endblock %}
-{% block main %}
-    <main class="content public-page mb-4">
-        <div class="brand"
-             style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}">
-            {% if brand.brand_image %}
-                <img src="{{ brand.brand_image }}"
-                     alt="{{ brand.name }}"
-                     class="brand-logo"
-                     width="192"
-                     height="48">
-            {% else %}
-                <img src="/static/img/sbomify.svg"
-                     alt="sbomify logo"
-                     class="brand-logo"
-                     width="192"
-                     height="48">
-            {% endif %}
-        </div>
-        <div class="pp-content-container">
-            <div class="pp-content-bg"
-                 style="background-color: {{ brand.brand_color|default:'#DCDCDC' }}"></div>
-            <div class="pp-content">
-                <a href="{% url 'sboms:sbom_download' sbom.id %}"
-                   class="btn btn-success float-end">
-                    <i class="fas fa-download"></i> Download SBOM
-                </a>
-            </div>
-        </div>
-        <div class="credits">
-            Powered by <a href="https://sbomify.com">
-            <img src="/static/img/sbomify.svg"
-                 alt="sbomify logo"
-                 class="credits-logo"
-                 width="80"
-                 height="20" />
-        </a>
-    </div>
-</main>
+{% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
+    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

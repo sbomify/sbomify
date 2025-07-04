@@ -1,21 +1,25 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.metadata
 import json
-import zipfile
+import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
+from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
+from django.conf import settings
 from django.http import HttpRequest
 
-from sbomify import logging
+from core.models import Component, Product, Project
+from sboms.models import SBOM
+from sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
+from sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from teams.models import Member, Team
 
-from .models import SBOM, Component, Product, Project
-from .sbom_format_schemas import cyclonedx_1_5 as cdx15
-from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .versioning import CycloneDXSupportedVersion
 
 log = logging.getLogger(__name__)
@@ -66,6 +70,114 @@ def verify_item_access(
     return False
 
 
+@contextmanager
+def temporary_sbom_files():
+    """Context manager for handling temporary SBOM files with automatic cleanup."""
+    temp_files = []
+    try:
+        yield temp_files
+    finally:
+        # Clean up all temporary files
+        for temp_file in temp_files:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+                    log.debug(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                log.warning(f"Failed to cleanup temporary file {temp_file}: {e}")
+
+
+def validate_api_endpoint(sbom_id: str) -> bool:
+    """
+    Validate that the API endpoint for SBOM download exists and is accessible.
+
+    Args:
+        sbom_id: The SBOM ID to validate
+
+    Returns:
+        bool: True if the endpoint should be accessible, False otherwise
+    """
+    try:
+        # Check if the SBOM exists and has proper access controls
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+
+        # Verify the SBOM has a valid file
+        if not sbom.sbom_filename:
+            return False
+
+        # Check if the component is public (for public API access)
+        if not sbom.component.is_public:
+            log.warning(f"API endpoint reference created for private SBOM {sbom_id}")
+
+        return True
+    except SBOM.DoesNotExist:
+        log.error(f"API endpoint reference created for non-existent SBOM {sbom_id}")
+        return False
+    except Exception as e:
+        # Handle database access issues gracefully (e.g., in tests)
+        if "Database access not allowed" in str(e):
+            log.debug(f"Database access not allowed for API endpoint validation of SBOM {sbom_id}")
+            return True
+        log.warning(f"Failed to validate API endpoint for SBOM {sbom_id}: {e}")
+        return True  # Default to allowing the reference
+
+
+def create_component_type_mapping() -> Dict[str, Any]:
+    """Create mapping for component type strings to CycloneDX enums."""
+    return {
+        "application": cdx16.Type.application,
+        "framework": cdx16.Type.framework,
+        "library": cdx16.Type.library,
+        "container": cdx16.Type.container,
+        "platform": cdx16.Type.platform,
+        "operating-system": cdx16.Type.operating_system,
+        "device": cdx16.Type.device,
+        "device-driver": cdx16.Type.device_driver,
+        "firmware": cdx16.Type.firmware,
+        "file": cdx16.Type.file,
+        "machine-learning-model": cdx16.Type.machine_learning_model,
+        "data": cdx16.Type.data,
+        "cryptographic-asset": cdx16.Type.cryptographic_asset,
+    }
+
+
+def extract_component_info(component_dict: Dict[str, Any]) -> Tuple[str, str, Any]:
+    """Extract basic component information from SBOM metadata."""
+    name = component_dict.get("name", "unknown")
+    component_type = component_dict.get("type", "library")
+    version = component_dict.get("version")
+    return name, component_type, version
+
+
+def create_version_object(version: Any) -> Optional[cdx16.Version]:
+    """Create a CycloneDX version object from various input types."""
+    if not version:
+        return None
+
+    if isinstance(version, str):
+        return cdx16.Version(version)
+    elif isinstance(version, dict):
+        return cdx16.Version(str(version))
+    else:
+        return cdx16.Version(str(version))
+
+
+def create_external_reference(sbom_filename: str, sbom_id: str) -> cdx16.ExternalReference:
+    """Create an external reference for the SBOM with proper validation."""
+    # Validate the API endpoint exists
+    if not validate_api_endpoint(sbom_id):
+        log.warning(f"Creating external reference for potentially invalid SBOM endpoint: {sbom_id}")
+
+    # Create hash of filename for reference
+    filename_hash = hashlib.sha256(sbom_filename.encode("utf-8")).hexdigest()
+
+    return cdx16.ExternalReference(
+        type=cdx16.Type3.other,
+        url=f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom_id}/download",
+        hashes=[cdx16.Hash(alg="SHA-256", content=cdx16.HashContent(filename_hash))],
+    )
+
+
 class ProjectSBOMBuilder:
     """
     Builds project SBOM from individual component SBOMs.
@@ -99,8 +211,7 @@ class ProjectSBOMBuilder:
 
     def __init__(self, project: Project | None = None):
         self.project = project
-        if project:
-            self.sboms = SBOM.objects.filter(component__projectcomponent__project=project)
+        self.temp_files = []
 
     def __call__(self, *args, **kwargs) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
         # Support both (target_folder) and (project, target_folder)
@@ -110,11 +221,18 @@ class ProjectSBOMBuilder:
         elif len(args) == 2:
             project, target_folder = args
             self.project = project
-            self.sboms = SBOM.objects.filter(component__projectcomponent__project=project)
         else:
             raise TypeError("ProjectSBOMBuilder.__call__() expects (target_folder) or (project, target_folder)")
 
         self.target_folder = target_folder
+
+        # Use context manager for automatic cleanup
+        with temporary_sbom_files() as temp_files:
+            self.temp_files = temp_files
+            return self._build_sbom(project)
+
+    def _build_sbom(self, project: Project) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+        """Build the SBOM with proper database optimization and cleanup."""
         self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
         self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
         self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
@@ -125,22 +243,41 @@ class ProjectSBOMBuilder:
             timestamp=datetime.now(timezone.utc),
             tools=[
                 cdx16.Tool(
-                    vendor="SBOMIFY",
+                    vendor="sbomify, ltd",
                     name="sbomify",
                     version=importlib.metadata.version("sbomify"),
+                    externalReferences=[
+                        cdx16.ExternalReference(type=cdx16.Type3.website, url="https://sbomify.com"),
+                        cdx16.ExternalReference(type=cdx16.Type3.vcs, url="https://github.com/sbomify/sbomify"),
+                    ],
                 )
             ],
-            component=cdx16.Component(name=project.name, type="application"),
+            component=cdx16.Component(name=project.name, type=cdx16.Type.application, scope=cdx16.Scope.required),
         )
 
-        # components section
+        # components section - only include public components
         self.sbom.components = []
-        for pc in project.projectcomponent_set.all():
-            sbom_path = self.download_component_sbom(pc.component)
-            log.info(f"Downloaded SBOM for component {pc.component.id} to {sbom_path}")
-            if sbom_path is None:
-                log.warning(f"SBOM for component {pc.component.id} not found")
+
+        # DATABASE OPTIMIZATION: Use select_related and prefetch_related to avoid N+1 queries
+        public_components = (
+            project.projectcomponent_set.select_related("component", "component__team")
+            .prefetch_related("component__sbom_set")
+            .filter(component__is_public=True)
+        )
+
+        for pc in public_components:
+            # Double-check component is public for extra security
+            if not pc.component.is_public:
+                log.warning(f"Skipping private component {pc.component.id} in public SBOM aggregation")
                 continue
+
+            sbom_result = self.download_component_sbom(pc.component)
+            if sbom_result is None:
+                log.warning(f"SBOM for public component {pc.component.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+            log.info(f"Downloaded SBOM for public component {pc.component.id} to {sbom_path}")
 
             try:
                 sbom_data = json.loads(sbom_path.read_text())
@@ -151,7 +288,7 @@ class ProjectSBOMBuilder:
                 log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
                 continue
 
-            component = self.get_component_metadata(sbom_path.name, sbom_data)
+            component = self.get_component_metadata(sbom_path.name, sbom_data, sbom_id)
             if component is None:
                 log.warning(f"Failed to get component from SBOM {sbom_path}")
                 continue
@@ -160,27 +297,28 @@ class ProjectSBOMBuilder:
 
         return self.sbom
 
-    def download_component_sbom(self, component: Component) -> Path | None:
-        """Download the SBOM file for a component.
+    def download_component_sbom(self, component: Component) -> tuple[Path, str] | None:
+        """Download the SBOM file for a component with proper cleanup tracking.
 
         Args:
             component: The component to download SBOM for
 
         Returns:
-            Path to the downloaded SBOM file, or None if no SBOM found
+            Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
         """
         from core.object_store import S3Client
 
-        sboms = component.sboms.all()
+        # Use the prefetched SBOMs to avoid additional queries
+        sboms = list(component.sbom_set.all())
 
         # TODO: For now, we download the first SBOM.
         # In the future, we need to support multiple SBOMs for a single component
         # and pick the latest/appropriate one.
 
-        if sboms.count() == 0:
+        if not sboms:
             return None
 
-        sbom = sboms.first()
+        sbom = sboms[0]
 
         # Download SBOM data from S3
         s3_client = S3Client("SBOMS")
@@ -188,15 +326,19 @@ class ProjectSBOMBuilder:
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
-            return download_path
+
+            # Track file for cleanup
+            self.temp_files.append(download_path)
+
+            return download_path, str(sbom.id)
         except Exception as e:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
             return None
 
-    def get_component_metadata(self, sbom_filename: str, sbom_data: dict) -> cdx15.Component | cdx16.Component | None:
-        """Get component metadata from SBOM."""
-        if sbom_data.get("bomFormat") != "CycloneDX":
-            log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
+    def get_component_metadata(self, sbom_filename: str, sbom_data: dict, sbom_id: str) -> cdx16.Component | None:
+        """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
+        # Validate basic SBOM format
+        if not self._validate_sbom_format(sbom_filename, sbom_data):
             return None
 
         component_dict = sbom_data.get("metadata", {}).get("component")
@@ -204,92 +346,322 @@ class ProjectSBOMBuilder:
             log.warning(f"SBOM {sbom_filename} does not contain component metadata")
             return None
 
-        if sbom_data["specVersion"] == "1.6":
-            component = cdx16.Component.model_validate(component_dict)
-        elif sbom_data["specVersion"] == "1.5":
-            component = cdx15.Component.model_validate(component_dict)
-        else:
-            log.warning(f"Unsupported CycloneDX specVersion {sbom_data['specVersion']} for {sbom_filename}")
+        # Extract component information
+        name, component_type, version = extract_component_info(component_dict)
+
+        # Create CycloneDX component
+        return self._create_cyclonedx_component(name, component_type, version, sbom_filename, sbom_id)
+
+    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
+        """Validate that the SBOM is in CycloneDX format."""
+        if sbom_data.get("bomFormat") != "CycloneDX":
+            log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
+            return False
+        return True
+
+    def _create_cyclonedx_component(
+        self, name: str, component_type: str, version: Any, sbom_filename: str, sbom_id: str
+    ) -> Optional[cdx16.Component]:
+        """Create a CycloneDX 1.6 component with proper error handling."""
+        try:
+            component_type_mapping = create_component_type_mapping()
+
+            # Create the CycloneDX 1.6 component with proper enum values
+            component = cdx16.Component(
+                name=name,
+                type=component_type_mapping.get(component_type, cdx16.Type.library),  # Default to library
+                scope=cdx16.Scope.required,
+            )
+
+            # Add version if present
+            version_obj = create_version_object(version)
+            if version_obj:
+                component.version = version_obj
+
+            # Add external reference to the original SBOM
+            component.externalReferences = [create_external_reference(sbom_filename, sbom_id)]
+
+            return component
+
+        except Exception as e:
+            spec_version = "unknown"
+            log.warning(f"Failed to create CycloneDX 1.6 component from {spec_version} SBOM {sbom_filename}: {e}")
             return None
 
-        if component:
-            component.externalReferences = [
-                cdx16.ExternalReference(
-                    type=cdx16.ExternalReferenceType.other,
-                    url=f"https://sbomify.io/sboms/{sbom_filename}",
-                    hashes=[cdx16.Hash(alg="SHA-256", content=sbom_filename.removesuffix(".json"))],
-                )
-            ]
 
-        return component
+class ProductSBOMBuilder:
+    """
+    Builds product SBOM from all component SBOMs across all projects.
+
+    This goes through all projects in a product, then all components in each project,
+    and their associated SBOMs to create a single aggregated SBOM for the entire product.
+
+    The product SBOM includes all components from all projects with proper external
+    references to the original component SBOMs.
+    """
+
+    def __init__(self, product: Product | None = None):
+        self.product = product
+        self.temp_files = []
+
+    def __call__(self, *args, **kwargs) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+        # Support both (target_folder) and (product, target_folder)
+        if len(args) == 1 and hasattr(self, "product") and self.product:
+            target_folder = args[0]
+            product = self.product
+        elif len(args) == 2:
+            product, target_folder = args
+            self.product = product
+        else:
+            raise TypeError("ProductSBOMBuilder.__call__() expects (target_folder) or (product, target_folder)")
+
+        self.target_folder = target_folder
+
+        # Use context manager for automatic cleanup
+        with temporary_sbom_files() as temp_files:
+            self.temp_files = temp_files
+            return self._build_sbom(product)
+
+    def _build_sbom(self, product: Product) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+        """Build the product SBOM with proper database optimization and cleanup."""
+        self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
+        self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
+        self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
+        self.sbom.version = 1
+
+        # metadata section
+        self.sbom.metadata = cdx16.Metadata(
+            timestamp=datetime.now(timezone.utc),
+            tools=[
+                cdx16.Tool(
+                    vendor="sbomify, ltd",
+                    name="sbomify",
+                    version=importlib.metadata.version("sbomify"),
+                    externalReferences=[
+                        cdx16.ExternalReference(type=cdx16.Type3.website, url="https://sbomify.com"),
+                        cdx16.ExternalReference(type=cdx16.Type3.vcs, url="https://github.com/sbomify/sbomify"),
+                    ],
+                )
+            ],
+            component=cdx16.Component(name=product.name, type=cdx16.Type.application, scope=cdx16.Scope.required),
+        )
+
+        # components section - aggregate all components from all PUBLIC projects
+        self.sbom.components = []
+
+        # DATABASE OPTIMIZATION: Use select_related and prefetch_related to avoid N+1 queries
+        public_projects = (
+            product.projects.select_related("team")
+            .prefetch_related(
+                "projectcomponent_set__component",
+                "projectcomponent_set__component__team",
+                "projectcomponent_set__component__sbom_set",
+            )
+            .filter(is_public=True)
+        )
+
+        for project in public_projects:
+            # Double-check project is public for extra security
+            if not project.is_public:
+                log.warning(f"Skipping private project {project.id} in public SBOM aggregation")
+                continue
+
+            log.info(f"Processing public project {project.name} for product {product.name}")
+            self._process_project_components(project)
+
+        return self.sbom
+
+    def _process_project_components(self, project: Project) -> None:
+        """Process all public components within a project."""
+        # SECURITY: Only process public components within public projects
+        public_components = [pc for pc in project.projectcomponent_set.all() if pc.component.is_public]
+
+        for pc in public_components:
+            # Double-check component is public for extra security
+            if not pc.component.is_public:
+                log.warning(f"Skipping private component {pc.component.id} in public SBOM aggregation")
+                continue
+
+            sbom_result = self.download_component_sbom(pc.component)
+            if sbom_result is None:
+                log.warning(f"SBOM for public component {pc.component.id} not found")
+                continue
+
+            sbom_path, sbom_id = sbom_result
+            log.info(f"Downloaded SBOM for public component {pc.component.id} to {sbom_path}")
+
+            try:
+                sbom_data = json.loads(sbom_path.read_text())
+            except json.JSONDecodeError as e:
+                log.error(f"Invalid JSON in SBOM file {sbom_path.name}: {e}")
+                continue
+            except Exception as e:
+                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            component = self.get_component_metadata(sbom_path.name, sbom_data, project.name, sbom_id)
+            if component is None:
+                log.warning(f"Failed to get component from SBOM {sbom_path}")
+                continue
+
+            self.sbom.components.append(component)
+
+    def download_component_sbom(self, component: Component) -> tuple[Path, str] | None:
+        """Download the SBOM file for a component with proper cleanup tracking.
+
+        Args:
+            component: The component to download SBOM for
+
+        Returns:
+            Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
+        """
+        from core.object_store import S3Client
+
+        # Use the prefetched SBOMs to avoid additional queries
+        sboms = list(component.sbom_set.all())
+
+        # TODO: For now, we download the first SBOM.
+        # In the future, we need to support multiple SBOMs for a single component
+        # and pick the latest/appropriate one.
+
+        if not sboms:
+            return None
+
+        sbom = sboms[0]
+
+        # Download SBOM data from S3
+        s3_client = S3Client("SBOMS")
+        try:
+            sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
+            download_path = self.target_folder / sbom.sbom_filename
+            download_path.write_bytes(sbom_data)
+
+            # Track file for cleanup
+            self.temp_files.append(download_path)
+
+            return download_path, str(sbom.id)
+        except Exception as e:
+            log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
+            return None
+
+    def get_component_metadata(
+        self, sbom_filename: str, sbom_data: dict, project_name: str, sbom_id: str
+    ) -> cdx16.Component | None:
+        """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
+        # Validate basic SBOM format
+        if not self._validate_sbom_format(sbom_filename, sbom_data):
+            return None
+
+        component_dict = sbom_data.get("metadata", {}).get("component")
+        if not component_dict:
+            log.warning(f"SBOM {sbom_filename} does not contain component metadata")
+            return None
+
+        # Extract component information
+        name, component_type, version = extract_component_info(component_dict)
+
+        # Add project context to the component name for better traceability
+        component_display_name = f"{project_name}/{name}" if project_name else name
+
+        # Create CycloneDX component
+        return self._create_cyclonedx_component(component_display_name, component_type, version, sbom_filename, sbom_id)
+
+    def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
+        """Validate that the SBOM is in CycloneDX format."""
+        if sbom_data.get("bomFormat") != "CycloneDX":
+            log.warning(f"SBOM {sbom_filename} is not in CycloneDX format")
+            return False
+        return True
+
+    def _create_cyclonedx_component(
+        self, name: str, component_type: str, version: Any, sbom_filename: str, sbom_id: str
+    ) -> Optional[cdx16.Component]:
+        """Create a CycloneDX 1.6 component with proper error handling."""
+        try:
+            component_type_mapping = create_component_type_mapping()
+
+            # Create the CycloneDX 1.6 component with proper enum values
+            component = cdx16.Component(
+                name=name,
+                type=component_type_mapping.get(component_type, cdx16.Type.library),  # Default to library
+                scope=cdx16.Scope.required,
+            )
+
+            # Add version if present
+            version_obj = create_version_object(version)
+            if version_obj:
+                component.version = version_obj
+
+            # Add external reference to the original SBOM
+            component.externalReferences = [create_external_reference(sbom_filename, sbom_id)]
+
+            return component
+
+        except Exception as e:
+            spec_version = "unknown"
+            log.warning(f"Failed to create CycloneDX 1.6 component from {spec_version} SBOM {sbom_filename}: {e}")
+            return None
 
 
 def get_project_sbom_package(project: Project, target_folder: Path) -> Path:
     """
-    Generates a ZIP package containing the project SBOM and all component SBOMs.
+    Generates the project SBOM file.
+
+    SECURITY: Only generates SBOMs for public projects to prevent leaking private SBOMs.
 
     Args:
-        project: The project to generate the SBOM package for
-        target_folder: The folder to save the package to
+        project: The project to generate the SBOM for
+        target_folder: The folder to save the SBOM to
 
     Returns:
-        Path to the generated ZIP package
+        Path to the generated SBOM file
+
+    Raises:
+        PermissionError: If the project is not public
     """
+    # SECURITY: Only allow SBOM generation for public projects
+    if not project.is_public:
+        raise PermissionError(f"Cannot generate SBOM for private project {project.id}")
+
     builder = ProjectSBOMBuilder(project)
     sbom = builder(target_folder)
 
-    # Save project SBOM
+    # Save project SBOM with clean serialization (exclude null values)
     sbom_path = target_folder / f"{project.name}.cdx.json"
-    sbom_path.write_text(sbom.model_dump_json(indent=2))
+    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True))
 
-    # Create ZIP package
-    zip_path = target_folder / f"{project.name}.cdx.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        # Add project SBOM
-        zip_file.write(sbom_path, sbom_path.name)
-
-        # Add all component SBOMs
-        for file_path in target_folder.glob("*.json"):
-            if file_path != sbom_path:  # Don't add the project SBOM twice
-                zip_file.write(file_path, file_path.name)
-
-    return zip_path  # Return the zip file path instead of sbom_path
+    return sbom_path
 
 
 def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
     """
-    Generates a ZIP package containing all project SBOMs for a product.
+    Generates the aggregated product SBOM file.
+
+    SECURITY: Only generates SBOMs for public products to prevent leaking private SBOMs.
 
     Args:
-        product: The product to generate the SBOM package for
-        target_folder: The folder to save the package to
+        product: The product to generate the SBOM for
+        target_folder: The folder to save the SBOM to
 
     Returns:
-        Path to the generated ZIP package
+        Path to the generated SBOM file
+
+    Raises:
+        PermissionError: If the product is not public
     """
-    # Create the main ZIP package for the product
-    product_zip_path = target_folder / f"{product.name}.cdx.zip"
+    # SECURITY: Only allow SBOM generation for public products
+    if not product.is_public:
+        raise PermissionError(f"Cannot generate SBOM for private product {product.id}")
 
-    with zipfile.ZipFile(product_zip_path, "w", zipfile.ZIP_DEFLATED) as product_zip:
-        # Iterate through all projects in the product
-        for project in product.projects.all():
-            # Create a temporary subfolder for each project
-            project_folder = target_folder / f"project_{project.id}"
-            project_folder.mkdir(exist_ok=True)
+    # Use ProductSBOMBuilder to create aggregated product SBOM
+    builder = ProductSBOMBuilder(product)
+    sbom = builder(target_folder)
 
-            try:
-                # Generate project SBOM package
-                project_zip_path = get_project_sbom_package(project, project_folder)
+    # Save product SBOM with clean serialization (exclude null values)
+    sbom_path = target_folder / f"{product.name}.cdx.json"
+    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True))
 
-                # Add the project ZIP to the product ZIP with a meaningful name
-                archive_name = f"{project.name}.cdx.zip"
-                product_zip.write(project_zip_path, archive_name)
-
-            except Exception as e:
-                log.warning(f"Failed to generate SBOM package for project {project.id}: {e}")
-                continue
-
-    return product_zip_path
+    return sbom_path
 
 
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:

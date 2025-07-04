@@ -29,6 +29,11 @@ import ItemsListTable from './components/ItemsListTable.vue';
 import ProductsList from './components/ProductsList.vue';
 import ProjectsList from './components/ProjectsList.vue';
 import ComponentsList from './components/ComponentsList.vue';
+import PublicCard from './components/PublicCard.vue';
+import PublicPageLayout from './components/PublicPageLayout.vue';
+import PublicProjectComponents from './components/PublicProjectComponents.vue';
+import PublicProductProjects from './components/PublicProductProjects.vue';
+import PublicDownloadCard from './components/PublicDownloadCard.vue';
 
 
 // Initialize Vue components
@@ -58,6 +63,11 @@ mountVueComponent('vc-items-list-table', ItemsListTable);
 mountVueComponent('vc-products-list', ProductsList);
 mountVueComponent('vc-projects-list', ProjectsList);
 mountVueComponent('vc-components-list', ComponentsList);
+mountVueComponent('vc-public-card', PublicCard);
+mountVueComponent('vc-public-page-layout', PublicPageLayout);
+mountVueComponent('vc-public-project-components', PublicProjectComponents);
+mountVueComponent('vc-public-product-projects', PublicProductProjects);
+mountVueComponent('vc-public-download-card', PublicDownloadCard);
 
 // Declare the global feather variable
 declare global {

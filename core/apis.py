@@ -1,6 +1,9 @@
+import tempfile
+from pathlib import Path
+
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -17,6 +20,7 @@ from sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
 )
+from sboms.utils import get_product_sbom_package, get_project_sbom_package
 from teams.models import Team
 from teams.utils import get_user_teams
 
@@ -272,13 +276,23 @@ def list_products(request: HttpRequest):
 @router.get(
     "/products/{product_id}",
     response={200: ProductResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
 )
+@decorate_view(optional_token_auth)
 def get_product(request: HttpRequest, product_id: str):
     """Get a specific product by ID."""
     try:
         product = Product.objects.prefetch_related("projects").get(pk=product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found"}
+
+    # If product is public, allow unauthenticated access
+    if product.is_public:
+        return 200, _build_item_response(product, "product")
+
+    # For private products, require authentication and team access
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required for private items"}
 
     if not verify_item_access(request, product, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -495,13 +509,23 @@ def list_projects(request: HttpRequest):
 @router.get(
     "/projects/{project_id}",
     response={200: ProjectResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
 )
+@decorate_view(optional_token_auth)
 def get_project(request: HttpRequest, project_id: str):
     """Get a specific project by ID."""
     try:
         project = Project.objects.prefetch_related("components").get(pk=project_id)
     except Project.DoesNotExist:
         return 404, {"detail": "Project not found"}
+
+    # If project is public, allow unauthenticated access
+    if project.is_public:
+        return 200, _build_item_response(project, "project")
+
+    # For private projects, require authentication and team access
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required for private items"}
 
     if not verify_item_access(request, project, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -992,15 +1016,60 @@ def get_dashboard_summary(
     project_id: str | None = Query(None),
 ):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required."}
+    # For specific public items, allow unauthenticated access
+    if product_id:
+        try:
+            product = Product.objects.get(pk=product_id)
+            if product.is_public:
+                # Allow unauthenticated access for public product stats
+                pass
+            else:
+                # Private product requires authentication
+                if not request.user or not request.user.is_authenticated:
+                    return 403, {"detail": "Authentication required for private items"}
+        except Product.DoesNotExist:
+            return 404, {"detail": "Product not found"}
+    elif project_id:
+        try:
+            project = Project.objects.get(pk=project_id)
+            if project.is_public:
+                # Allow unauthenticated access for public project stats
+                pass
+            else:
+                # Private project requires authentication
+                if not request.user or not request.user.is_authenticated:
+                    return 403, {"detail": "Authentication required for private items"}
+        except Project.DoesNotExist:
+            return 404, {"detail": "Project not found"}
+    elif component_id:
+        try:
+            component = Component.objects.get(pk=component_id)
+            if component.is_public:
+                # Allow unauthenticated access for public component stats
+                pass
+            else:
+                # Private component requires authentication
+                if not request.user or not request.user.is_authenticated:
+                    return 403, {"detail": "Authentication required for private items"}
+        except Component.DoesNotExist:
+            return 404, {"detail": "Component not found"}
+    else:
+        # General dashboard access requires authentication
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required."}
 
-    user_teams_qs = Team.objects.filter(member__user=request.user)
-
-    # Base querysets for the user's teams
-    products_qs = Product.objects.filter(team__in=user_teams_qs)
-    projects_qs = Project.objects.filter(team__in=user_teams_qs)
-    components_qs = Component.objects.filter(team__in=user_teams_qs)
+    # For authenticated users, use their teams; for public access, filter differently
+    if request.user and request.user.is_authenticated:
+        user_teams_qs = Team.objects.filter(member__user=request.user)
+        # Base querysets for the user's teams
+        products_qs = Product.objects.filter(team__in=user_teams_qs)
+        projects_qs = Project.objects.filter(team__in=user_teams_qs)
+        components_qs = Component.objects.filter(team__in=user_teams_qs)
+    else:
+        # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
+        products_qs = Product.objects.none()
+        projects_qs = Project.objects.none()
+        components_qs = Component.objects.none()
 
     # Import SBOM here to avoid circular import
     from sboms.models import SBOM
@@ -1048,3 +1117,69 @@ def get_dashboard_summary(
         total_components=total_components,
         latest_uploads=latest_uploads_data,
     )
+
+
+@router.get(
+    "/projects/{project_id}/download",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public projects
+)
+@decorate_view(optional_token_auth)
+def download_project_sbom(request: HttpRequest, project_id: str):
+    """Download the consolidated SBOM for a project."""
+    try:
+        project = Project.objects.get(pk=project_id)
+    except Project.DoesNotExist:
+        return 404, {"detail": "Project not found"}
+
+    # Check access permissions
+    if not project.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private projects"}
+        if not verify_item_access(request, project, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Access denied"}
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sbom_path = get_project_sbom_package(project, Path(temp_dir))
+
+            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
+
+            return response
+    except Exception as e:
+        log.error(f"Error generating project SBOM {project_id}: {e}")
+        return 500, {"detail": f"Error generating project SBOM: {str(e)}"}
+
+
+@router.get(
+    "/products/{product_id}/download",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public products
+)
+@decorate_view(optional_token_auth)
+def download_product_sbom(request: HttpRequest, product_id: str):
+    """Download the consolidated SBOM for a product."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    # Check access permissions
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private products"}
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Access denied"}
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sbom_path = get_product_sbom_package(product, Path(temp_dir))
+
+            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
+
+            return response
+    except Exception as e:
+        log.error(f"Error generating product SBOM {product_id}: {e}")
+        return 500, {"detail": f"Error generating product SBOM: {str(e)}"}

@@ -20,14 +20,10 @@ from ..models import Document
 
 
 @pytest.fixture
-def sample_document_component(sample_team, sample_user):
+def sample_document_component(sample_team, sample_user):  # noqa: F811
     """Create a sample document component for testing."""
     # Add sample_user as owner to the team for proper permissions
-    Member.objects.get_or_create(
-        user=sample_user,
-        team=sample_team,
-        defaults={"role": "owner"}
-    )
+    Member.objects.get_or_create(user=sample_user, team=sample_team, defaults={"role": "owner"})
 
     return Component.objects.create(
         name="Test Document Component",
@@ -52,7 +48,7 @@ def sample_document(sample_document_component):
 
 
 @pytest.fixture
-def sample_access_token(sample_user):
+def sample_access_token(sample_user):  # noqa: F811
     """Create a sample access token for API testing."""
     token = create_personal_access_token(sample_user)
     return AccessToken.objects.create(
@@ -65,16 +61,12 @@ def sample_access_token(sample_user):
 @pytest.mark.django_db
 def test_create_document_unauthenticated(client: Client, sample_document_component):
     """Test that unauthenticated users cannot upload documents."""
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": sample_document_component.id, "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 401
@@ -96,11 +88,7 @@ def test_create_document_file_upload_success(
 
     client.force_login(sample_user)
 
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
@@ -111,7 +99,7 @@ def test_create_document_file_upload_success(
             "document_type": "specification",
             "description": "Test document description",
         },
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 201
@@ -143,9 +131,12 @@ def test_create_document_raw_data_success(
     mock_s3_instance.upload_document.return_value = "mocked_filename.pdf"
     mock_s3_client.return_value = mock_s3_instance
 
+    url = reverse("api-1:create_document") + (
+        f"?component_id={sample_document_component.id}&name=API Document&version=2.0"
+        f"&document_type=manual&description=API uploaded document"
+    )
     response = client.post(
-        reverse("api-1:create_document") +
-        f"?component_id={sample_document_component.id}&name=API Document&version=2.0&document_type=manual&description=API uploaded document",
+        url,
         b"document content",  # Raw body content
         content_type="application/octet-stream",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
@@ -173,8 +164,7 @@ def test_create_document_raw_data_missing_name(
 ):
     """Test raw data upload without required name parameter."""
     response = client.post(
-        reverse("api-1:create_document") +
-        f"?component_id={sample_document_component.id}&version=2.0",
+        reverse("api-1:create_document") + f"?component_id={sample_document_component.id}&version=2.0",
         b"document content",
         content_type="application/octet-stream",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
@@ -193,16 +183,12 @@ def test_create_document_component_not_found(
     """Test upload with non-existent component."""
     client.force_login(sample_user)
 
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": "non-existent", "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 404
@@ -214,7 +200,7 @@ def test_create_document_component_not_found(
 def test_create_document_wrong_component_type(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    sample_team,
+    sample_team,  # noqa: F811
 ):
     """Test upload with wrong component type."""
     # Create a non-document component (SBOM type)
@@ -226,16 +212,12 @@ def test_create_document_wrong_component_type(
 
     client.force_login(sample_user)
 
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": component.id, "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 404
@@ -252,16 +234,12 @@ def test_create_document_forbidden(
     """Test that users without permission cannot upload documents."""
     client.force_login(guest_user)
 
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": sample_document_component.id, "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 403
@@ -280,16 +258,12 @@ def test_create_document_file_too_large(
 
     # Create a file larger than 50MB
     large_content = b"x" * (51 * 1024 * 1024)  # 51MB
-    test_file = SimpleUploadedFile(
-        "large_document.pdf",
-        large_content,
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("large_document.pdf", large_content, content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": sample_document_component.id, "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 400
@@ -306,9 +280,7 @@ def test_get_document_success(
     """Test successful document retrieval."""
     client.force_login(sample_user)
 
-    response = client.get(
-        reverse("api-1:get_document", kwargs={"document_id": sample_document.id})
-    )
+    response = client.get(reverse("api-1:get_document", kwargs={"document_id": sample_document.id}))
 
     assert response.status_code == 200
     data = json.loads(response.content)
@@ -327,9 +299,7 @@ def test_get_document_not_found(
     """Test getting non-existent document."""
     client.force_login(sample_user)
 
-    response = client.get(
-        reverse("api-1:get_document", kwargs={"document_id": "non-existent"})
-    )
+    response = client.get(reverse("api-1:get_document", kwargs={"document_id": "non-existent"}))
 
     assert response.status_code == 404
     data = json.loads(response.content)
@@ -345,9 +315,7 @@ def test_get_document_forbidden(
     """Test that users without permission cannot get documents."""
     client.force_login(guest_user)
 
-    response = client.get(
-        reverse("api-1:get_document", kwargs={"document_id": sample_document.id})
-    )
+    response = client.get(reverse("api-1:get_document", kwargs={"document_id": sample_document.id}))
 
     assert response.status_code == 403
     data = json.loads(response.content)
@@ -480,16 +448,12 @@ def test_create_document_with_s3_error(
 
     client.force_login(sample_user)
 
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     response = client.post(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": sample_document_component.id, "version": "1.0"},
-        format="multipart"
+        format="multipart",
     )
 
     assert response.status_code == 400
@@ -504,11 +468,7 @@ def test_create_document_with_access_token(
     sample_document_component,
 ):
     """Test document upload using access token authentication."""
-    test_file = SimpleUploadedFile(
-        "test_document.pdf",
-        b"test document content",
-        content_type="application/pdf"
-    )
+    test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
     with patch("documents.apis.S3Client") as mock_s3_client:
         mock_s3_instance = MagicMock()
@@ -552,13 +512,12 @@ def test_get_document_public_access(
     # The current API requires authentication, so let's create a user and authenticate
     # This test verifies public documents can be accessed by any authenticated user
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
     temp_user = User.objects.create_user(username="tempuser", password="temppass")
     client.force_login(temp_user)
 
-    response = client.get(
-        reverse("api-1:get_document", kwargs={"document_id": public_document.id})
-    )
+    response = client.get(reverse("api-1:get_document", kwargs={"document_id": public_document.id}))
 
     assert response.status_code == 200
     data = json.loads(response.content)
@@ -575,9 +534,7 @@ def test_delete_document_success(
     """Test successful document deletion."""
     client.force_login(sample_user)
 
-    response = client.delete(
-        reverse("api-1:delete_document", kwargs={"document_id": sample_document.id})
-    )
+    response = client.delete(reverse("api-1:delete_document", kwargs={"document_id": sample_document.id}))
 
     assert response.status_code == 204
 
@@ -593,9 +550,7 @@ def test_delete_document_not_found(
     """Test deleting non-existent document."""
     client.force_login(sample_user)
 
-    response = client.delete(
-        reverse("api-1:delete_document", kwargs={"document_id": "non-existent"})
-    )
+    response = client.delete(reverse("api-1:delete_document", kwargs={"document_id": "non-existent"}))
 
     assert response.status_code == 404
     data = json.loads(response.content)
@@ -611,9 +566,7 @@ def test_delete_document_forbidden(
     """Test that users without permission cannot delete documents."""
     client.force_login(guest_user)
 
-    response = client.delete(
-        reverse("api-1:delete_document", kwargs={"document_id": sample_document.id})
-    )
+    response = client.delete(reverse("api-1:delete_document", kwargs={"document_id": sample_document.id}))
 
     assert response.status_code == 403
     data = json.loads(response.content)
@@ -625,7 +578,7 @@ def test_delete_document_member_can_delete(
     client: Client,
     guest_user: AbstractBaseUser,  # noqa: F811
     sample_document,
-    sample_team,
+    sample_team,  # noqa: F811
 ):
     """Test that team members with admin role can delete documents."""
     # Add guest user as admin to the team
@@ -637,11 +590,213 @@ def test_delete_document_member_can_delete(
 
     client.force_login(guest_user)
 
-    response = client.delete(
-        reverse("api-1:delete_document", kwargs={"document_id": sample_document.id})
-    )
+    response = client.delete(reverse("api-1:delete_document", kwargs={"document_id": sample_document.id}))
 
     assert response.status_code == 204
 
     # Verify document was deleted
     assert not Document.objects.filter(id=sample_document.id).exists()
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_public_success(
+    mock_s3_client,
+    client: Client,
+    sample_team,  # noqa: F811
+):
+    """Test successful public document download without authentication."""
+    # Create a public document component
+    public_component = Component.objects.create(
+        name="Public Document Component",
+        team=sample_team,
+        component_type=Component.ComponentType.DOCUMENT,
+        is_public=True,
+    )
+
+    public_document = Document.objects.create(
+        name="Public Document",
+        version="1.0",
+        document_filename="public_doc.pdf",
+        component=public_component,
+        source="manual_upload",
+        content_type="application/pdf",
+    )
+
+    # Mock S3 client
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.return_value = b"public document content"
+    mock_s3_client.return_value = mock_s3_instance
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": public_document.id}))
+
+    assert response.status_code == 200
+    assert response.content == b"public document content"
+    assert response["Content-Type"] == "application/pdf"
+    assert f'attachment; filename="{public_document.name}"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_private_success(
+    mock_s3_client,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_document,
+):
+    """Test successful private document download with authentication."""
+    # Mock S3 client
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.return_value = b"private document content"
+    mock_s3_client.return_value = mock_s3_instance
+
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": sample_document.id}))
+
+    assert response.status_code == 200
+    assert response.content == b"private document content"
+    assert response["Content-Type"] == "application/pdf"
+    assert f'attachment; filename="{sample_document.name}"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_download_document_private_forbidden(
+    client: Client,
+    sample_document,
+):
+    """Test that private documents cannot be downloaded without authentication."""
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": sample_document.id}))
+
+    assert response.status_code == 403
+    data = json.loads(response.content)
+    assert "Access denied" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_download_document_not_found(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+):
+    """Test downloading non-existent document."""
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": "non-existent"}))
+
+    assert response.status_code == 404
+    data = json.loads(response.content)
+    assert "Document not found" in data["detail"]
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_file_not_found(
+    mock_s3_client,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_document,
+):
+    """Test download when S3 file doesn't exist."""
+    # Mock S3 client to return None (file not found)
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.return_value = None
+    mock_s3_client.return_value = mock_s3_instance
+
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": sample_document.id}))
+
+    assert response.status_code == 404
+    data = json.loads(response.content)
+    assert "Document file not found" in data["detail"]
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_s3_error(
+    mock_s3_client,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_document,
+):
+    """Test download handling when S3 raises an error."""
+    # Mock S3 client to raise an exception
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.side_effect = Exception("S3 download failed")
+    mock_s3_client.return_value = mock_s3_instance
+
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": sample_document.id}))
+
+    assert response.status_code == 500
+    data = json.loads(response.content)
+    assert "Error retrieving document: S3 download failed" in data["detail"]
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_with_fallback_filename(
+    mock_s3_client,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_document_component,
+):
+    """Test download with document that has no name (fallback to document_id)."""
+    # Mock S3 client
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.return_value = b"test document content"
+    mock_s3_client.return_value = mock_s3_instance
+
+    # Create document with empty name
+    document = Document.objects.create(
+        name="",
+        version="1.0",
+        document_filename="test_file.pdf",
+        component=sample_document_component,
+        source="manual_upload",
+        content_type="application/pdf",
+        file_size=1024,
+    )
+
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": document.id}))
+
+    assert response.status_code == 200
+    assert response.content == b"test document content"
+    assert f'attachment; filename="document_{document.id}"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+@patch("documents.apis.S3Client")
+def test_download_document_default_content_type(
+    mock_s3_client,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_document_component,
+):
+    """Test download with document that has no content_type."""
+    # Mock S3 client
+    mock_s3_instance = MagicMock()
+    mock_s3_instance.get_document_data.return_value = b"test document content"
+    mock_s3_client.return_value = mock_s3_instance
+
+    # Create document with no content_type
+    document = Document.objects.create(
+        name="Test Document",
+        version="1.0",
+        document_filename="test_file.pdf",
+        component=sample_document_component,
+        source="manual_upload",
+        content_type="",
+        file_size=1024,
+    )
+
+    client.force_login(sample_user)
+
+    response = client.get(reverse("api-1:download_document", kwargs={"document_id": document.id}))
+
+    assert response.status_code == 200
+    assert response.content == b"test document content"
+    assert response["Content-Type"] == "application/octet-stream"

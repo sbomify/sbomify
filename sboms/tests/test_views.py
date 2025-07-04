@@ -397,10 +397,10 @@ def test_sbom_download_project_public_success(client, sample_project, mocker):  
     sample_project.is_public = True
     sample_project.save()
 
-    mock_zip_content = b"mock zip content"
+    mock_zip_content = b"mock sbom content"
     mock_get_package = mocker.patch("core.views.get_project_sbom_package")
-    # Fix: Return a string path instead of a Path object with read_bytes
-    mock_get_package.return_value = "/tmp/mock/path.zip"  # nosec B108
+    # Return a string path for the SBOM file
+    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open to avoid actual file operations
     mock_open = mocker.patch("builtins.open")
@@ -410,8 +410,8 @@ def test_sbom_download_project_public_success(client, sample_project, mocker):  
     response = client.get(uri)
 
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/zip"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.zip"
+    assert response["Content-Type"] == "application/json"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.json"
 
 
 @pytest.mark.django_db
@@ -430,10 +430,10 @@ def test_sbom_download_project_private_authorized(
     session["current_team"] = {"role": "admin"}
     session.save()
 
-    mock_zip_content = b"mock zip content"
+    mock_zip_content = b"mock sbom content"
     mock_get_package = mocker.patch("core.views.get_project_sbom_package")
-    # Fix: Return a string path instead of a Path object with read_bytes
-    mock_get_package.return_value = "/tmp/mock/path.zip"  # nosec B108
+    # Return a string path for the SBOM file
+    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open to avoid actual file operations
     mock_open = mocker.patch("builtins.open")
@@ -446,8 +446,8 @@ def test_sbom_download_project_private_authorized(
     response = client.get(uri)
 
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/zip"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.zip"
+    assert response["Content-Type"] == "application/json"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.json"
 
 
 @pytest.mark.django_db
@@ -532,9 +532,9 @@ def test_sbom_download_product_public_success(client, sample_product, mocker):  
     sample_product.is_public = True
     sample_product.save()
 
-    mock_zip_content = b"mock product zip content"
+    mock_zip_content = b"mock sbom content"
     mock_get_package = mocker.patch("core.views.get_product_sbom_package")
-    mock_get_package.return_value = "/tmp/mock/product_path.zip"  # nosec B108
+    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open similar to existing project tests
     mock_open = mocker.patch("builtins.open")
@@ -544,8 +544,8 @@ def test_sbom_download_product_public_success(client, sample_product, mocker):  
     response = client.get(uri)
 
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/zip"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.zip"
+    assert response["Content-Type"] == "application/json"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.json"
 
 
 @pytest.mark.django_db
@@ -565,9 +565,9 @@ def test_sbom_download_product_private_authorized(
     session["current_team"] = {"role": "admin"}
     session.save()
 
-    mock_zip_content = b"mock authorized product zip content"
+    mock_zip_content = b"mock sbom content"
     mock_get_package = mocker.patch("core.views.get_product_sbom_package")
-    mock_get_package.return_value = "/tmp/mock/authorized_product_path.zip"  # nosec B108
+    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open similar to existing project tests
     mock_open = mocker.patch("builtins.open")
@@ -580,8 +580,8 @@ def test_sbom_download_product_private_authorized(
     response = client.get(uri)
 
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/zip"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.zip"
+    assert response["Content-Type"] == "application/json"
+    assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.json"
 
 
 
