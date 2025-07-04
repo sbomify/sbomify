@@ -84,6 +84,7 @@ export default defineConfig({
         sboms: resolve('./sboms/js/main.ts'),
         teams: resolve('./teams/js/main.ts'),
         billing: resolve('./billing/js/main.ts'),
+        documents: resolve('./documents/js/main.ts'),
         alerts: resolve('./core/js/alerts-global.ts'),
         djangoMessages: resolve('./core/js/django-messages.ts'),
       },
