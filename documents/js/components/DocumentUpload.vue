@@ -27,14 +27,14 @@
       <label for="document-type" class="form-label">Document Type</label>
       <select id="document-type" v-model="documentType" class="form-select">
         <option value="">Select document type (optional)</option>
-        <option value="specification">Specification</option>
-        <option value="manual">Manual</option>
-        <option value="report">Report</option>
-        <option value="license">License</option>
-        <option value="readme">README</option>
         <option value="changelog">Changelog</option>
-        <option value="documentation">Documentation</option>
         <option value="compliance">Compliance</option>
+        <option value="documentation">Documentation</option>
+        <option value="license">License</option>
+        <option value="manual">Manual</option>
+        <option value="readme">README</option>
+        <option value="report">Report</option>
+        <option value="specification">Specification</option>
         <option value="other">Other</option>
       </select>
     </div>
