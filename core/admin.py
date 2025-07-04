@@ -11,6 +11,8 @@ from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils.html import format_html
 
+from documents.admin import DocumentAdmin
+from documents.models import Document
 from sboms.models import SBOM  # SBOM still lives in sboms app
 from teams.models import Member, Team
 
@@ -238,3 +240,4 @@ admin_site.register(Product)
 admin_site.register(Project)
 admin_site.register(Component)
 admin_site.register(SBOM)
+admin_site.register(Document, DocumentAdmin)
