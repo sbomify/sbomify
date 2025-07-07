@@ -25,6 +25,8 @@ from sboms.tests.fixtures import (  # noqa: F401
 from sboms.tests.test_views import setup_test_session
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
+from sboms.models import ProductLink
+from django.contrib.auth.models import User
 
 # =============================================================================
 # PRODUCT CRUD TESTS
@@ -2325,23 +2327,73 @@ def test_product_identifier_private_access_denied(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test that product identifiers are not accessible on private product pages without auth."""
-    # Set product to business plan and create some identifiers
+    """Test that identifiers for private products are not accessible without permissions."""
+    # Set product team to business plan to allow identifiers
     sample_product.team.billing_plan = "business"
     sample_product.team.save()
 
-    # Keep the product private (is_public=False by default)
-    assert not sample_product.is_public
+    # Make product private
+    sample_product.is_public = False
+    sample_product.save()
+
+    # Create a test identifier
+    ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="PRIVATE-SKU-123",
+    )
 
     client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
 
-    # Set up authentication and session for creating identifiers
+    # Test without authentication - should be forbidden
+    response = client.get(url)
+    assert response.status_code == 403
+    assert "Authentication required" in response.json()["detail"]
+
+    # Test with authentication but as a user from different team
+    different_user = User.objects.create_user(
+        username="different_user",
+        email="different@example.com",
+        password=os.environ["DJANGO_TEST_PASSWORD"],
+    )
+
+    assert client.login(username="different_user", password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 403
+    assert "Forbidden" in response.json()["detail"]
+
+
+# =============================================================================
+# PRODUCT LINK CRUD TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_create_product_link_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product link creation."""
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links"
+
+    payload = {
+        "link_type": "website",
+        "title": "Official Website",
+        "url": "https://example.com",
+        "description": "The official company website"
+    }
+
+    # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
-
-    # Create an identifier
-    url = f"/api/v1/products/{sample_product.id}/identifiers"
-    payload = {"identifier_type": "sku", "value": "SKU-PRIVATE-123"}
 
     response = client.post(
         url,
@@ -2349,12 +2401,584 @@ def test_product_identifier_private_access_denied(
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
-    assert response.status_code == 201
 
-    # Now test that unauthenticated users cannot access identifiers for private products
-    client.logout()
+    assert response.status_code == 201
+    data = response.json()
+    assert data["link_type"] == "website"
+    assert data["title"] == "Official Website"
+    assert data["url"] == "https://example.com"
+    assert data["description"] == "The official company website"
+    assert "id" in data
+    assert "created_at" in data
+
+    # Verify link was created in database
+    link = ProductLink.objects.get(id=data["id"])
+    assert link.link_type == "website"
+    assert link.title == "Official Website"
+    assert link.url == "https://example.com"
+    assert link.description == "The official company website"
+    assert link.product_id == sample_product.id
+    assert link.team_id == sample_product.team_id
+
+
+@pytest.mark.django_db
+def test_create_product_link_duplicate_url(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test creating duplicate link fails."""
+    # Create initial link
+    ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Official Website",
+        url="https://example.com",
+        description="Test description",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links"
+
+    payload = {
+        "link_type": "website",
+        "title": "Another Website",
+        "url": "https://example.com",
+        "description": "Another description"
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_list_product_links_authenticated(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test listing links for authenticated users."""
+    # Create test links
+    link1 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Official Website",
+        url="https://example.com",
+        description="Company website",
+    )
+    link2 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="support",
+        title="Support Portal",
+        url="https://support.example.com",
+        description="Get help and support",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    # Check links are in response
+    link_ids = [item["id"] for item in data]
+    assert link1.id in link_ids
+    assert link2.id in link_ids
+
+
+@pytest.mark.django_db
+def test_list_product_links_public_product(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing links for public products without authentication."""
+    # Create a public product
+    product = Product.objects.create(
+        name="Public Product",
+        team=sample_team_with_owner_member.team,
+        is_public=True,
+    )
+
+    # Create test link
+    link = ProductLink.objects.create(
+        product=product,
+        team=product.team,
+        link_type="website",
+        title="Public Website",
+        url="https://public.example.com",
+        description="Public website",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/links"
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["id"] == link.id
+    assert data[0]["title"] == "Public Website"
+    assert data[0]["url"] == "https://public.example.com"
+
+
+@pytest.mark.django_db
+def test_list_product_links_private_product_no_auth(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing links for private products requires authentication."""
+    # Create a private product
+    product = Product.objects.create(
+        name="Private Product",
+        team=sample_team_with_owner_member.team,
+        is_public=False,
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/links"
 
     response = client.get(url)
 
     assert response.status_code == 403
-    assert "Authentication required for private items" in response.json()["detail"]
+    assert "Authentication required" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_update_product_link_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product link update."""
+    # Create test link
+    link = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Old Website",
+        url="https://old.example.com",
+        description="Old description",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links/{link.id}"
+
+    payload = {
+        "link_type": "support",
+        "title": "New Support Portal",
+        "url": "https://support.example.com",
+        "description": "Updated support portal"
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["link_type"] == "support"
+    assert data["title"] == "New Support Portal"
+    assert data["url"] == "https://support.example.com"
+    assert data["description"] == "Updated support portal"
+
+    # Verify update in database
+    link.refresh_from_db()
+    assert link.link_type == "support"
+    assert link.title == "New Support Portal"
+    assert link.url == "https://support.example.com"
+    assert link.description == "Updated support portal"
+
+
+@pytest.mark.django_db
+def test_delete_product_link_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product link deletion."""
+    # Create test link
+    link = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Website to Delete",
+        url="https://delete.example.com",
+        description="This will be deleted",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links/{link.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.delete(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 204
+
+    # Verify deletion in database
+    assert not ProductLink.objects.filter(id=link.id).exists()
+
+
+@pytest.mark.django_db
+def test_bulk_update_product_links_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful bulk update of product links."""
+    # Create existing links
+    link1 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Old Website",
+        url="https://old.example.com",
+        description="Old website",
+    )
+    link2 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="support",
+        title="Old Support",
+        url="https://oldsupport.example.com",
+        description="Old support",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links"
+
+    payload = {
+        "links": [
+            {
+                "link_type": "website",
+                "title": "New Official Website",
+                "url": "https://new.example.com",
+                "description": "Our new website"
+            },
+            {
+                "link_type": "documentation",
+                "title": "Documentation",
+                "url": "https://docs.example.com",
+                "description": "Product documentation"
+            },
+            {
+                "link_type": "repository",
+                "title": "Source Code",
+                "url": "https://github.com/example/product",
+                "description": "Open source repository"
+            }
+        ]
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 3
+
+    # Verify old links are deleted
+    assert not ProductLink.objects.filter(id=link1.id).exists()
+    assert not ProductLink.objects.filter(id=link2.id).exists()
+
+    # Verify new links are created
+    links = ProductLink.objects.filter(product=sample_product)
+    assert links.count() == 3
+
+    titles = list(links.values_list("title", flat=True))
+    assert "New Official Website" in titles
+    assert "Documentation" in titles
+    assert "Source Code" in titles
+
+
+@pytest.mark.django_db
+def test_product_link_permissions(
+    sample_team_with_owner_member: Member,  # noqa: F811
+    sample_user,  # noqa: F811
+):
+    """Test that only owners and admins can manage product links."""
+    from teams.models import Member
+
+    # Create a guest member
+    guest_member = Member.objects.create(
+        user=sample_user,
+        team=sample_team_with_owner_member.team,
+        role="guest",
+    )
+
+    # Create product
+    product = Product.objects.create(
+        name="Test Product",
+        team=sample_team_with_owner_member.team,
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/links"
+
+    payload = {
+        "link_type": "website",
+        "title": "Test Website",
+        "url": "https://test.example.com",
+        "description": "Test description"
+    }
+
+    # Test with guest user - should be forbidden
+    assert client.login(username=sample_user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_team_with_owner_member.team, sample_user)
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert "Only owners and admins" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_product_link_not_found(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test operations on non-existent links."""
+    client = Client()
+
+    # Test update non-existent link
+    url = f"/api/v1/products/{sample_product.id}/links/nonexistent"
+    payload = {
+        "link_type": "website",
+        "title": "Updated Title",
+        "url": "https://new.example.com",
+        "description": "Updated description"
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+    # Test delete non-existent link
+    response = client.delete(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_product_link_validation(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test validation of product link fields."""
+    product = Product.objects.create(
+        name="Test Product",
+        team=sample_team_with_owner_member.team,
+    )
+
+    # Test unique constraint within team
+    link1 = ProductLink.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        link_type="website",
+        title="Website",
+        url="https://unique.example.com",
+        description="Unique URL",
+    )
+
+    # Creating another link with same type and URL in same team should fail
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        ProductLink.objects.create(
+            product=product,
+            team=sample_team_with_owner_member.team,
+            link_type="website",
+            title="Another Website",
+            url="https://unique.example.com",
+            description="Duplicate URL",
+        )
+
+    # But same URL with different type should be allowed
+    link2 = ProductLink.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        link_type="support",
+        title="Support",
+        url="https://different.example.com",
+        description="Different URL",
+    )
+
+    assert link1.id != link2.id
+
+
+@pytest.mark.django_db
+def test_product_with_links_in_response(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product responses include links."""
+    # Create test links
+    link1 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="website",
+        title="Official Website",
+        url="https://example.com",
+        description="Company website",
+    )
+    link2 = ProductLink.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        link_type="support",
+        title="Support Portal",
+        url="https://support.example.com",
+        description="Get help",
+    )
+
+    client = Client()
+    url = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "links" in data
+    assert isinstance(data["links"], list)
+    assert len(data["links"]) == 2
+
+    # Check links data structure
+    link_ids = [item["id"] for item in data["links"]]
+    assert link1.id in link_ids
+    assert link2.id in link_ids
+
+    # Check link fields
+    for link_data in data["links"]:
+        assert "id" in link_data
+        assert "link_type" in link_data
+        assert "title" in link_data
+        assert "url" in link_data
+        assert "description" in link_data
+        assert "created_at" in link_data
+
+
+@pytest.mark.django_db
+def test_product_link_no_billing_restrictions(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product links are available regardless of billing plan."""
+    # Set product team to community plan
+    sample_product.team.billing_plan = "community"
+    sample_product.team.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/links"
+
+    payload = {
+        "link_type": "website",
+        "title": "Community Website",
+        "url": "https://community.example.com",
+        "description": "Available on community plan"
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test create - should succeed even on community plan
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Community Website"
+
+    # Test update - should also succeed
+    link_id = data["id"]
+    update_payload = {
+        "link_type": "support",
+        "title": "Community Support",
+        "url": "https://support.community.example.com",
+        "description": "Support for community users"
+    }
+
+    response = client.put(
+        f"{url}/{link_id}",
+        json.dumps(update_payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Community Support"
+
+    # Test delete - should also succeed
+    response = client.delete(
+        f"{url}/{link_id}",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 204

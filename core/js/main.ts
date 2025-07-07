@@ -35,6 +35,7 @@ import PublicProjectComponents from './components/PublicProjectComponents.vue';
 import PublicProductProjects from './components/PublicProductProjects.vue';
 import PublicDownloadCard from './components/PublicDownloadCard.vue';
 import ProductIdentifiers from './components/ProductIdentifiers.vue';
+import ProductLinks from './components/ProductLinks.vue';
 
 
 // Initialize Vue components
@@ -70,6 +71,7 @@ mountVueComponent('vc-public-project-components', PublicProjectComponents);
 mountVueComponent('vc-public-product-projects', PublicProductProjects);
 mountVueComponent('vc-public-download-card', PublicDownloadCard);
 mountVueComponent('vc-product-identifiers', ProductIdentifiers);
+mountVueComponent('vc-product-links', ProductLinks);
 
 // Declare the global feather variable
 declare global {

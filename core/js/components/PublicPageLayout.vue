@@ -49,6 +49,13 @@
                 />
               </div>
 
+              <div class="product-links-section">
+                <ProductLinks
+                  :productId="itemId"
+                  :hasCrudPermissions="false"
+                />
+              </div>
+
               <div class="product-projects-section">
                 <PublicProductProjects
                   :productId="itemId"
@@ -204,6 +211,7 @@ import PublicProjectComponents from './PublicProjectComponents.vue'
 import PublicDownloadCard from './PublicDownloadCard.vue'
 import PublicCard from './PublicCard.vue'
 import ProductIdentifiers from './ProductIdentifiers.vue'
+import ProductLinks from './ProductLinks.vue'
 import DocumentsTable from '@/documents/js/components/DocumentsTable.vue'
 import SbomsTable from '@/sboms/js/components/SbomsTable.vue'
 

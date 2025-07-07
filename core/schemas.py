@@ -96,6 +96,59 @@ class ProductIdentifierBulkUpdateSchema(BaseModel):
     identifiers: list[ProductIdentifierCreateSchema]
 
 
+# Product link types matching the model
+class ProductLinkType(str, Enum):
+    """Types of product links."""
+
+    WEBSITE = "website"
+    SUPPORT = "support"
+    DOCUMENTATION = "documentation"
+    REPOSITORY = "repository"
+    CHANGELOG = "changelog"
+    RELEASE_NOTES = "release_notes"
+    SECURITY = "security"
+    ISSUE_TRACKER = "issue_tracker"
+    DOWNLOAD = "download"
+    CHAT = "chat"
+    SOCIAL = "social"
+    OTHER = "other"
+
+
+class ProductLinkSchema(BaseModel):
+    """Schema for product link responses."""
+
+    id: str
+    link_type: ProductLinkType
+    title: str
+    url: str
+    description: str
+    created_at: datetime
+
+
+class ProductLinkCreateSchema(BaseModel):
+    """Schema for creating a new product link."""
+
+    link_type: ProductLinkType
+    title: str = Field(..., max_length=255, min_length=1)
+    url: str = Field(..., max_length=500, min_length=1)
+    description: str = Field(default="", max_length=1000)
+
+
+class ProductLinkUpdateSchema(BaseModel):
+    """Schema for updating a product link."""
+
+    link_type: ProductLinkType
+    title: str = Field(..., max_length=255, min_length=1)
+    url: str = Field(..., max_length=500, min_length=1)
+    description: str = Field(default="", max_length=1000)
+
+
+class ProductLinkBulkUpdateSchema(BaseModel):
+    """Schema for bulk updating product links."""
+
+    links: list[ProductLinkCreateSchema]
+
+
 # Product/Project/Component schemas moved from sboms
 class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
@@ -129,6 +182,7 @@ class ProductResponseSchema(BaseModel):
     project_count: int | None = None
     projects: list["ProjectSummarySchema"] | None = None
     identifiers: list[ProductIdentifierSchema] | None = None
+    links: list[ProductLinkSchema] | None = None
 
 
 class ProjectSummarySchema(BaseModel):

@@ -1,4 +1,5 @@
 from django.apps import apps
+from django.core.validators import URLValidator
 from django.db import models
 
 from core.utils import generate_id
@@ -61,6 +62,49 @@ class ProductIdentifier(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_identifier_type_display()}: {self.value}"
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure team consistency with product."""
+        if self.product_id:
+            self.team = self.product.team
+        super().save(*args, **kwargs)
+
+
+class ProductLink(models.Model):
+    """Model to store various product links like website, support, documentation, etc."""
+
+    class LinkType(models.TextChoices):
+        """Types of product links."""
+
+        WEBSITE = "website", "Website"
+        SUPPORT = "support", "Support"
+        DOCUMENTATION = "documentation", "Documentation"
+        REPOSITORY = "repository", "Repository"
+        CHANGELOG = "changelog", "Changelog"
+        RELEASE_NOTES = "release_notes", "Release Notes"
+        SECURITY = "security", "Security"
+        ISSUE_TRACKER = "issue_tracker", "Issue Tracker"
+        DOWNLOAD = "download", "Download"
+        CHAT = "chat", "Chat/Community"
+        SOCIAL = "social", "Social Media"
+        OTHER = "other", "Other"
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_product_links"
+        unique_together = ("team", "link_type", "url")
+        ordering = ["link_type", "title"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="links")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    link_type = models.CharField(max_length=20, choices=LinkType.choices, help_text="Type of product link")
+    title = models.CharField(max_length=255, help_text="Display title for the link")
+    url = models.URLField(max_length=500, help_text="The URL", validators=[URLValidator()])
+    description = models.TextField(blank=True, help_text="Optional description of the link")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.get_link_type_display()}: {self.title}"
 
     def save(self, *args, **kwargs):
         """Override save to ensure team consistency with product."""
