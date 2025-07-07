@@ -35,6 +35,14 @@ from .schemas import (
     ErrorCode,
     ErrorResponse,
     ProductCreateSchema,
+    ProductIdentifierBulkUpdateSchema,
+    ProductIdentifierCreateSchema,
+    ProductIdentifierSchema,
+    ProductIdentifierUpdateSchema,
+    ProductLinkBulkUpdateSchema,
+    ProductLinkCreateSchema,
+    ProductLinkSchema,
+    ProductLinkUpdateSchema,
     ProductPatchSchema,
     ProductResponseSchema,
     ProductUpdateSchema,
@@ -106,6 +114,28 @@ def _build_item_response(item, item_type: str):
                 "is_public": project.is_public,
             }
             for project in item.projects.all()
+        ]
+        # Include identifiers data
+        base_response["identifiers"] = [
+            {
+                "id": identifier.id,
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "created_at": identifier.created_at.isoformat(),
+            }
+            for identifier in item.identifiers.all()
+        ]
+        # Include links data
+        base_response["links"] = [
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "title": link.title,
+                "url": link.url,
+                "description": link.description,
+                "created_at": link.created_at.isoformat(),
+            }
+            for link in item.links.all()
         ]
     elif item_type == "project":
         base_response["component_count"] = item.components.count()
@@ -266,7 +296,7 @@ def list_products(request: HttpRequest):
         return 403, {"detail": "No current team selected"}
 
     try:
-        products = Product.objects.filter(team_id=team_id).prefetch_related("projects")
+        products = Product.objects.filter(team_id=team_id).prefetch_related("projects", "identifiers", "links")
         return 200, [_build_item_response(product, "product") for product in products]
     except Exception as e:
         log.error(f"Error listing products: {e}")
@@ -282,7 +312,7 @@ def list_products(request: HttpRequest):
 def get_product(request: HttpRequest, product_id: str):
     """Get a specific product by ID."""
     try:
-        product = Product.objects.prefetch_related("projects").get(pk=product_id)
+        product = Product.objects.prefetch_related("projects", "identifiers", "links").get(pk=product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found"}
 
@@ -439,6 +469,494 @@ def delete_product(request: HttpRequest, product_id: str):
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
         return 400, {"detail": str(e)}
+
+
+# =============================================================================
+# PRODUCT IDENTIFIER CRUD ENDPOINTS
+# =============================================================================
+
+
+@router.post(
+    "/products/{product_id}/identifiers",
+    response={201: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema):
+    """Create a new product identifier."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+
+    # Check billing plan restrictions - product identifiers only for business and enterprise
+    if is_billing_enabled() and product.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Product identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        with transaction.atomic():
+            # Import here to avoid issues
+            from sboms.models import ProductIdentifier
+
+            identifier = ProductIdentifier.objects.create(
+                product=product,
+                identifier_type=payload.identifier_type,
+                value=payload.value,
+            )
+
+        return 201, {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (
+                f"An identifier of type {payload.identifier_type} "
+                f"with value '{payload.value}' already exists in this team"
+            ),
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except Exception as e:
+        log.error(f"Error creating product identifier: {e}")
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.get(
+    "/products/{product_id}/identifiers",
+    response={200: list[ProductIdentifierSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def list_product_identifiers(request: HttpRequest, product_id: str):
+    """List all identifiers for a product."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    # If product is public, allow unauthenticated access
+    if product.is_public:
+        pass
+    else:
+        # For private products, require authentication and team access
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private items"}
+
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Forbidden"}
+
+    try:
+        identifiers = product.identifiers.all()
+        return 200, [
+            {
+                "id": identifier.id,
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "created_at": identifier.created_at.isoformat(),
+            }
+            for identifier in identifiers
+        ]
+    except Exception as e:
+        log.error(f"Error listing product identifiers: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.put(
+    "/products/{product_id}/identifiers/{identifier_id}",
+    response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_product_identifier(
+    request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
+):
+    """Update a product identifier."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+
+    # Check billing plan restrictions - product identifiers only for business and enterprise
+    if is_billing_enabled() and product.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Product identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        # Import here to avoid issues
+        from sboms.models import ProductIdentifier
+
+        identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
+    except ProductIdentifier.DoesNotExist:
+        return 404, {"detail": "Product identifier not found"}
+
+    try:
+        with transaction.atomic():
+            identifier.identifier_type = payload.identifier_type
+            identifier.value = payload.value
+            identifier.save()
+
+        return 200, {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (
+                f"An identifier of type {payload.identifier_type} "
+                f"with value '{payload.value}' already exists in this team"
+            )
+        }
+    except Exception as e:
+        log.error(f"Error updating product identifier {identifier_id}: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.delete(
+    "/products/{product_id}/identifiers/{identifier_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str):
+    """Delete a product identifier."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+
+    # Check billing plan restrictions - product identifiers only for business and enterprise
+    if is_billing_enabled() and product.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Product identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        # Import here to avoid issues
+        from sboms.models import ProductIdentifier
+
+        identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
+    except ProductIdentifier.DoesNotExist:
+        return 404, {"detail": "Product identifier not found"}
+
+    try:
+        identifier.delete()
+        return 204, None
+    except Exception as e:
+        log.error(f"Error deleting product identifier {identifier_id}: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.put(
+    "/products/{product_id}/identifiers",
+    response={200: list[ProductIdentifierSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def bulk_update_product_identifiers(request: HttpRequest, product_id: str, payload: ProductIdentifierBulkUpdateSchema):
+    """Bulk update product identifiers - replaces all existing identifiers."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+
+    # Check billing plan restrictions - product identifiers only for business and enterprise
+    if is_billing_enabled() and product.team.billing_plan == "community":
+        return 403, {
+            "detail": (
+                "Product identifiers are only available for business and enterprise plans. "
+                "Upgrade your plan to access this feature."
+            ),
+            "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
+        }
+
+    try:
+        with transaction.atomic():
+            # Import here to avoid issues
+            from sboms.models import ProductIdentifier
+
+            # Delete all existing identifiers
+            product.identifiers.all().delete()
+
+            # Create new identifiers
+            new_identifiers = []
+            for identifier_data in payload.identifiers:
+                identifier = ProductIdentifier.objects.create(
+                    product=product,
+                    identifier_type=identifier_data.identifier_type,
+                    value=identifier_data.value,
+                )
+                new_identifiers.append(identifier)
+
+        return 200, [
+            {
+                "id": identifier.id,
+                "identifier_type": identifier.identifier_type,
+                "value": identifier.value,
+                "created_at": identifier.created_at.isoformat(),
+            }
+            for identifier in new_identifiers
+        ]
+
+    except IntegrityError:
+        return 400, {
+            "detail": "One or more identifiers already exist in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except Exception as e:
+        log.error(f"Error bulk updating product identifiers: {e}")
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+# =============================================================================
+# PRODUCT LINK CRUD ENDPOINTS
+# =============================================================================
+
+
+@router.post(
+    "/products/{product_id}/links",
+    response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema):
+    """Create a new product link."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product links"}
+
+    try:
+        with transaction.atomic():
+            # Import here to avoid issues
+            from sboms.models import ProductLink
+
+            link = ProductLink.objects.create(
+                product=product,
+                link_type=payload.link_type,
+                title=payload.title,
+                url=payload.url,
+                description=payload.description,
+            )
+
+        return 201, {
+            "id": link.id,
+            "link_type": link.link_type,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "created_at": link.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (f"A link of type {payload.link_type} " f"with URL '{payload.url}' already exists in this team"),
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except Exception as e:
+        log.error(f"Error creating product link: {e}")
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.get(
+    "/products/{product_id}/links",
+    response={200: list[ProductLinkSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def list_product_links(request: HttpRequest, product_id: str):
+    """List all links for a product."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    # If product is public, allow unauthenticated access
+    if product.is_public:
+        pass
+    else:
+        # For private products, require authentication and team access
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private items"}
+
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Forbidden"}
+
+    try:
+        links = product.links.all()
+        return 200, [
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "title": link.title,
+                "url": link.url,
+                "description": link.description,
+                "created_at": link.created_at.isoformat(),
+            }
+            for link in links
+        ]
+    except Exception as e:
+        log.error(f"Error listing product links: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.put(
+    "/products/{product_id}/links/{link_id}",
+    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema):
+    """Update a product link."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product links"}
+
+    try:
+        # Import here to avoid issues
+        from sboms.models import ProductLink
+
+        link = ProductLink.objects.get(pk=link_id, product=product)
+    except ProductLink.DoesNotExist:
+        return 404, {"detail": "Product link not found"}
+
+    try:
+        with transaction.atomic():
+            link.link_type = payload.link_type
+            link.title = payload.title
+            link.url = payload.url
+            link.description = payload.description
+            link.save()
+
+        return 200, {
+            "id": link.id,
+            "link_type": link.link_type,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "created_at": link.created_at.isoformat(),
+        }
+
+    except IntegrityError:
+        return 400, {
+            "detail": (f"A link of type {payload.link_type} " f"with URL '{payload.url}' already exists in this team")
+        }
+    except Exception as e:
+        log.error(f"Error updating product link {link_id}: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.delete(
+    "/products/{product_id}/links/{link_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
+    """Delete a product link."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product links"}
+
+    try:
+        # Import here to avoid issues
+        from sboms.models import ProductLink
+
+        link = ProductLink.objects.get(pk=link_id, product=product)
+    except ProductLink.DoesNotExist:
+        return 404, {"detail": "Product link not found"}
+
+    try:
+        link.delete()
+        return 204, None
+    except Exception as e:
+        log.error(f"Error deleting product link {link_id}: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.put(
+    "/products/{product_id}/links",
+    response={200: list[ProductLinkSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema):
+    """Bulk update product links - replaces all existing links."""
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found"}
+
+    if not verify_item_access(request, product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage product links"}
+
+    try:
+        with transaction.atomic():
+            # Import here to avoid issues
+            from sboms.models import ProductLink
+
+            # Delete all existing links
+            product.links.all().delete()
+
+            # Create new links
+            new_links = []
+            for link_data in payload.links:
+                link = ProductLink.objects.create(
+                    product=product,
+                    link_type=link_data.link_type,
+                    title=link_data.title,
+                    url=link_data.url,
+                    description=link_data.description,
+                )
+                new_links.append(link)
+
+        return 200, [
+            {
+                "id": link.id,
+                "link_type": link.link_type,
+                "title": link.title,
+                "url": link.url,
+                "description": link.description,
+                "created_at": link.created_at.isoformat(),
+            }
+            for link in new_links
+        ]
+
+    except IntegrityError:
+        return 400, {
+            "detail": "One or more links already exist in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    except Exception as e:
+        log.error(f"Error bulk updating product links: {e}")
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
