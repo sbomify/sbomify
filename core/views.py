@@ -388,6 +388,8 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                             "format_version": sbom_item.format_version,
                             "version": sbom_item.version,
                             "created_at": sbom_item.created_at.isoformat(),
+                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": bool(keys),
                     }
@@ -403,6 +405,8 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                             "format_version": sbom_item.format_version,
                             "version": sbom_item.version,
                             "created_at": sbom_item.created_at.isoformat(),
+                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": False,
                     }
@@ -473,6 +477,8 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                             "format_version": sbom_item.format_version,
                             "version": sbom_item.version,
                             "created_at": sbom_item.created_at.isoformat(),
+                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": bool(keys),
                     }
@@ -489,6 +495,8 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                             "format_version": sbom_item.format_version,
                             "version": sbom_item.version,
                             "created_at": sbom_item.created_at.isoformat(),
+                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": False,
                     }

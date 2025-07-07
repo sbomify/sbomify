@@ -10,6 +10,7 @@ import SbomsTable from './components/SbomsTable.vue'
 import SbomMetadataCard from './components/SbomMetadataCard.vue'
 import SbomCommentCard from './components/SbomCommentCard.vue'
 import SbomActionsCard from './components/SbomActionsCard.vue'
+import NTIAComplianceBadge from './components/NTIAComplianceBadge.vue'
 
 mountVueComponent('vc-editable-single-field', EditableSingleField)
 mountVueComponent('vc-licenses-editor', LicensesEditor)
@@ -20,3 +21,4 @@ mountVueComponent('vc-sboms-table', SbomsTable)
 mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
 mountVueComponent('vc-sbom-comment-card', SbomCommentCard)
 mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
+mountVueComponent('vc-ntia-compliance-badge', NTIAComplianceBadge)

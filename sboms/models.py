@@ -142,6 +142,13 @@ class SBOM(models.Model):
     temporarily removed pending this new implementation.
     """
 
+    class NTIAComplianceStatus(models.TextChoices):
+        """NTIA compliance status choices."""
+
+        COMPLIANT = "compliant", "Compliant"
+        NON_COMPLIANT = "non_compliant", "Non-Compliant"
+        UNKNOWN = "unknown", "Unknown"
+
     class Meta:
         db_table = apps.get_app_config("sboms").name + "_sboms"
         ordering = ["-created_at"]
@@ -156,6 +163,20 @@ class SBOM(models.Model):
     # Where the sbom came from (file-upload, api, github-action, etc)
     source = models.CharField(max_length=255, null=True)
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
+
+    # NTIA compliance fields
+    ntia_compliance_status = models.CharField(
+        max_length=20,
+        choices=NTIAComplianceStatus.choices,
+        default=NTIAComplianceStatus.UNKNOWN,
+        help_text="NTIA minimum elements compliance status",
+    )
+    ntia_compliance_details = models.JSONField(
+        default=dict, blank=True, help_text="Detailed NTIA compliance validation results"
+    )
+    ntia_compliance_checked_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the NTIA compliance check was last performed"
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -181,3 +202,47 @@ class SBOM(models.Model):
             "manual_upload": "Manual Upload",
         }
         return source_display_map.get(self.source, self.source or "Unknown")
+
+    @property
+    def is_ntia_compliant(self) -> bool:
+        """Check if the SBOM is NTIA compliant.
+
+        Returns:
+            True if the SBOM is NTIA compliant, False otherwise.
+        """
+        return self.ntia_compliance_status == self.NTIAComplianceStatus.COMPLIANT
+
+    @property
+    def ntia_compliance_display(self) -> str:
+        """Return a user-friendly display name for NTIA compliance status.
+
+        Returns:
+            A human-readable string representing the NTIA compliance status.
+        """
+        return self.get_ntia_compliance_status_display()
+
+    def get_ntia_compliance_errors(self) -> list:
+        """Get NTIA compliance errors from the details.
+
+        Returns:
+            List of NTIA compliance errors.
+        """
+        if not self.ntia_compliance_details:
+            return []
+        return self.ntia_compliance_details.get("errors", [])
+
+    def get_ntia_compliance_error_count(self) -> int:
+        """Get the number of NTIA compliance errors.
+
+        Returns:
+            Number of NTIA compliance errors.
+        """
+        return len(self.get_ntia_compliance_errors())
+
+    def needs_ntia_compliance_check(self) -> bool:
+        """Check if the SBOM needs an NTIA compliance check.
+
+        Returns:
+            True if the SBOM needs to be checked for NTIA compliance.
+        """
+        return self.ntia_compliance_status == self.NTIAComplianceStatus.UNKNOWN

@@ -94,7 +94,7 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
             )
 
             # The SBOM is saved.
-            sbom.save()  # Ensures consistency if other parts of the transaction expect a save.
+            sbom.save()
             logger.debug(
                 (
                     f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
@@ -129,6 +129,125 @@ def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(
             f"[TASK_process_sbom_licenses] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow Dramatiq to handle retries
+
+
+@dramatiq.actor(queue_name="sbom_ntia_compliance", max_retries=3, time_limit=300000, store_results=True)
+@retry(
+    retry=retry_if_exception_type((OperationalError, ConnectionError)),
+    wait=wait_exponential(multiplier=1, min=1, max=5),  # Start with 1s, max 5s between retries
+    stop=stop_after_delay(30),  # Stop after 30s total
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
+    """
+    Check SBOM for NTIA minimum elements compliance.
+
+    Downloads the SBOM from S3, validates it against NTIA requirements,
+    and stores the results in the database.
+    """
+    logger.info(f"[TASK_check_sbom_ntia_compliance] Starting NTIA compliance check for SBOM ID: {sbom_id}")
+
+    try:
+        with transaction.atomic():
+            # Ensure database connection is alive
+            connection.ensure_connection()
+
+            logger.info(f"[TASK_check_sbom_ntia_compliance] Fetching SBOM ID: {sbom_id} from database.")
+            sbom = SBOM.objects.select_for_update().get(id=sbom_id)
+            logger.info(
+                f"[TASK_check_sbom_ntia_compliance] SBOM ID: {sbom_id} fetched. "
+                f"Format: {sbom.format}, Filename: {sbom.sbom_filename}"
+            )
+
+            if not sbom.sbom_filename:
+                logger.error(f"[TASK_check_sbom_ntia_compliance] SBOM ID: {sbom_id} has no sbom_filename.")
+                return {"error": f"SBOM ID: {sbom_id} has no sbom_filename."}
+
+            # Download SBOM from S3
+            logger.debug(f"[TASK_check_sbom_ntia_compliance] Downloading SBOM {sbom.sbom_filename} from S3.")
+            s3_client = S3Client(bucket_type="SBOMS")
+            sbom_data_bytes = s3_client.get_sbom_data(sbom.sbom_filename)
+
+            if not sbom_data_bytes:
+                logger.error(
+                    f"[TASK_check_sbom_ntia_compliance] Failed to download SBOM "
+                    f"{sbom.sbom_filename} from S3 (empty data)."
+                )
+                return {"error": f"Failed to download SBOM {sbom.sbom_filename} from S3 (empty data)."}
+
+            logger.debug(
+                f"[TASK_check_sbom_ntia_compliance] Downloaded {len(sbom_data_bytes)} bytes "
+                f"for {sbom.sbom_filename}."
+            )
+
+            # Parse SBOM data
+            try:
+                sbom_data_str = sbom_data_bytes.decode("utf-8")
+                sbom_data = json.loads(sbom_data_str)
+                logger.debug(
+                    f"[TASK_check_sbom_ntia_compliance] SBOM {sbom.sbom_filename} successfully parsed as JSON."
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(
+                    f"[TASK_check_sbom_ntia_compliance] SBOM {sbom.sbom_filename} "
+                    f"is not valid JSON or has encoding issues. Error: {e}"
+                )
+                return {
+                    "error": f"SBOM {sbom.sbom_filename} content is not valid JSON or has encoding issues.",
+                    "details": str(e),
+                }
+
+            # Perform NTIA compliance validation
+            from sboms.ntia_validator import validate_sbom_ntia_compliance
+
+            logger.debug(f"[TASK_check_sbom_ntia_compliance] Running NTIA validation for SBOM {sbom_id}")
+            validation_result = validate_sbom_ntia_compliance(sbom_data, sbom.format)
+
+            # Update SBOM with validation results
+            sbom.ntia_compliance_status = validation_result.status.value
+            # Convert result to dict with JSON-serializable datetime
+            result_dict = validation_result.dict()
+            if "checked_at" in result_dict and result_dict["checked_at"]:
+                result_dict["checked_at"] = result_dict["checked_at"].isoformat()
+            sbom.ntia_compliance_details = result_dict
+            sbom.ntia_compliance_checked_at = datetime.now(timezone.utc)
+            sbom.save()
+
+            logger.info(
+                f"[TASK_check_sbom_ntia_compliance] NTIA compliance check completed for SBOM ID: {sbom_id}. "
+                f"Status: {validation_result.status.value}, Errors: {validation_result.error_count}"
+            )
+
+            return {
+                "sbom_id": sbom_id,
+                "status": "NTIA compliance check completed",
+                "compliance_status": validation_result.status.value,
+                "is_compliant": validation_result.is_compliant,
+                "error_count": validation_result.error_count,
+                "message": "NTIA compliance check completed successfully",
+            }
+
+    except SBOM.DoesNotExist:
+        logger.error(f"[TASK_check_sbom_ntia_compliance] SBOM with ID {sbom_id} not found.")
+        return {"error": f"SBOM with ID {sbom_id} not found"}
+    except (DatabaseError, OperationalError) as db_err:
+        logger.error(
+            f"[TASK_check_sbom_ntia_compliance] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow tenacity to handle retries
+    except ConnectionError as conn_err:
+        logger.error(
+            f"[TASK_check_sbom_ntia_compliance] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
+            exc_info=True,
+        )
+        raise  # Re-raise to allow tenacity to handle retries
+    except Exception as e:
+        logger.error(
+            f"[TASK_check_sbom_ntia_compliance] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
             exc_info=True,
         )
         raise  # Re-raise to allow Dramatiq to handle retries
@@ -365,3 +484,4 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
 @dramatiq.actor
 def example_task(message: str):
     logger.info(f"Processing message: {message}")
+    return {"result": f"Processed: {message}"}
