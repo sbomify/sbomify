@@ -207,7 +207,7 @@ const getTooltipText = (): string => {
       const errorCount = props.complianceDetails?.error_count || complianceErrors.value.length
       return `This SBOM has ${errorCount} NTIA compliance issue${errorCount !== 1 ? 's' : ''}. Click for details.`
     case 'unknown':
-      return 'NTIA compliance check is being performed in the background. This usually takes a few seconds to complete.'
+      return 'NTIA compliance check is being performed in the background. This usually takes a few minutes to complete.'
     default:
       return 'NTIA compliance status unknown'
   }
