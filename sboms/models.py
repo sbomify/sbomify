@@ -28,6 +28,47 @@ class Product(models.Model):
         return f"{self.name}(Team ID: {self.team_id})"
 
 
+class ProductIdentifier(models.Model):
+    """Model to store various product identifiers like GTIN, SKU, MPN, etc."""
+
+    class IdentifierType(models.TextChoices):
+        """Types of product identifiers."""
+
+        GTIN_12 = "gtin_12", "GTIN-12 (UPC-A)"
+        GTIN_13 = "gtin_13", "GTIN-13 (EAN-13)"
+        GTIN_14 = "gtin_14", "GTIN-14 / ITF-14"
+        GTIN_8 = "gtin_8", "GTIN-8"
+        SKU = "sku", "SKU"
+        MPN = "mpn", "MPN"
+        ASIN = "asin", "ASIN"
+        GS1_GPC_BRICK = "gs1_gpc_brick", "GS1 GPC Brick code"
+        CPE = "cpe", "CPE"
+        PURL = "purl", "PURL"
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_product_identifiers"
+        unique_together = ("team", "identifier_type", "value")
+        ordering = ["identifier_type", "value"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="identifiers")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    identifier_type = models.CharField(
+        max_length=20, choices=IdentifierType.choices, help_text="Type of product identifier"
+    )
+    value = models.CharField(max_length=255, help_text="The identifier value")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.get_identifier_type_display()}: {self.value}"
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure team consistency with product."""
+        if self.product_id:
+            self.team = self.product.team
+        super().save(*args, **kwargs)
+
+
 class Project(models.Model):
     """Legacy Project model for data persistence only."""
 

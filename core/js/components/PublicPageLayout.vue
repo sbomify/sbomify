@@ -37,55 +37,64 @@
 
         <!-- Main Content -->
         <div class="public-main-content">
-          <!-- Download Card (if download info provided) -->
-          <div v-if="hasDownloadContent && pageType !== 'component-detailed'" class="download-section">
-            <PublicDownloadCard
-              :title="downloadTitle || 'Download'"
-              :description="downloadDescription"
-              :downloadUrl="downloadUrl"
-              :downloadText="downloadButtonText || 'Download'"
-              :downloadIcon="downloadIcon || 'fas fa-download'"
-              :fileInfo="downloadFileInfo"
-              :additionalInfo="downloadAdditionalInfo"
-              :downloadCount="downloadCount"
-              @download="handleDownload"
-            />
-          </div>
-
           <!-- Page Content Based on Type -->
           <div class="content-section">
             <!-- Product Page Content -->
             <div v-if="pageType === 'product'" class="product-content">
-              <PublicCard
-                title="Projects"
-                subtitle="Projects included in this product"
-                icon="fas fa-project-diagram"
-                variant="default"
-                size="lg"
-              >
+              <div class="product-identifiers-section">
+                <ProductIdentifiers
+                  :productId="itemId"
+                  :hasCrudPermissions="false"
+                  billingPlan="business"
+                />
+              </div>
+
+              <div class="product-projects-section">
                 <PublicProductProjects
                   :productId="itemId"
                   :brandColor="brandColor"
                   :accentColor="accentColor"
                 />
-              </PublicCard>
+              </div>
+
+              <!-- Download Card for Product -->
+              <div v-if="hasDownloadContent" class="download-section">
+                <PublicDownloadCard
+                  :title="downloadTitle || 'Download Product SBOM'"
+                  :description="downloadDescription"
+                  :downloadUrl="downloadUrl"
+                  :downloadText="downloadButtonText || 'Download SBOM'"
+                  :downloadIcon="downloadIcon || 'fas fa-download'"
+                  :fileInfo="downloadFileInfo"
+                  :additionalInfo="downloadAdditionalInfo"
+                  :downloadCount="downloadCount"
+                  @download="handleDownload"
+                />
+              </div>
             </div>
 
             <!-- Project Page Content -->
             <div v-else-if="pageType === 'project'" class="project-content">
-              <PublicCard
-                title="Components"
-                subtitle="Components included in this project"
-                icon="fas fa-cube"
-                variant="default"
-                size="lg"
-              >
-                <PublicProjectComponents
-                  :projectId="itemId"
-                  :brandColor="brandColor"
-                  :accentColor="accentColor"
+              <PublicProjectComponents
+                :projectId="itemId"
+                :brandColor="brandColor"
+                :accentColor="accentColor"
+              />
+
+              <!-- Download Card for Project -->
+              <div v-if="hasDownloadContent" class="download-section">
+                <PublicDownloadCard
+                  :title="downloadTitle || 'Download Project SBOM'"
+                  :description="downloadDescription"
+                  :downloadUrl="downloadUrl"
+                  :downloadText="downloadButtonText || 'Download SBOM'"
+                  :downloadIcon="downloadIcon || 'fas fa-download'"
+                  :fileInfo="downloadFileInfo"
+                  :additionalInfo="downloadAdditionalInfo"
+                  :downloadCount="downloadCount"
+                  @download="handleDownload"
                 />
-              </PublicCard>
+              </div>
             </div>
 
             <!-- Component Page Content -->
@@ -166,6 +175,8 @@
             </div>
           </div>
 
+
+
           <!-- Additional Information -->
           <div v-if="additionalSections && additionalSections.length > 0" class="additional-sections">
             <PublicCard
@@ -192,6 +203,7 @@ import PublicProductProjects from './PublicProductProjects.vue'
 import PublicProjectComponents from './PublicProjectComponents.vue'
 import PublicDownloadCard from './PublicDownloadCard.vue'
 import PublicCard from './PublicCard.vue'
+import ProductIdentifiers from './ProductIdentifiers.vue'
 import DocumentsTable from '@/documents/js/components/DocumentsTable.vue'
 import SbomsTable from '@/sboms/js/components/SbomsTable.vue'
 
@@ -545,6 +557,20 @@ const handleAction = (action: QuickAction) => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* Product and Project Content Sections */
+.product-content,
+.project-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.product-identifiers-section,
+.product-projects-section,
+.project-components-section {
+  margin-bottom: 0;
 }
 
 .component-download-section {

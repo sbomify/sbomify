@@ -275,6 +275,7 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
+            "team_billing_plan": getattr(product.team, "billing_plan", "community"),
         },
     )
 

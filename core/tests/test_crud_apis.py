@@ -13,6 +13,7 @@ from pytest_mock.plugin import MockerFixture
 from access_tokens.models import AccessToken
 from billing.models import BillingPlan
 from core.models import Component, Product, Project
+from sboms.models import ProductIdentifier
 from core.tests.fixtures import sample_user  # noqa: F401
 from sboms.tests.fixtures import (  # noqa: F401
     sample_access_token,
@@ -1600,3 +1601,760 @@ class TestBillingPlanLimitsAPI:
         )
         assert response.status_code == 403
         assert "No active billing plan" in response.json()["detail"]
+
+
+# =============================================================================
+# PRODUCT IDENTIFIER CRUD TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_create_product_identifier_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product identifier creation."""
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["identifier_type"] == "sku"
+    assert data["value"] == "SKU123456"
+    assert "id" in data
+    assert "created_at" in data
+
+    # Verify identifier was created in database
+    identifier = ProductIdentifier.objects.get(id=data["id"])
+    assert identifier.identifier_type == "sku"
+    assert identifier.value == "SKU123456"
+    assert identifier.product_id == sample_product.id
+    assert identifier.team_id == sample_product.team_id
+
+
+@pytest.mark.django_db
+def test_create_product_identifier_duplicate_value(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test creating duplicate identifier fails."""
+    # Create initial identifier
+    ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_list_product_identifiers_authenticated(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test listing identifiers for authenticated users."""
+    # Create test identifiers
+    identifier1 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+    identifier2 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="gtin_12",
+        value="123456789012",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    # Check identifiers are in response
+    identifier_ids = [item["id"] for item in data]
+    assert identifier1.id in identifier_ids
+    assert identifier2.id in identifier_ids
+
+
+@pytest.mark.django_db
+def test_list_product_identifiers_public_product(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing identifiers for public products without authentication."""
+    # Create a public product
+    product = Product.objects.create(
+        name="Public Product",
+        team=sample_team_with_owner_member.team,
+        is_public=True,
+    )
+
+    # Create test identifier
+    identifier = ProductIdentifier.objects.create(
+        product=product,
+        team=product.team,
+        identifier_type="sku",
+        value="PUBLIC-SKU-123",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/identifiers"
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["id"] == identifier.id
+    assert data[0]["value"] == "PUBLIC-SKU-123"
+
+
+@pytest.mark.django_db
+def test_list_product_identifiers_private_product_no_auth(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test listing identifiers for private products requires authentication."""
+    # Create a private product
+    product = Product.objects.create(
+        name="Private Product",
+        team=sample_team_with_owner_member.team,
+        is_public=False,
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/identifiers"
+
+    response = client.get(url)
+
+    assert response.status_code == 403
+    assert "Authentication required" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_update_product_identifier_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product identifier update."""
+    # Create test identifier
+    identifier = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers/{identifier.id}"
+
+    payload = {"identifier_type": "mpn", "value": "MPN789012"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["identifier_type"] == "mpn"
+    assert data["value"] == "MPN789012"
+
+    # Verify update in database
+    identifier.refresh_from_db()
+    assert identifier.identifier_type == "mpn"
+    assert identifier.value == "MPN789012"
+
+
+@pytest.mark.django_db
+def test_delete_product_identifier_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful product identifier deletion."""
+    # Create test identifier
+    identifier = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers/{identifier.id}"
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.delete(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 204
+
+    # Verify deletion in database
+    assert not ProductIdentifier.objects.filter(id=identifier.id).exists()
+
+
+@pytest.mark.django_db
+def test_bulk_update_product_identifiers_success(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test successful bulk update of product identifiers."""
+    # Create existing identifiers
+    identifier1 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="OLD-SKU",
+    )
+    identifier2 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="mpn",
+        value="OLD-MPN",
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {
+        "identifiers": [
+            {"identifier_type": "sku", "value": "NEW-SKU-123"},
+            {"identifier_type": "gtin_12", "value": "123456789012"},
+            {"identifier_type": "asin", "value": "B08N5WRWNW"},
+        ]
+    }
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 3
+
+    # Verify old identifiers are deleted
+    assert not ProductIdentifier.objects.filter(id=identifier1.id).exists()
+    assert not ProductIdentifier.objects.filter(id=identifier2.id).exists()
+
+    # Verify new identifiers are created
+    identifiers = ProductIdentifier.objects.filter(product=sample_product)
+    assert identifiers.count() == 3
+
+    values = list(identifiers.values_list("value", flat=True))
+    assert "NEW-SKU-123" in values
+    assert "123456789012" in values
+    assert "B08N5WRWNW" in values
+
+
+@pytest.mark.django_db
+def test_product_identifier_permissions(
+    sample_team_with_owner_member: Member,  # noqa: F811
+    sample_user,  # noqa: F811
+):
+    """Test that only owners and admins can manage product identifiers."""
+    from teams.models import Member
+
+    # Create a guest member
+    guest_member = Member.objects.create(
+        user=sample_user,
+        team=sample_team_with_owner_member.team,
+        role="guest",
+    )
+
+    # Create product
+    product = Product.objects.create(
+        name="Test Product",
+        team=sample_team_with_owner_member.team,
+    )
+
+    client = Client()
+    url = f"/api/v1/products/{product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Test with guest user - should be forbidden
+    assert client.login(username=sample_user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_team_with_owner_member.team, sample_user)
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert "Only owners and admins" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_product_identifier_not_found(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test operations on non-existent identifiers."""
+    client = Client()
+
+    # Test update non-existent identifier
+    url = f"/api/v1/products/{sample_product.id}/identifiers/nonexistent"
+    payload = {"identifier_type": "sku", "value": "NEW-VALUE"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+    # Test delete non-existent identifier
+    response = client.delete(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_product_identifier_validation(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test validation of product identifier fields."""
+    product = Product.objects.create(
+        name="Test Product",
+        team=sample_team_with_owner_member.team,
+    )
+
+    # Test unique constraint within team
+    identifier1 = ProductIdentifier.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        identifier_type="sku",
+        value="UNIQUE-SKU",
+    )
+
+    # Creating another identifier with same type and value in same team should fail
+    from django.db import IntegrityError
+    with pytest.raises(IntegrityError):
+        ProductIdentifier.objects.create(
+            product=product,
+            team=sample_team_with_owner_member.team,
+            identifier_type="sku",
+            value="UNIQUE-SKU",
+        )
+
+    # But same value with different type should be allowed
+    identifier2 = ProductIdentifier.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        identifier_type="mpn",
+        value="UNIQUE-SKU-2",  # Use different value to avoid confusion
+    )
+
+    assert identifier1.id != identifier2.id
+
+
+@pytest.mark.django_db
+def test_product_with_identifiers_in_response(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product responses include identifiers."""
+    # Create test identifiers
+    identifier1 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+    identifier2 = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="gtin_12",
+        value="123456789012",
+    )
+
+    client = Client()
+    url = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "identifiers" in data
+    assert isinstance(data["identifiers"], list)
+    assert len(data["identifiers"]) == 2
+
+    # Check identifiers data structure
+    identifier_ids = [item["id"] for item in data["identifiers"]]
+    assert identifier1.id in identifier_ids
+    assert identifier2.id in identifier_ids
+
+    # Check identifier fields
+    for identifier_data in data["identifiers"]:
+        assert "id" in identifier_data
+        assert "identifier_type" in identifier_data
+        assert "value" in identifier_data
+        assert "created_at" in identifier_data
+
+
+@pytest.mark.django_db
+def test_product_identifier_billing_restrictions(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product identifiers are restricted to business and enterprise plans."""
+    # Set product team to community plan
+    sample_product.team.billing_plan = "community"
+    sample_product.team.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test create - should be forbidden for community plan
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 403
+    assert "business and enterprise plans" in response.json()["detail"]
+    assert response.json()["error_code"] == "BILLING_LIMIT_EXCEEDED"
+
+    # Create identifier directly for testing update/delete restrictions
+    from sboms.models import ProductIdentifier
+    identifier = ProductIdentifier.objects.create(
+        product=sample_product,
+        team=sample_product.team,
+        identifier_type="sku",
+        value="SKU123456",
+    )
+
+    # Test update - should be forbidden for community plan
+    update_url = f"/api/v1/products/{sample_product.id}/identifiers/{identifier.id}"
+    update_payload = {"identifier_type": "mpn", "value": "MPN789012"}
+
+    response = client.put(
+        update_url,
+        json.dumps(update_payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 403
+    assert "business and enterprise plans" in response.json()["detail"]
+
+    # Test delete - should be forbidden for community plan
+    response = client.delete(
+        update_url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 403
+    assert "business and enterprise plans" in response.json()["detail"]
+
+    # Test bulk update - should be forbidden for community plan
+    bulk_payload = {
+        "identifiers": [
+            {"identifier_type": "sku", "value": "NEW-SKU-123"},
+            {"identifier_type": "gtin_12", "value": "123456789012"},
+        ]
+    }
+
+    response = client.put(
+        url,
+        json.dumps(bulk_payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 403
+    assert "business and enterprise plans" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_product_identifier_business_plan_allowed(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product identifiers work for business plan users."""
+    # Set product team to business plan
+    sample_product.team.billing_plan = "business"
+    sample_product.team.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test create - should work for business plan
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["identifier_type"] == "sku"
+    assert response.json()["value"] == "SKU123456"
+
+
+@pytest.mark.django_db
+def test_product_identifier_enterprise_plan_allowed(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product identifiers work for enterprise plan users."""
+    # Set product team to enterprise plan
+    sample_product.team.billing_plan = "enterprise"
+    sample_product.team.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test create - should work for enterprise plan
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["identifier_type"] == "sku"
+    assert response.json()["value"] == "SKU123456"
+
+
+@pytest.mark.django_db
+def test_product_identifier_billing_disabled(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    mocker,  # noqa: F811
+):
+    """Test that product identifiers work when billing is disabled."""
+    # Mock billing as disabled
+    mocker.patch('core.apis.is_billing_enabled', return_value=False)
+
+    # Set product team to community plan (should be ignored when billing is disabled)
+    sample_product.team.billing_plan = "community"
+    sample_product.team.save()
+
+    client = Client()
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    payload = {"identifier_type": "sku", "value": "SKU123456"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test create - should work when billing is disabled
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["identifier_type"] == "sku"
+    assert response.json()["value"] == "SKU123456"
+
+
+@pytest.mark.django_db
+def test_product_identifier_public_access(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product identifiers are visible on public product pages."""
+    # Set product to business plan and create some identifiers
+    sample_product.team.billing_plan = "business"
+    sample_product.team.save()
+
+    # Make the product public
+    sample_product.is_public = True
+    sample_product.save()
+
+    client = Client()
+
+    # Set up authentication and session for creating identifiers
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Create a few identifiers
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+
+    identifiers_data = [
+        {"identifier_type": "sku", "value": "SKU-PUBLIC-123"},
+        {"identifier_type": "gtin_13", "value": "1234567890123"},
+        {"identifier_type": "mpn", "value": "MPN-ABC-456"}
+    ]
+
+    for payload in identifiers_data:
+        response = client.post(
+            url,
+            json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+        assert response.status_code == 201
+
+    # Now test public access (without authentication)
+    client.logout()
+
+    # Test that unauthenticated users can view identifiers for public products
+    response = client.get(url)
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert len(response_data) == 3
+
+    # Verify the identifiers are returned correctly
+    identifier_values = [item["value"] for item in response_data]
+    assert "SKU-PUBLIC-123" in identifier_values
+    assert "1234567890123" in identifier_values
+    assert "MPN-ABC-456" in identifier_values
+
+    # Verify all expected fields are present
+    for identifier in response_data:
+        assert "id" in identifier
+        assert "identifier_type" in identifier
+        assert "value" in identifier
+        assert "created_at" in identifier
+
+
+@pytest.mark.django_db
+def test_product_identifier_private_access_denied(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that product identifiers are not accessible on private product pages without auth."""
+    # Set product to business plan and create some identifiers
+    sample_product.team.billing_plan = "business"
+    sample_product.team.save()
+
+    # Keep the product private (is_public=False by default)
+    assert not sample_product.is_public
+
+    client = Client()
+
+    # Set up authentication and session for creating identifiers
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Create an identifier
+    url = f"/api/v1/products/{sample_product.id}/identifiers"
+    payload = {"identifier_type": "sku", "value": "SKU-PRIVATE-123"}
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+    assert response.status_code == 201
+
+    # Now test that unauthenticated users cannot access identifiers for private products
+    client.logout()
+
+    response = client.get(url)
+
+    assert response.status_code == 403
+    assert "Authentication required for private items" in response.json()["detail"]

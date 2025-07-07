@@ -51,6 +51,51 @@ class ComponentType(str, Enum):
     DOCUMENT = "document"
 
 
+# Product identifier types matching the model
+class ProductIdentifierType(str, Enum):
+    """Types of product identifiers."""
+
+    GTIN_12 = "gtin_12"
+    GTIN_13 = "gtin_13"
+    GTIN_14 = "gtin_14"
+    GTIN_8 = "gtin_8"
+    SKU = "sku"
+    MPN = "mpn"
+    ASIN = "asin"
+    GS1_GPC_BRICK = "gs1_gpc_brick"
+    CPE = "cpe"
+    PURL = "purl"
+
+
+class ProductIdentifierSchema(BaseModel):
+    """Schema for product identifier responses."""
+
+    id: str
+    identifier_type: ProductIdentifierType
+    value: str
+    created_at: datetime
+
+
+class ProductIdentifierCreateSchema(BaseModel):
+    """Schema for creating a new product identifier."""
+
+    identifier_type: ProductIdentifierType
+    value: str = Field(..., max_length=255, min_length=1)
+
+
+class ProductIdentifierUpdateSchema(BaseModel):
+    """Schema for updating a product identifier."""
+
+    identifier_type: ProductIdentifierType
+    value: str = Field(..., max_length=255, min_length=1)
+
+
+class ProductIdentifierBulkUpdateSchema(BaseModel):
+    """Schema for bulk updating product identifiers."""
+
+    identifiers: list[ProductIdentifierCreateSchema]
+
+
 # Product/Project/Component schemas moved from sboms
 class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
@@ -83,6 +128,7 @@ class ProductResponseSchema(BaseModel):
     is_public: bool
     project_count: int | None = None
     projects: list["ProjectSummarySchema"] | None = None
+    identifiers: list[ProductIdentifierSchema] | None = None
 
 
 class ProjectSummarySchema(BaseModel):

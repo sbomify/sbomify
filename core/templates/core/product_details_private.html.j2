@@ -219,6 +219,14 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     </div>
     <div class="row mt-3">
         <div class="col-12">
+            <div class="vc-product-identifiers"
+                 data-product-id="{{ product.id }}"
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
+                 data-billing-plan="{{ team_billing_plan }}"></div>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
             <div class="standard-card">
                 <div class="card download-card shadow-sm">
                     <div class="card-header">
