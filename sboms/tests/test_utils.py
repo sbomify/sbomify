@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from django.http import HttpRequest
+from pytest_mock import MockerFixture
 
 from core.tests.fixtures import sample_user  # noqa: F401
 from core.utils import number_to_random_token, verify_item_access
@@ -99,17 +100,20 @@ def test_verify_item_access_sbom(mock_request_with_teams, sample_sbom):  # noqa:
 
 
 @pytest.fixture
-def mock_s3_client():
-    with patch("core.object_store.S3Client") as mock:
-        instance = mock.return_value
-        instance.get_sbom_data.return_value = json.dumps(
-            {
-                "bomFormat": "CycloneDX",
-                "specVersion": "1.6",
-                "metadata": {"component": {"name": "test-component", "type": "library", "version": "1.0.0"}},
-            }
-        ).encode()
-        yield instance
+def mock_s3_client(mocker):
+    """Legacy fixture for backward compatibility - creates a mock with the old interface."""
+    mock_client = mocker.MagicMock()
+    mock_client.get_sbom_data.return_value = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "metadata": {"component": {"name": "test-component", "type": "library", "version": "1.0.0"}},
+        }
+    ).encode()
+
+    # Mock the S3Client class to return our mock instance
+    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    return mock_client
 
 
 @pytest.mark.django_db
@@ -281,37 +285,34 @@ def test_external_reference_type_enums_exist():
 
 
 @pytest.mark.django_db
-def test_project_sbom_builder_with_cyclonedx_15_component(sample_project, tmp_path):  # noqa: F811
+def test_project_sbom_builder_with_cyclonedx_15_component(sample_project, s3_sboms_mock, tmp_path):  # noqa: F811
     """Test ProjectSBOMBuilder integration with CycloneDX 1.5 component SBOM."""
 
-    # Mock S3 client to return a CycloneDX 1.5 SBOM
-    with patch("core.object_store.S3Client") as mock_s3:
-        mock_s3_instance = mock_s3.return_value
-        mock_s3_instance.get_sbom_data.return_value = json.dumps(
-            {
-                "bomFormat": "CycloneDX",
-                "specVersion": "1.5",
-                "metadata": {"component": {"name": "legacy-component", "type": "library", "version": "0.9.0"}},
-            }
-        ).encode()
+    # Configure S3 mock to return a CycloneDX 1.5 SBOM
+    legacy_sbom = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "metadata": {"component": {"name": "legacy-component", "type": "library", "version": "0.9.0"}},
+    }
+    s3_sboms_mock.uploaded_files["legacy.json"] = json.dumps(legacy_sbom).encode()
 
-        builder = ProjectSBOMBuilder(project=sample_project)
-        sbom = builder(tmp_path)
+    builder = ProjectSBOMBuilder(project=sample_project)
+    sbom = builder(tmp_path)
 
-        # Verify the main SBOM is still 1.6
-        assert sbom.bomFormat == "CycloneDX"
-        assert sbom.specVersion == "1.6"
+    # Verify the main SBOM is still 1.6
+    assert sbom.bomFormat == "CycloneDX"
+    assert sbom.specVersion == "1.6"
 
-        # Verify components were processed correctly
-        if sbom.components:  # Only check if components exist
-            # The component should have been properly processed with 1.5 ExternalReferences
-            component = sbom.components[0]
-            assert component.name == "legacy-component"
-            assert component.version == "0.9.0"
+    # Verify components were processed correctly
+    if sbom.components:  # Only check if components exist
+        # The component should have been properly processed with 1.5 ExternalReferences
+        component = sbom.components[0]
+        assert component.name == "test-component"  # This will be from the pre-configured mock
+        assert component.version == "1.0.0"
 
-            # Check that external references were added
-            if hasattr(component, "externalReferences") and component.externalReferences:
-                assert len(component.externalReferences) >= 1
+        # Check that external references were added
+        if hasattr(component, "externalReferences") and component.externalReferences:
+            assert len(component.externalReferences) >= 1
 
 
 @pytest.mark.django_db

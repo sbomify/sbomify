@@ -299,9 +299,10 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     """Test SBOM download functionality."""
+    from core.tests.s3_fixtures import create_s3_method_mock
+
     mocker.patch("boto3.resource")
-    mocked_s3_get_file_data = mocker.patch("core.object_store.S3Client.get_file_data")
-    mocked_s3_get_file_data.return_value = b'{"name": "com.github.test/test", "a": 1}'
+    create_s3_method_mock(mocker, "get_file_data", return_value=b'{"name": "com.github.test/test", "a": 1}')
 
     client = Client()
 
@@ -322,9 +323,10 @@ def test_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
 
 @pytest.mark.django_db
 def test_public_sbom_download(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    from core.tests.s3_fixtures import create_s3_method_mock
+
     mocker.patch("boto3.resource")
-    mocked_s3_get_file_data = mocker.patch("core.object_store.S3Client.get_file_data")
-    mocked_s3_get_file_data.return_value = b'{"name": "com.github.test/test", "a": 1}'
+    create_s3_method_mock(mocker, "get_file_data", return_value=b'{"name": "com.github.test/test", "a": 1}')
 
     sample_sbom.component.is_public = True
     sample_sbom.component.save()
