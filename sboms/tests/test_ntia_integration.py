@@ -269,6 +269,25 @@ class TestNTIAComplianceIntegration:
 
     def test_signal_triggered_compliance_check(self, component, compliant_cyclonedx_sbom):
         """Test that NTIA compliance checking is triggered by SBOM creation signal."""
+        # Set up team with billing plan that includes NTIA compliance
+        from billing.models import BillingPlan
+
+        # Create or get a billing plan that includes NTIA compliance
+        billing_plan, created = BillingPlan.objects.get_or_create(
+            key="business",
+            defaults={
+                "name": "Business Plan",
+                "max_users": 10,
+                "max_products": 100,
+                "max_projects": 100,
+                "max_components": 1000,
+            }
+        )
+
+        # Set the team's billing plan
+        component.team.billing_plan = billing_plan.key
+        component.team.save()
+
         # Mock the task to verify it gets called
         with patch('sbomify.tasks.check_sbom_ntia_compliance.send_with_options') as mock_task:
             # Create SBOM directly (simulates what happens in upload endpoints)

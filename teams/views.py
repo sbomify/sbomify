@@ -108,7 +108,7 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_current_team(["owner", "admin", "guest"])
+@validate_role_in_current_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
 

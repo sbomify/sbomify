@@ -167,11 +167,11 @@ def _build_item_response(item, item_type: str):
 )
 def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
     "Get all items of a specific type (across all teams) that belong to the current user."
-    user_teams = get_user_teams(user=request.user, include_team_id=True)
+    user_teams = get_user_teams(user=request.user)
     Model = item_type_map[item_type]
 
     result = []
-    team_id_to_key = {v["team_id"]: k for k, v in user_teams.items() if "team_id" in v}
+    team_id_to_key = {v["id"]: k for k, v in user_teams.items() if "id" in v}
     item_records = Model.objects.filter(team_id__in=team_id_to_key.keys())
 
     for item in item_records:

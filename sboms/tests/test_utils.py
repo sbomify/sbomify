@@ -475,8 +475,13 @@ def test_project_sbom_builder_serialization(sample_project, tmp_path):  # noqa: 
     from sboms.models import SBOM, Component, ProjectComponent
     from sboms.utils import ProjectSBOMBuilder
 
-    # Create a component with SBOM
-    component = Component.objects.create(name="test-component", team=sample_project.team, component_type="sbom")
+    # Create a component with SBOM (must be public to be included in project SBOM)
+    component = Component.objects.create(
+        name="test-component",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True
+    )
 
     sbom = SBOM.objects.create(
         name="test-sbom", component=component, format="cyclonedx", format_version="1.6", sbom_filename="test.cdx.json"
@@ -548,10 +553,20 @@ def test_mixed_cyclonedx_versions_serialization(sample_project, tmp_path):  # no
     from sboms.models import SBOM, Component, ProjectComponent
     from sboms.utils import ProjectSBOMBuilder
 
-    # Create components with different CycloneDX versions
-    component1 = Component.objects.create(name="component1", team=sample_project.team, component_type="sbom")
+    # Create components with different CycloneDX versions (must be public to be included in project SBOM)
+    component1 = Component.objects.create(
+        name="component1",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True
+    )
 
-    component2 = Component.objects.create(name="component2", team=sample_project.team, component_type="sbom")
+    component2 = Component.objects.create(
+        name="component2",
+        team=sample_project.team,
+        component_type="sbom",
+        is_public=True
+    )
 
     # Create SBOMs with different versions
     sbom1 = SBOM.objects.create(
