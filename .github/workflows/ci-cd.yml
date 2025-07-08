@@ -149,7 +149,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Run tests for this specific group
-          poetry run pytest --tb=short -v ${{ matrix.test-group.path }} | tee test_results.txt || true
+          poetry run pytest --tb=short -v ${{ matrix.test-group.path }} | tee test_results.txt
+          PYTEST_EXIT_CODE=$?
 
           # Add summary to GitHub
           echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
@@ -162,8 +163,8 @@ jobs:
             grep "FAILED" test_results.txt >> $GITHUB_STEP_SUMMARY || true
           fi
 
-          # Exit with failure if tests failed
-          if grep -q "failed" test_results.txt; then
+          # Exit with failure if tests failed (use pytest exit code)
+          if [ $PYTEST_EXIT_CODE -ne 0 ]; then
             echo "Tests failed in ${{ matrix.test-group.name }}"
             exit 1
           fi
