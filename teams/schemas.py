@@ -30,6 +30,46 @@ class TeamResponseSchema(BaseModel):
     billing_plan: str | None
 
 
+class TeamListItemSchema(BaseModel):
+    """Schema for team list item in dashboard."""
+
+    key: str
+    name: str
+    role: str
+    member_count: int
+    invitation_count: int
+    is_default_team: bool
+    membership_id: str
+
+
+class UserSchema(BaseModel):
+    """Schema for user data."""
+
+    id: int
+    first_name: str
+    last_name: str
+    email: str
+
+
+class MemberSchema(BaseModel):
+    """Schema for team member data."""
+
+    id: int
+    user: UserSchema
+    role: str
+    is_default_team: bool
+
+
+class InvitationSchema(BaseModel):
+    """Schema for team invitation data."""
+
+    id: int
+    email: str
+    role: str
+    created_at: str
+    expires_at: str
+
+
 class BrandingInfo(BaseModel):
     icon: str = ""
     logo: str = ""
