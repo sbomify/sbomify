@@ -29,6 +29,7 @@ def tests_init():
 
 pytest_plugins = [
    "core.tests.fixtures",
+   "core.tests.s3_fixtures",
    "teams.fixtures",
    "sboms.tests.fixtures",
 ]

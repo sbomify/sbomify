@@ -6,8 +6,10 @@ import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client, override_settings
 from django.urls import reverse
+from pytest_mock import MockerFixture
 
 from core.tests.fixtures import guest_user, sample_user  # noqa: F401
+from core.tests.s3_fixtures import create_documents_views_mock
 from sboms.models import Component
 from teams.fixtures import sample_team  # noqa: F401
 from teams.models import Member
@@ -196,18 +198,14 @@ def test_document_details_public_private_document(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_success(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document,
 ):
     """Test successful document download."""
-    # Mock S3 client
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.return_value = b"test document content"
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="success")
 
     client.force_login(sample_user)
 
@@ -222,24 +220,20 @@ def test_document_download_success(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_public_success(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     public_document,
 ):
     """Test successful public document download without authentication."""
-    # Mock S3 client
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.return_value = b"public document content"
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="success")
 
     response = client.get(
         reverse("documents:document_download", kwargs={"document_id": public_document.id})
     )
 
     assert response.status_code == 200
-    assert response.content == b"public document content"
+    assert response.content == b"test document content"
     assert response["Content-Type"] == "application/pdf"
     assert f'attachment; filename="{public_document.name}"' in response["Content-Disposition"]
 
@@ -289,18 +283,14 @@ def test_document_download_private_document_public_access_denied(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_s3_file_not_found(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document,
 ):
     """Test download when S3 file doesn't exist."""
-    # Mock S3 client to return None (file not found)
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.return_value = None
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="not_found")
 
     client.force_login(sample_user)
 
@@ -312,18 +302,14 @@ def test_document_download_s3_file_not_found(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_s3_error(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document,
 ):
     """Test download when S3 raises an error."""
-    # Mock S3 client to raise an exception
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.side_effect = Exception("S3 error")
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="download_error")
 
     client.force_login(sample_user)
 
@@ -335,18 +321,14 @@ def test_document_download_s3_error(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_with_filename_fallback(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document_component,
 ):
     """Test download with document that has no name (fallback to document_id)."""
-    # Mock S3 client
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.return_value = b"test document content"
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="success")
 
     # Create document with empty name
     document = Document.objects.create(
@@ -371,18 +353,14 @@ def test_document_download_with_filename_fallback(
 
 
 @pytest.mark.django_db
-@patch("documents.views.S3Client")
 def test_document_download_default_content_type(
-    mock_s3_client,
+    mocker: MockerFixture,
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
     sample_document_component,
 ):
     """Test download with document that has no content_type."""
-    # Mock S3 client
-    mock_s3_instance = MagicMock()
-    mock_s3_instance.get_document_data.return_value = b"test document content"
-    mock_s3_client.return_value = mock_s3_instance
+    create_documents_views_mock(mocker, scenario="success")
 
     # Create document with no content_type
     document = Document.objects.create(
