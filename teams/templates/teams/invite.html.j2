@@ -16,6 +16,11 @@
                         <form action="{% url 'teams:invite_user' team_key %}" method="post">
                             {% csrf_token %}
                             {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
+                            {% if invite_user_form.non_field_errors %}
+                                <div class="alert alert-danger mb-3" role="alert">
+                                    {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                                </div>
+                            {% endif %}
                             <div class="form-group">
                                 <label for="{{ invite_user_form.email.id_for_label }}">{{ invite_user_form.email.label }}</label>
                                 {{ invite_user_form.email|add_class:'form-control mb-3' }}

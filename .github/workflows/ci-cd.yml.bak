@@ -79,26 +79,6 @@ jobs:
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        test-group:
-          - name: "Core Tests"
-            path: "core/tests/"
-          - name: "SBOM Tests"
-            path: "sboms/tests/"
-          - name: "Team Tests"
-            path: "teams/tests.py"
-          - name: "Billing Tests"
-            path: "billing/tests/"
-          - name: "Document Tests"
-            path: "documents/tests/"
-          - name: "Licensing Tests"
-            path: "licensing/tests/"
-          - name: "Access Token Tests"
-            path: "access_tokens/tests.py"
-          - name: "Notification Tests"
-            path: "notifications/tests.py"
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -141,18 +121,17 @@ jobs:
           done
           poetry run python manage.py collectstatic --noinput
 
-      - name: Run ${{ matrix.test-group.name }}
+      - name: Run ALL Tests
         run: |
-          echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
-          echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
-          echo "Test count: $(poetry run pytest --collect-only --quiet ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "## Complete Test Suite Results" >> $GITHUB_STEP_SUMMARY
+          echo "Running ALL tests (no filtering) - Total tests: $(poetry run pytest --collect-only --quiet | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Run tests for this specific group
-          poetry run pytest --tb=short -v ${{ matrix.test-group.path }} | tee test_results.txt
-          PYTEST_EXIT_CODE=$?
+          # Run all tests with verbose output and capture results
+          # Use || true to prevent CI failure so we can see all test results
+          poetry run pytest --tb=short -v | tee test_results.txt || true
 
-          # Add summary to GitHub
+          # Add detailed summary to GitHub
           echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
           grep -E "(failed|passed|errors|warnings)" test_results.txt | tail -1 >> $GITHUB_STEP_SUMMARY || echo "Test run completed" >> $GITHUB_STEP_SUMMARY
 
@@ -160,12 +139,12 @@ jobs:
           if grep -q "FAILED" test_results.txt; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Failed Tests:" >> $GITHUB_STEP_SUMMARY
-            grep "FAILED" test_results.txt >> $GITHUB_STEP_SUMMARY || true
+            grep "FAILED" test_results.txt | head -20 >> $GITHUB_STEP_SUMMARY || true
           fi
 
-          # Exit with failure if tests failed (use pytest exit code)
-          if [ $PYTEST_EXIT_CODE -ne 0 ]; then
-            echo "Tests failed in ${{ matrix.test-group.name }}"
+          # Exit with failure if tests failed (after reporting)
+          if grep -q "failed" test_results.txt; then
+            echo "Tests failed - check the summary above"
             exit 1
           fi
 

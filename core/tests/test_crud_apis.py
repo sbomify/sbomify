@@ -12,7 +12,7 @@ from pytest_mock.plugin import MockerFixture
 
 from access_tokens.models import AccessToken
 from billing.models import BillingPlan
-from core.models import Component, Product, Project
+from core.models import Component, Product, Project, User
 from sboms.models import ProductIdentifier
 from core.tests.fixtures import sample_user  # noqa: F401
 from sboms.tests.fixtures import (  # noqa: F401
@@ -23,10 +23,9 @@ from sboms.tests.fixtures import (  # noqa: F401
     sample_project,
 )
 from sboms.tests.test_views import setup_test_session
-from teams.fixtures import sample_team_with_owner_member  # noqa: F401
+from teams.fixtures import sample_team_with_owner_member, sample_team_with_guest_member  # noqa: F401
 from teams.models import Member
 from sboms.models import ProductLink
-from django.contrib.auth.models import User
 
 # =============================================================================
 # PRODUCT CRUD TESTS
@@ -1914,23 +1913,18 @@ def test_bulk_update_product_identifiers_success(
 
 @pytest.mark.django_db
 def test_product_identifier_permissions(
-    sample_team_with_owner_member: Member,  # noqa: F811
-    sample_user,  # noqa: F811
+    sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product identifiers."""
     from teams.models import Member
 
-    # Create a guest member
-    guest_member = Member.objects.create(
-        user=sample_user,
-        team=sample_team_with_owner_member.team,
-        role="guest",
-    )
+    # Use the provided guest member
+    guest_member = sample_team_with_guest_member
 
     # Create product
     product = Product.objects.create(
         name="Test Product",
-        team=sample_team_with_owner_member.team,
+        team=guest_member.team,
     )
 
     client = Client()
@@ -1939,8 +1933,8 @@ def test_product_identifier_permissions(
     payload = {"identifier_type": "sku", "value": "SKU123456"}
 
     # Test with guest user - should be forbidden
-    assert client.login(username=sample_user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
-    setup_test_session(client, sample_team_with_owner_member.team, sample_user)
+    assert client.login(username=guest_member.user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, guest_member.team, guest_member.user)
 
     response = client.post(
         url,
@@ -1988,13 +1982,22 @@ def test_product_identifier_not_found(
     assert "not found" in response.json()["detail"]
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_product_identifier_validation(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     """Test validation of product identifier fields."""
+    import uuid
+    from sboms.models import ProductIdentifier
+    from django.db import IntegrityError, transaction
+
+    unique_suffix = str(uuid.uuid4())[:8]
+
+    # Clean up any existing identifiers for this team to avoid conflicts
+    ProductIdentifier.objects.filter(team=sample_team_with_owner_member.team).delete()
+
     product = Product.objects.create(
-        name="Test Product",
+        name=f"Test Product {unique_suffix}",
         team=sample_team_with_owner_member.team,
     )
 
@@ -2003,25 +2006,26 @@ def test_product_identifier_validation(
         product=product,
         team=sample_team_with_owner_member.team,
         identifier_type="sku",
-        value="UNIQUE-SKU",
+        value=f"VALIDATION-SKU-{unique_suffix}",
     )
 
     # Creating another identifier with same type and value in same team should fail
-    from django.db import IntegrityError
+    # Use separate atomic block for this test to handle the rollback
     with pytest.raises(IntegrityError):
-        ProductIdentifier.objects.create(
-            product=product,
-            team=sample_team_with_owner_member.team,
-            identifier_type="sku",
-            value="UNIQUE-SKU",
-        )
+        with transaction.atomic():
+            ProductIdentifier.objects.create(
+                product=product,
+                team=sample_team_with_owner_member.team,
+                identifier_type="sku",
+                value=f"VALIDATION-SKU-{unique_suffix}",
+            )
 
     # But same value with different type should be allowed
     identifier2 = ProductIdentifier.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
         identifier_type="mpn",
-        value="UNIQUE-SKU-2",  # Use different value to avoid confusion
+        value=f"VALIDATION-MPN-{unique_suffix}",  # Use different value to avoid confusion
     )
 
     assert identifier1.id != identifier2.id
@@ -2328,6 +2332,8 @@ def test_product_identifier_private_access_denied(
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that identifiers for private products are not accessible without permissions."""
+    from teams.models import Team, Member
+
     # Set product team to business plan to allow identifiers
     sample_product.team.billing_plan = "business"
     sample_product.team.save()
@@ -2359,12 +2365,17 @@ def test_product_identifier_private_access_denied(
         password=os.environ["DJANGO_TEST_PASSWORD"],
     )
 
+    # Create a different team for this user
+    different_team = Team.objects.create(name="Different Team", billing_plan="business")
+    Member.objects.create(user=different_user, team=different_team, role="owner")
+
     assert client.login(username="different_user", password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    response = client.get(
-        url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
+    # Set up session for the different user with their own team
+    from sboms.tests.test_views import setup_test_session
+    setup_test_session(client, different_team, different_user)
+
+    response = client.get(url)
 
     assert response.status_code == 403
     assert "Forbidden" in response.json()["detail"]
@@ -2734,23 +2745,18 @@ def test_bulk_update_product_links_success(
 
 @pytest.mark.django_db
 def test_product_link_permissions(
-    sample_team_with_owner_member: Member,  # noqa: F811
-    sample_user,  # noqa: F811
+    sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product links."""
     from teams.models import Member
 
-    # Create a guest member
-    guest_member = Member.objects.create(
-        user=sample_user,
-        team=sample_team_with_owner_member.team,
-        role="guest",
-    )
+    # Use the provided guest member
+    guest_member = sample_team_with_guest_member
 
     # Create product
     product = Product.objects.create(
         name="Test Product",
-        team=sample_team_with_owner_member.team,
+        team=guest_member.team,
     )
 
     client = Client()
@@ -2764,8 +2770,8 @@ def test_product_link_permissions(
     }
 
     # Test with guest user - should be forbidden
-    assert client.login(username=sample_user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
-    setup_test_session(client, sample_team_with_owner_member.team, sample_user)
+    assert client.login(username=guest_member.user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, guest_member.team, guest_member.user)
 
     response = client.post(
         url,
@@ -2818,13 +2824,18 @@ def test_product_link_not_found(
     assert "not found" in response.json()["detail"]
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_product_link_validation(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     """Test validation of product link fields."""
+    import uuid
+    from django.db import IntegrityError, transaction
+
+    unique_suffix = str(uuid.uuid4())[:8]
+
     product = Product.objects.create(
-        name="Test Product",
+        name=f"Test Product {unique_suffix}",
         team=sample_team_with_owner_member.team,
     )
 
@@ -2834,21 +2845,22 @@ def test_product_link_validation(
         team=sample_team_with_owner_member.team,
         link_type="website",
         title="Website",
-        url="https://unique.example.com",
+        url=f"https://unique-{unique_suffix}.example.com",
         description="Unique URL",
     )
 
     # Creating another link with same type and URL in same team should fail
-    from django.db import IntegrityError
+    # Use separate atomic block for this test to handle the rollback
     with pytest.raises(IntegrityError):
-        ProductLink.objects.create(
-            product=product,
-            team=sample_team_with_owner_member.team,
-            link_type="website",
-            title="Another Website",
-            url="https://unique.example.com",
-            description="Duplicate URL",
-        )
+        with transaction.atomic():
+            ProductLink.objects.create(
+                product=product,
+                team=sample_team_with_owner_member.team,
+                link_type="website",
+                title="Another Website",
+                url=f"https://unique-{unique_suffix}.example.com",
+                description="Duplicate URL",
+            )
 
     # But same URL with different type should be allowed
     link2 = ProductLink.objects.create(

@@ -3,23 +3,141 @@
 {% load django_vite %}
 {% block title %}sbomify Team Settings: {{ team.name }}{% endblock %}
 {% block content %}
-    <div class="row">
-        <div class="col-9">
-            <h3 class="page-title">Settings for team: {{ team.name }}</h3>
-        </div>
-        <div class="col-3 text-end">
-            <a class="dropdown-item" href="{% url 'teams:team_details' team.key %}"><i class="align-middle me-1" data-feather="arrow-left"></i> Back to Team</a>
-        </div>
-    </div>
-    <div class="page-branding row align-items-center">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h4 class="p-1 text-black">Branding</h4>
-                    <p class="mb-4">Set default brand elements to determine how public SBOMs appear.</p>
-                    <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="fas fa-cog me-3 text-primary"></i>
+                    Team Settings
+                </h1>
+                <div class="header-actions">
+                    <a class="btn btn-outline-primary"
+                       href="{% url 'teams:team_details' team.key %}">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Back to Team
+                    </a>
                 </div>
             </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-cog me-2 text-primary"></i>
+                <span class="meta-label">Settings</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <span class="team-name">{{ team.name }}</span>
+            </span>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .team-name {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        .btn-outline-primary {
+            color: #4f46e5;
+            border-color: #4f46e5;
+            background: transparent;
+            transition: all 0.2s ease;
+        }
+
+        .btn-outline-primary:hover {
+            background-color: #4f46e5;
+            border-color: #4f46e5;
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+
+            .page-header {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+    <div class="row">
+        <div class="col-12">
+            <!-- Team Branding Component -->
+            <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
         </div>
     </div>
 {% endblock %}

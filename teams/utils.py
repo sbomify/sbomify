@@ -1,25 +1,35 @@
 """Utility code used throughout the app"""
 
-from .models import Member
+from collections import defaultdict
+
+from django.contrib.auth import get_user_model
+
+from billing.models import BillingPlan
+
+from .models import Member, Team
+
+User = get_user_model()
 
 
-def get_user_teams(user, include_team_id: bool = False) -> dict:
-    user_memberships = Member.objects.filter(user=user).order_by("team__name").all()
-    user_teams = {}
+def get_user_teams(user) -> dict:
+    """Get all teams for a user.
 
-    for membership in user_memberships:
-        user_teams[membership.team.key] = {
+    Returns:
+        A dictionary mapping team keys to team data
+    """
+    teams = defaultdict(dict)
+    memberships = Member.objects.filter(user=user).select_related("team").all()
+
+    for membership in memberships:
+        teams[membership.team.key] = {
+            "id": membership.team.id,
             "name": membership.team.name,
             "role": membership.role,
             "is_default_team": membership.is_default_team,
+            "has_completed_wizard": membership.team.has_completed_wizard,
         }
 
-        # We don't want it in session so by default it's not returned, but it's needed internally at some
-        # places like the api for getting all items of a specific type that the current user has access to.
-        if include_team_id:
-            user_teams[membership.team.key]["team_id"] = membership.team_id
-
-    return user_teams
+    return dict(teams)
 
 
 def get_user_default_team(user) -> int:
@@ -29,3 +39,46 @@ def get_user_default_team(user) -> int:
         return default_team.team_id
     except Member.DoesNotExist:
         return None
+
+
+def can_add_user_to_team(team: Team) -> tuple[bool, str]:
+    """
+    Check if a team can add more users based on their billing plan limits.
+
+    Args:
+        team: The team to check
+
+    Returns:
+        Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
+    """
+    # If no billing plan, default to community limits (1 user = owner only)
+    if not team.billing_plan:
+        current_members = Member.objects.filter(team=team).count()
+        if current_members >= 1:
+            return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
+        return True, ""
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+
+        # Enterprise plans have unlimited users
+        if plan.allows_unlimited_users:
+            return True, ""
+
+        current_members = Member.objects.filter(team=team).count()
+
+        if current_members >= plan.max_users:
+            return (
+                False,
+                f"Your {plan.name} plan allows only {plan.max_users} users. "
+                f"Please upgrade your plan to add more members.",
+            )
+
+        return True, ""
+
+    except BillingPlan.DoesNotExist:
+        # If plan doesn't exist, treat as community
+        current_members = Member.objects.filter(team=team).count()
+        if current_members >= 1:
+            return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
+        return True, ""

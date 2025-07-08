@@ -147,6 +147,17 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
 
+    # Set up session data for guest user
+    session = client.session
+    session["current_team"] = {"key": sample_team_with_guest_member.team.key}
+    session["user_teams"] = {
+        sample_team_with_guest_member.team.key: {
+            "role": "guest",
+            "name": sample_team_with_guest_member.team.name
+        }
+    }
+    session.save()
+
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 403
@@ -301,11 +312,38 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
 
 @pytest.mark.django_db
 def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
+    from billing.models import BillingPlan
+
     client = Client()
+
+    # Set up a billing plan that allows multiple users
+    billing_plan, created = BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={
+            "name": "Business Plan",
+            "max_users": 10,
+            "max_products": 100,
+            "max_projects": 100,
+            "max_components": 1000,
+        }
+    )
+    sample_team_with_owner_member.team.billing_plan = billing_plan.key
+    sample_team_with_owner_member.team.save()
 
     assert client.login(
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
+
+    # Set up session data for owner user
+    session = client.session
+    session["current_team"] = {"key": sample_team_with_owner_member.team.key}
+    session["user_teams"] = {
+        sample_team_with_owner_member.team.key: {
+            "role": "owner",
+            "name": sample_team_with_owner_member.team.name
+        }
+    }
+    session.save()
 
     uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
     form_data = urlencode({"email": "guest@example.com", "role": "guest"})

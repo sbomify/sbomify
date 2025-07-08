@@ -53,9 +53,10 @@
       <table class="table table-sm">
         <thead>
           <tr>
-            <th style="width: 30%">Type</th>
-            <th style="width: 50%">Value</th>
-            <th v-if="canManageIdentifiers" style="width: 20%" class="text-end">Actions</th>
+            <th style="width: 25%">Type</th>
+            <th style="width: 35%">Value</th>
+            <th style="width: 25%" class="text-center">Barcode</th>
+            <th v-if="canManageIdentifiers" style="width: 15%" class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -67,6 +68,22 @@
             </td>
             <td>
               <code class="text-primary">{{ identifier.value }}</code>
+            </td>
+                                    <td class="text-center">
+              <div v-if="canRenderBarcode(identifier.identifier_type)" class="barcode-container">
+                                <svg
+                  :data-barcode-id="identifier.id"
+                  class="barcode-svg"
+                ></svg>
+                <div v-if="barcodeErrors[identifier.id]" class="text-danger small mt-1">
+                  <i class="fas fa-exclamation-triangle me-1"></i>
+                  Invalid barcode data
+                </div>
+              </div>
+              <div v-else class="text-muted small text-center">
+                <i class="fas fa-info-circle me-1"></i>
+                Not Applicable
+              </div>
             </td>
             <td v-if="canManageIdentifiers" class="text-end">
               <div class="btn-group btn-group-sm">
@@ -141,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import $axios from '../utils'
 import { showSuccess, showError } from '../alerts'
 import { isAxiosError } from 'axios'
@@ -175,6 +192,7 @@ const showEditModal = ref(false)
 const isSubmitting = ref(false)
 const formError = ref('')
 const editingIdentifier = ref<ProductIdentifier | null>(null)
+const barcodeErrors = ref<Record<string, boolean>>({})
 
 // Form state
 const form = ref({
@@ -206,13 +224,89 @@ const getIdentifierTypeDisplayName = (type: string): string => {
   return identifierTypes[type as keyof typeof identifierTypes] || type
 }
 
+const canRenderBarcode = (type: string): boolean => {
+  // Only render barcodes for standard barcode formats (GTIN family)
+  const allowedTypes = ['gtin_12', 'gtin_13', 'gtin_14', 'gtin_8']
+  return allowedTypes.includes(type)
+}
+
+const getBarcodeFormat = (type: string): string => {
+  const formatMap: Record<string, string> = {
+    'gtin_12': 'UPC',
+    'gtin_13': 'EAN13',
+    'gtin_14': 'ITF14',
+    'gtin_8': 'EAN8'
+  }
+  return formatMap[type] || 'EAN13'
+}
+
+const renderBarcodes = async () => {
+  // Wait for Vue to update the DOM completely
+  await nextTick()
+  await nextTick() // Double nextTick to ensure template is fully rendered
+
+  // Add a small delay to ensure DOM is fully updated
+  await new Promise(resolve => setTimeout(resolve, 50))
+
+  // Dynamic import of JsBarcode
+  let JsBarcode: (element: Element, text: string, options?: Record<string, unknown>) => void
+  try {
+    const jsbarcode = await import('jsbarcode')
+    JsBarcode = jsbarcode.default || jsbarcode
+  } catch (err) {
+    console.error('Failed to load JsBarcode library:', err)
+    return
+  }
+
+  for (const identifier of identifiers.value) {
+    if (canRenderBarcode(identifier.identifier_type)) {
+      try {
+        // Get the SVG element using the data attribute
+        const svgElements = document.querySelectorAll(`[data-barcode-id="${identifier.id}"]`)
+
+        if (svgElements.length > 0) {
+          const svg = svgElements[0] as SVGElement
+
+          const format = getBarcodeFormat(identifier.identifier_type)
+
+          JsBarcode(svg, identifier.value, {
+            format: format,
+            width: 2,
+            height: 50,
+            displayValue: true,
+            fontSize: 14,
+            fontOptions: 'bold',
+            font: 'monospace',
+            textMargin: 8,
+            textAlign: 'center',
+            textPosition: 'bottom',
+            margin: 10,
+            background: '#ffffff',
+            lineColor: '#000000'
+          })
+
+          // Clear any previous error for this identifier
+          barcodeErrors.value[identifier.id] = false
+        }
+      } catch (err) {
+        console.warn(`Failed to generate barcode for ${identifier.identifier_type}: ${identifier.value}`, err)
+        barcodeErrors.value[identifier.id] = true
+      }
+    }
+  }
+}
+
+
+
 const loadIdentifiers = async () => {
   isLoading.value = true
   error.value = null
 
-  try {
+    try {
     const response = await $axios.get(`/api/v1/products/${props.productId}/identifiers`)
     identifiers.value = response.data
+
+    // Barcodes will be rendered by the watch function
   } catch (err) {
     console.error('Error loading identifiers:', err)
     error.value = 'Failed to load identifiers'
@@ -290,6 +384,9 @@ const submitForm = async () => {
     }
 
     closeModal()
+
+    // Re-render barcodes after adding/updating
+    await renderBarcodes()
   } catch (err) {
     console.error('Error saving identifier:', err)
 
@@ -315,6 +412,10 @@ const deleteIdentifier = async (identifier: ProductIdentifier) => {
 
     // Remove from list
     identifiers.value = identifiers.value.filter(i => i.id !== identifier.id)
+
+    // Clean up barcode error state
+    delete barcodeErrors.value[identifier.id]
+
     showSuccess('Identifier deleted successfully!')
   } catch (err) {
     console.error('Error deleting identifier:', err)
@@ -326,6 +427,15 @@ const deleteIdentifier = async (identifier: ProductIdentifier) => {
     }
   }
 }
+
+// Watch for changes in identifiers to re-render barcodes
+watch(identifiers, async (newIdentifiers) => {
+  if (newIdentifiers.length > 0) {
+    // Add a small delay to ensure the template has updated
+    await nextTick()
+    await renderBarcodes()
+  }
+}, { deep: true, flush: 'post' })
 
 // Lifecycle
 onMounted(() => {
@@ -362,5 +472,25 @@ code {
   background-color: #f8f9fa;
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
+}
+
+.barcode-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: center;
+}
+
+.barcode-svg {
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  background-color: #ffffff;
+  max-width: 180px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
 }
 </style>

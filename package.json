@@ -27,6 +27,7 @@
     "dotenv": "^16.5.0",
     "highlight.js": "^11.11.1",
     "js-cookie": "^3.0.5",
+    "jsbarcode": "^3.12.1",
     "sweetalert2": "^11.22.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

@@ -108,7 +108,7 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+@validate_role_in_current_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
 
@@ -117,18 +117,57 @@ def team_details(request: HttpRequest, team_key: str):
     except Team.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
+    # Get current user's role from session
+    current_user_role = request.session.get("current_team", {}).get("role", "guest")
+
     # Get default team status from session
     is_default_team = request.session.get("user_teams", {}).get(team_key, {}).get("is_default_team", False)
+
+    # Serialize members data for Vue component
+    members_data = [
+        {
+            "id": member.id,
+            "user": {
+                "id": member.user.id,
+                "first_name": member.user.first_name,
+                "last_name": member.user.last_name,
+                "email": member.user.email,
+            },
+            "role": member.role,
+            "is_default_team": member.is_default_team,
+        }
+        for member in team.member_set.select_related("user").all()
+    ]
+
+    # Only provide invitation data to owners and admins
+    invitations_data = []
+    if current_user_role in ["owner", "admin"]:
+        invitations_data = [
+            {
+                "id": invitation.id,
+                "email": invitation.email,
+                "role": invitation.role,
+                "created_at": invitation.created_at.isoformat(),
+                "expires_at": invitation.expires_at.isoformat(),
+            }
+            for invitation in team.invitation_set.all()
+        ]
 
     return render(
         request,
         "teams/team_details.html.j2",
-        {"team": team, "APP_BASE_URL": settings.APP_BASE_URL, "is_default_team": is_default_team},
+        {
+            "team": team,
+            "members_data": members_data,
+            "invitations_data": invitations_data,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "is_default_team": is_default_team,
+        },
     )
 
 
 @login_required
-@validate_role_in_current_team(["owner", "admin"])
+@validate_role_in_current_team(["owner"])
 def set_default_team(request: HttpRequest, membership_id: int):
     try:
         membership = Member.objects.get(pk=membership_id)
@@ -185,10 +224,27 @@ def delete_member(request: HttpRequest, membership_id: int):
 @validate_role_in_current_team(["owner"])
 def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
     team_id = token_to_number(team_key)
+    context = {"team_key": team_key}
+
+    # Get team for context
+    try:
+        team = Team.objects.get(id=team_id)
+        context["team"] = team
+    except Team.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Team not found"))
 
     if request.method == "POST":
         invite_user_form = InviteUserForm(request.POST)
-        if invite_user_form.is_valid():
+
+        # Check user limits before form validation to show as form error
+        from .utils import can_add_user_to_team
+
+        can_add, error_message = can_add_user_to_team(team)
+
+        if not can_add:
+            # Add form error instead of redirecting
+            invite_user_form.add_error(None, error_message)
+        elif invite_user_form.is_valid():
             # Check if we already have an invitation and if it's expired or not
             try:
                 existing_invitation: Invitation = Invitation.objects.get(
@@ -199,12 +255,11 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                     if existing_invitation.has_expired:
                         existing_invitation.delete()
                     else:
-                        messages.add_message(
-                            request,
-                            messages.WARNING,
-                            f"Invitation already sent to {invite_user_form.cleaned_data['email']}",
+                        invite_user_form.add_error(
+                            "email", f"Invitation already sent to {invite_user_form.cleaned_data['email']}"
                         )
-                        return redirect("teams:teams_dashboard")
+                        context["invite_user_form"] = invite_user_form
+                        return render(request, "teams/invite.html.j2", context)
 
             except Invitation.DoesNotExist:
                 pass
@@ -216,8 +271,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             )
             invitation.save()
 
-            team: Team = Team.objects.get(id=team_id)
-            context = {
+            email_context = {
                 "team": team,
                 "invitation": invitation,
                 "user": request.user,
@@ -227,17 +281,21 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 subject=f"Invitation to join {team.name} at sbomify",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[invite_user_form.cleaned_data["email"]],
-                message=render_to_string("teams/team_invite_email.txt", context),
-                html_message=render_to_string("teams/team_invite_email.html.j2", context),
+                message=render_to_string("teams/team_invite_email.txt", email_context),
+                html_message=render_to_string("teams/team_invite_email.html.j2", email_context),
             )
 
-            messages.add_message(request, messages.INFO, f"Invite sent to {invite_user_form.cleaned_data['email']}")
+            messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
 
-            return redirect("teams:teams_dashboard")
+            return redirect("teams:team_details", team_key=team_key)
+
+        # If form has errors, fall through to render the form with errors
+        context["invite_user_form"] = invite_user_form
     else:
         invite_user_form = InviteUserForm()
+        context["invite_user_form"] = invite_user_form
 
-    return render(request, "teams/invite.html.j2", {"invite_user_form": invite_user_form, "team_key": team_key})
+    return render(request, "teams/invite.html.j2", context)
 
 
 @login_required
@@ -263,6 +321,13 @@ def accept_invite(request: HttpRequest, invite_id: int) -> HttpResponseNotFound 
 
     except Member.DoesNotExist:
         pass
+
+    # Check user limits before accepting invitation
+    from .utils import can_add_user_to_team
+
+    can_add, error_message = can_add_user_to_team(invitation.team)
+    if not can_add:
+        return error_response(request, HttpResponseForbidden(error_message))
 
     membership = Member(team_id=invitation.team_id, user_id=request.user.id, role=invitation.role)
     membership.save()
