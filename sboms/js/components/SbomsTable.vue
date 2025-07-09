@@ -27,6 +27,7 @@
             <th scope="col">Version</th>
             <th scope="col">NTIA Compliant</th>
             <th scope="col">Created</th>
+            <th scope="col">Releases</th>
             <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
             <th scope="col">Actions</th>
           </tr>
@@ -56,6 +57,20 @@
               />
             </td>
             <td>{{ formatDate(itemData.sbom.created_at) }}</td>
+            <td>
+              <div v-if="itemData.releases && itemData.releases.length > 0" class="release-badges">
+                <span
+                  v-for="release in itemData.releases"
+                  :key="release.id"
+                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
+                  :title="`${release.product_name} - ${release.name}`"
+                >
+                  {{ release.name }}
+                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
+                </span>
+              </div>
+              <span v-else class="text-muted">None</span>
+            </td>
             <td v-if="!isPublicView">
               <a
                 :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
@@ -88,7 +103,6 @@
     </div>
   </StandardCard>
 
-  <!-- For public views, render content directly (PublicPageLayout provides the card) -->
   <div v-else>
     <!-- Table content (same as above but without StandardCard wrapper) -->
     <div v-if="error" class="alert alert-danger">
@@ -110,6 +124,7 @@
             <th scope="col">Version</th>
             <th scope="col">NTIA Compliant</th>
             <th scope="col">Created</th>
+            <th scope="col">Releases</th>
             <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
             <th scope="col">Actions</th>
           </tr>
@@ -139,6 +154,20 @@
               />
             </td>
             <td>{{ formatDate(itemData.sbom.created_at) }}</td>
+            <td>
+              <div v-if="itemData.releases && itemData.releases.length > 0" class="release-badges">
+                <span
+                  v-for="release in itemData.releases"
+                  :key="release.id"
+                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
+                  :title="`${release.product_name} - ${release.name}`"
+                >
+                  {{ release.name }}
+                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
+                </span>
+              </div>
+              <span v-else class="text-muted">None</span>
+            </td>
             <td v-if="!isPublicView">
               <a
                 :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
@@ -213,9 +242,19 @@ interface Sbom {
   }
 }
 
+interface Release {
+  id: string
+  name: string
+  product_name: string
+  is_latest: boolean
+  is_prerelease: boolean
+  is_public: boolean
+}
+
 interface SbomData {
   sbom: Sbom
   has_vulnerabilities_report: boolean
+  releases: Release[]
 }
 
 const props = defineProps<{
@@ -271,6 +310,18 @@ const formatDate = (dateString: string): string => {
     return formatted
   } catch {
     return dateString
+  }
+}
+
+const getReleaseBadge = (release: Release): string => {
+  if (release.is_latest) {
+    return 'bg-success'
+  } else if (release.is_prerelease) {
+    return 'bg-warning text-dark'
+  } else if (release.is_public) {
+    return 'bg-primary'
+  } else {
+    return 'bg-secondary'
   }
 }
 
@@ -433,6 +484,35 @@ onMounted(() => {
   opacity: 0.6;
   pointer-events: none;
   transform: none;
+}
+
+/* Release Badges Styling */
+.release-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.release-badges .badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.release-badges .badge:hover {
+  transform: scale(1.05);
+}
+
+/* Responsive badge handling */
+@media (max-width: 768px) {
+  .release-badges {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 

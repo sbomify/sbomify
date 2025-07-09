@@ -210,7 +210,10 @@ class ProjectComponent(models.Model):
 
 
 class SBOM(models.Model):
-    """Represents a Software Bill of Materials document.
+    """Represents a Software Bill of Materials (SBOM) artifact associated with a component.
+
+    SBOMs are versioned artifacts that contain detailed information about software components,
+    dependencies, and their relationships. They can be in various formats (SPDX, CycloneDX, etc.).
 
     License Data Handling Note (2025-05-29):
     Previously, this model included `licenses` (JSONField) and `packages_licenses` (JSONField)

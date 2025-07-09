@@ -1,16 +1,21 @@
 {% extends "core/dashboard_base.html.j2" %}
+{% comment %}
+Template context:
+has_crud_permissions: Boolean indicating if user has CRUD permissions
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+{% endcomment %}
 {% load widget_tweaks %}
-{% load form_helpers %}
+{% load static %}
 {% load django_vite %}
-{% block title %}sbomify Products{% endblock %}
+{% block title %}sbomify Releases{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main">
             <div class="title-section">
                 <h1 class="item-title">
-                    <i class="fas fa-box me-3 text-primary"></i>Products
+                    <i class="fas fa-tag me-3 text-primary"></i>Releases
                 </h1>
-                <p class="item-subtitle">Manage and organize your software products</p>
+                <p class="item-subtitle">Manage and view all software releases across your products</p>
             </div>
         </div>
     </div>
@@ -62,15 +67,13 @@
             }
         }
     </style>
-    <div class="row align-items-center">
+    <div class="row">
         <div class="col-12">
-            <div class="vc-products-list"
+            <div class="vc-releases-list"
                  data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
-    {% if has_crud_permissions %}<div class="vc-add-product-form"></div>{% endif %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

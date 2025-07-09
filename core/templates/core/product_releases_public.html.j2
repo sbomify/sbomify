@@ -1,0 +1,257 @@
+{% extends "core/public_base.html.j2" %}
+{% comment %}
+Template context:
+product: Product object
+releases: QuerySet of Release objects
+brand: BrandingInfo object for team branding
+{% endcomment %}
+{% load static %}
+{% block title %}{{ product.name }} - Releases{% endblock %}
+{% block content %}
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="page-header mb-4">
+                    <div class="header-main mb-3">
+                        <div class="title-section">
+                            <div class="breadcrumb-nav">
+                                <nav aria-label="breadcrumb">
+                                    <ol class="breadcrumb">
+                                        <li class="breadcrumb-item">
+                                            <a href="{% url 'core:product_details_public' product.id %}">{{ product.name }}</a>
+                                        </li>
+                                        <li class="breadcrumb-item active" aria-current="page">Releases</li>
+                                    </ol>
+                                </nav>
+                            </div>
+                            <h1 class="item-title">Releases</h1>
+                            <p class="item-subtitle">Software releases for {{ product.name }}</p>
+                        </div>
+                    </div>
+                    <div class="header-meta">
+                        <span class="meta-item">
+                            <i class="fas fa-tag me-2 text-primary"></i>
+                            <span class="meta-label">{{ releases|length }} Release{{ releases|length|pluralize }}</span>
+                        </span>
+                    </div>
+                </div>
+                {% if releases %}
+                    <div class="releases-grid">
+                        {% for release in releases %}
+                            <div class="release-card">
+                                <div class="release-header">
+                                    <div class="release-title">
+                                        <h3 class="release-name">
+                                            <a href="{% url 'core:release_details_public' product.id release.id %}">{{ release.name }}</a>
+                                            {% if release.is_latest %}<span class="badge bg-success ms-2">Latest</span>{% endif %}
+                                        </h3>
+                                        {% if release.description %}<p class="release-description">{{ release.description }}</p>{% endif %}
+                                    </div>
+                                    <div class="release-meta">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock me-1"></i>
+                                            {{ release.created_at|date:"M d, Y" }}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="release-content">
+                                    <div class="release-stats">
+                                        <div class="stat-item">
+                                            <i class="fas fa-puzzle-piece me-1"></i>
+                                            <span class="stat-value">{{ release.artifacts.count }}</span>
+                                            <span class="stat-label">Artifact{{ release.artifacts.count|pluralize }}</span>
+                                        </div>
+                                        {% with sbom_count=release.artifacts.filter|length %}
+                                            {% if sbom_count > 0 %}
+                                                <div class="stat-item">
+                                                    <i class="fas fa-download me-1"></i>
+                                                    <a href="/api/v1/products/{{ product.id }}/releases/{{ release.id }}/download"
+                                                       class="download-link">Download SBOM</a>
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fas fa-tag"></i>
+                        </div>
+                        <h3>No releases available</h3>
+                        <p class="text-muted">This product doesn't have any releases yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .breadcrumb {
+            background: none;
+            padding: 0;
+            margin: 0 0 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .breadcrumb-item a:hover {
+            text-decoration: underline;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .item-subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+            margin: 0.5rem 0 0 0;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+        }
+
+        .releases-grid {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: 1fr;
+        }
+
+        .release-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .release-card:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transform: translateY(-2px);
+        }
+
+        .release-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .release-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .release-name a {
+            color: #1a202c;
+            text-decoration: none;
+        }
+
+        .release-name a:hover {
+            color: #6366f1;
+            text-decoration: underline;
+        }
+
+        .release-description {
+            color: #64748b;
+            margin: 0.5rem 0 0 0;
+            font-size: 0.95rem;
+        }
+
+        .release-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .download-link {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .download-link:hover {
+            text-decoration: underline;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #64748b;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-state h3 {
+            color: #1a202c;
+            margin-bottom: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .release-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .release-stats {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+        }
+    </style>
+{% endblock %}

@@ -60,7 +60,7 @@ brand: BrandingInfo object
                 </small>
                 {% if sbom.version %}
                     <small class="sbom-version">
-                        <i class="fas fa-code-branch me-1"></i>{{ sbom.version }}
+                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ sbom.version }}">{{ sbom.version }}</span>
                     </small>
                 {% endif %}
             {% elif component.component_type == 'document' %}
@@ -69,7 +69,7 @@ brand: BrandingInfo object
                 </small>
                 {% if document.version %}
                     <small class="document-version">
-                        <i class="fas fa-code-branch me-1"></i>{{ document.version }}
+                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ document.version }}">{{ document.version }}</span>
                     </small>
                 {% endif %}
             {% endif %}
@@ -101,6 +101,15 @@ brand: BrandingInfo object
 .sbom-version:last-child,
 .document-version:last-child {
     margin-right: 0;
+}
+
+.version-display {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
 }
     </style>
 {% endblock %}

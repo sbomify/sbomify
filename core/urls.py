@@ -63,6 +63,7 @@ urlpatterns = [
         views.component_details_private,
         name="component_details",
     ),
+    path("releases/", views.releases_dashboard, name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
         views.component_detailed_private,
@@ -83,6 +84,28 @@ urlpatterns = [
         views.transfer_component_to_team,
         name="transfer_component",
     ),
+    # Release URLs
+    path(
+        "product/<str:product_id>/releases/",
+        views.product_releases_private,
+        name="product_releases",
+    ),
+    path(
+        "public/product/<str:product_id>/releases/",
+        views.product_releases_public,
+        name="product_releases_public",
+    ),
+    path(
+        "product/<str:product_id>/release/<str:release_id>/",
+        views.release_details_private,
+        name="release_details",
+    ),
+    path(
+        "public/product/<str:product_id>/release/<str:release_id>/",
+        views.release_details_public,
+        name="release_details_public",
+    ),
+    # Download URLs
     path(
         "project/<str:project_id>/sbom/download",
         views.sbom_download_project,

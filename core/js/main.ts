@@ -36,6 +36,12 @@ import PublicProductProjects from './components/PublicProductProjects.vue';
 import PublicDownloadCard from './components/PublicDownloadCard.vue';
 import ProductIdentifiers from './components/ProductIdentifiers.vue';
 import ProductLinks from './components/ProductLinks.vue';
+import ProductReleases from './components/ProductReleases.vue';
+import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
+import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
+import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
+
+import ReleasesList from './components/ReleasesList.vue';
 
 
 // Initialize Vue components
@@ -72,6 +78,12 @@ mountVueComponent('vc-public-product-projects', PublicProductProjects);
 mountVueComponent('vc-public-download-card', PublicDownloadCard);
 mountVueComponent('vc-product-identifiers', ProductIdentifiers);
 mountVueComponent('vc-product-links', ProductLinks);
+mountVueComponent('vc-product-releases', ProductReleases);
+mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
+mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
+mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
+
+mountVueComponent('vc-releases-list', ReleasesList);
 
 // Declare the global feather variable
 declare global {

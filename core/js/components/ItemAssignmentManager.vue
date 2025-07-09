@@ -55,7 +55,7 @@
                             {{ item.name }}
                           </a>
                         </h6>
-                        <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
+                        <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
                       <div class="d-flex align-items-center gap-2">
                         <span v-if="item.is_public" class="badge bg-success-subtle text-success">
@@ -151,7 +151,7 @@
                             {{ item.name }}
                           </a>
                         </h6>
-                        <small v-if="item.version" class="text-muted">v{{ item.version }}</small>
+                        <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
                       <div class="d-flex align-items-center gap-2">
                         <span v-if="item.is_public" class="badge bg-success-subtle text-success">
@@ -560,5 +560,14 @@
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
+  }
+
+  .version-display {
+    display: inline-block;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
   }
 </style>

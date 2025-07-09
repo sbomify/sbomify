@@ -234,18 +234,27 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     </div>
     <div class="row mt-3">
         <div class="col-12">
+            <div class="vc-product-releases"
+                 data-product-id="{{ product.id }}"
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
             <div class="standard-card">
                 <div class="card download-card shadow-sm">
                     <div class="card-header">
                         <h4 class="card-title mb-0">
-                            <i class="fas fa-download me-2"></i>Export Data
+                            <i class="fas fa-download me-2"></i>Latest Release
                         </h4>
                     </div>
                     <div class="card-body text-center">
-                        <p class="text-muted mb-3">Download aggregated SBOM containing all components from projects in this product</p>
+                        <p class="text-muted mb-3">
+                            Download SBOM from the latest release containing the most current artifacts for this product
+                        </p>
                         <a class="btn btn-primary download-btn"
                            href="/api/v1/products/{{ product.id }}/download">
-                            <i class="fas fa-download me-2"></i>Download Product SBOM
+                            <i class="fas fa-download me-2"></i>Download Latest Release
                         </a>
                     </div>
                 </div>

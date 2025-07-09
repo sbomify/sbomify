@@ -41,7 +41,7 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
                 <span class="meta-divider">•</span>
                 <span class="meta-item">
                     <span class="meta-label">Version:</span>
-                    <span class="ms-1">{{ sbom.version }}</span>
+                    <span class="ms-1 version-display" title="{{ sbom.version }}">{{ sbom.version }}</span>
                 </span>
             {% endif %}
             <span class="meta-divider">•</span>
@@ -109,6 +109,15 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             font-weight: bold;
         }
 
+        .version-display {
+            display: inline-block;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+
         @media (max-width: 768px) {
             .title-section {
                 flex-direction: column;
@@ -128,22 +137,14 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
     </style>
     <div class="row">
         <div class="col-12 col-lg-8">
-            <div class="row">
-                <div class="col-12 col-md-6">
-                    <div class="vc-sbom-metadata-card"
-                         data-sbom-id="{{ sbom.id }}"
-                         data-sbom-name="{{ sbom.name }}"
-                         data-created-at="{{ sbom.created_at }}"
-                         data-source-display="{{ sbom.source_display }}"
-                         data-format="{{ sbom.format }}"
-                         data-format-version="{{ sbom.format_version }}"
-                         data-version="{{ sbom.version|default:'' }}"></div>
-                </div>
-                <div class="col-12 col-md-6">
-                    <div class="vc-sbom-comment-card"
-                         data-comment="{{ sbom.data.creationInfo.comment|default:'' }}"></div>
-                </div>
-            </div>
+            <div class="vc-sbom-metadata-card"
+                 data-sbom-id="{{ sbom.id }}"
+                 data-sbom-name="{{ sbom.name }}"
+                 data-created-at="{{ sbom.created_at }}"
+                 data-source-display="{{ sbom.source_display }}"
+                 data-format="{{ sbom.format }}"
+                 data-format-version="{{ sbom.format_version|stringformat:'s' }}"
+                 data-version="{{ sbom.version|default:'' }}"></div>
         </div>
         <div class="col-12 col-lg-4">
             <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
