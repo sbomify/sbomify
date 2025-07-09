@@ -133,7 +133,7 @@ def test_create_release_named_latest_fails(
     )
 
     assert response.status_code == 400
-    assert "Cannot manually create" in response.json()["detail"]
+    assert "Cannot create release with name 'latest'" in response.json()["detail"]
 
 
 @pytest.mark.django_db
