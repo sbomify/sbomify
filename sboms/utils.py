@@ -634,76 +634,105 @@ class ReleaseSBOMBuilder:
         # Use context manager for automatic cleanup
         with temporary_sbom_files() as temp_files:
             self.temp_files = temp_files
-            return self._build_sbom(release)
+            try:
+                return self._build_sbom(release)
+            except Exception as e:
+                # Ensure cleanup happens even on error
+                self._cleanup_temp_files()
+                log.error(f"Error building release SBOM for {release.id}: {e}")
+                raise
+
+    def _cleanup_temp_files(self):
+        """Clean up any temporary files that were created during SBOM generation."""
+        for temp_file in self.temp_files:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+                    log.debug(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                log.warning(f"Failed to clean up temporary file {temp_file}: {e}")
 
     def _build_sbom(self, release):
         """Build the release SBOM with proper database optimization and cleanup."""
-        self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
-        self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
-        self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
-        self.sbom.version = 1
+        try:
+            self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
+            self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
+            self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
+            self.sbom.version = 1
 
-        # metadata section
-        self.sbom.metadata = cdx16.Metadata(
-            timestamp=datetime.now(timezone.utc),
-            tools=[
-                cdx16.Tool(
-                    vendor="sbomify, ltd",
-                    name="sbomify",
-                    version=importlib.metadata.version("sbomify"),
-                    externalReferences=[
-                        cdx16.ExternalReference(type=cdx16.Type3.website, url="https://sbomify.com"),
-                        cdx16.ExternalReference(type=cdx16.Type3.vcs, url="https://github.com/sbomify/sbomify"),
-                    ],
-                )
-            ],
-            component=cdx16.Component(
-                name=f"{release.product.name} - {release.name}", type=cdx16.Type.application, scope=cdx16.Scope.required
-            ),
-        )
+            # metadata section
+            self.sbom.metadata = cdx16.Metadata(
+                timestamp=datetime.now(timezone.utc),
+                tools=[
+                    cdx16.Tool(
+                        vendor="sbomify, ltd",
+                        name="sbomify",
+                        version=importlib.metadata.version("sbomify"),
+                        externalReferences=[
+                            cdx16.ExternalReference(type=cdx16.Type3.website, url="https://sbomify.com"),
+                            cdx16.ExternalReference(type=cdx16.Type3.vcs, url="https://github.com/sbomify/sbomify"),
+                        ],
+                    )
+                ],
+                component=cdx16.Component(
+                    name=f"{release.product.name} - {release.name}",
+                    type=cdx16.Type.application,
+                    scope=cdx16.Scope.required,
+                ),
+            )
 
-        # components section - only include artifacts specifically in this release
-        self.sbom.components = []
+            # components section - only include artifacts specifically in this release
+            self.sbom.components = []
 
-        # Get all SBOM artifacts in this release
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component")
-            .prefetch_related("sbom__component__team")
-        )
+            # Get all SBOM artifacts in this release with optimized query
+            sbom_artifacts = (
+                release.artifacts.filter(sbom__isnull=False)
+                .select_related("sbom__component", "sbom__component__team")
+                .prefetch_related("sbom__component__team")
+            )
 
-        for artifact in sbom_artifacts:
-            sbom = artifact.sbom
+            for artifact in sbom_artifacts:
+                sbom = artifact.sbom
 
-            # Skip if component/product access restrictions apply
-            if not self._should_include_artifact(release, sbom):
-                continue
+                # Skip if component/product access restrictions apply
+                if not self._should_include_artifact(release, sbom):
+                    continue
 
-            sbom_result = self.download_specific_sbom(sbom)
-            if sbom_result is None:
-                log.warning(f"SBOM for artifact {artifact.id} (SBOM {sbom.id}) not found")
-                continue
+                try:
+                    sbom_result = self.download_specific_sbom(sbom)
+                    if sbom_result is None:
+                        log.warning(f"SBOM for artifact {artifact.id} (SBOM {sbom.id}) not found")
+                        continue
 
-            sbom_path, sbom_id = sbom_result
-            log.info(f"Downloaded SBOM for release artifact {artifact.id} to {sbom_path}")
+                    sbom_path, sbom_id = sbom_result
+                    log.info(f"Downloaded SBOM for release artifact {artifact.id} to {sbom_path}")
 
-            try:
-                sbom_data = json.loads(sbom_path.read_text())
-            except json.JSONDecodeError as e:
-                log.error(f"Invalid JSON in SBOM file {sbom_path.name}: {e}")
-                continue
-            except Exception as e:
-                log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
-                continue
+                    try:
+                        sbom_data = json.loads(sbom_path.read_text())
+                    except json.JSONDecodeError as e:
+                        log.error(f"Invalid JSON in SBOM file {sbom_path.name}: {e}")
+                        continue
+                    except Exception as e:
+                        log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                        continue
 
-            component = self.get_component_metadata(sbom_path.name, sbom_data, release.name, sbom_id)
-            if component is None:
-                log.warning(f"Failed to get component from SBOM {sbom_path}")
-                continue
+                    component = self.get_component_metadata(sbom_path.name, sbom_data, release.name, sbom_id)
+                    if component is None:
+                        log.warning(f"Failed to get component from SBOM {sbom_path}")
+                        continue
 
-            self.sbom.components.append(component)
+                    self.sbom.components.append(component)
 
-        return self.sbom
+                except Exception as e:
+                    log.error(f"Error processing SBOM artifact {artifact.id}: {e}")
+                    # Continue with other artifacts rather than failing completely
+                    continue
+
+            return self.sbom
+
+        except Exception as e:
+            log.error(f"Error building SBOM for release {release.id}: {e}")
+            raise
 
     def _should_include_artifact(self, release, sbom) -> bool:
         """Check if an SBOM artifact should be included based on access controls."""
@@ -729,9 +758,10 @@ class ReleaseSBOMBuilder:
         if not sbom.sbom_filename:
             return None
 
-        # Download SBOM data from S3
-        s3_client = S3Client("SBOMS")
+        download_path = None
         try:
+            # Download SBOM data from S3
+            s3_client = S3Client("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
@@ -742,29 +772,45 @@ class ReleaseSBOMBuilder:
             return download_path, str(sbom.id)
         except Exception as e:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
+            # Clean up partial download if it exists
+            if download_path and download_path.exists():
+                try:
+                    download_path.unlink()
+                except Exception as cleanup_error:
+                    log.warning(f"Failed to clean up partial download {download_path}: {cleanup_error}")
             return None
 
     def get_component_metadata(
         self, sbom_filename: str, sbom_data: dict, release_name: str, sbom_id: str
     ) -> cdx16.Component | None:
         """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
-        # Validate basic SBOM format
-        if not self._validate_sbom_format(sbom_filename, sbom_data):
+        try:
+            # Import the constant here to avoid circular imports
+            from core.models import LATEST_RELEASE_NAME
+
+            # Validate basic SBOM format
+            if not self._validate_sbom_format(sbom_filename, sbom_data):
+                return None
+
+            component_dict = sbom_data.get("metadata", {}).get("component")
+            if not component_dict:
+                log.warning(f"SBOM {sbom_filename} does not contain component metadata")
+                return None
+
+            # Extract component information
+            name, component_type, version = extract_component_info(component_dict)
+
+            # Add release context to the component name for better traceability
+            component_display_name = f"{release_name}/{name}" if release_name != LATEST_RELEASE_NAME else name
+
+            # Create CycloneDX component
+            return self._create_cyclonedx_component(
+                component_display_name, component_type, version, sbom_filename, sbom_id
+            )
+
+        except Exception as e:
+            log.error(f"Error processing component metadata from {sbom_filename}: {e}")
             return None
-
-        component_dict = sbom_data.get("metadata", {}).get("component")
-        if not component_dict:
-            log.warning(f"SBOM {sbom_filename} does not contain component metadata")
-            return None
-
-        # Extract component information
-        name, component_type, version = extract_component_info(component_dict)
-
-        # Add release context to the component name for better traceability
-        component_display_name = f"{release_name}/{name}" if release_name != "latest" else name
-
-        # Create CycloneDX component
-        return self._create_cyclonedx_component(component_display_name, component_type, version, sbom_filename, sbom_id)
 
     def _validate_sbom_format(self, sbom_filename: str, sbom_data: dict) -> bool:
         """Validate that the SBOM is in CycloneDX format."""

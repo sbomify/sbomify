@@ -21,6 +21,10 @@ from sboms.models import (
     ProjectComponent as SbomProjectComponent,
 )
 
+# Release constants
+LATEST_RELEASE_NAME = "latest"
+DEFAULT_LATEST_DESCRIPTION = "Automatically updated release containing the latest artifacts from all components"
+
 
 class User(AbstractUser):
     """Custom user model."""
@@ -173,6 +177,16 @@ class Component(SbomComponent):
         else:
             raise ValueError("artifact_type must be either 'sbom' or 'document'")
 
+    def get_products(self):
+        """Get all products that contain this component through projects.
+
+        Returns:
+            QuerySet of Product objects that contain this component.
+        """
+        # Components are related to products through projects
+        # Component -> Projects -> Products
+        return Product.objects.filter(projects__components=self).distinct()
+
 
 class ProductProject(SbomProductProject):
     """Proxy model for sboms.ProductProject - moved to core app for better organization."""
@@ -200,6 +214,12 @@ class Release(models.Model):
         db_table = "core_releases"
         unique_together = ("product", "name")
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["product", "-created_at"], name="core_rel_prod_created_idx"),
+            models.Index(fields=["is_latest"], name="core_rel_is_latest_idx"),
+            models.Index(fields=["is_prerelease"], name="core_rel_is_prerel_idx"),
+            models.Index(fields=["product", "is_latest"], name="core_rel_prod_latest_idx"),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="releases")
@@ -241,10 +261,10 @@ class Release(models.Model):
         """
         latest_release, created = cls.objects.get_or_create(
             product=product,
-            name="latest",
+            name=LATEST_RELEASE_NAME,
             defaults={
                 "is_latest": True,
-                "description": "Automatically updated release containing the latest artifacts from all components",
+                "description": DEFAULT_LATEST_DESCRIPTION,
             },
         )
 
@@ -386,6 +406,13 @@ class ReleaseArtifact(models.Model):
         unique_together = [
             ("release", "sbom"),  # An SBOM can only be in a release once
             ("release", "document"),  # A document can only be in a release once
+        ]
+        indexes = [
+            models.Index(fields=["release", "-created_at"], name="core_art_rel_created_idx"),
+            models.Index(fields=["sbom"], name="core_art_sbom_idx"),
+            models.Index(fields=["document"], name="core_art_document_idx"),
+            models.Index(fields=["release", "sbom"], name="core_art_rel_sbom_idx"),
+            models.Index(fields=["release", "document"], name="core_art_rel_doc_idx"),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)

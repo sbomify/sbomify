@@ -1914,6 +1914,8 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
 )
 def create_release(request: HttpRequest, product_id: str, payload: ReleaseCreateSchema):
     """Create a new release for a product."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -1923,9 +1925,12 @@ def create_release(request: HttpRequest, product_id: str, payload: ReleaseCreate
         return 403, {"detail": "Only owners and admins can create releases"}
 
     # Prevent creating releases with name "latest" manually
-    if payload.name.lower() == "latest":
+    if payload.name.lower() == LATEST_RELEASE_NAME.lower():
         return 400, {
-            "detail": "Cannot manually create a release named 'latest'. This release is automatically managed."
+            "detail": (
+                f"Cannot create release with name '{LATEST_RELEASE_NAME}'. "
+                "This name is reserved for the auto-managed latest release."
+            )
         }
 
     try:
@@ -2007,6 +2012,8 @@ def get_release(request: HttpRequest, product_id: str, release_id: str):
 )
 def update_release(request: HttpRequest, product_id: str, release_id: str, payload: ReleaseUpdateSchema):
     """Update a release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
         release = Release.objects.get(pk=release_id, product=product)
@@ -2018,12 +2025,17 @@ def update_release(request: HttpRequest, product_id: str, release_id: str, paylo
 
     # Prevent modifying latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot modify the 'latest' release. This release is automatically managed."}
+        return 400, {
+            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+        }
 
     # Prevent renaming to "latest"
-    if payload.name.lower() == "latest":
+    if payload.name.lower() == LATEST_RELEASE_NAME.lower():
         return 400, {
-            "detail": "Cannot rename a release to 'latest'. This name is reserved for automatically managed releases."
+            "detail": (
+                f"Cannot rename a release to '{LATEST_RELEASE_NAME}'. "
+                "This name is reserved for automatically managed releases."
+            )
         }
 
     try:
@@ -2050,6 +2062,8 @@ def update_release(request: HttpRequest, product_id: str, release_id: str, paylo
 )
 def patch_release(request: HttpRequest, product_id: str, release_id: str, payload: ReleasePatchSchema):
     """Partially update a release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
         release = Release.objects.get(pk=release_id, product=product)
@@ -2061,17 +2075,19 @@ def patch_release(request: HttpRequest, product_id: str, release_id: str, payloa
 
     # Prevent modifying latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot modify the 'latest' release. This release is automatically managed."}
+        return 400, {
+            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+        }
 
     try:
         with transaction.atomic():
             update_data = payload.model_dump(exclude_unset=True)
 
             # Prevent renaming to "latest"
-            if "name" in update_data and update_data["name"].lower() == "latest":
+            if "name" in update_data and update_data["name"].lower() == LATEST_RELEASE_NAME.lower():
                 return 400, {
                     "detail": (
-                        "Cannot rename a release to 'latest'. This name is reserved for "
+                        f"Cannot rename a release to '{LATEST_RELEASE_NAME}'. This name is reserved for "
                         "automatically managed releases."
                     )
                 }
@@ -2096,6 +2112,8 @@ def patch_release(request: HttpRequest, product_id: str, release_id: str, payloa
 )
 def delete_release(request: HttpRequest, product_id: str, release_id: str):
     """Delete a release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
         release = Release.objects.get(pk=release_id, product=product)
@@ -2107,7 +2125,9 @@ def delete_release(request: HttpRequest, product_id: str, release_id: str):
 
     # Prevent deleting latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot delete the 'latest' release. This release is automatically managed."}
+        return 400, {
+            "detail": f"Cannot delete the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+        }
 
     try:
         release.delete()
@@ -2199,6 +2219,8 @@ def add_artifact_to_release(
     request: HttpRequest, product_id: str, release_id: str, payload: ReleaseArtifactCreateSchema
 ):
     """Add an artifact to a release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
         release = Release.objects.get(pk=release_id, product=product)
@@ -2211,7 +2233,10 @@ def add_artifact_to_release(
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": "Cannot manually modify artifacts in the 'latest' release. This release is automatically managed."
+            "detail": (
+                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
+                "This release is automatically managed."
+            )
         }
 
     try:
@@ -2317,6 +2342,8 @@ def add_artifact_to_release(
 )
 def remove_artifact_from_release(request: HttpRequest, product_id: str, release_id: str, artifact_id: str):
     """Remove an artifact from a release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         product = Product.objects.get(pk=product_id)
         release = Release.objects.get(pk=release_id, product=product)
@@ -2330,7 +2357,10 @@ def remove_artifact_from_release(request: HttpRequest, product_id: str, release_
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": "Cannot manually modify artifacts in the 'latest' release. This release is automatically managed."
+            "detail": (
+                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
+                "This release is automatically managed."
+            )
         }
 
     try:
@@ -2448,6 +2478,8 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str):
 )
 def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema):
     """Add an SBOM to multiple releases, replacing any existing SBOM of the same format from the same component."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         # Import here to avoid circular imports
         from sboms.models import SBOM
@@ -2481,8 +2513,8 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
                     # Prevent modifying latest releases
                     if release.is_latest:
                         errors.append(
-                            f"Cannot manually modify artifacts in the 'latest' release '{release.name}'. "
-                            f"This release is automatically managed."
+                            f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release "
+                            f"'{release.name}'. This release is automatically managed."
                         )
                         continue
 
@@ -2556,6 +2588,8 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 )
 def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str):
     """Remove an SBOM from a specific release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         # Import here to avoid circular imports
         from sboms.models import SBOM
@@ -2578,7 +2612,10 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": "Cannot manually modify artifacts in the 'latest' release. This release is automatically managed."
+            "detail": (
+                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
+                "This release is automatically managed."
+            )
         }
 
     try:
@@ -2666,6 +2703,8 @@ def list_document_releases(request: HttpRequest, document_id: str):
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema):
     """Add a document to multiple releases, replacing any existing document of the same type from the same component."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         # Import here to avoid circular imports
         from documents.models import Document
@@ -2699,8 +2738,8 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
                     # Prevent modifying latest releases
                     if release.is_latest:
                         errors.append(
-                            f"Cannot manually modify artifacts in the 'latest' release '{release.name}'. "
-                            f"This release is automatically managed."
+                            f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release "
+                            f"'{release.name}'. This release is automatically managed."
                         )
                         continue
 
@@ -2776,6 +2815,8 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str):
     """Remove a document from a specific release."""
+    from core.models import LATEST_RELEASE_NAME
+
     try:
         # Import here to avoid circular imports
         from documents.models import Document
@@ -2798,7 +2839,10 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": "Cannot manually modify artifacts in the 'latest' release. This release is automatically managed."
+            "detail": (
+                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
+                "This release is automatically managed."
+            )
         }
 
     try:
