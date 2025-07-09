@@ -23,7 +23,7 @@ brand: BrandingInfo object
          data-title-icon="fas fa-box"
          data-page-type="product"
          data-item-id="{{ product.id }}"
-         {% if has_downloadable_content %} data-download-url="/api/v1/products/{{ product.id }}/download" data-download-title="Download Product SBOM" data-download-button-text="Download SBOM" data-download-description="Download aggregated SBOM for this product" data-download-icon="fas fa-download" {% endif %}>
+         {% if has_downloadable_content %} data-download-url="/api/v1/products/{{ product.id }}/download" data-download-title="Download Latest Release" data-download-button-text="Download Latest Release" data-download-description="Download SBOM from the latest release containing the most current artifacts for this product" data-download-icon="fas fa-download" {% endif %}>
         <template data-slot="subtitle">
             <span class="meta-badge meta-badge--primary">
                 <i class="fas fa-box"></i>

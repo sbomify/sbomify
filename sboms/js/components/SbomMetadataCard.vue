@@ -43,7 +43,9 @@
           <i class="fas fa-tag me-2 text-primary"></i>
           Version
         </div>
-        <div class="metadata-value">{{ sbomData.version }}</div>
+        <div class="metadata-value">
+          <span class="version-display" :title="sbomData.version">{{ sbomData.version }}</span>
+        </div>
       </div>
 
       <div class="metadata-item">
@@ -86,7 +88,7 @@ interface Props {
   createdAt?: string
   sourceDisplay?: string
   format?: string
-  formatVersion?: string
+  formatVersion?: string | number
   version?: string
 }
 
@@ -114,7 +116,7 @@ const parseSbomData = (): void => {
         created_at: props.createdAt || '',
         source_display: props.sourceDisplay || '',
         format: props.format || '',
-        format_version: props.formatVersion || '',
+        format_version: String(props.formatVersion || ''),
         version: props.version
       }
     }
@@ -196,6 +198,15 @@ const formatSbomFormat = (format: string): string => {
 .font-monospace:hover {
   background: #e2e8f0;
   border-color: #cbd5e1;
+}
+
+.version-display {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 @media (max-width: 768px) {

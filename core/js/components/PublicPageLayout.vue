@@ -64,16 +64,23 @@
                 />
               </div>
 
+              <div class="product-releases-section">
+                <ProductReleases
+                  :productId="itemId"
+                  :hasCrudPermissions="false"
+                  :publicView="true"
+                  :viewAllUrl="`/public/product/${itemId}/releases/`"
+                />
+              </div>
+
               <!-- Download Card for Product -->
               <div v-if="hasDownloadContent" class="download-section">
                 <PublicDownloadCard
-                  :title="downloadTitle || 'Download Product SBOM'"
+                  :title="downloadTitle || 'Download Latest Release'"
                   :description="downloadDescription"
                   :downloadUrl="downloadUrl"
-                  :downloadText="downloadButtonText || 'Download SBOM'"
+                  :downloadText="downloadButtonText || 'Download Latest Release'"
                   :downloadIcon="downloadIcon || 'fas fa-download'"
-                  :fileInfo="downloadFileInfo"
-                  :additionalInfo="downloadAdditionalInfo"
                   :downloadCount="downloadCount"
                   @download="handleDownload"
                 />
@@ -96,8 +103,6 @@
                   :downloadUrl="downloadUrl"
                   :downloadText="downloadButtonText || 'Download SBOM'"
                   :downloadIcon="downloadIcon || 'fas fa-download'"
-                  :fileInfo="downloadFileInfo"
-                  :additionalInfo="downloadAdditionalInfo"
                   :downloadCount="downloadCount"
                   @download="handleDownload"
                 />
@@ -169,8 +174,6 @@
                   :downloadUrl="downloadUrl"
                   :downloadText="downloadButtonText || 'Download'"
                   :downloadIcon="downloadIcon || 'fas fa-download'"
-                  :fileInfo="downloadFileInfo"
-                  :additionalInfo="downloadAdditionalInfo"
                   @download="handleDownload"
                 />
               </div>
@@ -212,6 +215,7 @@ import PublicDownloadCard from './PublicDownloadCard.vue'
 import PublicCard from './PublicCard.vue'
 import ProductIdentifiers from './ProductIdentifiers.vue'
 import ProductLinks from './ProductLinks.vue'
+import ProductReleases from './ProductReleases.vue'
 import DocumentsTable from '@/documents/js/components/DocumentsTable.vue'
 import SbomsTable from '@/sboms/js/components/SbomsTable.vue'
 
@@ -386,12 +390,12 @@ function lightenColor(color: string, amount: number): string {
 }
 
 const emit = defineEmits<{
-  download: [url: string]
+  download: []
   action: [action: QuickAction]
 }>()
 
-const handleDownload = (url: string) => {
-  emit('download', url)
+const handleDownload = () => {
+  emit('download')
 }
 
 const handleAction = (action: QuickAction) => {

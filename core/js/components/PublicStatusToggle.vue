@@ -8,10 +8,12 @@
             <span v-if="isPublic" class="status-badge public-badge">
               <i class="fas fa-globe"></i>
               <span>Public</span>
+              <small v-if="itemType === 'release'" class="inheritance-note d-block">(inherited from product)</small>
             </span>
             <span v-else class="status-badge private-badge">
               <i class="fas fa-lock"></i>
               <span>Private</span>
+              <small v-if="itemType === 'release'" class="inheritance-note d-block">(inherited from product)</small>
             </span>
           </div>
 
@@ -49,6 +51,7 @@
           <div class="status-indicator" :class="{ 'public': isPublic, 'private': !isPublic }">
             <i :class="isPublic ? 'fas fa-globe' : 'fas fa-lock'"></i>
             <span class="status-text">{{ isPublic ? 'Public' : 'Private' }}</span>
+            <span v-if="itemType === 'release'" class="inheritance-note">(inherited from product)</span>
           </div>
 
           <div class="toggle-switch" :class="{ loading: isLoading }">
@@ -119,6 +122,15 @@
         return `/api/v1/projects/${props.itemId}`
       case 'component':
         return `/api/v1/components/${props.itemId}`
+      case 'release':
+        // Releases inherit public status from their parent product
+        // Extract product ID from the public URL: /public/product/{product_id}/release/{release_id}/
+        const urlMatch = props.publicUrl.match(/\/public\/product\/([^/]+)\/release\//)
+        if (!urlMatch) {
+          throw new Error('Could not extract product ID from release public URL')
+        }
+        const productId = urlMatch[1]
+        return `/api/v1/products/${productId}`
       default:
         throw new Error(`Unknown item type: ${props.itemType}`)
     }
@@ -160,14 +172,23 @@
       isPublic.value = response.data.is_public
 
       // Show success message
-      if (isPublic.value) {
-        showSuccess(
-          `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} is now public`
-        )
+      if (props.itemType === 'release') {
+        // For releases, we're actually updating the parent product
+        if (isPublic.value) {
+          showSuccess('Release product is now public (release inherits this status)')
+        } else {
+          showSuccess('Release product is now private (release inherits this status)')
+        }
       } else {
-        showSuccess(
-          `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} is now private`
-        )
+        if (isPublic.value) {
+          showSuccess(
+            `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} is now public`
+          )
+        } else {
+          showSuccess(
+            `${props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1)} is now private`
+          )
+        }
       }
     } catch (error) {
       const apiError = error as ApiErrorResponse
@@ -303,6 +324,13 @@
 
   .status-text {
     font-size: 0.75rem;
+  }
+
+  .inheritance-note {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    font-style: italic;
+    margin-left: 0.25rem;
   }
 
   .status-badge-container {

@@ -35,7 +35,7 @@ from teams.schemas import BrandingInfo
 
 from .errors import error_response
 from .forms import CreateAccessTokenForm
-from .models import Component, Product, Project
+from .models import Component, Product, Project, Release, ReleaseArtifact
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +280,180 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
     )
 
 
+# ============================================================================
+# Release Views
+# ============================================================================
+
+
+def product_releases_public(request: HttpRequest, product_id: str) -> HttpResponse:
+    """Public view showing all releases for a product."""
+    try:
+        product: Product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Product not found"))
+
+    # Verify access to product
+    if not product.is_public:
+        return error_response(request, HttpResponseNotFound("Product not found"))
+
+    releases = Release.objects.filter(product=product).order_by("-created_at")
+    branding_info = BrandingInfo(**product.team.branding_info)
+
+    return render(
+        request,
+        "core/product_releases_public.html.j2",
+        {
+            "product": product,
+            "releases": releases,
+            "brand": branding_info,
+        },
+    )
+
+
+@login_required
+def product_releases_private(request: HttpRequest, product_id: str) -> HttpResponse:
+    """Private view showing all releases for a product."""
+    try:
+        product: Product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Product not found"))
+
+    # Verify access to product
+    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
+    releases = Release.objects.filter(product=product).order_by("-created_at")
+
+    return render(
+        request,
+        "core/product_releases_private.html.j2",
+        {
+            "product": product,
+            "releases": releases,
+            "has_crud_permissions": has_crud_permissions,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "current_team": request.session.get("current_team", {}),
+        },
+    )
+
+
+def release_details_public(request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
+    """Public view showing details of a specific release."""
+    try:
+        product: Product = Product.objects.get(pk=product_id)
+        release: Release = (
+            Release.objects.select_related("product")
+            .prefetch_related("artifacts__sbom__component", "artifacts__document__component")
+            .get(pk=release_id, product=product)
+        )
+    except (Product.DoesNotExist, Release.DoesNotExist):
+        return error_response(request, HttpResponseNotFound("Release not found"))
+
+    # Verify access to product
+    if not product.is_public:
+        return error_response(request, HttpResponseNotFound("Release not found"))
+
+    # Check if there are any artifacts available for download
+    has_downloadable_content = release.artifacts.filter(sbom__isnull=False).exists()
+
+    # Prepare artifacts data for Vue component
+    artifacts_data = []
+    for artifact in release.artifacts.all():
+        if artifact.sbom:
+            artifacts_data.append(
+                {
+                    "id": str(artifact.id),
+                    "sbom": {
+                        "id": str(artifact.sbom.id),
+                        "name": artifact.sbom.name,
+                        "format": artifact.sbom.format,
+                        "format_version": artifact.sbom.format_version,
+                        "version": artifact.sbom.version,
+                        "created_at": artifact.sbom.created_at.isoformat(),
+                        "component": {
+                            "id": str(artifact.sbom.component.id),
+                            "name": artifact.sbom.component.name,
+                        },
+                    },
+                    "document": None,
+                    "created_at": artifact.created_at.isoformat()
+                    if hasattr(artifact, "created_at")
+                    else artifact.sbom.created_at.isoformat(),
+                }
+            )
+        elif artifact.document:
+            artifacts_data.append(
+                {
+                    "id": str(artifact.id),
+                    "sbom": None,
+                    "document": {
+                        "id": str(artifact.document.id),
+                        "name": artifact.document.name,
+                        "document_type": artifact.document.document_type,
+                        "version": artifact.document.version,
+                        "created_at": artifact.document.created_at.isoformat(),
+                        "component": {
+                            "id": str(artifact.document.component.id),
+                            "name": artifact.document.component.name,
+                        },
+                    },
+                    "created_at": artifact.created_at.isoformat()
+                    if hasattr(artifact, "created_at")
+                    else artifact.document.created_at.isoformat(),
+                }
+            )
+
+    branding_info = BrandingInfo(**product.team.branding_info)
+    return render(
+        request,
+        "core/release_details_public.html.j2",
+        {
+            "product": product,
+            "release": release,
+            "brand": branding_info,
+            "has_downloadable_content": has_downloadable_content,
+            "artifacts_data": artifacts_data,
+        },
+    )
+
+
+@login_required
+def release_details_private(request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
+    """Private view showing details of a specific release."""
+    try:
+        product: Product = Product.objects.get(pk=product_id)
+        release: Release = (
+            Release.objects.select_related("product")
+            .prefetch_related("artifacts__sbom__component", "artifacts__document__component")
+            .get(pk=release_id, product=product)
+        )
+    except (Product.DoesNotExist, Release.DoesNotExist):
+        return error_response(request, HttpResponseNotFound("Release not found"))
+
+    # Verify access to product
+    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
+
+    # Check if there are any artifacts available for download
+    has_downloadable_content = release.artifacts.filter(sbom__isnull=False).exists()
+
+    return render(
+        request,
+        "core/release_details_private.html.j2",
+        {
+            "product": product,
+            "release": release,
+            "has_crud_permissions": has_crud_permissions,
+            "has_downloadable_content": has_downloadable_content,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "current_team": request.session.get("current_team", {}),
+        },
+    )
+
+
 @login_required
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
     current_team = request.session.get("current_team")
@@ -356,6 +530,21 @@ def components_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
+@login_required
+def releases_dashboard(request: HttpRequest) -> HttpResponse:
+    current_team = request.session.get("current_team")
+    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
+
+    return render(
+        request,
+        "core/releases_dashboard.html.j2",
+        {
+            "has_crud_permissions": has_crud_permissions,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+        },
+    )
+
+
 def component_details_public(request: HttpRequest, component_id: str) -> HttpResponse:
     try:
         component: Component = Component.objects.get(pk=component_id)
@@ -380,6 +569,26 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
             redis_client = redis.from_url(settings.REDIS_WORKER_URL)
             for sbom_item in sboms_queryset:
                 keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+
+                # Get releases that contain this SBOM (only public releases for public view)
+                releases = []
+                release_artifacts = (
+                    ReleaseArtifact.objects.filter(sbom=sbom_item)
+                    .select_related("release", "release__product")
+                    .filter(release__product__is_public=True)
+                )
+                for artifact in release_artifacts:
+                    releases.append(
+                        {
+                            "id": str(artifact.release.id),
+                            "name": artifact.release.name,
+                            "product_name": artifact.release.product.name,
+                            "is_latest": artifact.release.is_latest,
+                            "is_prerelease": artifact.release.is_prerelease,
+                            "is_public": artifact.release.product.is_public,
+                        }
+                    )
+
                 sboms_with_vuln_status.append(
                     {
                         "sbom": {
@@ -393,10 +602,30 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                             "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": bool(keys),
+                        "releases": releases,
                     }
                 )
         except redis.exceptions.ConnectionError:
             for sbom_item in sboms_queryset:
+                # Get releases that contain this SBOM (only public releases for public view)
+                releases = []
+                release_artifacts = (
+                    ReleaseArtifact.objects.filter(sbom=sbom_item)
+                    .select_related("release", "release__product")
+                    .filter(release__product__is_public=True)
+                )
+                for artifact in release_artifacts:
+                    releases.append(
+                        {
+                            "id": str(artifact.release.id),
+                            "name": artifact.release.name,
+                            "product_name": artifact.release.product.name,
+                            "is_latest": artifact.release.is_latest,
+                            "is_prerelease": artifact.release.is_prerelease,
+                            "is_public": artifact.release.product.is_public,
+                        }
+                    )
+
                 sboms_with_vuln_status.append(
                     {
                         "sbom": {
@@ -410,6 +639,7 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                             "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": False,
+                        "releases": releases,
                     }
                 )
             # No messages.error for public view, just log or fail silently
@@ -421,6 +651,25 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
         documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
         documents_data = []
         for document_item in documents_queryset:
+            # Get releases that contain this document (only public releases for public view)
+            releases = []
+            release_artifacts = (
+                ReleaseArtifact.objects.filter(document=document_item)
+                .select_related("release", "release__product")
+                .filter(release__product__is_public=True)
+            )
+            for artifact in release_artifacts:
+                releases.append(
+                    {
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
+                    }
+                )
+
             documents_data.append(
                 {
                     "document": {
@@ -431,7 +680,8 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                         "file_size": document_item.file_size,
                         "version": document_item.version,
                         "created_at": document_item.created_at.isoformat(),
-                    }
+                    },
+                    "releases": releases,
                 }
             )
         context["documents_data"] = documents_data
@@ -469,6 +719,24 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
             redis_client = redis.from_url(settings.REDIS_WORKER_URL)
             for sbom_item in sboms_queryset:
                 keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+
+                # Get releases that contain this SBOM
+                releases = []
+                release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom_item).select_related(
+                    "release", "release__product"
+                )
+                for artifact in release_artifacts:
+                    releases.append(
+                        {
+                            "id": str(artifact.release.id),
+                            "name": artifact.release.name,
+                            "product_name": artifact.release.product.name,
+                            "is_latest": artifact.release.is_latest,
+                            "is_prerelease": artifact.release.is_prerelease,
+                            "is_public": artifact.release.product.is_public,
+                        }
+                    )
+
                 sboms_with_vuln_status.append(
                     {
                         "sbom": {
@@ -482,11 +750,29 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                             "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": bool(keys),
+                        "releases": releases,
                     }
                 )
         except redis.exceptions.ConnectionError:
             # If Redis is down, assume no reports are available for simplicity
             for sbom_item in sboms_queryset:
+                # Get releases that contain this SBOM
+                releases = []
+                release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom_item).select_related(
+                    "release", "release__product"
+                )
+                for artifact in release_artifacts:
+                    releases.append(
+                        {
+                            "id": str(artifact.release.id),
+                            "name": artifact.release.name,
+                            "product_name": artifact.release.product.name,
+                            "is_latest": artifact.release.is_latest,
+                            "is_prerelease": artifact.release.is_prerelease,
+                            "is_public": artifact.release.product.is_public,
+                        }
+                    )
+
                 sboms_with_vuln_status.append(
                     {
                         "sbom": {
@@ -500,6 +786,7 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                             "ntia_compliance_details": sbom_item.ntia_compliance_details,
                         },
                         "has_vulnerabilities_report": False,
+                        "releases": releases,
                     }
                 )
             messages.error(
@@ -512,6 +799,23 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
         documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
         documents_data = []
         for document_item in documents_queryset:
+            # Get releases that contain this document
+            releases = []
+            release_artifacts = ReleaseArtifact.objects.filter(document=document_item).select_related(
+                "release", "release__product"
+            )
+            for artifact in release_artifacts:
+                releases.append(
+                    {
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
+                    }
+                )
+
             documents_data.append(
                 {
                     "document": {
@@ -522,7 +826,8 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                         "content_type": document_item.content_type,
                         "file_size": document_item.file_size,
                         "created_at": document_item.created_at.isoformat(),
-                    }
+                    },
+                    "releases": releases,
                 }
             )
         context["documents_data"] = documents_data

@@ -45,6 +45,11 @@
                         <i class="align-middle" data-feather="file-text"></i> <span class="align-middle pt-1">Components</span>
                     </a>
                 </li>
+                <li class="sidebar-item {% if 'core:release' in current_view_name %}active{% endif %}">
+                    <a class="sidebar-link" href="{% url 'core:releases_dashboard' %}">
+                        <i class="align-middle" data-feather="tag"></i> <span class="align-middle pt-1">Releases</span>
+                    </a>
+                </li>
             </ul>
         {% endwith %}
     </div>

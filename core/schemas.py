@@ -371,3 +371,165 @@ class ComponentMetadataPatchCore(BaseModel):
     authors: list[ContactInfo] | None = None
     licenses: list[str] | None = None
     lifecycle_phase: str | None = None
+
+
+# Release schemas
+class ArtifactSBOMSchema(BaseModel):
+    """Schema for SBOM artifacts in release responses."""
+
+    id: str
+    name: str
+    format: str
+    format_version: str
+    version: str | None
+    created_at: datetime
+    component: dict  # {"id": str, "name": str}
+
+
+class ArtifactDocumentSchema(BaseModel):
+    """Schema for Document artifacts in release responses."""
+
+    id: str
+    name: str
+    document_type: str
+    version: str | None
+    created_at: datetime
+    component: dict  # {"id": str, "name": str}
+
+
+class ReleaseArtifactSchema(BaseModel):
+    """Schema for release artifacts in responses."""
+
+    id: str
+    sbom: ArtifactSBOMSchema | None = None
+    document: ArtifactDocumentSchema | None = None
+
+
+class ReleaseCreateSchema(BaseModel):
+    """Schema for creating a new Release."""
+
+    name: str = Field(..., max_length=255, min_length=1)
+    description: str | None = Field(default="", max_length=1000)
+    is_prerelease: bool = Field(default=False)
+
+
+class ReleaseUpdateSchema(BaseModel):
+    """Schema for updating a Release."""
+
+    name: str = Field(..., max_length=255, min_length=1)
+    description: str | None = Field(default="", max_length=1000)
+    is_prerelease: bool = Field(default=False)
+    created_at: datetime | None = None
+
+
+class ReleasePatchSchema(BaseModel):
+    """Schema for partially updating a Release using PATCH."""
+
+    name: str | None = Field(None, max_length=255, min_length=1)
+    description: str | None = None
+    is_prerelease: bool | None = None
+    created_at: datetime | None = None
+
+
+class ReleaseResponseSchema(BaseModel):
+    """Schema for Release API responses."""
+
+    id: str
+    name: str
+    description: str
+    product_id: str
+    product_name: str
+    is_latest: bool
+    is_prerelease: bool
+    is_public: bool
+    created_at: datetime
+    artifact_count: int | None = None
+    artifacts: list[ReleaseArtifactSchema] | None = None
+
+
+class ReleaseArtifactCreateSchema(BaseModel):
+    """Schema for adding artifacts to a release."""
+
+    sbom_id: str | None = None
+    document_id: str | None = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Validate that exactly one of sbom_id or document_id is provided
+        if not self.sbom_id and not self.document_id:
+            raise ValueError("Either sbom_id or document_id must be provided")
+        if self.sbom_id and self.document_id:
+            raise ValueError("Cannot provide both sbom_id and document_id")
+
+
+class ReleaseArtifactsUpdateSchema(BaseModel):
+    """Schema for bulk updating artifacts in a release."""
+
+    artifacts: list[ReleaseArtifactCreateSchema]
+
+
+class SBOMReleaseTaggingSchema(BaseModel):
+    """Schema for tagging SBOMs to releases."""
+
+    release_ids: list[str] = Field(..., min_length=1, description="List of release IDs to tag the SBOM to")
+
+
+class SBOMReleaseTaggingArtifactSchema(BaseModel):
+    """Schema for individual artifacts in SBOM tagging response."""
+
+    artifact_id: str
+    release_id: str
+    release_name: str
+    product_id: str
+    product_name: str
+    created_at: datetime
+    replaced_sbom: str | None = None  # Only present if this was a replacement
+
+
+class SBOMReleaseTaggingResponseSchema(BaseModel):
+    """Schema for SBOM tagging operation response."""
+
+    created_artifacts: list[SBOMReleaseTaggingArtifactSchema]
+    replaced_artifacts: list[SBOMReleaseTaggingArtifactSchema]
+    errors: list[str]
+
+
+class DocumentReleaseTaggingSchema(BaseModel):
+    """Schema for tagging documents to releases."""
+
+    release_ids: list[str] = Field(..., min_length=1, description="List of release IDs to tag the document to")
+
+
+class DocumentReleaseTaggingArtifactSchema(BaseModel):
+    """Schema for individual artifacts in document tagging response."""
+
+    artifact_id: str
+    release_id: str
+    release_name: str
+    product_id: str
+    product_name: str
+    created_at: datetime
+    replaced_document: str | None = None  # Only present if this was a replacement
+
+
+class DocumentReleaseTaggingResponseSchema(BaseModel):
+    """Schema for document tagging operation response."""
+
+    created_artifacts: list[DocumentReleaseTaggingArtifactSchema]
+    replaced_artifacts: list[DocumentReleaseTaggingArtifactSchema]
+    errors: list[str]
+
+
+class ReleaseArtifactAddResponseSchema(BaseModel):
+    """Schema for the response when adding an artifact to a release."""
+
+    id: str
+    artifact_type: str  # "sbom" or "document"
+    artifact_name: str
+    component_id: str
+    component_name: str
+    created_at: str
+    sbom_format: str | None = None
+    sbom_version: str | None = None
+    document_type: str | None = None
+    document_version: str | None = None

@@ -190,6 +190,7 @@ APP_BASE_URL - Base URL for the application
                 {{ documents_data|json_script:"documents-data" }}
                 <div class="vc-documents-table"
                      data-documents-data-element-id="documents-data"
+                     data-component-id="{{ component.id }}"
                      data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
             </div>
         </div>
