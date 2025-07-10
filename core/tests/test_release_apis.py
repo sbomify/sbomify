@@ -161,11 +161,22 @@ def test_list_releases(
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 2
+    # Now expect 3 releases: 2 manual + 1 automatic "latest" release
+    assert len(data) == 3
 
+    release_names = [r["name"] for r in data]
     release_ids = [r["id"] for r in data]
+
+    # Verify the manual releases are present
     assert release1.id in release_ids
     assert release2.id in release_ids
+    assert "v1.0.0" in release_names
+    assert "v2.0.0" in release_names
+
+    # Verify the automatic latest release was created
+    assert "latest" in release_names
+    latest_release_data = [r for r in data if r["name"] == "latest"][0]
+    assert latest_release_data["is_latest"] is True
 
 
 @pytest.mark.django_db
@@ -252,6 +263,181 @@ def test_update_latest_release_fails(
 
     assert response.status_code == 400
     assert "automatically managed" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_patch_release_with_unchanged_name(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that patching a release with the same name doesn't trigger 'already exists' error."""
+    client = Client()
+    release = Release.objects.create(product=sample_product, name="v1.0.0", description="Original description")
+    url = reverse("api-1:patch_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+
+    # PATCH with same name but different description - should succeed
+    payload = {"name": "v1.0.0", "description": "Updated description"}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "v1.0.0"
+    assert data["description"] == "Updated description"
+
+    # Verify in database
+    release.refresh_from_db()
+    assert release.name == "v1.0.0"
+    assert release.description == "Updated description"
+
+
+@pytest.mark.django_db
+def test_patch_release_with_no_changes(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that patching a release with no actual changes works correctly."""
+    client = Client()
+    release = Release.objects.create(product=sample_product, name="v1.0.0", description="Test description")
+    url = reverse("api-1:patch_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+
+    # PATCH with exact same values - should succeed and not trigger database save
+    payload = {"name": "v1.0.0", "description": "Test description", "is_prerelease": False}
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "v1.0.0"
+    assert data["description"] == "Test description"
+    assert data["is_prerelease"] is False
+
+    # Verify in database - values should remain the same
+    release.refresh_from_db()
+    assert release.name == "v1.0.0"
+    assert release.description == "Test description"
+    assert release.is_prerelease is False
+
+
+@pytest.mark.django_db
+def test_latest_release_created_on_product_access(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that accessing a product creates a latest release if it doesn't exist."""
+    client = Client()
+
+    # Verify no releases exist initially
+    assert Release.objects.filter(product=sample_product).count() == 0
+
+    # Access the product via API
+    url = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+
+    # Verify latest release was created
+    latest_releases = Release.objects.filter(product=sample_product, is_latest=True)
+    assert latest_releases.count() == 1
+
+    latest_release = latest_releases.first()
+    assert latest_release.name == "latest"
+    assert latest_release.is_latest is True
+
+
+@pytest.mark.django_db
+def test_latest_release_created_on_releases_list_access(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that accessing product releases creates a latest release if it doesn't exist."""
+    client = Client()
+
+    # Verify no releases exist initially
+    assert Release.objects.filter(product=sample_product).count() == 0
+
+    # Access the product releases via API
+    url = reverse("api-1:list_releases", kwargs={"product_id": sample_product.id})
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+
+    # Verify latest release was created and is in the response
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "latest"
+    assert data[0]["is_latest"] is True
+
+    # Verify in database
+    latest_releases = Release.objects.filter(product=sample_product, is_latest=True)
+    assert latest_releases.count() == 1
+
+
+@pytest.mark.django_db
+def test_latest_release_not_duplicated_on_repeated_access(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that accessing a product multiple times doesn't create duplicate latest releases."""
+    client = Client()
+
+    # Verify no releases exist initially
+    assert Release.objects.filter(product=sample_product).count() == 0
+
+    url = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Access the product multiple times
+    for _ in range(3):
+        response = client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+        assert response.status_code == 200
+
+    # Verify only one latest release exists
+    latest_releases = Release.objects.filter(product=sample_product, is_latest=True)
+    assert latest_releases.count() == 1
+
+    # Verify total releases count is still 1
+    assert Release.objects.filter(product=sample_product).count() == 1
 
 
 @pytest.mark.django_db
