@@ -13,7 +13,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.test import Client
 from django.urls import reverse
 
-from core.tests.shared_fixtures import get_api_headers
+from core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_api_client
 from core.utils import number_to_random_token
 
 from .fixtures import (  # noqa: F401
