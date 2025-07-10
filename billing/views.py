@@ -6,7 +6,7 @@ import stripe
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,7 +20,7 @@ from sboms.models import Component, Product, Project
 from teams.models import Team
 
 from . import billing_processing
-from .forms import EnterpriseContactForm
+from .forms import EnterpriseContactForm, PublicEnterpriseContactForm
 from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
 
@@ -77,22 +77,23 @@ Submitted by user: {request.user.email} ({
 Submitted at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
 """
 
-                # Send email
-                send_mail(
+                # Send email to sales team
+                sales_email = EmailMessage(
                     subject=subject,
-                    message=message_content,
+                    body=message_content,
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=["hello@sbomify.com"],
-                    fail_silently=False,
+                    to=["hello@sbomify.com"],
+                    reply_to=["hello@sbomify.com"],
                 )
+                sales_email.send(fail_silently=False)
 
                 # Send confirmation email to the user
                 confirmation_subject = "Thank you for your Enterprise inquiry"
                 confirmation_message = f"""
 Dear {form.cleaned_data['first_name']},
 
-Thank you for your interest in sbomify Enterprise. We have received your inquiry and will get back to you \
-within 1-2 business days.
+Thank you for your interest in sbomify Enterprise. We have received your inquiry and will get back \
+to you within 1-2 business days.
 
 Our sales team will review your requirements and reach out to discuss how sbomify
 Enterprise can meet {
@@ -103,17 +104,17 @@ Best regards,
 The sbomify Team
 
 ---
-This is an automated confirmation. Please do not reply to this email.
-For immediate questions, contact us at hello@sbomify.com
+You can reply to this email and we'll receive your message at hello@sbomify.com
 """
 
-                send_mail(
+                confirmation_email = EmailMessage(
                     subject=confirmation_subject,
-                    message=confirmation_message,
+                    body=confirmation_message,
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[form.cleaned_data["email"]],
-                    fail_silently=True,  # Don't fail if confirmation email fails
+                    to=[form.cleaned_data["email"]],
+                    reply_to=["hello@sbomify.com"],
                 )
+                confirmation_email.send(fail_silently=True)  # Don't fail if confirmation email fails
 
                 messages.success(
                     request,
@@ -145,6 +146,116 @@ For immediate questions, contact us at hello@sbomify.com
         form = EnterpriseContactForm(initial=initial_data)
 
     return render(request, "billing/enterprise_contact.html.j2", {"form": form})
+
+
+def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
+    """Public enterprise contact form accessible without login."""
+    if request.method == "POST":
+        form = PublicEnterpriseContactForm(request.POST)
+        if form.is_valid():
+            # Form is valid, proceed with email sending
+
+            # Send email to sales team
+            try:
+                subject = f"Enterprise Inquiry from {form.cleaned_data['company_name']} (Public Form)"
+
+                # Create email content
+                message_content = f"""
+New Enterprise Plan Inquiry (Public Form)
+
+Company Information:
+- Company Name: {form.cleaned_data['company_name']}
+- Company Size: {dict(form.fields['company_size'].choices).get(
+    form.cleaned_data['company_size'], 'N/A'
+)}
+- Industry: {form.cleaned_data.get('industry') or 'Not specified'}
+
+Contact Information:
+- Name: {form.cleaned_data['first_name']} {form.cleaned_data['last_name']}
+- Email: {form.cleaned_data['email']}
+- Phone: {form.cleaned_data.get('phone') or 'Not provided'}
+- Job Title: {form.cleaned_data.get('job_title') or 'Not specified'}
+
+Project Details:
+- Primary Use Case: {dict(form.fields['primary_use_case'].choices).get(
+    form.cleaned_data['primary_use_case'], 'N/A'
+)}
+- Timeline: {form.cleaned_data.get('timeline') or 'Not specified'}
+
+Message:
+{form.cleaned_data['message']}
+
+Newsletter Signup: {'Yes' if form.cleaned_data.get('newsletter_signup') else 'No'}
+
+Submitted from: Public Enterprise Contact Form
+Submitted at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+Source IP: {request.META.get('REMOTE_ADDR', 'Unknown')}
+User Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}
+"""
+
+                # Send email to sales team
+                sales_email = EmailMessage(
+                    subject=subject,
+                    body=message_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=["hello@sbomify.com"],
+                    reply_to=["hello@sbomify.com"],
+                )
+                sales_email.send(fail_silently=False)
+
+                # Send confirmation email to the user
+                confirmation_subject = "Thank you for your Enterprise inquiry"
+                confirmation_message = f"""
+Dear {form.cleaned_data['first_name']},
+
+Thank you for your interest in sbomify Enterprise! We've received your inquiry and our sales team will \
+reach out to you within 1-2 business days.
+
+Our team will review your requirements and discuss how sbomify Enterprise can meet {
+    form.cleaned_data['company_name']
+}'s specific needs.
+
+Best regards,
+The sbomify Team
+
+---
+You can reply to this email and we'll receive your message at hello@sbomify.com
+"""
+
+                confirmation_email = EmailMessage(
+                    subject=confirmation_subject,
+                    body=confirmation_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[form.cleaned_data["email"]],
+                    reply_to=["hello@sbomify.com"],
+                )
+                confirmation_email.send(fail_silently=True)  # Don't fail if confirmation email fails
+
+                messages.success(
+                    request,
+                    f"Thank you for your inquiry! We'll be in touch with "
+                    f"{form.cleaned_data['company_name']} within 1-2 business days.",
+                )
+                return redirect("public_enterprise_contact")
+
+            except Exception as e:
+                logger.error(f"Failed to send public enterprise contact email: {e}")
+                messages.error(
+                    request,
+                    "There was an issue sending your inquiry. Please try again or contact us directly "
+                    "at hello@sbomify.com",
+                )
+    else:
+        form = PublicEnterpriseContactForm()
+
+    return render(
+        request,
+        "billing/public_enterprise_contact.html.j2",
+        {
+            "form": form,
+            "turnstile_site_key": settings.TURNSTILE_SITE_KEY,
+        },
+    )
 
 
 @login_required
