@@ -52,9 +52,9 @@ def test_create_release_success(
 ):
     """Test successful release creation."""
     client = Client()
-    url = reverse("api-1:create_release", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:create_release")
 
-    payload = {"name": "v1.0.0"}
+    payload = {"name": "v1.0.0", "product_id": str(sample_product.id)}
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -88,12 +88,12 @@ def test_create_release_duplicate_name(
 ):
     """Test release creation with duplicate name fails."""
     client = Client()
-    url = reverse("api-1:create_release", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:create_release")
 
     # Create first release
     Release.objects.create(product=sample_product, name="v1.0.0")
 
-    payload = {"name": "v1.0.0"}
+    payload = {"name": "v1.0.0", "product_id": str(sample_product.id)}
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -117,9 +117,9 @@ def test_create_release_named_latest_fails(
 ):
     """Test that manually creating a release named 'latest' fails."""
     client = Client()
-    url = reverse("api-1:create_release", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:create_release")
 
-    payload = {"name": "latest"}
+    payload = {"name": "latest", "product_id": str(sample_product.id)}
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -143,7 +143,7 @@ def test_list_releases(
 ):
     """Test listing releases for a product."""
     client = Client()
-    url = reverse("api-1:list_releases", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:list_all_releases") + f"?product_id={sample_product.id}"
 
     # Create test releases
     release1 = Release.objects.create(product=sample_product, name="v1.0.0")
@@ -187,7 +187,7 @@ def test_get_release_success(
     """Test getting a specific release."""
     client = Client()
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:get_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:get_release", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -213,7 +213,7 @@ def test_update_release_success(
     """Test successful release update."""
     client = Client()
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:update_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:update_release", kwargs={"release_id": release.id})
 
     payload = {"name": "v1.1.0"}
 
@@ -246,7 +246,7 @@ def test_update_latest_release_fails(
     client = Client()
     # Create latest release directly (simulating auto-creation)
     release = Release.objects.create(product=sample_product, name="latest", is_latest=True)
-    url = reverse("api-1:update_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:update_release", kwargs={"release_id": release.id})
 
     payload = {"name": "v1.0.0"}
 
@@ -273,7 +273,7 @@ def test_patch_release_with_unchanged_name(
     """Test that patching a release with the same name doesn't trigger 'already exists' error."""
     client = Client()
     release = Release.objects.create(product=sample_product, name="v1.0.0", description="Original description")
-    url = reverse("api-1:patch_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:patch_release", kwargs={"release_id": release.id})
 
     # PATCH with same name but different description - should succeed
     payload = {"name": "v1.0.0", "description": "Updated description"}
@@ -308,7 +308,7 @@ def test_patch_release_with_no_changes(
     """Test that patching a release with no actual changes works correctly."""
     client = Client()
     release = Release.objects.create(product=sample_product, name="v1.0.0", description="Test description")
-    url = reverse("api-1:patch_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:patch_release", kwargs={"release_id": release.id})
 
     # PATCH with exact same values - should succeed and not trigger database save
     payload = {"name": "v1.0.0", "description": "Test description", "is_prerelease": False}
@@ -338,40 +338,6 @@ def test_patch_release_with_no_changes(
 
 
 @pytest.mark.django_db
-def test_latest_release_created_on_product_access(
-    sample_product: Product,  # noqa: F811
-    sample_access_token: AccessToken,  # noqa: F811
-):
-    """Test that accessing a product creates a latest release if it doesn't exist."""
-    client = Client()
-
-    # Verify no releases exist initially
-    assert Release.objects.filter(product=sample_product).count() == 0
-
-    # Access the product via API
-    url = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
-
-    # Set up authentication and session
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
-    setup_test_session(client, sample_product.team, sample_product.team.members.first())
-
-    response = client.get(
-        url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
-    )
-
-    assert response.status_code == 200
-
-    # Verify latest release was created
-    latest_releases = Release.objects.filter(product=sample_product, is_latest=True)
-    assert latest_releases.count() == 1
-
-    latest_release = latest_releases.first()
-    assert latest_release.name == "latest"
-    assert latest_release.is_latest is True
-
-
-@pytest.mark.django_db
 def test_latest_release_created_on_releases_list_access(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
@@ -383,7 +349,7 @@ def test_latest_release_created_on_releases_list_access(
     assert Release.objects.filter(product=sample_product).count() == 0
 
     # Access the product releases via API
-    url = reverse("api-1:list_releases", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:list_all_releases") + f"?product_id={sample_product.id}"
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -448,7 +414,7 @@ def test_delete_release_success(
     """Test successful release deletion."""
     client = Client()
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:delete_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:delete_release", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -474,7 +440,7 @@ def test_delete_latest_release_fails(
     client = Client()
     # Create latest release directly (simulating auto-creation)
     release = Release.objects.create(product=sample_product, name="latest", is_latest=True)
-    url = reverse("api-1:delete_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:delete_release", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -516,7 +482,7 @@ def test_add_sbom_to_release(
     sample_sbom.save()
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:add_artifact_to_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
 
     payload = {"sbom_id": sample_sbom.id}
 
@@ -566,7 +532,7 @@ def test_add_document_to_release(
     sample_document.save()
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:add_artifact_to_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
 
     payload = {"document_id": sample_document.id}
 
@@ -619,7 +585,6 @@ def test_remove_sbom_from_release(
     artifact = ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
 
     url = reverse("api-1:remove_artifact_from_release", kwargs={
-        "product_id": sample_product.id,
         "release_id": release.id,
         "artifact_id": artifact.id
     })
@@ -667,7 +632,6 @@ def test_remove_document_from_release(
     artifact = ReleaseArtifact.objects.create(release=release, document=sample_document)
 
     url = reverse("api-1:remove_artifact_from_release", kwargs={
-        "product_id": sample_product.id,
         "release_id": release.id,
         "artifact_id": artifact.id
     })
@@ -749,7 +713,7 @@ def test_download_release_sbom_success(
     release = Release.objects.create(product=sample_product, name="v1.0.0")
     ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
 
-    url = reverse("api-1:download_release_sbom", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:download_release", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -785,7 +749,7 @@ def test_download_release_sbom_no_artifacts(
     client = Client()
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:download_release_sbom", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:download_release", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -811,8 +775,8 @@ def test_release_operations_require_authentication():
     client = Client()
 
     # Create a product (will fail without authentication)
-    url = reverse("api-1:create_release", kwargs={"product_id": "test"})
-    payload = {"name": "v1.0.0"}
+    url = reverse("api-1:create_release")
+    payload = {"name": "v1.0.0", "product_id": "test"}
 
     response = client.post(
         url,
@@ -831,9 +795,9 @@ def test_release_operations_require_team_member(
 ):
     """Test that release operations require proper team membership."""
     client = Client()
-    url = reverse("api-1:create_release", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:create_release")
 
-    payload = {"name": "v1.0.0"}
+    payload = {"name": "v1.0.0", "product_id": str(sample_product.id)}
 
     # Set up authentication with different team
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -863,9 +827,9 @@ def test_guest_cannot_modify_releases(
     guest_member.save()
 
     client = Client()
-    url = reverse("api-1:create_release", kwargs={"product_id": sample_product.id})
+    url = reverse("api-1:create_release")
 
-    payload = {"name": "v1.0.0"}
+    payload = {"name": "v1.0.0", "product_id": str(sample_product.id)}
 
     # Set up authentication as guest
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -922,7 +886,7 @@ def test_add_duplicate_sbom_format_to_release(
     ReleaseArtifact.objects.create(release=release, sbom=sbom1)
 
     # Try to add second SBOM with same format
-    url = reverse("api-1:add_artifact_to_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
     payload = {"sbom_id": sbom2.id}
 
     # Set up authentication and session
@@ -962,7 +926,7 @@ def test_add_sbom_from_different_team_fails(
     sample_sbom.save()
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:add_artifact_to_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
 
     payload = {"sbom_id": sample_sbom.id}
 
@@ -1005,7 +969,7 @@ def test_list_available_artifacts_for_release(
     sample_document.save()
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    url = reverse("api-1:list_available_artifacts_for_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:list_release_artifacts", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1066,7 +1030,7 @@ def test_list_available_artifacts_excludes_existing(
     # Add SBOM to release (but not document)
     ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
 
-    url = reverse("api-1:list_available_artifacts_for_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:list_release_artifacts", kwargs={"release_id": release.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1103,7 +1067,7 @@ def test_update_release_date(
     # Set a new date
     new_date = datetime(2023, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
 
-    url = reverse("api-1:update_release", kwargs={"product_id": sample_product.id, "release_id": release.id})
+    url = reverse("api-1:update_release", kwargs={"release_id": release.id})
     data = {
         "name": "v1.0.0",
         "description": "Test release",

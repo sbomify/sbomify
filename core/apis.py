@@ -54,7 +54,6 @@ from .schemas import (
     ProjectUpdateSchema,
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
-    ReleaseArtifactSchema,
     ReleaseCreateSchema,
     ReleasePatchSchema,
     ReleaseResponseSchema,
@@ -1401,8 +1400,9 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     project_names = ", ".join(public_projects.values_list("name", flat=True))
                     return 400, {
                         "detail": (
-                            f"Cannot make component private because it's assigned to public projects: {project_names}. "
-                            "Please remove it from these projects first or make the projects private."
+                            f"Cannot make component private because it's assigned to public projects: "
+                            f"{project_names}. Please remove it from these projects first or make the "
+                            f"projects private."
                         )
                     }
 
@@ -1839,16 +1839,35 @@ def download_product_sbom(request: HttpRequest, product_id: str):
 @router.get(
     "/releases",
     response={200: list[dict], 403: ErrorResponse},
+    auth=None,
 )
-def list_all_releases(request: HttpRequest):
-    """List all releases across all products for the current user's team."""
+@decorate_view(optional_token_auth)
+def list_all_releases(request: HttpRequest, product_id: str | None = Query(None)):
+    """List all releases across all products for the current user's team, optionally filtered by product."""
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
 
     try:
-        # Get all releases for products belonging to the user's team
-        releases = Release.objects.filter(product__team_id=team_id).select_related("product").order_by("-created_at")
+        # Build the base query for releases belonging to the user's team
+        query = Release.objects.filter(product__team_id=team_id).select_related("product")
+
+        # Filter by product if specified
+        if product_id:
+            query = query.filter(product_id=product_id)
+            # Ensure latest release exists for the specific product when filtering
+            try:
+                product = Product.objects.get(pk=product_id, team_id=team_id)
+                _ensure_latest_release_exists(product)
+            except Product.DoesNotExist:
+                pass  # Product not found or doesn't belong to team, ignore
+        else:
+            # Ensure latest releases exist for all team products when listing all releases
+            team_products = Product.objects.filter(team_id=team_id)
+            for product in team_products:
+                _ensure_latest_release_exists(product)
+
+        releases = query.order_by("-created_at")
 
         response_data = []
         for release in releases:
@@ -1938,16 +1957,21 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
     return response
 
 
+# =============================================================================
+# TOP-LEVEL RELEASE CRUD ENDPOINTS
+# =============================================================================
+
+
 @router.post(
-    "/products/{product_id}/releases",
+    "/releases",
     response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_release(request: HttpRequest, product_id: str, payload: ReleaseCreateSchema):
-    """Create a new release for a product."""
+def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
+    """Create a new release."""
     from core.models import LATEST_RELEASE_NAME
 
     try:
-        product = Product.objects.get(pk=product_id)
+        product = Product.objects.get(pk=payload.product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found"}
 
@@ -1983,77 +2007,42 @@ def create_release(request: HttpRequest, product_id: str, payload: ReleaseCreate
 
 
 @router.get(
-    "/products/{product_id}/releases",
-    response={200: list[ReleaseResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
-)
-@decorate_view(optional_token_auth)
-def list_releases(request: HttpRequest, product_id: str):
-    """List all releases for a product."""
-    try:
-        product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
-
-    # Ensure latest release exists when users access releases
-    _ensure_latest_release_exists(product)
-
-    # If product is public, allow unauthenticated access
-    if not product.is_public:
-        if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private products"}
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
-
-    try:
-        releases = Release.objects.filter(product=product).prefetch_related("artifacts")
-        return 200, [_build_release_response(release) for release in releases]
-    except Exception as e:
-        log.error(f"Error listing releases: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.get(
-    "/products/{product_id}/releases/{release_id}",
+    "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_release(request: HttpRequest, product_id: str, release_id: str):
+def get_release(request: HttpRequest, release_id: str):
     """Get a specific release by ID."""
     try:
-        product = Product.objects.get(pk=product_id)
-        release = (
-            Release.objects.select_related("product").prefetch_related("artifacts").get(pk=release_id, product=product)
-        )
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").prefetch_related("artifacts").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
     # If product is public, allow unauthenticated access
-    if not product.is_public:
+    if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products"}
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied"}
 
     return 200, _build_release_response(release, include_artifacts=True)
 
 
 @router.put(
-    "/products/{product_id}/releases/{release_id}",
+    "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_release(request: HttpRequest, product_id: str, release_id: str, payload: ReleaseUpdateSchema):
+def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema):
     """Update a release."""
     from core.models import LATEST_RELEASE_NAME
 
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update releases"}
 
     # Prevent modifying latest releases
@@ -2090,20 +2079,19 @@ def update_release(request: HttpRequest, product_id: str, release_id: str, paylo
 
 
 @router.patch(
-    "/products/{product_id}/releases/{release_id}",
+    "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def patch_release(request: HttpRequest, product_id: str, release_id: str, payload: ReleasePatchSchema):
+def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema):
     """Partially update a release."""
     from core.models import LATEST_RELEASE_NAME
 
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update releases"}
 
     # Prevent modifying latest releases
@@ -2147,20 +2135,19 @@ def patch_release(request: HttpRequest, product_id: str, release_id: str, payloa
 
 
 @router.delete(
-    "/products/{product_id}/releases/{release_id}",
+    "/releases/{release_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def delete_release(request: HttpRequest, product_id: str, release_id: str):
+def delete_release(request: HttpRequest, release_id: str):
     """Delete a release."""
     from core.models import LATEST_RELEASE_NAME
 
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete releases"}
 
     # Prevent deleting latest releases
@@ -2178,186 +2165,270 @@ def delete_release(request: HttpRequest, product_id: str, release_id: str):
 
 
 # =============================================================================
-# RELEASE ARTIFACT MANAGEMENT ENDPOINTS
+# RELEASE DOWNLOAD ENDPOINT
 # =============================================================================
 
 
 @router.get(
-    "/products/{product_id}/releases/{release_id}/artifacts",
-    response={200: list[ReleaseArtifactSchema], 403: ErrorResponse, 404: ErrorResponse},
+    "/releases/{release_id}/download",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_release_artifacts(request: HttpRequest, product_id: str, release_id: str):
-    """List all artifacts in a release."""
+def download_release(request: HttpRequest, release_id: str):
+    """Download release SBOM."""
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
     # If product is public, allow unauthenticated access
-    if not product.is_public:
+    if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private products"}
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Authentication required"}
+
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(release.product.team_id):
             return 403, {"detail": "Access denied"}
 
+    # Get all SBOM artifacts in the release
+    sbom_artifacts = release.artifacts.filter(sbom__isnull=False).select_related("sbom")
+
+    if not sbom_artifacts.exists():
+        return HttpResponse(
+            status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
+        )
+
     try:
-        artifacts = release.artifacts.select_related("sbom__component", "document__component").order_by("-created_at")
+        # Use the SBOM package generator
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            sbom_file_path = get_release_sbom_package(release, temp_path)
 
-        response_data = []
-        for artifact in artifacts:
-            if artifact.sbom:
-                response_data.append(
-                    {
-                        "id": artifact.id,
-                        "sbom": {
-                            "id": str(artifact.sbom.id),
-                            "name": artifact.sbom.name,
-                            "format": artifact.sbom.format,
-                            "format_version": artifact.sbom.format_version,
-                            "version": artifact.sbom.version,
-                            "created_at": artifact.sbom.created_at.isoformat(),
-                            "component": {
-                                "id": str(artifact.sbom.component.id),
-                                "name": artifact.sbom.component.name,
-                            },
-                        },
-                    }
-                )
-            else:  # artifact.document
-                response_data.append(
-                    {
-                        "id": artifact.id,
-                        "document": {
-                            "id": str(artifact.document.id),
-                            "name": artifact.document.name,
-                            "document_type": artifact.document.document_type,
-                            "version": artifact.document.version,
-                            "created_at": artifact.document.created_at.isoformat(),
-                            "component": {
-                                "id": str(artifact.document.component.id),
-                                "name": artifact.document.component.name,
-                            },
-                        },
-                    }
-                )
+            # Read the generated SBOM file
+            with open(sbom_file_path, "r") as f:
+                sbom_content = f.read()
 
-        return 200, response_data
+            response = HttpResponse(sbom_content, content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={release.product.name}-{release.name}.cdx.json"
+
+            return response
 
     except Exception as e:
-        log.error(f"Error listing artifacts for release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return HttpResponse(
+            status=500,
+            content=f'{{"detail": "Error generating release SBOM: {str(e)}"}}',
+            content_type="application/json",
+        )
+
+
+# =============================================================================
+# ARTIFACT MANAGEMENT ENDPOINTS
+# =============================================================================
+
+
+@router.get(
+    "/releases/{release_id}/artifacts",
+    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Query("available")):
+    """
+    List artifacts for a release.
+
+    Mode can be 'existing' (artifacts in release) or 'available' (artifacts that can be added).
+    """
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found"}
+
+    # If product is public, allow unauthenticated access
+    if not release.product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required"}
+
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(release.product.team_id):
+            return 403, {"detail": "Access denied"}
+
+    if mode == "existing":
+        # Return artifacts that are already in this release
+        existing_artifacts = ReleaseArtifact.objects.filter(release=release).select_related("sbom", "document")
+
+        artifacts = []
+        for artifact in existing_artifacts:
+            if artifact.sbom:
+                artifacts.append(
+                    {
+                        "id": str(artifact.id),
+                        "artifact_type": "sbom",
+                        "artifact_name": artifact.sbom.name,
+                        "component_id": str(artifact.sbom.component.id),
+                        "component_name": artifact.sbom.component.name,
+                        "created_at": artifact.created_at.isoformat(),
+                        "sbom_format": artifact.sbom.format,
+                        "sbom_version": artifact.sbom.format_version,
+                        "document_type": None,
+                        "document_version": None,
+                    }
+                )
+            elif artifact.document:
+                artifacts.append(
+                    {
+                        "id": str(artifact.id),
+                        "artifact_type": "document",
+                        "artifact_name": artifact.document.name,
+                        "component_id": str(artifact.document.component.id),
+                        "component_name": artifact.document.component.name,
+                        "created_at": artifact.created_at.isoformat(),
+                        "sbom_format": None,
+                        "sbom_version": None,
+                        "document_type": artifact.document.document_type,
+                        "document_version": artifact.document.version or "",
+                    }
+                )
+
+        return artifacts
+
+    else:  # mode == "available" (default)
+        # Return artifacts that can be added to this release (existing logic)
+        from core.models import Component
+        from documents.models import Document
+        from sboms.models import SBOM
+
+        product_components = Component.objects.filter(
+            projects__products=release.product, team_id=release.product.team_id
+        ).distinct()
+
+        # Get existing artifacts in this release to exclude them
+        existing_sbom_ids = set(
+            ReleaseArtifact.objects.filter(release=release, sbom__isnull=False).values_list("sbom_id", flat=True)
+        )
+        existing_document_ids = set(
+            ReleaseArtifact.objects.filter(release=release, document__isnull=False).values_list(
+                "document_id", flat=True
+            )
+        )
+
+        available_artifacts = []
+
+        # Add available SBOMs
+        available_sboms = SBOM.objects.filter(component__in=product_components).exclude(id__in=existing_sbom_ids)
+
+        for sbom in available_sboms:
+            available_artifacts.append(
+                {
+                    "id": str(sbom.id),
+                    "artifact_type": "sbom",
+                    "name": sbom.name,
+                    "component": {
+                        "id": str(sbom.component.id),
+                        "name": sbom.component.name,
+                    },
+                    "format": sbom.format,
+                    "format_version": sbom.format_version,
+                    "version": sbom.version or "",
+                    "created_at": sbom.created_at.isoformat(),
+                }
+            )
+
+        # Add available Documents
+        available_documents = Document.objects.filter(component__in=product_components).exclude(
+            id__in=existing_document_ids
+        )
+
+        for document in available_documents:
+            available_artifacts.append(
+                {
+                    "id": str(document.id),
+                    "artifact_type": "document",
+                    "name": document.name,
+                    "component": {
+                        "id": str(document.component.id),
+                        "name": document.component.name,
+                    },
+                    "document_type": document.document_type,
+                    "version": document.version or "",
+                    "created_at": document.created_at.isoformat(),
+                }
+            )
+
+        return available_artifacts
 
 
 @router.post(
-    "/products/{product_id}/releases/{release_id}/artifacts",
+    "/releases/{release_id}/artifacts",
     response={201: ReleaseArtifactAddResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
 )
-def add_artifact_to_release(
-    request: HttpRequest, product_id: str, release_id: str, payload: ReleaseArtifactCreateSchema
-):
-    """Add an artifact to a release."""
-    from core.models import LATEST_RELEASE_NAME
-
+@decorate_view(optional_token_auth)
+def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: ReleaseArtifactCreateSchema):
+    """Add artifacts to a release."""
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(release.product.team_id):
+        return 403, {"detail": "Access denied"}
+
+    if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage release artifacts"}
 
-    # Prevent modifying latest releases
+    # Prevent adding artifacts to latest releases
     if release.is_latest:
-        return 400, {
-            "detail": (
-                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
-                "This release is automatically managed."
-            )
-        }
+        return 400, {"detail": "Cannot add artifacts to 'latest' release"}
 
-    try:
-        with transaction.atomic():
-            if payload.sbom_id:
-                # Import here to avoid circular imports
-                from sboms.models import SBOM
+    from core.utils import add_artifact_to_release
 
-                try:
-                    sbom = SBOM.objects.select_related("component").get(pk=payload.sbom_id)
-                except SBOM.DoesNotExist:
-                    return 404, {"detail": "SBOM not found"}
+    # Handle SBOM
+    if payload.sbom_id:
+        try:
+            from sboms.models import SBOM
 
-                # Verify the SBOM's component belongs to the same team as the product
-                if sbom.component.team_id != product.team_id:
-                    return 403, {"detail": "SBOM belongs to a different team"}
+            sbom = SBOM.objects.get(pk=payload.sbom_id)
+            if str(sbom.component.team_id) != str(team_id):
+                return 403, {"detail": f"SBOM {sbom.name} does not belong to your team"}
 
-                # Check for existing SBOM of same format from same component
-                existing = ReleaseArtifact.objects.filter(
-                    release=release, sbom__component=sbom.component, sbom__format=sbom.format
-                ).first()
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            if result.get("error"):
+                return 400, {"detail": result["error"]}
+            artifact = result["artifact"]
 
-                if existing:
-                    return 400, {
-                        "detail": (
-                            f"Release already contains an SBOM of format '{sbom.format}' "
-                            f"from component '{sbom.component.name}'"
-                        )
-                    }
-
-                artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
-
-            elif payload.document_id:
-                # Import here to avoid circular imports
-                from documents.models import Document
-
-                try:
-                    document = Document.objects.select_related("component").get(pk=payload.document_id)
-                except Document.DoesNotExist:
-                    return 404, {"detail": "Document not found"}
-
-                # Verify the document's component belongs to the same team as the product
-                if document.component.team_id != product.team_id:
-                    return 403, {"detail": "Document belongs to a different team"}
-
-                # Check for existing document of same type from same component
-                existing = ReleaseArtifact.objects.filter(
-                    release=release,
-                    document__component=document.component,
-                    document__document_type=document.document_type,
-                ).first()
-
-                if existing:
-                    doc_type = document.document_type or "default"
-                    type_display = f" of type '{doc_type}'" if document.document_type else ""
-                    return 400, {
-                        "detail": (
-                            f"Release already contains a document{type_display} from component "
-                            f"'{document.component.name}'"
-                        )
-                    }
-
-                artifact = ReleaseArtifact.objects.create(release=release, document=document)
-
-        # Build response
-        if artifact.sbom:
-            response_data = {
-                "id": artifact.id,
+            return 201, {
+                "id": str(artifact.id),
                 "artifact_type": "sbom",
                 "artifact_name": artifact.sbom.name,
                 "component_id": str(artifact.sbom.component.id),
                 "component_name": artifact.sbom.component.name,
                 "created_at": artifact.created_at.isoformat(),
                 "sbom_format": artifact.sbom.format,
-                "sbom_version": artifact.sbom.version,
+                "sbom_version": artifact.sbom.format_version,
                 "document_type": None,
                 "document_version": None,
             }
-        else:
-            response_data = {
-                "id": artifact.id,
+        except Exception as e:
+            return 400, {"detail": f"Error processing SBOM: {str(e)}"}
+
+    # Handle Document
+    if payload.document_id:
+        try:
+            from documents.models import Document
+
+            document = Document.objects.get(pk=payload.document_id)
+            if str(document.component.team_id) != str(team_id):
+                return 403, {"detail": f"Document {document.name} does not belong to your team"}
+
+            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            if result.get("error"):
+                return 400, {"detail": result["error"]}
+            artifact = result["artifact"]
+
+            return 201, {
+                "id": str(artifact.id),
                 "artifact_type": "document",
                 "artifact_name": artifact.document.name,
                 "component_id": str(artifact.document.component.id),
@@ -2366,311 +2437,49 @@ def add_artifact_to_release(
                 "sbom_format": None,
                 "sbom_version": None,
                 "document_type": artifact.document.document_type,
-                "document_version": artifact.document.version,
+                "document_version": artifact.document.version or "",
             }
+        except Exception as e:
+            return 400, {"detail": f"Error processing document: {str(e)}"}
 
-        return 201, response_data
-
-    except Exception as e:
-        log.error(f"Error adding artifact to release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+    return 400, {"detail": "Either sbom_id or document_id must be provided"}
 
 
 @router.delete(
-    "/products/{product_id}/releases/{release_id}/artifacts/{artifact_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
-)
-def remove_artifact_from_release(request: HttpRequest, product_id: str, release_id: str, artifact_id: str):
-    """Remove an artifact from a release."""
-    from core.models import LATEST_RELEASE_NAME
-
-    try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-        artifact = ReleaseArtifact.objects.get(pk=artifact_id, release=release)
-    except (Product.DoesNotExist, Release.DoesNotExist, ReleaseArtifact.DoesNotExist):
-        return 404, {"detail": "Artifact not found in this release"}
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage release artifacts"}
-
-    # Prevent modifying latest releases
-    if release.is_latest:
-        return 400, {
-            "detail": (
-                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
-                "This release is automatically managed."
-            )
-        }
-
-    try:
-        artifact.delete()
-        return 204, None
-    except Exception as e:
-        log.error(f"Error removing artifact {artifact_id} from release {release_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.get(
-    "/products/{product_id}/releases/{release_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
-    auth=None,
-)
-@decorate_view(optional_token_auth)
-def download_release_sbom(request: HttpRequest, product_id: str, release_id: str):
-    """Download the consolidated SBOM for a release."""
-    try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
-        return 404, {"detail": "Release not found"}
-
-    # Check access permissions
-    if not product.is_public:
-        if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private products"}
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
-
-    try:
-        # Generate release-specific SBOM from the artifacts in this release
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sbom_path = get_release_sbom_package(release, Path(temp_dir))
-
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={product.name}-{release.name}.cdx.json"
-
-            return response
-    except Exception as e:
-        log.error(f"Error generating release SBOM {release_id}: {e}")
-        return 500, {"detail": f"Error generating release SBOM: {str(e)}"}
-
-
-# =============================================================================
-# SBOM TAGGING ENDPOINTS
-# =============================================================================
-
-
-@router.get(
-    "/sboms/{sbom_id}/releases",
-    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
-)
-@decorate_view(optional_token_auth)
-def list_sbom_releases(request: HttpRequest, sbom_id: str):
-    """List all releases that contain this SBOM."""
-    try:
-        # Import here to avoid circular imports
-        from sboms.models import SBOM
-
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
-
-    # Check access permissions
-    if not sbom.component.is_public:
-        if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private SBOMs"}
-        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
-
-    try:
-        # Find all releases that contain this SBOM
-        release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related("release", "release__product")
-
-        response_data = []
-        for artifact in release_artifacts:
-            release = artifact.release
-
-            # Only include public releases if this is an unauthenticated request
-            if not request.user.is_authenticated and not release.product.is_public:
-                continue
-
-            response_data.append(
-                {
-                    "id": str(release.id),
-                    "name": release.name,
-                    "description": release.description or "",
-                    "product_id": str(release.product.id),
-                    "product_name": release.product.name,
-                    "is_latest": release.is_latest,
-                    "is_prerelease": release.is_prerelease,
-                    "is_public": release.product.is_public,
-                    "created_at": release.created_at.isoformat(),
-                    "artifact_id": str(artifact.id),
-                    "product": {
-                        "id": str(release.product.id),
-                        "name": release.product.name,
-                    },
-                }
-            )
-
-        return 200, response_data
-
-    except Exception as e:
-        log.error(f"Error listing releases for SBOM {sbom_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.post(
-    "/sboms/{sbom_id}/releases",
-    response={201: SBOMReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-)
-def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema):
-    """Add an SBOM to multiple releases, replacing any existing SBOM of the same format from the same component."""
-    from core.models import LATEST_RELEASE_NAME
-
-    try:
-        # Import here to avoid circular imports
-        from sboms.models import SBOM
-
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
-
-    # Check access permissions
-    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can tag SBOMs with releases"}
-
-    # Get release_ids from the validated payload
-    release_ids = payload.release_ids
-
-    try:
-        with transaction.atomic():
-            created_artifacts = []
-            replaced_artifacts = []
-            errors = []
-
-            for release_id in release_ids:
-                try:
-                    release = Release.objects.select_related("product").get(pk=release_id)
-
-                    # Verify the release's product belongs to the same team as the SBOM's component
-                    if release.product.team_id != sbom.component.team_id:
-                        errors.append(f"Release '{release.name}' belongs to a different team")
-                        continue
-
-                    # Prevent modifying latest releases
-                    if release.is_latest:
-                        errors.append(
-                            f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release "
-                            f"'{release.name}'. This release is automatically managed."
-                        )
-                        continue
-
-                    # Check if this exact SBOM is already in this release
-                    existing_exact = ReleaseArtifact.objects.filter(release=release, sbom=sbom).first()
-                    if existing_exact:
-                        errors.append(f"SBOM is already in release '{release.name}'")
-                        continue
-
-                    # Check for existing SBOM of same format from same component (replace logic)
-                    existing_format = ReleaseArtifact.objects.filter(
-                        release=release, sbom__component=sbom.component, sbom__format=sbom.format
-                    ).first()
-
-                    if existing_format:
-                        # Replace the existing SBOM with the new one
-                        old_sbom_name = existing_format.sbom.name
-                        existing_format.delete()
-
-                        artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
-                        replaced_artifacts.append(
-                            {
-                                "artifact_id": str(artifact.id),
-                                "release_id": str(release.id),
-                                "release_name": release.name,
-                                "product_id": str(release.product.id),
-                                "product_name": release.product.name,
-                                "created_at": artifact.created_at.isoformat(),
-                                "replaced_sbom": old_sbom_name,
-                            }
-                        )
-                    else:
-                        # Create new artifact
-                        artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
-                        created_artifacts.append(
-                            {
-                                "artifact_id": str(artifact.id),
-                                "release_id": str(release.id),
-                                "release_name": release.name,
-                                "product_id": str(release.product.id),
-                                "product_name": release.product.name,
-                                "created_at": artifact.created_at.isoformat(),
-                            }
-                        )
-
-                except Release.DoesNotExist:
-                    errors.append(f"Release with ID '{release_id}' not found")
-                except Exception as e:
-                    errors.append(f"Error adding to release '{release_id}': {str(e)}")
-
-            # Return results with any errors
-            response = {
-                "created_artifacts": created_artifacts,
-                "replaced_artifacts": replaced_artifacts,
-                "errors": errors,
-            }
-
-            if created_artifacts or replaced_artifacts:
-                return 201, response
-            else:
-                return 400, {"detail": "No artifacts were created or replaced", "errors": errors}
-
-    except Exception as e:
-        log.error(f"Error adding SBOM {sbom_id} to releases: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.delete(
-    "/sboms/{sbom_id}/releases/{release_id}",
+    "/releases/{release_id}/artifacts/{artifact_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
 )
-def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str):
-    """Remove an SBOM from a specific release."""
-    from core.models import LATEST_RELEASE_NAME
-
+@decorate_view(optional_token_auth)
+def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact_id: str):
+    """Remove an artifact from a release."""
     try:
-        # Import here to avoid circular imports
-        from sboms.models import SBOM
-
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
         release = Release.objects.select_related("product").get(pk=release_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    # Check access permissions
-    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage SBOM release tags"}
-
-    # Verify the release's product belongs to the same team as the SBOM's component
-    if release.product.team_id != sbom.component.team_id:
-        return 403, {"detail": "Release belongs to a different team"}
-
-    # Prevent modifying latest releases
-    if release.is_latest:
-        return 400, {
-            "detail": (
-                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
-                "This release is automatically managed."
-            )
-        }
-
     try:
-        artifact = ReleaseArtifact.objects.get(release=release, sbom=sbom)
-        artifact.delete()
-        return 204, None
+        artifact = ReleaseArtifact.objects.get(pk=artifact_id, release=release)
     except ReleaseArtifact.DoesNotExist:
-        return 404, {"detail": "SBOM is not in this release"}
-    except Exception as e:
-        log.error(f"Error removing SBOM {sbom_id} from release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 404, {"detail": "Artifact not found in this release"}
+
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(release.product.team_id):
+        return 403, {"detail": "Access denied"}
+
+    if not verify_item_access(request, release.product, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage release artifacts"}
+
+    # Prevent removing artifacts from latest releases
+    if release.is_latest:
+        return 400, {"detail": "Cannot remove artifacts from 'latest' release"}
+
+    artifact.delete()
+    return 204, None
 
 
 # =============================================================================
-# DOCUMENT TAGGING ENDPOINTS
+# REVERSE LOOKUP ENDPOINTS - WHAT RELEASES CONTAIN THESE ARTIFACTS
 # =============================================================================
 
 
@@ -2683,58 +2492,36 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 def list_document_releases(request: HttpRequest, document_id: str):
     """List all releases that contain this document."""
     try:
-        # Import here to avoid circular imports
         from documents.models import Document
 
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
 
-    # Check access permissions
+    # If component is public, allow unauthenticated access
     if not document.component.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private documents"}
-        if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Authentication required"}
+
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(document.component.team_id):
             return 403, {"detail": "Access denied"}
 
-    try:
-        # Find all releases that contain this document
-        release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related(
-            "release", "release__product"
-        )
+    # Get all releases containing this document
+    release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related("release", "release__product")
 
-        response_data = []
-        for artifact in release_artifacts:
-            release = artifact.release
-
-            # Only include public releases if this is an unauthenticated request
-            if not request.user.is_authenticated and not release.product.is_public:
-                continue
-
-            response_data.append(
-                {
-                    "id": str(release.id),
-                    "name": release.name,
-                    "description": release.description or "",
-                    "product_id": str(release.product.id),
-                    "product_name": release.product.name,
-                    "is_latest": release.is_latest,
-                    "is_prerelease": release.is_prerelease,
-                    "is_public": release.product.is_public,
-                    "created_at": release.created_at.isoformat(),
-                    "artifact_id": str(artifact.id),
-                    "product": {
-                        "id": str(release.product.id),
-                        "name": release.product.name,
-                    },
-                }
-            )
-
-        return 200, response_data
-
-    except Exception as e:
-        log.error(f"Error listing releases for document {document_id}: {e}")
-        return 400, {"detail": str(e)}
+    return [
+        {
+            "id": str(artifact.release.id),
+            "name": artifact.release.name,
+            "description": artifact.release.description,
+            "is_prerelease": artifact.release.is_prerelease,
+            "is_latest": artifact.release.is_latest,
+            "product_id": str(artifact.release.product.id),
+            "product_name": artifact.release.product.name,
+        }
+        for artifact in release_artifacts
+    ]
 
 
 @router.post(
@@ -2742,111 +2529,85 @@ def list_document_releases(request: HttpRequest, document_id: str):
     response={201: DocumentReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema):
-    """Add a document to multiple releases, replacing any existing document of the same type from the same component."""
-    from core.models import LATEST_RELEASE_NAME
-
+    """Add a document to multiple releases."""
     try:
-        # Import here to avoid circular imports
         from documents.models import Document
 
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
 
-    # Check access permissions
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(document.component.team_id):
+        return 403, {"detail": "Access denied"}
+
     if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can tag documents with releases"}
+        return 403, {"detail": "Only owners and admins can manage document releases"}
 
-    # Get release_ids from the validated payload
-    release_ids = payload.release_ids
+    from core.utils import add_artifact_to_release
 
-    try:
-        with transaction.atomic():
-            created_artifacts = []
-            replaced_artifacts = []
-            errors = []
+    created_artifacts = []
+    replaced_artifacts = []
+    errors = []
 
-            for release_id in release_ids:
-                try:
-                    release = Release.objects.select_related("product").get(pk=release_id)
+    for release_id in payload.release_ids:
+        try:
+            release = Release.objects.select_related("product").get(pk=release_id)
 
-                    # Verify the release's product belongs to the same team as the document's component
-                    if release.product.team_id != document.component.team_id:
-                        errors.append(f"Release '{release.name}' belongs to a different team")
-                        continue
+            # Verify release belongs to same team
+            if str(release.product.team_id) != str(team_id):
+                errors.append(f"Release {release.name} does not belong to your team")
+                continue
 
-                    # Prevent modifying latest releases
-                    if release.is_latest:
-                        errors.append(
-                            f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release "
-                            f"'{release.name}'. This release is automatically managed."
-                        )
-                        continue
+            # Prevent adding to latest releases
+            if release.is_latest:
+                errors.append(f"Cannot add document to 'latest' release {release.name}")
+                continue
 
-                    # Check if this exact document is already in this release
-                    existing_exact = ReleaseArtifact.objects.filter(release=release, document=document).first()
-                    if existing_exact:
-                        errors.append(f"Document is already in release '{release.name}'")
-                        continue
-
-                    # Check for existing document of same type from same component (replace logic)
-                    existing_type = ReleaseArtifact.objects.filter(
-                        release=release,
-                        document__component=document.component,
-                        document__document_type=document.document_type,
-                    ).first()
-
-                    if existing_type:
-                        # Replace the existing document with the new one
-                        old_document_name = existing_type.document.name
-                        existing_type.delete()
-
-                        artifact = ReleaseArtifact.objects.create(release=release, document=document)
-                        replaced_artifacts.append(
-                            {
-                                "artifact_id": str(artifact.id),
-                                "release_id": str(release.id),
-                                "release_name": release.name,
-                                "product_id": str(release.product.id),
-                                "product_name": release.product.name,
-                                "created_at": artifact.created_at.isoformat(),
-                                "replaced_document": old_document_name,
-                            }
-                        )
-                    else:
-                        # Create new artifact
-                        artifact = ReleaseArtifact.objects.create(release=release, document=document)
-                        created_artifacts.append(
-                            {
-                                "artifact_id": str(artifact.id),
-                                "release_id": str(release.id),
-                                "release_name": release.name,
-                                "product_id": str(release.product.id),
-                                "product_name": release.product.name,
-                                "created_at": artifact.created_at.isoformat(),
-                            }
-                        )
-
-                except Release.DoesNotExist:
-                    errors.append(f"Release with ID '{release_id}' not found")
-                except Exception as e:
-                    errors.append(f"Error adding to release '{release_id}': {str(e)}")
-
-            # Return results with any errors
-            response = {
-                "created_artifacts": created_artifacts,
-                "replaced_artifacts": replaced_artifacts,
-                "errors": errors,
-            }
-
-            if created_artifacts or replaced_artifacts:
-                return 201, response
+            result = add_artifact_to_release(release, document=document, allow_replacement=True)
+            if result["created"]:
+                created_artifacts.append(result["artifact"])
+            elif result["replaced"]:
+                replaced_artifacts.append(result)
             else:
-                return 400, {"detail": "No artifacts were created or replaced", "errors": errors}
+                errors.append(f"Document already exists in release {release.name}")
 
-    except Exception as e:
-        log.error(f"Error adding document {document_id} to releases: {e}")
-        return 400, {"detail": str(e)}
+        except Release.DoesNotExist:
+            errors.append(f"Release {release_id} not found")
+        except Exception as e:
+            errors.append(f"Error adding to release {release_id}: {str(e)}")
+
+    if not created_artifacts and not replaced_artifacts:
+        return 400, {"detail": "No artifacts were created or replaced"}
+
+    return 201, {
+        "created_artifacts": [
+            {
+                "artifact_id": str(artifact.id),
+                "release_id": str(artifact.release.id),
+                "release_name": artifact.release.name,
+                "product_id": str(artifact.release.product.id),
+                "product_name": artifact.release.product.name,
+                "created_at": artifact.created_at,
+            }
+            for artifact in created_artifacts
+        ],
+        "replaced_artifacts": [
+            {
+                "artifact_id": str(result["artifact"].id),
+                "release_id": str(result["artifact"].release.id),
+                "release_name": result["artifact"].release.name,
+                "product_id": str(result["artifact"].release.product.id),
+                "product_name": result["artifact"].release.product.name,
+                "created_at": result["artifact"].created_at,
+                "replaced_document": result["replaced_info"]["replaced_document"]
+                if result.get("replaced_info")
+                else None,
+            }
+            for result in replaced_artifacts
+        ],
+        "errors": errors,
+    }
 
 
 @router.delete(
@@ -2855,190 +2616,198 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str):
     """Remove a document from a specific release."""
-    from core.models import LATEST_RELEASE_NAME
-
     try:
-        # Import here to avoid circular imports
         from documents.models import Document
 
         document = Document.objects.select_related("component").get(pk=document_id)
-        release = Release.objects.select_related("product").get(pk=release_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found"}
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found"}
 
-    # Check access permissions
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(document.component.team_id):
+        return 403, {"detail": "Access denied"}
+
     if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage document release tags"}
+        return 403, {"detail": "Only owners and admins can manage document releases"}
 
-    # Verify the release's product belongs to the same team as the document's component
-    if release.product.team_id != document.component.team_id:
-        return 403, {"detail": "Release belongs to a different team"}
-
-    # Prevent modifying latest releases
+    # Prevent removing from latest releases
     if release.is_latest:
-        return 400, {
-            "detail": (
-                f"Cannot manually modify artifacts in the '{LATEST_RELEASE_NAME}' release. "
-                "This release is automatically managed."
-            )
-        }
+        return 400, {"detail": "Cannot remove document from 'latest' release"}
 
     try:
         artifact = ReleaseArtifact.objects.get(release=release, document=document)
         artifact.delete()
         return 204, None
     except ReleaseArtifact.DoesNotExist:
-        return 404, {"detail": "Document is not in this release"}
-    except Exception as e:
-        log.error(f"Error removing document {document_id} from release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 404, {"detail": "Document not in this release"}
 
 
 @router.get(
-    "/products/{product_id}/components/available-for-release/{release_id}",
-    response={200: list[ComponentResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
-)
-def list_available_components_for_release(request: HttpRequest, product_id: str, release_id: str):
-    """List components available to be added to a release."""
-    try:
-        product = Product.objects.get(pk=product_id)
-        Release.objects.get(pk=release_id, product=product)  # Just verify release exists
-    except (Product.DoesNotExist, Release.DoesNotExist):
-        return 404, {"detail": "Release not found"}
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage release artifacts"}
-
-    try:
-        # Get all components that belong to the same team as the product
-        team_components = Component.objects.filter(team_id=product.team_id)
-
-        # Build response data with component counts
-        response_data = []
-        for component in team_components:
-            # Count SBOMs and Documents for this component
-            if component.component_type == "sbom":
-                # Import here to avoid circular imports
-                from sboms.models import SBOM
-
-                sbom_count = SBOM.objects.filter(component=component).count()
-            else:  # component_type == "document"
-                # For document components, we don't need to count them separately
-                # since ComponentResponseSchema only has sbom_count field
-                sbom_count = 0
-
-            response_data.append(
-                {
-                    "id": component.id,
-                    "name": component.name,
-                    "team_id": str(component.team_id),
-                    "created_at": component.created_at,
-                    "is_public": component.is_public,
-                    "component_type": component.component_type,
-                    "metadata": component.metadata,
-                    "sbom_count": sbom_count,
-                }
-            )
-
-        return 200, response_data
-
-    except Exception as e:
-        log.error(f"Error listing available components for release {release_id}: {e}")
-        return 400, {"detail": str(e)}
-
-
-@router.get(
-    "/products/{product_id}/artifacts/available-for-release/{release_id}",
+    "/sboms/{sbom_id}/releases",
     response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
 )
-def list_available_artifacts_for_release(request: HttpRequest, product_id: str, release_id: str):
-    """List individual artifacts (SBOMs and Documents) available to be added to a release."""
+@decorate_view(optional_token_auth)
+def list_sbom_releases(request: HttpRequest, sbom_id: str):
+    """List all releases that contain this SBOM."""
     try:
-        product = Product.objects.get(pk=product_id)
-        release = Release.objects.get(pk=release_id, product=product)
-    except (Product.DoesNotExist, Release.DoesNotExist):
-        return 404, {"detail": "Release not found"}
-
-    if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage release artifacts"}
-
-    try:
-        # Import here to avoid circular imports
-        from documents.models import Document
         from sboms.models import SBOM
 
-        # Get existing artifacts in this release to exclude them
-        existing_sbom_ids = set(
-            ReleaseArtifact.objects.filter(release=release, sbom__isnull=False).values_list("sbom_id", flat=True)
-        )
-        existing_document_ids = set(
-            ReleaseArtifact.objects.filter(release=release, document__isnull=False).values_list(
-                "document_id", flat=True
-            )
-        )
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
 
-        response_data = []
+    # If component is public, allow unauthenticated access
+    if not sbom.component.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required"}
 
-        # Get all SBOMs from components that belong to the same team as the product
-        # Exclude SBOMs already in this release
-        sboms = (
-            SBOM.objects.filter(component__team_id=product.team_id)
-            .exclude(id__in=existing_sbom_ids)
-            .select_related("component")
-            .order_by("component__name", "-created_at")
-        )
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(sbom.component.team_id):
+            return 403, {"detail": "Access denied"}
 
-        for sbom in sboms:
-            response_data.append(
-                {
-                    "id": str(sbom.id),
-                    "artifact_type": "sbom",
-                    "name": sbom.name,
-                    "version": sbom.version,
-                    "format": sbom.format,
-                    "format_version": sbom.format_version,
-                    "created_at": sbom.created_at.isoformat(),
-                    "component": {
-                        "id": str(sbom.component.id),
-                        "name": sbom.component.name,
-                        "component_type": sbom.component.component_type,
-                    },
-                }
-            )
+    # Get all releases containing this SBOM
+    release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related("release", "release__product")
 
-        # Get all Documents from components that belong to the same team as the product
-        # Exclude Documents already in this release
-        documents = (
-            Document.objects.filter(component__team_id=product.team_id)
-            .exclude(id__in=existing_document_ids)
-            .select_related("component")
-            .order_by("component__name", "-created_at")
-        )
+    return [
+        {
+            "id": str(artifact.release.id),
+            "name": artifact.release.name,
+            "description": artifact.release.description,
+            "is_prerelease": artifact.release.is_prerelease,
+            "is_latest": artifact.release.is_latest,
+            "product_id": str(artifact.release.product.id),
+            "product_name": artifact.release.product.name,
+        }
+        for artifact in release_artifacts
+    ]
 
-        for document in documents:
-            response_data.append(
-                {
-                    "id": str(document.id),
-                    "artifact_type": "document",
-                    "name": document.name,
-                    "version": document.version,
-                    "document_type": document.document_type,
-                    "created_at": document.created_at.isoformat(),
-                    "component": {
-                        "id": str(document.component.id),
-                        "name": document.component.name,
-                        "component_type": document.component.component_type,
-                    },
-                }
-            )
 
-        # Sort by component name, then by creation date (newest first)
-        response_data.sort(key=lambda x: (x["component"]["name"], -int(x["created_at"][:4])))
+@router.post(
+    "/sboms/{sbom_id}/releases",
+    response={201: SBOMReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema):
+    """Add an SBOM to multiple releases."""
+    try:
+        from sboms.models import SBOM
 
-        return 200, response_data
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
 
-    except Exception as e:
-        log.error(f"Error listing available artifacts for release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(sbom.component.team_id):
+        return 403, {"detail": "Access denied"}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage SBOM releases"}
+
+    from core.utils import add_artifact_to_release
+
+    created_artifacts = []
+    replaced_artifacts = []
+    errors = []
+
+    for release_id in payload.release_ids:
+        try:
+            release = Release.objects.select_related("product").get(pk=release_id)
+
+            # Verify release belongs to same team
+            if str(release.product.team_id) != str(team_id):
+                errors.append(f"Release {release.name} does not belong to your team")
+                continue
+
+            # Prevent adding to latest releases
+            if release.is_latest:
+                errors.append(f"Cannot add SBOM to 'latest' release {release.name}")
+                continue
+
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=True)
+            if result["created"]:
+                created_artifacts.append(result["artifact"])
+            elif result["replaced"]:
+                replaced_artifacts.append(result)
+            else:
+                errors.append(f"SBOM already exists in release {release.name}")
+
+        except Release.DoesNotExist:
+            errors.append(f"Release {release_id} not found")
+        except Exception as e:
+            errors.append(f"Error adding to release {release_id}: {str(e)}")
+
+    if not created_artifacts and not replaced_artifacts:
+        return 400, {"detail": "No artifacts were created or replaced"}
+
+    return 201, {
+        "created_artifacts": [
+            {
+                "artifact_id": str(artifact.id),
+                "release_id": str(artifact.release.id),
+                "release_name": artifact.release.name,
+                "product_id": str(artifact.release.product.id),
+                "product_name": artifact.release.product.name,
+                "created_at": artifact.created_at,
+            }
+            for artifact in created_artifacts
+        ],
+        "replaced_artifacts": [
+            {
+                "artifact_id": str(result["artifact"].id),
+                "release_id": str(result["artifact"].release.id),
+                "release_name": result["artifact"].release.name,
+                "product_id": str(result["artifact"].release.product.id),
+                "product_name": result["artifact"].release.product.name,
+                "created_at": result["artifact"].created_at,
+                "replaced_sbom": result["replaced_info"]["replaced_sbom"] if result.get("replaced_info") else None,
+            }
+            for result in replaced_artifacts
+        ],
+        "errors": errors,
+    }
+
+
+@router.delete(
+    "/sboms/{sbom_id}/releases/{release_id}",
+    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str):
+    """Remove an SBOM from a specific release."""
+    try:
+        from sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found"}
+
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(sbom.component.team_id):
+        return 403, {"detail": "Access denied"}
+
+    # Verify release belongs to same team
+    if str(release.product.team_id) != str(team_id):
+        return 403, {"detail": "Access denied"}
+
+    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        return 403, {"detail": "Only owners and admins can manage SBOM releases"}
+
+    # Prevent removing from latest releases
+    if release.is_latest:
+        return 400, {"detail": "Cannot remove SBOM from automatically managed release"}
+
+    try:
+        artifact = ReleaseArtifact.objects.get(release=release, sbom=sbom)
+        artifact.delete()
+        return 204, None
+    except ReleaseArtifact.DoesNotExist:
+        return 404, {"detail": "SBOM not in this release"}
