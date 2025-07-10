@@ -14,13 +14,14 @@ from django.test import Client
 from access_tokens.models import AccessToken
 from access_tokens.utils import create_personal_access_token
 from billing.models import BillingPlan
-from core.tests.fixtures import sample_user, guest_user  # noqa: F401
+from core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from core.utils import number_to_random_token
 from teams.models import Member, Team
 
 # ============================================================================
 # Authentication & API Testing Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def authenticated_api_client(sample_user: AbstractBaseUser) -> Generator[tuple[Client, AccessToken], Any, None]:  # noqa: F811
@@ -31,11 +32,7 @@ def authenticated_api_client(sample_user: AbstractBaseUser) -> Generator[tuple[C
         Tuple of (client, access_token) for API testing
     """
     token_str = create_personal_access_token(sample_user)
-    access_token = AccessToken.objects.create(
-        user=sample_user,
-        encoded_token=token_str,
-        description="Test API Token"
-    )
+    access_token = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="Test API Token")
 
     client = Client()
 
@@ -70,9 +67,7 @@ def guest_api_client(guest_user: AbstractBaseUser) -> Generator[tuple[Client, Ac
     """
     token_str = create_personal_access_token(guest_user)
     access_token = AccessToken.objects.create(
-        user=guest_user,
-        encoded_token=token_str,
-        description="Guest Test API Token"
+        user=guest_user, encoded_token=token_str, description="Guest Test API Token"
     )
 
     client = Client()
@@ -85,6 +80,7 @@ def guest_api_client(guest_user: AbstractBaseUser) -> Generator[tuple[Client, Ac
 # ============================================================================
 # Team & Billing Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:  # noqa: F811
@@ -99,13 +95,10 @@ def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, A
             "max_projects": 1,
             "max_components": 5,
             "max_users": 1,
-        }
+        },
     )
 
-    team = Team.objects.create(
-        name="Test Community Team",
-        billing_plan=community_plan.key
-    )
+    team = Team.objects.create(name="Test Community Team", billing_plan=community_plan.key)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -134,7 +127,7 @@ def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Team, An
             "stripe_product_id": "prod_test_business",
             "stripe_price_monthly_id": "price_test_business_monthly",
             "stripe_price_annual_id": "price_test_business_annual",
-        }
+        },
     )
 
     team = Team.objects.create(
@@ -147,7 +140,7 @@ def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Team, An
             "stripe_customer_id": "cus_test123",
             "stripe_subscription_id": "sub_test123",
             "subscription_status": "active",
-        }
+        },
     )
     team.key = number_to_random_token(team.pk)
     team.save()
@@ -174,13 +167,10 @@ def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, 
             "max_projects": None,
             "max_components": None,
             "max_users": None,
-        }
+        },
     )
 
-    team = Team.objects.create(
-        name="Test Enterprise Team",
-        billing_plan=enterprise_plan.key
-    )
+    team = Team.objects.create(name="Test Enterprise Team", billing_plan=enterprise_plan.key)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -196,6 +186,7 @@ def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, 
 # ============================================================================
 # Web Client Session Setup Utilities
 # ============================================================================
+
 
 def setup_authenticated_client_session(client: Client, team: Team, user: AbstractBaseUser) -> None:
     """
@@ -228,7 +219,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
             "role": member.role,
             "name": team.name,
             "is_default_team": member.is_default_team,
-            "team_id": team.id
+            "team_id": team.id,
         }
     }
     session["current_team"] = {
@@ -236,14 +227,15 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
         "role": member.role,
         "name": team.name,
         "is_default_team": member.is_default_team,
-        "id": team.id
+        "id": team.id,
     }
     session.save()
 
 
 @pytest.fixture
 def authenticated_web_client(
-    sample_user: AbstractBaseUser, team_with_business_plan: Team  # noqa: F811
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,  # noqa: F811
 ) -> Generator[Client, Any, None]:
     """
     Create an authenticated web client with team session setup.
@@ -261,9 +253,12 @@ def authenticated_web_client(
 # Multi-User Team Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def team_with_multiple_members(
-    sample_user: AbstractBaseUser, guest_user: AbstractBaseUser, team_with_business_plan: Team  # noqa: F811
+    sample_user: AbstractBaseUser,
+    guest_user: AbstractBaseUser,
+    team_with_business_plan: Team,  # noqa: F811
 ) -> Generator[Team, Any, None]:
     """
     Create a team with multiple members for testing team functionality.
@@ -281,6 +276,7 @@ def team_with_multiple_members(
 # Error Testing Utilities
 # ============================================================================
 
+
 class AuthenticationTestMixin:
     """Mixin class providing common authentication test methods."""
 
@@ -297,9 +293,10 @@ class AuthenticationTestMixin:
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
 
-        assert response.status_code in [401, 403], (
-            f"Expected 401 Unauthorized or 403 Forbidden, got {response.status_code}"
-        )
+        assert response.status_code in [
+            401,
+            403,
+        ], f"Expected 401 Unauthorized or 403 Forbidden, got {response.status_code}"
 
     def assert_requires_team_permission(self, client: Client, url: str, method: str = "GET") -> None:
         """Assert that a URL requires team permission."""
@@ -314,6 +311,7 @@ class AuthenticationTestMixin:
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
 
-        assert response.status_code in [403, 404], (
-            f"Expected 403 Forbidden or 404 Not Found, got {response.status_code}"
-        )
+        assert response.status_code in [
+            403,
+            404,
+        ], f"Expected 403 Forbidden or 404 Not Found, got {response.status_code}"
