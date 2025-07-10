@@ -11,18 +11,17 @@ api = NinjaAPI(
     title="sbomify API",
     version=__version__,
     description="""
-# sbomify API
-
 A comprehensive API for managing Software Bill of Materials (SBOM) and document artifacts.
 
 ## Features
 
-- **SBOM Management**: Upload, analyze, and manage CycloneDX and SPDX format SBOMs
-- **Document Management**: Store and organize compliance documents, specifications, and reports
-- **Vulnerability Scanning**: Integrated security analysis with OSV database
+- **Product Management**: Create and organize products with identifiers and external links
+- **Project Organization**: Manage projects within products for better structure
+- **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
+- **Release Management**: Tag and organize artifacts by product releases with download capabilities
 - **Team Collaboration**: Multi-user access with role-based permissions
 - **Public & Private Access**: Flexible sharing and access controls
-- **Release Management**: Tag and organize artifacts by product releases
+- **Vulnerability Scanning**: Integrated security analysis with OSV database
 
 ## Authentication
 
@@ -54,19 +53,31 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
         },
         "tags": [
             {
-                "name": "Core",
-                "description": "Manage core entities: components, projects, products, and releases. "
-                "These endpoints form the foundation of the sbomify platform.",
+                "name": "Products",
+                "description": "Manage products, their identifiers (CPE, PURL, etc.), and external links. "
+                "Products are the top-level organizational unit in sbomify and can contain multiple projects.",
             },
             {
-                "name": "SBOMs",
-                "description": "Upload, validate, and manage Software Bill of Materials in CycloneDX and SPDX formats. "
-                "Includes vulnerability scanning and analysis.",
+                "name": "Projects",
+                "description": "Manage projects within products. Projects help organize components and provide "
+                "logical groupings for development workflows and release planning.",
             },
             {
-                "name": "Documents",
-                "description": "Upload and manage document artifacts such as specifications, compliance documents, "
-                "manuals, and reports.",
+                "name": "Components",
+                "description": "Manage components as organizational containers for artifacts. "
+                "Components help structure and organize your SBOMs and documents.",
+            },
+            {
+                "name": "Artifacts",
+                "description": "Upload and manage SBOMs (Software Bill of Materials) and documents. "
+                "Supports CycloneDX/SPDX formats with vulnerability scanning and various document types.",
+            },
+            {
+                "name": "Releases",
+                "description": (
+                    "Manage product releases and associate artifacts (SBOMs, documents) with specific versions. "
+                    "Includes bulk download capabilities and release artifact management."
+                ),
             },
             {
                 "name": "Teams",

@@ -17,7 +17,7 @@ from .schemas import DocumentResponseSchema, DocumentUpdateRequest, DocumentUplo
 
 log = logging.getLogger(__name__)
 
-router = Router(tags=["Documents"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 @router.post(
