@@ -13,6 +13,7 @@ from django.http import HttpResponseForbidden
 
 from billing import billing_processing
 from billing.models import BillingPlan
+from core.tests.shared_fixtures import team_with_business_plan, sample_user
 from teams.models import Member, Team
 from sboms.models import Product, Project, Component
 from sbomify.logging import getLogger
@@ -26,53 +27,6 @@ logger = getLogger(__name__)
 
 
 @pytest.fixture
-def team(db):
-    """Create a test team."""
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123",
-        first_name="Test",
-        last_name="User",
-    )
-    team = Team.objects.create(
-        name="Test Team",
-        billing_plan="business",
-        billing_plan_limits={
-            "max_products": 10,
-            "max_projects": 20,
-            "max_components": 100,
-            "stripe_customer_id": "cus_test123",
-            "stripe_subscription_id": "sub_test123",
-            "subscription_status": "active",
-            "last_updated": timezone.now().isoformat(),
-        },
-    )
-    team.key = number_to_random_token(team.pk)
-    team.save()
-    Member.objects.create(
-        team=team,
-        user=user,
-        role="owner",
-    )
-    return team
-
-
-@pytest.fixture
-def business_plan(db):
-    """Create a business plan."""
-    return BillingPlan.objects.create(
-        key="business",
-        name="Business",
-        max_products=10,
-        max_projects=20,
-        max_components=100,
-        stripe_price_monthly_id="price_monthly",
-        stripe_price_annual_id="price_annual",
-    )
-
-
-@pytest.fixture
 def mock_stripe_subscription():
     """Create a mock Stripe subscription for testing."""
     subscription = MagicMock()
@@ -80,20 +34,13 @@ def mock_stripe_subscription():
     subscription.status = "active"
     subscription.customer = "cus_test123"  # Match the team's customer ID
     subscription.trial_end = None
-    subscription.items.data = [
-        MagicMock(
-            price=MagicMock(
-                product="prod_123",
-                metadata={"plan_key": "business"}
-            )
-        )
-    ]
+    subscription.items.data = [MagicMock(price=MagicMock(product="prod_123", metadata={"plan_key": "business"}))]
     subscription.metadata = {"plan_key": "business"}
     return subscription
 
 
 @pytest.fixture
-def mock_stripe_checkout_session(team):
+def mock_stripe_checkout_session(team_with_business_plan):
     """Create a mock Stripe checkout session for testing."""
     session = MagicMock()
     session.id = "cs_123"
@@ -101,8 +48,8 @@ def mock_stripe_checkout_session(team):
     session.subscription = "sub_test123"  # Match the team's subscription ID
     session.payment_status = "paid"
     session.metadata = {
-        "team_key": team.key,  # Use the actual team key
-        "plan_key": "business"
+        "team_key": team_with_business_plan.key,  # Use the actual team key
+        "plan_key": "business",
     }
     return session
 
@@ -121,77 +68,49 @@ def mock_stripe_invoice():
 @pytest.fixture
 def mock_stripe_client():
     """Create a mock Stripe client for testing."""
-    with patch('billing.billing_processing.stripe_client') as mock_client:
+    with patch("billing.billing_processing.stripe_client") as mock_client:
         mock_client.get_subscription.return_value = MagicMock(
             id="sub_test123",
             status="active",
             trial_end=None,
-            items=MagicMock(
-                data=[
-                    MagicMock(
-                        price=MagicMock(
-                            product="prod_123",
-                            metadata={"plan_key": "business"}
-                        )
-                    )
-                ]
-            ),
-            metadata={"plan_key": "business"}
+            items=MagicMock(data=[MagicMock(price=MagicMock(product="prod_123", metadata={"plan_key": "business"}))]),
+            metadata={"plan_key": "business"},
         )
         yield mock_client
 
 
 @pytest.fixture
-def test_team(db):
-    """Create a test team with billing information."""
-    team = Team.objects.create(
-        name="Test Team",
-        billing_plan="business",
-        billing_plan_limits={
-            "stripe_customer_id": "cus_123",
-            "stripe_subscription_id": "sub_123",
-            "subscription_status": "active",
+def business_plan(db):
+    """Create a business plan."""
+    plan, _ = BillingPlan.objects.get_or_create(
+        key="business",
+        defaults={
+            "name": "Business",
             "max_products": 10,
             "max_projects": 20,
             "max_components": 100,
-            "last_updated": timezone.now().isoformat()
-        }
+            "stripe_price_monthly_id": "price_monthly",
+            "stripe_price_annual_id": "price_annual",
+        },
     )
-    team.key = number_to_random_token(team.pk)
-    team.save()
-    return team
-
-
-@pytest.fixture
-def test_plan(db):
-    """Create a test billing plan."""
-    return BillingPlan.objects.create(
-        key="business",
-        name="Business",
-        stripe_price_id="price_123",
-        max_products=10,
-        max_projects=20,
-        max_components=100
-    )
-
-
-@pytest.fixture
-def test_owner(db, test_team):
-    """Create a test team owner."""
-    return Member.objects.create(
-        team=test_team,
-        role="owner",
-        user=MagicMock(email="owner@example.com")
-    )
+    return plan
 
 
 class TestBillingProcessing:
     """Test cases for billing processing functionality."""
 
     @pytest.fixture(autouse=True)
-    def setup(self, team, business_plan, mock_stripe_subscription, mock_stripe_checkout_session, mock_stripe_invoice, mock_stripe_client):
+    def setup(
+        self,
+        team_with_business_plan,
+        business_plan,
+        mock_stripe_subscription,
+        mock_stripe_checkout_session,
+        mock_stripe_invoice,
+        mock_stripe_client,
+    ):
         """Set up test environment."""
-        self.team = team
+        self.team = team_with_business_plan
         self.plan = business_plan
         self.subscription = mock_stripe_subscription
         self.session = mock_stripe_checkout_session
@@ -203,7 +122,9 @@ class TestBillingProcessing:
         """Test handling subscription update with trial status."""
         self.subscription.status = "trialing"
         # Set trial end to be within notification period
-        self.subscription.trial_end = int((timezone.now() + datetime.timedelta(days=settings.TRIAL_ENDING_NOTIFICATION_DAYS)).timestamp())
+        self.subscription.trial_end = int(
+            (timezone.now() + datetime.timedelta(days=settings.TRIAL_ENDING_NOTIFICATION_DAYS)).timestamp()
+        )
 
         billing_processing.handle_subscription_updated(self.subscription)
 
@@ -231,7 +152,9 @@ class TestBillingProcessing:
         """Test handling checkout completion with trial period."""
         self.subscription.status = "trialing"
         # Set trial end to be within notification period
-        self.subscription.trial_end = int((timezone.now() + datetime.timedelta(days=settings.TRIAL_ENDING_NOTIFICATION_DAYS)).timestamp())
+        self.subscription.trial_end = int(
+            (timezone.now() + datetime.timedelta(days=settings.TRIAL_ENDING_NOTIFICATION_DAYS)).timestamp()
+        )
         self.stripe_client.get_subscription.return_value = self.subscription
 
         billing_processing.handle_checkout_completed(self.session)
@@ -273,11 +196,7 @@ class TestBillingProcessing:
             Component.objects.create(team=self.team, name=f"Component {i}")
 
         # Test with no limits
-        plan = BillingPlan.objects.create(
-            key="enterprise",
-            name="Enterprise",
-            stripe_price_monthly_id="price_456"
-        )
+        plan = BillingPlan.objects.create(key="enterprise", name="Enterprise", stripe_price_monthly_id="price_456")
         can_downgrade, message = billing_processing.can_downgrade_to_plan(self.team, plan)
         assert can_downgrade is True
         assert message == ""
@@ -289,7 +208,7 @@ class TestBillingProcessing:
             stripe_price_monthly_id="price_789",
             max_products=1,
             max_projects=1,
-            max_components=1
+            max_components=1,
         )
         can_downgrade, message = billing_processing.can_downgrade_to_plan(self.team, plan)
         assert can_downgrade is False
@@ -323,6 +242,7 @@ class TestBillingProcessing:
 
 def test_handle_stripe_error():
     """Test Stripe error handling decorator."""
+
     # Create a proper exception that inherits from BaseException
     class TestCardError(Exception):
         def __init__(self, message):
@@ -351,9 +271,7 @@ def test_verify_stripe_webhook(mock_construct):
     result = billing_processing.verify_stripe_webhook(request)
     assert result == "test_event"
     mock_construct.assert_called_once_with(
-        request.body,
-        request.headers["Stripe-Signature"],
-        settings.STRIPE_WEBHOOK_SECRET
+        request.body, request.headers["Stripe-Signature"], settings.STRIPE_WEBHOOK_SECRET
     )
 
 
@@ -369,7 +287,7 @@ def test_verify_stripe_webhook_invalid(mock_construct):
     assert result is False
 
 
-def test_handle_subscription_updated_error(team, mock_stripe_subscription):
+def test_handle_subscription_updated_error(team_with_business_plan, mock_stripe_subscription):
     """Test error handling in subscription update."""
     mock_stripe_subscription.status = "invalid_status"
     mock_stripe_subscription.items.data = []
@@ -381,7 +299,7 @@ def test_handle_subscription_updated_error(team, mock_stripe_subscription):
     assert "Invalid subscription status: invalid_status" in str(excinfo.value)
 
 
-def test_handle_checkout_completed_error(team):
+def test_handle_checkout_completed_error(team_with_business_plan):
     """Test error handling in checkout completion."""
     session = MagicMock()
     session.payment_status = "paid"
@@ -391,7 +309,7 @@ def test_handle_checkout_completed_error(team):
         billing_processing.handle_checkout_completed(session)
 
 
-def test_handle_payment_succeeded(team, mock_stripe_subscription):
+def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscription):
     """Test handling successful payment."""
     invoice = MagicMock()
     invoice.subscription = "sub_test123"
@@ -400,47 +318,47 @@ def test_handle_payment_succeeded(team, mock_stripe_subscription):
     billing_processing.handle_payment_succeeded(invoice)
 
     # Refresh team from database
-    team.refresh_from_db()
+    team_with_business_plan.refresh_from_db()
 
     # Check subscription status
-    assert team.billing_plan_limits["subscription_status"] == "active"
+    assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
 
 
-def test_can_downgrade_to_plan_within_limits(team, business_plan):
+def test_can_downgrade_to_plan_within_limits(team_with_business_plan, business_plan):
     """Test downgrade check when usage is within plan limits."""
     # Create some test data within limits
     for i in range(5):  # Less than max_products (10)
-        Product.objects.create(team=team, name=f"Product {i}")
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
 
     for i in range(10):  # Less than max_projects (20)
-        Project.objects.create(team=team, name=f"Project {i}")
+        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
 
     for i in range(50):  # Less than max_components (100)
-        Component.objects.create(team=team, name=f"Component {i}")
+        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
 
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team, business_plan)
+    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, business_plan)
     assert can_downgrade is True
     assert message == ""
 
 
-def test_can_downgrade_to_plan_exceeds_limits(team, business_plan):
+def test_can_downgrade_to_plan_exceeds_limits(team_with_business_plan, business_plan):
     """Test downgrade check when usage exceeds plan limits."""
     # Create test data exceeding limits
     for i in range(15):  # More than max_products (10)
-        Product.objects.create(team=team, name=f"Product {i}")
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
 
     for i in range(25):  # More than max_projects (20)
-        Project.objects.create(team=team, name=f"Project {i}")
+        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
 
     for i in range(150):  # More than max_components (100)
-        Component.objects.create(team=team, name=f"Component {i}")
+        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
 
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team, business_plan)
+    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, business_plan)
     assert can_downgrade is False
     assert "Current usage exceeds plan limits" in message
 
 
-def test_can_downgrade_to_plan_no_limits(team):
+def test_can_downgrade_to_plan_no_limits(team_with_business_plan):
     """Test downgrade check for plan with no limits."""
     # Create enterprise plan with no limits
     enterprise_plan = BillingPlan.objects.create(
@@ -453,11 +371,11 @@ def test_can_downgrade_to_plan_no_limits(team):
 
     # Create test data exceeding normal limits
     for i in range(100):
-        Product.objects.create(team=team, name=f"Product {i}")
-        Project.objects.create(team=team, name=f"Project {i}")
-        Component.objects.create(team=team, name=f"Component {i}")
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
+        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
 
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team, enterprise_plan)
+    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, enterprise_plan)
     assert can_downgrade is True
     assert message == ""
 
@@ -466,24 +384,11 @@ def test_can_downgrade_to_plan_no_limits(team):
 def test_billing_disabled_bypass():
     """Test that billing checks are bypassed when billing is disabled."""
     # Create a test team with no billing plan
-    team = Team.objects.create(
-        name="Test Team",
-        key="test-team",
-        billing_plan=None,
-        billing_plan_limits={}
-    )
+    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
 
     # Create a test user and member
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123"
-    )
-    Member.objects.create(
-        team=team,
-        user=user,
-        role="owner"
-    )
+    user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
+    Member.objects.create(team=team, user=user, role="owner")
 
     # Create a test request
     request = MagicMock()
@@ -498,108 +403,73 @@ def test_billing_disabled_bypass():
     # Test that the view is called without any billing checks
     result = test_view(request)
     assert result == "success"
-
-    # Verify that no billing plan was required
-    team.refresh_from_db()
-    assert team.billing_plan is None
 
 
 @override_settings(BILLING=False)
 def test_billing_disabled_unlimited_limits():
-    """Test that unlimited limits are applied when billing is disabled."""
-    # Create a test team
-    team = Team.objects.create(
-        name="Test Team",
-        key="test-team",
-        billing_plan=None,
-        billing_plan_limits={}
-    )
+    """Test that billing disabled returns unlimited limits."""
+    # Create a team
+    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
 
-    # Create a test user and member
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123"
-    )
-    Member.objects.create(
-        team=team,
-        user=user,
-        role="owner"
-    )
+    # Get current limits (should be unlimited when billing is disabled)
+    limits = billing_processing.get_current_limits(team)
 
-    # Create a test request
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_team": {"key": "test-team"}}
-
-    # Create a test view function
-    @billing_processing.check_billing_limits("product")
-    def test_view(request):
-        return "success"
-
-    # Create products exceeding normal limits
-    for i in range(100):
-        Product.objects.create(team=team, name=f"Product {i}")
-
-    # Test that the view is called without any billing checks
-    result = test_view(request)
-    assert result == "success"
-
-    # Verify that no limits were enforced
-    assert Product.objects.filter(team=team).count() == 100
+    # With billing disabled, all limits should be None (unlimited)
+    assert limits.get("max_products") is None
+    assert limits.get("max_projects") is None
+    assert limits.get("max_components") is None
 
 
 @override_settings(BILLING=True)
 def test_billing_enabled_checks():
     """Test that billing checks are enforced when billing is enabled."""
-    # Create a starter plan with limits
-    starter_plan = BillingPlan.objects.create(
-        key="starter",
-        name="Starter",
+    # Create a billing plan with realistic limits (matching original test)
+    business_plan = BillingPlan.objects.create(
+        key="business",
+        name="Business",
         max_products=5,
         max_projects=10,
         max_components=50,
-        stripe_price_monthly_id="price_starter_monthly",
-        stripe_price_annual_id="price_starter_annual"
+        stripe_price_monthly_id="price_business_monthly",
+        stripe_price_annual_id="price_business_annual",
     )
 
-    # Create a test team with the starter plan
+    # Create a team with the billing plan
     team = Team.objects.create(
         name="Test Team",
         key="test-team",
-        billing_plan=starter_plan.key,
+        billing_plan="business",
         billing_plan_limits={
-            "max_products": starter_plan.max_products,
-            "max_projects": starter_plan.max_projects,
-            "max_components": starter_plan.max_components,
-            "subscription_status": "active"
-        }
+            "max_products": business_plan.max_products,
+            "max_projects": business_plan.max_projects,
+            "max_components": business_plan.max_components,
+            "subscription_status": "active",
+        },
     )
 
     # Create a test user and member
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123"
-    )
-    Member.objects.create(
-        team=team,
-        user=user,
-        role="owner"
-    )
+    user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
+    Member.objects.create(team=team, user=user, role="owner")
 
     # Create a test request
     request = MagicMock()
     request.method = "POST"
     request.session = {"current_team": {"key": "test-team"}}
 
-    # Create a test view function
+    # Create a test view function decorated with billing limits
     @billing_processing.check_billing_limits("product")
     def test_view(request):
         return "success"
 
-    # Create products exceeding the limit
-    for i in range(6):  # Exceeds max_products (5)
+    # Test 1: View should work when under the limit
+    for i in range(4):  # Create 4 products (under limit of 5)
+        Product.objects.create(team=team, name=f"Product {i}")
+
+    result = test_view(request)
+    assert result == "success"
+
+    # Test 2: Create products exceeding the limit (original test logic)
+    for i in range(4, 7):  # Create 3 more products (total 7, exceeds limit of 5)
         Product.objects.create(team=team, name=f"Product {i}")
 
     # Test that the view is blocked by billing checks

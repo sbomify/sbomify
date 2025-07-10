@@ -3,27 +3,27 @@ from __future__ import annotations
 
 import os
 from urllib.parse import urlencode
-import boto3
 
-import pytest
-from django.http import HttpResponse, HttpResponseRedirect
-from django.test import Client, TestCase
-from django.urls import reverse
 import django.contrib.messages as django_messages
-from django.contrib.messages import get_messages
+import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.messages import get_messages
+from django.http import HttpResponse, HttpResponseRedirect
+from django.test import Client
+from django.urls import reverse
 
+from core.tests.shared_fixtures import get_api_headers
 from core.utils import number_to_random_token
 
 from .fixtures import (  # noqa: F401
-    sample_user,
     guest_user,
     sample_team,
-    sample_team_with_owner_member,
     sample_team_with_guest_member,
+    sample_team_with_owner_member,
+    sample_user,
 )
-from .models import Team, Member, Invitation
+from .models import Invitation, Member, Team
 from .schemas import BrandingInfo
 
 
@@ -531,7 +531,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     )
 
     team_key = sample_team_with_owner_member.team.key
-    base_uri = f'/api/v1/teams/{team_key}/branding'
+    base_uri = f"/api/v1/teams/{team_key}/branding"
 
     # Mock S3 client methods
     mock_upload = mocker.patch("core.object_store.S3Client.upload_media")
@@ -553,7 +553,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert "logo_url" in data
 
     # Test updating brand color
-    response = client.patch(f'{base_uri}/brand_color',
+    response = client.patch(f"{base_uri}/brand_color",
                           {"value": "#ff0000"},
                           content_type="application/json")
     assert response.status_code == 200
@@ -561,7 +561,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert data["brand_color"] == "#ff0000"
 
     # Test updating accent color
-    response = client.patch(f'{base_uri}/accent_color',
+    response = client.patch(f"{base_uri}/accent_color",
                           {"value": "#00ff00"},
                           content_type="application/json")
     assert response.status_code == 200
@@ -569,7 +569,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert data["accent_color"] == "#00ff00"
 
     # Test updating prefer_logo_over_icon
-    response = client.patch(f'{base_uri}/prefer_logo_over_icon',
+    response = client.patch(f"{base_uri}/prefer_logo_over_icon",
                           {"value": True},
                           content_type="application/json")
     assert response.status_code == 200
@@ -577,7 +577,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert data["prefer_logo_over_icon"] is True
 
     # Test invalid field name
-    response = client.patch(f'{base_uri}/invalid_field',
+    response = client.patch(f"{base_uri}/invalid_field",
                           {"value": "test"},
                           content_type="application/json")
     assert response.status_code == 400
@@ -588,7 +588,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         f.write(b"fake png content")
 
     with open("test_icon.png", "rb") as f:
-        response = client.post(f'{base_uri}/upload/icon',
+        response = client.post(f"{base_uri}/upload/icon",
                              {"file": f},
                              format="multipart")
         assert response.status_code == 200
@@ -602,7 +602,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     os.remove("test_icon.png")
 
     # Test file deletion
-    response = client.patch(f'{base_uri}/icon',
+    response = client.patch(f"{base_uri}/icon",
                           {"value": None},
                           content_type="application/json")
     assert response.status_code == 200
@@ -621,14 +621,14 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
     )
 
     team_key = sample_team_with_guest_member.team.key
-    base_uri = f'/api/v1/teams/{team_key}/branding'
+    base_uri = f"/api/v1/teams/{team_key}/branding"
 
     # Test GET branding info as non-owner
     response = client.get(base_uri)
     assert response.status_code == 200
 
     # Test updating brand color as non-owner
-    response = client.patch(f'{base_uri}/brand_color',
+    response = client.patch(f"{base_uri}/brand_color",
                           {"value": "#ff0000"},
                           content_type="application/json")
     assert response.status_code == 403
@@ -639,7 +639,7 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
         f.write(b"fake png content")
 
     with open("test_icon.png", "rb") as f:
-        response = client.post(f'{base_uri}/upload/icon',
+        response = client.post(f"{base_uri}/upload/icon",
                              {"file": f},
                              format="multipart")
         assert response.status_code == 403
@@ -826,3 +826,264 @@ def test_delete_team_auto_makes_another_default_when_needed(sample_user: Abstrac
     # This test covers edge cases where we might allow default deletion in the future
     # For now, this documents expected behavior if the logic changes
     pass
+
+
+# ============================================================================
+# Teams API Tests
+# ============================================================================
+
+@pytest.mark.django_db
+def test_list_teams_api_success(authenticated_api_client, sample_user):  # noqa: F811
+    """Test successful listing of teams for authenticated user."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Create multiple teams for the user
+    team1 = Team.objects.create(name="Team One", billing_plan="business")
+    team1.key = number_to_random_token(team1.pk)
+    team1.save()
+
+    team2 = Team.objects.create(name="Team Two", billing_plan="community")
+    team2.key = number_to_random_token(team2.pk)
+    team2.save()
+
+    # Add user as member to both teams
+    Member.objects.create(team=team1, user=sample_user, role="owner", is_default_team=True)
+    Member.objects.create(team=team2, user=sample_user, role="admin", is_default_team=False)
+
+    # Test the API
+    response = client.get("/api/v1/teams/", **headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+
+    # Check that both teams are returned
+    team_names = {team["name"] for team in data}
+    assert "Team One" in team_names
+    assert "Team Two" in team_names
+
+    # Check response structure
+    for team in data:
+        assert "key" in team
+        assert "name" in team
+        assert "created_at" in team
+        assert "has_completed_wizard" in team
+        assert "billing_plan" in team
+
+
+@pytest.mark.django_db
+def test_list_teams_api_empty_result(authenticated_api_client, sample_user):  # noqa: F811
+    """Test listing teams when user has no teams."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Don't create any teams for the user
+
+    response = client.get("/api/v1/teams/", **headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 0
+    assert data == []
+
+
+@pytest.mark.django_db
+def test_list_teams_api_unauthenticated(client):
+    """Test that unauthenticated requests are rejected."""
+    response = client.get("/api/v1/teams/")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_list_teams_api_only_user_teams(authenticated_api_client, sample_user, guest_user):  # noqa: F811
+    """Test that users only see teams they are members of."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Create teams for sample_user
+    user_team = Team.objects.create(name="User Team")
+    user_team.key = number_to_random_token(user_team.pk)
+    user_team.save()
+    Member.objects.create(team=user_team, user=sample_user, role="owner")
+
+    # Create team for guest_user (sample_user should not see this)
+    other_team = Team.objects.create(name="Other Team")
+    other_team.key = number_to_random_token(other_team.pk)
+    other_team.save()
+    Member.objects.create(team=other_team, user=guest_user, role="owner")
+
+    response = client.get("/api/v1/teams/", **headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "User Team"
+
+
+@pytest.mark.django_db
+def test_get_team_api_success(authenticated_api_client, sample_user):  # noqa: F811
+    """Test successful retrieval of team details."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Create a team
+    team = Team.objects.create(
+        name="Test Team",
+        billing_plan="business",
+        has_completed_wizard=True
+    )
+    team.key = number_to_random_token(team.pk)
+    team.save()
+
+    # Add user as member
+    Member.objects.create(team=team, user=sample_user, role="owner")
+
+    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["key"] == team.key
+    assert data["name"] == "Test Team"
+    assert data["billing_plan"] == "business"
+    assert data["has_completed_wizard"] is True
+    assert "created_at" in data
+
+
+@pytest.mark.django_db
+def test_get_team_api_invalid_team_key(authenticated_api_client):
+    """Test get team with invalid team key returns 404."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    response = client.get("/api/v1/teams/invalid-key", **headers)
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "Team not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_get_team_api_nonexistent_team(authenticated_api_client):
+    """Test get team with nonexistent but valid team key format."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Use a valid format team key that doesn't exist
+    fake_key = number_to_random_token(99999)
+
+    response = client.get(f"/api/v1/teams/{fake_key}", **headers)
+
+    assert response.status_code == 404
+    data = response.json()
+    assert "Team not found" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_get_team_api_access_denied(authenticated_api_client, sample_user, guest_user):  # noqa: F811
+    """Test that users cannot access teams they are not members of."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Create a team with a different user as owner
+    team = Team.objects.create(name="Other Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+    Member.objects.create(team=team, user=guest_user, role="owner")
+
+    # sample_user (authenticated user) should not be able to access this team
+    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+
+    assert response.status_code == 403
+    data = response.json()
+    assert "Access denied" in data["detail"]
+
+
+@pytest.mark.django_db
+def test_get_team_api_unauthenticated(client):
+    """Test that unauthenticated requests are rejected."""
+    # Create a team
+    team = Team.objects.create(name="Test Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+
+    response = client.get(f"/api/v1/teams/{team.key}")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_get_team_api_different_roles(authenticated_api_client, guest_api_client, sample_user, guest_user):  # noqa: F811
+    """Test that team members with different roles can all access team details."""
+    # Create a team
+    team = Team.objects.create(name="Multi-Role Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+
+    # Add users with different roles
+    Member.objects.create(team=team, user=sample_user, role="owner")
+    Member.objects.create(team=team, user=guest_user, role="guest")
+
+    # Test owner access
+    owner_client, owner_token = authenticated_api_client
+    owner_headers = get_api_headers(owner_token)
+
+    response = owner_client.get(f"/api/v1/teams/{team.key}", **owner_headers)
+    assert response.status_code == 200
+    assert response.json()["name"] == "Multi-Role Team"
+
+    # Test guest access
+    guest_client, guest_token = guest_api_client
+    guest_headers = get_api_headers(guest_token)
+
+    response = guest_client.get(f"/api/v1/teams/{team.key}", **guest_headers)
+    assert response.status_code == 200
+    assert response.json()["name"] == "Multi-Role Team"
+
+
+@pytest.mark.django_db
+def test_teams_api_response_schema_validation(authenticated_api_client, sample_user):  # noqa: F811
+    """Test that API responses match expected schema."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    # Create a team with all possible fields
+    team = Team.objects.create(
+        name="Schema Test Team",
+        billing_plan="enterprise",
+        has_completed_wizard=False
+    )
+    team.key = number_to_random_token(team.pk)
+    team.save()
+
+    Member.objects.create(team=team, user=sample_user, role="admin")
+
+    # Test list teams response schema
+    response = client.get("/api/v1/teams/", **headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert isinstance(data, list)
+    team_data = data[0]
+
+    # Required fields
+    required_fields = ["key", "name", "created_at", "has_completed_wizard", "billing_plan"]
+    for field in required_fields:
+        assert field in team_data, f"Field {field} missing from response"
+
+    # Test get team response schema
+    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    for field in required_fields:
+        assert field in data, f"Field {field} missing from response"
+
+    # Validate data types
+    assert isinstance(data["key"], str)
+    assert isinstance(data["name"], str)
+    assert isinstance(data["created_at"], str)
+    assert isinstance(data["has_completed_wizard"], bool)
+    assert data["billing_plan"] is None or isinstance(data["billing_plan"], str)

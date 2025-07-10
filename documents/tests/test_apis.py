@@ -9,9 +9,7 @@ from django.test import Client
 from django.urls import reverse
 from pytest_mock import MockerFixture
 
-from access_tokens.models import AccessToken
-from access_tokens.utils import create_personal_access_token
-from core.tests.fixtures import guest_user, sample_user  # noqa: F401
+from core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_user, sample_user
 from core.tests.s3_fixtures import create_documents_api_mock
 from sboms.models import Component
 from teams.fixtures import sample_team  # noqa: F401
@@ -45,17 +43,6 @@ def sample_document(sample_document_component):
         source="manual_upload",
         content_type="application/pdf",
         file_size=1024,
-    )
-
-
-@pytest.fixture
-def sample_access_token(sample_user):  # noqa: F811
-    """Create a sample access token for API testing."""
-    token = create_personal_access_token(sample_user)
-    return AccessToken.objects.create(
-        user=sample_user,
-        description="Test Token",
-        encoded_token=token,
     )
 
 
@@ -117,12 +104,14 @@ def test_create_document_file_upload_success(
 @pytest.mark.django_db
 def test_create_document_raw_data_success(
     mocker: MockerFixture,
-    client: Client,
-    sample_access_token,
+    authenticated_api_client,
     sample_document_component,
 ):
     """Test successful document upload via raw data (API)."""
     create_documents_api_mock(mocker, scenario="success")
+
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
 
     url = reverse("api-1:create_document") + (
         f"?component_id={sample_document_component.id}&name=API Document&version=2.0"
@@ -132,7 +121,7 @@ def test_create_document_raw_data_success(
         url,
         b"document content",  # Raw body content
         content_type="application/octet-stream",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **headers,
     )
 
     assert response.status_code == 201
@@ -151,16 +140,18 @@ def test_create_document_raw_data_success(
 
 @pytest.mark.django_db
 def test_create_document_raw_data_missing_name(
-    client: Client,
-    sample_access_token,
+    authenticated_api_client,
     sample_document_component,
 ):
     """Test raw data upload without required name parameter."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
     response = client.post(
         reverse("api-1:create_document") + f"?component_id={sample_document_component.id}&version=2.0",
         b"document content",
         content_type="application/octet-stream",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **headers,
     )
 
     assert response.status_code == 400
@@ -453,12 +444,14 @@ def test_create_document_with_s3_error(
 @pytest.mark.django_db
 def test_create_document_with_access_token(
     mocker: MockerFixture,
-    client: Client,
-    sample_access_token,
+    authenticated_api_client,
     sample_document_component,
 ):
     """Test document upload using access token authentication."""
     create_documents_api_mock(mocker, scenario="success")
+
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
 
     test_file = SimpleUploadedFile("test_document.pdf", b"test document content", content_type="application/pdf")
 
@@ -466,7 +459,7 @@ def test_create_document_with_access_token(
         reverse("api-1:create_document"),
         {"document_file": test_file, "component_id": sample_document_component.id, "version": "1.0"},
         format="multipart",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **headers,
     )
 
     assert response.status_code == 201

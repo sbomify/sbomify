@@ -217,7 +217,7 @@ def test_list_releases(test_user, test_product, admin_membership):
 
     assert response.status_code == 200
     releases = response.json()
-    assert len(releases) == 2
+    assert len(releases) == 3  # 2 manual releases + 1 automatic "latest" release
 
     # Verify response structure includes is_prerelease
     for release in releases:

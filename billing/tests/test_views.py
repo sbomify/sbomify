@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from billing import billing_processing
 from billing.models import BillingPlan
+from core.tests.shared_fixtures import team_with_business_plan, sample_user, guest_user
 from teams.models import Member, Team
 from core.utils import number_to_random_token
 
@@ -25,8 +26,6 @@ from .fixtures import (  # noqa: F401
     community_plan,
     enterprise_plan,
     mock_stripe,  # Use the new comprehensive mock
-    sample_user,
-    team_with_business_plan,
 )
 
 pytestmark = pytest.mark.django_db
@@ -42,53 +41,6 @@ def client():
 def factory():
     """Create a request factory."""
     return RequestFactory()
-
-
-@pytest.fixture
-def team(db):
-    """Create a test team."""
-    user = User.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123",
-        first_name="Test",
-        last_name="User",
-    )
-    team = Team.objects.create(
-        name="Test Team",
-        billing_plan="business",
-        billing_plan_limits={
-            "max_products": 10,
-            "max_projects": 20,
-            "max_components": 100,
-            "stripe_customer_id": "cus_test123",
-            "stripe_subscription_id": "sub_test123",
-            "subscription_status": "active",
-            "last_updated": "2024-01-01T00:00:00Z",
-        },
-    )
-    team.key = number_to_random_token(team.pk)
-    team.save()
-    Member.objects.create(
-        team=team,
-        user=user,
-        role="owner",
-    )
-    return team
-
-
-@pytest.fixture
-def business_plan(db):
-    """Create a business plan."""
-    return BillingPlan.objects.create(
-        key="business",
-        name="Business",
-        max_products=10,
-        max_projects=20,
-        max_components=100,
-        stripe_price_monthly_id="price_monthly",
-        stripe_price_annual_id="price_annual",
-    )
 
 
 @pytest.mark.django_db
@@ -191,7 +143,7 @@ def test_stripe_webhook_invalid_signature(factory):
 
 
 @pytest.mark.django_db
-def test_stripe_webhook_checkout_completed(factory, team):
+def test_stripe_webhook_checkout_completed(factory, team_with_business_plan):
     """Test webhook for checkout completed event."""
     event_data = {
         "type": "checkout.session.completed",
@@ -201,7 +153,7 @@ def test_stripe_webhook_checkout_completed(factory, team):
                 "customer": "cus_test123",
                 "subscription": "sub_test123",
                 "payment_status": "paid",
-                "metadata": {"team_key": team.key},
+                "metadata": {"team_key": team_with_business_plan.key},
             }
         },
     }
@@ -225,7 +177,7 @@ def test_stripe_webhook_checkout_completed(factory, team):
 
 
 @pytest.mark.django_db
-def test_stripe_webhook_subscription_updated(factory, team):
+def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
     """Test webhook for subscription updated event."""
     event_data = {
         "type": "customer.subscription.updated",
@@ -258,7 +210,7 @@ def test_stripe_webhook_subscription_updated(factory, team):
 
 
 @pytest.mark.django_db
-def test_stripe_webhook_payment_failed(factory, team):
+def test_stripe_webhook_payment_failed(factory, team_with_business_plan):
     """Test webhook for payment failed event."""
     event_data = {
         "type": "invoice.payment_failed",
@@ -311,14 +263,14 @@ def test_stripe_webhook_error_handling(factory):
 
 
 @pytest.mark.django_db
-def test_billing_redirect_trial(client, team, business_plan):
+def test_billing_redirect_trial(client, team_with_business_plan, business_plan):
     """Test billing redirect with trial period."""
-    member = team.members.first()
-    client.force_login(member)
+    member = team_with_business_plan.member_set.first()
+    client.force_login(member.user)
 
     with patch("stripe.checkout.Session.create") as mock_create:
         mock_create.return_value = MagicMock(url="https://checkout.stripe.com/test")
-        response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team.key}))
+        response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team_with_business_plan.key}))
 
         assert response.status_code == 302
-        assert response.url == reverse("billing:select_plan", kwargs={"team_key": team.key})
+        assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})

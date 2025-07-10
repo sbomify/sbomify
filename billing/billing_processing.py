@@ -15,7 +15,7 @@ from sboms.models import Component, Product, Project
 from teams.models import Member, Team
 
 from . import email_notifications
-from .config import is_billing_enabled
+from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
 
@@ -388,6 +388,37 @@ def can_downgrade_to_plan(team, plan):
         return False, message
 
     return True, ""
+
+
+def get_current_limits(team):
+    """
+    Get current billing limits for a team.
+
+    Args:
+        team: Team object
+
+    Returns:
+        Dictionary with current limits (max_products, max_projects, max_components)
+    """
+    # If billing is disabled, return unlimited limits
+    if not is_billing_enabled():
+        return get_unlimited_plan_limits()
+
+    # If team has no billing plan, return unlimited limits
+    if not team.billing_plan:
+        return get_unlimited_plan_limits()
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+        return {
+            "max_products": plan.max_products,
+            "max_projects": plan.max_projects,
+            "max_components": plan.max_components,
+            "subscription_status": team.billing_plan_limits.get("subscription_status", "active"),
+        }
+    except BillingPlan.DoesNotExist:
+        # If plan doesn't exist, return unlimited limits
+        return get_unlimited_plan_limits()
 
 
 @_handle_stripe_error

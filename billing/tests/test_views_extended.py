@@ -18,8 +18,8 @@ from billing.tests.fixtures import (  # noqa: F401
     community_plan,
     enterprise_plan,
     sample_user,
-    team_with_business_plan,
 )
+from core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from teams.models import Member, Team
 
 User = get_user_model()
