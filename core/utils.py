@@ -267,3 +267,152 @@ def verify_item_access(
             return member.role in allowed_roles
 
     return False
+
+
+def add_artifact_to_release(release, sbom=None, document=None, allow_replacement=False):
+    """
+    Add an artifact (SBOM or Document) to a release.
+
+    This function handles the logic for adding artifacts to releases, including
+    replacement logic for artifacts of the same type/format from the same component.
+
+    Args:
+        release: The Release object to add the artifact to
+        sbom: The SBOM object to add (optional)
+        document: The Document object to add (optional)
+        allow_replacement: If True, allows replacing existing artifacts of same format/type.
+                          If False, rejects duplicates with an error.
+
+    Returns:
+        dict: Contains 'created', 'replaced', 'artifact' keys with information about the operation
+    """
+    from core.models import ReleaseArtifact
+
+    if not sbom and not document:
+        raise ValueError("Either sbom or document must be provided")
+    if sbom and document:
+        raise ValueError("Cannot provide both sbom and document")
+
+    # Check if artifact already exists in this release
+    if sbom:
+        existing = ReleaseArtifact.objects.filter(release=release, sbom=sbom).first()
+    else:
+        existing = ReleaseArtifact.objects.filter(release=release, document=document).first()
+
+    if existing:
+        # Artifact already exists - no action needed
+        return {
+            "created": False,
+            "replaced": False,
+            "artifact": existing,
+            "error": "Artifact already exists in this release",
+        }
+
+    # Handle duplicate formats based on allow_replacement setting
+    if sbom:
+        # For SBOMs: check for existing SBOM of same format from same component
+        existing_sbom_artifact = ReleaseArtifact.objects.filter(
+            release=release, sbom__component=sbom.component, sbom__format=sbom.format
+        ).first()
+
+        if existing_sbom_artifact:
+            if not allow_replacement:
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains an SBOM of format {sbom.format} "
+                        f"from component {sbom.component.name}"
+                    ),
+                }
+            else:
+                # Replace the existing artifact
+                replaced_info = {
+                    "replaced_sbom": existing_sbom_artifact.sbom.name,
+                    "replaced_format": existing_sbom_artifact.sbom.format,
+                    "new_sbom": sbom.name,
+                    "component": sbom.component.name,
+                }
+                existing_sbom_artifact.delete()
+                new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+                return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
+
+    else:  # document
+        # For Documents: check for existing document of same type from same component
+        existing_doc_artifact = ReleaseArtifact.objects.filter(
+            release=release, document__component=document.component, document__document_type=document.document_type
+        ).first()
+
+        if existing_doc_artifact:
+            if not allow_replacement:
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains {document.document_type} document "
+                        f"from component {document.component.name}"
+                    ),
+                }
+            else:
+                # Replace the existing artifact
+                replaced_info = {
+                    "replaced_document": existing_doc_artifact.document.name,
+                    "replaced_type": existing_doc_artifact.document.document_type,
+                    "new_document": document.name,
+                    "component": document.component.name,
+                }
+                existing_doc_artifact.delete()
+                new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+                return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
+
+    # Create the new artifact (no duplicates found)
+    if sbom:
+        new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    else:
+        new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+
+    return {"created": True, "replaced": False, "artifact": new_artifact, "replaced_info": None}
+
+
+def create_release_download_response(release):
+    """
+    Create an HTTP response for downloading a release's SBOM content.
+
+    Args:
+        release: The Release object to create download response for
+
+    Returns:
+        HttpResponse: Response with the release SBOM content for download
+    """
+    import tempfile
+    from pathlib import Path
+
+    from django.http import HttpResponse, JsonResponse
+
+    # Get all SBOM artifacts in the release
+    sbom_artifacts = release.artifacts.filter(sbom__isnull=False).select_related("sbom")
+
+    if not sbom_artifacts.exists():
+        return JsonResponse({"detail": "Error generating release SBOM"}, status=500)
+
+    try:
+        # Use the proper SBOM package generator
+        from sboms.utils import get_release_sbom_package
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            sbom_file_path = get_release_sbom_package(release, temp_path)
+
+            # Read the generated SBOM file
+            with open(sbom_file_path, "r") as f:
+                sbom_content = f.read()
+
+            response = HttpResponse(sbom_content, content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={release.product.name}-{release.name}.cdx.json"
+
+            return response
+
+    except Exception as e:
+        return JsonResponse({"detail": f"Error generating release SBOM: {str(e)}"}, status=500)

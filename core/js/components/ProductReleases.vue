@@ -120,7 +120,7 @@
             <div class="action-buttons">
               <a
                 v-if="release.has_sboms"
-                :href="`/api/v1/products/${productId}/releases/${release.id}/download`"
+                :href="`/api/v1/releases/${release.id}/download`"
                 class="btn btn-sm btn-outline-primary"
                 title="Download release SBOM"
               >
@@ -351,7 +351,7 @@ const loadReleases = async () => {
   error.value = null
 
   try {
-    const response = await $axios.get(`/api/v1/products/${props.productId}/releases`)
+    const response = await $axios.get(`/api/v1/releases?product_id=${props.productId}`)
     releases.value = response.data
   } catch (err) {
     console.error('Error loading releases:', err)
@@ -402,7 +402,7 @@ const deleteRelease = async (release: Release) => {
   }
 
   try {
-    await $axios.delete(`/api/v1/products/${props.productId}/releases/${release.id}`)
+    await $axios.delete(`/api/v1/releases/${release.id}`)
     showSuccess('Release deleted successfully!')
     await loadReleases()
   } catch (err) {
@@ -425,19 +425,26 @@ const submitRelease = async () => {
   isSubmitting.value = true
 
   try {
-    const data = {
-      name: releaseForm.value.name.trim(),
-      description: releaseForm.value.description.trim() || null,
-      is_prerelease: releaseForm.value.is_prerelease
-    }
-
     if (editingRelease.value) {
-      // Update existing release
-      await $axios.patch(`/api/v1/products/${props.productId}/releases/${editingRelease.value.id}`, data)
+      // Update existing release using top-level API
+      const data = {
+        name: releaseForm.value.name.trim(),
+        description: releaseForm.value.description.trim() || null,
+        is_prerelease: releaseForm.value.is_prerelease
+      }
+
+      await $axios.patch(`/api/v1/releases/${editingRelease.value.id}`, data)
       showSuccess('Release updated successfully!')
     } else {
-      // Create new release
-      await $axios.post(`/api/v1/products/${props.productId}/releases`, data)
+      // Create new release using top-level API
+      const data = {
+        name: releaseForm.value.name.trim(),
+        description: releaseForm.value.description.trim() || null,
+        is_prerelease: releaseForm.value.is_prerelease,
+        product_id: props.productId
+      }
+
+      await $axios.post('/api/v1/releases', data)
       showSuccess('Release created successfully!')
     }
 

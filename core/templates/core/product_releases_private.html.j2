@@ -263,11 +263,12 @@ current_team: Current team session data
                         const formData = new FormData(createReleaseForm);
                         const data = {
                             name: formData.get('name'),
-                            description: formData.get('description') || ''
+                            description: formData.get('description') || '',
+                            product_id: '{{ product.id }}'
                         };
 
                         try {
-                            const response = await fetch(`/api/v1/products/{{ product.id }}/releases`, {
+                            const response = await fetch('/api/v1/releases', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
