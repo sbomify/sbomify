@@ -53,7 +53,7 @@ has_downloadable_content: Boolean indicating if release has downloadable SBOMs
                     <div class="vc-public-download-card"
                          data-title="Download Release"
                          data-description="Download consolidated SBOM containing all artifacts in this release"
-                         data-download-url="/api/v1/products/{{ product.id }}/releases/{{ release.id }}/download"
+                         data-download-url="/api/v1/releases/{{ release.id }}/download"
                          data-download-text="Download Release SBOM"
                          data-download-icon="fas fa-download"></div>
                 {% endif %}

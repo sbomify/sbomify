@@ -196,7 +196,7 @@ const getProductReleasesUrl = (release: Release): string => {
 }
 
 const getReleaseDownloadUrl = (release: Release): string => {
-  return `/api/v1/products/${release.product.id}/releases/${release.id}/download`
+  return `/api/v1/releases/${release.id}/download`
 }
 
 const loadReleases = async () => {

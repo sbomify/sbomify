@@ -823,8 +823,44 @@ const loadArtifacts = async () => {
   error.value = null
 
   try {
-    const response = await $axios.get(`/api/v1/products/${props.productId}/releases/${props.releaseId}/artifacts`)
-    artifacts.value = response.data
+    // Get artifacts already in this release
+    const response = await $axios.get(`/api/v1/releases/${props.releaseId}/artifacts?mode=existing`)
+
+    // Transform the response to match expected format
+    artifacts.value = response.data.map((artifact: Record<string, string>) => {
+      if (artifact.artifact_type === 'sbom') {
+        return {
+          id: artifact.id,
+          sbom: {
+            id: artifact.id,
+            name: artifact.artifact_name,
+            format: artifact.sbom_format,
+            format_version: artifact.sbom_version,
+            version: artifact.sbom_version,
+            created_at: artifact.created_at,
+            component: {
+              id: artifact.component_id,
+              name: artifact.component_name
+            }
+          }
+        }
+      } else {
+        return {
+          id: artifact.id,
+          document: {
+            id: artifact.id,
+            name: artifact.artifact_name,
+            document_type: artifact.document_type,
+            version: artifact.document_version,
+            created_at: artifact.created_at,
+            component: {
+              id: artifact.component_id,
+              name: artifact.component_name
+            }
+          }
+        }
+      }
+    })
   } catch (err) {
     console.error('Error loading artifacts:', err)
     error.value = 'Failed to load artifacts'
@@ -843,8 +879,9 @@ const loadAvailableArtifacts = async () => {
   isLoadingArtifacts.value = true
 
   try {
-    const response = await $axios.get(`/api/v1/products/${props.productId}/artifacts/available-for-release/${props.releaseId}`)
-    availableArtifacts.value = response.data
+    // Get available artifacts that can be added to this release
+    const response = await $axios.get(`/api/v1/releases/${props.releaseId}/artifacts?mode=available`)
+    availableArtifacts.value = response.data || []
   } catch (err) {
     console.error('Error loading available artifacts:', err)
 
@@ -878,60 +915,63 @@ const showAddArtifactModal = async () => {
 }
 
 const addSelectedArtifacts = async () => {
-  if (selectedArtifacts.value.length === 0) {
-    showError('Please select at least one artifact')
-    return
-  }
+  if (selectedArtifacts.value.length === 0) return
 
   isSubmitting.value = true
 
   try {
-    // Add artifacts one by one since the API only accepts one artifact per request
     const results = []
-    const errors = []
 
+    // Add each selected artifact to the release
     for (const artifact of selectedArtifacts.value) {
       try {
-        const payload: { sbom_id?: string; document_id?: string } = {}
+        let payload: Record<string, string> = {}
+
         if (artifact.artifact_type === 'sbom') {
           payload.sbom_id = artifact.id
-        } else if (artifact.artifact_type === 'document') {
+        } else {
           payload.document_id = artifact.id
         }
 
-        const response = await $axios.post(
-          `/api/v1/products/${props.productId}/releases/${props.releaseId}/artifacts`,
-          payload
-        )
-        results.push(response.data)
+        const response = await $axios.post(`/api/v1/releases/${props.releaseId}/artifacts`, payload)
+        results.push({ success: true, artifact, response: response.data })
       } catch (err) {
         console.error(`Error adding artifact ${artifact.name}:`, err)
-        if (isAxiosError(err)) {
-          errors.push(`${artifact.name}: ${err.response?.data?.detail || 'Unknown error'}`)
-        } else {
-          errors.push(`${artifact.name}: Unknown error`)
+        results.push({ success: false, artifact, error: err })
+      }
+    }
+
+    // Count successes and failures
+    const successful = results.filter(r => r.success)
+    const failed = results.filter(r => !r.success)
+
+    if (successful.length > 0) {
+      showSuccess(`Successfully added ${successful.length} artifact${successful.length === 1 ? '' : 's'} to the release`)
+      await loadArtifacts() // Reload artifacts to show the new ones
+    }
+
+    if (failed.length > 0) {
+      const errorMessages = failed.map(f => {
+        if (isAxiosError(f.error)) {
+          return `${f.artifact.name}: ${f.error.response?.data?.detail || 'Unknown error'}`
+        }
+        return `${f.artifact.name}: Failed to add`
+      })
+      showError(`Failed to add ${failed.length} artifact${failed.length === 1 ? '' : 's'}:\n${errorMessages.join('\n')}`)
+    }
+
+    // Close modal if all successful
+    if (failed.length === 0) {
+      const modalElement = document.getElementById('addArtifactModal')
+      if (modalElement) {
+        const bootstrap = (window as unknown as { bootstrap?: { Modal: new(element: Element) => { hide(): void } } }).bootstrap
+        if (bootstrap && bootstrap.Modal) {
+          const modal = new bootstrap.Modal(modalElement)
+          modal.hide()
         }
       }
     }
 
-    if (results.length > 0) {
-      showSuccess(`Added ${results.length} artifact${results.length === 1 ? '' : 's'} to release`)
-    }
-
-    if (errors.length > 0) {
-      showError(`Some artifacts could not be added: ${errors.join(', ')}`)
-    }
-
-    const modalElement = document.getElementById('addArtifactModal')
-    if (modalElement) {
-      const bootstrap = (window as unknown as { bootstrap?: { Modal: { getInstance(element: Element): { hide(): void } | null } } }).bootstrap
-      if (bootstrap && bootstrap.Modal) {
-        const modal = bootstrap.Modal.getInstance(modalElement)
-        modal?.hide()
-      }
-    }
-
-    await loadArtifacts()
   } catch (err) {
     console.error('Error adding artifacts:', err)
     showError('Failed to add artifacts')
@@ -941,18 +981,16 @@ const addSelectedArtifacts = async () => {
 }
 
 const removeArtifact = async (artifact: Artifact) => {
-  const artifactName = getArtifactName(artifact)
-  if (!confirm(`Are you sure you want to remove "${artifactName}" from this release?`)) {
+  if (!confirm(`Are you sure you want to remove "${getArtifactName(artifact)}" from this release?`)) {
     return
   }
 
   try {
-    await $axios.delete(`/api/v1/products/${props.productId}/releases/${props.releaseId}/artifacts/${artifact.id}`)
-    showSuccess('Artifact removed from release')
-    await loadArtifacts()
+    await $axios.delete(`/api/v1/releases/${props.releaseId}/artifacts/${artifact.id}`)
+    showSuccess(`Successfully removed ${getArtifactName(artifact)} from the release`)
+    await loadArtifacts() // Reload artifacts to reflect the removal
   } catch (err) {
     console.error('Error removing artifact:', err)
-
     if (isAxiosError(err)) {
       showError(err.response?.data?.detail || 'Failed to remove artifact')
     } else {

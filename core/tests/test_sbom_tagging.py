@@ -351,7 +351,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
 
         assert response.status_code == 403
         data = json.loads(response.content)
-        assert "different team" in data["detail"]
+        assert "Access denied" in data["detail"]
 
     def test_sbom_not_found(self, authenticated_api_client):
         """Test endpoints with non-existent SBOM."""

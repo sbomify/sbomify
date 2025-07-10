@@ -69,7 +69,7 @@ const hideDeleteConfirmation = (): void => {
 
 const handleDeleteConfirm = async (): Promise<void> => {
   try {
-    const response = await $axios.delete(`/api/v1/products/${props.productId}/releases/${props.releaseId}`)
+    const response = await $axios.delete(`/api/v1/releases/${props.releaseId}`)
 
     if (response.status === 204) {
       showSuccess('Release deleted successfully!')

@@ -65,7 +65,7 @@ brand: BrandingInfo object for team branding
                                             {% if sbom_count > 0 %}
                                                 <div class="stat-item">
                                                     <i class="fas fa-download me-1"></i>
-                                                    <a href="/api/v1/products/{{ product.id }}/releases/{{ release.id }}/download"
+                                                    <a href="/api/v1/releases/{{ release.id }}/download"
                                                        class="download-link">Download SBOM</a>
                                                 </div>
                                             {% endif %}

@@ -97,7 +97,7 @@
         apiUrl = `/api/v1/products/${props.itemId}`;
         break;
       case 'release':
-        apiUrl = `/api/v1/products/${getProductIdFromUrl()}/releases/${props.itemId}`;
+        apiUrl = `/api/v1/releases/${props.itemId}`;
         break;
       default:
         errorMessage.value = 'Unknown item type';
@@ -125,15 +125,7 @@
     fieldValue.value = originalValue;
   }
 
-  // Helper function to get product ID from current URL for release endpoints
-  const getProductIdFromUrl = (): string => {
-    const pathParts = window.location.pathname.split('/');
-    const productIndex = pathParts.indexOf('products');
-    if (productIndex !== -1 && productIndex + 1 < pathParts.length) {
-      return pathParts[productIndex + 1];
-    }
-    throw new Error('Could not determine product ID from URL');
-  }
+
 </script>
 
 <style scoped>

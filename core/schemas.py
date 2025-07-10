@@ -406,11 +406,12 @@ class ReleaseArtifactSchema(BaseModel):
 
 
 class ReleaseCreateSchema(BaseModel):
-    """Schema for creating a new Release."""
+    """Schema for creating a new Release via top-level API endpoint."""
 
     name: str = Field(..., max_length=255, min_length=1)
     description: str | None = Field(default="", max_length=1000)
     is_prerelease: bool = Field(default=False)
+    product_id: str = Field(..., description="ID of the product this release belongs to")
 
 
 class ReleaseUpdateSchema(BaseModel):
