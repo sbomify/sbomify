@@ -81,7 +81,7 @@ class CreateProjectRequest(BaseModel):
     product_id: str
 
 
-router = Router(tags=["core"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Core"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 item_type_map = {"team": Team, "component": Component, "project": Project, "product": Product}
 
