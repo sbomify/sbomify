@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description"
+              content="Contact sbomify for enterprise solutions. Get custom SBOM management and security solutions for your organization.">
+        <meta name="keywords"
+              content="sbomify, enterprise, SBOM, security, contact, software bill of materials">
+        <title>Enterprise Contact - sbomify</title>
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <!-- Font Awesome -->
+        <link rel="stylesheet"
+              href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+        <!-- Custom Styles -->
+        <style>
+        body {
+            background: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .enterprise-contact-page {
+            min-height: 100vh;
+        }
+
+                /* Hero Section */
+        .hero-logo {
+            margin-bottom: 2rem;
+        }
+
+        .hero-logo a {
+            display: inline-block;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .hero-logo a:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        .hero-logo img {
+            height: 48px;
+            width: auto;
+            filter: brightness(0) invert(1); /* Make logo white on gradient background */
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4rem 0;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: white !important;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.95) !important;
+            line-height: 1.6;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .hero-features {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .feature-pill {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* Form Section */
+        .form-section {
+            background: #f8fafc;
+            padding: 4rem 0;
+        }
+
+        .contact-form-card {
+            background: white;
+            border-radius: 16px;
+            padding: 3rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .form-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .form-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+
+        .form-subtitle {
+            font-size: 1.125rem;
+            color: #6b7280;
+            margin: 0;
+        }
+
+        .form-section-block {
+            margin-bottom: 3rem;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .section-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            color: white;
+            font-size: 1.125rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151;
+            margin: 0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .form-label.required:after {
+            content: " *";
+            color: #ef4444;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-error {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-hint {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-check-input {
+            margin-top: 0.25rem;
+        }
+
+        .form-check-label {
+            font-size: 0.875rem;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #6b7280;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #374151;
+            text-decoration: none;
+        }
+
+        /* Footer */
+        .public-footer {
+            background: #1f2937;
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .footer-text {
+            margin: 0;
+            color: #d1d5db;
+        }
+
+        .footer-link {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .footer-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+
+        /* Turnstile Widget */
+        .turnstile-widget {
+            margin: 2rem 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.125rem;
+            }
+
+            .hero-features {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .contact-form-card {
+                padding: 2rem 1.5rem;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-actions {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .hero-title {
+                font-size: 1.75rem;
+            }
+
+            .contact-form-card {
+                padding: 1.5rem 1rem;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            .section-icon {
+                margin-right: 0;
+            }
+        }
+        </style>
+        <!-- Cloudflare Turnstile -->
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                async
+                defer></script>
+    </head>
+    <body>
+        <div class="enterprise-contact-page">
+            <!-- Hero Section -->
+            <section class="hero-section">
+                <div class="container">
+                    <div class="row justify-content-center text-center">
+                        <div class="col-lg-8">
+                            <div class="hero-logo mb-4">
+                                <a href="/">
+                                    <img src="/static/img/logo.svg" alt="sbomify" height="48" width="208">
+                                </a>
+                            </div>
+                            <h1 class="hero-title">Let's Talk Enterprise</h1>
+                            <p class="hero-subtitle">
+                                Ready to scale your security and product artifact management? Our enterprise team will work with you to create a custom solution that meets your organization's specific needs.
+                            </p>
+                            <div class="hero-features">
+                                <div class="feature-pill">
+                                    <i class="fas fa-users me-2"></i>
+                                    Unlimited Users
+                                </div>
+                                <div class="feature-pill">
+                                    <i class="fas fa-shield-alt me-2"></i>
+                                    Advanced Security
+                                </div>
+                                <div class="feature-pill">
+                                    <i class="fas fa-headset me-2"></i>
+                                    Dedicated Support
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- Form Section -->
+            <section class="form-section">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-lg-8">
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4"
+                                         role="alert">
+                                        {{ message }}
+                                        <button type="button"
+                                                class="btn-close"
+                                                data-bs-dismiss="alert"
+                                                aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                            <div class="contact-form-card">
+                                <div class="form-header">
+                                    <h2 class="form-title">Tell Us About Your Needs</h2>
+                                    <p class="form-subtitle">We'll get back to you within 1-2 business days with a custom proposal.</p>
+                                </div>
+                                <form method="post" novalidate class="contact-form" id="enterprise-form">
+                                    {% csrf_token %}
+                                    <!-- Company Information Section -->
+                                    <div class="form-section-block">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-building"></i>
+                                            </div>
+                                            <h3 class="section-title">Company Information</h3>
+                                        </div>
+                                        <div class="form-grid">
+                                            <div class="form-group full-width">
+                                                <label for="{{ form.company_name.id_for_label }}"
+                                                       class="form-label required">
+                                                    {{ form.company_name.label }}
+                                                </label>
+                                                <input type="text"
+                                                       name="{{ form.company_name.name }}"
+                                                       id="{{ form.company_name.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="Your company name"
+                                                       value="{{ form.company_name.value|default:'' }}"
+                                                       required>
+                                                {% if form.company_name.errors %}<div class="form-error">{{ form.company_name.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.company_size.id_for_label }}"
+                                                       class="form-label required">
+                                                    {{ form.company_size.label }}
+                                                </label>
+                                                <select name="{{ form.company_size.name }}"
+                                                        id="{{ form.company_size.id_for_label }}"
+                                                        class="form-control"
+                                                        required>
+                                                    {% for value, label in form.company_size.field.choices %}
+                                                        <option value="{{ value }}"
+                                                                {% if form.company_size.value == value %}selected{% endif %}>
+                                                            {{ label }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                {% if form.company_size.errors %}<div class="form-error">{{ form.company_size.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.industry.id_for_label }}" class="form-label">{{ form.industry.label }}</label>
+                                                <input type="text"
+                                                       name="{{ form.industry.name }}"
+                                                       id="{{ form.industry.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="Technology, Healthcare, Finance, etc."
+                                                       value="{{ form.industry.value|default:'' }}">
+                                                {% if form.industry.errors %}<div class="form-error">{{ form.industry.errors.0 }}</div>{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Contact Information Section -->
+                                    <div class="form-section-block">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-user"></i>
+                                            </div>
+                                            <h3 class="section-title">Contact Information</h3>
+                                        </div>
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label for="{{ form.first_name.id_for_label }}" class="form-label required">{{ form.first_name.label }}</label>
+                                                <input type="text"
+                                                       name="{{ form.first_name.name }}"
+                                                       id="{{ form.first_name.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="John"
+                                                       value="{{ form.first_name.value|default:'' }}"
+                                                       required>
+                                                {% if form.first_name.errors %}<div class="form-error">{{ form.first_name.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.last_name.id_for_label }}" class="form-label required">{{ form.last_name.label }}</label>
+                                                <input type="text"
+                                                       name="{{ form.last_name.name }}"
+                                                       id="{{ form.last_name.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="Doe"
+                                                       value="{{ form.last_name.value|default:'' }}"
+                                                       required>
+                                                {% if form.last_name.errors %}<div class="form-error">{{ form.last_name.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.email.id_for_label }}" class="form-label required">{{ form.email.label }}</label>
+                                                <input type="email"
+                                                       name="{{ form.email.name }}"
+                                                       id="{{ form.email.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="john.doe@company.com"
+                                                       value="{{ form.email.value|default:'' }}"
+                                                       required>
+                                                {% if form.email.errors %}<div class="form-error">{{ form.email.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.phone.id_for_label }}" class="form-label">{{ form.phone.label }}</label>
+                                                <input type="tel"
+                                                       name="{{ form.phone.name }}"
+                                                       id="{{ form.phone.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="+1 (555) 123-4567"
+                                                       value="{{ form.phone.value|default:'' }}">
+                                                {% if form.phone.errors %}<div class="form-error">{{ form.phone.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group full-width">
+                                                <label for="{{ form.job_title.id_for_label }}" class="form-label">{{ form.job_title.label }}</label>
+                                                <input type="text"
+                                                       name="{{ form.job_title.name }}"
+                                                       id="{{ form.job_title.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="CTO, Security Manager, etc."
+                                                       value="{{ form.job_title.value|default:'' }}">
+                                                {% if form.job_title.errors %}<div class="form-error">{{ form.job_title.errors.0 }}</div>{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Project Details Section -->
+                                    <div class="form-section-block">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-project-diagram"></i>
+                                            </div>
+                                            <h3 class="section-title">Project Details</h3>
+                                        </div>
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label for="{{ form.primary_use_case.id_for_label }}"
+                                                       class="form-label required">
+                                                    {{ form.primary_use_case.label }}
+                                                </label>
+                                                <select name="{{ form.primary_use_case.name }}"
+                                                        id="{{ form.primary_use_case.id_for_label }}"
+                                                        class="form-control"
+                                                        required>
+                                                    {% for value, label in form.primary_use_case.field.choices %}
+                                                        <option value="{{ value }}"
+                                                                {% if form.primary_use_case.value == value %}selected{% endif %}>
+                                                            {{ label }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                {% if form.primary_use_case.errors %}<div class="form-error">{{ form.primary_use_case.errors.0 }}</div>{% endif %}
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="{{ form.timeline.id_for_label }}" class="form-label">{{ form.timeline.label }}</label>
+                                                <input type="text"
+                                                       name="{{ form.timeline.name }}"
+                                                       id="{{ form.timeline.id_for_label }}"
+                                                       class="form-control"
+                                                       placeholder="Immediate, 1-3 months, 6+ months"
+                                                       value="{{ form.timeline.value|default:'' }}">
+                                                {% if form.timeline.errors %}<div class="form-error">{{ form.timeline.errors.0 }}</div>{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Message Section -->
+                                    <div class="form-section-block">
+                                        <div class="section-header">
+                                            <div class="section-icon">
+                                                <i class="fas fa-comment-alt"></i>
+                                            </div>
+                                            <h3 class="section-title">Tell Us More</h3>
+                                        </div>
+                                        <div class="form-group full-width">
+                                            <label for="{{ form.message.id_for_label }}" class="form-label required">{{ form.message.label }}</label>
+                                            <textarea name="{{ form.message.name }}"
+                                                      id="{{ form.message.id_for_label }}"
+                                                      class="form-control"
+                                                      rows="5"
+                                                      placeholder="Please describe your requirements, specific needs, or any questions you have about our Enterprise plan..."
+                                                      required>{{ form.message.value|default:'' }}</textarea>
+                                            {% if form.message.errors %}<div class="form-error">{{ form.message.errors.0 }}</div>{% endif %}
+                                            <div class="form-hint">
+                                                Please include details about your specific requirements, number of applications, compliance needs, or integration requirements.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Consent Section -->
+                                    <div class="form-section-block">
+                                        <div class="form-checkbox">
+                                            <input type="checkbox"
+                                                   name="{{ form.newsletter_signup.name }}"
+                                                   id="{{ form.newsletter_signup.id_for_label }}"
+                                                   class="form-check-input"
+                                                   {% if form.newsletter_signup.value %}checked{% endif %}>
+                                            <label class="form-check-label"
+                                                   for="{{ form.newsletter_signup.id_for_label }}">
+                                                {{ form.newsletter_signup.label }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <!-- Turnstile Section -->
+                                    {% if turnstile_site_key %}
+                                        <div class="turnstile-widget">
+                                            <div class="cf-turnstile"
+                                                 data-sitekey="{{ turnstile_site_key }}"
+                                                 data-callback="onTurnstileSuccess"
+                                                 data-error-callback="onTurnstileError"></div>
+                                        </div>
+                                        <!-- Hidden field for Turnstile response -->
+                                        <input type="hidden"
+                                               name="{{ form.cf_turnstile_response.name }}"
+                                               id="{{ form.cf_turnstile_response.id_for_label }}">
+                                        {% if form.cf_turnstile_response.errors %}
+                                            <div class="form-error">{{ form.cf_turnstile_response.errors.0 }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <!-- No Turnstile configured - show warning -->
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.
+                                        </div>
+                                        <!-- Hidden field for Turnstile response -->
+                                        <input type="hidden"
+                                               name="{{ form.cf_turnstile_response.name }}"
+                                               id="{{ form.cf_turnstile_response.id_for_label }}"
+                                               value="dev-mode-bypass">
+                                    {% endif %}
+                                    <!-- Submit Section -->
+                                    <div class="form-actions">
+                                        <a href="/" class="btn btn-secondary">
+                                            <i class="fas fa-arrow-left me-2"></i>
+                                            Back to Home
+                                        </a>
+                                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                                            <i class="fas fa-paper-plane me-2"></i>
+                                            Send Enterprise Inquiry
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- Footer -->
+            <footer class="public-footer">
+                <div class="container">
+                    <p class="footer-text">
+                        © 2024 sbomify.
+                        <a href="#" class="footer-link">Privacy Policy</a> |
+                        <a href="#" class="footer-link">Terms of Service</a>
+                    </p>
+                </div>
+            </footer>
+        </div>
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- Turnstile Callback Scripts -->
+        <script>
+        function onTurnstileSuccess(token) {
+            // Set the token in the hidden field
+            document.getElementById('{{ form.cf_turnstile_response.id_for_label }}').value = token;
+            // Enable the submit button
+            document.getElementById('submit-btn').disabled = false;
+        }
+
+        function onTurnstileError() {
+            // Clear the token and disable submit button
+            document.getElementById('{{ form.cf_turnstile_response.id_for_label }}').value = '';
+            document.getElementById('submit-btn').disabled = true;
+        }
+
+        // Initial state - disable submit button if no token
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = document.getElementById('{{ form.cf_turnstile_response.id_for_label }}').value;
+            const submitBtn = document.getElementById('submit-btn');
+
+            {% if turnstile_site_key %}
+            // Production mode with Turnstile - disable until verified
+            submitBtn.disabled = !token;
+            {% else %}
+            // Development mode - enable button by default
+            submitBtn.disabled = false;
+            {% endif %}
+        });
+        </script>
+    </body>
+</html>

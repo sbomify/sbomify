@@ -2,7 +2,11 @@
 Forms for billing-related functionality
 """
 
+import json
+
+import requests
 from django import forms
+from django.conf import settings
 
 
 class EnterpriseContactForm(forms.Form):
@@ -123,6 +127,12 @@ class EnterpriseContactForm(forms.Form):
         label="I would like to receive product updates and security best practices via email",
     )
 
+    # Cloudflare Turnstile token (only for public form)
+    cf_turnstile_response = forms.CharField(
+        widget=forms.HiddenInput(),
+        required=False,  # Will be set dynamically based on form usage
+    )
+
     def clean_email(self) -> str:
         """Validate email domain for enterprise inquiries."""
         email = self.cleaned_data.get("email", "")
@@ -159,3 +169,44 @@ class EnterpriseContactForm(forms.Form):
             raise forms.ValidationError("Please provide a more detailed message (at least 10 characters).")
 
         return message.strip()
+
+
+class PublicEnterpriseContactForm(EnterpriseContactForm):
+    """Form for public enterprise contact inquiries with required Turnstile verification."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make Turnstile token required for public form (unless in DEBUG mode)
+        if not settings.DEBUG:
+            self.fields["cf_turnstile_response"].required = True
+
+    def clean_cf_turnstile_response(self) -> str:
+        """Validate Cloudflare Turnstile response."""
+        token = self.cleaned_data.get("cf_turnstile_response")
+
+        # Skip Turnstile validation in development mode
+        if settings.DEBUG:
+            return token or "dev-mode-bypass"
+
+        if not token:
+            raise forms.ValidationError("Please complete the security verification.")
+
+        # Verify token with Cloudflare
+        try:
+            response = requests.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={
+                    "secret": settings.TURNSTILE_SECRET_KEY,
+                    "response": token,
+                },
+                timeout=10,
+            )
+            result = response.json()
+
+            if not result.get("success", False):
+                raise forms.ValidationError("Security verification failed. Please try again.")
+
+        except (requests.RequestException, json.JSONDecodeError):
+            raise forms.ValidationError("Unable to verify security check. Please try again.")
+
+        return token

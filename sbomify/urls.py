@@ -18,6 +18,7 @@ Including another URLconf
 from django.conf import settings
 from django.urls import include, path
 
+from billing.views import public_enterprise_contact
 from core.admin import admin_site
 
 from .apis import api
@@ -25,6 +26,7 @@ from .apis import api
 urlpatterns = [
     path("admin/", admin_site.urls),
     path("accounts/", include("allauth.urls")),
+    path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
     path("", include("core.urls")),
     path("workspace/", include("teams.urls")),
     path("", include("sboms.urls")),

@@ -379,7 +379,7 @@ async function handlePlanSelection(plan: Plan | undefined) {
 
   try {
     if (plan.key === 'enterprise') {
-      window.location.href = '/billing/enterprise-contact/';
+      window.location.href = '/enterprise-contact/';
       return;
     }
 

@@ -472,3 +472,7 @@ NOTIFICATION_REFRESH_INTERVAL = 60 * 1000  # 1 minute
 BILLING = os.getenv("BILLING", "True").lower() == "true"
 
 SITE_ID = 1
+
+# Cloudflare Turnstile settings
+TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "")
