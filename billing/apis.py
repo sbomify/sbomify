@@ -13,7 +13,7 @@ from teams.models import Team
 from .models import BillingPlan
 from .schemas import ChangePlanRequest, ChangePlanResponse, PlanSchema, UsageSchema
 
-router = Router(tags=["billing"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Billing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 @router.get("/plans/", response={200: list[PlanSchema], 404: ErrorResponse})

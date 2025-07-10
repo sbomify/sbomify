@@ -5,10 +5,13 @@ from typing import Any, Dict, List
 
 import yaml
 from ninja import Router, Schema
+from ninja.security import django_auth
+
+from access_tokens.auth import PersonalAccessTokenAuth
 
 from .loader import get_license_list, load_custom_licenses, validate_expression
 
-router = Router()
+router = Router(tags=["Licensing"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 class LicenseSchema(Schema):

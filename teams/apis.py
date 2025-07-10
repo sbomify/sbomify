@@ -20,7 +20,7 @@ from .utils import get_user_teams
 
 logger = getLogger(__name__)
 
-router = Router(tags=["teams"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Teams"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 class FieldValue(BaseModel):

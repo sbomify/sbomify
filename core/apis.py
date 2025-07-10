@@ -80,7 +80,7 @@ class CreateProjectRequest(BaseModel):
     product_id: str
 
 
-router = Router(tags=["core"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 item_type_map = {"team": Team, "component": Component, "project": Project, "product": Product}
 
@@ -196,6 +196,7 @@ def _build_item_response(item, item_type: str):
         200: list[UserItemsResponse],
         400: ErrorResponse,
     },
+    tags=["Components"],
 )
 def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
     "Get all items of a specific type (across all teams) that belong to the current user."
@@ -1007,6 +1008,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 @router.post(
     "/projects",
     response={201: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    tags=["Projects"],
 )
 def create_project(request: HttpRequest, payload: ProjectCreateSchema):
     """Create a new project."""
@@ -1049,6 +1051,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
 @router.get(
     "/projects",
     response={200: list[ProjectResponseSchema], 403: ErrorResponse},
+    tags=["Projects"],
 )
 def list_projects(request: HttpRequest):
     """List all projects for the current user's team."""
@@ -1068,6 +1071,7 @@ def list_projects(request: HttpRequest):
     "/projects/{project_id}",
     response={200: ProjectResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Projects"],
 )
 @decorate_view(optional_token_auth)
 def get_project(request: HttpRequest, project_id: str):
@@ -1094,6 +1098,7 @@ def get_project(request: HttpRequest, project_id: str):
 @router.put(
     "/projects/{project_id}",
     response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Projects"],
 )
 def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdateSchema):
     """Update a project."""
@@ -1124,6 +1129,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
 @router.patch(
     "/projects/{project_id}",
     response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Projects"],
 )
 def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSchema):
     """Partially update a project."""
@@ -1226,6 +1232,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 @router.delete(
     "/projects/{project_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Projects"],
 )
 def delete_project(request: HttpRequest, project_id: str):
     """Delete a project."""
@@ -1253,6 +1260,7 @@ def delete_project(request: HttpRequest, project_id: str):
 @router.post(
     "/components",
     response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    tags=["Components"],
 )
 def create_component(request: HttpRequest, payload: ComponentCreateSchema):
     """Create a new component."""
@@ -1296,6 +1304,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 @router.get(
     "/components",
     response={200: list[ComponentResponseSchema], 403: ErrorResponse},
+    tags=["Components"],
 )
 def list_components(request: HttpRequest):
     """List all components for the current user's team."""
@@ -1314,6 +1323,7 @@ def list_components(request: HttpRequest):
 @router.get(
     "/components/{component_id}",
     response={200: ComponentResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Components"],
 )
 def get_component(request: HttpRequest, component_id: str):
     """Get a specific component by ID."""
@@ -1331,6 +1341,7 @@ def get_component(request: HttpRequest, component_id: str):
 @router.put(
     "/components/{component_id}",
     response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Components"],
 )
 def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema):
     """Update a component."""
@@ -1362,6 +1373,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 @router.patch(
     "/components/{component_id}",
     response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Components"],
 )
 def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema):
     """Partially update a component."""
@@ -1423,6 +1435,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 @router.delete(
     "/components/{component_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Components"],
 )
 def delete_component(request: HttpRequest, component_id: str):
     """Delete a component."""
@@ -1469,6 +1482,7 @@ def delete_component(request: HttpRequest, component_id: str):
     },
     exclude_none=True,
     auth=None,
+    tags=["Components"],
 )
 @decorate_view(optional_auth)
 def get_component_metadata(request, component_id: str):
@@ -1515,6 +1529,7 @@ def get_component_metadata(request, component_id: str):
         403: ErrorResponse,
         404: ErrorResponse,
     },
+    tags=["Components"],
 )
 def patch_component_metadata(request, component_id: str, metadata: ComponentMetaDataPatch):
     """Partially update metadata for a component."""
@@ -1561,6 +1576,7 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
     "/components/{component_id}/releases",
     response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def list_component_releases(request: HttpRequest, component_id: str):
@@ -1653,6 +1669,7 @@ def list_component_releases(request: HttpRequest, component_id: str):
     "/dashboard/summary",
     response={200: DashboardStatsResponse, 403: ErrorResponse},
     auth=None,
+    tags=["Components"],
 )
 @decorate_view(optional_token_auth)
 def get_dashboard_summary(
@@ -1769,6 +1786,7 @@ def get_dashboard_summary(
     "/projects/{project_id}/download",
     response={200: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public projects
+    tags=["Projects"],
 )
 @decorate_view(optional_token_auth)
 def download_project_sbom(request: HttpRequest, project_id: str):
@@ -1802,6 +1820,7 @@ def download_project_sbom(request: HttpRequest, project_id: str):
     "/products/{product_id}/download",
     response={200: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public products
+    tags=["Products"],
 )
 @decorate_view(optional_token_auth)
 def download_product_sbom(request: HttpRequest, product_id: str):
@@ -1840,6 +1859,7 @@ def download_product_sbom(request: HttpRequest, product_id: str):
     "/releases",
     response={200: list[dict], 403: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def list_all_releases(request: HttpRequest, product_id: str | None = Query(None)):
@@ -1965,6 +1985,7 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
 @router.post(
     "/releases",
     response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
     """Create a new release."""
@@ -2010,6 +2031,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
     "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def get_release(request: HttpRequest, release_id: str):
@@ -2032,6 +2054,7 @@ def get_release(request: HttpRequest, release_id: str):
 @router.put(
     "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema):
     """Update a release."""
@@ -2081,6 +2104,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 @router.patch(
     "/releases/{release_id}",
     response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema):
     """Partially update a release."""
@@ -2137,6 +2161,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 @router.delete(
     "/releases/{release_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def delete_release(request: HttpRequest, release_id: str):
     """Delete a release."""
@@ -2173,6 +2198,7 @@ def delete_release(request: HttpRequest, release_id: str):
     "/releases/{release_id}/download",
     response={200: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def download_release(request: HttpRequest, release_id: str):
@@ -2231,6 +2257,7 @@ def download_release(request: HttpRequest, release_id: str):
     "/releases/{release_id}/artifacts",
     response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Query("available")):
@@ -2362,6 +2389,7 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
     "/releases/{release_id}/artifacts",
     response={201: ReleaseArtifactAddResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: ReleaseArtifactCreateSchema):
@@ -2449,6 +2477,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     "/releases/{release_id}/artifacts/{artifact_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact_id: str):
@@ -2487,6 +2516,7 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
     "/documents/{document_id}/releases",
     response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def list_document_releases(request: HttpRequest, document_id: str):
@@ -2527,6 +2557,7 @@ def list_document_releases(request: HttpRequest, document_id: str):
 @router.post(
     "/documents/{document_id}/releases",
     response={201: DocumentReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema):
     """Add a document to multiple releases."""
@@ -2613,6 +2644,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 @router.delete(
     "/documents/{document_id}/releases/{release_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str):
     """Remove a document from a specific release."""
@@ -2651,6 +2683,7 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
     "/sboms/{sbom_id}/releases",
     response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
+    tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
 def list_sbom_releases(request: HttpRequest, sbom_id: str):
@@ -2691,6 +2724,7 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str):
 @router.post(
     "/sboms/{sbom_id}/releases",
     response={201: SBOMReleaseTaggingResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema):
     """Add an SBOM to multiple releases."""
@@ -2775,6 +2809,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 @router.delete(
     "/sboms/{sbom_id}/releases/{release_id}",
     response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
 )
 def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str):
     """Remove an SBOM from a specific release."""

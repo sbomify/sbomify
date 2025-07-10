@@ -28,7 +28,7 @@ from .schemas import (
 
 log = logging.getLogger(__name__)
 
-router = Router(tags=["SBOMs"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 item_type_map = {"component": Component, "project": Project, "product": Product}
 

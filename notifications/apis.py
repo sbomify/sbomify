@@ -7,7 +7,7 @@ from core.schemas import ErrorResponse
 from .schemas import NotificationSchema
 from .utils import get_notifications
 
-router = Router(tags=["notifications"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Notifications"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 @router.get(
