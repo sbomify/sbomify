@@ -6,23 +6,32 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
 
-from access_tokens.models import AccessToken
-from access_tokens.utils import create_personal_access_token
 from core.models import Component, Product, Release, ReleaseArtifact
+from core.tests.shared_fixtures import (
+    AuthenticationTestMixin,
+    authenticated_api_client,
+    get_api_headers,
+    guest_api_client,
+    team_with_business_plan,
+)
 from documents.models import Document
-from teams.models import Member, Team
+from teams.models import Team
 
 User = get_user_model()
 
 
 @pytest.mark.django_db
-class TestDocumentTaggingAPI:
+class TestDocumentTaggingAPI(AuthenticationTestMixin):
     """Test the document tagging API endpoints."""
 
-    def setup_method(self):
-        """Set up test data."""
-        # Create teams
-        self.team1 = Team.objects.create(name="Test Team 1")
+    @pytest.fixture(autouse=True)
+    def setup_test_data(self, team_with_business_plan, sample_user, guest_user):
+        """Set up test data using shared fixtures."""
+        self.team1 = team_with_business_plan
+        self.user = sample_user
+        self.guest_user = guest_user
+
+        # Create second team for cross-team testing
         self.team2 = Team.objects.create(name="Test Team 2")
 
         # Create products
@@ -58,37 +67,26 @@ class TestDocumentTaggingAPI:
             name="Test Doc 1 Manual", component=self.component1, document_type="manual", version="1.0"
         )
 
-        # Set up authenticated client
-        self.client = Client()
-
-        # Create test user and access token
-        self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        token_str = create_personal_access_token(self.user)
-        self.access_token = AccessToken.objects.create(
-            user=self.user, encoded_token=token_str, description="Test Token"
-        )
-
-        # Add user to team1 as admin
-        Member.objects.create(user=self.user, team=self.team1, role="admin")
-
-    def _get_headers(self):
-        """Get authentication headers."""
-        return {"HTTP_AUTHORIZATION": f"Bearer {self.access_token.encoded_token}"}
-
-    def test_list_document_releases_empty(self):
+    def test_list_document_releases_empty(self, authenticated_api_client):
         """Test listing releases for a document with no releases."""
-        response = self.client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **self._get_headers())
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
+        response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data == []
 
-    def test_list_document_releases_with_data(self):
+    def test_list_document_releases_with_data(self, authenticated_api_client):
         """Test listing releases for a document that is in releases."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add document to releases
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
         ReleaseArtifact.objects.create(release=self.release2, document=self.doc1_spec)
 
-        response = self.client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **self._get_headers())
+        response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
         assert len(data) == 2
@@ -98,15 +96,18 @@ class TestDocumentTaggingAPI:
         assert "v1.0" in release_names
         assert "v2.0" in release_names
 
-    def test_add_document_to_releases_new(self):
+    def test_add_document_to_releases_new(self, authenticated_api_client):
         """Test adding document to new releases."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         payload = {"release_ids": [str(self.release1.id), str(self.release2.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 201
@@ -119,19 +120,22 @@ class TestDocumentTaggingAPI:
         assert ReleaseArtifact.objects.filter(release=self.release1, document=self.doc1_spec).exists()
         assert ReleaseArtifact.objects.filter(release=self.release2, document=self.doc1_spec).exists()
 
-    def test_add_document_to_releases_with_replacement(self):
+    def test_add_document_to_releases_with_replacement(self, authenticated_api_client):
         """Test adding document to release that already has same document type from same component."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add first document to release
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
         # Now add second document of same type to same release
         payload = {"release_ids": [str(self.release1.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc2_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 201
@@ -149,19 +153,22 @@ class TestDocumentTaggingAPI:
         assert artifacts.count() == 1
         assert artifacts.first().document == self.doc2_spec
 
-    def test_add_document_to_releases_different_types_no_replacement(self):
+    def test_add_document_to_releases_different_types_no_replacement(self, authenticated_api_client):
         """Test adding documents of different types doesn't trigger replacement."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add specification document to release
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
         # Add manual document to same release - should not replace
         payload = {"release_ids": [str(self.release1.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_manual.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 201
@@ -174,167 +181,193 @@ class TestDocumentTaggingAPI:
         assert ReleaseArtifact.objects.filter(release=self.release1, document=self.doc1_spec).exists()
         assert ReleaseArtifact.objects.filter(release=self.release1, document=self.doc1_manual).exists()
 
-    def test_add_document_to_latest_release_forbidden(self):
+    def test_add_document_to_latest_release_forbidden(self, authenticated_api_client):
         """Test that adding document to 'latest' release is forbidden."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         payload = {"release_ids": [str(self.latest_release.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 400
         data = json.loads(response.content)
         assert "No artifacts were created or replaced" in data["detail"]
 
-    def test_add_document_to_releases_already_exists(self):
+    def test_add_document_to_releases_already_exists(self, authenticated_api_client):
         """Test adding same document to release it's already in."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add document to release first
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
         payload = {"release_ids": [str(self.release1.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 400
         data = json.loads(response.content)
         assert "No artifacts were created or replaced" in data["detail"]
 
-    def test_add_document_to_releases_different_team(self):
+    def test_add_document_to_releases_different_team(self, authenticated_api_client):
         """Test adding document to release from different team."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         payload = {"release_ids": [str(self.other_team_release.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 400
         data = json.loads(response.content)
         assert "No artifacts were created or replaced" in data["detail"]
 
-    def test_add_document_to_releases_nonexistent_release(self):
+    def test_add_document_to_releases_nonexistent_release(self, authenticated_api_client):
         """Test adding document to non-existent release."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         payload = {"release_ids": ["nonexistent-id"]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
 
         assert response.status_code == 400
         data = json.loads(response.content)
         assert "No artifacts were created or replaced" in data["detail"]
 
-    def test_add_document_to_releases_invalid_payload(self):
+    def test_add_document_to_releases_invalid_payload(self, authenticated_api_client):
         """Test adding document with invalid payload."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Missing release_ids
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps({}),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
         assert response.status_code == 422  # Schema validation error
 
         # Empty release_ids
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps({"release_ids": []}),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
         assert response.status_code == 422  # Schema validation error
 
-    def test_add_document_to_releases_no_permission(self):
+    def test_add_document_to_releases_no_permission(self, guest_api_client):
         """Test adding document without proper permissions."""
-        # Create token with guest role
-        guest_user = User.objects.create_user(username="guestuser", email="guest@example.com", password="guestpass")
-        guest_token_str = create_personal_access_token(guest_user)
-        guest_token = AccessToken.objects.create(
-            user=guest_user, encoded_token=guest_token_str, description="Guest Token"
-        )
+        client, access_token = guest_api_client
+        headers = get_api_headers(access_token)
 
         # Add guest user to team with guest role
-        Member.objects.create(user=guest_user, team=self.team1, role="guest")
+        from teams.models import Member
+        Member.objects.create(user=self.guest_user, team=self.team1, role="guest")
 
         payload = {"release_ids": [str(self.release1.id)]}
 
-        response = self.client.post(
+        response = client.post(
             f"/api/v1/documents/{self.doc1_spec.id}/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {guest_token.encoded_token}",
+            **headers,
         )
 
         assert response.status_code == 403
 
-    def test_remove_document_from_release(self):
+    def test_remove_document_from_release(self, authenticated_api_client):
         """Test removing document from release."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add document to release first
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
-        response = self.client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **self._get_headers()
+        response = client.delete(
+            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers
         )
 
         assert response.status_code == 204
         assert not ReleaseArtifact.objects.filter(release=self.release1, document=self.doc1_spec).exists()
 
-    def test_remove_document_from_release_not_in_release(self):
+    def test_remove_document_from_release_not_in_release(self, authenticated_api_client):
         """Test removing document from release when it's not in the release."""
-        response = self.client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **self._get_headers()
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
+        response = client.delete(
+            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.release1.id}", **headers
         )
 
         assert response.status_code == 404
 
-    def test_remove_document_from_latest_release_forbidden(self):
+    def test_remove_document_from_latest_release_forbidden(self, authenticated_api_client):
         """Test that removing document from 'latest' release is forbidden."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Add document to latest release first
         ReleaseArtifact.objects.create(release=self.latest_release, document=self.doc1_spec)
 
-        response = self.client.delete(
-            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.latest_release.id}", **self._get_headers()
+        response = client.delete(
+            f"/api/v1/documents/{self.doc1_spec.id}/releases/{self.latest_release.id}", **headers
         )
 
         assert response.status_code == 400
 
-    def test_document_not_found(self):
+    def test_document_not_found(self, authenticated_api_client):
         """Test endpoints with non-existent document."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
         # Test list releases
-        response = self.client.get("/api/v1/documents/nonexistent/releases", **self._get_headers())
+        response = client.get("/api/v1/documents/nonexistent/releases", **headers)
         assert response.status_code == 404
 
         # Test add to releases
         payload = {"release_ids": [str(self.release1.id)]}
-        response = self.client.post(
+        response = client.post(
             "/api/v1/documents/nonexistent/releases",
             data=json.dumps(payload),
             content_type="application/json",
-            **self._get_headers(),
+            **headers,
         )
         assert response.status_code == 404
 
         # Test remove from release
-        response = self.client.delete(
-            f"/api/v1/documents/nonexistent/releases/{self.release1.id}", **self._get_headers()
+        response = client.delete(
+            f"/api/v1/documents/nonexistent/releases/{self.release1.id}", **headers
         )
         assert response.status_code == 404
 
     def test_unauthenticated_access_public_document(self):
         """Test unauthenticated access to public document releases."""
+        client = Client()
+
         # Make component public
         self.component1.is_public = True
         self.component1.save()
@@ -346,12 +379,14 @@ class TestDocumentTaggingAPI:
         # Add document to release
         ReleaseArtifact.objects.create(release=self.release1, document=self.doc1_spec)
 
-        response = self.client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases")
+        response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases")
         assert response.status_code == 200
         data = json.loads(response.content)
         assert len(data) == 1
 
     def test_unauthenticated_access_private_document(self):
         """Test unauthenticated access to private document releases."""
-        response = self.client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases")
+        client = Client()
+
+        response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases")
         assert response.status_code == 403

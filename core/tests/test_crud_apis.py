@@ -13,6 +13,7 @@ from pytest_mock.plugin import MockerFixture
 from access_tokens.models import AccessToken
 from billing.models import BillingPlan
 from core.models import Component, Product, Project, User
+from core.tests.shared_fixtures import get_api_headers
 from sboms.models import ProductIdentifier
 from core.tests.fixtures import sample_user  # noqa: F401
 from sboms.tests.fixtures import (  # noqa: F401
@@ -59,7 +60,7 @@ def test_create_product_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -96,7 +97,7 @@ def test_create_product_duplicate_name(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 400
@@ -118,7 +119,7 @@ def test_list_products(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -144,7 +145,7 @@ def test_get_product_success(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -169,7 +170,7 @@ def test_get_product_not_found(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 404
@@ -194,7 +195,7 @@ def test_update_product_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -223,7 +224,7 @@ def test_delete_product_success(
 
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -256,7 +257,7 @@ def test_link_projects_to_product(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -290,7 +291,7 @@ def test_unlink_projects_from_product(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -329,7 +330,7 @@ def test_create_project_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -357,7 +358,7 @@ def test_list_projects(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -382,7 +383,7 @@ def test_get_project_success(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -414,7 +415,7 @@ def test_update_project_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -439,7 +440,7 @@ def test_delete_project_success(
 
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -472,7 +473,7 @@ def test_link_components_to_project(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -506,7 +507,7 @@ def test_unlink_components_from_project(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -545,7 +546,7 @@ def test_create_component_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -571,7 +572,7 @@ def test_list_components(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -596,7 +597,7 @@ def test_get_component_success(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -628,7 +629,7 @@ def test_update_component_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -658,7 +659,7 @@ def test_delete_component_success(
 
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -725,7 +726,7 @@ def test_crud_operations_require_billing_plan(
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         assert "No active billing plan" in response.json()["detail"]
@@ -755,7 +756,7 @@ def test_create_product_missing_required_fields(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 422  # Validation error
@@ -786,7 +787,7 @@ def test_update_nonexistent_item(
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 404
 
@@ -815,7 +816,7 @@ def test_patch_product_partial_update(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -844,7 +845,7 @@ def test_patch_product_public_status_only(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -873,7 +874,7 @@ def test_patch_product_empty_body(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -902,7 +903,7 @@ def test_patch_project_partial_update(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -932,7 +933,7 @@ def test_patch_project_metadata_only(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -962,7 +963,7 @@ def test_patch_component_partial_update(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -992,7 +993,7 @@ def test_patch_component_name_only(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -1026,7 +1027,7 @@ def test_patch_not_found(
             url,
             json.dumps({"name": "Test"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 404
 
@@ -1075,7 +1076,7 @@ def test_patch_validation_errors(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 422  # Validation error
 
@@ -1099,7 +1100,7 @@ def test_patch_component_empty_body(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -1133,7 +1134,7 @@ class TestDeleteOperationsAPI:
         url = reverse("api-1:delete_product", kwargs={"product_id": sample_product.id})
         response = client.delete(
             url,
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
 
         assert response.status_code == 204
@@ -1156,7 +1157,7 @@ class TestDeleteOperationsAPI:
         url = reverse("api-1:delete_project", kwargs={"project_id": sample_project.id})
         response = client.delete(
             url,
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
 
         assert response.status_code == 204
@@ -1179,7 +1180,7 @@ class TestDeleteOperationsAPI:
         url = reverse("api-1:delete_component", kwargs={"component_id": sample_component.id})
         response = client.delete(
             url,
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
 
         assert response.status_code == 204
@@ -1202,21 +1203,21 @@ class TestDeleteOperationsAPI:
         # Test deleting non-existent product
         response = client.delete(
             reverse("api-1:delete_product", kwargs={"product_id": "nonexistent"}),
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 404
 
         # Test deleting non-existent project
         response = client.delete(
             reverse("api-1:delete_project", kwargs={"project_id": "nonexistent"}),
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 404
 
         # Test deleting non-existent component
         response = client.delete(
             reverse("api-1:delete_component", kwargs={"component_id": "nonexistent"}),
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 404
 
@@ -1249,7 +1250,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 201
 
@@ -1258,7 +1259,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
@@ -1290,7 +1291,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 201
 
@@ -1299,7 +1300,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
@@ -1331,7 +1332,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 201
 
@@ -1340,7 +1341,7 @@ class TestDuplicateNamesAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
@@ -1391,7 +1392,7 @@ class TestBillingPlanLimitsAPI:
                 url,
                 json.dumps(payload),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+                **get_api_headers(sample_access_token),
             )
             assert response.status_code == 201
 
@@ -1401,7 +1402,7 @@ class TestBillingPlanLimitsAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         error_detail = response.json()["detail"]
@@ -1437,7 +1438,7 @@ class TestBillingPlanLimitsAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 201
 
@@ -1447,7 +1448,7 @@ class TestBillingPlanLimitsAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         error_detail = response.json()["detail"]
@@ -1484,7 +1485,7 @@ class TestBillingPlanLimitsAPI:
                 url,
                 json.dumps(payload),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+                **get_api_headers(sample_access_token),
             )
             assert response.status_code == 201
 
@@ -1494,7 +1495,7 @@ class TestBillingPlanLimitsAPI:
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         error_detail = response.json()["detail"]
@@ -1529,7 +1530,7 @@ class TestBillingPlanLimitsAPI:
                 reverse("api-1:create_product"),
                 json.dumps({"name": f"Product {i+1}"}),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+                **get_api_headers(sample_access_token),
             )
             assert response.status_code == 201
 
@@ -1538,7 +1539,7 @@ class TestBillingPlanLimitsAPI:
                 reverse("api-1:create_project"),
                 json.dumps({"name": f"Project {i+1}", "metadata": {}}),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+                **get_api_headers(sample_access_token),
             )
             assert response.status_code == 201
 
@@ -1547,7 +1548,7 @@ class TestBillingPlanLimitsAPI:
                 reverse("api-1:create_component"),
                 json.dumps({"name": f"Component {i+1}", "metadata": {}}),
                 content_type="application/json",
-                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+                **get_api_headers(sample_access_token),
             )
             assert response.status_code == 201
 
@@ -1578,7 +1579,7 @@ class TestBillingPlanLimitsAPI:
             reverse("api-1:create_product"),
             json.dumps({"name": "Test Product"}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         assert "No active billing plan" in response.json()["detail"]
@@ -1588,7 +1589,7 @@ class TestBillingPlanLimitsAPI:
             reverse("api-1:create_project"),
             json.dumps({"name": "Test Project", "metadata": {}}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         assert "No active billing plan" in response.json()["detail"]
@@ -1598,7 +1599,7 @@ class TestBillingPlanLimitsAPI:
             reverse("api-1:create_component"),
             json.dumps({"name": "Test Component", "metadata": {}}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 403
         assert "No active billing plan" in response.json()["detail"]
@@ -1628,7 +1629,7 @@ def test_create_product_identifier_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -1673,7 +1674,7 @@ def test_create_product_identifier_duplicate_value(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 400
@@ -1709,7 +1710,7 @@ def test_list_product_identifiers_authenticated(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -1804,7 +1805,7 @@ def test_update_product_identifier_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -1841,7 +1842,7 @@ def test_delete_product_identifier_success(
 
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -1889,7 +1890,7 @@ def test_bulk_update_product_identifiers_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -1916,10 +1917,19 @@ def test_product_identifier_permissions(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product identifiers."""
-    from teams.models import Member
+    from access_tokens.utils import create_personal_access_token
+    from access_tokens.models import AccessToken
 
     # Use the provided guest member
     guest_member = sample_team_with_guest_member
+
+    # Create access token for the guest user
+    guest_token_str = create_personal_access_token(guest_member.user)
+    guest_access_token = AccessToken.objects.create(
+        user=guest_member.user,
+        encoded_token=guest_token_str,
+        description="Guest Test API Token"
+    )
 
     # Create product
     product = Product.objects.create(
@@ -1932,7 +1942,7 @@ def test_product_identifier_permissions(
 
     payload = {"identifier_type": "sku", "value": "SKU123456"}
 
-    # Test with guest user - should be forbidden
+    # Test with guest user - should be forbidden due to role permissions
     assert client.login(username=guest_member.user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, guest_member.team, guest_member.user)
 
@@ -1940,10 +1950,14 @@ def test_product_identifier_permissions(
         url,
         json.dumps(payload),
         content_type="application/json",
+        **get_api_headers(guest_access_token),
     )
 
     assert response.status_code == 403
     assert "Only owners and admins" in response.json()["detail"]
+
+    # Clean up
+    guest_access_token.delete()
 
 
 @pytest.mark.django_db
@@ -1966,7 +1980,7 @@ def test_product_identifier_not_found(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 404
@@ -1975,7 +1989,7 @@ def test_product_identifier_not_found(
     # Test delete non-existent identifier
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 404
@@ -2060,7 +2074,7 @@ def test_product_with_identifiers_in_response(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2106,7 +2120,7 @@ def test_product_identifier_billing_restrictions(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 403
@@ -2130,7 +2144,7 @@ def test_product_identifier_billing_restrictions(
         update_url,
         json.dumps(update_payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 403
@@ -2139,7 +2153,7 @@ def test_product_identifier_billing_restrictions(
     # Test delete - should be forbidden for community plan
     response = client.delete(
         update_url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 403
@@ -2157,7 +2171,7 @@ def test_product_identifier_billing_restrictions(
         url,
         json.dumps(bulk_payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 403
@@ -2188,7 +2202,7 @@ def test_product_identifier_business_plan_allowed(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -2220,7 +2234,7 @@ def test_product_identifier_enterprise_plan_allowed(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -2256,7 +2270,7 @@ def test_product_identifier_billing_disabled(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -2298,7 +2312,7 @@ def test_product_identifier_public_access(
             url,
             json.dumps(payload),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
         assert response.status_code == 201
 
@@ -2410,7 +2424,7 @@ def test_create_product_link_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -2466,7 +2480,7 @@ def test_create_product_link_duplicate_url(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 400
@@ -2506,7 +2520,7 @@ def test_list_product_links_authenticated(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2611,7 +2625,7 @@ def test_update_product_link_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2654,7 +2668,7 @@ def test_delete_product_link_success(
 
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -2721,7 +2735,7 @@ def test_bulk_update_product_links_success(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2748,10 +2762,19 @@ def test_product_link_permissions(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     """Test that only owners and admins can manage product links."""
-    from teams.models import Member
+    from access_tokens.utils import create_personal_access_token
+    from access_tokens.models import AccessToken
 
     # Use the provided guest member
     guest_member = sample_team_with_guest_member
+
+    # Create access token for the guest user
+    guest_token_str = create_personal_access_token(guest_member.user)
+    guest_access_token = AccessToken.objects.create(
+        user=guest_member.user,
+        encoded_token=guest_token_str,
+        description="Guest Test API Token"
+    )
 
     # Create product
     product = Product.objects.create(
@@ -2769,7 +2792,7 @@ def test_product_link_permissions(
         "description": "Test description"
     }
 
-    # Test with guest user - should be forbidden
+    # Test with guest user - should be forbidden due to role permissions
     assert client.login(username=guest_member.user.username, password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, guest_member.team, guest_member.user)
 
@@ -2777,10 +2800,14 @@ def test_product_link_permissions(
         url,
         json.dumps(payload),
         content_type="application/json",
+        **get_api_headers(guest_access_token),
     )
 
     assert response.status_code == 403
     assert "Only owners and admins" in response.json()["detail"]
+
+    # Clean up
+    guest_access_token.delete()
 
 
 @pytest.mark.django_db
@@ -2808,7 +2835,7 @@ def test_product_link_not_found(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 404
@@ -2817,7 +2844,7 @@ def test_product_link_not_found(
     # Test delete non-existent link
     response = client.delete(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 404
@@ -2908,7 +2935,7 @@ def test_product_with_links_in_response(
 
     response = client.get(
         url,
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2961,7 +2988,7 @@ def test_product_link_no_billing_restrictions(
         url,
         json.dumps(payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 201
@@ -2981,7 +3008,7 @@ def test_product_link_no_billing_restrictions(
         f"{url}/{link_id}",
         json.dumps(update_payload),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -2990,7 +3017,7 @@ def test_product_link_no_billing_restrictions(
     # Test delete - should also succeed
     response = client.delete(
         f"{url}/{link_id}",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204

@@ -12,7 +12,7 @@ from pytest_mock.plugin import MockerFixture
 
 from access_tokens.models import AccessToken
 from billing.models import BillingPlan
-from core.tests.fixtures import sample_user  # noqa: F401
+from core.tests.shared_fixtures import get_api_headers, sample_user
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from teams.models import Member
 
@@ -92,7 +92,7 @@ def test_sbom_api_get_user_items(
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     response: HttpResponse = client.get(
-        uri, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        uri, content_type="application/json", **get_api_headers(sample_access_token)
     )
 
     assert response.status_code == 200
@@ -104,7 +104,7 @@ def test_sbom_api_get_user_items(
 
     uri = reverse("api-1:get_user_items", kwargs={"item_type": "project"})
     response: HttpResponse = client.get(
-        uri, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        uri, content_type="application/json", **get_api_headers(sample_access_token)
     )
 
     assert response.status_code == 200
@@ -116,7 +116,7 @@ def test_sbom_api_get_user_items(
 
     uri = reverse("api-1:get_user_items", kwargs={"item_type": "component"})
     response: HttpResponse = client.get(
-        uri, content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}"
+        uri, content_type="application/json", **get_api_headers(sample_access_token)
     )
 
     assert response.status_code == 200
@@ -147,7 +147,7 @@ def test_sbom_upload_api_spdx(
         url,
         data=sbom_data,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     # Assert the response status code and data
@@ -184,7 +184,7 @@ def test_sbom_upload_api_cyclonedx(
         url,
         data=sbom_data,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     # Assert the response status code and data
@@ -213,7 +213,7 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -246,7 +246,7 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
         url,
         json.dumps(component_metadata),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -255,7 +255,7 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -306,7 +306,7 @@ def test_component_copy_metadata_api(
     response = client.get(
         source_url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     source_metadata = response.json()
@@ -320,7 +320,7 @@ def test_component_copy_metadata_api(
         target_url,
         json.dumps(metadata_to_copy),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -377,7 +377,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     response = client.post(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
         data=json.dumps(sbom_metadata),
     )
 
@@ -413,7 +413,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     response = client.post(
         url + "?override_metadata=true&sbom_version=1.1.1&override_name=true",
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
         data=json.dumps(sbom_metadata),
     )
 
@@ -443,7 +443,7 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
     response = client.post(
         url + "?override_metadata=true&sbom_version=1.1.1&override_name=true",
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
         data=json.dumps(sbom_metadata),
     )
 
@@ -492,7 +492,7 @@ def test_metadata_enrichment_on_no_component_in_metadata(
     response = client.post(
         url + "?sbom_version=1.1.1&override_name=true",
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
         data=json.dumps(sbom_metadata),
     )
 
@@ -520,7 +520,7 @@ def test_get_dashboard_summary_authenticated_no_data(
     response = client.get(
         url,
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -569,7 +569,7 @@ def test_get_dashboard_summary_authenticated_with_data(
     response = client.get(
         url,
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -615,7 +615,7 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
         url,
         json.dumps(component_metadata),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -624,7 +624,7 @@ def test_component_metadata_license_expressions(sample_component: Component, sam
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -673,7 +673,7 @@ def test_component_metadata_supplier_url_handling(
         url,
         json.dumps(metadata_with_url),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -682,7 +682,7 @@ def test_component_metadata_supplier_url_handling(
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -719,7 +719,7 @@ def test_component_metadata_patch_partial_update(sample_component: Component, sa
         url,
         json.dumps(initial_metadata),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 204
 
@@ -730,7 +730,7 @@ def test_component_metadata_patch_partial_update(sample_component: Component, sa
         url,
         json.dumps(partial_update),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 204
 
@@ -738,7 +738,7 @@ def test_component_metadata_patch_partial_update(sample_component: Component, sa
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     response_data = response.json()
@@ -776,7 +776,7 @@ def test_component_metadata_author_information(sample_component: Component, samp
         url,
         json.dumps(metadata_with_authors),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -785,7 +785,7 @@ def test_component_metadata_author_information(sample_component: Component, samp
     response = client.get(
         url,
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200
@@ -960,7 +960,7 @@ def test_delete_sbom_api(
     # Test with valid token and permissions
     response = client.delete(
         url,
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 204
@@ -972,7 +972,7 @@ def test_delete_sbom_api(
     # Test deleting non-existent SBOM
     response = client.delete(
         url,
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 404
 
@@ -990,6 +990,7 @@ def test_delete_sbom_api_forbidden(
 
     from access_tokens.models import AccessToken
     from access_tokens.utils import create_personal_access_token
+    from core.tests.shared_fixtures import get_api_headers
 
     User = get_user_model()
     other_user = User.objects.create_user(username="otheruser", password="password")
@@ -1001,7 +1002,7 @@ def test_delete_sbom_api_forbidden(
 
     response = client.delete(
         url,
-        headers={"Authorization": f"Bearer {other_token.encoded_token}"},
+        **get_api_headers(other_token),
     )
 
     assert response.status_code == 403
@@ -1059,7 +1060,7 @@ def test_get_dashboard_summary_with_product_filter(
     response = client.get(
         f"{url}?product_id={product1.id}",
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -1111,7 +1112,7 @@ def test_get_dashboard_summary_with_project_filter(
     response = client.get(
         f"{url}?project_id={project1.id}",
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     data = response.json()
@@ -1172,7 +1173,7 @@ def test_patch_public_status_billing_plan_restrictions(
             uri,
             json.dumps({"is_public": True}),
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            **get_api_headers(sample_access_token),
         )
 
     # Try to make component private - should fail
@@ -1180,7 +1181,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1190,7 +1191,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1200,7 +1201,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
@@ -1210,7 +1211,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1225,7 +1226,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200, f"Failed for product: {response.content}"
     assert response.json()["is_public"] is False
@@ -1235,7 +1236,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200, f"Failed for project: {response.content}"
     assert response.json()["is_public"] is False
@@ -1245,7 +1246,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200, f"Failed for component: {response.content}"
     assert response.json()["is_public"] is False
@@ -1255,7 +1256,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1264,7 +1265,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1273,7 +1274,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -1288,7 +1289,7 @@ def test_patch_public_status_billing_plan_restrictions(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1298,7 +1299,7 @@ def test_patch_public_status_billing_plan_restrictions(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1308,7 +1309,7 @@ def test_patch_public_status_billing_plan_restrictions(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
-        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        **get_api_headers(sample_access_token),
     )
     assert response.status_code == 200
     assert response.json()["is_public"] is False
@@ -1363,7 +1364,7 @@ def test_community_plan_restriction_bypassed_when_billing_disabled(sample_compon
         url,
         json.dumps({"is_public": True}),
         content_type="application/json",
-        headers={"Authorization": f"Bearer {sample_access_token.encoded_token}"},
+        **get_api_headers(sample_access_token),
     )
 
     assert response.status_code == 200

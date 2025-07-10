@@ -15,69 +15,61 @@ from teams.models import Member, Team
 @pytest.fixture
 def community_plan() -> BillingPlan:
     """Free community plan fixture."""
-    return BillingPlan.objects.create(
+    plan, _ = BillingPlan.objects.get_or_create(
         key="community",
-        name="Community",
-        description="Free plan for small teams",
-        max_products=1,
-        max_projects=1,
-        max_components=5,
-        stripe_product_id=None,
-        stripe_price_monthly_id=None,
-        stripe_price_annual_id=None,
+        defaults={
+            "name": "Community",
+            "description": "Free plan for small teams",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "stripe_product_id": None,
+            "stripe_price_monthly_id": None,
+            "stripe_price_annual_id": None,
+        }
     )
+    return plan
 
 
 @pytest.fixture
 def business_plan() -> BillingPlan:
     """Business plan fixture."""
-    return BillingPlan.objects.create(
+    plan, _ = BillingPlan.objects.get_or_create(
         key="business",
-        name="Business",
-        description="For growing teams",
-        max_products=10,
-        max_projects=20,
-        max_components=100,
-        stripe_product_id="prod_test_business",
-        stripe_price_monthly_id="price_test_business_monthly",  # $199/month
-        stripe_price_annual_id="price_test_business_annual",  # $159 * 12/year
+        defaults={
+            "name": "Business",
+            "description": "For growing teams",
+            "max_products": 10,
+            "max_projects": 20,
+            "max_components": 100,
+            "stripe_product_id": "prod_test_business",
+            "stripe_price_monthly_id": "price_test_business_monthly",  # $199/month
+            "stripe_price_annual_id": "price_test_business_annual",  # $159 * 12/year
+        }
     )
+    return plan
 
 
 @pytest.fixture
 def enterprise_plan() -> BillingPlan:
     """Enterprise plan fixture with unlimited resources."""
-    return BillingPlan.objects.create(
+    plan, _ = BillingPlan.objects.get_or_create(
         key="enterprise",
-        name="Enterprise",
-        description="For large organizations",
-        max_products=None,
-        max_projects=None,
-        max_components=None,
-        stripe_product_id="prod_test_enterprise",
-        stripe_price_monthly_id="price_test_enterprise_monthly",
-        stripe_price_annual_id="price_test_enterprise_annual",
+        defaults={
+            "name": "Enterprise",
+            "description": "For large organizations",
+            "max_products": None,
+            "max_projects": None,
+            "max_components": None,
+            "stripe_product_id": "prod_test_enterprise",
+            "stripe_price_monthly_id": "price_test_enterprise_monthly",
+            "stripe_price_annual_id": "price_test_enterprise_annual",
+        }
     )
+    return plan
 
 
-@pytest.fixture
-def team_with_business_plan(sample_user: AbstractBaseUser, business_plan: BillingPlan) -> Team:  # noqa: F811
-    """Team fixture with active business plan subscription."""
-    team = Team.objects.create(
-        name="Test Business Team",
-        key="test_business_team",
-        billing_plan=business_plan.key,
-        billing_plan_limits={
-            "max_products": business_plan.max_products,
-            "max_projects": business_plan.max_projects,
-            "max_components": business_plan.max_components,
-            "stripe_customer_id": "c_test_business_team",
-            "stripe_subscription_id": "sub_test123",
-            "subscription_status": "active",
-        },
-    )
-    Member.objects.create(team=team, user=sample_user, role="owner")
-    return team
+# Removed - this fixture was conflicting with the shared fixtures version
 
 
 @pytest.fixture(autouse=True)

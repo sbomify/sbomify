@@ -13,13 +13,13 @@ from .fixtures import (  # noqa: F401
     community_plan,
     business_plan,
     enterprise_plan,
-    team_with_business_plan,
     test_product,
     multiple_products,
     test_project,
     multiple_projects,
     multiple_components,
 )
+from core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 
 
 @pytest.mark.django_db

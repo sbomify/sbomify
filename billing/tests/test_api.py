@@ -16,8 +16,8 @@ from billing.tests.fixtures import (  # noqa: F401
     enterprise_plan,
     mock_stripe,
     sample_user,
-    team_with_business_plan,
 )
+from core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sboms.models import SBOM, Component
 
 # Import SBOM-related fixtures from sboms app

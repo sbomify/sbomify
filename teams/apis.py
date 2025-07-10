@@ -16,6 +16,7 @@ from sbomify.logging import getLogger
 
 from .models import Member, Team
 from .schemas import BrandingInfo, BrandingInfoWithUrls, TeamPatchSchema, TeamResponseSchema, TeamUpdateSchema
+from .utils import get_user_teams
 
 logger = getLogger(__name__)
 
@@ -32,7 +33,7 @@ def get_team_branding(request: HttpRequest, team_key: str):
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 400, {"detail": "Invalid team key"}
+        return 404, {"detail": "Team not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
@@ -154,7 +155,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 400, {"detail": "Invalid team key"}
+        return 404, {"detail": "Team not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
@@ -194,7 +195,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 400, {"detail": "Invalid team key"}
+        return 404, {"detail": "Team not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
@@ -226,3 +227,59 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
         return 400, {"detail": str(e)}
+
+
+@router.get("/", response={200: list[TeamResponseSchema], 403: ErrorResponse})
+def list_teams(request: HttpRequest):
+    """List all teams for the current user."""
+    try:
+        user_teams = get_user_teams(request.user)
+        teams_list = []
+
+        for team_key, team_data in user_teams.items():
+            try:
+                team = Team.objects.get(id=team_data["id"])
+                teams_list.append(
+                    TeamResponseSchema(
+                        key=team.key,
+                        name=team.name,
+                        created_at=team.created_at.isoformat(),
+                        has_completed_wizard=team.has_completed_wizard,
+                        billing_plan=team.billing_plan,
+                    )
+                )
+            except Team.DoesNotExist:
+                continue
+
+        return 200, teams_list
+    except Exception as e:
+        logger.error(f"Error listing teams for user {request.user.id}: {e}")
+        return 403, {"detail": "Unable to retrieve teams"}
+
+
+@router.get(
+    "/{team_key}", response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse}
+)
+def get_team(request: HttpRequest, team_key: str):
+    """Get team information by team key."""
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Team not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is a member of this team
+    if not Member.objects.filter(user=request.user, team=team).exists():
+        return 403, {"detail": "Access denied"}
+
+    return 200, TeamResponseSchema(
+        key=team.key,
+        name=team.name,
+        created_at=team.created_at.isoformat(),
+        has_completed_wizard=team.has_completed_wizard,
+        billing_plan=team.billing_plan,
+    )
