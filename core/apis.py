@@ -105,6 +105,28 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
     return None
 
 
+def _ensure_latest_release_exists(product: "Product") -> None:
+    """Ensure a latest release exists for the product.
+
+    This function is called when users access products to proactively create
+    latest releases if they don't exist. Failures are logged but don't
+    interrupt the main request flow.
+
+    Args:
+        product: The product to ensure has a latest release
+    """
+    try:
+        # Import here to avoid circular imports
+        from core.models import Release
+
+        # This will create the latest release if it doesn't exist
+        Release.get_or_create_latest_release(product)
+
+    except Exception as e:
+        # Log the error but don't fail the main request
+        log.warning(f"Failed to ensure latest release for product {product.id}: {e}")
+
+
 def _build_item_response(item, item_type: str):
     """Build a standardized response for items."""
     base_response = {
@@ -308,6 +330,11 @@ def list_products(request: HttpRequest):
 
     try:
         products = Product.objects.filter(team_id=team_id).prefetch_related("projects", "identifiers", "links")
+
+        # Ensure latest releases exist for all products when users view their dashboard
+        for product in products:
+            _ensure_latest_release_exists(product)
+
         return 200, [_build_item_response(product, "product") for product in products]
     except Exception as e:
         log.error(f"Error listing products: {e}")
@@ -326,6 +353,9 @@ def get_product(request: HttpRequest, product_id: str):
         product = Product.objects.prefetch_related("projects", "identifiers", "links").get(pk=product_id)
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found"}
+
+    # Ensure latest release exists when users access the product
+    _ensure_latest_release_exists(product)
 
     # If product is public, allow unauthenticated access
     if product.is_public:
@@ -1965,6 +1995,9 @@ def list_releases(request: HttpRequest, product_id: str):
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found"}
 
+    # Ensure latest release exists when users access releases
+    _ensure_latest_release_exists(product)
+
     # If product is public, allow unauthenticated access
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
@@ -2092,10 +2125,17 @@ def patch_release(request: HttpRequest, product_id: str, release_id: str, payloa
                     )
                 }
 
-            # Update only provided fields
+            # Update only fields that have actually changed to avoid unnecessary unique constraint checks
+            changed = False
             for field, value in update_data.items():
-                setattr(release, field, value)
-            release.save()
+                current_value = getattr(release, field)
+                if current_value != value:
+                    setattr(release, field, value)
+                    changed = True
+
+            # Only save if something actually changed
+            if changed:
+                release.save()
 
         return 200, _build_release_response(release, include_artifacts=True)
 
