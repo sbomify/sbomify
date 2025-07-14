@@ -148,6 +148,7 @@ services:
     entrypoint: /bin/sh /keycloak-bootstrap.sh
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
+      KEYCLOAK_DEV_MODE: "false"
 
   sbomify-redis:
     image: redis:7-alpine

@@ -21,6 +21,12 @@ if ! /opt/keycloak/bin/kcadm.sh get "realms/$REALM" > /dev/null 2>&1; then
     -s enabled=true
 fi
 
+# Disable SSL requirement for development (only in dev mode)
+if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+  /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s sslRequired=NONE
+  echo "SSL requirement disabled for development"
+fi
+
 # Create client if it doesn't exist
 if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID" | grep -q '"id"'; then
   /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
@@ -42,4 +48,41 @@ fi
 # Always enable user registration after all other steps
 /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true
 
+# Create test users for development (only in dev mode)
+if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+  # Create test user if it doesn't exist
+  if ! /opt/keycloak/bin/kcadm.sh get users -r "$REALM" -q username=jdoe | grep -q '"id"'; then
+    /opt/keycloak/bin/kcadm.sh create users -r "$REALM" \
+      -s username=jdoe \
+      -s firstName=John \
+      -s lastName=Doe \
+      -s email=jdoe@example.com \
+      -s enabled=true
+    echo "Created test user: jdoe"
+  fi
+
+  # Set password for test user
+  /opt/keycloak/bin/kcadm.sh set-password -r "$REALM" --username jdoe --new-password foobar123
+
+  # Create second test user if it doesn't exist
+  if ! /opt/keycloak/bin/kcadm.sh get users -r "$REALM" -q username=ssmith | grep -q '"id"'; then
+    /opt/keycloak/bin/kcadm.sh create users -r "$REALM" \
+      -s username=ssmith \
+      -s firstName=Steve \
+      -s lastName=Smith \
+      -s email=ssmith@example.com \
+      -s enabled=true
+    echo "Created test user: ssmith"
+  fi
+
+  # Set password for second test user
+  /opt/keycloak/bin/kcadm.sh set-password -r "$REALM" --username ssmith --new-password foobar123
+fi
+
 echo "Keycloak client secret for $CLIENT_ID: $CLIENT_SECRET"
+
+if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+  echo "Development test users created:"
+  echo "  - jdoe / foobar123 (John Doe)"
+  echo "  - ssmith / foobar123 (Steve Smith)"
+fi
