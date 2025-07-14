@@ -7,154 +7,197 @@
     :defaultExpanded="true"
     storageKey="documents-table"
   >
-    <!-- Table content -->
-    <div v-if="error" class="alert alert-danger">
+    <!-- Loading state -->
+    <div v-if="isLoading" class="text-center py-4">
+      <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+      <p class="mt-2 text-muted">Loading documents...</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="alert alert-danger">
       {{ error }}
     </div>
 
+    <!-- Empty state -->
     <div v-else-if="!hasData" class="text-center text-muted py-4">
       <i class="fas fa-file-alt fa-3x mb-3"></i>
       <p>No documents found for this component.</p>
     </div>
 
-    <div v-else class="data-table">
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Artifact Type</th>
-            <th scope="col">Type</th>
-            <th scope="col">Version</th>
-            <th scope="col">Created</th>
-            <th scope="col">Releases</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in parsedDocumentsData" :key="item.document.id">
-            <td>
-              <a :href="getDocumentDetailUrl(item.document.id)" title="Details" class="icon-link">
-                {{ item.document.name }}
-              </a>
-            </td>
-            <td>Document</td>
-            <td>
-              <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
-            </td>
-            <td :title="item.document.version">
-              {{ truncateText(item.document.version, 20) }}
-            </td>
-            <td>{{ formatDate(item.document.created_at) }}</td>
-            <td>
-              <div v-if="item.releases && item.releases.length > 0" class="release-badges">
-                <span
-                  v-for="release in item.releases"
-                  :key="release.id"
-                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
-                  :title="`${release.product_name} - ${release.name}`"
-                >
-                  {{ release.name }}
-                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
-                </span>
-              </div>
-              <span v-else class="text-muted">None</span>
-            </td>
-            <td>
-              <div class="d-flex gap-2">
-                <a :href="`/api/v1/documents/${item.document.id}/download`" title="Download" class="btn btn-outline-primary btn-sm action-btn">
-                  <i class="fas fa-download"></i>
+    <!-- Data table -->
+    <div v-else>
+      <div class="data-table">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Artifact Type</th>
+              <th scope="col">Type</th>
+              <th scope="col">Version</th>
+              <th scope="col">Created</th>
+              <th scope="col">Releases</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in documentsData" :key="item.document.id">
+              <td>
+                <a :href="getDocumentDetailUrl(item.document.id)" title="Details" class="icon-link">
+                  {{ item.document.name }}
                 </a>
-                <button
-                  v-if="hasCrudPermissions"
-                  class="btn btn-sm btn-outline-danger action-btn"
-                  title="Delete Document"
-                  :disabled="isDeleting === item.document.id"
-                  @click="confirmDelete(item.document)"
-                >
-                  <i v-if="isDeleting === item.document.id" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td>Document</td>
+              <td>
+                <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
+              </td>
+              <td :title="item.document.version">
+                {{ truncateText(item.document.version, 20) }}
+              </td>
+              <td>{{ formatDate(item.document.created_at) }}</td>
+              <td>
+                <div v-if="item.releases && item.releases.length > 0" class="release-tags">
+                  <span
+                    v-for="release in item.releases.slice(0, 2)"
+                    :key="release.id"
+                    class="badge bg-primary-subtle text-primary me-1 mb-1"
+                    :title="`${release.product_name} - ${release.name}`"
+                  >
+                    {{ truncateText(release.name, 15) }}
+                  </span>
+                  <span
+                    v-if="item.releases.length > 2"
+                    class="badge bg-secondary-subtle text-secondary"
+                    :title="`${item.releases.length - 2} more releases`"
+                  >
+                    +{{ item.releases.length - 2 }}
+                  </span>
+                </div>
+                <span v-else class="text-muted">None</span>
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a :href="getDocumentDownloadUrl(item.document.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
+                    <i class="fas fa-download"></i>
+                  </a>
+                  <button
+                    v-if="hasCrudPermissions"
+                    class="btn btn-sm btn-outline-danger action-btn"
+                    title="Delete Document"
+                    :disabled="isDeleting === item.document.id"
+                    @click="confirmDelete(item.document)"
+                  >
+                    <i v-if="isDeleting === item.document.id" class="fas fa-spinner fa-spin"></i>
+                    <i v-else class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <PaginationControls
+        v-if="paginationMeta && paginationMeta.total_pages > 1"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total-pages="paginationMeta.total_pages"
+        :total-items="paginationMeta.total"
+        :show-page-size-selector="true"
+      />
     </div>
   </StandardCard>
 
   <div v-else>
-    <!-- Table content (same as above but without StandardCard wrapper) -->
-    <div v-if="error" class="alert alert-danger">
+    <!-- Public view without StandardCard wrapper -->
+    <!-- Loading state -->
+    <div v-if="isLoading" class="text-center py-4">
+      <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+      <p class="mt-2 text-muted">Loading documents...</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="alert alert-danger">
       {{ error }}
     </div>
 
+    <!-- Empty state -->
     <div v-else-if="!hasData" class="text-center text-muted py-4">
       <i class="fas fa-file-alt fa-3x mb-3"></i>
       <p>No documents found for this component.</p>
     </div>
 
-    <div v-else class="data-table">
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Artifact Type</th>
-            <th scope="col">Type</th>
-            <th scope="col">Version</th>
-            <th scope="col">Created</th>
-            <th scope="col">Releases</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in parsedDocumentsData" :key="item.document.id">
-            <td>
-              <a :href="getDocumentDetailUrl(item.document.id)" title="Details" class="icon-link">
-                {{ item.document.name }}
-              </a>
-            </td>
-            <td>Document</td>
-            <td>
-              <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
-            </td>
-            <td :title="item.document.version">
-              {{ truncateText(item.document.version, 20) }}
-            </td>
-            <td>{{ formatDate(item.document.created_at) }}</td>
-            <td>
-              <div v-if="item.releases && item.releases.length > 0" class="release-badges">
-                <span
-                  v-for="release in item.releases"
-                  :key="release.id"
-                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
-                  :title="`${release.product_name} - ${release.name}`"
-                >
-                  {{ release.name }}
-                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
-                </span>
-              </div>
-              <span v-else class="text-muted">None</span>
-            </td>
-            <td>
-              <div class="d-flex gap-2">
-                <a :href="`/api/v1/documents/${item.document.id}/download`" title="Download" class="btn btn-outline-primary btn-sm action-btn">
-                  <i class="fas fa-download"></i>
+    <!-- Data table -->
+    <div v-else>
+      <div class="data-table">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Artifact Type</th>
+              <th scope="col">Type</th>
+              <th scope="col">Version</th>
+              <th scope="col">Created</th>
+              <th scope="col">Releases</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in documentsData" :key="item.document.id">
+              <td>
+                <a :href="getDocumentDetailUrl(item.document.id)" title="Details" class="icon-link">
+                  {{ item.document.name }}
                 </a>
-                <button
-                  v-if="hasCrudPermissions"
-                  class="btn btn-sm btn-outline-danger action-btn"
-                  title="Delete Document"
-                  :disabled="isDeleting === item.document.id"
-                  @click="confirmDelete(item.document)"
-                >
-                  <i v-if="isDeleting === item.document.id" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td>Document</td>
+              <td>
+                <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
+              </td>
+              <td :title="item.document.version">
+                {{ truncateText(item.document.version, 20) }}
+              </td>
+              <td>{{ formatDate(item.document.created_at) }}</td>
+              <td>
+                <div v-if="item.releases && item.releases.length > 0" class="release-tags">
+                  <span
+                    v-for="release in item.releases.slice(0, 2)"
+                    :key="release.id"
+                    class="badge bg-primary-subtle text-primary me-1 mb-1"
+                    :title="`${release.product_name} - ${release.name}`"
+                  >
+                    {{ truncateText(release.name, 15) }}
+                  </span>
+                  <span
+                    v-if="item.releases.length > 2"
+                    class="badge bg-secondary-subtle text-secondary"
+                    :title="`${item.releases.length - 2} more releases`"
+                  >
+                    +{{ item.releases.length - 2 }}
+                  </span>
+                </div>
+                <span v-else class="text-muted">None</span>
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a :href="getDocumentDownloadUrl(item.document.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
+                    <i class="fas fa-download"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <PaginationControls
+        v-if="paginationMeta && paginationMeta.total_pages > 1"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total-pages="paginationMeta.total_pages"
+        :total-items="paginationMeta.total"
+        :show-page-size-selector="true"
+      />
     </div>
   </div>
 
@@ -173,10 +216,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import $axios from '../../../core/js/utils'
 import { showSuccess, showError } from '../../../core/js/alerts'
+import { isAxiosError } from 'axios'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
+import PaginationControls from '../../../core/js/components/PaginationControls.vue'
 
 interface Document {
   id: string
@@ -203,30 +249,49 @@ interface DocumentData {
   releases: Release[]
 }
 
+interface PaginationMeta {
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
+}
+
+interface PaginatedResponse {
+  items: DocumentData[]
+  pagination: PaginationMeta
+}
+
 const props = defineProps<{
   documentsDataElementId?: string
   componentId?: string
-  hasCrudPermissions?: boolean
+  hasCrudPermissions?: boolean | string
   isPublicView?: boolean
 }>()
 
-const parsedDocumentsData = ref<DocumentData[]>([])
+// State
+const documentsData = ref<DocumentData[]>([])
+const isLoading = ref(false)
 const error = ref<string | null>(null)
+const paginationMeta = ref<PaginationMeta | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(15)
 const showDeleteModal = ref(false)
 const documentToDelete = ref<Document | null>(null)
 const isDeleting = ref<string | null>(null)
 
-const hasData = computed(() => parsedDocumentsData.value.length > 0)
-
+// Computed
+const hasData = computed(() => documentsData.value.length > 0)
 const hasCrudPermissions = computed(() => {
   if (typeof props.hasCrudPermissions === 'string') {
     return props.hasCrudPermissions === 'true'
   }
   return props.hasCrudPermissions || false
 })
-
 const isPublicView = computed(() => props.isPublicView === true)
 
+// Methods
 const getDocumentDetailUrl = (documentId: string): string => {
   // For the new URL structure, we need the component ID
   if (props.componentId) {
@@ -243,177 +308,144 @@ const getDocumentDetailUrl = (documentId: string): string => {
   return `/document/${documentId}/`
 }
 
-const truncateText = (text: string, maxLength: number): string => {
+const getDocumentDownloadUrl = (documentId: string): string => {
+  return `/api/v1/documents/${documentId}/download`
+}
+
+const getDocumentTypeDisplay = (documentType: string): string => {
+  if (!documentType) return 'Document'
+
+  // Convert snake_case to Title Case
+  return documentType
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+const truncateText = (text: string | null | undefined, maxLength: number): string => {
+  if (!text) return ''
   if (text.length <= maxLength) return text
-  return text.substring(0, maxLength - 3) + '...'
-}
-
-const getReleaseBadge = (release: Release): string => {
-  if (release.is_latest) {
-    return 'bg-success'
-  } else if (release.is_prerelease) {
-    return 'bg-warning text-dark'
-  } else if (release.is_public) {
-    return 'bg-primary'
-  } else {
-    return 'bg-secondary'
-  }
-}
-
-
-
-const getDocumentTypeDisplay = (type: string): string => {
-  const typeMap: { [key: string]: string } = {
-    'specification': 'Specification',
-    'manual': 'Manual',
-    'report': 'Report',
-    'license': 'License',
-    'readme': 'README',
-    'changelog': 'Changelog',
-    'documentation': 'Documentation',
-    'compliance': 'Compliance',
-    'other': 'Other'
-  }
-  return typeMap[type] || 'Document'
+  return text.substring(0, maxLength) + '...'
 }
 
 const formatDate = (dateString: string): string => {
   try {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
+    return date.toLocaleDateString()
   } catch {
-    return 'Invalid date'
+    return dateString
   }
 }
 
+const loadDocuments = async () => {
+  if (!props.componentId) {
+    // Fallback to old behavior for backward compatibility
+    return parseDocumentsData()
+  }
 
+  isLoading.value = true
+  error.value = null
 
-
-
-const parseDocumentsData = (): void => {
   try {
-    console.log('📄 Parsing documents data with elementId:', props.documentsDataElementId)
+    const params = new URLSearchParams({
+      page: currentPage.value.toString(),
+      page_size: pageSize.value.toString()
+    })
 
-    if (props.documentsDataElementId) {
-      // Get data from JSON script element
-      const element = document.getElementById(props.documentsDataElementId)
-      console.log('📄 Found element:', element)
+    const response = await $axios.get(`/api/v1/components/${props.componentId}/documents?${params}`)
 
-      if (element && element.textContent) {
-        console.log('📄 Element content length:', element.textContent.length)
-        console.log('📄 Element content (first 100 chars):', element.textContent.substring(0, 100))
-
-        const parsed = JSON.parse(element.textContent)
-        console.log('📄 Parsed data:', parsed)
-        console.log('📄 Is array?', Array.isArray(parsed))
-        console.log('📄 Array length:', Array.isArray(parsed) ? parsed.length : 'N/A')
-
-        if (Array.isArray(parsed)) {
-          parsedDocumentsData.value = parsed
-          console.log('📄 Set parsedDocumentsData, length:', parsedDocumentsData.value.length)
-          return
-        } else {
-          console.log('📄 Parsed data is not an array, type:', typeof parsed)
-        }
-      } else {
-        console.log('📄 Element not found or has no content. Element:', !!element, 'Content:', !!element?.textContent)
-      }
-    } else {
-      console.log('📄 No documentsDataElementId provided')
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`HTTP ${response.status}`)
     }
 
-    // If no valid data provided, show empty state
-    console.log('📄 Setting empty array as fallback')
-    parsedDocumentsData.value = []
+    const data = response.data as PaginatedResponse
+    documentsData.value = data.items
+    paginationMeta.value = data.pagination
   } catch (err) {
-    console.error('📄 Error parsing documents data:', err)
-    error.value = 'Failed to parse documents data'
-    parsedDocumentsData.value = []
+    console.error('Error loading documents:', err)
+    error.value = 'Failed to load documents'
+
+    if (isAxiosError(err)) {
+      showError(err.response?.data?.detail || 'Failed to load documents')
+    } else {
+      showError('Failed to load documents')
+    }
+  } finally {
+    isLoading.value = false
   }
 }
 
-const confirmDelete = (document: Document): void => {
+const parseDocumentsData = (): void => {
+  // Fallback method for backward compatibility with static JSON data
+  try {
+    if (props.documentsDataElementId) {
+      const element = document.getElementById(props.documentsDataElementId)
+      if (element && element.textContent) {
+        const parsed = JSON.parse(element.textContent)
+        if (Array.isArray(parsed)) {
+          documentsData.value = parsed
+          return
+        }
+      }
+    }
+
+    documentsData.value = []
+  } catch (err) {
+    console.error('Error parsing documents data:', err)
+    error.value = 'Failed to parse documents data'
+    documentsData.value = []
+  }
+}
+
+const confirmDelete = (document: Document) => {
   documentToDelete.value = document
   showDeleteModal.value = true
 }
 
-const cancelDelete = (): void => {
-  if (isDeleting.value) return // Prevent canceling during deletion
-  showDeleteModal.value = false
+const cancelDelete = () => {
   documentToDelete.value = null
+  showDeleteModal.value = false
 }
 
-const deleteDocument = async (): Promise<void> => {
+const deleteDocument = async () => {
   if (!documentToDelete.value) return
 
-  isDeleting.value = documentToDelete.value.id
+  const documentId = documentToDelete.value.id
+  isDeleting.value = documentId
 
   try {
-    const response = await fetch(`/api/v1/documents/${documentToDelete.value.id}`, {
-      method: 'DELETE',
-      headers: {
-        'X-CSRFToken': getCsrfToken()
-      }
-    })
+    const response = await $axios.delete(`/api/v1/documents/${documentId}`)
 
-    if (response.ok) {
-      // Remove the document from the local data
-      parsedDocumentsData.value = parsedDocumentsData.value.filter(
-        item => item.document.id !== documentToDelete.value!.id
-      )
-
-      showSuccess(`Document "${documentToDelete.value.name}" deleted successfully`)
-
-      // Clear deleting state before closing modal
-      isDeleting.value = null
-      cancelDelete()
+    if (response.status === 204 || response.status === 200) {
+      showSuccess('Document deleted successfully')
+      // Reload data
+      await loadDocuments()
     } else {
-      const errorData = await response.json()
-      throw new Error(errorData.detail || 'Failed to delete document')
+      throw new Error(`HTTP ${response.status}`)
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error deleting document:', err)
-    showError(err.message || 'Failed to delete document')
-    isDeleting.value = null
-  }
-}
-
-const getCsrfToken = (): string => {
-  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-  if (token) return token
-
-  const cookies = document.cookie.split(';')
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=')
-    if (name === 'csrftoken') {
-      return value
+    if (isAxiosError(err)) {
+      showError(err.response?.data?.detail || 'Failed to delete document')
+    } else {
+      showError('Failed to delete document')
     }
+  } finally {
+    isDeleting.value = null
+    cancelDelete()
   }
-  return ''
 }
 
+// Watchers for pagination changes
+watch([currentPage, pageSize], () => {
+  if (props.componentId) {
+    loadDocuments()
+  }
+})
+
+// Lifecycle
 onMounted(() => {
-  console.log('📄 DocumentsTable onMounted, props:', {
-    documentsDataElementId: props.documentsDataElementId,
-    componentId: props.componentId,
-    hasCrudPermissions: props.hasCrudPermissions,
-    isPublicView: props.isPublicView
-  })
-
-  parseDocumentsData()
-
-  console.log('📄 After initial parse - hasData:', hasData.value, 'error:', error.value)
-
-  // Try again after a delay in case of timing issues
-  setTimeout(() => {
-    console.log('📄 Retry parsing after delay...')
-    parseDocumentsData()
-    console.log('📄 After retry - hasData:', hasData.value, 'error:', error.value)
-  }, 100)
+  loadDocuments()
 })
 </script>
 

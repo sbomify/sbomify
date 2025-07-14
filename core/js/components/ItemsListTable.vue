@@ -133,15 +133,26 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination Controls -->
+    <PaginationControls
+      v-if="paginationMeta && paginationMeta.total_pages > 1"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total-pages="paginationMeta.total_pages"
+      :total-items="paginationMeta.total"
+      :show-page-size-selector="true"
+    />
   </StandardCard>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import $axios from '../utils'
 import { showError } from '../alerts'
 import { isAxiosError } from 'axios'
 import StandardCard from './StandardCard.vue'
+import PaginationControls from './PaginationControls.vue'
 
 // Types
 interface BaseItem {
@@ -168,6 +179,20 @@ interface Component extends BaseItem {
 
 type ItemData = Product | Project | Component
 
+interface PaginationMeta {
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
+}
+
+interface PaginatedResponse {
+  items: ItemData[]
+  pagination: PaginationMeta
+}
+
 interface Props {
   itemType: 'product' | 'project' | 'component'
   title?: string
@@ -187,6 +212,9 @@ const props = withDefaults(defineProps<Props>(), {
 const items = ref<ItemData[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+const paginationMeta = ref<PaginationMeta | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(15)
 
 // Computed
 const hasCrudPermissions = computed(() => {
@@ -249,13 +277,20 @@ const loadItems = async () => {
   error.value = null
 
   try {
-    const response = await $axios.get(computedApiEndpoint.value)
+    const params = new URLSearchParams({
+      page: currentPage.value.toString(),
+      page_size: pageSize.value.toString()
+    })
+
+    const response = await $axios.get(`${computedApiEndpoint.value}?${params}`)
 
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`HTTP ${response.status}`)
     }
 
-    items.value = response.data
+    const data = response.data as PaginatedResponse
+    items.value = data.items
+    paginationMeta.value = data.pagination
   } catch (err) {
     console.error(`Error loading ${props.itemType}s:`, err)
     error.value = `Failed to load ${props.itemType}s`
@@ -269,6 +304,11 @@ const loadItems = async () => {
     isLoading.value = false
   }
 }
+
+// Watchers for pagination changes
+watch([currentPage, pageSize], () => {
+  loadItems()
+})
 
 // Event listener setup for refresh events
 const setupEventListeners = () => {
@@ -288,7 +328,10 @@ const setupEventListeners = () => {
     }
 
     if (eventName) {
-      window.eventBus.on(eventName, loadItems)
+      window.eventBus.on(eventName, () => {
+        currentPage.value = 1 // Reset to first page on refresh
+        loadItems()
+      })
       return true
     }
   }

@@ -7,196 +7,225 @@
     :defaultExpanded="true"
     storageKey="sboms-table"
   >
-    <!-- Table content -->
-    <div v-if="error" class="alert alert-danger">
+    <!-- Loading state -->
+    <div v-if="isLoading" class="text-center py-4">
+      <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+      <p class="mt-2 text-muted">Loading SBOMs...</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="alert alert-danger">
       {{ error }}
     </div>
 
+    <!-- Empty state -->
     <div v-else-if="!hasData" class="text-center text-muted py-4">
       <i class="fas fa-file-alt fa-3x mb-3"></i>
       <p>No SBOMs found for this component.</p>
     </div>
 
-    <div v-else class="data-table">
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Artifact Type</th>
-            <th scope="col">Format</th>
-            <th scope="col">Version</th>
-            <th scope="col">NTIA Compliant</th>
-            <th scope="col">Created</th>
-            <th scope="col">Releases</th>
-            <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="itemData in parsedSbomsData" :key="itemData.sbom.id">
-            <td>
-              <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
-                {{ itemData.sbom.name }}
-              </a>
-            </td>
-            <td>SBOM</td>
-            <td>
-              <span v-if="itemData.sbom.format === 'spdx'">SPDX</span>
-              <span v-else-if="itemData.sbom.format === 'cyclonedx'">CycloneDX</span>
-              <span v-else>{{ itemData.sbom.format }}</span>
-              {{ itemData.sbom.format_version }}
-            </td>
-            <td :title="itemData.sbom.version">
-              {{ truncateText(itemData.sbom.version, 20) }}
-            </td>
-            <td>
-              <NTIAComplianceBadge
-                :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
-                :compliance-details="itemData.sbom.ntia_compliance_details || {}"
-                :is-public-view="isPublicView"
-              />
-            </td>
-            <td>{{ formatDate(itemData.sbom.created_at) }}</td>
-            <td>
-              <div v-if="itemData.releases && itemData.releases.length > 0" class="release-badges">
-                <span
-                  v-for="release in itemData.releases"
-                  :key="release.id"
-                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
-                  :title="`${release.product_name} - ${release.name}`"
-                >
-                  {{ release.name }}
-                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
-                </span>
-              </div>
-              <span v-else class="text-muted">None</span>
-            </td>
-            <td v-if="!isPublicView">
-              <a
-                :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
-                title="Vulnerabilities"
-                :class="['btn', 'btn-sm', 'btn-outline-warning', 'action-btn', { 'disabled': !itemData.has_vulnerabilities_report }]"
-              >
-                <i class="fas fa-shield-alt me-1"></i> View
-              </a>
-            </td>
-            <td>
-              <div class="d-flex gap-2">
-                <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
-                  <i class="fas fa-download"></i>
+    <!-- Data table -->
+    <div v-else>
+      <div class="data-table">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Artifact Type</th>
+              <th scope="col">Format</th>
+              <th scope="col">Version</th>
+              <th scope="col">NTIA Compliant</th>
+              <th scope="col">Created</th>
+              <th scope="col">Releases</th>
+              <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="itemData in sbomsData" :key="itemData.sbom.id">
+              <td>
+                <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
+                  {{ itemData.sbom.name }}
                 </a>
-                <button
-                  v-if="hasCrudPermissions"
-                  class="btn btn-sm btn-outline-danger action-btn"
-                  title="Delete SBOM"
-                  :disabled="isDeleting === itemData.sbom.id"
-                  @click="confirmDelete(itemData.sbom)"
+              </td>
+              <td>SBOM</td>
+              <td>
+                <span class="badge bg-success-subtle text-success">
+                  {{ getFormatDisplay(itemData.sbom.format) }} {{ itemData.sbom.format_version }}
+                </span>
+              </td>
+              <td :title="itemData.sbom.version">
+                {{ truncateText(itemData.sbom.version, 20) }}
+              </td>
+              <td>
+                <NTIAComplianceBadge
+                  :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
+                  :details="itemData.sbom.ntia_compliance_details || {}"
+                />
+              </td>
+              <td>{{ formatDate(itemData.sbom.created_at) }}</td>
+              <td>
+                <div v-if="itemData.releases && itemData.releases.length > 0" class="release-tags">
+                  <span
+                    v-for="release in itemData.releases.slice(0, 2)"
+                    :key="release.id"
+                    class="badge bg-primary-subtle text-primary me-1 mb-1"
+                    :title="`${release.product_name} - ${release.name}`"
+                  >
+                    {{ truncateText(release.name, 15) }}
+                  </span>
+                  <span
+                    v-if="itemData.releases.length > 2"
+                    class="badge bg-secondary-subtle text-secondary"
+                    :title="`${itemData.releases.length - 2} more releases`"
+                  >
+                    +{{ itemData.releases.length - 2 }}
+                  </span>
+                </div>
+                <span v-else class="text-muted">None</span>
+              </td>
+              <td v-if="!isPublicView">
+                <a
+                  :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
+                  title="Vulnerabilities"
+                  :class="['btn', 'btn-sm', 'btn-outline-warning', 'action-btn', { 'disabled': !itemData.has_vulnerabilities_report }]"
                 >
-                  <i v-if="isDeleting === itemData.sbom.id" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                  <i class="fas fa-shield-alt me-1"></i> View
+                </a>
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
+                    <i class="fas fa-download"></i>
+                  </a>
+                  <button
+                    v-if="hasCrudPermissions"
+                    class="btn btn-sm btn-outline-danger action-btn"
+                    title="Delete SBOM"
+                    :disabled="isDeleting === itemData.sbom.id"
+                    @click="confirmDelete(itemData.sbom)"
+                  >
+                    <i v-if="isDeleting === itemData.sbom.id" class="fas fa-spinner fa-spin"></i>
+                    <i v-else class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <PaginationControls
+        v-if="paginationMeta && paginationMeta.total_pages > 1"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total-pages="paginationMeta.total_pages"
+        :total-items="paginationMeta.total"
+        :show-page-size-selector="true"
+      />
     </div>
   </StandardCard>
 
   <div v-else>
-    <!-- Table content (same as above but without StandardCard wrapper) -->
-    <div v-if="error" class="alert alert-danger">
+    <!-- Public view without StandardCard wrapper -->
+    <!-- Loading state -->
+    <div v-if="isLoading" class="text-center py-4">
+      <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+      <p class="mt-2 text-muted">Loading SBOMs...</p>
+    </div>
+
+    <!-- Error state -->
+    <div v-else-if="error" class="alert alert-danger">
       {{ error }}
     </div>
 
+    <!-- Empty state -->
     <div v-else-if="!hasData" class="text-center text-muted py-4">
       <i class="fas fa-file-alt fa-3x mb-3"></i>
       <p>No SBOMs found for this component.</p>
     </div>
 
-    <div v-else class="data-table">
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Artifact Type</th>
-            <th scope="col">Format</th>
-            <th scope="col">Version</th>
-            <th scope="col">NTIA Compliant</th>
-            <th scope="col">Created</th>
-            <th scope="col">Releases</th>
-            <th v-if="!isPublicView" scope="col">Vulnerabilities</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="itemData in parsedSbomsData" :key="itemData.sbom.id">
-            <td>
-              <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
-                {{ itemData.sbom.name }}
-              </a>
-            </td>
-            <td>SBOM</td>
-            <td>
-              <span v-if="itemData.sbom.format === 'spdx'">SPDX</span>
-              <span v-else-if="itemData.sbom.format === 'cyclonedx'">CycloneDX</span>
-              <span v-else>{{ itemData.sbom.format }}</span>
-              {{ itemData.sbom.format_version }}
-            </td>
-            <td :title="itemData.sbom.version">
-              {{ truncateText(itemData.sbom.version, 20) }}
-            </td>
-            <td>
-              <NTIAComplianceBadge
-                :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
-                :compliance-details="itemData.sbom.ntia_compliance_details || {}"
-                :is-public-view="isPublicView"
-              />
-            </td>
-            <td>{{ formatDate(itemData.sbom.created_at) }}</td>
-            <td>
-              <div v-if="itemData.releases && itemData.releases.length > 0" class="release-badges">
-                <span
-                  v-for="release in itemData.releases"
-                  :key="release.id"
-                  :class="['badge', 'me-1', 'mb-1', getReleaseBadge(release)]"
-                  :title="`${release.product_name} - ${release.name}`"
-                >
-                  {{ release.name }}
-                  <span v-if="release.is_prerelease" class="ms-1">⚠️</span>
-                </span>
-              </div>
-              <span v-else class="text-muted">None</span>
-            </td>
-            <td v-if="!isPublicView">
-              <a
-                :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
-                title="Vulnerabilities"
-                :class="['btn', 'btn-sm', 'btn-outline-warning', 'action-btn', { 'disabled': !itemData.has_vulnerabilities_report }]"
-              >
-                <i class="fas fa-shield-alt me-1"></i> View
-              </a>
-            </td>
-            <td>
-              <div class="d-flex gap-2">
-                <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
-                  <i class="fas fa-download"></i>
+    <!-- Data table -->
+    <div v-else>
+      <div class="data-table">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Artifact Type</th>
+              <th scope="col">Format</th>
+              <th scope="col">Version</th>
+              <th scope="col">NTIA Compliant</th>
+              <th scope="col">Created</th>
+              <th scope="col">Releases</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="itemData in sbomsData" :key="itemData.sbom.id">
+              <td>
+                <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
+                  {{ itemData.sbom.name }}
                 </a>
-                <button
-                  v-if="hasCrudPermissions"
-                  class="btn btn-sm btn-outline-danger action-btn"
-                  title="Delete SBOM"
-                  :disabled="isDeleting === itemData.sbom.id"
-                  @click="confirmDelete(itemData.sbom)"
-                >
-                  <i v-if="isDeleting === itemData.sbom.id" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td>SBOM</td>
+              <td>
+                <span class="badge bg-success-subtle text-success">
+                  {{ getFormatDisplay(itemData.sbom.format) }} {{ itemData.sbom.format_version }}
+                </span>
+              </td>
+              <td :title="itemData.sbom.version">
+                {{ truncateText(itemData.sbom.version, 20) }}
+              </td>
+              <td>
+                <NTIAComplianceBadge
+                  :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
+                  :details="itemData.sbom.ntia_compliance_details || {}"
+                />
+              </td>
+              <td>{{ formatDate(itemData.sbom.created_at) }}</td>
+              <td>
+                <div v-if="itemData.releases && itemData.releases.length > 0" class="release-tags">
+                  <span
+                    v-for="release in itemData.releases.slice(0, 2)"
+                    :key="release.id"
+                    class="badge bg-primary-subtle text-primary me-1 mb-1"
+                    :title="`${release.product_name} - ${release.name}`"
+                  >
+                    {{ truncateText(release.name, 15) }}
+                  </span>
+                  <span
+                    v-if="itemData.releases.length > 2"
+                    class="badge bg-secondary-subtle text-secondary"
+                    :title="`${itemData.releases.length - 2} more releases`"
+                  >
+                    +{{ itemData.releases.length - 2 }}
+                  </span>
+                </div>
+                <span v-else class="text-muted">None</span>
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
+                    <i class="fas fa-download"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <PaginationControls
+        v-if="paginationMeta && paginationMeta.total_pages > 1"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total-pages="paginationMeta.total_pages"
+        :total-items="paginationMeta.total"
+        :show-page-size-selector="true"
+      />
     </div>
   </div>
 
@@ -215,13 +244,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import $axios from '../../../core/js/utils'
 import { showSuccess, showError } from '../../../core/js/alerts'
 import { isAxiosError } from 'axios'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 import NTIAComplianceBadge from './NTIAComplianceBadge.vue'
+import PaginationControls from '../../../core/js/components/PaginationControls.vue'
 
 interface Sbom {
   id: string
@@ -257,23 +287,49 @@ interface SbomData {
   releases: Release[]
 }
 
+interface PaginationMeta {
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
+}
+
+interface PaginatedResponse {
+  items: SbomData[]
+  pagination: PaginationMeta
+}
+
 const props = defineProps<{
   sbomsDataElementId?: string
   componentId?: string
-  hasCrudPermissions?: boolean
+  hasCrudPermissions?: boolean | string
   isPublicView?: boolean
 }>()
 
-const parsedSbomsData = ref<SbomData[]>([])
+// State
+const sbomsData = ref<SbomData[]>([])
+const isLoading = ref(false)
 const error = ref<string | null>(null)
+const paginationMeta = ref<PaginationMeta | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(15)
 const showDeleteModal = ref(false)
 const sbomToDelete = ref<Sbom | null>(null)
 const isDeleting = ref<string | null>(null)
 
-const hasData = computed(() => parsedSbomsData.value.length > 0)
-const hasCrudPermissions = computed(() => props.hasCrudPermissions === true)
+// Computed
+const hasData = computed(() => sbomsData.value.length > 0)
+const hasCrudPermissions = computed(() => {
+  if (typeof props.hasCrudPermissions === 'string') {
+    return props.hasCrudPermissions === 'true'
+  }
+  return props.hasCrudPermissions === true
+})
 const isPublicView = computed(() => props.isPublicView === true)
 
+// Methods
 const getSbomDetailUrl = (sbomId: string): string => {
   // For the new URL structure, we need the component ID
   if (props.componentId) {
@@ -294,104 +350,141 @@ const getSbomDownloadUrl = (sbomId: string): string => {
   return `/api/v1/sboms/${sbomId}/download`
 }
 
-const truncateText = (text: string, maxLength: number): string => {
+const getFormatDisplay = (format: string): string => {
+  switch (format.toLowerCase()) {
+    case 'cyclonedx':
+      return 'CycloneDX'
+    case 'spdx':
+      return 'SPDX'
+    default:
+      return format.toUpperCase()
+  }
+}
+
+const truncateText = (text: string | null | undefined, maxLength: number): string => {
+  if (!text) return ''
   if (text.length <= maxLength) return text
-  return text.substring(0, maxLength - 3) + '...'
+  return text.substring(0, maxLength) + '...'
 }
 
 const formatDate = (dateString: string): string => {
   try {
     const date = new Date(dateString)
-    const formatted = date.toLocaleDateString()
-    // Check if the date is invalid
-    if (formatted === 'Invalid Date') {
-      return dateString
-    }
-    return formatted
+    return date.toLocaleDateString()
   } catch {
     return dateString
   }
 }
 
-const getReleaseBadge = (release: Release): string => {
-  if (release.is_latest) {
-    return 'bg-success'
-  } else if (release.is_prerelease) {
-    return 'bg-warning text-dark'
-  } else if (release.is_public) {
-    return 'bg-primary'
-  } else {
-    return 'bg-secondary'
+const loadSboms = async () => {
+  if (!props.componentId) {
+    // Fallback to old behavior for backward compatibility
+    return parseSbomsData()
   }
-}
 
-const confirmDelete = (sbom: Sbom): void => {
-  sbomToDelete.value = sbom
-  showDeleteModal.value = true
-}
-
-const cancelDelete = (): void => {
-  if (isDeleting.value) return // Prevent canceling during deletion
-  showDeleteModal.value = false
-  sbomToDelete.value = null
-}
-
-const deleteSbom = async (): Promise<void> => {
-  if (!sbomToDelete.value) return
-
-  isDeleting.value = sbomToDelete.value.id
+  isLoading.value = true
+  error.value = null
 
   try {
-    await $axios.delete(`/api/v1/sboms/sbom/${sbomToDelete.value.id}`)
+    const params = new URLSearchParams({
+      page: currentPage.value.toString(),
+      page_size: pageSize.value.toString()
+    })
 
-    // Remove the deleted SBOM from the list
-    parsedSbomsData.value = parsedSbomsData.value.filter(
-      item => item.sbom.id !== sbomToDelete.value!.id
-    )
+    const response = await $axios.get(`/api/v1/components/${props.componentId}/sboms?${params}`)
 
-    showSuccess(`SBOM "${sbomToDelete.value.name}" deleted successfully`)
-
-    // Clear deleting state before closing modal
-    isDeleting.value = null
-    cancelDelete()
-  } catch (err) {
-    console.error('Error deleting SBOM:', err)
-    let errorMessage = 'Failed to delete SBOM'
-
-    if (isAxiosError(err)) {
-      errorMessage = err.response?.data?.detail || errorMessage
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`HTTP ${response.status}`)
     }
 
-    showError(errorMessage)
-    isDeleting.value = null
+    const data = response.data as PaginatedResponse
+    sbomsData.value = data.items
+    paginationMeta.value = data.pagination
+  } catch (err) {
+    console.error('Error loading SBOMs:', err)
+    error.value = 'Failed to load SBOMs'
+
+    if (isAxiosError(err)) {
+      showError(err.response?.data?.detail || 'Failed to load SBOMs')
+    } else {
+      showError('Failed to load SBOMs')
+    }
+  } finally {
+    isLoading.value = false
   }
 }
 
 const parseSbomsData = (): void => {
+  // Fallback method for backward compatibility with static JSON data
   try {
     if (props.sbomsDataElementId) {
-      // Get data from JSON script element
       const element = document.getElementById(props.sbomsDataElementId)
       if (element && element.textContent) {
         const parsed = JSON.parse(element.textContent)
         if (Array.isArray(parsed)) {
-          parsedSbomsData.value = parsed
+          sbomsData.value = parsed
           return
         }
       }
     }
 
-    // If no valid data provided, show empty state
-    parsedSbomsData.value = []
+    sbomsData.value = []
   } catch (err) {
     console.error('Error parsing SBOMs data:', err)
     error.value = 'Failed to parse SBOMs data'
-    parsedSbomsData.value = []
+    sbomsData.value = []
   }
 }
 
+const confirmDelete = (sbom: Sbom) => {
+  sbomToDelete.value = sbom
+  showDeleteModal.value = true
+}
+
+const cancelDelete = () => {
+  sbomToDelete.value = null
+  showDeleteModal.value = false
+}
+
+const deleteSbom = async () => {
+  if (!sbomToDelete.value) return
+
+  const sbomId = sbomToDelete.value.id
+  isDeleting.value = sbomId
+
+  try {
+    const response = await $axios.delete(`/api/v1/sboms/${sbomId}`)
+
+    if (response.status === 204 || response.status === 200) {
+      showSuccess('SBOM deleted successfully')
+      // Reload data
+      await loadSboms()
+    } else {
+      throw new Error(`HTTP ${response.status}`)
+    }
+  } catch (err) {
+    console.error('Error deleting SBOM:', err)
+    if (isAxiosError(err)) {
+      showError(err.response?.data?.detail || 'Failed to delete SBOM')
+    } else {
+      showError('Failed to delete SBOM')
+    }
+  } finally {
+    isDeleting.value = null
+    cancelDelete()
+  }
+}
+
+// Watchers for pagination changes
+watch([currentPage, pageSize], () => {
+  if (props.componentId) {
+    loadSboms()
+  }
+})
+
+// Lifecycle
 onMounted(() => {
-  parseSbomsData()
+  loadSboms()
 })
 </script>
 

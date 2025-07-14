@@ -36,6 +36,10 @@ from .schemas import (
     DocumentReleaseTaggingSchema,
     ErrorCode,
     ErrorResponse,
+    PaginatedComponentsResponse,
+    PaginatedProductsResponse,
+    PaginatedProjectsResponse,
+    PaginationMeta,
     ProductCreateSchema,
     ProductIdentifierBulkUpdateSchema,
     ProductIdentifierCreateSchema,
@@ -190,6 +194,45 @@ def _build_item_response(item, item_type: str):
     return base_response
 
 
+def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
+    """
+    Paginate a Django queryset and return items with pagination metadata.
+
+    Args:
+        queryset: Django queryset to paginate
+        page: Page number (1-based)
+        page_size: Number of items per page
+
+    Returns:
+        tuple: (paginated_items, pagination_meta)
+    """
+    from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
+    # Validate and set defaults
+    page = max(1, page)  # Ensure page is at least 1
+    page_size = min(max(1, page_size), 100)  # Ensure page_size is between 1 and 100
+
+    paginator = Paginator(queryset, page_size)
+
+    try:
+        paginated_items = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        # If page is out of range or invalid, return first page
+        paginated_items = paginator.page(1)
+        page = 1
+
+    pagination_meta = PaginationMeta(
+        total=paginator.count,
+        page=page,
+        page_size=page_size,
+        total_pages=paginator.num_pages,
+        has_previous=paginated_items.has_previous(),
+        has_next=paginated_items.has_next(),
+    )
+
+    return paginated_items.object_list, pagination_meta
+
+
 @router.get(
     "/user-items/{item_type}",
     response={
@@ -320,22 +363,28 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 
 @router.get(
     "/products",
-    response={200: list[ProductResponseSchema], 403: ErrorResponse},
+    response={200: PaginatedProductsResponse, 403: ErrorResponse},
 )
-def list_products(request: HttpRequest):
-    """List all products for the current user's team."""
+def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+    """List all products for the current user's team with pagination."""
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
 
     try:
-        products = Product.objects.filter(team_id=team_id).prefetch_related("projects", "identifiers", "links")
+        products_queryset = Product.objects.filter(team_id=team_id).prefetch_related("projects", "identifiers", "links")
+
+        # Apply pagination
+        paginated_products, pagination_meta = _paginate_queryset(products_queryset, page, page_size)
 
         # Ensure latest releases exist for all products when users view their dashboard
-        for product in products:
+        for product in paginated_products:
             _ensure_latest_release_exists(product)
 
-        return 200, [_build_item_response(product, "product") for product in products]
+        # Build response items
+        items = [_build_item_response(product, "product") for product in paginated_products]
+
+        return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing products: {e}")
         return 400, {"detail": str(e)}
@@ -1050,18 +1099,25 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
 
 @router.get(
     "/projects",
-    response={200: list[ProjectResponseSchema], 403: ErrorResponse},
+    response={200: PaginatedProjectsResponse, 403: ErrorResponse},
     tags=["Projects"],
 )
-def list_projects(request: HttpRequest):
-    """List all projects for the current user's team."""
+def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+    """List all projects for the current user's team with pagination."""
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
 
     try:
-        projects = Project.objects.filter(team_id=team_id).prefetch_related("components")
-        return 200, [_build_item_response(project, "project") for project in projects]
+        projects_queryset = Project.objects.filter(team_id=team_id).prefetch_related("components")
+
+        # Apply pagination
+        paginated_projects, pagination_meta = _paginate_queryset(projects_queryset, page, page_size)
+
+        # Build response items
+        items = [_build_item_response(project, "project") for project in paginated_projects]
+
+        return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing projects: {e}")
         return 400, {"detail": str(e)}
@@ -1303,18 +1359,25 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 
 @router.get(
     "/components",
-    response={200: list[ComponentResponseSchema], 403: ErrorResponse},
+    response={200: PaginatedComponentsResponse, 403: ErrorResponse},
     tags=["Components"],
 )
-def list_components(request: HttpRequest):
-    """List all components for the current user's team."""
+def list_components(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
+    """List all components for the current user's team with pagination."""
     team_id = _get_user_team_id(request)
     if not team_id:
         return 403, {"detail": "No current team selected"}
 
     try:
-        components = Component.objects.filter(team_id=team_id).prefetch_related("sbom_set")
-        return 200, [_build_item_response(component, "component") for component in components]
+        components_queryset = Component.objects.filter(team_id=team_id).prefetch_related("sbom_set")
+
+        # Apply pagination
+        paginated_components, pagination_meta = _paginate_queryset(components_queryset, page, page_size)
+
+        # Build response items
+        items = [_build_item_response(component, "component") for component in paginated_components]
+
+        return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing components: {e}")
         return 400, {"detail": str(e)}
@@ -2846,3 +2909,156 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
         return 204, None
     except ReleaseArtifact.DoesNotExist:
         return 404, {"detail": "SBOM not in this release"}
+
+
+@router.get(
+    "/components/{component_id}/sboms",
+    response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=PersonalAccessTokenAuth(),
+    tags=["Components"],
+)
+def list_component_sboms(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
+    """List all SBOMs for a specific component with pagination."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found"}
+
+    # Check access permissions - require team membership
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(component.team_id):
+        return 403, {"detail": "Access denied"}
+
+    try:
+        from sboms.models import SBOM
+
+        def check_vulnerability_report(sbom_id: str) -> bool:
+            """Check if vulnerability report exists for an SBOM."""
+            try:
+                import redis
+                from django.conf import settings
+
+                redis_client = redis.from_url(settings.REDIS_WORKER_URL)
+                keys = redis_client.keys(f"osv_scan_result:{sbom_id}:*")
+                return len(keys) > 0
+            except Exception:
+                return False
+
+        sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
+
+        # Apply pagination
+        paginated_sboms, pagination_meta = _paginate_queryset(sboms_queryset, page, page_size)
+
+        # Build response items with vulnerability status and releases
+        items = []
+        for sbom in paginated_sboms:
+            # Get vulnerability status
+            vuln_status = check_vulnerability_report(sbom.id)
+
+            # Get releases that contain this SBOM
+            releases = []
+            release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related("release", "release__product")
+
+            for artifact in release_artifacts:
+                releases.append(
+                    {
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
+                    }
+                )
+
+            items.append(
+                {
+                    "sbom": {
+                        "id": str(sbom.id),
+                        "name": sbom.name,
+                        "format": sbom.format,
+                        "format_version": sbom.format_version,
+                        "version": sbom.version,
+                        "created_at": sbom.created_at.isoformat(),
+                        "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", None),
+                        "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
+                    },
+                    "has_vulnerabilities_report": vuln_status,
+                    "releases": releases,
+                }
+            )
+
+        return 200, {"items": items, "pagination": pagination_meta}
+
+    except Exception as e:
+        log.error(f"Error listing component SBOMs: {e}")
+        return 400, {"detail": str(e)}
+
+
+@router.get(
+    "/components/{component_id}/documents",
+    response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=PersonalAccessTokenAuth(),
+    tags=["Components"],
+)
+def list_component_documents(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
+    """List all documents for a specific component with pagination."""
+    try:
+        component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return 404, {"detail": "Component not found"}
+
+    # Check access permissions - require team membership
+    team_id = _get_user_team_id(request)
+    if not team_id or str(team_id) != str(component.team_id):
+        return 403, {"detail": "Access denied"}
+
+    try:
+        from documents.models import Document
+
+        documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at")
+
+        # Apply pagination
+        paginated_documents, pagination_meta = _paginate_queryset(documents_queryset, page, page_size)
+
+        # Build response items with releases
+        items = []
+        for document in paginated_documents:
+            # Get releases that contain this document
+            releases = []
+            release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related(
+                "release", "release__product"
+            )
+
+            for artifact in release_artifacts:
+                releases.append(
+                    {
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
+                    }
+                )
+
+            items.append(
+                {
+                    "document": {
+                        "id": str(document.id),
+                        "name": document.name,
+                        "document_type": document.document_type,
+                        "content_type": document.content_type,
+                        "file_size": document.file_size,
+                        "version": document.version,
+                        "created_at": document.created_at.isoformat(),
+                    },
+                    "releases": releases,
+                }
+            )
+
+        return 200, {"items": items, "pagination": pagination_meta}
+
+    except Exception as e:
+        log.error(f"Error listing component documents: {e}")
+        return 400, {"detail": str(e)}
