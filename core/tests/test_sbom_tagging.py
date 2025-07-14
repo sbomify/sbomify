@@ -72,7 +72,10 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert data == []
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "pagination" in data
+        assert data["items"] == []
 
     def test_list_sbom_releases_with_releases(self, authenticated_api_client):
         """Test listing releases for an SBOM that has releases."""
@@ -85,10 +88,13 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert len(data) == 1
-        assert data[0]["id"] == str(self.release1.id)
-        assert data[0]["name"] == "v1.0.0"
-        assert data[0]["product_name"] == "Test Product 1"
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "pagination" in data
+        assert len(data["items"]) == 1
+        assert data["items"][0]["id"] == str(self.release1.id)
+        assert data["items"][0]["name"] == "v1.0.0"
+        assert data["items"][0]["product_name"] == "Test Product 1"
 
     def test_list_sbom_releases_unauthenticated_private(self):
         """Test listing releases for a private SBOM without authentication."""

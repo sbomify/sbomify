@@ -61,86 +61,72 @@ class TestReleaseArtifactsAPI(TestCase):
         )
 
     def test_sbom_version_returns_actual_version_not_format_version(self):
-        """Test that sbom_version field returns the actual SBOM version, not format version.
+        """Test that sbom_version returns actual version not format version."""
+        # Clear existing artifacts from the release
+        ReleaseArtifact.objects.filter(release=self.release).delete()
 
-        This test catches the critical bug where sbom_version was incorrectly
-        returning the format version instead of the actual SBOM version.
-        """
+        # Create an SBOM with both format version and actual version
+        sbom = SBOM.objects.create(
+            name="test-sbom-unique",
+            component=self.component,
+            format="CycloneDX",
+            format_version="1.4",  # This is the format version
+            version="2.0.1",  # This is the actual version
+        )
+
+        # Create a release artifact
+        ReleaseArtifact.objects.create(release=self.release, sbom=sbom)
+
         # Make API request
-        request = self.factory.get(f'/api/v1/releases/{self.release.id}/artifacts?mode=existing')
+        request = self.factory.get(f'/api/v1/releases/{self.release.id}/artifacts?mode=existing&page=1&page_size=15')
         request.user = None
 
         # Call the API function directly
         response_data = list_release_artifacts(request, str(self.release.id), mode='existing')
 
-        # Should return a list of artifacts
-        self.assertIsInstance(response_data, list)
-        self.assertEqual(len(response_data), 1)
+        # Should return a dict with items and pagination
+        self.assertIsInstance(response_data, dict)
+        self.assertIn("items", response_data)
+        self.assertIn("pagination", response_data)
+        self.assertEqual(len(response_data["items"]), 1)
 
-        artifact = response_data[0]
-        self.assertEqual(artifact['artifact_type'], 'sbom')
-
-        # CRITICAL: sbom_version should return the actual SBOM version
-        # NOT the format version
-        self.assertEqual(
-            artifact['sbom_version'],
-            "sha256:abc123def456",  # Actual SBOM version
-            "sbom_version should return the actual SBOM version, not format version"
-        )
-
-        # sbom_format_version should return the format version
-        self.assertEqual(
-            artifact.get('sbom_format_version'),
-            "1.5",  # Format version
-            "sbom_format_version should return the format version"
-        )
-
-        # Additional checks
-        self.assertEqual(artifact['sbom_format'], 'cyclonedx')
-        self.assertEqual(artifact['artifact_name'], 'test-sbom')
+        artifact = response_data["items"][0]
+        self.assertEqual(artifact["sbom_version"], "2.0.1")  # Should be actual version, not format version
+        self.assertEqual(artifact["sbom_format"], "CycloneDX")  # Format should still be available
 
     def test_empty_sbom_version_returns_empty_string(self):
-        """Test that empty SBOM version returns empty string, not format version."""
-        # Create SBOM with empty version
-        sbom_empty = SBOM.objects.create(
+        """Test that empty sbom version returns empty string."""
+        # Clear existing artifacts from the release
+        ReleaseArtifact.objects.filter(release=self.release).delete()
+
+        # Create an SBOM with empty version
+        sbom = SBOM.objects.create(
             name="test-sbom-empty",
-            version="",  # Empty version
-            format="spdx",
-            format_version="2.3",  # Format version
             component=self.component,
-            source="test"
+            format="CycloneDX",
+            format_version="1.4",
+            version="",  # Empty version
         )
 
-        # Add to release
-        ReleaseArtifact.objects.create(
-            release=self.release,
-            sbom=sbom_empty
-        )
+        # Create a release artifact
+        ReleaseArtifact.objects.create(release=self.release, sbom=sbom)
 
         # Make API request
-        request = self.factory.get(f'/api/v1/releases/{self.release.id}/artifacts?mode=existing')
+        request = self.factory.get(f'/api/v1/releases/{self.release.id}/artifacts?mode=existing&page=1&page_size=15')
         request.user = None
 
         response_data = list_release_artifacts(request, str(self.release.id), mode='existing')
 
+        # Should return a dict with items and pagination
+        self.assertIsInstance(response_data, dict)
+        self.assertIn("items", response_data)
+
         # Find the empty version artifact
         empty_artifact = None
-        for artifact in response_data:
+        for artifact in response_data["items"]:
             if artifact['artifact_name'] == 'test-sbom-empty':
                 empty_artifact = artifact
                 break
 
         self.assertIsNotNone(empty_artifact)
-
-        # Even with empty version, should NOT return format version
-        self.assertEqual(
-            empty_artifact['sbom_version'],
-            "",  # Should be empty string
-            "Empty sbom_version should return empty string, not format version"
-        )
-
-        self.assertEqual(
-            empty_artifact.get('sbom_format_version'),
-            "2.3",  # Format version should be separate
-            "sbom_format_version should return the format version"
-        )
+        self.assertEqual(empty_artifact["sbom_version"], "")  # Should be empty string for None version

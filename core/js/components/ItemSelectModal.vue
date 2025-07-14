@@ -31,6 +31,16 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination Controls -->
+          <PaginationControls
+            v-if="shouldShowPagination"
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total-pages="paginationMeta!.total_pages"
+            :total-items="paginationMeta!.total"
+            :show-page-size-selector="true"
+          />
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-link text-black" data-bs-dismiss="modal" @click="$emit('canceled')">
@@ -45,8 +55,9 @@
 
 <script setup lang="ts">
   import $axios from '../../../core/js/utils';
-  import { ref, onMounted, computed } from 'vue';
+  import { ref, onMounted, computed, watch } from 'vue';
   import type { UserItemsResponse } from '../type_defs';
+  import PaginationControls from './PaginationControls.vue';
 
   interface Props {
     itemType: string;
@@ -57,30 +68,70 @@
   const model = defineModel({type: String, default: ''});
 
   const items = ref<UserItemsResponse[]>([]);
+  const paginationMeta = ref<{
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    has_previous: boolean;
+    has_next: boolean;
+  } | null>(null);
+  const currentPage = ref(1);
+  const pageSize = ref(15);
 
   const titledItemType = computed(() => {
     return props.itemType.charAt(0).toUpperCase() + props.itemType.slice(1);
   });
 
-  const apiUrl = '/api/v1/user-items/' + props.itemType;
+  const apiUrl = '/api/v1/' + props.itemType + 's';
 
   const getUserItems = async () => {
     try {
-      const response = await $axios.get(apiUrl);
+      const params = new URLSearchParams({
+        page: currentPage.value.toString(),
+        page_size: pageSize.value.toString()
+      });
+
+      const response = await $axios.get(`${apiUrl}?${params}`);
       if (response.status < 200 || response.status >= 300) {
         throw new Error('Network response was not ok. ' + response.statusText);
       }
 
+      // Handle paginated response format
+      const itemsData = response.data.items || response.data;
+      paginationMeta.value = response.data.pagination || null;
+
+      // Transform paginated items to UserItemsResponse format
+      const transformedItems: UserItemsResponse[] = itemsData.map((item: {
+        team_id: string;
+        id: string;
+        name: string;
+      }) => ({
+        team_key: item.team_id,
+        team_name: 'Current Team', // We could get this from context if needed
+        item_key: item.id,
+        item_name: item.name
+      }));
+
       if (props.excludeItems && props.excludeItems.length > 0) {
-        items.value = response.data.filter((item: UserItemsResponse) => !props.excludeItems?.includes(item.item_key));
+        items.value = transformedItems.filter((item: UserItemsResponse) => !props.excludeItems?.includes(item.item_key));
       } else {
-        items.value = response.data;
+        items.value = transformedItems;
       }
 
     } catch (error) {
       console.log(error)
     }
   }
+
+  const shouldShowPagination = computed(() => {
+    return paginationMeta.value && paginationMeta.value.total_pages > 1;
+  });
+
+  // Watch for pagination changes
+  watch([currentPage, pageSize], () => {
+    getUserItems();
+  });
 
   onMounted(async () => {
     getUserItems();

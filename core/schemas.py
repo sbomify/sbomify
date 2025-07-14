@@ -19,6 +19,7 @@ class ErrorCode(str, Enum):
     VALIDATION_ERROR = "VALIDATION_ERROR"
     DUPLICATE_NAME = "DUPLICATE_NAME"
     INVALID_DATA = "INVALID_DATA"
+    BAD_REQUEST = "BAD_REQUEST"
 
     # Billing errors
     BILLING_LIMIT_EXCEEDED = "BILLING_LIMIT_EXCEEDED"
@@ -29,6 +30,15 @@ class ErrorCode(str, Enum):
     NOT_FOUND = "NOT_FOUND"
     TEAM_NOT_FOUND = "TEAM_NOT_FOUND"
     ITEM_NOT_FOUND = "ITEM_NOT_FOUND"
+    PRODUCT_NOT_FOUND = "PRODUCT_NOT_FOUND"
+    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
+    COMPONENT_NOT_FOUND = "COMPONENT_NOT_FOUND"
+    RELEASE_NOT_FOUND = "RELEASE_NOT_FOUND"
+
+    # Permission errors
+    TEAM_MISMATCH = "TEAM_MISMATCH"
+    RELEASE_MODIFICATION_NOT_ALLOWED = "RELEASE_MODIFICATION_NOT_ALLOWED"
+    RELEASE_DELETION_NOT_ALLOWED = "RELEASE_DELETION_NOT_ALLOWED"
 
     # General errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -338,6 +348,20 @@ class PaginatedProductsResponse(BaseModel):
     pagination: PaginationMeta
 
 
+class PaginatedProductIdentifiersResponse(BaseModel):
+    """Paginated response for product identifiers list."""
+
+    items: list[ProductIdentifierSchema]
+    pagination: PaginationMeta
+
+
+class PaginatedProductLinksResponse(BaseModel):
+    """Paginated response for product links list."""
+
+    items: list[ProductLinkSchema]
+    pagination: PaginationMeta
+
+
 class PaginatedProjectsResponse(BaseModel):
     """Paginated response for projects list."""
 
@@ -349,6 +373,106 @@ class PaginatedComponentsResponse(BaseModel):
     """Paginated response for components list."""
 
     items: list[ComponentResponseSchema]
+    pagination: PaginationMeta
+
+
+class SBOMWithReleasesSchema(BaseModel):
+    """Schema for SBOM with releases information."""
+
+    sbom: dict = Field(..., description="SBOM information")
+    has_vulnerabilities_report: bool
+    releases: list[ReleaseReferenceSchema]
+
+
+class PaginatedSBOMsResponse(BaseModel):
+    """Paginated response for component SBOMs list."""
+
+    items: list[SBOMWithReleasesSchema]
+    pagination: PaginationMeta
+
+
+class PaginatedReleasesResponse(BaseModel):
+    """Paginated response for releases list."""
+
+    items: list[ReleaseResponseSchema]
+    pagination: PaginationMeta
+
+
+class ReleaseArtifactSchema(BaseModel):
+    """Schema for release artifact responses."""
+
+    id: str
+    artifact_type: str = Field(..., description="Type of artifact: 'sbom' or 'document'")
+    artifact_name: str = Field(..., description="Name of the artifact")
+    component_id: str
+    component_name: str
+    created_at: str
+    sbom_format: str | None = None
+    sbom_format_version: str | None = None
+    sbom_version: str | None = None
+    document_type: str | None = None
+    document_version: str | None = None
+
+
+class AvailableArtifactSchema(BaseModel):
+    """Schema for available artifact responses."""
+
+    id: str
+    artifact_type: str = Field(..., description="Type of artifact: 'sbom' or 'document'")
+    name: str
+    component: dict = Field(..., description="Component information with id and name")
+    format: str | None = None
+    format_version: str | None = None
+    version: str | None = None
+    document_type: str | None = None
+    created_at: str
+
+
+class PaginatedReleaseArtifactsResponse(BaseModel):
+    """Paginated response for release artifacts list."""
+
+    items: list[ReleaseArtifactSchema | AvailableArtifactSchema]
+    pagination: PaginationMeta
+
+
+class ReleaseReferenceSchema(BaseModel):
+    """Schema for release references in document/SBOM responses."""
+
+    id: str
+    name: str
+    description: str | None = None
+    is_prerelease: bool
+    is_latest: bool
+    product_id: str
+    product_name: str
+    is_public: bool
+
+
+class PaginatedDocumentReleasesResponse(BaseModel):
+    """Paginated response for document releases list."""
+
+    items: list[ReleaseReferenceSchema]
+    pagination: PaginationMeta
+
+
+class PaginatedSBOMReleasesResponse(BaseModel):
+    """Paginated response for SBOM releases list."""
+
+    items: list[ReleaseReferenceSchema]
+    pagination: PaginationMeta
+
+
+class DocumentWithReleasesSchema(BaseModel):
+    """Schema for document with releases information."""
+
+    document: dict = Field(..., description="Document information")
+    releases: list[ReleaseReferenceSchema]
+
+
+class PaginatedDocumentsResponse(BaseModel):
+    """Paginated response for component documents list."""
+
+    items: list[DocumentWithReleasesSchema]
     pagination: PaginationMeta
 
 
@@ -429,8 +553,8 @@ class ArtifactDocumentSchema(BaseModel):
     component: dict  # {"id": str, "name": str}
 
 
-class ReleaseArtifactSchema(BaseModel):
-    """Schema for release artifacts in responses."""
+class ReleaseArtifactDetailSchema(BaseModel):
+    """Schema for release artifacts in detailed responses."""
 
     id: str
     sbom: ArtifactSBOMSchema | None = None
@@ -477,7 +601,7 @@ class ReleaseResponseSchema(BaseModel):
     is_public: bool
     created_at: datetime
     artifact_count: int | None = None
-    artifacts: list[ReleaseArtifactSchema] | None = None
+    artifacts: list[ReleaseArtifactDetailSchema] | None = None
 
 
 class ReleaseArtifactCreateSchema(BaseModel):

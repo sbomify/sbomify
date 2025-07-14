@@ -304,7 +304,7 @@ const loadIdentifiers = async () => {
 
     try {
     const response = await $axios.get(`/api/v1/products/${props.productId}/identifiers`)
-    identifiers.value = response.data
+    identifiers.value = response.data.items || []
 
     // Barcodes will be rendered by the watch function
   } catch (err) {

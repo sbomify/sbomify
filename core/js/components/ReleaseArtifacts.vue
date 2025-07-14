@@ -181,35 +181,14 @@
       </div>
 
       <!-- Pagination Controls -->
-      <div v-if="totalArtifactPages > 1" class="d-flex justify-content-between align-items-center mt-3">
-        <small class="text-muted">
-          Page {{ currentArtifactPage }} of {{ totalArtifactPages }}
-        </small>
-        <nav>
-          <ul class="pagination pagination-sm mb-0">
-            <li class="page-item" :class="{ disabled: currentArtifactPage === 1 }">
-              <button class="page-link" :disabled="currentArtifactPage === 1" @click="currentArtifactPage = 1">
-                First
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentArtifactPage === 1 }">
-              <button class="page-link" :disabled="currentArtifactPage === 1" @click="currentArtifactPage--">
-                Previous
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentArtifactPage === totalArtifactPages }">
-              <button class="page-link" :disabled="currentArtifactPage === totalArtifactPages" @click="currentArtifactPage++">
-                Next
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentArtifactPage === totalArtifactPages }">
-              <button class="page-link" :disabled="currentArtifactPage === totalArtifactPages" @click="currentArtifactPage = totalArtifactPages">
-                Last
-              </button>
-            </li>
-          </ul>
-        </nav>
-      </div>
+      <PaginationControls
+        v-if="totalArtifactPages > 1"
+        v-model:current-page="currentArtifactPage"
+        v-model:page-size="artifactsPerPage"
+        :total-pages="totalArtifactPages"
+        :total-items="filteredDisplayArtifacts.length"
+        :show-page-size-selector="true"
+      />
     </div>
 
     <!-- Add Artifact Modal -->
@@ -385,35 +364,14 @@
               </div>
 
               <!-- Pagination Controls -->
-              <div v-if="totalPages > 1" class="d-flex justify-content-between align-items-center mt-3">
-                <small class="text-muted">
-                  Page {{ currentPage }} of {{ totalPages }}
-                </small>
-                <nav>
-                  <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                      <button class="page-link" :disabled="currentPage === 1" @click="currentPage = 1">
-                        First
-                      </button>
-                    </li>
-                    <li class="page-item" :class="{ disabled: currentPage === 1 }">
-                      <button class="page-link" :disabled="currentPage === 1" @click="currentPage--">
-                        Previous
-                      </button>
-                    </li>
-                    <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                      <button class="page-link" :disabled="currentPage === totalPages" @click="currentPage++">
-                        Next
-                      </button>
-                    </li>
-                    <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-                      <button class="page-link" :disabled="currentPage === totalPages" @click="currentPage = totalPages">
-                        Last
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
-              </div>
+              <PaginationControls
+                v-if="totalPages > 1"
+                v-model:current-page="currentPage"
+                v-model:page-size="itemsPerPage"
+                :total-pages="totalPages"
+                :total-items="filteredArtifacts.length"
+                :show-page-size-selector="true"
+              />
             </div>
           </div>
           <div class="modal-footer">
@@ -446,6 +404,7 @@ import $axios from '../utils'
 import { showError, showSuccess } from '../alerts'
 import { isAxiosError } from 'axios'
 import StandardCard from './StandardCard.vue'
+import PaginationControls from './PaginationControls.vue'
 
 interface Artifact {
   id: string
@@ -826,8 +785,11 @@ const loadArtifacts = async () => {
     // Get artifacts already in this release
     const response = await $axios.get(`/api/v1/releases/${props.releaseId}/artifacts?mode=existing`)
 
+    // Handle both old array format and new paginated format for backward compatibility
+    const artifactsData = Array.isArray(response.data) ? response.data : response.data.items || []
+
     // Transform the response to match expected format
-    artifacts.value = response.data.map((artifact: Record<string, string>) => {
+    artifacts.value = artifactsData.map((artifact: Record<string, string>) => {
       if (artifact.artifact_type === 'sbom') {
         return {
           id: artifact.id,
@@ -881,7 +843,12 @@ const loadAvailableArtifacts = async () => {
   try {
     // Get available artifacts that can be added to this release
     const response = await $axios.get(`/api/v1/releases/${props.releaseId}/artifacts?mode=available`)
-    availableArtifacts.value = response.data || []
+    // Handle both old array format and new paginated format for backward compatibility
+    if (Array.isArray(response.data)) {
+      availableArtifacts.value = response.data
+    } else {
+      availableArtifacts.value = response.data.items || []
+    }
   } catch (err) {
     console.error('Error loading available artifacts:', err)
 
@@ -928,15 +895,20 @@ const addSelectedArtifacts = async () => {
         let payload: Record<string, string> = {}
 
         if (artifact.artifact_type === 'sbom') {
-          payload.sbom_id = artifact.id
+          payload.sbom_id = String(artifact.id)
         } else {
-          payload.document_id = artifact.id
+          payload.document_id = String(artifact.id)
         }
 
         const response = await $axios.post(`/api/v1/releases/${props.releaseId}/artifacts`, payload)
         results.push({ success: true, artifact, response: response.data })
       } catch (err) {
         console.error(`Error adding artifact ${artifact.name}:`, err)
+        // Log the specific error details for debugging
+        if (isAxiosError(err) && err.response) {
+          console.error(`API Error Details:`, err.response.data)
+          console.error(`Status: ${err.response.status}`)
+        }
         results.push({ success: false, artifact, error: err })
       }
     }
@@ -953,7 +925,20 @@ const addSelectedArtifacts = async () => {
     if (failed.length > 0) {
       const errorMessages = failed.map(f => {
         if (isAxiosError(f.error)) {
-          return `${f.artifact.name}: ${f.error.response?.data?.detail || 'Unknown error'}`
+          const errorDetail = f.error.response?.data?.detail || 'Unknown error'
+
+          // Provide more user-friendly error messages for common cases
+          if (errorDetail.includes('latest')) {
+            return `${f.artifact.name}: Cannot add artifacts to the 'latest' release`
+          } else if (errorDetail.includes('team')) {
+            return `${f.artifact.name}: This artifact doesn't belong to your team`
+          } else if (errorDetail.includes('already exists')) {
+            return `${f.artifact.name}: This artifact is already in the release`
+          } else if (errorDetail.includes('already contains')) {
+            return `${f.artifact.name}: Release already contains this type of artifact from the same component`
+          }
+
+          return `${f.artifact.name}: ${errorDetail}`
         }
         return `${f.artifact.name}: Failed to add`
       })

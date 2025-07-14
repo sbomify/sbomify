@@ -243,7 +243,7 @@ const loadLinks = async () => {
 
   try {
     const response = await $axios.get(`/api/v1/products/${props.productId}/links`)
-    links.value = response.data
+    links.value = response.data.items || []
   } catch (err) {
     console.error('Error loading links:', err)
     error.value = 'Failed to load links'

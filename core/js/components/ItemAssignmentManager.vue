@@ -402,14 +402,14 @@
           assignedItems.value = parentResponse.data.projects || []
           // Filter out assigned projects from available list
           const assignedIds = assignedItems.value.map((p: AssignmentItem) => p.id)
-          availableItems.value = availableResponse.data.filter(
+          availableItems.value = availableResponse.data.items.filter(
             (p: AssignmentItem) => !assignedIds.includes(p.id)
           )
         } else {
           assignedItems.value = parentResponse.data.components || []
           // Filter out assigned components from available list
           const assignedIds = assignedItems.value.map((c: AssignmentItem) => c.id)
-          availableItems.value = availableResponse.data.filter(
+          availableItems.value = availableResponse.data.items.filter(
             (c: AssignmentItem) => !assignedIds.includes(c.id)
           )
         }

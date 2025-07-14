@@ -122,35 +122,14 @@
       </div>
 
       <!-- Pagination Controls -->
-      <div v-if="totalPages > 1" class="d-flex justify-content-between align-items-center mt-3">
-        <small class="text-muted">
-          Page {{ currentPage }} of {{ totalPages }}
-        </small>
-        <nav>
-          <ul class="pagination pagination-sm mb-0">
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" :disabled="currentPage === 1" @click="currentPage = 1">
-                First
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <button class="page-link" :disabled="currentPage === 1" @click="currentPage--">
-                Previous
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" :disabled="currentPage === totalPages" @click="currentPage++">
-                Next
-              </button>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <button class="page-link" :disabled="currentPage === totalPages" @click="currentPage = totalPages">
-                Last
-              </button>
-            </li>
-          </ul>
-        </nav>
-      </div>
+      <PaginationControls
+        v-if="totalPages > 1"
+        v-model:current-page="currentPage"
+        v-model:page-size="itemsPerPage"
+        :total-pages="totalPages"
+        :total-items="filteredArtifacts.length"
+        :show-page-size-selector="true"
+      />
     </div>
   </StandardCard>
 </template>
@@ -158,6 +137,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import StandardCard from './StandardCard.vue'
+import PaginationControls from './PaginationControls.vue'
 
 interface Component {
   id: string
