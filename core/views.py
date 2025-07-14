@@ -562,22 +562,32 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
 
     # Add component-specific data based on type
     if component.component_type == Component.ComponentType.SBOM:
-        # Handle SBOM components
+        # Handle SBOM components with optimized queries
         sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+
+        # Batch fetch all ReleaseArtifacts for all SBOMs to avoid N+1 queries
+        sbom_ids = [sbom.id for sbom in sboms_queryset]
+        release_artifacts_map = {}
+        if sbom_ids:
+            release_artifacts = ReleaseArtifact.objects.filter(
+                sbom_id__in=sbom_ids, release__product__is_public=True
+            ).select_related("release", "release__product")
+            # Group by SBOM ID for easy lookup
+            for artifact in release_artifacts:
+                if artifact.sbom_id not in release_artifacts_map:
+                    release_artifacts_map[artifact.sbom_id] = []
+                release_artifacts_map[artifact.sbom_id].append(artifact)
+
         sboms_with_vuln_status = []
         try:
             redis_client = redis.from_url(settings.REDIS_WORKER_URL)
             for sbom_item in sboms_queryset:
                 keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
 
-                # Get releases that contain this SBOM (only public releases for public view)
+                # Get releases that contain this SBOM using pre-fetched data (only public releases)
                 releases = []
-                release_artifacts = (
-                    ReleaseArtifact.objects.filter(sbom=sbom_item)
-                    .select_related("release", "release__product")
-                    .filter(release__product__is_public=True)
-                )
-                for artifact in release_artifacts:
+                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+                for artifact in artifacts_for_sbom:
                     releases.append(
                         {
                             "id": str(artifact.release.id),
@@ -607,14 +617,10 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                 )
         except redis.exceptions.ConnectionError:
             for sbom_item in sboms_queryset:
-                # Get releases that contain this SBOM (only public releases for public view)
+                # Get releases that contain this SBOM using pre-fetched data (only public releases)
                 releases = []
-                release_artifacts = (
-                    ReleaseArtifact.objects.filter(sbom=sbom_item)
-                    .select_related("release", "release__product")
-                    .filter(release__product__is_public=True)
-                )
-                for artifact in release_artifacts:
+                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+                for artifact in artifacts_for_sbom:
                     releases.append(
                         {
                             "id": str(artifact.release.id),
@@ -647,18 +653,28 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
         context["sboms_data"] = sboms_with_vuln_status
 
     elif component.component_type == Component.ComponentType.DOCUMENT:
-        # Handle Document components
+        # Handle Document components with optimized queries
         documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
+
+        # Batch fetch all ReleaseArtifacts for all Documents to avoid N+1 queries
+        document_ids = [doc.id for doc in documents_queryset]
+        release_artifacts_map = {}
+        if document_ids:
+            release_artifacts = ReleaseArtifact.objects.filter(
+                document_id__in=document_ids, release__product__is_public=True
+            ).select_related("release", "release__product")
+            # Group by Document ID for easy lookup
+            for artifact in release_artifacts:
+                if artifact.document_id not in release_artifacts_map:
+                    release_artifacts_map[artifact.document_id] = []
+                release_artifacts_map[artifact.document_id].append(artifact)
+
         documents_data = []
         for document_item in documents_queryset:
-            # Get releases that contain this document (only public releases for public view)
+            # Get releases that contain this document using pre-fetched data (only public releases)
             releases = []
-            release_artifacts = (
-                ReleaseArtifact.objects.filter(document=document_item)
-                .select_related("release", "release__product")
-                .filter(release__product__is_public=True)
-            )
-            for artifact in release_artifacts:
+            artifacts_for_document = release_artifacts_map.get(document_item.id, [])
+            for artifact in artifacts_for_document:
                 releases.append(
                     {
                         "id": str(artifact.release.id),
@@ -712,20 +728,32 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
     }
 
     if component.component_type == Component.ComponentType.SBOM:
-        # Handle SBOM components
+        # Handle SBOM components with optimized queries
         sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
+
+        # Batch fetch all ReleaseArtifacts for all SBOMs to avoid N+1 queries
+        sbom_ids = [sbom.id for sbom in sboms_queryset]
+        release_artifacts_map = {}
+        if sbom_ids:
+            release_artifacts = ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
+                "release", "release__product"
+            )
+            # Group by SBOM ID for easy lookup
+            for artifact in release_artifacts:
+                if artifact.sbom_id not in release_artifacts_map:
+                    release_artifacts_map[artifact.sbom_id] = []
+                release_artifacts_map[artifact.sbom_id].append(artifact)
+
         sboms_with_vuln_status = []
         try:
             redis_client = redis.from_url(settings.REDIS_WORKER_URL)
             for sbom_item in sboms_queryset:
                 keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
 
-                # Get releases that contain this SBOM
+                # Get releases that contain this SBOM using pre-fetched data
                 releases = []
-                release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom_item).select_related(
-                    "release", "release__product"
-                )
-                for artifact in release_artifacts:
+                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+                for artifact in artifacts_for_sbom:
                     releases.append(
                         {
                             "id": str(artifact.release.id),
@@ -756,12 +784,10 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
         except redis.exceptions.ConnectionError:
             # If Redis is down, assume no reports are available for simplicity
             for sbom_item in sboms_queryset:
-                # Get releases that contain this SBOM
+                # Get releases that contain this SBOM using pre-fetched data
                 releases = []
-                release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom_item).select_related(
-                    "release", "release__product"
-                )
-                for artifact in release_artifacts:
+                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+                for artifact in artifacts_for_sbom:
                     releases.append(
                         {
                             "id": str(artifact.release.id),
@@ -795,16 +821,28 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
         context["sboms_data"] = sboms_with_vuln_status
 
     elif component.component_type == Component.ComponentType.DOCUMENT:
-        # Handle document components
+        # Handle document components with optimized queries
         documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
-        documents_data = []
-        for document_item in documents_queryset:
-            # Get releases that contain this document
-            releases = []
-            release_artifacts = ReleaseArtifact.objects.filter(document=document_item).select_related(
+
+        # Batch fetch all ReleaseArtifacts for all Documents to avoid N+1 queries
+        document_ids = [doc.id for doc in documents_queryset]
+        release_artifacts_map = {}
+        if document_ids:
+            release_artifacts = ReleaseArtifact.objects.filter(document_id__in=document_ids).select_related(
                 "release", "release__product"
             )
+            # Group by Document ID for easy lookup
             for artifact in release_artifacts:
+                if artifact.document_id not in release_artifacts_map:
+                    release_artifacts_map[artifact.document_id] = []
+                release_artifacts_map[artifact.document_id].append(artifact)
+
+        documents_data = []
+        for document_item in documents_queryset:
+            # Get releases that contain this document using pre-fetched data
+            releases = []
+            artifacts_for_document = release_artifacts_map.get(document_item.id, [])
+            for artifact in artifacts_for_document:
                 releases.append(
                     {
                         "id": str(artifact.release.id),
