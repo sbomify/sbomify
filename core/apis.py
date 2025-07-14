@@ -2914,7 +2914,7 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 @router.get(
     "/components/{component_id}/sboms",
     response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=PersonalAccessTokenAuth(),
+    auth=(PersonalAccessTokenAuth(), django_auth),
     tags=["Components"],
 )
 def list_component_sboms(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
@@ -2998,7 +2998,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 @router.get(
     "/components/{component_id}/documents",
     response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=PersonalAccessTokenAuth(),
+    auth=(PersonalAccessTokenAuth(), django_auth),
     tags=["Components"],
 )
 def list_component_documents(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
