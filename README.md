@@ -250,6 +250,15 @@ Persistent storage for Keycloak is managed by Docker using a named volume (`keyc
 
 Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your `.env` file or Docker Compose configuration to control the bootstrap process.
 
+When running in development mode (using `docker-compose.dev.yml`), the bootstrap script automatically:
+
+- **Disables SSL requirements** for easier local development
+- **Creates test users** for authentication testing:
+  - **John Doe** - Username: `jdoe`, Password: `foobar123`, Email: `jdoe@example.com`
+  - **Steve Smith** - Username: `ssmith`, Password: `foobar123`, Email: `ssmith@example.com`
+
+These development-specific configurations are controlled by the `KEYCLOAK_DEV_MODE` environment variable and are only applied when running the development Docker Compose stack.
+
 To start Keycloak (and all other services) in development, simply run:
 
 ```bash

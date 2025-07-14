@@ -29,6 +29,10 @@ services:
     volumes:
       - .:/code # Mount local code for development
 
+  keycloak-bootstrap:
+    environment:
+      KEYCLOAK_DEV_MODE: "true"
+
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
     build:
