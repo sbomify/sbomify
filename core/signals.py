@@ -18,18 +18,20 @@ def update_latest_release_on_sbom_created(sender, instance, created, **kwargs):
 def _update_latest_release_for_sbom(sbom_instance):
     """Internal function to update latest release for SBOM with proper error handling."""
     # Import here to avoid circular imports
-    from core.models import Release
+    from core.models import Component, Release
 
     try:
         # Get all products that contain this SBOM's component
-        products = sbom_instance.component.get_products()
+        # Cast to core.Component proxy model to access get_products method
+        component = Component.objects.get(id=sbom_instance.component.id)
+        products = component.get_products()
 
         for product in products:
             # Get or create latest release for this product
             latest_release = Release.get_or_create_latest_release(product)
 
-            # Add the SBOM to the latest release
-            latest_release.add_sbom(sbom_instance)
+            # Add the SBOM to the latest release using the proper method that handles duplicates
+            latest_release.add_artifact_to_latest_release(sbom_instance)
 
             logger.info(
                 f"Added SBOM {sbom_instance.id} to latest release {latest_release.id} " f"for product {product.id}"
@@ -50,18 +52,20 @@ def update_latest_release_on_document_created(sender, instance, created, **kwarg
 def _update_latest_release_for_document(document_instance):
     """Internal function to update latest release for Document with proper error handling."""
     # Import here to avoid circular imports
-    from core.models import Release
+    from core.models import Component, Release
 
     try:
         # Get all products that contain this document's component
-        products = document_instance.component.get_products()
+        # Cast to core.Component proxy model to access get_products method
+        component = Component.objects.get(id=document_instance.component.id)
+        products = component.get_products()
 
         for product in products:
             # Get or create latest release for this product
             latest_release = Release.get_or_create_latest_release(product)
 
-            # Add the document to the latest release
-            latest_release.add_document(document_instance)
+            # Add the document to the latest release using the proper method that handles duplicates
+            latest_release.add_artifact_to_latest_release(document_instance)
 
             logger.info(
                 f"Added Document {document_instance.id} to latest release {latest_release.id} "
