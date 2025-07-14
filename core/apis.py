@@ -2008,13 +2008,14 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
             if artifact.sbom:
                 artifacts.append(
                     {
-                        "id": artifact.id,
+                        "id": str(artifact.id),
                         "artifact_type": "sbom",
                         "artifact_name": artifact.sbom.name,
                         "component_id": str(artifact.sbom.component.id),
                         "component_name": artifact.sbom.component.name,
                         "created_at": artifact.created_at.isoformat(),
                         "sbom_format": artifact.sbom.format,
+                        "sbom_format_version": artifact.sbom.format_version,
                         "sbom_version": artifact.sbom.version,
                         "document_type": None,
                         "document_version": None,
@@ -2023,7 +2024,7 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
             elif artifact.document:
                 artifacts.append(
                     {
-                        "id": artifact.id,
+                        "id": str(artifact.id),
                         "artifact_type": "document",
                         "artifact_name": artifact.document.name,
                         "component_id": str(artifact.document.component.id),
@@ -2359,7 +2360,8 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
                         "component_name": artifact.sbom.component.name,
                         "created_at": artifact.created_at.isoformat(),
                         "sbom_format": artifact.sbom.format,
-                        "sbom_version": artifact.sbom.format_version,
+                        "sbom_format_version": artifact.sbom.format_version,
+                        "sbom_version": artifact.sbom.version,
                         "document_type": None,
                         "document_version": None,
                     }
@@ -2497,7 +2499,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "component_name": artifact.sbom.component.name,
                 "created_at": artifact.created_at.isoformat(),
                 "sbom_format": artifact.sbom.format,
-                "sbom_version": artifact.sbom.format_version,
+                "sbom_format_version": artifact.sbom.format_version,
+                "sbom_version": artifact.sbom.version,
                 "document_type": None,
                 "document_version": None,
             }

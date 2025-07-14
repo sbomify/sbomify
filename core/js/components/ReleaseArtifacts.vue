@@ -835,7 +835,7 @@ const loadArtifacts = async () => {
             id: artifact.id,
             name: artifact.artifact_name,
             format: artifact.sbom_format,
-            format_version: artifact.sbom_version,
+            format_version: artifact.sbom_format_version,
             version: artifact.sbom_version,
             created_at: artifact.created_at,
             component: {
