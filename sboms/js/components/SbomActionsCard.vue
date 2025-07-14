@@ -60,7 +60,7 @@ const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities
   gap: 2rem;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1200px) {
   .actions-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -111,6 +111,8 @@ const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities
   font-weight: 600;
   color: #374151;
   margin: 0 0 0.5rem 0;
+  word-wrap: break-word;
+  hyphens: auto;
 }
 
 .action-description {
@@ -130,6 +132,9 @@ const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities
   display: inline-flex;
   align-items: center;
   border: none;
+  white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .btn-primary.btn-action {

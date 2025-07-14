@@ -187,17 +187,17 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     {% if component.component_type == 'sbom' %}
         <!-- SBOM Detailed View -->
         <div class="row">
-            <div class="col-12 col-lg-8">
+            <div class="col-12 col-lg-5">
                 <div class="vc-sbom-metadata-card"
                      data-sbom-id="{{ sbom.id }}"
                      data-sbom-name="{{ sbom.name }}"
-                     data-created-at="{{ sbom.created_at }}"
+                     data-created-at="{{ sbom.created_at.isoformat }}"
                      data-source-display="{{ sbom.source_display }}"
                      data-format="{{ sbom.format }}"
                      data-format-version="{{ sbom.format_version|stringformat:'s' }}"
                      data-version="{{ sbom.version|default:'' }}"></div>
             </div>
-            <div class="col-12 col-lg-4">
+            <div class="col-12 col-lg-7">
                 <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
             </div>
         </div>

@@ -131,7 +131,18 @@ onMounted(() => {
 
 const formatDate = (dateString: string): string => {
   try {
+    if (!dateString || dateString.trim() === '') {
+      return 'Unknown'
+    }
+
     const date = new Date(dateString)
+
+    // Check if the date is invalid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date string provided:', dateString)
+      return 'Invalid Date'
+    }
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -139,7 +150,8 @@ const formatDate = (dateString: string): string => {
       hour: '2-digit',
       minute: '2-digit'
     })
-  } catch {
+  } catch (error) {
+    console.error('Error formatting date:', error)
     return dateString
   }
 }
