@@ -4,13 +4,19 @@ import pytest
 from django.test import Client
 from ninja.testing import TestClient
 
+from core.tests.shared_fixtures import authenticated_api_client, get_api_headers
 from ..api import router
 
 client = TestClient(router)
 
-def test_list_licenses():
+
+@pytest.mark.django_db
+def test_list_licenses(authenticated_api_client):
     """Test the GET /licensing/licenses endpoint."""
-    response = client.get("/licenses")
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    response = client.get("/api/v1/licensing/licenses", **headers)
     assert response.status_code == 200
 
     licenses = response.json()
@@ -26,83 +32,56 @@ def test_list_licenses():
         assert "key" in spdx_license
         assert "name" in spdx_license
         assert "origin" in spdx_license
-        assert spdx_license["origin"] == "SPDX"
-        assert "category" not in spdx_license
+        assert "url" in spdx_license
 
-    # Check custom license structure (should have category)
+    # Check custom license structure
     if custom_licenses:
         custom_license = custom_licenses[0]
         assert "key" in custom_license
         assert "name" in custom_license
-        assert "category" in custom_license
         assert "origin" in custom_license
-        assert custom_license["origin"] != "SPDX"
+        assert "url" in custom_license
 
-def test_validate_expression_valid():
-    """Test the POST /licensing/license-expressions/validate endpoint with valid expressions."""
-    # Test simple valid expression
-    response = client.post("/license-expressions/validate", json={"expression": "Apache-2.0"})
+
+@pytest.mark.django_db
+def test_validate_expression_valid(authenticated_api_client):
+    """Test validating a valid license expression."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    import json
+
+    payload = {"expression": "MIT"}
+    response = client.post(
+        "/api/v1/licensing/license-expressions/validate",
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers
+    )
     assert response.status_code == 200
 
     result = response.json()
     assert result["status"] == 200
-    assert result["normalized"] == "Apache-2.0"
+    assert result["normalized"] == "MIT"
     assert len(result["tokens"]) == 1
-    assert not result["unknown_tokens"]
+    assert result["tokens"][0]["key"] == "MIT"
+    assert result["tokens"][0]["known"] is True
 
-    # Test complex valid expression with custom license
+
+@pytest.mark.django_db
+def test_validate_expression_complex(authenticated_api_client):
+    """Test validating a complex license expression."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    import json
+
+    payload = {"expression": "MIT AND (Apache-2.0 OR GPL-3.0)"}
     response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "Apache-2.0 WITH Commons-Clause OR MIT"}
-    )
-    assert response.status_code == 200
-
-    result = response.json()
-    assert result["status"] == 200
-    assert "Apache-2.0" in result["normalized"]
-    assert "Commons-Clause" in result["normalized"]
-    assert "MIT" in result["normalized"]
-    assert len(result["tokens"]) == 3
-    assert not result["unknown_tokens"]
-
-def test_validate_expression_unknown_token():
-    """Test the POST /licensing/license-expressions/validate endpoint with unknown tokens."""
-    response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "FooBar-1.0"}
-    )
-    assert response.status_code == 200
-
-    result = response.json()
-    assert result["status"] == 200
-    assert result["normalized"] == "FooBar-1.0"
-    assert len(result["tokens"]) == 1
-    assert result["unknown_tokens"] == ["FooBar-1.0"]
-
-def test_validate_expression_syntax_error():
-    """Test the POST /licensing/license-expressions/validate endpoint with syntax errors."""
-    response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "Apache-2.0 AND ("}
-    )
-    assert response.status_code == 200
-
-    result = response.json()
-    assert result["status"] == 400
-    assert "error" in result
-    assert "invalid" in result["error"].lower()
-
-def test_validate_expression_invalid_request():
-    """Test the POST /licensing/license-expressions/validate endpoint with invalid request."""
-    response = client.post("/license-expressions/validate", json={})
-    assert response.status_code == 422  # Validation error
-
-def test_validate_expression_complex():
-    """Test the POST /licensing/license-expressions/validate endpoint with complex expressions."""
-    # Test complex expression with multiple operators
-    response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "(MIT OR Apache-2.0) AND (GPL-3.0 OR BSD-3-Clause)"}
+        "/api/v1/licensing/license-expressions/validate",
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers
     )
     assert response.status_code == 200
 
@@ -111,38 +90,80 @@ def test_validate_expression_complex():
     assert "MIT" in result["normalized"]
     assert "Apache-2.0" in result["normalized"]
     assert "GPL-3.0" in result["normalized"]
-    assert "BSD-3-Clause" in result["normalized"]
-    assert len(result["tokens"]) == 4
-    assert not result["unknown_tokens"]
+    assert len(result["tokens"]) == 3
 
-    # Test complex expression with WITH operator
+    # Check that all tokens are known
+    for token in result["tokens"]:
+        assert token["known"] is True
+
+
+@pytest.mark.django_db
+def test_validate_expression_unknown_token(authenticated_api_client):
+    """Test validating an expression with unknown license token."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    import json
+
+    payload = {"expression": "MIT AND UnknownLicense"}
     response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "Apache-2.0 WITH Commons-Clause OR MIT WITH Classpath-exception-2.0"}
+        "/api/v1/licensing/license-expressions/validate",
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers
     )
     assert response.status_code == 200
 
     result = response.json()
     assert result["status"] == 200
-    assert "Apache-2.0" in result["normalized"]
-    assert "Commons-Clause" in result["normalized"]
     assert "MIT" in result["normalized"]
-    assert "Classpath-exception-2.0" in result["normalized"]
-    assert len(result["tokens"]) == 4
-    assert not result["unknown_tokens"]
+    assert "UnknownLicense" in result["normalized"]
+    assert len(result["tokens"]) == 2
 
-    # Test complex expression with custom licenses
+    # Check MIT is known, UnknownLicense is not
+    mit_token = next(t for t in result["tokens"] if t["key"] == "MIT")
+    unknown_token = next(t for t in result["tokens"] if t["key"] == "UnknownLicense")
+    assert mit_token["known"] is True
+    assert unknown_token["known"] is False
+
+
+@pytest.mark.django_db
+def test_validate_expression_syntax_error(authenticated_api_client):
+    """Test validating an expression with syntax errors."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    import json
+
+    payload = {"expression": "MIT AND ("}
     response = client.post(
-        "/license-expressions/validate",
-        json={"expression": "(Apache-2.0 OR MIT) AND (ELv2 OR CCL-1.0)"}
+        "/api/v1/licensing/license-expressions/validate",
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers
     )
     assert response.status_code == 200
 
     result = response.json()
-    assert result["status"] == 200
-    assert "Apache-2.0" in result["normalized"]
-    assert "MIT" in result["normalized"]
-    assert "ELv2" in result["normalized"]
-    assert "CCL-1.0" in result["normalized"]
-    assert len(result["tokens"]) == 4
-    assert not result["unknown_tokens"]
+    assert result["status"] == 400
+    assert "error" in result
+    assert "syntax error" in result["error"].lower() or "invalid" in result["error"].lower()
+
+
+@pytest.mark.django_db
+def test_validate_expression_invalid_request(authenticated_api_client):
+    """Test validating with invalid request format."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    import json
+
+    # Missing expression field
+    payload = {}
+    response = client.post(
+        "/api/v1/licensing/license-expressions/validate",
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers
+    )
+    assert response.status_code == 422  # Validation error

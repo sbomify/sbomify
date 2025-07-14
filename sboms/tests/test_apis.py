@@ -77,54 +77,7 @@ def test_sbom_api_is_public(
     assert response.json()["is_public"] is True
 
 
-@pytest.mark.django_db
-def test_sbom_api_get_user_items(
-    sample_user: Member,  # noqa: F811
-    sample_access_token: AccessToken,  # noqa: F811
-    sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-):
-    client = Client()
 
-    uri = reverse("api-1:get_user_items", kwargs={"item_type": "product"})
-
-    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
-
-    response: HttpResponse = client.get(
-        uri, content_type="application/json", **get_api_headers(sample_access_token)
-    )
-
-    assert response.status_code == 200
-    result = response.json()
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert result[0]["item_key"] == sample_product.id
-    assert result[0]["item_name"] == sample_product.name
-
-    uri = reverse("api-1:get_user_items", kwargs={"item_type": "project"})
-    response: HttpResponse = client.get(
-        uri, content_type="application/json", **get_api_headers(sample_access_token)
-    )
-
-    assert response.status_code == 200
-    result = response.json()
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert result[0]["item_key"] == sample_project.id
-    assert result[0]["item_name"] == sample_project.name
-
-    uri = reverse("api-1:get_user_items", kwargs={"item_type": "component"})
-    response: HttpResponse = client.get(
-        uri, content_type="application/json", **get_api_headers(sample_access_token)
-    )
-
-    assert response.status_code == 200
-    result = response.json()
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert result[0]["item_key"] == sample_component.id
-    assert result[0]["item_name"] == sample_component.name
 
 
 @pytest.mark.django_db

@@ -205,7 +205,8 @@ const loadReleases = async () => {
 
   try {
     const response = await $axios.get('/api/v1/releases')
-    releases.value = response.data.sort((a: Release, b: Release) => {
+    const items = response.data.items || []
+    releases.value = items.sort((a: Release, b: Release) => {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
   } catch (err) {

@@ -13,7 +13,6 @@ from access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_
 from billing.config import is_billing_enabled
 from billing.models import BillingPlan
 from core.object_store import S3Client
-from core.schemas import ItemTypes
 from core.utils import verify_item_access
 from sbomify.logging import getLogger
 from sboms.schemas import (
@@ -22,7 +21,6 @@ from sboms.schemas import (
 )
 from sboms.utils import get_product_sbom_package, get_project_sbom_package, get_release_sbom_package
 from teams.models import Team
-from teams.utils import get_user_teams
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
 from .schemas import (
@@ -37,8 +35,16 @@ from .schemas import (
     ErrorCode,
     ErrorResponse,
     PaginatedComponentsResponse,
+    PaginatedDocumentReleasesResponse,
+    PaginatedDocumentsResponse,
+    PaginatedProductIdentifiersResponse,
+    PaginatedProductLinksResponse,
     PaginatedProductsResponse,
     PaginatedProjectsResponse,
+    PaginatedReleaseArtifactsResponse,
+    PaginatedReleasesResponse,
+    PaginatedSBOMReleasesResponse,
+    PaginatedSBOMsResponse,
     PaginationMeta,
     ProductCreateSchema,
     ProductIdentifierBulkUpdateSchema,
@@ -64,7 +70,6 @@ from .schemas import (
     ReleaseUpdateSchema,
     SBOMReleaseTaggingResponseSchema,
     SBOMReleaseTaggingSchema,
-    UserItemsResponse,
 )
 
 log = getLogger(__name__)
@@ -85,8 +90,6 @@ class CreateProjectRequest(BaseModel):
 
 
 router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
-
-item_type_map = {"team": Team, "component": Component, "project": Project, "product": Product}
 
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
@@ -233,37 +236,6 @@ def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
     return paginated_items.object_list, pagination_meta
 
 
-@router.get(
-    "/user-items/{item_type}",
-    response={
-        200: list[UserItemsResponse],
-        400: ErrorResponse,
-    },
-    tags=["Components"],
-)
-def get_user_items(request, item_type: ItemTypes) -> list[UserItemsResponse]:
-    "Get all items of a specific type (across all teams) that belong to the current user."
-    user_teams = get_user_teams(user=request.user)
-    Model = item_type_map[item_type]
-
-    result = []
-    team_id_to_key = {v["id"]: k for k, v in user_teams.items() if "id" in v}
-    item_records = Model.objects.filter(team_id__in=team_id_to_key.keys())
-
-    for item in item_records:
-        team_key = team_id_to_key[item.team_id]
-        result.append(
-            UserItemsResponse(
-                team_key=team_key,
-                team_name=user_teams[team_key]["name"],
-                item_key=item.id,
-                item_name=item.name,
-            )
-        )
-
-    return result
-
-
 def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
@@ -364,15 +336,26 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 @router.get(
     "/products",
     response={200: PaginatedProductsResponse, 403: ErrorResponse},
+    auth=None,
 )
+@decorate_view(optional_token_auth)
 def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
-    """List all products for the current user's team with pagination."""
-    team_id = _get_user_team_id(request)
-    if not team_id:
-        return 403, {"detail": "No current team selected"}
-
+    """List all products - public products for unauthenticated users, team products for authenticated users."""
     try:
-        products_queryset = Product.objects.filter(team_id=team_id).prefetch_related("projects", "identifiers", "links")
+        # For authenticated users, show their team's products
+        if request.user and request.user.is_authenticated:
+            team_id = _get_user_team_id(request)
+            if not team_id:
+                return 403, {"detail": "No current team selected"}
+
+            products_queryset = Product.objects.filter(team_id=team_id).prefetch_related(
+                "projects", "identifiers", "links"
+            )
+        else:
+            # For unauthenticated users, show only public products
+            products_queryset = Product.objects.filter(is_public=True).prefetch_related(
+                "projects", "identifiers", "links"
+            )
 
         # Apply pagination
         paginated_products, pagination_meta = _paginate_queryset(products_queryset, page, page_size)
@@ -387,7 +370,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing products: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -401,7 +384,7 @@ def get_product(request: HttpRequest, product_id: str):
     try:
         product = Product.objects.prefetch_related("projects", "identifiers", "links").get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     # Ensure latest release exists when users access the product
     _ensure_latest_release_exists(product)
@@ -412,10 +395,10 @@ def get_product(request: HttpRequest, product_id: str):
 
     # For private products, require authentication and team access
     if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items"}
+        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
     if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_item_response(product, "product")
 
@@ -429,7 +412,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update products"}
@@ -443,10 +426,13 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         return 200, _build_item_response(product, "product")
 
     except IntegrityError:
-        return 400, {"detail": "A product with this name already exists in this team"}
+        return 400, {
+            "detail": "A product with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error updating product {product_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -458,7 +444,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update products"}
@@ -533,10 +519,13 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         return 200, _build_item_response(product, "product")
 
     except IntegrityError:
-        return 400, {"detail": "A product with this name already exists in this team"}
+        return 400, {
+            "detail": "A product with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error patching product {product_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -548,7 +537,7 @@ def delete_product(request: HttpRequest, product_id: str):
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete products"}
@@ -558,7 +547,7 @@ def delete_product(request: HttpRequest, product_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -575,7 +564,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product identifiers"}
@@ -623,16 +612,16 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
 
 @router.get(
     "/products/{product_id}/identifiers",
-    response={200: list[ProductIdentifierSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_product_identifiers(request: HttpRequest, product_id: str):
+def list_product_identifiers(request: HttpRequest, product_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all identifiers for a product."""
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If product is public, allow unauthenticated access
     if product.is_public:
@@ -640,25 +629,31 @@ def list_product_identifiers(request: HttpRequest, product_id: str):
     else:
         # For private products, require authentication and team access
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private items"}
+            return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        identifiers = product.identifiers.all()
-        return 200, [
+        identifiers_queryset = product.identifiers.all().order_by("-created_at")
+
+        # Apply pagination
+        paginated_identifiers, pagination_meta = _paginate_queryset(identifiers_queryset, page, page_size)
+
+        items = [
             {
                 "id": identifier.id,
                 "identifier_type": identifier.identifier_type,
                 "value": identifier.value,
                 "created_at": identifier.created_at.isoformat(),
             }
-            for identifier in identifiers
+            for identifier in paginated_identifiers
         ]
+
+        return 200, {"items": items, "pagination": pagination_meta}
     except Exception as e:
         log.error(f"Error listing product identifiers: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -672,7 +667,7 @@ def update_product_identifier(
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product identifiers"}
@@ -717,7 +712,7 @@ def update_product_identifier(
         }
     except Exception as e:
         log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -729,7 +724,7 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product identifiers"}
@@ -757,7 +752,7 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product identifier {identifier_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -769,7 +764,7 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product identifiers"}
@@ -836,7 +831,7 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product links"}
@@ -875,16 +870,16 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
 
 @router.get(
     "/products/{product_id}/links",
-    response={200: list[ProductLinkSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductLinksResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def list_product_links(request: HttpRequest, product_id: str):
+def list_product_links(request: HttpRequest, product_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all links for a product."""
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If product is public, allow unauthenticated access
     if product.is_public:
@@ -892,14 +887,18 @@ def list_product_links(request: HttpRequest, product_id: str):
     else:
         # For private products, require authentication and team access
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private items"}
+            return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        links = product.links.all()
-        return 200, [
+        links_queryset = product.links.all().order_by("-created_at")
+
+        # Apply pagination
+        paginated_links, pagination_meta = _paginate_queryset(links_queryset, page, page_size)
+
+        items = [
             {
                 "id": link.id,
                 "link_type": link.link_type,
@@ -908,11 +907,13 @@ def list_product_links(request: HttpRequest, product_id: str):
                 "description": link.description,
                 "created_at": link.created_at.isoformat(),
             }
-            for link in links
+            for link in paginated_links
         ]
+
+        return 200, {"items": items, "pagination": pagination_meta}
     except Exception as e:
         log.error(f"Error listing product links: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -924,7 +925,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product links"}
@@ -960,7 +961,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
         }
     except Exception as e:
         log.error(f"Error updating product link {link_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -972,7 +973,7 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product links"}
@@ -990,7 +991,7 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product link {link_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -1002,7 +1003,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage product links"}
@@ -1091,25 +1092,32 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found"}
+        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating project: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/projects",
     response={200: PaginatedProjectsResponse, 403: ErrorResponse},
+    auth=None,
     tags=["Projects"],
 )
+@decorate_view(optional_token_auth)
 def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
-    """List all projects for the current user's team with pagination."""
-    team_id = _get_user_team_id(request)
-    if not team_id:
-        return 403, {"detail": "No current team selected"}
-
+    """List all projects - public projects for unauthenticated users, team projects for authenticated users."""
     try:
-        projects_queryset = Project.objects.filter(team_id=team_id).prefetch_related("components")
+        # For authenticated users, show their team's projects
+        if request.user and request.user.is_authenticated:
+            team_id = _get_user_team_id(request)
+            if not team_id:
+                return 403, {"detail": "No current team selected"}
+
+            projects_queryset = Project.objects.filter(team_id=team_id).prefetch_related("components")
+        else:
+            # For unauthenticated users, show only public projects
+            projects_queryset = Project.objects.filter(is_public=True).prefetch_related("components")
 
         # Apply pagination
         paginated_projects, pagination_meta = _paginate_queryset(projects_queryset, page, page_size)
@@ -1120,7 +1128,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing projects: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1135,7 +1143,7 @@ def get_project(request: HttpRequest, project_id: str):
     try:
         project = Project.objects.prefetch_related("components").get(pk=project_id)
     except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
+        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If project is public, allow unauthenticated access
     if project.is_public:
@@ -1143,10 +1151,10 @@ def get_project(request: HttpRequest, project_id: str):
 
     # For private projects, require authentication and team access
     if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items"}
+        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
     if not verify_item_access(request, project, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_item_response(project, "project")
 
@@ -1161,7 +1169,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
+        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update projects"}
@@ -1176,10 +1184,13 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
         return 200, _build_item_response(project, "project")
 
     except IntegrityError:
-        return 400, {"detail": "A project with this name already exists in this team"}
+        return 400, {
+            "detail": "A project with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error updating project {project_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -1192,7 +1203,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
+        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update projects"}
@@ -1279,10 +1290,13 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
         return 200, _build_item_response(project, "project")
 
     except IntegrityError:
-        return 400, {"detail": "A project with this name already exists in this team"}
+        return 400, {
+            "detail": "A project with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error patching project {project_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -1295,7 +1309,7 @@ def delete_project(request: HttpRequest, project_id: str):
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
+        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete projects"}
@@ -1305,7 +1319,7 @@ def delete_project(request: HttpRequest, project_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting project {project_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1360,16 +1374,23 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
 @router.get(
     "/components",
     response={200: PaginatedComponentsResponse, 403: ErrorResponse},
+    auth=None,
     tags=["Components"],
 )
+@decorate_view(optional_token_auth)
 def list_components(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)):
-    """List all components for the current user's team with pagination."""
-    team_id = _get_user_team_id(request)
-    if not team_id:
-        return 403, {"detail": "No current team selected"}
-
+    """List all components - public components for unauthenticated users, team components for authenticated users."""
     try:
-        components_queryset = Component.objects.filter(team_id=team_id).prefetch_related("sbom_set")
+        # For authenticated users, show their team's components
+        if request.user and request.user.is_authenticated:
+            team_id = _get_user_team_id(request)
+            if not team_id:
+                return 403, {"detail": "No current team selected"}
+
+            components_queryset = Component.objects.filter(team_id=team_id).prefetch_related("sbom_set")
+        else:
+            # For unauthenticated users, show only public components
+            components_queryset = Component.objects.filter(is_public=True).prefetch_related("sbom_set")
 
         # Apply pagination
         paginated_components, pagination_meta = _paginate_queryset(components_queryset, page, page_size)
@@ -1380,23 +1401,33 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing components: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}",
     response={200: ComponentResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
     tags=["Components"],
 )
+@decorate_view(optional_token_auth)
 def get_component(request: HttpRequest, component_id: str):
     """Get a specific component by ID."""
     try:
         component = Component.objects.prefetch_related("sbom_set").get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # If component is public, allow unauthenticated access
+    if component.is_public:
+        return 200, _build_item_response(component, "component")
+
+    # For private components, require authentication and team access
+    if not request.user or not request.user.is_authenticated:
+        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_item_response(component, "component")
 
@@ -1411,7 +1442,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update components"}
@@ -1427,10 +1458,13 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
         return 200, _build_item_response(component, "component")
 
     except IntegrityError:
-        return 400, {"detail": "A component with this name already exists in this team"}
+        return 400, {
+            "detail": "A component with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error updating component {component_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -1443,7 +1477,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update components"}
@@ -1489,10 +1523,13 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         return 200, _build_item_response(component, "component")
 
     except IntegrityError:
-        return 400, {"detail": "A component with this name already exists in this team"}
+        return 400, {
+            "detail": "A component with this name already exists in this team",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error patching component {component_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -1505,7 +1542,7 @@ def delete_component(request: HttpRequest, component_id: str):
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete components"}
@@ -1527,7 +1564,7 @@ def delete_component(request: HttpRequest, component_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting component {component_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1553,7 +1590,7 @@ def get_component_metadata(request, component_id: str):
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -1600,7 +1637,7 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -1632,29 +1669,32 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         return 422, {"detail": str(ve.errors())}
     except Exception as e:
         log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/releases",
-    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_component_releases(request: HttpRequest, component_id: str):
+def list_component_releases(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all releases that contain this component."""
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If component is public, allow unauthenticated access
     if not component.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private components"}
+            return 403, {
+                "detail": "Authentication required for private components",
+                "error_code": ErrorCode.UNAUTHORIZED,
+            }
         if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         # Find all releases that have artifacts from this component
@@ -1682,10 +1722,13 @@ def list_component_releases(request: HttpRequest, component_id: str):
         release_ids.update(document_releases)
 
         # Get the actual release objects
-        releases = Release.objects.filter(id__in=release_ids).select_related("product").order_by("-created_at")
+        releases_queryset = Release.objects.filter(id__in=release_ids).select_related("product").order_by("-created_at")
+
+        # Apply pagination
+        paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
 
         response_data = []
-        for release in releases:
+        for release in paginated_releases:
             # Only include public releases if this is a public view (unauthenticated)
             if not request.user.is_authenticated and not release.product.is_public:
                 continue
@@ -1716,11 +1759,11 @@ def list_component_releases(request: HttpRequest, component_id: str):
                 }
             )
 
-        return 200, response_data
+        return 200, {"items": response_data, "pagination": pagination_meta}
 
     except Exception as e:
         log.error(f"Error listing releases for component {component_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1752,9 +1795,12 @@ def get_dashboard_summary(
             else:
                 # Private product requires authentication
                 if not request.user or not request.user.is_authenticated:
-                    return 403, {"detail": "Authentication required for private items"}
+                    return 403, {
+                        "detail": "Authentication required for private items",
+                        "error_code": ErrorCode.UNAUTHORIZED,
+                    }
         except Product.DoesNotExist:
-            return 404, {"detail": "Product not found"}
+            return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
     elif project_id:
         try:
             project = Project.objects.get(pk=project_id)
@@ -1764,9 +1810,12 @@ def get_dashboard_summary(
             else:
                 # Private project requires authentication
                 if not request.user or not request.user.is_authenticated:
-                    return 403, {"detail": "Authentication required for private items"}
+                    return 403, {
+                        "detail": "Authentication required for private items",
+                        "error_code": ErrorCode.UNAUTHORIZED,
+                    }
         except Project.DoesNotExist:
-            return 404, {"detail": "Project not found"}
+            return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
@@ -1776,13 +1825,16 @@ def get_dashboard_summary(
             else:
                 # Private component requires authentication
                 if not request.user or not request.user.is_authenticated:
-                    return 403, {"detail": "Authentication required for private items"}
+                    return 403, {
+                        "detail": "Authentication required for private items",
+                        "error_code": ErrorCode.UNAUTHORIZED,
+                    }
         except Component.DoesNotExist:
-            return 404, {"detail": "Component not found"}
+            return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
     else:
         # General dashboard access requires authentication
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required."}
+            return 403, {"detail": "Authentication required.", "error_code": ErrorCode.UNAUTHORIZED}
 
     # For authenticated users, use their teams; for public access, filter differently
     if request.user and request.user.is_authenticated:
@@ -1857,14 +1909,14 @@ def download_project_sbom(request: HttpRequest, project_id: str):
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
-        return 404, {"detail": "Project not found"}
+        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     # Check access permissions
     if not project.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private projects"}
+            return 403, {"detail": "Authentication required for private projects", "error_code": ErrorCode.UNAUTHORIZED}
         if not verify_item_access(request, project, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1891,14 +1943,14 @@ def download_product_sbom(request: HttpRequest, product_id: str):
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     # Check access permissions
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private products"}
+            return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1920,40 +1972,61 @@ def download_product_sbom(request: HttpRequest, product_id: str):
 
 @router.get(
     "/releases",
-    response={200: list[dict], 403: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_all_releases(request: HttpRequest, product_id: str | None = Query(None)):
+def list_all_releases(
+    request: HttpRequest, product_id: str | None = Query(None), page: int = Query(1), page_size: int = Query(15)
+):
     """List all releases across all products for the current user's team, optionally filtered by product."""
-    team_id = _get_user_team_id(request)
-    if not team_id:
-        return 403, {"detail": "No current team selected"}
 
     try:
-        # Build the base query for releases belonging to the user's team
-        query = Release.objects.filter(product__team_id=team_id).select_related("product")
-
-        # Filter by product if specified
+        # Special handling for public product access
         if product_id:
-            query = query.filter(product_id=product_id)
-            # Ensure latest release exists for the specific product when filtering
             try:
-                product = Product.objects.get(pk=product_id, team_id=team_id)
-                _ensure_latest_release_exists(product)
+                product = Product.objects.get(pk=product_id)
+                # If product is public, allow unauthenticated access
+                if product.is_public:
+                    _ensure_latest_release_exists(product)
+                    query = Release.objects.filter(product_id=product_id).select_related("product")
+                else:
+                    # For private products, require team access
+                    team_id = _get_user_team_id(request)
+                    if not team_id:
+                        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+
+                    # Verify the product belongs to the user's team
+                    if str(product.team.id) != team_id:
+                        return 403, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
+
+                    _ensure_latest_release_exists(product)
+                    query = Release.objects.filter(product_id=product_id).select_related("product")
             except Product.DoesNotExist:
-                pass  # Product not found or doesn't belong to team, ignore
+                return 404, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
         else:
+            # When no product_id is provided, we need team context
+            team_id = _get_user_team_id(request)
+            if not team_id:
+                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+
+            # Build the base query for releases belonging to the user's team
+            query = Release.objects.filter(product__team_id=team_id).select_related("product")
+
             # Ensure latest releases exist for all team products when listing all releases
-            team_products = Product.objects.filter(team_id=team_id)
+            team_products = Product.objects.filter(team__id=team_id)
             for product in team_products:
                 _ensure_latest_release_exists(product)
 
-        releases = query.order_by("-created_at")
+        releases_queryset = query.order_by("-created_at")
 
+        # Apply pagination
+        paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
+
+        # Build response items
         response_data = []
-        for release in releases:
+        for release in paginated_releases:
             # Count artifacts for this release
             artifact_count = release.artifacts.count()
 
@@ -1980,11 +2053,11 @@ def list_all_releases(request: HttpRequest, product_id: str | None = Query(None)
                 }
             )
 
-        return 200, response_data
+        return 200, {"items": response_data, "pagination": pagination_meta}
 
     except Exception as e:
         log.error(f"Error listing all releases: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 def _build_release_response(release: Release, include_artifacts: bool = False) -> dict:
@@ -2016,7 +2089,7 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
                         "created_at": artifact.created_at.isoformat(),
                         "sbom_format": artifact.sbom.format,
                         "sbom_format_version": artifact.sbom.format_version,
-                        "sbom_version": artifact.sbom.version,
+                        "sbom_version": artifact.sbom.version or "",
                         "document_type": None,
                         "document_version": None,
                     }
@@ -2033,7 +2106,7 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
                         "sbom_format": None,
                         "sbom_version": None,
                         "document_type": artifact.document.document_type,
-                        "document_version": artifact.document.version,
+                        "document_version": artifact.document.version or "",
                     }
                 )
         response["artifacts"] = artifacts
@@ -2058,10 +2131,10 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
     try:
         product = Product.objects.get(pk=payload.product_id)
     except Product.DoesNotExist:
-        return 404, {"detail": "Product not found"}
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can create releases"}
+        return 403, {"detail": "Only owners and admins can create releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -2069,7 +2142,8 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
             "detail": (
                 f"Cannot create release with name '{LATEST_RELEASE_NAME}'. "
                 "This name is reserved for the auto-managed latest release."
-            )
+            ),
+            "error_code": ErrorCode.DUPLICATE_NAME,
         }
 
     try:
@@ -2085,10 +2159,13 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
         return 201, _build_release_response(release, include_artifacts=True)
 
     except IntegrityError:
-        return 400, {"detail": "A release with this name already exists for this product"}
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -2103,14 +2180,14 @@ def get_release(request: HttpRequest, release_id: str):
     try:
         release = Release.objects.select_related("product").prefetch_related("artifacts").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     # If product is public, allow unauthenticated access
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private products"}
+            return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
         if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_release_response(release, include_artifacts=True)
 
@@ -2127,7 +2204,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update releases"}
@@ -2135,7 +2212,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed.",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
         }
 
     # Prevent renaming to "latest"
@@ -2144,7 +2222,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
             "detail": (
                 f"Cannot rename a release to '{LATEST_RELEASE_NAME}'. "
                 "This name is reserved for automatically managed releases."
-            )
+            ),
+            "error_code": ErrorCode.DUPLICATE_NAME,
         }
 
     try:
@@ -2159,10 +2238,13 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 200, _build_release_response(release, include_artifacts=True)
 
     except IntegrityError:
-        return 400, {"detail": "A release with this name already exists for this product"}
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error updating release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -2177,7 +2259,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can update releases"}
@@ -2185,7 +2267,8 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
     # Prevent modifying latest releases
     if release.is_latest:
         return 400, {
-            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+            "detail": f"Cannot modify the '{LATEST_RELEASE_NAME}' release. This release is automatically managed.",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
         }
 
     try:
@@ -2198,7 +2281,8 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
                     "detail": (
                         f"Cannot rename a release to '{LATEST_RELEASE_NAME}'. This name is reserved for "
                         "automatically managed releases."
-                    )
+                    ),
+                    "error_code": ErrorCode.DUPLICATE_NAME,
                 }
 
             # Update only fields that have actually changed to avoid unnecessary unique constraint checks
@@ -2216,10 +2300,13 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 200, _build_release_response(release, include_artifacts=True)
 
     except IntegrityError:
-        return 400, {"detail": "A release with this name already exists for this product"}
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error patching release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -2234,7 +2321,7 @@ def delete_release(request: HttpRequest, release_id: str):
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can delete releases"}
@@ -2242,7 +2329,8 @@ def delete_release(request: HttpRequest, release_id: str):
     # Prevent deleting latest releases
     if release.is_latest:
         return 400, {
-            "detail": f"Cannot delete the '{LATEST_RELEASE_NAME}' release. This release is automatically managed."
+            "detail": f"Cannot delete the '{LATEST_RELEASE_NAME}' release. This release is automatically managed.",
+            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
     try:
@@ -2250,7 +2338,7 @@ def delete_release(request: HttpRequest, release_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting release {release_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2270,16 +2358,16 @@ def download_release(request: HttpRequest, release_id: str):
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     # If product is public, allow unauthenticated access
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
+            return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
         team_id = _get_user_team_id(request)
         if not team_id or str(team_id) != str(release.product.team_id):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all SBOM artifacts in the release
     sbom_artifacts = release.artifacts.filter(sbom__isnull=False).select_related("sbom")
@@ -2319,12 +2407,18 @@ def download_release(request: HttpRequest, release_id: str):
 
 @router.get(
     "/releases/{release_id}/artifacts",
-    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedReleaseArtifactsResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Query("available")):
+def list_release_artifacts(
+    request: HttpRequest,
+    release_id: str,
+    mode: str = Query("available"),
+    page: int = Query(1),
+    page_size: int = Query(15),
+):
     """
     List artifacts for a release.
 
@@ -2333,23 +2427,32 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     # If product is public, allow unauthenticated access
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
+            return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
         team_id = _get_user_team_id(request)
         if not team_id or str(team_id) != str(release.product.team_id):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if mode == "existing":
         # Return artifacts that are already in this release
-        existing_artifacts = ReleaseArtifact.objects.filter(release=release).select_related("sbom", "document")
+        existing_artifacts_queryset = (
+            ReleaseArtifact.objects.filter(release=release).select_related("sbom", "document").order_by("-created_at")
+        )
+
+        # Extract pagination parameters properly
+        page_num = page if isinstance(page, int) else int(request.GET.get("page", 1))
+        page_size_num = page_size if isinstance(page_size, int) else int(request.GET.get("page_size", 15))
+
+        # Apply pagination
+        paginated_artifacts, pagination_meta = _paginate_queryset(existing_artifacts_queryset, page_num, page_size_num)
 
         artifacts = []
-        for artifact in existing_artifacts:
+        for artifact in paginated_artifacts:
             if artifact.sbom:
                 artifacts.append(
                     {
@@ -2361,7 +2464,7 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
                         "created_at": artifact.created_at.isoformat(),
                         "sbom_format": artifact.sbom.format,
                         "sbom_format_version": artifact.sbom.format_version,
-                        "sbom_version": artifact.sbom.version,
+                        "sbom_version": artifact.sbom.version or "",
                         "document_type": None,
                         "document_version": None,
                     }
@@ -2382,7 +2485,7 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
                     }
                 )
 
-        return artifacts
+        return {"items": artifacts, "pagination": pagination_meta}
 
     else:  # mode == "available" (default)
         # Return artifacts that can be added to this release (existing logic)
@@ -2407,7 +2510,11 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
         available_artifacts = []
 
         # Add available SBOMs
-        available_sboms = SBOM.objects.filter(component__in=product_components).exclude(id__in=existing_sbom_ids)
+        available_sboms = (
+            SBOM.objects.filter(component__in=product_components)
+            .exclude(id__in=existing_sbom_ids)
+            .order_by("-created_at")
+        )
 
         for sbom in available_sboms:
             available_artifacts.append(
@@ -2427,8 +2534,10 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
             )
 
         # Add available Documents
-        available_documents = Document.objects.filter(component__in=product_components).exclude(
-            id__in=existing_document_ids
+        available_documents = (
+            Document.objects.filter(component__in=product_components)
+            .exclude(id__in=existing_document_ids)
+            .order_by("-created_at")
         )
 
         for document in available_documents:
@@ -2447,7 +2556,38 @@ def list_release_artifacts(request: HttpRequest, release_id: str, mode: str = Qu
                 }
             )
 
-        return available_artifacts
+        # Sort by created_at descending (most recent first)
+        available_artifacts.sort(key=lambda x: x["created_at"], reverse=True)
+
+        # Apply pagination manually
+        total_items = len(available_artifacts)
+
+        # Extract pagination parameters properly
+        page_num = page if isinstance(page, int) else int(request.GET.get("page", 1))
+        page_size_num = page_size if isinstance(page_size, int) else int(request.GET.get("page_size", 15))
+
+        page_num = max(1, page_num)  # Ensure page is at least 1
+        page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
+
+        start_index = (page_num - 1) * page_size_num
+        end_index = start_index + page_size_num
+        paginated_artifacts = available_artifacts[start_index:end_index]
+
+        # Create pagination metadata
+        from core.schemas import PaginationMeta
+
+        total_pages = (total_items + page_size_num - 1) // page_size_num  # Ceiling division
+
+        pagination_meta = PaginationMeta(
+            total=total_items,
+            page=page_num,
+            page_size=page_size_num,
+            total_pages=total_pages,
+            has_previous=page_num > 1,
+            has_next=page_num < total_pages,
+        )
+
+        return {"items": paginated_artifacts, "pagination": pagination_meta}
 
 
 @router.post(
@@ -2462,18 +2602,21 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(release.product.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage release artifacts"}
 
     # Prevent adding artifacts to latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot add artifacts to 'latest' release"}
+        return 400, {
+            "detail": "Cannot add artifacts to 'latest' release",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
+        }
 
     from core.utils import add_artifact_to_release
 
@@ -2484,11 +2627,14 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
             sbom = SBOM.objects.get(pk=payload.sbom_id)
             if str(sbom.component.team_id) != str(team_id):
-                return 403, {"detail": f"SBOM {sbom.name} does not belong to your team"}
+                return 403, {
+                    "detail": f"SBOM {sbom.name} does not belong to your team",
+                    "error_code": ErrorCode.TEAM_MISMATCH,
+                }
 
             result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
             if result.get("error"):
-                return 400, {"detail": result["error"]}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
 
             return 201, {
@@ -2500,12 +2646,12 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "created_at": artifact.created_at.isoformat(),
                 "sbom_format": artifact.sbom.format,
                 "sbom_format_version": artifact.sbom.format_version,
-                "sbom_version": artifact.sbom.version,
+                "sbom_version": artifact.sbom.version or "",
                 "document_type": None,
                 "document_version": None,
             }
         except Exception as e:
-            return 400, {"detail": f"Error processing SBOM: {str(e)}"}
+            return 400, {"detail": f"Error processing SBOM: {str(e)}", "error_code": ErrorCode.INTERNAL_ERROR}
 
     # Handle Document
     if payload.document_id:
@@ -2514,11 +2660,14 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
             document = Document.objects.get(pk=payload.document_id)
             if str(document.component.team_id) != str(team_id):
-                return 403, {"detail": f"Document {document.name} does not belong to your team"}
+                return 403, {
+                    "detail": f"Document {document.name} does not belong to your team",
+                    "error_code": ErrorCode.TEAM_MISMATCH,
+                }
 
             result = add_artifact_to_release(release, document=document, allow_replacement=False)
             if result.get("error"):
-                return 400, {"detail": result["error"]}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
 
             return 201, {
@@ -2534,9 +2683,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": artifact.document.version or "",
             }
         except Exception as e:
-            return 400, {"detail": f"Error processing document: {str(e)}"}
+            return 400, {"detail": f"Error processing document: {str(e)}", "error_code": ErrorCode.INTERNAL_ERROR}
 
-    return 400, {"detail": "Either sbom_id or document_id must be provided"}
+    return 400, {"detail": "Either sbom_id or document_id must be provided", "error_code": ErrorCode.BAD_REQUEST}
 
 
 @router.delete(
@@ -2551,7 +2700,7 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     try:
         artifact = ReleaseArtifact.objects.get(pk=artifact_id, release=release)
@@ -2560,14 +2709,17 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(release.product.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage release artifacts"}
 
     # Prevent removing artifacts from latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot remove artifacts from 'latest' release"}
+        return 400, {
+            "detail": "Cannot remove artifacts from 'latest' release",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
+        }
 
     artifact.delete()
     return 204, None
@@ -2580,12 +2732,12 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
 
 @router.get(
     "/documents/{document_id}/releases",
-    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedDocumentReleasesResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_document_releases(request: HttpRequest, document_id: str):
+def list_document_releases(request: HttpRequest, document_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all releases that contain this document."""
     try:
         from documents.models import Document
@@ -2597,16 +2749,23 @@ def list_document_releases(request: HttpRequest, document_id: str):
     # If component is public, allow unauthenticated access
     if not document.component.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
+            return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
         team_id = _get_user_team_id(request)
         if not team_id or str(team_id) != str(document.component.team_id):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this document
-    release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related("release", "release__product")
+    release_artifacts_queryset = (
+        ReleaseArtifact.objects.filter(document=document)
+        .select_related("release", "release__product")
+        .order_by("-release__created_at")
+    )
 
-    return [
+    # Apply pagination
+    paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
+
+    items = [
         {
             "id": str(artifact.release.id),
             "name": artifact.release.name,
@@ -2615,9 +2774,12 @@ def list_document_releases(request: HttpRequest, document_id: str):
             "is_latest": artifact.release.is_latest,
             "product_id": str(artifact.release.product.id),
             "product_name": artifact.release.product.name,
+            "is_public": artifact.release.product.is_public,
         }
-        for artifact in release_artifacts
+        for artifact in paginated_artifacts
     ]
+
+    return {"items": items, "pagination": pagination_meta}
 
 
 @router.post(
@@ -2636,7 +2798,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(document.component.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if not verify_item_access(request, document.component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage document releases"}
@@ -2675,7 +2837,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
             errors.append(f"Error adding to release {release_id}: {str(e)}")
 
     if not created_artifacts and not replaced_artifacts:
-        return 400, {"detail": "No artifacts were created or replaced"}
+        return 400, {"detail": "No artifacts were created or replaced", "error_code": ErrorCode.BAD_REQUEST}
 
     return 201, {
         "created_artifacts": [
@@ -2728,14 +2890,17 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(document.component.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if not verify_item_access(request, document.component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage document releases"}
 
     # Prevent removing from latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot remove document from 'latest' release"}
+        return 400, {
+            "detail": "Cannot remove document from 'latest' release",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
+        }
 
     try:
         artifact = ReleaseArtifact.objects.get(release=release, document=document)
@@ -2747,12 +2912,12 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 
 @router.get(
     "/sboms/{sbom_id}/releases",
-    response={200: list[dict], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedSBOMReleasesResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def list_sbom_releases(request: HttpRequest, sbom_id: str):
+def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all releases that contain this SBOM."""
     try:
         from sboms.models import SBOM
@@ -2764,16 +2929,23 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str):
     # If component is public, allow unauthenticated access
     if not sbom.component.is_public:
         if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required"}
+            return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
         team_id = _get_user_team_id(request)
         if not team_id or str(team_id) != str(sbom.component.team_id):
-            return 403, {"detail": "Access denied"}
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this SBOM
-    release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related("release", "release__product")
+    release_artifacts_queryset = (
+        ReleaseArtifact.objects.filter(sbom=sbom)
+        .select_related("release", "release__product")
+        .order_by("-release__created_at")
+    )
 
-    return [
+    # Apply pagination
+    paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
+
+    items = [
         {
             "id": str(artifact.release.id),
             "name": artifact.release.name,
@@ -2782,9 +2954,12 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str):
             "is_latest": artifact.release.is_latest,
             "product_id": str(artifact.release.product.id),
             "product_name": artifact.release.product.name,
+            "is_public": artifact.release.product.is_public,
         }
-        for artifact in release_artifacts
+        for artifact in paginated_artifacts
     ]
+
+    return {"items": items, "pagination": pagination_meta}
 
 
 @router.post(
@@ -2803,7 +2978,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(sbom.component.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if not verify_item_access(request, sbom.component, ["owner", "admin"]):
         return 403, {"detail": "Only owners and admins can manage SBOM releases"}
@@ -2842,7 +3017,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
             errors.append(f"Error adding to release {release_id}: {str(e)}")
 
     if not created_artifacts and not replaced_artifacts:
-        return 400, {"detail": "No artifacts were created or replaced"}
+        return 400, {"detail": "No artifacts were created or replaced", "error_code": ErrorCode.BAD_REQUEST}
 
     return 201, {
         "created_artifacts": [
@@ -2893,7 +3068,7 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 
     team_id = _get_user_team_id(request)
     if not team_id or str(team_id) != str(sbom.component.team_id):
-        return 403, {"detail": "Access denied"}
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Verify release belongs to same team
     if str(release.product.team_id) != str(team_id):
@@ -2904,7 +3079,10 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 
     # Prevent removing from latest releases
     if release.is_latest:
-        return 400, {"detail": "Cannot remove SBOM from automatically managed release"}
+        return 400, {
+            "detail": "Cannot remove SBOM from automatically managed release",
+            "error_code": ErrorCode.RELEASE_MODIFICATION_NOT_ALLOWED,
+        }
 
     try:
         artifact = ReleaseArtifact.objects.get(release=release, sbom=sbom)
@@ -2916,21 +3094,29 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 
 @router.get(
     "/components/{component_id}/sboms",
-    response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=(PersonalAccessTokenAuth(), django_auth),
+    response={200: PaginatedSBOMsResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
     tags=["Components"],
 )
+@decorate_view(optional_token_auth)
 def list_component_sboms(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all SBOMs for a specific component with pagination."""
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # Check access permissions - require team membership
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(component.team_id):
-        return 403, {"detail": "Access denied"}
+    # If component is public, allow unauthenticated access
+    if component.is_public:
+        pass
+    else:
+        # For private components, require authentication and team access
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
+
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(component.team.id):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         from sboms.models import SBOM
@@ -2967,6 +3153,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     {
                         "id": str(artifact.release.id),
                         "name": artifact.release.name,
+                        "product_id": str(artifact.release.product.id),
                         "product_name": artifact.release.product.name,
                         "is_latest": artifact.release.is_latest,
                         "is_prerelease": artifact.release.is_prerelease,
@@ -2995,26 +3182,34 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 
     except Exception as e:
         log.error(f"Error listing component SBOMs: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/documents",
-    response={200: dict, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=(PersonalAccessTokenAuth(), django_auth),
+    response={200: PaginatedDocumentsResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
     tags=["Components"],
 )
+@decorate_view(optional_token_auth)
 def list_component_documents(request: HttpRequest, component_id: str, page: int = Query(1), page_size: int = Query(15)):
     """List all documents for a specific component with pagination."""
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
-        return 404, {"detail": "Component not found"}
+        return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    # Check access permissions - require team membership
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(component.team_id):
-        return 403, {"detail": "Access denied"}
+    # If component is public, allow unauthenticated access
+    if component.is_public:
+        pass
+    else:
+        # For private components, require authentication and team access
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
+
+        team_id = _get_user_team_id(request)
+        if not team_id or str(team_id) != str(component.team.id):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         from documents.models import Document
@@ -3038,6 +3233,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
                     {
                         "id": str(artifact.release.id),
                         "name": artifact.release.name,
+                        "product_id": str(artifact.release.product.id),
                         "product_name": artifact.release.product.name,
                         "is_latest": artifact.release.is_latest,
                         "is_prerelease": artifact.release.is_prerelease,
@@ -3064,4 +3260,4 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
 
     except Exception as e:
         log.error(f"Error listing component documents: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}

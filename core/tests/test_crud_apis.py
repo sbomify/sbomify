@@ -681,24 +681,33 @@ def test_delete_component_success(
 
 @pytest.mark.django_db
 def test_crud_operations_require_authentication():
-    """Test that all CRUD operations require authentication."""
+    """Test that create operations require authentication, but list operations allow public access."""
     client = Client()
 
-    urls = [
+    # Create operations should require authentication
+    create_urls = [
         reverse("api-1:create_product"),
-        reverse("api-1:list_products"),
         reverse("api-1:create_project"),
-        reverse("api-1:list_projects"),
         reverse("api-1:create_component"),
+    ]
+
+    for url in create_urls:
+        response = client.post(url, json.dumps({"name": "test"}), content_type="application/json")
+        assert response.status_code in [401, 403]  # Unauthorized or Forbidden
+
+    # List operations should allow public access (return 200 with empty items for no public items)
+    list_urls = [
+        reverse("api-1:list_products"),
+        reverse("api-1:list_projects"),
         reverse("api-1:list_components"),
     ]
 
-    for url in urls:
+    for url in list_urls:
         response = client.get(url)
-        assert response.status_code in [401, 403]  # Unauthorized or Forbidden
-
-        response = client.post(url, json.dumps({"name": "test"}), content_type="application/json")
-        assert response.status_code in [401, 403]
+        assert response.status_code == 200  # Public access allowed
+        data = response.json()
+        assert "items" in data
+        assert "pagination" in data
 
 
 @pytest.mark.django_db
@@ -1721,11 +1730,13 @@ def test_list_product_identifiers_authenticated(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 2
 
     # Check identifiers are in response
-    identifier_ids = [item["id"] for item in data]
+    identifier_ids = [item["id"] for item in data["items"]]
     assert identifier1.id in identifier_ids
     assert identifier2.id in identifier_ids
 
@@ -1757,10 +1768,12 @@ def test_list_product_identifiers_public_product(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == identifier.id
-    assert data[0]["value"] == "PUBLIC-SKU-123"
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == identifier.id
+    assert data["items"][0]["value"] == "PUBLIC-SKU-123"
 
 
 @pytest.mark.django_db
@@ -2330,16 +2343,18 @@ def test_product_identifier_public_access(
 
     assert response.status_code == 200
     response_data = response.json()
-    assert len(response_data) == 3
+    assert "items" in response_data
+    assert "pagination" in response_data
+    assert len(response_data["items"]) == 3
 
     # Verify the identifiers are returned correctly
-    identifier_values = [item["value"] for item in response_data]
+    identifier_values = [item["value"] for item in response_data["items"]]
     assert "SKU-PUBLIC-123" in identifier_values
     assert "1234567890123" in identifier_values
     assert "MPN-ABC-456" in identifier_values
 
     # Verify all expected fields are present
-    for identifier in response_data:
+    for identifier in response_data["items"]:
         assert "id" in identifier
         assert "identifier_type" in identifier
         assert "value" in identifier
@@ -2398,7 +2413,7 @@ def test_product_identifier_private_access_denied(
     response = client.get(url)
 
     assert response.status_code == 403
-    assert "Forbidden" in response.json()["detail"]
+    assert "Access denied" in response.json()["detail"]
 
 
 # =============================================================================
@@ -2531,11 +2546,13 @@ def test_list_product_links_authenticated(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 2
 
     # Check links are in response
-    link_ids = [item["id"] for item in data]
+    link_ids = [item["id"] for item in data["items"]]
     assert link1.id in link_ids
     assert link2.id in link_ids
 
@@ -2569,11 +2586,13 @@ def test_list_product_links_public_product(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == link.id
-    assert data[0]["title"] == "Public Website"
-    assert data[0]["url"] == "https://public.example.com"
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == link.id
+    assert data["items"][0]["title"] == "Public Website"
+    assert data["items"][0]["url"] == "https://public.example.com"
 
 
 @pytest.mark.django_db

@@ -75,7 +75,10 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert data == []
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "pagination" in data
+        assert data["items"] == []
 
     def test_list_document_releases_with_data(self, authenticated_api_client):
         """Test listing releases for a document that is in releases."""
@@ -89,10 +92,13 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases", **headers)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert len(data) == 2
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "pagination" in data
+        assert len(data["items"]) == 2
 
         # Check release data structure
-        release_names = [r["name"] for r in data]
+        release_names = [r["name"] for r in data["items"]]
         assert "v1.0" in release_names
         assert "v2.0" in release_names
 
@@ -382,7 +388,10 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/documents/{self.doc1_spec.id}/releases")
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert len(data) == 1
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "pagination" in data
+        assert len(data["items"]) == 1
 
     def test_unauthenticated_access_private_document(self):
         """Test unauthenticated access to private document releases."""

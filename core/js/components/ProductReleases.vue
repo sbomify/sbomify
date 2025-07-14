@@ -166,6 +166,16 @@
       </div>
     </div>
 
+    <!-- Pagination Controls -->
+    <PaginationControls
+      v-if="shouldShowPagination"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :total-pages="paginationMeta!.total_pages"
+      :total-items="paginationMeta!.total"
+      :show-page-size-selector="true"
+    />
+
     <!-- Add Release Modal (only for private view) -->
     <div
       v-if="hasCrudPermissions && !isPublicView"
@@ -248,11 +258,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import $axios from '../utils'
 import { showError, showSuccess } from '../alerts'
 import { isAxiosError } from 'axios'
 import StandardCard from './StandardCard.vue'
+import PaginationControls from './PaginationControls.vue'
 
 interface Release {
   id: string
@@ -270,6 +281,15 @@ interface ReleaseForm {
   name: string
   description: string
   is_prerelease: boolean
+}
+
+interface PaginationMeta {
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
 }
 
 interface Props {
@@ -293,6 +313,9 @@ const isLoading = ref(false)
 const isSubmitting = ref(false)
 const error = ref<string | null>(null)
 const editingRelease = ref<Release | null>(null)
+const paginationMeta = ref<PaginationMeta | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(15)
 
 const releaseForm = ref<ReleaseForm>({
   name: '',
@@ -330,6 +353,11 @@ const hasTruncatedReleases = computed(() => {
   return isPublicView.value && props.viewAllUrl && releases.value.length > props.maxReleasesToShow
 })
 
+// Show pagination controls only if we have pagination metadata and more than one page
+const shouldShowPagination = computed(() => {
+  return paginationMeta.value && paginationMeta.value.total_pages > 1 && !isPublicView.value
+})
+
 // Methods
 const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -351,8 +379,21 @@ const loadReleases = async () => {
   error.value = null
 
   try {
-    const response = await $axios.get(`/api/v1/releases?product_id=${props.productId}`)
-    releases.value = response.data
+    const params = new URLSearchParams({
+      product_id: props.productId,
+      page: currentPage.value.toString(),
+      page_size: pageSize.value.toString()
+    })
+
+    const response = await $axios.get(`/api/v1/releases?${params}`)
+    // Handle both old array format and new paginated format for backward compatibility
+    if (Array.isArray(response.data)) {
+      releases.value = response.data
+      paginationMeta.value = null
+    } else {
+      releases.value = response.data.items || []
+      paginationMeta.value = response.data.pagination || null
+    }
   } catch (err) {
     console.error('Error loading releases:', err)
     error.value = 'Failed to load releases'
@@ -475,6 +516,11 @@ const submitRelease = async () => {
 const handleModalHidden = () => {
   resetForm()
 }
+
+// Watchers for pagination changes
+watch([currentPage, pageSize], () => {
+  loadReleases()
+})
 
 // Lifecycle
 onMounted(async () => {

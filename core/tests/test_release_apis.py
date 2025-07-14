@@ -160,12 +160,14 @@ def test_list_releases(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
     # Now expect 3 releases: 2 manual + 1 automatic "latest" release
-    assert len(data) == 3
+    assert len(data["items"]) == 3
 
-    release_names = [r["name"] for r in data]
-    release_ids = [r["id"] for r in data]
+    release_names = [r["name"] for r in data["items"]]
+    release_ids = [r["id"] for r in data["items"]]
 
     # Verify the manual releases are present
     assert release1.id in release_ids
@@ -175,8 +177,117 @@ def test_list_releases(
 
     # Verify the automatic latest release was created
     assert "latest" in release_names
-    latest_release_data = [r for r in data if r["name"] == "latest"][0]
+    latest_release_data = [r for r in data["items"] if r["name"] == "latest"][0]
     assert latest_release_data["is_latest"] is True
+
+
+@pytest.mark.django_db
+def test_list_releases_public_product_no_auth(sample_product):  # noqa: F811
+    """Test listing releases for a public product without authentication."""
+    from django.test import Client
+    from django.urls import reverse
+
+    from core.models import Release
+
+    # Make product public
+    sample_product.is_public = True
+    sample_product.save()
+
+    # Create test releases
+    release1 = Release.objects.create(product=sample_product, name="v1.0.0")
+    release2 = Release.objects.create(product=sample_product, name="v2.0.0")
+
+    client = Client()
+    url = reverse("api-1:list_all_releases") + f"?product_id={sample_product.id}"
+
+    # Should work without authentication for public products
+    response = client.get(url)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    # Should have 3 releases: 2 manual + 1 automatic "latest" release
+    assert len(data["items"]) == 3
+
+    release_names = [r["name"] for r in data["items"]]
+    release_ids = [r["id"] for r in data["items"]]
+
+    # Verify the manual releases are present
+    assert release1.id in release_ids
+    assert release2.id in release_ids
+    assert "v1.0.0" in release_names
+    assert "v2.0.0" in release_names
+
+    # Verify the automatic latest release was created
+    assert "latest" in release_names
+
+
+@pytest.mark.django_db
+def test_list_releases_pagination(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that releases endpoint supports pagination."""
+    client = Client()
+    url = reverse("api-1:list_all_releases") + f"?product_id={sample_product.id}"
+
+    # Create many releases to test pagination
+    for i in range(25):
+        Release.objects.create(product=sample_product, name=f"v{i}.0.0")
+
+    # Set up authentication and session
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    # Test first page with default page size
+    response = client.get(
+        url,
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+
+    pagination = data["pagination"]
+    assert pagination["page"] == 1
+    assert pagination["page_size"] == 15
+    assert pagination["total"] == 26  # 25 manual + 1 automatic "latest" release
+    assert pagination["total_pages"] == 2
+    assert pagination["has_previous"] is False
+    assert pagination["has_next"] is True
+    assert len(data["items"]) == 15
+
+    # Test second page
+    response = client.get(
+        url + "&page=2",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    pagination = data["pagination"]
+    assert pagination["page"] == 2
+    assert pagination["has_previous"] is True
+    assert pagination["has_next"] is False
+    assert len(data["items"]) == 11  # Remaining items on last page
+
+    # Test custom page size
+    response = client.get(
+        url + "&page_size=10",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    pagination = data["pagination"]
+    assert pagination["page_size"] == 10
+    assert pagination["total_pages"] == 3
+    assert len(data["items"]) == 10
 
 
 @pytest.mark.django_db
@@ -364,9 +475,9 @@ def test_latest_release_created_on_releases_list_access(
 
     # Verify latest release was created and is in the response
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "latest"
-    assert data[0]["is_latest"] is True
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "latest"
+    assert data["items"][0]["is_latest"] is True
 
     # Verify in database
     latest_releases = Release.objects.filter(product=sample_product, is_latest=True)
@@ -503,11 +614,7 @@ def test_add_sbom_to_release(
     assert data["artifact_name"] == sample_sbom.name
 
     # Verify artifact was added to database
-    assert ReleaseArtifact.objects.filter(
-        release=release,
-        sbom=sample_sbom,
-        document=None
-    ).exists()
+    assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom, document=None).exists()
 
 
 @pytest.mark.django_db
@@ -553,11 +660,7 @@ def test_add_document_to_release(
     assert data["artifact_name"] == sample_document.name
 
     # Verify artifact was added to database
-    assert ReleaseArtifact.objects.filter(
-        release=release,
-        sbom=None,
-        document=sample_document
-    ).exists()
+    assert ReleaseArtifact.objects.filter(release=release, sbom=None, document=sample_document).exists()
 
 
 @pytest.mark.django_db
@@ -584,10 +687,7 @@ def test_remove_sbom_from_release(
     release = Release.objects.create(product=sample_product, name="v1.0.0")
     artifact = ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
 
-    url = reverse("api-1:remove_artifact_from_release", kwargs={
-        "release_id": release.id,
-        "artifact_id": artifact.id
-    })
+    url = reverse("api-1:remove_artifact_from_release", kwargs={"release_id": release.id, "artifact_id": artifact.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -601,10 +701,7 @@ def test_remove_sbom_from_release(
     assert response.status_code == 204
 
     # Verify artifact was removed from database
-    assert not ReleaseArtifact.objects.filter(
-        release=release,
-        sbom=sample_sbom
-    ).exists()
+    assert not ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom).exists()
 
 
 @pytest.mark.django_db
@@ -631,10 +728,7 @@ def test_remove_document_from_release(
     release = Release.objects.create(product=sample_product, name="v1.0.0")
     artifact = ReleaseArtifact.objects.create(release=release, document=sample_document)
 
-    url = reverse("api-1:remove_artifact_from_release", kwargs={
-        "release_id": release.id,
-        "artifact_id": artifact.id
-    })
+    url = reverse("api-1:remove_artifact_from_release", kwargs={"release_id": release.id, "artifact_id": artifact.id})
 
     # Set up authentication and session
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -648,10 +742,7 @@ def test_remove_document_from_release(
     assert response.status_code == 204
 
     # Verify artifact was removed from database
-    assert not ReleaseArtifact.objects.filter(
-        release=release,
-        document=sample_document
-    ).exists()
+    assert not ReleaseArtifact.objects.filter(release=release, document=sample_document).exists()
 
 
 # =============================================================================
@@ -682,13 +773,9 @@ def test_download_release_sbom_success(
         "version": 1,
         "metadata": {
             "timestamp": "2024-01-01T00:00:00Z",
-            "component": {
-                "type": "application",
-                "name": sample_product.name,
-                "version": "v1.0.0"
-            }
+            "component": {"type": "application", "name": sample_product.name, "version": "v1.0.0"},
         },
-        "components": []
+        "components": [],
     }
 
     # Create a mock file that will be returned by the mock function
@@ -867,18 +954,8 @@ def test_add_duplicate_sbom_format_to_release(
     sample_product.projects.add(component_project)
 
     # Create two SBOMs with same format for same component
-    sbom1 = SBOM.objects.create(
-        component=sample_component,
-        format="cyclonedx",
-        format_version="1.6",
-        name="SBOM 1"
-    )
-    sbom2 = SBOM.objects.create(
-        component=sample_component,
-        format="cyclonedx",
-        format_version="1.6",
-        name="SBOM 2"
-    )
+    sbom1 = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1")
+    sbom2 = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2")
 
     release = Release.objects.create(product=sample_product, name="v1.0.0")
 
@@ -984,17 +1061,17 @@ def test_list_available_artifacts_for_release(
     data = response.json()
 
     # Should have both SBOM and document
-    assert len(data) == 2
+    assert len(data["items"]) == 2
 
     # Check SBOM data
-    sbom_artifact = next((item for item in data if item["artifact_type"] == "sbom"), None)
+    sbom_artifact = next((item for item in data["items"] if item["artifact_type"] == "sbom"), None)
     assert sbom_artifact is not None
     assert sbom_artifact["id"] == sample_sbom.id
     assert sbom_artifact["name"] == sample_sbom.name
     assert sbom_artifact["component"]["name"] == sample_component.name
 
     # Check document data
-    doc_artifact = next((item for item in data if item["artifact_type"] == "document"), None)
+    doc_artifact = next((item for item in data["items"] if item["artifact_type"] == "document"), None)
     assert doc_artifact is not None
     assert doc_artifact["id"] == sample_document.id
     assert doc_artifact["name"] == sample_document.name
@@ -1045,9 +1122,9 @@ def test_list_available_artifacts_excludes_existing(
     data = response.json()
 
     # Should only have document (SBOM should be excluded since it's already in release)
-    assert len(data) == 1
-    assert data[0]["artifact_type"] == "document"
-    assert data[0]["id"] == sample_document.id
+    assert len(data["items"]) == 1
+    assert data["items"][0]["artifact_type"] == "document"
+    assert data["items"][0]["id"] == sample_document.id
 
 
 @pytest.mark.django_db
@@ -1068,12 +1145,7 @@ def test_update_release_date(
     new_date = datetime(2023, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
 
     url = reverse("api-1:update_release", kwargs={"release_id": release.id})
-    data = {
-        "name": "v1.0.0",
-        "description": "Test release",
-        "is_prerelease": False,
-        "created_at": new_date.isoformat()
-    }
+    data = {"name": "v1.0.0", "description": "Test release", "is_prerelease": False, "created_at": new_date.isoformat()}
 
     response = client.put(
         url,
