@@ -158,5 +158,5 @@ class TestUIWorkflows:
         response = client.get(reverse("api-1:list_components"))
         assert response.status_code == 200
         components_data = response.json()
-        component_names = [c["name"] for c in components_data]
+        component_names = [c["name"] for c in components_data["items"]]
         assert component_name in component_names
