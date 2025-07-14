@@ -124,10 +124,12 @@ def test_list_products(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == sample_product.id
-    assert data[0]["name"] == sample_product.name
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == sample_product.id
+    assert data["items"][0]["name"] == sample_product.name
 
 
 @pytest.mark.django_db
@@ -363,9 +365,11 @@ def test_list_projects(
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["id"] == sample_project.id
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "pagination" in data
+    assert len(data["items"]) == 1
+    assert data["items"][0]["id"] == sample_project.id
 
 
 @pytest.mark.django_db
