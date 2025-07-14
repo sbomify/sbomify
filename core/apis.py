@@ -2027,31 +2027,40 @@ def list_all_releases(
         # Build response items
         response_data = []
         for release in paginated_releases:
-            # Count artifacts for this release
-            artifact_count = release.artifacts.count()
+            try:
+                # Count artifacts for this release
+                artifact_count = release.artifacts.count()
 
-            # Check if release has SBOMs for download capability
-            has_sboms = release.artifacts.filter(sbom__isnull=False).exists()
+                # Check if release has SBOMs for download capability
+                has_sboms = release.artifacts.filter(sbom__isnull=False).exists()
 
-            response_data.append(
-                {
-                    "id": str(release.id),
-                    "name": release.name,
-                    "description": release.description or "",
-                    "product_id": str(release.product.id),
-                    "product_name": release.product.name,
-                    "is_latest": release.is_latest,
-                    "is_prerelease": release.is_prerelease,
-                    "is_public": release.product.is_public,  # Inherit from product
-                    "created_at": release.created_at,
-                    "artifacts_count": artifact_count,
-                    "has_sboms": has_sboms,
-                    "product": {
-                        "id": str(release.product.id),
-                        "name": release.product.name,
-                    },
-                }
-            )
+                # Ensure the product exists
+                if not release.product:
+                    log.error(f"Release {release.id} has no product - skipping")
+                    continue
+
+                response_data.append(
+                    {
+                        "id": str(release.id),
+                        "name": release.name,
+                        "description": release.description or "",
+                        "product_id": str(release.product.id),
+                        "product_name": release.product.name,
+                        "is_latest": release.is_latest,
+                        "is_prerelease": release.is_prerelease,
+                        "is_public": release.product.is_public,  # Inherit from product
+                        "created_at": release.created_at,
+                        "artifacts_count": artifact_count,
+                        "has_sboms": has_sboms,
+                        "product": {
+                            "id": str(release.product.id),
+                            "name": release.product.name,
+                        },
+                    }
+                )
+            except Exception as e:
+                log.error(f"Error processing release {release.id}: {e}")
+                continue
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
@@ -2062,17 +2071,30 @@ def list_all_releases(
 
 def _build_release_response(release: Release, include_artifacts: bool = False) -> dict:
     """Build a standardized response for releases."""
+    # Count artifacts for this release
+    artifact_count = release.artifacts.count()
+
+    # Check if release has SBOMs for download capability
+    has_sboms = release.artifacts.filter(sbom__isnull=False).exists()
+
     response = {
-        "id": release.id,
+        "id": str(release.id),
         "name": release.name,
-        "description": release.description,
+        "description": release.description or "",
         "product_id": str(release.product.id),
         "product_name": release.product.name,
         "is_latest": release.is_latest,
         "is_prerelease": release.is_prerelease,
         "is_public": release.product.is_public,  # Inherit from product
-        "created_at": release.created_at.isoformat(),
-        "artifact_count": release.artifacts.count(),
+        "created_at": release.created_at,
+        "artifacts_count": artifact_count,
+        "has_sboms": has_sboms,
+        "product": {
+            "id": str(release.product.id),
+            "name": release.product.name,
+        },
+        # Keep backward compatibility fields
+        "artifact_count": artifact_count,
     }
 
     if include_artifacts:
