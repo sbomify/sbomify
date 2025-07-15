@@ -60,6 +60,7 @@
             </td>
             <td>
               <a
+                v-if="release.product"
                 :href="getProductUrl(release)"
                 class="product-link"
                 :title="'View ' + release.product.name"
@@ -67,6 +68,10 @@
                 <i class="fas fa-box me-1"></i>
                 {{ release.product.name }}
               </a>
+              <span v-else class="text-muted">
+                <i class="fas fa-box me-1"></i>
+                Product not found
+              </span>
             </td>
             <td>
               <div class="artifacts-info">
@@ -141,6 +146,20 @@ interface Product {
   name: string
 }
 
+interface Artifact {
+  id: string
+  artifact_type: 'sbom' | 'document'
+  artifact_name: string
+  component_id: string
+  component_name: string
+  created_at: string
+  sbom_format?: string
+  sbom_format_version?: string
+  sbom_version?: string
+  document_type?: string
+  document_version?: string
+}
+
 interface Release {
   id: string
   name: string
@@ -150,8 +169,12 @@ interface Release {
   is_prerelease: boolean
   created_at: string
   artifacts_count?: number
+  artifact_count?: number
   has_sboms?: boolean
-  product: Product
+  product?: Product
+  product_id?: string
+  product_name?: string
+  artifacts?: Artifact[]
 }
 
 // Component doesn't need props currently
@@ -184,14 +207,23 @@ const formatDateFull = (dateString: string): string => {
 }
 
 const getReleaseUrl = (release: Release): string => {
+  if (!release.product) {
+    return '#'
+  }
   return `/product/${release.product.id}/release/${release.id}/`
 }
 
 const getProductUrl = (release: Release): string => {
+  if (!release.product) {
+    return '#'
+  }
   return `/product/${release.product.id}/`
 }
 
 const getProductReleasesUrl = (release: Release): string => {
+  if (!release.product) {
+    return '#'
+  }
   return `/product/${release.product.id}/releases/`
 }
 
@@ -206,7 +238,46 @@ const loadReleases = async () => {
   try {
     const response = await $axios.get('/api/v1/releases')
     const items = response.data.items || []
-    releases.value = items.sort((a: Release, b: Release) => {
+
+    // Normalize the response format to handle both old and new API structures
+    const normalizedReleases = items.map((release: Release) => {
+      // Handle missing product object (stage environment)
+      if (!release.product && release.product_id && release.product_name) {
+        release.product = {
+          id: release.product_id,
+          name: release.product_name
+        }
+      }
+
+      // Handle different field names
+      if (release.artifact_count !== undefined && release.artifacts_count === undefined) {
+        release.artifacts_count = release.artifact_count
+      }
+
+      // Handle missing has_sboms field
+      if (release.has_sboms === undefined) {
+        // If artifacts array exists, check if any are SBOMs
+        if (Array.isArray(release.artifacts)) {
+          release.has_sboms = release.artifacts.some((artifact: Artifact) => artifact.artifact_type === 'sbom')
+        } else {
+          // Default to false if we can't determine
+          release.has_sboms = false
+        }
+      }
+
+      return release
+    })
+
+    // Filter out releases without products (as defensive coding)
+    const validReleases = normalizedReleases.filter((release: Release) => {
+      if (!release.product) {
+        console.warn('Release without product found:', release)
+        return false
+      }
+      return true
+    })
+
+    releases.value = validReleases.sort((a: Release, b: Release) => {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
   } catch (err) {

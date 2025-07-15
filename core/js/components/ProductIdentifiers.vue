@@ -53,9 +53,9 @@
       <table class="table table-sm">
         <thead>
           <tr>
-            <th style="width: 25%">Type</th>
-            <th style="width: 35%">Value</th>
-            <th style="width: 25%" class="text-center">Barcode</th>
+            <th style="width: 20%">Type</th>
+            <th style="width: 30%">Value</th>
+            <th style="width: 35%" class="text-center">Barcode</th>
             <th v-if="canManageIdentifiers" style="width: 15%" class="text-end">Actions</th>
           </tr>
         </thead>
@@ -69,20 +69,45 @@
             <td>
               <code class="text-primary">{{ identifier.value }}</code>
             </td>
-                                    <td class="text-center">
-              <div v-if="canRenderBarcode(identifier.identifier_type)" class="barcode-container">
-                                <svg
-                  :data-barcode-id="identifier.id"
-                  class="barcode-svg"
-                ></svg>
-                <div v-if="barcodeErrors[identifier.id]" class="text-danger small mt-1">
-                  <i class="fas fa-exclamation-triangle me-1"></i>
-                  Invalid barcode data
+            <td class="text-center">
+              <div class="barcode-container">
+                <!-- Successful barcode render -->
+                <div
+                  v-if="canRenderBarcode(identifier.identifier_type) && barcodeRendered[identifier.id] && !barcodeErrors[identifier.id]"
+                  class="barcode-wrapper barcode-success"
+                >
+                  <svg
+                    :data-barcode-id="identifier.id"
+                    class="barcode-svg"
+                  ></svg>
                 </div>
-              </div>
-              <div v-else class="text-muted small text-center">
-                <i class="fas fa-info-circle me-1"></i>
-                Not Applicable
+
+                <!-- Loading state -->
+                <div
+                  v-else-if="canRenderBarcode(identifier.identifier_type) && !barcodeRendered[identifier.id] && !barcodeErrors[identifier.id]"
+                  class="barcode-wrapper barcode-loading"
+                >
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span class="small">Generating...</span>
+                </div>
+
+                <!-- Error state -->
+                <div
+                  v-else-if="canRenderBarcode(identifier.identifier_type) && barcodeErrors[identifier.id]"
+                  class="barcode-wrapper barcode-error"
+                >
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <span class="small">Invalid barcode data</span>
+                </div>
+
+                <!-- Not applicable -->
+                <div
+                  v-else
+                  class="barcode-wrapper barcode-not-applicable"
+                >
+                  <i class="fas fa-info-circle"></i>
+                  <span class="small">Not Applicable</span>
+                </div>
               </div>
             </td>
             <td v-if="canManageIdentifiers" class="text-end">
@@ -158,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import $axios from '../utils'
 import { showSuccess, showError } from '../alerts'
 import { isAxiosError } from 'axios'
@@ -193,6 +218,8 @@ const isSubmitting = ref(false)
 const formError = ref('')
 const editingIdentifier = ref<ProductIdentifier | null>(null)
 const barcodeErrors = ref<Record<string, boolean>>({})
+const barcodeRendered = ref<Record<string, boolean>>({})
+const barcodeTimeouts = ref<Record<string, number>>({})
 
 // Form state
 const form = ref({
@@ -255,42 +282,84 @@ const renderBarcodes = async () => {
     JsBarcode = jsbarcode.default || jsbarcode
   } catch (err) {
     console.error('Failed to load JsBarcode library:', err)
+    // Mark all barcode-eligible identifiers as errored
+    identifiers.value.forEach(identifier => {
+      if (canRenderBarcode(identifier.identifier_type)) {
+        barcodeErrors.value[identifier.id] = true
+        barcodeRendered.value[identifier.id] = false
+      }
+    })
     return
   }
 
   for (const identifier of identifiers.value) {
     if (canRenderBarcode(identifier.identifier_type)) {
+      // Clear any existing timeout for this identifier
+      if (barcodeTimeouts.value[identifier.id]) {
+        window.clearTimeout(barcodeTimeouts.value[identifier.id])
+      }
+
+      // Set a timeout to mark as error if rendering takes too long
+      barcodeTimeouts.value[identifier.id] = window.setTimeout(() => {
+        if (!barcodeRendered.value[identifier.id]) {
+          console.warn(`Barcode generation timeout for ${identifier.identifier_type}: ${identifier.value}`)
+          barcodeErrors.value[identifier.id] = true
+          barcodeRendered.value[identifier.id] = false
+        }
+      }, 5000) // 5 second timeout
+
       try {
         // Get the SVG element using the data attribute
         const svgElements = document.querySelectorAll(`[data-barcode-id="${identifier.id}"]`)
 
-        if (svgElements.length > 0) {
-          const svg = svgElements[0] as SVGElement
-
-          const format = getBarcodeFormat(identifier.identifier_type)
-
-          JsBarcode(svg, identifier.value, {
-            format: format,
-            width: 2,
-            height: 50,
-            displayValue: true,
-            fontSize: 14,
-            fontOptions: 'bold',
-            font: 'monospace',
-            textMargin: 8,
-            textAlign: 'center',
-            textPosition: 'bottom',
-            margin: 10,
-            background: '#ffffff',
-            lineColor: '#000000'
-          })
-
-          // Clear any previous error for this identifier
-          barcodeErrors.value[identifier.id] = false
+        if (svgElements.length === 0) {
+          console.warn(`No SVG element found for barcode ID: ${identifier.id}`)
+          barcodeErrors.value[identifier.id] = true
+          barcodeRendered.value[identifier.id] = false
+          continue
         }
+
+        const svg = svgElements[0] as SVGElement
+        const format = getBarcodeFormat(identifier.identifier_type)
+
+        // Validate barcode value before rendering
+        if (!identifier.value || identifier.value.trim() === '') {
+          throw new Error('Empty barcode value')
+        }
+
+        JsBarcode(svg, identifier.value, {
+          format: format,
+          width: 2,
+          height: 50,
+          displayValue: true,
+          fontSize: 14,
+          fontOptions: 'bold',
+          font: 'monospace',
+          textMargin: 8,
+          textAlign: 'center',
+          textPosition: 'bottom',
+          margin: 10,
+          background: '#ffffff',
+          lineColor: '#000000'
+        })
+
+        // Clear timeout and mark as successful
+        window.clearTimeout(barcodeTimeouts.value[identifier.id])
+        delete barcodeTimeouts.value[identifier.id]
+        barcodeErrors.value[identifier.id] = false
+        barcodeRendered.value[identifier.id] = true
+
+        // Verify the barcode was actually rendered by checking SVG content
+        if (!svg.innerHTML || svg.innerHTML.trim() === '') {
+          throw new Error('Barcode rendering produced empty SVG')
+        }
+
       } catch (err) {
         console.warn(`Failed to generate barcode for ${identifier.identifier_type}: ${identifier.value}`, err)
+        window.clearTimeout(barcodeTimeouts.value[identifier.id])
+        delete barcodeTimeouts.value[identifier.id]
         barcodeErrors.value[identifier.id] = true
+        barcodeRendered.value[identifier.id] = false
       }
     }
   }
@@ -304,7 +373,20 @@ const loadIdentifiers = async () => {
 
     try {
     const response = await $axios.get(`/api/v1/products/${props.productId}/identifiers`)
-    identifiers.value = response.data.items || []
+
+    // Ensure we always have an array
+    const items = response.data?.items
+    if (Array.isArray(items)) {
+      identifiers.value = items
+      // Initialize barcode states for all identifiers
+      items.forEach(identifier => {
+        barcodeRendered.value[identifier.id] = false
+        barcodeErrors.value[identifier.id] = false
+      })
+    } else {
+      console.warn('API response items is not an array:', items)
+      identifiers.value = []
+    }
 
     // Barcodes will be rendered by the watch function
   } catch (err) {
@@ -366,10 +448,19 @@ const submitForm = async () => {
       )
 
       // Update the identifier in the list
-      const index = identifiers.value.findIndex(i => i.id === editingIdentifier.value!.id)
-      if (index !== -1) {
-        identifiers.value[index] = response.data
+      if (Array.isArray(identifiers.value)) {
+        const index = identifiers.value.findIndex(i => i.id === editingIdentifier.value!.id)
+        if (index !== -1) {
+          identifiers.value[index] = response.data
+        }
+      } else {
+        console.warn('identifiers.value is not an array during update, reinitializing:', identifiers.value)
+        identifiers.value = [response.data]
       }
+
+      // Reset barcode states for the updated identifier
+      barcodeRendered.value[response.data.id] = false
+      barcodeErrors.value[response.data.id] = false
 
       showSuccess('Identifier updated successfully!')
     } else {
@@ -379,7 +470,17 @@ const submitForm = async () => {
         value: form.value.value.trim()
       })
 
-      identifiers.value.push(response.data)
+      // Ensure identifiers.value is an array before pushing
+      if (Array.isArray(identifiers.value)) {
+        identifiers.value.push(response.data)
+      } else {
+        console.warn('identifiers.value is not an array, reinitializing:', identifiers.value)
+        identifiers.value = [response.data]
+      }
+
+      // Initialize barcode states for the new identifier
+      barcodeRendered.value[response.data.id] = false
+      barcodeErrors.value[response.data.id] = false
       showSuccess('Identifier added successfully!')
     }
 
@@ -411,10 +512,20 @@ const deleteIdentifier = async (identifier: ProductIdentifier) => {
     await $axios.delete(`/api/v1/products/${props.productId}/identifiers/${identifier.id}`)
 
     // Remove from list
-    identifiers.value = identifiers.value.filter(i => i.id !== identifier.id)
+    if (Array.isArray(identifiers.value)) {
+      identifiers.value = identifiers.value.filter(i => i.id !== identifier.id)
+    } else {
+      console.warn('identifiers.value is not an array during delete, reinitializing:', identifiers.value)
+      identifiers.value = []
+    }
 
-    // Clean up barcode error state
+    // Clean up barcode state
+    if (barcodeTimeouts.value[identifier.id]) {
+      window.clearTimeout(barcodeTimeouts.value[identifier.id])
+      delete barcodeTimeouts.value[identifier.id]
+    }
     delete barcodeErrors.value[identifier.id]
+    delete barcodeRendered.value[identifier.id]
 
     showSuccess('Identifier deleted successfully!')
   } catch (err) {
@@ -429,8 +540,24 @@ const deleteIdentifier = async (identifier: ProductIdentifier) => {
 }
 
 // Watch for changes in identifiers to re-render barcodes
-watch(identifiers, async (newIdentifiers) => {
+watch(identifiers, async (newIdentifiers, oldIdentifiers) => {
   if (newIdentifiers.length > 0) {
+    // Check if any identifier values have changed and reset their barcode state
+    if (oldIdentifiers) {
+      newIdentifiers.forEach(newId => {
+        const oldId = oldIdentifiers.find(old => old.id === newId.id)
+        if (oldId && oldId.value !== newId.value) {
+          // Value changed, reset barcode state
+          barcodeRendered.value[newId.id] = false
+          barcodeErrors.value[newId.id] = false
+          if (barcodeTimeouts.value[newId.id]) {
+            window.clearTimeout(barcodeTimeouts.value[newId.id])
+            delete barcodeTimeouts.value[newId.id]
+          }
+        }
+      })
+    }
+
     // Add a small delay to ensure the template has updated
     await nextTick()
     await renderBarcodes()
@@ -440,6 +567,14 @@ watch(identifiers, async (newIdentifiers) => {
 // Lifecycle
 onMounted(() => {
   loadIdentifiers()
+})
+
+onUnmounted(() => {
+  // Clear all pending timeouts
+  Object.values(barcodeTimeouts.value).forEach(timeout => {
+    window.clearTimeout(timeout)
+  })
+  barcodeTimeouts.value = {}
 })
 
 // Expose methods for external use
@@ -479,18 +614,92 @@ code {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   width: 100%;
   text-align: center;
 }
 
-.barcode-svg {
+.barcode-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  min-height: 60px;
   border: 1px solid #dee2e6;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   background-color: #ffffff;
-  max-width: 180px;
+  overflow: hidden;
+  transition: all 0.15s ease-in-out;
+  gap: 0.25rem;
+  padding: 0.5rem;
+}
+
+.barcode-wrapper:hover {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+/* Success state - contains actual barcode */
+.barcode-success {
+  background-color: #ffffff;
+  border-color: #28a745;
+  min-height: 80px; /* Slightly taller to accommodate barcode */
+  padding: 0.25rem;
+}
+
+.barcode-success:hover {
+  box-shadow: 0 0.125rem 0.25rem rgba(40, 167, 69, 0.15);
+}
+
+/* Loading state */
+.barcode-loading {
+  background-color: #f8f9fa;
+  border-color: #6c757d;
+  color: #6c757d;
+}
+
+.barcode-loading i {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Error state */
+.barcode-error {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #dc3545;
+}
+
+.barcode-error i {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Not applicable state */
+.barcode-not-applicable {
+  background-color: #f8f9fa;
+  border-color: #dee2e6;
+  color: #6c757d;
+}
+
+.barcode-not-applicable i {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+  opacity: 0.7;
+}
+
+.barcode-svg {
+  max-width: 100%;
   height: auto;
   display: block;
   margin: 0 auto;
+}
+
+.barcode-wrapper .small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  margin: 0;
 }
 </style>
