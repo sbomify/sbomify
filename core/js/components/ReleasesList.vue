@@ -146,6 +146,20 @@ interface Product {
   name: string
 }
 
+interface Artifact {
+  id: string
+  artifact_type: 'sbom' | 'document'
+  artifact_name: string
+  component_id: string
+  component_name: string
+  created_at: string
+  sbom_format?: string
+  sbom_format_version?: string
+  sbom_version?: string
+  document_type?: string
+  document_version?: string
+}
+
 interface Release {
   id: string
   name: string
@@ -155,8 +169,12 @@ interface Release {
   is_prerelease: boolean
   created_at: string
   artifacts_count?: number
+  artifact_count?: number
   has_sboms?: boolean
   product?: Product
+  product_id?: string
+  product_name?: string
+  artifacts?: Artifact[]
 }
 
 // Component doesn't need props currently
@@ -222,7 +240,7 @@ const loadReleases = async () => {
     const items = response.data.items || []
 
     // Normalize the response format to handle both old and new API structures
-    const normalizedReleases = items.map((release: any) => {
+    const normalizedReleases = items.map((release: Release) => {
       // Handle missing product object (stage environment)
       if (!release.product && release.product_id && release.product_name) {
         release.product = {
@@ -240,7 +258,7 @@ const loadReleases = async () => {
       if (release.has_sboms === undefined) {
         // If artifacts array exists, check if any are SBOMs
         if (Array.isArray(release.artifacts)) {
-          release.has_sboms = release.artifacts.some((artifact: any) => artifact.artifact_type === 'sbom')
+          release.has_sboms = release.artifacts.some((artifact: Artifact) => artifact.artifact_type === 'sbom')
         } else {
           // Default to false if we can't determine
           release.has_sboms = false
