@@ -71,33 +71,40 @@
             </td>
             <td class="text-center">
               <div class="barcode-container">
-                <!-- Successful barcode render -->
+                <!-- Barcode eligible types -->
                 <div
-                  v-if="canRenderBarcode(identifier.identifier_type) && barcodeRendered[identifier.id] && !barcodeErrors[identifier.id]"
-                  class="barcode-wrapper barcode-success"
+                  v-if="canRenderBarcode(identifier.identifier_type)"
+                  class="barcode-wrapper"
+                  :class="{
+                    'barcode-success': barcodeRendered[identifier.id] && !barcodeErrors[identifier.id],
+                    'barcode-loading': !barcodeRendered[identifier.id] && !barcodeErrors[identifier.id],
+                    'barcode-error': barcodeErrors[identifier.id]
+                  }"
                 >
+                  <!-- Always render SVG for barcode types (hidden until rendered) -->
                   <svg
                     :data-barcode-id="identifier.id"
                     class="barcode-svg"
+                    :style="{ display: barcodeRendered[identifier.id] && !barcodeErrors[identifier.id] ? 'block' : 'none' }"
                   ></svg>
-                </div>
 
-                <!-- Loading state -->
-                <div
-                  v-else-if="canRenderBarcode(identifier.identifier_type) && !barcodeRendered[identifier.id] && !barcodeErrors[identifier.id]"
-                  class="barcode-wrapper barcode-loading"
-                >
-                  <i class="fas fa-spinner fa-spin"></i>
-                  <span class="small">Generating...</span>
-                </div>
+                  <!-- Loading state content -->
+                  <div
+                    v-if="!barcodeRendered[identifier.id] && !barcodeErrors[identifier.id]"
+                    class="barcode-state-content"
+                  >
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span class="small">Generating...</span>
+                  </div>
 
-                <!-- Error state -->
-                <div
-                  v-else-if="canRenderBarcode(identifier.identifier_type) && barcodeErrors[identifier.id]"
-                  class="barcode-wrapper barcode-error"
-                >
-                  <i class="fas fa-exclamation-triangle"></i>
-                  <span class="small">Invalid barcode data</span>
+                  <!-- Error state content -->
+                  <div
+                    v-if="barcodeErrors[identifier.id]"
+                    class="barcode-state-content"
+                  >
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span class="small">Invalid barcode data</span>
+                  </div>
                 </div>
 
                 <!-- Not applicable -->
@@ -659,11 +666,6 @@ code {
   color: #6c757d;
 }
 
-.barcode-loading i {
-  font-size: 1.25rem;
-  margin-bottom: 0.25rem;
-}
-
 /* Error state */
 .barcode-error {
   background-color: #f8d7da;
@@ -671,7 +673,16 @@ code {
   color: #dc3545;
 }
 
-.barcode-error i {
+/* State content styling */
+.barcode-state-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.barcode-state-content i {
   font-size: 1.25rem;
   margin-bottom: 0.25rem;
 }
