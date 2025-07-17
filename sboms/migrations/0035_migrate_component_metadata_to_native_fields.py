@@ -2,9 +2,10 @@
 
 import core.utils
 import django.db.models.deletion
-from django.db import migrations, models
+from django.db import migrations, models, transaction
 
 
+@transaction.atomic
 def migrate_component_metadata_to_native_fields(apps, schema_editor):
     """
     Migrate component metadata from JSONField to native fields and related models.
@@ -12,6 +13,7 @@ def migrate_component_metadata_to_native_fields(apps, schema_editor):
     Component = apps.get_model("sboms", "Component")
     ComponentAuthor = apps.get_model("sboms", "ComponentAuthor")
     ComponentSupplierContact = apps.get_model("sboms", "ComponentSupplierContact")
+    ComponentLicense = apps.get_model("sboms", "ComponentLicense")
 
     for component in Component.objects.all():
         metadata = component.metadata or {}
@@ -95,9 +97,54 @@ def migrate_component_metadata_to_native_fields(apps, schema_editor):
         if lifecycle_phase:
             component.lifecycle_phase = lifecycle_phase
 
+        # Migrate licenses
+        licenses = metadata.get("licenses", [])
+        for order, license_data in enumerate(licenses):
+            if isinstance(license_data, str):
+                # Check if it's a license expression (contains operators)
+                license_operators = ["AND", "OR", "WITH"]
+                is_expression = any(f" {op} " in license_data for op in license_operators)
+
+                if is_expression:
+                    ComponentLicense.objects.create(
+                        component=component,
+                        license_type="expression",
+                        license_id=license_data,
+                        order=order,
+                    )
+                else:
+                    ComponentLicense.objects.create(
+                        component=component,
+                        license_type="spdx",
+                        license_id=license_data,
+                        order=order,
+                    )
+            elif isinstance(license_data, dict):
+                # Handle custom licenses
+                if "name" in license_data:
+                    ComponentLicense.objects.create(
+                        component=component,
+                        license_type="custom",
+                        license_name=license_data["name"],
+                        license_url=license_data.get("url"),
+                        license_text=license_data.get("text"),
+                        bom_ref=license_data.get("bom_ref"),
+                        order=order,
+                    )
+                elif "id" in license_data:
+                    # Handle SPDX license objects
+                    ComponentLicense.objects.create(
+                        component=component,
+                        license_type="spdx",
+                        license_id=license_data["id"],
+                        bom_ref=license_data.get("bom_ref"),
+                        order=order,
+                    )
+
         component.save()
 
 
+@transaction.atomic
 def reverse_migrate_component_metadata_to_native_fields(apps, schema_editor):
     """
     Reverse migration - move data back to JSONField from native fields.
@@ -146,6 +193,25 @@ def reverse_migrate_component_metadata_to_native_fields(apps, schema_editor):
         # Restore lifecycle phase
         if component.lifecycle_phase:
             metadata["lifecycle_phase"] = component.lifecycle_phase
+
+        # Restore licenses
+        licenses = []
+        for license_obj in component.licenses.all():
+            if license_obj.license_type == "spdx":
+                licenses.append(license_obj.license_id)
+            elif license_obj.license_type == "expression":
+                licenses.append(license_obj.license_id)
+            elif license_obj.license_type == "custom":
+                license_data = {"name": license_obj.license_name}
+                if license_obj.license_url:
+                    license_data["url"] = license_obj.license_url
+                if license_obj.license_text:
+                    license_data["text"] = license_obj.license_text
+                if license_obj.bom_ref:
+                    license_data["bom_ref"] = license_obj.bom_ref
+                licenses.append(license_data)
+        if licenses:
+            metadata["licenses"] = licenses
 
         # Note: Legacy 'author' and 'organization' fields are not restored in reverse migration
         # as they would be converted to the standard format during forward migration
@@ -334,6 +400,94 @@ class Migration(migrations.Migration):
                 "db_table": "sboms_component_supplier_contacts",
                 "ordering": ["order", "name"],
                 "unique_together": {("component", "name", "email")},
+            },
+        ),
+        migrations.CreateModel(
+            name="ComponentLicense",
+            fields=[
+                (
+                    "id",
+                    models.CharField(
+                        default=core.utils.generate_id,
+                        max_length=20,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "license_type",
+                    models.CharField(
+                        choices=[
+                            ("spdx", "SPDX License"),
+                            ("custom", "Custom License"),
+                            ("expression", "License Expression"),
+                        ],
+                        help_text="Type of license",
+                        max_length=10,
+                    ),
+                ),
+                (
+                    "license_id",
+                    models.CharField(
+                        blank=True,
+                        help_text="SPDX license ID or expression",
+                        max_length=255,
+                        null=True,
+                    ),
+                ),
+                (
+                    "license_name",
+                    models.CharField(
+                        blank=True,
+                        help_text="Custom license name",
+                        max_length=255,
+                        null=True,
+                    ),
+                ),
+                (
+                    "license_url",
+                    models.URLField(
+                        blank=True,
+                        help_text="Custom license URL",
+                        null=True,
+                    ),
+                ),
+                (
+                    "license_text",
+                    models.TextField(
+                        blank=True,
+                        help_text="Custom license text",
+                        null=True,
+                    ),
+                ),
+                (
+                    "bom_ref",
+                    models.CharField(
+                        blank=True,
+                        help_text="BOM reference identifier for CycloneDX",
+                        max_length=255,
+                        null=True,
+                    ),
+                ),
+                (
+                    "order",
+                    models.PositiveIntegerField(
+                        default=0, help_text="Order of the license in the list"
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "component",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="licenses",
+                        to="sboms.component",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "sboms_component_licenses",
+                "ordering": ["order", "license_id"],
             },
         ),
         migrations.RunPython(

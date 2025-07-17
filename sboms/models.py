@@ -195,6 +195,60 @@ class ComponentAuthor(models.Model):
         return f"{self.name} ({self.component.name})"
 
 
+class ComponentLicense(models.Model):
+    """License information for components."""
+
+    class LicenseType(models.TextChoices):
+        SPDX = "spdx", "SPDX License"
+        CUSTOM = "custom", "Custom License"
+        EXPRESSION = "expression", "License Expression"
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_component_licenses"
+        ordering = ["order", "license_id"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="licenses")
+    license_type = models.CharField(max_length=10, choices=LicenseType.choices, help_text="Type of license")
+
+    # For SPDX licenses and expressions
+    license_id = models.CharField(max_length=255, blank=True, null=True, help_text="SPDX license ID or expression")
+
+    # For custom licenses
+    license_name = models.CharField(max_length=255, blank=True, null=True, help_text="Custom license name")
+    license_url = models.URLField(blank=True, null=True, help_text="Custom license URL")
+    license_text = models.TextField(blank=True, null=True, help_text="Custom license text")
+
+    # Common fields
+    bom_ref = models.CharField(
+        max_length=255, blank=True, null=True, help_text="BOM reference identifier for CycloneDX"
+    )
+    order = models.PositiveIntegerField(default=0, help_text="Order of the license in the list")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        if self.license_type == self.LicenseType.SPDX:
+            return f"{self.license_id} ({self.component.name})"
+        elif self.license_type == self.LicenseType.CUSTOM:
+            return f"{self.license_name} ({self.component.name})"
+        else:  # expression
+            return f"{self.license_id} ({self.component.name})"
+
+    def to_dict(self):
+        """Convert license to dictionary format for API responses."""
+        if self.license_type == self.LicenseType.SPDX:
+            return self.license_id
+        elif self.license_type == self.LicenseType.EXPRESSION:
+            return self.license_id
+        else:  # custom
+            result = {"name": self.license_name}
+            if self.license_url:
+                result["url"] = self.license_url
+            if self.license_text:
+                result["text"] = self.license_text
+            return result
+
+
 class Component(models.Model):
     """Legacy Component model for data persistence only.
 

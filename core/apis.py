@@ -1589,7 +1589,9 @@ def get_component_metadata(request, component_id: str):
     """Get metadata for a component."""
     try:
         component = (
-            Component.objects.select_related().prefetch_related("supplier_contacts", "authors").get(pk=component_id)
+            Component.objects.select_related()
+            .prefetch_related("supplier_contacts", "authors", "licenses")
+            .get(pk=component_id)
         )
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
@@ -1630,9 +1632,10 @@ def get_component_metadata(request, component_id: str):
             author_dict["bom_ref"] = author.bom_ref
         authors.append(author_dict)
 
-    # Get licenses from legacy metadata field (until we migrate that too)
-    metadata = component.metadata or {}
-    licenses = metadata.get("licenses", [])
+    # Get licenses from native fields
+    licenses = []
+    for license_obj in component.licenses.all():
+        licenses.append(license_obj.to_dict())
 
     # Construct the response
     response_data = {
@@ -1715,14 +1718,53 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         if "lifecycle_phase" in meta_dict:
             component.lifecycle_phase = meta_dict["lifecycle_phase"]
 
-        # Handle licenses (keep in legacy metadata field for now)
+        # Handle licenses using native fields
         if "licenses" in meta_dict:
-            existing_metadata = component.metadata or {}
+            # Clear existing licenses
+            component.licenses.all().delete()
+
+            # Create new licenses
             licenses = meta_dict.get("licenses", [])
             if licenses is None:
                 licenses = []
-            existing_metadata["licenses"] = licenses
-            component.metadata = existing_metadata
+
+            for order, license_data in enumerate(licenses):
+                if isinstance(license_data, str):
+                    # Check if it's a license expression (contains operators)
+                    license_operators = ["AND", "OR", "WITH"]
+                    is_expression = any(f" {op} " in license_data for op in license_operators)
+
+                    if is_expression:
+                        component.licenses.create(
+                            license_type="expression",
+                            license_id=license_data,
+                            order=order,
+                        )
+                    else:
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data,
+                            order=order,
+                        )
+                elif isinstance(license_data, dict):
+                    # Handle custom licenses
+                    if "name" in license_data:
+                        component.licenses.create(
+                            license_type="custom",
+                            license_name=license_data["name"],
+                            license_url=license_data.get("url"),
+                            license_text=license_data.get("text"),
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
+                    elif "id" in license_data:
+                        # Handle SPDX license objects
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data["id"],
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
 
         log.debug(f"Final component to be saved: {component.__dict__}")
         component.save()
