@@ -60,7 +60,7 @@
               <td>
                 <NTIAComplianceBadge
                   :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
-                  :details="itemData.sbom.ntia_compliance_details || {}"
+                  :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
                 />
               </td>
               <td>{{ formatDate(itemData.sbom.created_at) }}</td>
@@ -181,7 +181,7 @@
               <td>
                 <NTIAComplianceBadge
                   :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
-                  :details="itemData.sbom.ntia_compliance_details || {}"
+                  :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
                 />
               </td>
               <td>{{ formatDate(itemData.sbom.created_at) }}</td>
