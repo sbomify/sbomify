@@ -75,12 +75,32 @@ class CustomLicenseSchema(BaseLicenseSchema):
         return result
 
 
+class ComponentSupplierContactSchema(BaseModel):
+    """Schema for component supplier contact information."""
+
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    bom_ref: str | None = None
+
+
+class ComponentAuthorSchema(BaseModel):
+    """Schema for component author information."""
+
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    bom_ref: str | None = None
+
+
 class SupplierSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: str | None = None
     url: list[str] | None = None
     address: str | None = None
-    contacts: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
+    contacts: list[ComponentSupplierContactSchema] = Field(default_factory=list)
 
     @field_validator("url", mode="before")
     @classmethod
@@ -123,9 +143,9 @@ class ComponentMetaData(BaseModel):
     id: str
     name: str
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
-    authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
+    authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+    lifecycle_phase: str | None = None
 
     @field_validator("authors", mode="before")
     @classmethod
@@ -218,9 +238,9 @@ class ComponentMetaDataUpdate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
-    authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] = Field(default_factory=list)
+    authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+    lifecycle_phase: str | None = None
 
     @field_validator("authors", mode="before")
     @classmethod
@@ -247,9 +267,9 @@ class ComponentMetaDataPatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     supplier: SupplierSchema | None = None
-    authors: list[cdx15.OrganizationalContact | cdx16.OrganizationalContact] | None = None
+    authors: list[ComponentAuthorSchema] | None = None
     licenses: list[LicenseSchema | CustomLicenseSchema | str] | None = None
-    lifecycle_phase: cdx15.Phase | cdx16.Phase | None = None
+    lifecycle_phase: str | None = None
 
     @field_validator("authors", mode="before")
     @classmethod

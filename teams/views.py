@@ -522,7 +522,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     project = Project.objects.get(id=project_id)
 
                     # Build component metadata using utility function
-                    from sboms.utils import create_default_component_metadata
+                    from sboms.utils import create_default_component_metadata, populate_component_metadata_native_fields
 
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None
@@ -534,6 +534,9 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         team=team,
                         metadata=component_metadata,
                     )
+
+                    # Populate native fields with default metadata
+                    populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
 
                     # Link the project to the product
                     product.projects.add(project)

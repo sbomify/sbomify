@@ -149,6 +149,52 @@ class ProductProject(models.Model):
         return f"{self.product_id} - {self.project_id}"
 
 
+class ComponentSupplierContact(models.Model):
+    """Contact information for component suppliers."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_component_supplier_contacts"
+        unique_together = ("component", "name", "email")
+        ordering = ["order", "name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="supplier_contacts")
+    name = models.CharField(max_length=255, help_text="The name of the contact")
+    email = models.EmailField(blank=True, null=True, help_text="The email address of the contact")
+    phone = models.CharField(max_length=50, blank=True, null=True, help_text="The phone number of the contact")
+    bom_ref = models.CharField(
+        max_length=255, blank=True, null=True, help_text="BOM reference identifier for CycloneDX"
+    )
+    order = models.PositiveIntegerField(default=0, help_text="Order of the contact in the list")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.component.name})"
+
+
+class ComponentAuthor(models.Model):
+    """Author/contributor information for components."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_component_authors"
+        unique_together = ("component", "name", "email")
+        ordering = ["order", "name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="authors")
+    name = models.CharField(max_length=255, help_text="The name of the author")
+    email = models.EmailField(blank=True, null=True, help_text="The email address of the author")
+    phone = models.CharField(max_length=50, blank=True, null=True, help_text="The phone number of the author")
+    bom_ref = models.CharField(
+        max_length=255, blank=True, null=True, help_text="BOM reference identifier for CycloneDX"
+    )
+    order = models.PositiveIntegerField(default=0, help_text="Order of the author in the list")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.component.name})"
+
+
 class Component(models.Model):
     """Legacy Component model for data persistence only.
 
@@ -178,6 +224,28 @@ class Component(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
+
+    # Native fields for contact information (migrated from JSONField)
+    supplier_name = models.CharField(max_length=255, blank=True, null=True, help_text="The name of the supplier")
+    supplier_url = models.JSONField(default=list, help_text="List of supplier URLs")
+    supplier_address = models.TextField(blank=True, null=True, help_text="The address of the supplier")
+    lifecycle_phase = models.CharField(
+        max_length=20,
+        choices=[
+            ("design", "Design"),
+            ("pre-build", "Pre-Build"),
+            ("build", "Build"),
+            ("post-build", "Post-Build"),
+            ("operations", "Operations"),
+            ("discovery", "Discovery"),
+            ("decommission", "Decommission"),
+        ],
+        blank=True,
+        null=True,
+        help_text="The lifecycle phase of the component",
+    )
+
+    # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict)
     projects = models.ManyToManyField(Project, through="sboms.ProjectComponent")
 
