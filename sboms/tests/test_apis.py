@@ -233,25 +233,36 @@ def test_component_copy_metadata_api(
 ):
     client = Client()
 
-    # Create another component and set its metadata
+        # Create another component and set its metadata using the API
     another_component = Component.objects.create(
         name="Another Component",
         team_id=sample_component.team_id,
-        metadata={
-            "supplier": {
-                "name": "Another supplier",
-                "url": ["http://another-supply.org"],
-                "address": "5678, Another Street, Another City, Another Country",
-                "contacts": [{"name": "C2", "email": "c2@contacts.org", "phone": "1234567890"}],
-            },
-            "authors": [
-                {"name": "B1", "email": "b1@example.org", "phone": "9876543210"},
-                {"name": "B2", "email": "b2@example.com", "phone": ""},
-            ],
-            "licenses": ["MIT"],
-            "lifecycle_phase": "design",
-        },
     )
+
+    # Set metadata via API to ensure it gets stored in native fields
+    metadata_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": another_component.id})
+    metadata_to_set = {
+        "supplier": {
+            "name": "Another supplier",
+            "url": ["http://another-supply.org"],
+            "address": "5678, Another Street, Another City, Another Country",
+            "contacts": [{"name": "C2", "email": "c2@contacts.org", "phone": "1234567890"}],
+        },
+        "authors": [
+            {"name": "B1", "email": "b1@example.org", "phone": "9876543210"},
+            {"name": "B2", "email": "b2@example.com", "phone": ""},
+        ],
+        "licenses": ["MIT"],
+        "lifecycle_phase": "design",
+    }
+
+    response = client.patch(
+        metadata_url,
+        json.dumps(metadata_to_set),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
 
     # Use the new approach: GET source metadata + PATCH target
     # First, get metadata from source component
@@ -278,14 +289,22 @@ def test_component_copy_metadata_api(
 
     assert response.status_code == 204
 
-    # Verify that sample_component's metadata has been set
-    sample_component.refresh_from_db()
-    assert sample_component.metadata["supplier"]["name"] == "Another supplier"
-    assert sample_component.metadata["supplier"]["url"] == ["http://another-supply.org"]
-    assert sample_component.metadata["supplier"]["contacts"][0]["name"] == "C2"
-    assert sample_component.metadata["authors"][0]["name"] == "B1"
-    assert sample_component.metadata["licenses"][0] == "MIT"
-    assert sample_component.metadata["lifecycle_phase"] == "design"
+    # Verify that sample_component's metadata has been set by checking the API response
+    verify_url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        verify_url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 200
+    result_metadata = response.json()
+
+    assert result_metadata["supplier"]["name"] == "Another supplier"
+    assert result_metadata["supplier"]["url"] == ["http://another-supply.org"]
+    assert result_metadata["supplier"]["contacts"][0]["name"] == "C2"
+    assert result_metadata["authors"][0]["name"] == "B1"
+    assert result_metadata["licenses"][0] == "MIT"
+    assert result_metadata["lifecycle_phase"] == "design"
 
 
 @pytest.mark.django_db

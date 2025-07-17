@@ -1588,37 +1588,66 @@ def delete_component(request: HttpRequest, component_id: str):
 def get_component_metadata(request, component_id: str):
     """Get metadata for a component."""
     try:
-        component = Component.objects.get(pk=component_id)
+        component = (
+            Component.objects.select_related()
+            .prefetch_related("supplier_contacts", "authors", "licenses")
+            .get(pk=component_id)
+        )
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
 
-    metadata = component.metadata or {}
+    # Build supplier information from native fields
+    supplier = {}
+    if component.supplier_name:
+        supplier["name"] = component.supplier_name
+    if component.supplier_url:
+        supplier["url"] = component.supplier_url
+    if component.supplier_address:
+        supplier["address"] = component.supplier_address
 
-    # Remove extra fields from contacts and authors
-    def strip_extra_fields(obj_list):
-        allowed = {"name", "email", "phone"}
-        return [
-            {k: v for k, v in obj.items() if k in allowed and v is not None}
-            for obj in obj_list
-            if isinstance(obj, dict)
-        ]
+    # Always include contacts (even if empty list)
+    supplier["contacts"] = []
+    for contact in component.supplier_contacts.all():
+        contact_dict = {"name": contact.name}
+        if contact.email is not None:
+            contact_dict["email"] = contact.email
+        if contact.phone is not None:
+            contact_dict["phone"] = contact.phone
+        if contact.bom_ref is not None:
+            contact_dict["bom_ref"] = contact.bom_ref
+        supplier["contacts"].append(contact_dict)
 
-    supplier = metadata.get("supplier", {})
-    if "contacts" in supplier:
-        supplier["contacts"] = strip_extra_fields(supplier["contacts"])
-    metadata["supplier"] = supplier
+    # Build authors information from native fields
+    authors = []
+    for author in component.authors.all():
+        author_dict = {"name": author.name}
+        if author.email is not None:
+            author_dict["email"] = author.email
+        if author.phone is not None:
+            author_dict["phone"] = author.phone
+        if author.bom_ref is not None:
+            author_dict["bom_ref"] = author.bom_ref
+        authors.append(author_dict)
 
-    if "authors" in metadata:
-        metadata["authors"] = strip_extra_fields(metadata["authors"])
+    # Get licenses from native fields
+    licenses = []
+    for license_obj in component.licenses.all():
+        licenses.append(license_obj.to_dict())
 
-    # Include component id and name in the response
-    metadata["id"] = component.id
-    metadata["name"] = component.name
+    # Construct the response
+    response_data = {
+        "id": component.id,
+        "name": component.name,
+        "supplier": supplier,
+        "authors": authors,
+        "licenses": licenses,
+        "lifecycle_phase": component.lifecycle_phase,
+    }
 
-    return metadata
+    return response_data
 
 
 @router.patch(
@@ -1643,24 +1672,101 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         return 403, {"detail": "Forbidden"}
 
     try:
-        # Get existing metadata
-        existing_metadata = component.metadata or {}
-
         # Convert incoming metadata to dict, excluding unset fields
         meta_dict = metadata.model_dump(exclude_unset=True)
 
-        # Only process licenses if they were explicitly provided in the request
+        # Update supplier information
+        if "supplier" in meta_dict:
+            supplier_data = meta_dict["supplier"]
+            component.supplier_name = supplier_data.get("name")
+            component.supplier_address = supplier_data.get("address")
+            component.supplier_url = supplier_data.get("url") or []
+
+            # Update supplier contacts
+            if "contacts" in supplier_data:
+                # Clear existing contacts
+                component.supplier_contacts.all().delete()
+
+                # Create new contacts
+                for order, contact_data in enumerate(supplier_data["contacts"]):
+                    if contact_data.get("name"):  # Only create if name is provided
+                        component.supplier_contacts.create(
+                            name=contact_data["name"],
+                            email=contact_data.get("email"),
+                            phone=contact_data.get("phone"),
+                            bom_ref=contact_data.get("bom_ref"),
+                            order=order,
+                        )
+
+        # Update authors information
+        if "authors" in meta_dict:
+            # Clear existing authors
+            component.authors.all().delete()
+
+            # Create new authors
+            for order, author_data in enumerate(meta_dict["authors"]):
+                if author_data.get("name"):  # Only create if name is provided
+                    component.authors.create(
+                        name=author_data["name"],
+                        email=author_data.get("email"),
+                        phone=author_data.get("phone"),
+                        bom_ref=author_data.get("bom_ref"),
+                        order=order,
+                    )
+
+        # Update lifecycle phase
+        if "lifecycle_phase" in meta_dict:
+            component.lifecycle_phase = meta_dict["lifecycle_phase"]
+
+        # Handle licenses using native fields
         if "licenses" in meta_dict:
+            # Clear existing licenses
+            component.licenses.all().delete()
+
+            # Create new licenses
             licenses = meta_dict.get("licenses", [])
             if licenses is None:
                 licenses = []
-            meta_dict["licenses"] = licenses
 
-        # Merge with existing metadata
-        updated_metadata = {**existing_metadata, **meta_dict}
+            for order, license_data in enumerate(licenses):
+                if isinstance(license_data, str):
+                    # Check if it's a license expression (contains operators)
+                    license_operators = ["AND", "OR", "WITH"]
+                    is_expression = any(f" {op} " in license_data for op in license_operators)
 
-        log.debug(f"Final metadata to be saved: {updated_metadata}")
-        component.metadata = updated_metadata
+                    if is_expression:
+                        component.licenses.create(
+                            license_type="expression",
+                            license_id=license_data,
+                            order=order,
+                        )
+                    else:
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data,
+                            order=order,
+                        )
+                elif isinstance(license_data, dict):
+                    # Handle custom licenses
+                    if "name" in license_data:
+                        component.licenses.create(
+                            license_type="custom",
+                            license_name=license_data["name"],
+                            license_url=license_data.get("url"),
+                            license_text=license_data.get("text"),
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
+                    elif "id" in license_data:
+                        # Handle SPDX license objects
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data["id"],
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
+
+        log.debug(f"Final component to be saved: {component.__dict__}")
         component.save()
         return 204, None
     except ValidationError as ve:

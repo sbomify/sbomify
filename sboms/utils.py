@@ -977,7 +977,7 @@ def create_default_component_metadata(user, team_id: int, custom_metadata: dict 
         custom_metadata: Optional custom metadata to merge with defaults
 
     Returns:
-        dict: The component metadata
+        dict: The component metadata (legacy format for backward compatibility)
     """
     from allauth.socialaccount.models import SocialAccount
 
@@ -1033,3 +1033,120 @@ def create_default_component_metadata(user, team_id: int, custom_metadata: dict 
         return component_metadata
 
     return default_metadata
+
+
+def populate_component_metadata_native_fields(component, user, custom_metadata: dict = None):
+    """
+    Populate component native fields with default metadata.
+
+    Args:
+        component: The component instance to populate
+        user: The user creating the component
+        custom_metadata: Optional custom metadata to merge with defaults
+    """
+    from allauth.socialaccount.models import SocialAccount
+
+    # Get user and team information
+    social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
+    user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
+
+    # Set supplier information
+    company_name = user_metadata.get("company")
+    if company_name:
+        component.supplier_name = company_name
+        supplier_url = user_metadata.get("supplier_url")
+        if supplier_url:
+            component.supplier_url = [supplier_url]
+    elif user.first_name and user.last_name:
+        # Use user name as supplier if no company
+        component.supplier_name = f"{user.first_name} {user.last_name}".strip()
+
+    # Create default author if we have user name and email
+    if user.first_name and user.last_name and user.email:
+        user_name = f"{user.first_name} {user.last_name}".strip()
+        component.authors.create(
+            name=user_name,
+            email=user.email,
+        )
+
+    # Handle custom metadata if provided
+    if custom_metadata:
+        # Override with custom supplier info
+        supplier = custom_metadata.get("supplier", {})
+        if supplier.get("name"):
+            component.supplier_name = supplier["name"]
+        if supplier.get("url"):
+            component.supplier_url = supplier["url"]
+        if supplier.get("address"):
+            component.supplier_address = supplier["address"]
+
+        # Create custom supplier contacts
+        for contact_data in supplier.get("contacts", []):
+            if contact_data.get("name"):
+                component.supplier_contacts.create(
+                    name=contact_data["name"],
+                    email=contact_data.get("email"),
+                    phone=contact_data.get("phone"),
+                )
+
+        # Override with custom authors
+        authors = custom_metadata.get("authors", [])
+        if authors:
+            # Clear default author if custom authors are provided
+            component.authors.all().delete()
+            for author_data in authors:
+                if author_data.get("name"):
+                    component.authors.create(
+                        name=author_data["name"],
+                        email=author_data.get("email"),
+                        phone=author_data.get("phone"),
+                    )
+
+        # Set lifecycle phase
+        if custom_metadata.get("lifecycle_phase"):
+            component.lifecycle_phase = custom_metadata["lifecycle_phase"]
+
+        # Handle licenses
+        licenses = custom_metadata.get("licenses", [])
+        if licenses:
+            # Clear any existing licenses
+            component.licenses.all().delete()
+
+            # Create new licenses
+            for order, license_data in enumerate(licenses):
+                if isinstance(license_data, str):
+                    # Check if it's a license expression (contains operators)
+                    license_operators = ["AND", "OR", "WITH"]
+                    is_expression = any(f" {op} " in license_data for op in license_operators)
+
+                    if is_expression:
+                        component.licenses.create(
+                            license_type="expression",
+                            license_id=license_data,
+                            order=order,
+                        )
+                    else:
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data,
+                            order=order,
+                        )
+                elif isinstance(license_data, dict):
+                    # Handle custom licenses
+                    if "name" in license_data:
+                        component.licenses.create(
+                            license_type="custom",
+                            license_name=license_data["name"],
+                            license_url=license_data.get("url"),
+                            license_text=license_data.get("text"),
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
+                    elif "id" in license_data:
+                        # Handle SPDX license objects
+                        component.licenses.create(
+                            license_type="spdx",
+                            license_id=license_data["id"],
+                            bom_ref=license_data.get("bom_ref"),
+                            order=order,
+                        )
