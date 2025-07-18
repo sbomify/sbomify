@@ -497,6 +497,7 @@ onUnmounted(() => {
   font-size: 1rem;
   width: 1.25rem;
   text-align: center;
+  z-index: 1;
 }
 
 /* Transition animations */

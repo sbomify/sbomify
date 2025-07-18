@@ -81,5 +81,97 @@ const handleToggleExpansion = () => {
 </script>
 
 <style scoped>
-/* Component uses global release styles from release-badges.css */
+/* Fix bullet point alignment for release lists on product pages */
+.releases-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.releases-list {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: none;
+}
+
+.release-item {
+  position: relative;
+  margin-bottom: 0.25rem;
+  line-height: 1.5;
+}
+
+.release-item::before {
+  content: "•";
+  position: absolute;
+  left: -1.25rem;
+  top: 0;
+  color: #6b7280;
+  font-weight: bold;
+  width: 1rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.release-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  line-height: 1.5;
+}
+
+.release-link:hover {
+  text-decoration: underline;
+  color: #2563eb;
+}
+
+.product-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.release-version {
+  color: #6b7280;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8125rem;
+  background: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.release-expand {
+  margin-top: 0.25rem;
+}
+
+.release-expand button {
+  font-size: 0.75rem;
+  text-decoration: none;
+  border: none;
+  background: none;
+}
+
+.release-expand button:hover {
+  text-decoration: underline;
+}
+
+.release-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.release-actions a {
+  font-size: 0.75rem;
+  text-decoration: none;
+  border: none;
+  background: none;
+}
+
+.release-actions a:hover {
+  text-decoration: underline;
+}
 </style>

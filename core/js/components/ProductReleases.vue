@@ -566,6 +566,12 @@ defineExpose({
   padding: 1.5rem;
   background: #ffffff;
   transition: all 0.2s ease;
+  position: relative;
+}
+
+/* Override bullet points from global styles */
+.release-item::before {
+  display: none !important;
 }
 
 .release-item:hover {
