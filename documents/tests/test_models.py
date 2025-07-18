@@ -164,7 +164,7 @@ def test_document_defaults(sample_team):  # noqa: F811
     assert document.version == ""
     assert document.document_filename == ""
     assert document.source is None
-    assert document.document_type == ""
+    assert document.document_type == Document.DocumentType.OTHER
     assert document.description == ""
     assert document.content_type == ""
     assert document.file_size is None

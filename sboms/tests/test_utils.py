@@ -737,7 +737,7 @@ def test_product_sbom_file_generation(tmp_path):
         mock_s3_instance.get_sbom_data.side_effect = mock_get_sbom_data
 
         # Test product SBOM file creation
-        sbom_path = get_product_sbom_package(product, tmp_path)
+        sbom_path = get_product_sbom_package(product, tmp_path, user=None)
 
         # Verify SBOM file exists
         assert sbom_path.exists()
@@ -802,7 +802,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
         ).encode()
 
         # Generate product SBOM
-        sbom_path = get_product_sbom_package(product, tmp_path)
+        sbom_path = get_product_sbom_package(product, tmp_path, user=None)
 
         # Read the generated product SBOM
         sbom_content = sbom_path.read_text()
@@ -878,7 +878,7 @@ def test_private_product_sbom_generation(tmp_path):
     private_product = Product.objects.create(name="private-product", team=team, is_public=False)
 
     # Should be able to generate SBOM for private product (authorization handled at API/view layer)
-    sbom_path = get_product_sbom_package(private_product, tmp_path)
+    sbom_path = get_product_sbom_package(private_product, tmp_path, user=None)
 
     # Verify the SBOM file was created
     assert sbom_path.exists(), "SBOM file should be created for private product"
@@ -1068,27 +1068,19 @@ def test_cyclonedx_schema_mapping_error():
     assert cyclonedx_type is not None
 
     # Test accessing the release_notes attribute (should work with snake_case)
-    cdx16 = None
+    # This should work - snake_case format
+    release_notes_type = cdx16.Type3.release_notes
+    assert release_notes_type is not None
+
+    # This should NOT work - camelCase format (the bug we had)
     try:
-        from .sbom_format_schemas import cyclonedx_1_6 as cdx16
-
-        # This should work - snake_case format
-        release_notes_type = cdx16.Type3.release_notes
-        assert release_notes_type is not None
-
-        # This should NOT work - camelCase format (the bug we had)
-        try:
-            # This should raise AttributeError
-            camel_case_type = cdx16.Type3.releaseNotes
-            # If we get here, the test fails because the bug is NOT fixed
-            pytest.fail("Expected AttributeError for camelCase 'releaseNotes' but none was raised")
-        except AttributeError:
-            # This is expected - camelCase should not work
-            pass
-
-    except ImportError:
-        # Skip test if cyclonedx is not available
-        pytest.skip("CycloneDX schema not available")
+        # This should raise AttributeError
+        camel_case_type = cdx16.Type3.releaseNotes
+        # If we get here, the test fails because the bug is NOT fixed
+        pytest.fail("Expected AttributeError for camelCase 'releaseNotes' but none was raised")
+    except AttributeError:
+        # This is expected - camelCase should not work
+        pass
 
 
 @pytest.mark.django_db
@@ -1113,7 +1105,7 @@ def test_product_external_references_schema_compatibility():
 
     # This should not raise an AttributeError
     try:
-        external_refs = create_product_external_references(product)
+        external_refs = create_product_external_references(product, user=None)
 
         # Verify we get a reference back
         assert len(external_refs) >= 1
@@ -1177,7 +1169,7 @@ def test_product_sbom_includes_documents_full_integration():
 
     # Test the external references function directly first
     from sboms.utils import create_product_external_references
-    external_refs = create_product_external_references(product)
+    external_refs = create_product_external_references(product, user=None)
 
     # Should have at least one external reference for the document
     assert len(external_refs) >= 1, "Should have external references for documents"
@@ -1194,7 +1186,7 @@ def test_product_sbom_includes_documents_full_integration():
         temp_path = Path(temp_dir)
 
         try:
-            sbom_path = get_product_sbom_package(product, temp_path)
+            sbom_path = get_product_sbom_package(product, temp_path, user=None)
 
             # Read and parse the generated SBOM
             import json
@@ -1289,7 +1281,7 @@ def test_product_sbom_documents_relationship_debug():
 
     # Test external references
     from sboms.utils import create_product_external_references
-    external_refs = create_product_external_references(product)
+    external_refs = create_product_external_references(product, user=None)
 
     print(f"Created {len(external_refs)} external references")
     for i, ref in enumerate(external_refs):

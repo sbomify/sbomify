@@ -927,7 +927,7 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_path = get_project_sbom_package(project, Path(temp_dir))
+        sbom_path = get_project_sbom_package(project, Path(temp_dir), user=request.user)
 
         response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
         response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
@@ -949,7 +949,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_path = get_product_sbom_package(product, Path(temp_dir))
+        sbom_path = get_product_sbom_package(product, Path(temp_dir), user=request.user)
 
         response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
         response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"

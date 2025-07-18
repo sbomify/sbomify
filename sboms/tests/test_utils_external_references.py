@@ -11,18 +11,8 @@ from teams.models import Team
 from teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from documents.models import Document
 
-# Try to import cyclonedx, but handle gracefully if not available
-try:
-    import cyclonedx.model.v1_6 as cdx16
-    CYCLONEDX_AVAILABLE = True
-except ImportError:
-    CYCLONEDX_AVAILABLE = False
-
-# Skip the entire module if cyclonedx is not available
-pytestmark = pytest.mark.skipif(
-    not CYCLONEDX_AVAILABLE,
-    reason="CycloneDX not available - skipping external reference tests"
-)
+# Use local CycloneDX schemas
+from sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 
 
 @pytest.fixture
@@ -120,7 +110,7 @@ class TestExternalReferenceUtils:
             url='https://example.com/download'
         )
 
-        external_refs = create_product_spdx_external_references(sample_product)
+        external_refs = create_product_spdx_external_references(sample_product, user=None)
 
         assert len(external_refs) == 2
 
@@ -140,5 +130,5 @@ class TestExternalReferenceUtils:
         """Test creating SPDX external references for a product with no links or documents."""
         from sboms.utils import create_product_spdx_external_references
 
-        external_refs = create_product_spdx_external_references(sample_product)
+        external_refs = create_product_spdx_external_references(sample_product, user=None)
         assert len(external_refs) == 0

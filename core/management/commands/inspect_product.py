@@ -81,7 +81,7 @@ class Command(BaseCommand):
         try:
             from sboms.utils import create_product_external_references
 
-            external_refs = create_product_external_references(product)
+            external_refs = create_product_external_references(product, user=None)
             self.stdout.write(f"Generated {len(external_refs)} external references:")
 
             for i, ref in enumerate(external_refs):
