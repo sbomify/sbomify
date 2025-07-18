@@ -36,26 +36,14 @@
               :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
             />
           </td>
-          <td>{{ formatDate(itemData.sbom.created_at) }}</td>
+                      <td>{{ utils.formatDate(itemData.sbom.created_at) }}</td>
           <td>
-            <div v-if="itemData.releases && itemData.releases.length > 0" class="release-tags">
-              <span
-                v-for="release in itemData.releases.slice(0, 2)"
-                :key="release.id"
-                class="badge bg-primary-subtle text-primary me-1 mb-1"
-                :title="`${release.product_name} - ${release.name}`"
-              >
-                {{ truncateText(release.name, 15) }}
-              </span>
-              <span
-                v-if="itemData.releases.length > 2"
-                class="badge bg-secondary-subtle text-secondary"
-                :title="`${itemData.releases.length - 2} more releases`"
-              >
-                +{{ itemData.releases.length - 2 }}
-              </span>
-            </div>
-            <span v-else class="text-muted">None</span>
+                        <ReleaseList
+              :releases="itemData.releases"
+              :item-id="itemData.sbom.id"
+              :is-public-view="isPublicView"
+              :view-all-url="getSbomReleasesUrl(itemData.sbom.id)"
+            />
           </td>
           <td v-if="showVulnerabilities">
             <a
@@ -91,6 +79,9 @@
 
 <script setup lang="ts">
 import NTIAComplianceBadge from './NTIAComplianceBadge.vue'
+import ReleaseList from '../../../core/js/components/ReleaseList.vue'
+import { useCommonUtils } from '../../../core/js/composables/useCommonUtils'
+import { useUrlGeneration } from '../../../core/js/composables/useUrlGeneration'
 
 interface Sbom {
   id: string
@@ -118,6 +109,11 @@ interface Release {
   is_latest: boolean
   is_prerelease: boolean
   is_public: boolean
+  product_id?: string
+  product?: {
+    id: string
+    name: string
+  }
 }
 
 interface SbomData {
@@ -135,28 +131,26 @@ const props = defineProps<{
   isDeleting?: string | null
 }>()
 
+// Use composables
+const utils = useCommonUtils()
+const urlGen = useUrlGeneration(props.isPublicView)
+
 defineEmits<{
   delete: [sbom: Sbom]
 }>()
 
 const getSbomDetailUrl = (sbomId: string): string => {
-  // For the new URL structure, we need the component ID
-  if (props.componentId) {
-    if (props.isPublicView) {
-      return `/public/component/${props.componentId}/detailed/`
-    }
-    return `/component/${props.componentId}/detailed/`
-  }
-
-  // Fallback to old URLs if component ID not available
-  if (props.isPublicView) {
-    return `/public/sbom/${sbomId}/`
-  }
-  return `/sbom/${sbomId}/`
+  return urlGen.getSbomDetailUrl(sbomId, props.componentId)
 }
 
 const getSbomDownloadUrl = (sbomId: string): string => {
-  return `/api/v1/sboms/${sbomId}/download`
+  return urlGen.getSbomDownloadUrl(sbomId)
+}
+
+
+
+const getSbomReleasesUrl = (sbomId: string): string => {
+  return urlGen.getSbomReleasesUrl(sbomId)
 }
 
 const getFormatDisplay = (format: string): string => {
@@ -176,14 +170,11 @@ const truncateText = (text: string | null | undefined, maxLength: number): strin
   return text.substring(0, maxLength) + '...'
 }
 
-const formatDate = (dateString: string): string => {
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString()
-  } catch {
-    return dateString
-  }
-}
+
+
+
+
+
 </script>
 
 <style scoped>
@@ -277,30 +268,9 @@ const formatDate = (dateString: string): string => {
   transform: none;
 }
 
-/* Release Badges Styling */
-.release-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  align-items: center;
-}
-
-.release-badges .badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: help;
-  transition: all 0.2s ease;
-}
-
-.release-badges .badge:hover {
-  transform: scale(1.05);
-}
-
 /* Responsive badge handling */
 @media (max-width: 768px) {
-  .release-badges {
+  .release-tags {
     flex-direction: column;
     align-items: flex-start;
   }

@@ -51,34 +51,30 @@
                 <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
               </td>
               <td :title="item.document.version">
-                {{ truncateText(item.document.version, 20) }}
+                {{ utils.truncateText(item.document.version, 20) }}
               </td>
-              <td>{{ formatDate(item.document.created_at) }}</td>
+              <td>{{ utils.formatDate(item.document.created_at) }}</td>
               <td>
-                <div v-if="item.releases && item.releases.length > 0" class="release-tags">
-                  <span
-                    v-for="release in item.releases.slice(0, 2)"
-                    :key="release.id"
-                    class="badge bg-primary-subtle text-primary me-1 mb-1"
-                    :title="`${release.product_name} - ${release.name}`"
-                  >
-                    {{ truncateText(release.name, 15) }}
-                  </span>
-                  <span
-                    v-if="item.releases.length > 2"
-                    class="badge bg-secondary-subtle text-secondary"
-                    :title="`${item.releases.length - 2} more releases`"
-                  >
-                    +{{ item.releases.length - 2 }}
-                  </span>
-                </div>
-                <span v-else class="text-muted">None</span>
+                <ReleaseList
+                  :releases="item.releases"
+                  :item-id="item.document.id"
+                  :is-public-view="isPublicView"
+                  :view-all-url="getDocumentReleasesUrl(item.document.id)"
+                />
               </td>
               <td>
                 <div class="d-flex gap-2">
                   <a :href="getDocumentDownloadUrl(item.document.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
                     <i class="fas fa-download"></i>
                   </a>
+                  <button
+                    v-if="hasCrudPermissions"
+                    class="btn btn-sm btn-outline-secondary action-btn"
+                    title="Edit Document"
+                    @click="editDocument(item.document)"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
                   <button
                     v-if="hasCrudPermissions"
                     class="btn btn-sm btn-outline-danger action-btn"
@@ -154,28 +150,16 @@
                 <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
               </td>
               <td :title="item.document.version">
-                {{ truncateText(item.document.version, 20) }}
+                {{ utils.truncateText(item.document.version, 20) }}
               </td>
-              <td>{{ formatDate(item.document.created_at) }}</td>
+              <td>{{ utils.formatDate(item.document.created_at) }}</td>
               <td>
-                <div v-if="item.releases && item.releases.length > 0" class="release-tags">
-                  <span
-                    v-for="release in item.releases.slice(0, 2)"
-                    :key="release.id"
-                    class="badge bg-primary-subtle text-primary me-1 mb-1"
-                    :title="`${release.product_name} - ${release.name}`"
-                  >
-                    {{ truncateText(release.name, 15) }}
-                  </span>
-                  <span
-                    v-if="item.releases.length > 2"
-                    class="badge bg-secondary-subtle text-secondary"
-                    :title="`${item.releases.length - 2} more releases`"
-                  >
-                    +{{ item.releases.length - 2 }}
-                  </span>
-                </div>
-                <span v-else class="text-muted">None</span>
+                <ReleaseList
+                  :releases="item.releases"
+                  :item-id="item.document.id"
+                  :is-public-view="isPublicView"
+                  :view-all-url="getDocumentReleasesUrl(item.document.id)"
+                />
               </td>
               <td>
                 <div class="d-flex gap-2">
@@ -213,6 +197,107 @@
     @confirm="deleteDocument"
     @cancel="cancelDelete"
   />
+
+  <!-- Edit Document Modal -->
+  <div v-if="showEditModal" class="modal fade show d-block" tabindex="-1" style="z-index: var(--z-index-modal);">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Document</h5>
+          <button type="button" class="btn-close" @click="cancelEdit" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="updateDocument">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="editDocumentName" class="form-label">Name <span class="text-danger">*</span></label>
+                  <input
+                    id="editDocumentName"
+                    v-model="editForm.name"
+                    type="text"
+                    class="form-control"
+                    required
+                    placeholder="Enter document name"
+                  />
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="editDocumentVersion" class="form-label">Version <span class="text-danger">*</span></label>
+                  <input
+                    id="editDocumentVersion"
+                    v-model="editForm.version"
+                    type="text"
+                    class="form-control"
+                    required
+                    placeholder="Enter version (e.g., 1.0)"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="editDocumentType" class="form-label">Document Type</label>
+              <select
+                id="editDocumentType"
+                v-model="editForm.document_type"
+                class="form-select"
+              >
+                <option value="">Select document type</option>
+                <option value="specification">Specification</option>
+                <option value="manual">Manual</option>
+                <option value="readme">README</option>
+                <option value="documentation">Documentation</option>
+                <option value="build-instructions">Build Instructions</option>
+                <option value="configuration">Configuration</option>
+                <option value="license">License</option>
+                <option value="compliance">Compliance</option>
+                <option value="evidence">Evidence</option>
+                <option value="changelog">Changelog</option>
+                <option value="release-notes">Release Notes</option>
+                <option value="security-advisory">Security Advisory</option>
+                <option value="vulnerability-report">Vulnerability Report</option>
+                <option value="threat-model">Threat Model</option>
+                <option value="risk-assessment">Risk Assessment</option>
+                <option value="pentest-report">Penetration Test Report</option>
+                <option value="static-analysis">Static Analysis Report</option>
+                <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                <option value="quality-metrics">Quality Metrics</option>
+                <option value="maturity-report">Maturity Report</option>
+                <option value="report">Report</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="editDocumentDescription" class="form-label">Description</label>
+              <textarea
+                id="editDocumentDescription"
+                v-model="editForm.description"
+                class="form-control"
+                rows="3"
+                placeholder="Enter description (optional)"
+              ></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="cancelEdit">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="isUpdating || !editForm.name || !editForm.version"
+            @click="updateDocument"
+          >
+            <span v-if="isUpdating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Update Document
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Backdrop -->
+  <div v-if="showEditModal" class="modal-backdrop fade show" style="z-index: var(--z-index-modal-backdrop);" @click="cancelEdit"></div>
 </template>
 
 <script setup lang="ts">
@@ -223,6 +308,10 @@ import { isAxiosError } from 'axios'
 import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmationModal.vue'
 import StandardCard from '../../../core/js/components/StandardCard.vue'
 import PaginationControls from '../../../core/js/components/PaginationControls.vue'
+import ReleaseList from '../../../core/js/components/ReleaseList.vue'
+import { useCommonUtils } from '../../../core/js/composables/useCommonUtils'
+import { useUrlGeneration } from '../../../core/js/composables/useUrlGeneration'
+import { PAGINATION } from '../../../core/js/constants'
 
 interface Document {
   id: string
@@ -242,6 +331,11 @@ interface Release {
   is_latest: boolean
   is_prerelease: boolean
   is_public: boolean
+  product_id?: string // Added for new URL structure
+  product?: { // Added for new URL structure
+    id: string
+    name: string
+  }
 }
 
 interface DocumentData {
@@ -270,16 +364,28 @@ const props = defineProps<{
   isPublicView?: boolean
 }>()
 
+// Use composables
+const utils = useCommonUtils()
+
 // State
 const documentsData = ref<DocumentData[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const paginationMeta = ref<PaginationMeta | null>(null)
 const currentPage = ref(1)
-const pageSize = ref(15)
+const pageSize = ref(PAGINATION.DEFAULT_PAGE_SIZE)
 const showDeleteModal = ref(false)
 const documentToDelete = ref<Document | null>(null)
 const isDeleting = ref<string | null>(null)
+const showEditModal = ref(false)
+const documentToEdit = ref<Document | null>(null)
+const isUpdating = ref(false)
+const editForm = ref({
+  name: '',
+  version: '',
+  document_type: '',
+  description: ''
+})
 
 // Computed
 const hasData = computed(() => documentsData.value.length > 0)
@@ -291,26 +397,25 @@ const hasCrudPermissions = computed(() => {
 })
 const isPublicView = computed(() => props.isPublicView === true)
 
-// Methods
-const getDocumentDetailUrl = (documentId: string): string => {
-  // For the new URL structure, we need the component ID
-  if (props.componentId) {
-    if (isPublicView.value) {
-      return `/public/component/${props.componentId}/detailed/`
-    }
-    return `/component/${props.componentId}/detailed/`
-  }
+// URL generation composable (needs to be after isPublicView is defined)
+const urlGen = useUrlGeneration(isPublicView.value)
 
-  // Fallback to document URLs if component ID not available
-  if (isPublicView.value) {
-    return `/public/document/${documentId}/`
-  }
-  return `/document/${documentId}/`
+// Methods - using URL generation composable
+const getDocumentDetailUrl = (documentId: string): string => {
+  return urlGen.getDocumentDetailUrl(documentId, props.componentId)
 }
 
 const getDocumentDownloadUrl = (documentId: string): string => {
-  return `/api/v1/documents/${documentId}/download`
+  return urlGen.getDocumentDownloadUrl(documentId)
 }
+
+const getDocumentReleasesUrl = (documentId: string): string => {
+  return urlGen.getDocumentReleasesUrl(documentId)
+}
+
+
+
+
 
 const getDocumentTypeDisplay = (documentType: string): string => {
   if (!documentType) return 'Document'
@@ -356,21 +461,6 @@ const getDocumentTypeDisplay = (documentType: string): string => {
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
-}
-
-const truncateText = (text: string | null | undefined, maxLength: number): string => {
-  if (!text) return ''
-  if (text.length <= maxLength) return text
-  return text.substring(0, maxLength) + '...'
-}
-
-const formatDate = (dateString: string): string => {
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString()
-  } catch {
-    return dateString
-  }
 }
 
 const loadDocuments = async () => {
@@ -441,6 +531,56 @@ const confirmDelete = (document: Document) => {
 const cancelDelete = () => {
   documentToDelete.value = null
   showDeleteModal.value = false
+}
+
+const editDocument = (document: Document) => {
+  documentToEdit.value = document
+  editForm.value = {
+    name: document.name,
+    version: document.version,
+    document_type: document.document_type,
+    description: document.description || ''
+  }
+  showEditModal.value = true
+}
+
+const cancelEdit = () => {
+  documentToEdit.value = null
+  showEditModal.value = false
+  editForm.value = {
+    name: '',
+    version: '',
+    document_type: '',
+    description: ''
+  }
+}
+
+const updateDocument = async () => {
+  if (!documentToEdit.value) return
+
+  isUpdating.value = true
+
+  try {
+    const response = await $axios.patch(`/api/v1/documents/${documentToEdit.value.id}`, editForm.value)
+
+    if (response.status === 200) {
+      showSuccess('Document updated successfully')
+      // Reload data
+      await loadDocuments()
+    } else {
+      throw new Error(`HTTP ${response.status}`)
+    }
+  } catch (err) {
+    console.error('Error updating document:', err)
+    if (isAxiosError(err)) {
+      showError(err.response?.data?.detail || 'Failed to update document')
+    } else {
+      showError('Failed to update document')
+    }
+  } finally {
+    isUpdating.value = false
+    cancelEdit()
+  }
 }
 
 const deleteDocument = async () => {
@@ -531,13 +671,6 @@ onMounted(() => {
   vertical-align: bottom;
 }
 
-/* Release badges styling */
-.release-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
 /* Action Button Styling */
 .action-btn {
   border-radius: 0.5rem;
@@ -571,6 +704,21 @@ onMounted(() => {
   box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
 }
 
+.action-btn.btn-outline-secondary {
+  background-color: #fff;
+  border-color: #6c757d;
+  color: #6c757d;
+  box-shadow: 0 1px 2px rgba(108, 117, 125, 0.15);
+}
+
+.action-btn.btn-outline-secondary:hover {
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  border-color: #6c757d;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(108, 117, 125, 0.3);
+}
+
 .action-btn.btn-outline-danger {
   background-color: #fff;
   border-color: #dc3545;
@@ -584,5 +732,60 @@ onMounted(() => {
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+/* Edit Modal Styling */
+.modal {
+  z-index: 1055;
+}
+
+.modal-backdrop {
+  z-index: 1050;
+}
+
+.modal-content {
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  border-bottom: 1px solid #dee2e6;
+  padding: 1rem 1.5rem;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  border-top: 1px solid #dee2e6;
+  padding: 1rem 1.5rem;
+}
+
+.form-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+.form-control,
+.form-select {
+  border-radius: 0.375rem;
+  border: 1px solid #ced4da;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #86b7fe;
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.btn-close {
+  padding: 0.5rem 0.5rem;
+  margin: -0.5rem -0.5rem -0.5rem auto;
 }
 </style>

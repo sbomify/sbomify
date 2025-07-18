@@ -945,15 +945,13 @@ const addSelectedArtifacts = async () => {
       showError(`Failed to add ${failed.length} artifact${failed.length === 1 ? '' : 's'}:\n${errorMessages.join('\n')}`)
     }
 
-    // Close modal if all successful
-    if (failed.length === 0) {
-      const modalElement = document.getElementById('addArtifactModal')
-      if (modalElement) {
-        const bootstrap = (window as unknown as { bootstrap?: { Modal: new(element: Element) => { hide(): void } } }).bootstrap
-        if (bootstrap && bootstrap.Modal) {
-          const modal = new bootstrap.Modal(modalElement)
-          modal.hide()
-        }
+    // Close modal after attempting to add artifacts
+    const modalElement = document.getElementById('addArtifactModal')
+    if (modalElement) {
+      const bootstrap = (window as unknown as { bootstrap?: { Modal: new(element: Element) => { hide(): void } } }).bootstrap
+      if (bootstrap && bootstrap.Modal) {
+        const modal = new bootstrap.Modal(modalElement)
+        modal.hide()
       }
     }
 

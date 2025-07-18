@@ -1,0 +1,219 @@
+/*
+ * Shared Release Styles
+ * Clean, simple approach for releases display
+ */
+
+:root {
+  /* Z-index scale for layered UI elements */
+  --z-index-modal: 1055;
+  --z-index-modal-backdrop: 1050;
+  --z-index-dropdown: 1000;
+  --z-index-sticky: 1020;
+  --z-index-fixed: 1030;
+  --z-index-tooltip: 1070;
+}
+
+/* Releases list display */
+.releases-display {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.releases-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  list-style: none;
+}
+
+.release-item {
+  position: relative;
+  margin-bottom: 0.25rem;
+}
+
+.release-item::before {
+  content: "•";
+  position: absolute;
+  left: -1rem;
+  color: #6b7280;
+  font-weight: bold;
+}
+
+.release-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.release-link:hover {
+  text-decoration: underline;
+  color: #2563eb;
+}
+
+.product-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.release-version {
+  color: #6b7280;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8125rem;
+  background: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.release-expand {
+  margin-top: 0.25rem;
+}
+
+.release-expand button {
+  font-size: 0.75rem;
+  text-decoration: none;
+  border: none;
+  background: none;
+}
+
+.release-expand button:hover {
+  text-decoration: underline;
+}
+
+.release-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.release-actions a {
+  font-size: 0.75rem;
+  text-decoration: none;
+  border: none;
+  background: none;
+}
+
+.release-actions a:hover {
+  text-decoration: underline;
+}
+
+/* Legacy support for more complex approaches */
+.releases-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+}
+
+.releases-info {
+  display: flex;
+  align-items: center;
+}
+
+.releases-link {
+  color: #0d6efd;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  margin: -0.125rem -0.25rem;
+}
+
+.releases-link:hover {
+  color: #0b5ed7;
+  background-color: rgba(13, 110, 253, 0.1);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.releases-link i {
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+
+.latest-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.latest-indicator .badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(25, 135, 84, 0.2);
+}
+
+.latest-indicator .badge i {
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+/* Legacy badge support */
+.release-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.release-badge-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.release-badge {
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.release-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  text-decoration: none !important;
+}
+
+/* Bootstrap badge overrides */
+.badge {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  margin-right: 0;
+  margin-bottom: 0;
+}
+
+/* Responsive behavior */
+@media (max-width: 768px) {
+  .releases-display {
+    gap: 0.375rem;
+  }
+
+  .releases-count {
+    font-size: 0.8125rem;
+  }
+
+  .latest-badge {
+    font-size: 0.6875rem;
+  }
+}
