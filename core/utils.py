@@ -403,7 +403,9 @@ def create_release_download_response(release):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            sbom_file_path = get_release_sbom_package(release, temp_path)
+            # Note: In this context, we don't have access to the requesting user,
+            # so we pass None. This function is mainly for internal use.
+            sbom_file_path = get_release_sbom_package(release, temp_path, user=None)
 
             # Read the generated SBOM file
             with open(sbom_file_path, "r") as f:

@@ -20,8 +20,9 @@ A comprehensive API for managing Software Bill of Materials (SBOM) and document 
 - **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
 - **Release Management**: Tag and organize artifacts by product releases with download capabilities
 - **Team Collaboration**: Multi-user access with role-based permissions
-- **Public & Private Access**: Flexible sharing and access controls
+- **Public & Private Access**: Flexible sharing and access controls with signed URLs for private components
 - **Vulnerability Scanning**: Integrated security analysis with OSV database
+- **Signed URL Security**: Time-limited, secure access to private components without authentication
 
 ## Authentication
 
@@ -70,7 +71,8 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
             {
                 "name": "Artifacts",
                 "description": "Upload and manage SBOMs (Software Bill of Materials) and documents. "
-                "Supports CycloneDX/SPDX formats with vulnerability scanning and various document types.",
+                "Supports CycloneDX/SPDX formats with vulnerability scanning and various document types. "
+                "Includes signed URL endpoints for secure, time-limited access to private artifacts.",
             },
             {
                 "name": "Releases",

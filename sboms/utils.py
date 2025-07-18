@@ -5,14 +5,15 @@ import importlib.metadata
 import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
 from django.conf import settings
+from django.core import signing
 from django.http import HttpRequest
+from django.utils import timezone
 
 from core.models import Component, Product, Project
 from sboms.models import SBOM
@@ -23,6 +24,52 @@ from teams.models import Member, Team
 from .versioning import CycloneDXSupportedVersion
 
 log = logging.getLogger(__name__)
+
+# =============================================================================
+# SIGNED URL FUNCTIONALITY FOR PRIVATE COMPONENT DOWNLOADS
+# =============================================================================
+#
+# This module provides signed URL functionality for downloading private component
+# SBOMs. When generating product/project SBOMs that contain private components,
+# we need to provide access to those components without exposing them publicly.
+#
+# SECURITY CONSIDERATIONS:
+# - The SIGNED_URL_SALT setting should be unique per installation
+# - Set SIGNED_URL_SALT environment variable in production
+# - Tokens expire after SIGNED_URL_MAX_AGE seconds (default: 7 days)
+# - Each token is tied to a specific SBOM and user
+#
+# CONFIGURATION:
+# Set the SIGNED_URL_SALT environment variable to a unique value for your installation:
+#   export SIGNED_URL_SALT="your-unique-salt-value-here"
+#
+# =============================================================================
+
+# Signed URL constants
+SIGNED_URL_MAX_AGE = 7 * 24 * 3600  # 7 days in seconds
+
+# Lazy initialization of signer to avoid issues when Django settings aren't configured
+_signer = None
+
+
+def get_signer():
+    """Get the TimestampSigner instance, creating it if necessary."""
+    global _signer
+    if _signer is None:
+        # Use configurable salt from settings
+        _signer = signing.TimestampSigner(salt=settings.SIGNED_URL_SALT)
+    return _signer
+
+
+def _get_cyclonedx_model():
+    """Get the CycloneDX model, importing it lazily to avoid import errors."""
+    try:
+        from .sbom_format_schemas import cyclonedx_1_6 as cdx16
+
+        return cdx16
+    except ImportError:
+        log.warning("CycloneDX library not available. Some SBOM features may be limited.")
+        return None
 
 
 def verify_item_access(
@@ -124,6 +171,10 @@ def validate_api_endpoint(sbom_id: str) -> bool:
 
 def create_component_type_mapping() -> Dict[str, Any]:
     """Create mapping for component type strings to CycloneDX enums."""
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None:
+        return {}
+
     return {
         "application": cdx16.Type.application,
         "framework": cdx16.Type.framework,
@@ -149,9 +200,10 @@ def extract_component_info(component_dict: Dict[str, Any]) -> Tuple[str, str, An
     return name, component_type, version
 
 
-def create_version_object(version: Any) -> Optional[cdx16.Version]:
+def create_version_object(version: Any) -> Optional[object]:
     """Create a CycloneDX version object from various input types."""
-    if not version:
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None or not version:
         return None
 
     if isinstance(version, str):
@@ -162,20 +214,219 @@ def create_version_object(version: Any) -> Optional[cdx16.Version]:
         return cdx16.Version(str(version))
 
 
-def create_external_reference(sbom_filename: str, sbom_id: str) -> cdx16.ExternalReference:
-    """Create an external reference for the SBOM with proper validation."""
+def create_external_reference(sbom_filename: str, sbom_id: str, user=None) -> Optional[object]:
+    """Create an external reference for the SBOM with proper validation and signed URLs for private components."""
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None:
+        return None
+
     # Validate the API endpoint exists
     if not validate_api_endpoint(sbom_id):
         log.warning(f"Creating external reference for potentially invalid SBOM endpoint: {sbom_id}")
+
+    # Get the SBOM instance to check if it's private and generate appropriate URL
+    try:
+        from sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component").get(id=sbom_id)
+        download_url = get_download_url_for_sbom(sbom, user, settings.APP_BASE_URL)
+    except Exception as e:
+        log.warning(f"Failed to get SBOM {sbom_id} for URL generation: {e}")
+        # Fallback to regular URL
+        download_url = f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom_id}/download"
 
     # Create hash of filename for reference
     filename_hash = hashlib.sha256(sbom_filename.encode("utf-8")).hexdigest()
 
     return cdx16.ExternalReference(
         type=cdx16.Type3.other,
-        url=f"{settings.APP_BASE_URL}/api/v1/sboms/{sbom_id}/download",
+        url=download_url,
         hashes=[cdx16.Hash(alg="SHA-256", content=cdx16.HashContent(filename_hash))],
     )
+
+
+def create_product_external_references(product: Product, user=None) -> list[object]:
+    """Create external references from product links and documents."""
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None:
+        return []
+
+    external_refs = []
+
+    # Add product links as external references
+    for link in product.links.all():
+        cyclonedx_type = _get_cyclonedx_type_for_product_link(link.link_type)
+        external_refs.append(
+            cdx16.ExternalReference(
+                type=cyclonedx_type, url=link.url, comment=link.description if link.description else None
+            )
+        )
+
+    # Add documents as external references (for document components that are part of this product)
+    # Get document components that are associated with projects that are part of this product
+    # Authorization is handled at the API level, so we don't filter by is_public here
+    from core.models import Component
+
+    document_components = (
+        Component.objects.filter(
+            component_type="document",
+            projects__products=product,  # Only components that are in projects that are part of this product
+        )
+        .distinct()
+        .prefetch_related("document_set")
+    )
+
+    for component in document_components:
+        for document in component.document_set.all():
+            cyclonedx_type = _get_cyclonedx_type_for_document_type(document.document_type)
+            # Use signed URL for private documents
+            document_url = get_download_url_for_document(document, user=user, base_url=settings.APP_BASE_URL)
+            external_refs.append(
+                cdx16.ExternalReference(
+                    type=cyclonedx_type,
+                    url=document_url,
+                    comment=document.description if document.description else None,
+                )
+            )
+
+    return external_refs
+
+
+def create_product_spdx_external_references(product: Product, user=None) -> list[dict]:
+    """Create SPDX external references from product links and documents."""
+    external_refs = []
+
+    # Add product links as external references
+    for link in product.links.all():
+        reference_category = _get_spdx_category_for_product_link(link.link_type)
+        reference_type = _get_spdx_type_for_product_link(link.link_type)
+        external_refs.append(
+            {
+                "referenceCategory": reference_category,
+                "referenceType": reference_type,
+                "referenceLocator": link.url,
+                "comment": link.description if link.description else None,
+            }
+        )
+
+    # Add documents as external references (for document components that are part of this product)
+    # Get document components that are associated with projects that are part of this product
+    # Authorization is handled at the API level, so we don't filter by is_public here
+    from core.models import Component
+
+    document_components = (
+        Component.objects.filter(
+            component_type="document",
+            projects__products=product,  # Only components that are in projects that are part of this product
+        )
+        .distinct()
+        .prefetch_related("document_set")
+    )
+
+    for component in document_components:
+        for document in component.document_set.all():
+            reference_category = document.spdx_reference_category
+            reference_type = document.spdx_reference_type
+            # Use signed URL for private documents
+            document_url = get_download_url_for_document(document, user=user, base_url=settings.APP_BASE_URL)
+            external_refs.append(
+                {
+                    "referenceCategory": reference_category,
+                    "referenceType": reference_type,
+                    "referenceLocator": document_url,
+                    "comment": document.description if document.description else None,
+                }
+            )
+
+    return external_refs
+
+
+def _get_cyclonedx_type_for_product_link(link_type: str) -> Optional[object]:
+    """Map product link types to CycloneDX external reference types."""
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None:
+        return None
+
+    mapping = {
+        "website": cdx16.Type3.website,
+        "support": cdx16.Type3.support,
+        "documentation": cdx16.Type3.documentation,
+        "repository": cdx16.Type3.vcs,
+        "changelog": cdx16.Type3.release_notes,
+        "release_notes": cdx16.Type3.release_notes,
+        "security": cdx16.Type3.security_contact,
+        "issue_tracker": cdx16.Type3.issue_tracker,
+        "download": cdx16.Type3.distribution,
+        "chat": cdx16.Type3.chat,
+        "social": cdx16.Type3.social,
+        "other": cdx16.Type3.other,
+    }
+    return mapping.get(link_type, cdx16.Type3.other)
+
+
+def _get_cyclonedx_type_for_document_type(document_type: str) -> Optional[object]:
+    """Map document types to CycloneDX external reference types."""
+    cdx16 = _get_cyclonedx_model()
+    if cdx16 is None:
+        return None
+
+    mapping = {
+        "specification": cdx16.Type3.documentation,
+        "manual": cdx16.Type3.documentation,
+        "readme": cdx16.Type3.documentation,
+        "documentation": cdx16.Type3.documentation,
+        "build-instructions": cdx16.Type3.build_meta,
+        "configuration": cdx16.Type3.configuration,
+        "license": cdx16.Type3.license,
+        "compliance": cdx16.Type3.certification_report,
+        "evidence": cdx16.Type3.evidence,
+        "changelog": cdx16.Type3.release_notes,
+        "release-notes": cdx16.Type3.release_notes,
+        "security-advisory": cdx16.Type3.advisories,
+        "vulnerability-report": cdx16.Type3.vulnerability_assertion,
+        "threat-model": cdx16.Type3.threat_model,
+        "risk-assessment": cdx16.Type3.risk_assessment,
+        "pentest-report": cdx16.Type3.pentest_report,
+        "static-analysis": cdx16.Type3.static_analysis_report,
+        "dynamic-analysis": cdx16.Type3.dynamic_analysis_report,
+        "quality-metrics": cdx16.Type3.quality_metrics,
+        "maturity-report": cdx16.Type3.maturity_report,
+        "report": cdx16.Type3.other,
+        "other": cdx16.Type3.other,
+    }
+    return mapping.get(document_type, cdx16.Type3.other)
+
+
+def _get_spdx_category_for_product_link(link_type: str) -> str:
+    """Map product link types to SPDX reference categories."""
+    security_types = {"security"}
+    package_manager_types = {"download"}
+
+    if link_type in security_types:
+        return "SECURITY"
+    elif link_type in package_manager_types:
+        return "PACKAGE-MANAGER"
+    else:
+        return "OTHER"
+
+
+def _get_spdx_type_for_product_link(link_type: str) -> str:
+    """Map product link types to SPDX reference types."""
+    mapping = {
+        "website": "website",
+        "support": "support",
+        "documentation": "documentation",
+        "repository": "vcs",
+        "changelog": "changelog",
+        "release_notes": "release-notes",
+        "security": "security-contact",
+        "issue_tracker": "issue-tracker",
+        "download": "download",
+        "chat": "chat",
+        "social": "social",
+        "other": "other",
+    }
+    return mapping.get(link_type, "other")
 
 
 class ProjectSBOMBuilder:
@@ -209,11 +460,18 @@ class ProjectSBOMBuilder:
     }
     """
 
-    def __init__(self, project: Project | None = None):
+    def __init__(self, project: Project | None = None, user=None):
         self.project = project
+        self.user = user  # User for signed URL generation
         self.temp_files = []
 
-    def __call__(self, *args, **kwargs) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+    def __call__(self, *args, **kwargs) -> Optional[object]:
+        # Check if cyclonedx is available
+        cdx16 = _get_cyclonedx_model()
+        if cdx16 is None:
+            log.error("CycloneDX library not available. Cannot build SBOM.")
+            return None
+
         # Support both (target_folder) and (project, target_folder)
         if len(args) == 1 and hasattr(self, "project") and self.project:
             target_folder = args[0]
@@ -231,8 +489,12 @@ class ProjectSBOMBuilder:
             self.temp_files = temp_files
             return self._build_sbom(project)
 
-    def _build_sbom(self, project: Project) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
+    def _build_sbom(self, project: Project) -> Optional[object]:
         """Build the SBOM with proper database optimization and cleanup."""
+        cdx16 = _get_cyclonedx_model()
+        if cdx16 is None:
+            return None
+
         self.sbom = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(bomFormat="CycloneDX", specVersion="1.6")
         self.sbom.field_schema = "http://cyclonedx.org/schema/bom-1.6.schema.json"
         self.sbom.serialNumber = f"urn:uuid:{uuid4()}"
@@ -240,7 +502,7 @@ class ProjectSBOMBuilder:
 
         # metadata section
         self.sbom.metadata = cdx16.Metadata(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=timezone.now(),
             tools=[
                 cdx16.Tool(
                     vendor="sbomify, ltd",
@@ -255,29 +517,23 @@ class ProjectSBOMBuilder:
             component=cdx16.Component(name=project.name, type=cdx16.Type.application, scope=cdx16.Scope.required),
         )
 
-        # components section - only include public components
+        # components section - include all components
         self.sbom.components = []
 
         # DATABASE OPTIMIZATION: Use select_related and prefetch_related to avoid N+1 queries
-        public_components = (
-            project.projectcomponent_set.select_related("component", "component__team")
-            .prefetch_related("component__sbom_set")
-            .filter(component__is_public=True)
+        # Authorization is handled at the API level, so we don't filter by is_public here
+        all_components = project.projectcomponent_set.select_related("component", "component__team").prefetch_related(
+            "component__sbom_set"
         )
 
-        for pc in public_components:
-            # Double-check component is public for extra security
-            if not pc.component.is_public:
-                log.warning(f"Skipping private component {pc.component.id} in public SBOM aggregation")
-                continue
-
+        for pc in all_components:
             sbom_result = self.download_component_sbom(pc.component)
             if sbom_result is None:
-                log.warning(f"SBOM for public component {pc.component.id} not found")
+                log.warning(f"SBOM for component {pc.component.id} not found")
                 continue
 
             sbom_path, sbom_id = sbom_result
-            log.info(f"Downloaded SBOM for public component {pc.component.id} to {sbom_path}")
+            log.info(f"Downloaded SBOM for component {pc.component.id} to {sbom_path}")
 
             try:
                 sbom_data = json.loads(sbom_path.read_text())
@@ -335,7 +591,7 @@ class ProjectSBOMBuilder:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
             return None
 
-    def get_component_metadata(self, sbom_filename: str, sbom_data: dict, sbom_id: str) -> cdx16.Component | None:
+    def get_component_metadata(self, sbom_filename: str, sbom_data: dict, sbom_id: str) -> Optional[object]:
         """Get component metadata from SBOM and create a CycloneDX 1.6 component that references the original."""
         # Validate basic SBOM format
         if not self._validate_sbom_format(sbom_filename, sbom_data):
@@ -379,7 +635,7 @@ class ProjectSBOMBuilder:
                 component.version = version_obj
 
             # Add external reference to the original SBOM
-            component.externalReferences = [create_external_reference(sbom_filename, sbom_id)]
+            component.externalReferences = [create_external_reference(sbom_filename, sbom_id, self.user)]
 
             return component
 
@@ -400,8 +656,9 @@ class ProductSBOMBuilder:
     references to the original component SBOMs.
     """
 
-    def __init__(self, product: Product | None = None):
+    def __init__(self, product: Product | None = None, user=None):
         self.product = product
+        self.user = user
         self.temp_files = []
 
     def __call__(self, *args, **kwargs) -> cdx16.CyclonedxSoftwareBillOfMaterialsStandard:
@@ -430,8 +687,16 @@ class ProductSBOMBuilder:
         self.sbom.version = 1
 
         # metadata section
+        # Create main component with external references from product links and documents
+        main_component = cdx16.Component(name=product.name, type=cdx16.Type.application, scope=cdx16.Scope.required)
+
+        # Add external references from product links and documents
+        external_refs = create_product_external_references(product, user=self.user)
+        if external_refs:
+            main_component.externalReferences = external_refs
+
         self.sbom.metadata = cdx16.Metadata(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=timezone.now(),
             tools=[
                 cdx16.Tool(
                     vendor="sbomify, ltd",
@@ -443,13 +708,14 @@ class ProductSBOMBuilder:
                     ],
                 )
             ],
-            component=cdx16.Component(name=product.name, type=cdx16.Type.application, scope=cdx16.Scope.required),
+            component=main_component,
         )
 
-        # components section - aggregate all components from all PUBLIC projects
+        # components section - aggregate all components from all public projects
         self.sbom.components = []
 
         # DATABASE OPTIMIZATION: Use select_related and prefetch_related to avoid N+1 queries
+        # Filter for public projects only, but include all components within those projects
         public_projects = (
             product.projects.select_related("team")
             .prefetch_related(
@@ -463,32 +729,27 @@ class ProductSBOMBuilder:
         for project in public_projects:
             # Double-check project is public for extra security
             if not project.is_public:
-                log.warning(f"Skipping private project {project.id} in public SBOM aggregation")
+                log.warning(f"Skipping private project {project.id} in SBOM aggregation")
                 continue
 
-            log.info(f"Processing public project {project.name} for product {product.name}")
+            log.info(f"Processing project {project.name} for product {product.name}")
             self._process_project_components(project)
 
         return self.sbom
 
     def _process_project_components(self, project: Project) -> None:
-        """Process all public components within a project."""
-        # SECURITY: Only process public components within public projects
-        public_components = [pc for pc in project.projectcomponent_set.all() if pc.component.is_public]
+        """Process all components within a project."""
+        # Authorization is handled at the API level, so we don't filter by is_public here
+        all_components = [pc for pc in project.projectcomponent_set.all()]
 
-        for pc in public_components:
-            # Double-check component is public for extra security
-            if not pc.component.is_public:
-                log.warning(f"Skipping private component {pc.component.id} in public SBOM aggregation")
-                continue
-
+        for pc in all_components:
             sbom_result = self.download_component_sbom(pc.component)
             if sbom_result is None:
-                log.warning(f"SBOM for public component {pc.component.id} not found")
+                log.warning(f"SBOM for component {pc.component.id} not found")
                 continue
 
             sbom_path, sbom_id = sbom_result
-            log.info(f"Downloaded SBOM for public component {pc.component.id} to {sbom_path}")
+            log.info(f"Downloaded SBOM for component {pc.component.id} to {sbom_path}")
 
             try:
                 sbom_data = json.loads(sbom_path.read_text())
@@ -593,7 +854,7 @@ class ProductSBOMBuilder:
                 component.version = version_obj
 
             # Add external reference to the original SBOM
-            component.externalReferences = [create_external_reference(sbom_filename, sbom_id)]
+            component.externalReferences = [create_external_reference(sbom_filename, sbom_id, self.user)]
 
             return component
 
@@ -614,8 +875,9 @@ class ReleaseSBOMBuilder:
     artifacts that have been selected for the release, not all available artifacts.
     """
 
-    def __init__(self, release=None):
+    def __init__(self, release=None, user=None):
         self.release = release
+        self.user = user  # User for signed URL generation
         self.temp_files = []
 
     def __call__(self, *args, **kwargs):
@@ -661,8 +923,20 @@ class ReleaseSBOMBuilder:
             self.sbom.version = 1
 
             # metadata section
+            # Create main component with external references from product links and documents
+            main_component = cdx16.Component(
+                name=f"{release.product.name} - {release.name}",
+                type=cdx16.Type.application,
+                scope=cdx16.Scope.required,
+            )
+
+            # Add external references from the release's product links and documents
+            external_refs = create_product_external_references(release.product, user=self.user)
+            if external_refs:
+                main_component.externalReferences = external_refs
+
             self.sbom.metadata = cdx16.Metadata(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=timezone.now(),
                 tools=[
                     cdx16.Tool(
                         vendor="sbomify, ltd",
@@ -674,11 +948,7 @@ class ReleaseSBOMBuilder:
                         ],
                     )
                 ],
-                component=cdx16.Component(
-                    name=f"{release.product.name} - {release.name}",
-                    type=cdx16.Type.application,
-                    scope=cdx16.Scope.required,
-                ),
+                component=main_component,
             )
 
             # components section - only include artifacts specifically in this release
@@ -839,7 +1109,7 @@ class ReleaseSBOMBuilder:
                 component.version = version_obj
 
             # Add external reference to the original SBOM
-            component.externalReferences = [create_external_reference(sbom_filename, sbom_id)]
+            component.externalReferences = [create_external_reference(sbom_filename, sbom_id, self.user)]
 
             return component
 
@@ -849,27 +1119,184 @@ class ReleaseSBOMBuilder:
             return None
 
 
-def get_project_sbom_package(project: Project, target_folder: Path) -> Path:
+def make_download_token(sbom_id: str, user_id: str, expires_in: int = SIGNED_URL_MAX_AGE) -> str:
     """
-    Generates the project SBOM file.
+    Generate a signed download token for an SBOM.
 
-    SECURITY: Only generates SBOMs for public projects to prevent leaking private SBOMs.
+    Args:
+        sbom_id: The ID of the SBOM to generate a token for
+        user_id: The ID of the user requesting the download
+        expires_in: Token expiration time in seconds (default: 7 days)
+
+    Returns:
+        A signed token string that can be used to download the SBOM
+    """
+    payload = {"sbom_id": sbom_id, "user_id": user_id, "expires_in": expires_in}
+    return get_signer().sign_object(payload)
+
+
+def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict | None:
+    """
+    Verify a signed download token and return the payload.
+
+    Args:
+        token: The signed token to verify
+        max_age: Maximum age of the token in seconds (default: 7 days)
+
+    Returns:
+        Dictionary containing the payload if valid, None otherwise
+    """
+    try:
+        payload = get_signer().unsign_object(token, max_age=max_age)
+        return payload
+    except signing.BadSignature:
+        log.warning(f"Invalid signature in download token: {token}")
+        return None
+    except signing.SignatureExpired:
+        log.warning(f"Expired download token: {token}")
+        return None
+    except Exception as e:
+        log.error(f"Error verifying download token: {e}")
+        return None
+
+
+def generate_signed_download_url(sbom_id: str, user_id: str, base_url: str = "") -> str:
+    """
+    Generate a complete signed download URL for an SBOM.
+
+    Args:
+        sbom_id: The ID of the SBOM to generate a URL for
+        user_id: The ID of the user requesting the download
+        base_url: Base URL for the application (optional)
+
+    Returns:
+        Complete signed download URL
+    """
+    token = make_download_token(sbom_id, user_id)
+    return f"{base_url}/api/v1/sboms/{sbom_id}/download/signed?token={token}"
+
+
+def should_use_signed_url(sbom, user=None) -> bool:
+    """
+    Determine if a signed URL should be used for downloading an SBOM.
+
+    Args:
+        sbom: The SBOM object to check
+        user: The user requesting the download (optional)
+
+    Returns:
+        True if a signed URL should be used, False for regular download
+    """
+    # Only use signed URLs for private components
+    if not sbom.component.is_public:
+        return True
+
+    # For public components, use regular download URLs
+    return False
+
+
+def get_download_url_for_sbom(sbom, user=None, base_url: str = "") -> str:
+    """
+    Get the appropriate download URL for an SBOM (signed or regular).
+
+    Args:
+        sbom: The SBOM object to get a URL for
+        user: The user requesting the download (optional)
+        base_url: Base URL for the application (optional)
+
+    Returns:
+        Complete download URL (signed or regular)
+    """
+    if should_use_signed_url(sbom, user):
+        if user and user.is_authenticated:
+            return generate_signed_download_url(sbom.id, str(user.id), base_url)
+        else:
+            # For unauthenticated users, we can't generate signed URLs
+            # They shouldn't have access to private components anyway
+            return f"{base_url}/api/v1/sboms/{sbom.id}/download"
+    else:
+        # Public components use regular download URLs
+        return f"{base_url}/api/v1/sboms/{sbom.id}/download"
+
+
+def make_document_download_token(document_id: str, user_id: str, expires_in: int = SIGNED_URL_MAX_AGE) -> str:
+    """
+    Generate a signed download token for a document.
+
+    Args:
+        document_id: The ID of the document to generate a token for
+        user_id: The ID of the user requesting the download
+        expires_in: Token expiration time in seconds (default: 7 days)
+
+    Returns:
+        A signed token string that can be used to download the document
+    """
+    payload = {"document_id": document_id, "user_id": user_id, "expires_in": expires_in}
+    return get_signer().sign_object(payload)
+
+
+def should_use_signed_url_for_document(document, user=None) -> bool:
+    """
+    Determine if a signed URL should be used for downloading a document.
+
+    Args:
+        document: The document object to check
+        user: The user requesting the download (optional)
+
+    Returns:
+        True if a signed URL should be used, False for regular download
+    """
+    # Only use signed URLs for private components
+    if not document.component.is_public:
+        return True
+
+    # For public components, use regular download URLs
+    return False
+
+
+def get_download_url_for_document(document, user=None, base_url: str = "") -> str:
+    """
+    Get the appropriate download URL for a document (signed or regular).
+
+    Args:
+        document: The document object to get a URL for
+        user: The user requesting the download (optional)
+        base_url: Base URL for the application (optional)
+
+    Returns:
+        Complete download URL (signed or regular)
+    """
+    if should_use_signed_url_for_document(document, user):
+        if user and user.is_authenticated:
+            token = make_document_download_token(document.id, str(user.id))
+            return f"{base_url}/api/v1/documents/{document.id}/download/signed?token={token}"
+        else:
+            # For unauthenticated users, we can't generate signed URLs
+            # They shouldn't have access to private components anyway
+            return f"{base_url}/api/v1/documents/{document.id}/download"
+    else:
+        # Public components use regular download URLs
+        return f"{base_url}/api/v1/documents/{document.id}/download"
+
+
+def get_project_sbom_package(project: Project, target_folder: Path, user=None) -> Path:
+    """
+    Generates the aggregated project SBOM file.
+
+    SECURITY: Authorization is handled at the API/view layer. This function
+    generates SBOMs for both public and private projects when called by
+    authorized users. For private projects, only authorized team members
+    can access the endpoints that call this function.
 
     Args:
         project: The project to generate the SBOM for
         target_folder: The folder to save the SBOM to
+        user: The user requesting the SBOM (for signed URL generation)
 
     Returns:
         Path to the generated SBOM file
-
-    Raises:
-        PermissionError: If the project is not public
     """
-    # SECURITY: Only allow SBOM generation for public projects
-    if not project.is_public:
-        raise PermissionError(f"Cannot generate SBOM for private project {project.id}")
-
-    builder = ProjectSBOMBuilder(project)
+    builder = ProjectSBOMBuilder(project, user=user)
     sbom = builder(target_folder)
 
     # Save project SBOM with clean serialization (exclude null values)
@@ -879,7 +1306,7 @@ def get_project_sbom_package(project: Project, target_folder: Path) -> Path:
     return sbom_path
 
 
-def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
+def get_product_sbom_package(product: Product, target_folder: Path, user=None) -> Path:
     """
     Generates the aggregated product SBOM file using the latest release.
 
@@ -887,22 +1314,19 @@ def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
     selecting SBOMs. It ensures we get a consistent, curated set of artifacts
     that represent the current state of the product.
 
-    SECURITY: Only generates SBOMs for public products to prevent leaking private SBOMs.
+    SECURITY: Authorization is handled at the API/view layer. This function
+    generates SBOMs for both public and private products when called by
+    authorized users. For private products, only authorized team members
+    can access the endpoints that call this function.
 
     Args:
         product: The product to generate the SBOM for
         target_folder: The folder to save the SBOM to
+        user: The user requesting the SBOM (for signed URL generation)
 
     Returns:
         Path to the generated SBOM file
-
-    Raises:
-        PermissionError: If the product is not public
     """
-    # SECURITY: Only allow SBOM generation for public products
-    if not product.is_public:
-        raise PermissionError(f"Cannot generate SBOM for private product {product.id}")
-
     # Import here to avoid circular imports
     from core.models import Release
 
@@ -910,7 +1334,7 @@ def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
     latest_release = Release.get_or_create_latest_release(product)
 
     # Use ReleaseSBOMBuilder to create the SBOM from the latest release
-    builder = ReleaseSBOMBuilder(latest_release)
+    builder = ReleaseSBOMBuilder(latest_release, user=user)
     sbom = builder(target_folder)
 
     # Save product SBOM with clean serialization (exclude null values)
@@ -920,28 +1344,24 @@ def get_product_sbom_package(product: Product, target_folder: Path) -> Path:
     return sbom_path
 
 
-def get_release_sbom_package(release, target_folder: Path) -> Path:
+def get_release_sbom_package(release, target_folder: Path, user=None) -> Path:
     """
-    Generates the release-specific SBOM file.
+    Generates the aggregated release SBOM file.
 
-    SECURITY: Only generates SBOMs for public releases to prevent leaking private SBOMs.
+    SECURITY: Authorization is handled at the API/view layer. This function
+    generates SBOMs for both public and private releases when called by
+    authorized users. For private releases, only authorized team members
+    can access the endpoints that call this function.
 
     Args:
         release: The release to generate the SBOM for
         target_folder: The folder to save the SBOM to
+        user: The user requesting the SBOM (for signed URL generation)
 
     Returns:
         Path to the generated SBOM file
-
-    Raises:
-        PermissionError: If the release's product is not public
     """
-    # SECURITY: Only allow SBOM generation for public product releases
-    if not release.product.is_public:
-        raise PermissionError(f"Cannot generate SBOM for private product release {release.id}")
-
-    # Use ReleaseSBOMBuilder to create release-specific SBOM
-    builder = ReleaseSBOMBuilder(release)
+    builder = ReleaseSBOMBuilder(release, user=user)
     sbom = builder(target_folder)
 
     # Save release SBOM with clean serialization (exclude null values)

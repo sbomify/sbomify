@@ -49,6 +49,9 @@ DATABASES = {
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# Override signed URL salt for testing (required)
+SIGNED_URL_SALT = "test-signed-url-salt-unique-per-installation"
+
 SECRET_KEY = "django-insecure-test-key-do-not-use-in-production"  # nosec B105 - This is a test-only key
 
 # Mock AWS settings for testing

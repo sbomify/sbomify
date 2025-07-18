@@ -40,6 +40,7 @@ x-django-env: &django-env
   AWS_SBOMS_STORAGE_BUCKET_NAME: sbomify-sboms
   AWS_SBOMS_STORAGE_BUCKET_URL: http://sbomify-minio:9000/sbomify-sboms
   BILLING: 'False'
+  SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
 
 services:
   sbomify-db:

@@ -19,7 +19,11 @@ from sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
 )
-from sboms.utils import get_product_sbom_package, get_project_sbom_package, get_release_sbom_package
+from sboms.utils import (
+    get_product_sbom_package,
+    get_project_sbom_package,
+    get_release_sbom_package,
+)
 from teams.models import Team
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
@@ -2005,7 +2009,7 @@ def get_dashboard_summary(
 
 @router.get(
     "/projects/{project_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public projects
     tags=["Projects"],
 )
@@ -2026,7 +2030,8 @@ def download_project_sbom(request: HttpRequest, project_id: str):
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            sbom_path = get_project_sbom_package(project, Path(temp_dir))
+            # Pass the user to the SBOM builder for signed URL generation
+            sbom_path = get_project_sbom_package(project, Path(temp_dir), user=request.user)
 
             response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
@@ -2039,7 +2044,7 @@ def download_project_sbom(request: HttpRequest, project_id: str):
 
 @router.get(
     "/products/{product_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public products
     tags=["Products"],
 )
@@ -2060,7 +2065,8 @@ def download_product_sbom(request: HttpRequest, product_id: str):
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            sbom_path = get_product_sbom_package(product, Path(temp_dir))
+            # Pass the user to the SBOM builder for signed URL generation
+            sbom_path = get_product_sbom_package(product, Path(temp_dir), user=request.user)
 
             response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
@@ -2476,7 +2482,7 @@ def delete_release(request: HttpRequest, release_id: str):
 
 @router.get(
     "/releases/{release_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
@@ -2506,10 +2512,10 @@ def download_release(request: HttpRequest, release_id: str):
         )
 
     try:
-        # Use the SBOM package generator
+        # Use the SBOM package generator with user for signed URLs
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            sbom_file_path = get_release_sbom_package(release, temp_path)
+            sbom_file_path = get_release_sbom_package(release, temp_path, user=request.user)
 
             # Read the generated SBOM file
             with open(sbom_file_path, "r") as f:

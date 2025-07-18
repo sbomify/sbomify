@@ -461,6 +461,15 @@ poetry run pre-commit run
 
 A `docker-compose.prod.yml` file is available for production-like setups. **Note:** This configuration is not fully tested and is not recommended for use in real production environments as-is. The provided settings are for demonstration and staging purposes only and will be updated and improved in the future.
 
+For production deployments, generate a secure signing salt for signed URLs:
+
+```bash
+# Generate a secure signing salt for signed URLs
+export SIGNED_URL_SALT="$(openssl rand -hex 32)"
+```
+
+The `SIGNED_URL_SALT` is used to sign download URLs for private components in product/project SBOMs.
+
 To try a production-like stack:
 
 ```bash
