@@ -2005,7 +2005,7 @@ def get_dashboard_summary(
 
 @router.get(
     "/projects/{project_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public projects
     tags=["Projects"],
 )
@@ -2039,7 +2039,7 @@ def download_project_sbom(request: HttpRequest, project_id: str):
 
 @router.get(
     "/products/{product_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public products
     tags=["Products"],
 )
@@ -2476,7 +2476,7 @@ def delete_release(request: HttpRequest, release_id: str):
 
 @router.get(
     "/releases/{release_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )

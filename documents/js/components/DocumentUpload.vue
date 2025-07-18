@@ -27,16 +27,54 @@
       <label for="document-type" class="form-label">Document Type</label>
       <select id="document-type" v-model="documentType" class="form-select">
         <option value="">Select document type (optional)</option>
-        <option value="changelog">Changelog</option>
-        <option value="compliance">Compliance</option>
-        <option value="documentation">Documentation</option>
-        <option value="license">License</option>
-        <option value="manual">Manual</option>
-        <option value="readme">README</option>
-        <option value="report">Report</option>
-        <option value="specification">Specification</option>
-        <option value="other">Other</option>
+
+        <!-- Technical Documentation -->
+        <optgroup label="Technical Documentation">
+          <option value="specification">Specification</option>
+          <option value="manual">Manual</option>
+          <option value="readme">README</option>
+          <option value="documentation">Documentation</option>
+          <option value="build-instructions">Build Instructions</option>
+          <option value="configuration">Configuration</option>
+        </optgroup>
+
+        <!-- Legal and Compliance -->
+        <optgroup label="Legal and Compliance">
+          <option value="license">License</option>
+          <option value="compliance">Compliance</option>
+          <option value="evidence">Evidence</option>
+        </optgroup>
+
+        <!-- Release Information -->
+        <optgroup label="Release Information">
+          <option value="changelog">Changelog</option>
+          <option value="release-notes">Release Notes</option>
+        </optgroup>
+
+        <!-- Security Documents -->
+        <optgroup label="Security Documents">
+          <option value="security-advisory">Security Advisory</option>
+          <option value="vulnerability-report">Vulnerability Report</option>
+          <option value="threat-model">Threat Model</option>
+          <option value="risk-assessment">Risk Assessment</option>
+          <option value="pentest-report">Penetration Test Report</option>
+        </optgroup>
+
+        <!-- Analysis Reports -->
+        <optgroup label="Analysis Reports">
+          <option value="static-analysis">Static Analysis Report</option>
+          <option value="dynamic-analysis">Dynamic Analysis Report</option>
+          <option value="quality-metrics">Quality Metrics</option>
+          <option value="maturity-report">Maturity Report</option>
+          <option value="report">Report</option>
+        </optgroup>
+
+        <!-- Other -->
+        <optgroup label="Other">
+          <option value="other">Other</option>
+        </optgroup>
       </select>
+      <div class="form-text">Select the type of document you're uploading. This helps with SBOM generation and compliance.</div>
     </div>
 
     <div class="mb-3">

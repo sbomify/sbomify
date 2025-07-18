@@ -315,9 +315,45 @@ const getDocumentDownloadUrl = (documentId: string): string => {
 const getDocumentTypeDisplay = (documentType: string): string => {
   if (!documentType) return 'Document'
 
-  // Convert snake_case to Title Case
-  return documentType
-    .split('_')
+  // Map document types to display names
+  const typeDisplayMap: { [key: string]: string } = {
+    // Technical Documentation
+    'specification': 'Specification',
+    'manual': 'Manual',
+    'readme': 'README',
+    'documentation': 'Documentation',
+    'build-instructions': 'Build Instructions',
+    'configuration': 'Configuration',
+
+    // Legal and Compliance
+    'license': 'License',
+    'compliance': 'Compliance',
+    'evidence': 'Evidence',
+
+    // Release Information
+    'changelog': 'Changelog',
+    'release-notes': 'Release Notes',
+
+    // Security Documents
+    'security-advisory': 'Security Advisory',
+    'vulnerability-report': 'Vulnerability Report',
+    'threat-model': 'Threat Model',
+    'risk-assessment': 'Risk Assessment',
+    'pentest-report': 'Penetration Test Report',
+
+    // Analysis Reports
+    'static-analysis': 'Static Analysis Report',
+    'dynamic-analysis': 'Dynamic Analysis Report',
+    'quality-metrics': 'Quality Metrics',
+    'maturity-report': 'Maturity Report',
+    'report': 'Report',
+
+    // Other
+    'other': 'Other'
+  }
+
+  return typeDisplayMap[documentType] || documentType
+    .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 }
