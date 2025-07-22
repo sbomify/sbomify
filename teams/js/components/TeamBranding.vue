@@ -1,11 +1,11 @@
 <template>
   <StandardCard
-    title="Branding"
+    title="Workspace Branding"
     variant="settings"
     size="large"
     shadow="md"
   >
-    <p class="mb-4">Set default brand elements to determine how public SBOMs appear.</p>
+    <p class="subtitle mb-5">Customize your workspace's visual identity for public SBOMs and shared content.</p>
 
     <v-skeleton-loader
       v-show="isLoading"
@@ -13,58 +13,127 @@
       class="mb-4"
     ></v-skeleton-loader>
 
-    <div v-show="!isLoading">
-      <div class="row form-field">
-        <div class="col-md-3 col-6">
-          <label for="brand_color" class="form-label">Brand color</label>
+    <div v-show="!isLoading" class="branding-form">
+      <!-- Colors Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">Brand Colors</h3>
+          <p class="section-description">Define your primary brand colors for consistent visual identity.</p>
         </div>
-        <div class="col-md-2 col-3">
-          <div class="color-picker-wrapper">
-            <input v-model="brandingInfo.brand_color" type="text" class="form-control color-text"
-              placeholder="#000000" @input="validateAndUpdateColor($event, 'brand_color')">
-            <input v-model="brandingInfo.brand_color" type="color" class="form-control color-picker" @change="updateField('brand_color')">
+        <div class="section-content">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="color-field">
+                <label for="brand_color" class="field-label">Primary Brand Color</label>
+                <div class="color-input-group">
+                  <div class="color-preview" :style="{ backgroundColor: brandingInfo.brand_color || '#000000' }"></div>
+                  <input
+                    v-model="brandingInfo.brand_color"
+                    type="text"
+                    class="form-control color-text"
+                    placeholder="#000000"
+                    @input="validateAndUpdateColor($event, 'brand_color')"
+                  >
+                  <input
+                    v-model="brandingInfo.brand_color"
+                    type="color"
+                    class="color-picker"
+                    @change="updateField('brand_color')"
+                  >
+                </div>
+                <small class="field-hint">Used for primary branding elements and headers</small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="color-field">
+                <label for="accent_color" class="field-label">Accent Color</label>
+                <div class="color-input-group">
+                  <div class="color-preview" :style="{ backgroundColor: brandingInfo.accent_color || '#000000' }"></div>
+                  <input
+                    v-model="brandingInfo.accent_color"
+                    type="text"
+                    class="form-control color-text"
+                    placeholder="#000000"
+                    @input="validateAndUpdateColor($event, 'accent_color')"
+                  >
+                  <input
+                    v-model="brandingInfo.accent_color"
+                    type="color"
+                    class="color-picker"
+                    @change="updateField('accent_color')"
+                  >
+                </div>
+                <small class="field-hint">Used for buttons, links, and highlights</small>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="row form-field">
-        <div class="col-md-3 col-6">
-          <label for="accent_color" class="form-label">Accent color</label>
+      <!-- Visual Assets Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">Visual Assets</h3>
+          <p class="section-description">Upload your brand assets to personalize the appearance of public content.</p>
         </div>
-        <div class="col-md-2 col-3">
-          <div class="color-picker-wrapper">
-            <input v-model="brandingInfo.accent_color" type="text" class="form-control color-text"
-              placeholder="#000000" @input="validateAndUpdateColor($event, 'accent_color')">
-            <input v-model="brandingInfo.accent_color" type="color" class="form-control color-picker" @change="updateField('accent_color')">
+        <div class="section-content">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="upload-field">
+                <label class="field-label">Brand Icon</label>
+                <div class="upload-container">
+                                     <FileDragAndDrop
+                     v-model="brandingInfo.icon"
+                     accept="image/*"
+                     @update:modelValue="(file) => handleFileUpload('icon', file || null)"
+                     class="modern-upload"
+                   />
+                </div>
+                <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="upload-field">
+                <label class="field-label">Brand Logo</label>
+                <div class="upload-container">
+                                     <FileDragAndDrop
+                     v-model="brandingInfo.logo"
+                     accept="image/*"
+                     @update:modelValue="(file) => handleFileUpload('logo', file || null)"
+                     class="modern-upload"
+                   />
+                </div>
+                <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="row form-field">
-        <div class="col-md-3 col-6">
-          <label for="icon" class="form-label">Icon</label>
+      <!-- Preferences Section -->
+      <div class="section-card">
+        <div class="section-header">
+          <h3 class="section-title">Display Preferences</h3>
+          <p class="section-description">Configure how your brand assets are displayed across the platform.</p>
         </div>
-        <div class="col-md-2 col-3">
-          <FileDragAndDrop v-model="brandingInfo.icon" accept="image/*" @update:modelValue="handleFileUpload('icon', $event)" />
-        </div>
-      </div>
-
-      <div class="row form-field">
-        <div class="col-md-3 col-6">
-          <label for="logo" class="form-label">Logo</label>
-        </div>
-        <div class="col-md-2 col-3">
-          <FileDragAndDrop v-model="brandingInfo.logo" accept="image/*" @update:modelValue="handleFileUpload('logo', $event)" />
-        </div>
-      </div>
-
-      <div class="row form-field">
-        <div class="col-md-3 col-6">
-          <label for="prefer_logo_over_icon_switch" class="form-label d-flex align-items-center h-100">Prefer logo over icon</label>
-        </div>
-        <div class="col-md-2 col-3">
-          <v-switch id="prefer_logo_over_icon_switch" v-model="brandingInfo.prefer_logo_over_icon"
-            hide-details density="compact" color="primary" inset @change="updateField('prefer_logo_over_icon')"></v-switch>
+        <div class="section-content">
+          <div class="preference-row">
+            <div class="preference-content">
+              <label for="prefer_logo_over_icon_switch" class="preference-label">Prefer Logo Over Icon</label>
+              <p class="preference-description">When both logo and icon are available, prioritize showing the logo in branding areas.</p>
+            </div>
+            <div class="preference-control">
+              <v-switch
+                id="prefer_logo_over_icon_switch"
+                v-model="brandingInfo.prefer_logo_over_icon"
+                hide-details
+                density="compact"
+                color="primary"
+                inset
+                @change="updateField('prefer_logo_over_icon')"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -106,82 +175,61 @@ const brandingInfo = ref<BrandingInfo>({
   prefer_logo_over_icon: false
 });
 
-const handleFileUpload = async (field: string, file: File | null | undefined) => {
-  if (!file) return;
+const validateAndUpdateColor = (event: Event, field: string) => {
+  const target = event.target as HTMLInputElement;
+  let value = target.value;
 
-  const formData = new FormData();
-  formData.append(field, file);
+  // Add # if not present and value is not empty
+  if (value && !value.startsWith('#')) {
+    value = '#' + value;
+    target.value = value;
+  }
 
-  try {
-    const response = await $axios.post(`/api/v1/teams/${props.teamKey}/branding/${field}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error('Network response was not ok. ' + response.statusText);
-    }
-
-    await showSuccess('File uploaded successfully');
-  } catch (error: unknown) {
-    console.log(error);
-    if (isAxiosError(error)) {
-      showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
-    } else {
-      showError('Failed to upload file');
-    }
+  // Validate hex color format
+  const hexPattern = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+  if (value === '' || hexPattern.test(value)) {
+    brandingInfo.value[field] = value;
+    updateField(field);
   }
 };
 
 const updateField = async (field: string) => {
   try {
-    const response = await $axios.post(`/api/v1/teams/${props.teamKey}/branding/${field}`, {
-      [field]: brandingInfo.value[field]
+    const payload: any = {};
+    payload[field] = brandingInfo.value[field];
+
+    await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, payload);
+    showSuccess('Branding updated successfully');
+  } catch (error) {
+    console.error('Error updating branding:', error);
+    if (isAxiosError(error)) {
+      showError(error.response?.data?.message || 'Failed to update branding');
+    } else {
+      showError('Failed to update branding');
+    }
+  }
+};
+
+const handleFileUpload = async (field: string, file: File | null) => {
+  if (!file) return;
+
+  try {
+    const formData = new FormData();
+    formData.append(field, file);
+
+    await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error('Network response was not ok. ' + response.statusText);
-    }
-
-    await showSuccess('Setting updated successfully');
-  } catch (error: unknown) {
-    console.log(error);
+    showSuccess(`${field.charAt(0).toUpperCase() + field.slice(1)} uploaded successfully`);
+  } catch (error) {
+    console.error(`Error uploading ${field}:`, error);
     if (isAxiosError(error)) {
-      showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+      showError(error.response?.data?.message || `Failed to upload ${field}`);
     } else {
-      showError('Failed to update setting');
-    }
-  }
-};
-
-const validateAndUpdateColor = async (event: Event, field: 'brand_color' | 'accent_color') => {
-  const input = event.target as HTMLInputElement;
-  const colorValue = input.value;
-  if (/^#[0-9A-F]{6}$/i.test(colorValue)) {
-    brandingInfo.value[field] = colorValue;
-    await updateField(field);
-  }
-};
-
-const loadImagesFromUrls = async () => {
-  if (brandingInfo.value.icon_url) {
-    try {
-      const iconResponse = await fetch(brandingInfo.value.icon_url);
-      const iconBlob = await iconResponse.blob();
-      brandingInfo.value.icon = new File([iconBlob], 'icon', { type: iconBlob.type });
-    } catch (error) {
-      console.error('Failed to load icon:', error);
-    }
-  }
-
-  if (brandingInfo.value.logo_url) {
-    try {
-      const logoResponse = await fetch(brandingInfo.value.logo_url);
-      const logoBlob = await logoResponse.blob();
-      brandingInfo.value.logo = new File([logoBlob], 'logo', { type: logoBlob.type });
-    } catch (error) {
-      console.error('Failed to load logo:', error);
+      showError(`Failed to upload ${field}`);
     }
   }
 };
@@ -189,14 +237,15 @@ const loadImagesFromUrls = async () => {
 onMounted(async () => {
   try {
     const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
-    brandingInfo.value = response.data;
-    await loadImagesFromUrls();
-  } catch (error: unknown) {
-    console.log(error);
+    if (response.data) {
+      Object.assign(brandingInfo.value, response.data);
+    }
+  } catch (error) {
+    console.error('Error loading branding info:', error);
     if (isAxiosError(error)) {
-      showError(`${error.response?.status} - ${error.response?.statusText}: ${error.response?.data?.detail[0].msg}`);
+      showError(error.response?.data?.message || 'Failed to load branding information');
     } else {
-      showError('Failed to load branding settings');
+      showError('Failed to load branding information');
     }
   } finally {
     isLoading.value = false;
@@ -205,67 +254,273 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.form-field {
-  margin-bottom: 1.5rem;
-  align-items: center;
+.subtitle {
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
-.form-label {
+.branding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Section Cards */
+.section-card {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.section-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.section-header {
+  padding: 1.5rem 1.5rem 1rem;
+  background: linear-gradient(135deg, #ffffff, #f9fafb);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.section-content {
+  padding: 1.5rem;
+}
+
+/* Form Fields */
+.field-label {
+  display: block;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 0;
-  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
 }
 
-.color-picker-wrapper {
+.field-hint {
+  color: #6b7280;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+/* Color Fields */
+.color-field {
   position: relative;
+}
+
+.color-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.color-input-group:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.color-preview {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 2px solid #e5e7eb;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease;
+}
+
+.color-text {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.color-picker {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+/* Upload Fields */
+.upload-field {
+  position: relative;
+}
+
+.upload-container {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Override FileDragAndDrop default styling completely */
+:deep(.modern-upload) {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-height: 160px;
+}
+
+:deep(.modern-upload .file-upload-container) {
+  width: 100%;
+}
+
+:deep(.modern-upload .drop-zone) {
+  border: 2px dashed #d1d5db !important;
+  border-radius: 8px !important;
+  background: white !important;
+  padding: 2rem !important;
+  min-height: 160px !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+:deep(.modern-upload .drop-zone):hover {
+  border-color: #9ca3af !important;
+  background: #f9fafb !important;
+}
+
+:deep(.modern-upload .drop-zone.has-file) {
+  border-style: dashed !important;
+}
+
+/* Preferences */
+.preference-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.preference-row:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.preference-content {
+  flex: 1;
+}
+
+.preference-label {
+  display: block;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+.preference-description {
+  color: #6b7280;
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.preference-control {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
 }
 
-.color-picker {
-  width: 40px;
-  height: 38px;
-  padding: 0;
-  margin-left: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  cursor: pointer;
-}
-
-.color-text {
-  width: 100px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.color-text:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  outline: none;
-}
-
-/* Responsive adjustments */
+/* Responsive Design */
 @media (max-width: 768px) {
-  .form-field {
+  .section-content {
+    padding: 1rem;
+  }
+
+  .section-header {
+    padding: 1rem 1rem 0.75rem;
+  }
+
+  .color-input-group {
     flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem;
   }
 
-  .form-label {
-    margin-bottom: 0.5rem;
+  .color-preview {
+    align-self: center;
   }
 
-  .color-picker-wrapper {
-    width: 100%;
+  .preference-row {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .preference-control {
     justify-content: flex-start;
   }
 }
 
+@media (max-width: 576px) {
+  .branding-form {
+    gap: 1.5rem;
+  }
+
+  .section-card {
+    border-radius: 8px;
+  }
+
+  .section-content {
+    padding: 0.75rem;
+  }
+}
+
+/* Floating Alert Styling */
 :deep(.floating-alert) {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }

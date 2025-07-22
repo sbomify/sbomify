@@ -51,13 +51,19 @@ function mountVueComponent(selector: string, component: Component, props: Record
       }
     }
 
-    if (elementProps.billingPlanLimits && elementProps.billingPlanLimits !== '') {
-      try {
-        elementProps.billingPlanLimits = JSON.parse(elementProps.billingPlanLimits as string);
-      } catch (error) {
-        console.error('Error parsing billing plan limits:', error);
+    if (elementProps.billingPlanLimits) {
+      if (elementProps.billingPlanLimits === '' || elementProps.billingPlanLimits === 'null') {
         elementProps.billingPlanLimits = null;
+      } else {
+        try {
+          elementProps.billingPlanLimits = JSON.parse(elementProps.billingPlanLimits as string);
+        } catch (error) {
+          console.error('Error parsing billing plan limits:', error);
+          elementProps.billingPlanLimits = null;
+        }
       }
+    } else {
+      elementProps.billingPlanLimits = null;
     }
 
     const app = createApp(component, elementProps);

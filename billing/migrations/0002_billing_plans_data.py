@@ -6,7 +6,7 @@ BILLING_PLANS = [
     {
         "key": "community",
         "name": "Community",
-        "description": "Free plan for small teams",
+        "description": "Community plan for small teams",
         "max_products": 1,
         "max_projects": 1,
         "max_components": 5,
@@ -29,6 +29,7 @@ BILLING_PLANS = [
     },
 ]
 
+
 def add_billing_plans(apps, schema_editor):
     BillingPlan = apps.get_model("billing", "BillingPlan")
     for plan in BILLING_PLANS:
@@ -44,7 +45,6 @@ def add_billing_plans(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("billing", "0001_initial"),
     ]
@@ -52,5 +52,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(add_billing_plans, migrations.RunPython.noop),
     ]
-
-

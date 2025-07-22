@@ -11,7 +11,7 @@
       <div class="plan-pricing">
         <h1 class="pricing-title">
           <slot name="pricing">
-            <template v-if="price === 0">Free</template>
+            <template v-if="price === 0">Community</template>
             <template v-else-if="price > 0">
               ${{ price }}<small class="pricing-period">{{ pricePeriod }}</small>
             </template>

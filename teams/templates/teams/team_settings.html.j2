@@ -1,146 +1,169 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
 {% load django_vite %}
-{% block title %}sbomify Team Settings: {{ team.name }}{% endblock %}
+{% load static %}
+{% block title %}sbomify Workspace Settings: {{ team.name }}{% endblock %}
 {% block content %}
+    <link rel="stylesheet" href="{% static 'css/team-settings.css' %}">
     <div class="page-header mb-4">
-        <div class="header-main mb-3">
+        <div class="header-main">
             <div class="title-section">
                 <h1 class="item-title">
                     <i class="fas fa-cog me-3 text-primary"></i>
-                    Team Settings
+                    Workspace Settings
                 </h1>
-                <div class="header-actions">
-                    <a class="btn btn-outline-primary"
-                       href="{% url 'teams:team_details' team.key %}">
-                        <i class="fas fa-arrow-left me-2"></i>
-                        Back to Team
-                    </a>
+                <p class="item-subtitle">Manage your workspace configuration, members, and preferences</p>
+            </div>
+            <div class="header-actions">
+                <span class="workspace-key">
+                    <span class="vc-copyable-value"
+                          data-value="{{ team.key }}"
+                          title="Workspace Key: {{ team.key }} (click to copy)">{{ team.key }}</span>
+                </span>
+            </div>
+        </div>
+    </div>
+    <!-- Navigation Tabs -->
+    <div class="settings-nav mb-4">
+        <nav class="nav nav-pills nav-fill settings-tabs">
+            <a class="nav-link"
+               data-bs-toggle="pill"
+               href="#members"
+               data-tab="members">
+                <i class="fas fa-users me-2"></i>
+                Members
+            </a>
+            <a class="nav-link"
+               data-bs-toggle="pill"
+               href="#branding"
+               data-tab="branding">
+                <i class="fas fa-palette me-2"></i>
+                Branding
+            </a>
+            {% if request.session.current_team.role == 'owner' %}
+                <a class="nav-link"
+                   data-bs-toggle="pill"
+                   href="#billing"
+                   data-tab="billing">
+                    <i class="fas fa-credit-card me-2"></i>
+                    Billing
+                </a>
+            {% endif %}
+        </nav>
+    </div>
+    <!-- Tab Content -->
+    <div class="tab-content settings-content mt-4">
+        <!-- Members Tab -->
+        <div class="tab-pane fade" id="members">
+            <div class="row g-4 g-lg-5">
+                <div class="col-12">
+                    <StandardCard title="Team Members" variant="settings" size="large" shadow="md">
+                    <!-- Team Members Component -->
+                    {{ members_data|json_script:"team-members-data" }}
+                    <div class="vc-team-members"
+                         data-team-key="{{ team.key }}"
+                         data-team-members-element-id="team-members-data"
+                         data-user-role="{{ request.session.current_team.role }}"
+                         data-csrf-token="{{ csrf_token }}"></div>
+                    </StandardCard>
+                </div>
+                {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
+                    <div class="col-12">
+                        <StandardCard title="Pending Invitations" variant="settings" size="large" shadow="md">
+                        <!-- Team Invitations Component -->
+                        {{ invitations_data|json_script:"team-invitations-data" }}
+                        <div class="vc-team-invitations"
+                             data-team-key="{{ team.key }}"
+                             data-team-invitations-element-id="team-invitations-data"
+                             data-user-role="{{ request.session.current_team.role }}"
+                             data-csrf-token="{{ csrf_token }}"></div>
+                        </StandardCard>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Branding Tab -->
+        <div class="tab-pane fade" id="branding">
+            <div class="row">
+                <div class="col-12">
+                    <!-- Team Branding Component -->
+                    <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
                 </div>
             </div>
         </div>
-        <div class="header-meta">
-            <span class="meta-item">
-                <i class="fas fa-cog me-2 text-primary"></i>
-                <span class="meta-label">Settings</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                <span class="team-name">{{ team.name }}</span>
-            </span>
-        </div>
-    </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-main {
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.5rem;
-        }
-
-        .title-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .item-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-            display: flex;
-            align-items: center;
-        }
-
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 1rem;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .meta-label {
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .team-name {
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .meta-divider {
-            color: #cbd5e1;
-            font-weight: bold;
-        }
-
-        .btn-outline-primary {
-            color: #4f46e5;
-            border-color: #4f46e5;
-            background: transparent;
-            transition: all 0.2s ease;
-        }
-
-        .btn-outline-primary:hover {
-            background-color: #4f46e5;
-            border-color: #4f46e5;
-            color: white;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
-        }
-
-        @media (max-width: 768px) {
-            .title-section {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .item-title {
-                font-size: 1.5rem;
-            }
-
-            .header-meta {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-
-            .page-header {
-                padding: 1.5rem;
-            }
-        }
-    </style>
-    <div class="row">
-        <div class="col-12">
-            <!-- Team Branding Component -->
-            <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
-        </div>
+        {% if request.session.current_team.role == 'owner' %}
+            <!-- Billing Tab -->
+            <div class="tab-pane fade" id="billing">
+                <div class="row">
+                    <div class="col-12">
+                        <!-- Team Billing Component -->
+                        <div class="vc-team-billing"
+                             data-team-key="{{ team.key }}"
+                             data-billing-plan="{{ team.billing_plan }}"
+                             data-billing-plan-limits="{{ team.billing_plan_limits|default:''|escape }}"
+                             data-user-role="{{ request.session.current_team.role }}"></div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}
+    {% vite_asset 'core/js/main.ts' %}
     {% vite_asset 'teams/js/main.ts' %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get available tabs
+            const availableTabs = ['members', 'branding'];
+            {% if request.session.current_team.role == 'owner' %}
+                availableTabs.push('billing');
+            {% endif %}
+
+            // Function to activate a tab
+            function activateTab(tabName) {
+                // Remove active class from all nav links and tab panes
+                document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                document.querySelectorAll('.tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                });
+
+                // Add active class to the selected tab nav link and pane
+                const navLink = document.querySelector(`.settings-tabs .nav-link[href="#${tabName}"]`);
+                const tabPane = document.getElementById(tabName);
+
+                if (navLink && tabPane) {
+                    navLink.classList.add('active');
+                    tabPane.classList.add('show', 'active');
+                }
+            }
+
+            // Function to get the current tab from URL hash
+            function getCurrentTab() {
+                const hash = window.location.hash.substring(1); // Remove the #
+                return availableTabs.includes(hash) ? hash : 'members'; // Default to members
+            }
+
+            // Activate tab based on current URL hash
+            activateTab(getCurrentTab());
+
+            // Listen for hash changes
+            window.addEventListener('hashchange', function() {
+                activateTab(getCurrentTab());
+            });
+
+            // Update hash when tab links are clicked
+            document.querySelectorAll('.settings-tabs .nav-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetTab = this.getAttribute('href').substring(1);
+                    if (availableTabs.includes(targetTab)) {
+                        history.pushState(null, null, `#${targetTab}`);
+                        activateTab(targetTab);
+                    }
+                });
+            });
+        });
+    </script>
 {% endblock %}

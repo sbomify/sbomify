@@ -50,6 +50,14 @@
                         <i class="align-middle" data-feather="tag"></i> <span class="align-middle pt-1">Releases</span>
                     </a>
                 </li>
+                {% if request.session.current_team and request.session.current_team.key %}
+                    <li class="sidebar-item {% if 'teams:team_settings' in current_view_name %}active{% endif %}">
+                        <a class="sidebar-link"
+                           href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}">
+                            <i class="align-middle" data-feather="settings"></i> <span class="align-middle pt-1">Settings</span>
+                        </a>
+                    </li>
+                {% endif %}
             </ul>
         {% endwith %}
     </div>

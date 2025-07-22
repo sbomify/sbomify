@@ -213,8 +213,8 @@ class TestCriticalPaths:
         assert f"sbomify Component: {component.name}" in response.content.decode()
 
         # Test teams pages
-        response = client.get(reverse("teams:team_details", kwargs={"team_key": team.key}))
-        assert f"sbomify Team: {team.name}" in response.content.decode()
+        response = client.get(reverse("teams:team_details", kwargs={"team_key": team.key}), follow=True)
+        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()
 
         response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
-        assert f"sbomify Team Settings: {team.name}" in response.content.decode()
+        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()

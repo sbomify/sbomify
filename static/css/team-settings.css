@@ -1,0 +1,194 @@
+/* Team Settings Page Styles - Extracted from template */
+
+.page-header {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    margin-bottom: 2rem;
+}
+
+.header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.title-section {
+    flex: 1;
+}
+
+.item-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin: 0;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+}
+
+.item-subtitle {
+    color: #6b7280;
+    font-size: 1.1rem;
+    margin: 0.5rem 0 0 0;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.workspace-key {
+    background: #f1f5f9;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 0.875rem;
+    color: #475569;
+}
+
+.workspace-key .vc-copyable-value {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.workspace-key .vc-copyable-value:hover {
+    color: #1e293b;
+}
+
+/* Settings Navigation */
+.settings-nav {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0.5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.settings-tabs .nav-link {
+    border-radius: 8px;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+}
+
+.settings-tabs .nav-link:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.settings-tabs .nav-link.active {
+    background: #f8fafc;
+    color: #1f2937;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+}
+
+/* Settings Content */
+.settings-content {
+    min-height: 400px;
+    padding: 0 0.5rem;
+    overflow-x: hidden;
+}
+
+/* Responsive Design */
+@media (max-width: 991.98px) {
+    .item-title {
+        font-size: 2.25rem;
+    }
+
+    .item-subtitle {
+        font-size: 1rem;
+    }
+
+    .settings-content {
+        padding: 0 0.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .item-title {
+        font-size: 2rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .header-main {
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: stretch;
+    }
+
+    .header-actions {
+        justify-content: flex-start;
+    }
+
+    .settings-tabs {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .settings-tabs .nav-link {
+        text-align: center;
+        padding: 0.625rem 1rem;
+    }
+
+    .settings-content {
+        padding: 0;
+    }
+}
+
+@media (max-width: 576px) {
+    .page-header {
+        padding: 1.25rem;
+        border-radius: 8px;
+        margin: 0 -0.5rem 1rem -0.5rem;
+    }
+
+    .item-title {
+        font-size: 1.75rem;
+    }
+
+    .item-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .settings-nav {
+        border-radius: 8px;
+        padding: 0.25rem;
+        margin: 0 -0.5rem;
+    }
+
+    .settings-tabs .nav-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .settings-content {
+        margin: 0 -0.5rem;
+        padding: 0 0.5rem;
+    }
+}
+
+@media (max-width: 375px) {
+    .page-header {
+        padding: 1rem;
+    }
+
+    .item-title {
+        font-size: 1.5rem;
+    }
+
+    .settings-tabs .nav-link {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+}

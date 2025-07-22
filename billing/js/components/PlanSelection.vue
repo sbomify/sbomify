@@ -7,7 +7,7 @@
           <div class="col-lg-8">
             <h1 class="hero-title mb-4">Choose the Perfect Plan for Your Team</h1>
                          <p class="hero-subtitle mb-4">
-               Secure, scalable security and product artifact management for teams of all sizes. Start free, upgrade when you need more.
+               Secure, scalable security and product artifact management for teams of all sizes. Start with Community, upgrade when you need more.
              </p>
             <div class="billing-toggle-wrapper mb-5">
               <div class="billing-toggle">
@@ -232,7 +232,7 @@ const faqs = reactive<FAQ[]>([
   {
     id: 'free-trial',
     question: 'Do you offer a free trial?',
-    answer: 'Yes! Our Community plan is completely free forever. For Business plans, you get a 14-day free trial to test all premium features.',
+    answer: 'Yes! Our Community plan is free forever. For Business plans, you get a 14-day free trial to test all premium features.',
     expanded: false
   },
   {
@@ -363,7 +363,7 @@ const getButtonText = (plan: Plan | undefined): string => {
   if (plan.key === currentPlan.value) {
     return 'Current Plan';
   } else if (!currentPlan.value && plan.key === 'community') {
-    return 'Get Started Free';
+    return 'Get Started with Community';
   } else if (plan.key === 'enterprise') {
     return 'Contact Sales';
   } else {
