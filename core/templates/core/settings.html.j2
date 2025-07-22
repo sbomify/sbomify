@@ -1,72 +1,81 @@
-{% extends "./dashboard_base.html.j2" %}
-{% load django_vite %}
+{% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
+{% load form_helpers %}
+{% load django_vite %}
 {% block title %}sbomify Settings{% endblock %}
-{% block styles %}
-    <style>
-    .access-token-code {
-        word-break: break-all;
-        white-space: pre-wrap;
-    }
-    </style>
-{% endblock %}
 {% block content %}
-    <h1 class="page-title">Settings</h1>
-    <div class="row">
-        <div class="col-12">
-            <div class="card settings-card" data-shadow="md">
+    <div class="container-fluid">
+        <div class="settings-page-header">
+            <h1>Personal Access Tokens</h1>
+            <p class="text-muted mb-4">
+                Personal access tokens are used to authenticate API requests to sbomify. Use these tokens to access the API programmatically.
+            </p>
+        </div>
+        <!-- Token Generation Card (Plain HTML with StandardCard styling) -->
+        <div class="standard-card-container">
+            <div class="card settings-card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Access Tokens</h5>
+                    <h4 class="card-title mb-0">Generate New Token</h4>
                 </div>
                 <div class="card-body">
-                    <form method="post" class="row g-3 align-items-center">
+                    <form method="post" id="tokenGenerationForm">
                         {% csrf_token %}
-                        {% for field in create_access_token_form %}
-                            <div class="form-group col-4 mt-2">
-                                <div>
-                                    <label class="mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                                    {{ field|add_class:'form-control mb-3' }}
-                                </div>
-                                {% for error in field.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
-                            </div>
-                        {% endfor %}
-                        <div class="col-4">
-                            <input type="submit"
-                                   class="btn btn-primary"
-                                   value="Generate New Access Token" />
+                        <div class="form-group mb-3">
+                            {% for field in create_access_token_form %}
+                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field|add_class:'form-control' }}
+                                {% for error in field.errors %}<div class="text-danger mt-1">{{ error }}</div>{% endfor %}
+                            {% endfor %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>
+                                Generate Token
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    onclick="document.getElementById('tokenGenerationForm').reset();">
+                                <i class="fas fa-times me-2"></i>
+                                Clear
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
-    {% if new_encoded_access_token %}
-        <div class="row">
-            <div class="col-12">
-                <div class="card settings-card" data-shadow="md">
+        <!-- New Token Display Card (only shown when a new token is created) -->
+        {% if new_encoded_access_token %}
+            <div class="standard-card-container">
+                <div class="card settings-card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                            Your New Personal Access Token
+                        </h4>
+                    </div>
                     <div class="card-body">
-                        <p class="mt-4">
-                            Your new access token is displayed below. Please copy it and store in a safe place as it will only be displayed once.
-                        </p>
-                        <div class="row">
-                            <div class="token-display" id="new-access-token-display">
-                                <div class="token-heading px-3 py-1 d-flex align-items-center justify-content-between">
-                                    <span>New Access Token</span>
-                                    <div class="vc-copy-token"></div>
-                                </div>
-                                <code id="access-token" class="p-3 d-block">{{ new_encoded_access_token }}</code>
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Make sure to copy your personal access token now. You won't be able to see it again!
+                        </div>
+                        <div class="token-display-container">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Personal Access Token</label>
+                                <div class="vc-copy-token"></div>
                             </div>
+                            <div id="access-token"
+                                 class="form-control bg-light font-monospace"
+                                 readonly>{{ new_encoded_access_token }}</div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    {% endif %}
-    <div class="row">
-        <div class="col-12">
-            <div class="card settings-card data-table" data-shadow="md">
+        {% endif %}
+        <!-- Personal Access Tokens List Card -->
+        <div class="standard-card-container">
+            <div class="card settings-card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Your Access Tokens</h5>
+                    <h4 class="card-title mb-0">Personal Access Tokens</h4>
                 </div>
                 <div class="card-body">
                     {{ access_tokens|json_script:"access-tokens-data" }}
@@ -77,55 +86,147 @@
             </div>
         </div>
     </div>
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'core/js/main.ts' %}
-    <script>
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(function() {
-                // Show success message
-                const toast = new bootstrap.Toast(document.getElementById('copyToast'));
-                toast.show();
-            }, function(err) {
-                console.error('Could not copy text: ', err);
-            });
+    <!-- Site notifications component -->
+    <div class="vc-site-notifications"></div>
+    <style>
+        .settings-page-header {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 0.5rem;
+            border-left: 4px solid #007bff;
         }
 
-        function rotateToken() {
-            if (confirm('Are you sure you want to rotate your access token? The current token will become invalid.')) {
-                fetch('/api/v1/access-tokens/rotate', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'Content-Type': 'application/json',
-                    },
-                })
-                .then(response => {
-                    if (response.ok) {
-                        return response.json();
-                    }
-                    throw new Error('Failed to rotate token');
-                })
-                .then(data => {
-                    document.getElementById('access-token').textContent = data.token;
-                    // Show success message
-                    alert('Token rotated successfully!');
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to rotate token. Please try again.');
-                });
+        .standard-card-container {
+            margin-bottom: 2rem;
+        }
+
+        .settings-card {
+            border: 1px solid #e5e9f2;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .settings-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .settings-card .card-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #e5e9f2;
+            border-radius: 0.75rem 0.75rem 0 0;
+            padding: 1rem 1.25rem;
+        }
+
+        .settings-card .card-body {
+            background: #ffffff;
+            padding: 1.25rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            font-size: 0.875rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        .btn {
+            font-weight: 500;
+            border-radius: 0.375rem;
+            padding: 0.5rem 1rem;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary {
+            background-color: #374151;
+            border-color: #374151;
+            color: #ffffff;
+        }
+
+        .btn-primary:hover {
+            background-color: #1f2937;
+            border-color: #1f2937;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-outline-secondary {
+            border: 1px solid #d1d5db;
+            color: #6c757d;
+            background: white;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #f8f9fa;
+            border-color: #adb5bd;
+            color: #495057;
+        }
+
+        .token-display-container {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 0.375rem;
+            padding: 1rem;
+        }
+
+        .font-monospace {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 0.875rem;
+            letter-spacing: 0.025em;
+        }
+
+        .bg-light {
+            background-color: #f8f9fa !important;
+        }
+
+        .alert {
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+            border-radius: 0.375rem;
+        }
+
+        .alert-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffecb5;
+        }
+
+
+    </style>
+    <script>
+        // Handle form submission feedback
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if there's a success message to show
+            var hasNewToken = document.getElementById('access-token');
+            if (hasNewToken && window.showSuccess) {
+                window.showSuccess('Personal access token created successfully!');
             }
+        });
+
+        // Handle form reset
+        function resetTokenForm() {
+            document.getElementById('tokenGenerationForm').reset();
         }
     </script>
-    <!-- Toast for copy confirmation -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
-        <div id="copyToast"
-             class="toast"
-             role="alert"
-             aria-live="assertive"
-             aria-atomic="true">
-            <div class="toast-body">Token copied to clipboard!</div>
-        </div>
-    </div>
 {% endblock %}

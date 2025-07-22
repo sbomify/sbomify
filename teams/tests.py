@@ -113,6 +113,8 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
 def test_only_owners_are_allowed_to_access_team_details(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
+    from core.tests.shared_fixtures import setup_authenticated_client_session
+
     client = Client()
 
     # User not logged in
@@ -122,14 +124,18 @@ def test_only_owners_are_allowed_to_access_team_details(
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    # Set up authenticated client session with proper team context
+    setup_authenticated_client_session(
+        client,
+        sample_team_with_owner_member.team,
+        sample_team_with_owner_member.user
     )
 
     response: HttpResponse = client.get(uri)
 
-    assert response.status_code == 200
-    assert response.request["PATH_INFO"] == uri
+    # team_details now redirects to team_settings for unified interface
+    assert response.status_code == 302
+    assert response.url == reverse("teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
 
 
 @pytest.mark.django_db
@@ -501,6 +507,8 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
 def test_only_owners_are_allowed_to_access_team_settings(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
+    from core.tests.shared_fixtures import setup_authenticated_client_session
+
     client = Client()
 
     # User not logged in
@@ -512,8 +520,11 @@ def test_only_owners_are_allowed_to_access_team_settings(
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
-    assert client.login(
-        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    # Set up authenticated client session with proper team context
+    setup_authenticated_client_session(
+        client,
+        sample_team_with_owner_member.team,
+        sample_team_with_owner_member.user
     )
 
     response: HttpResponse = client.get(uri)

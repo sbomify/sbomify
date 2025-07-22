@@ -18,7 +18,7 @@
         </a>
         <div class="dropdown-menu">
             {% for t_key, t_info in request.session.user_teams.items %}
-                <a class="dropdown-item {% if t_key == request.session.current_team.key %}active{% endif %}"
+                <a class="dropdown-item {% if request.session.current_team.key and t_key == request.session.current_team.key %}active{% endif %}"
                    href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">{{ t_info.name }}</a>
             {% endfor %}
         </div>

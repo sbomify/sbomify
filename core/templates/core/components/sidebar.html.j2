@@ -10,7 +10,7 @@
                 <select class="form-select" data-action="switch-team">
                     {% for team_key, team in request.session.user_teams.items %}
                         <option value="{{ team_key }}"
-                                {% if request.session.current_team.key == team_key %}selected{% endif %}
+                                {% if request.session.current_team.key and request.session.current_team.key == team_key %}selected{% endif %}
                                 data-role="{{ team.role }}">{{ team.name }}</option>
                     {% endfor %}
                 </select>
@@ -58,30 +58,24 @@
                     <span>Components</span>
                 </a>
             </li>
-        </ul>
-        {# Team settings - only show for team owners #}
-        {% if request.session.current_team.role == 'owner' %}
-            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                <span>Team Settings</span>
-            </h6>
-            <ul class="nav flex-column mb-2" data-component="team-settings">
+            <li class="nav-item">
+                <a class="nav-link sidebar-item d-flex align-items-center {% if 'release' in request.path %}active{% endif %}"
+                   href="{% url 'core:releases_dashboard' %}"
+                   data-nav-item="releases">
+                    <i class="bi bi-tag me-2"></i>
+                    <span>Releases</span>
+                </a>
+            </li>
+            {% if request.session.current_team and request.session.current_team.key %}
                 <li class="nav-item">
-                    <a class="nav-link sidebar-item d-flex align-items-center {% if 'team/settings' in request.path %}active{% endif %}"
+                    <a class="nav-link sidebar-item d-flex align-items-center {% if request.resolver_match.view_name == 'teams:team_settings' %}active{% endif %}"
                        href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
-                       data-nav-item="team-settings">
+                       data-nav-item="settings">
                         <i class="bi bi-gear me-2"></i>
                         <span>Settings</span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link sidebar-item d-flex align-items-center {% if 'team/members' in request.path %}active{% endif %}"
-                       href="{% url 'teams:team_details' team_key=request.session.current_team.key %}"
-                       data-nav-item="team-members">
-                        <i class="bi bi-people me-2"></i>
-                        <span>Members</span>
-                    </a>
-                </li>
-            </ul>
-        {% endif %}
+            {% endif %}
+        </ul>
     </div>
 </nav>

@@ -110,60 +110,8 @@ def teams_dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 @validate_role_in_current_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str):
-    team_id = token_to_number(team_key)
-
-    try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Team not found"))
-
-    # Get current user's role from session
-    current_user_role = request.session.get("current_team", {}).get("role", "guest")
-
-    # Get default team status from session
-    is_default_team = request.session.get("user_teams", {}).get(team_key, {}).get("is_default_team", False)
-
-    # Serialize members data for Vue component
-    members_data = [
-        {
-            "id": member.id,
-            "user": {
-                "id": member.user.id,
-                "first_name": member.user.first_name,
-                "last_name": member.user.last_name,
-                "email": member.user.email,
-            },
-            "role": member.role,
-            "is_default_team": member.is_default_team,
-        }
-        for member in team.member_set.select_related("user").all()
-    ]
-
-    # Only provide invitation data to owners and admins
-    invitations_data = []
-    if current_user_role in ["owner", "admin"]:
-        invitations_data = [
-            {
-                "id": invitation.id,
-                "email": invitation.email,
-                "role": invitation.role,
-                "created_at": invitation.created_at.isoformat(),
-                "expires_at": invitation.expires_at.isoformat(),
-            }
-            for invitation in team.invitation_set.all()
-        ]
-
-    return render(
-        request,
-        "teams/team_details.html.j2",
-        {
-            "team": team,
-            "members_data": members_data,
-            "invitations_data": invitations_data,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "is_default_team": is_default_team,
-        },
-    )
+    """Redirect to team settings for unified interface."""
+    return redirect("teams:team_settings", team_key=team_key)
 
 
 @login_required
@@ -356,7 +304,36 @@ def delete_invite(request: HttpRequest, invitation_id: int):
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+def settings_redirect(request: HttpRequest) -> HttpResponse:
+    """
+    Redirect /workspace/settings/ to the current team's settings page.
+    This provides backward compatibility for the old URL structure.
+    """
+    current_team = request.session.get("current_team")
+    if current_team and current_team.get("key"):
+        return redirect("teams:team_settings", team_key=current_team["key"])
+    else:
+        # If no current team, redirect to teams dashboard to select one
+        messages.add_message(
+            request,
+            messages.INFO,
+            "Please select a workspace to access its settings.",
+        )
+        return redirect("teams:teams_dashboard")
+
+
+@login_required
+@validate_role_in_current_team(["owner", "admin"])
+def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
+    """
+    Redirect /workspace/{team_key}/settings/ to the unified settings interface.
+    This provides backward compatibility for the old URL structure.
+    """
+    return redirect("teams:team_settings", team_key=team_key)
+
+
+@login_required
+@validate_role_in_current_team(["owner", "admin"])
 def team_settings(request: HttpRequest, team_key: str):
     team_id = token_to_number(team_key)
 
@@ -365,11 +342,54 @@ def team_settings(request: HttpRequest, team_key: str):
     except Team.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
+    # Get current user's role from session
+    current_user_role = request.session.get("current_team", {}).get("role", "guest")
+
+    # Get default team status from session
+    is_default_team = request.session.get("user_teams", {}).get(team_key, {}).get("is_default_team", False)
+
+    # Serialize members data for Vue component
+    members_data = [
+        {
+            "id": member.id,
+            "user": {
+                "id": member.user.id,
+                "first_name": member.user.first_name,
+                "last_name": member.user.last_name,
+                "email": member.user.email,
+            },
+            "role": member.role,
+            "is_default_team": member.is_default_team,
+        }
+        for member in team.member_set.select_related("user").all()
+    ]
+
+    # Only provide invitation data to owners and admins
+    invitations_data = []
+    if current_user_role in ["owner", "admin"]:
+        invitations_data = [
+            {
+                "id": invitation.id,
+                "email": invitation.email,
+                "role": invitation.role,
+                "created_at": invitation.created_at.isoformat(),
+                "expires_at": invitation.expires_at.isoformat(),
+            }
+            for invitation in team.invitation_set.all()
+        ]
+
     branding_info = BrandingInfo(**team.branding_info)
     return render(
         request,
         "teams/team_settings.html.j2",
-        {"team": team, "branding_info": branding_info, "APP_BASE_URL": settings.APP_BASE_URL},
+        {
+            "team": team,
+            "branding_info": branding_info,
+            "members_data": members_data,
+            "invitations_data": invitations_data,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "is_default_team": is_default_team,
+        },
     )
 
 
