@@ -34,7 +34,7 @@
         <div v-if="isFreePlan()" class="plan-description">
           <div class="free-plan-message">
             <i class="fas fa-info-circle text-primary me-2"></i>
-            <span>You're currently on the free tier. Upgrade to unlock additional features and higher limits.</span>
+            <span>You're currently on the Community tier. Upgrade to unlock additional features and higher limits.</span>
           </div>
         </div>
 
@@ -127,7 +127,7 @@ const isFreePlan = (): boolean => {
 
 const getPlanDisplayName = (): string => {
   if (isFreePlan()) {
-    return 'Free'
+    return 'Community'
   }
   return props.billingPlan.charAt(0).toUpperCase() + props.billingPlan.slice(1)
 }
