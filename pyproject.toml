@@ -55,7 +55,7 @@ pytest-mock = "^3.14.0"
 coverage = "^7.6.1"
 
 [tool.poetry.group.prod.dependencies]
-gunicorn = "^22.0.0"
+gunicorn = "^23.0.0"
 poetry-plugin-export = "^1.7.1"
 
 [build-system]
