@@ -48,33 +48,27 @@ def enterprise_contact(request: HttpRequest) -> HttpResponse:
 New Enterprise Plan Inquiry
 
 Company Information:
-- Company Name: {form.cleaned_data['company_name']}
-- Company Size: {dict(form.fields['company_size'].choices).get(
-    form.cleaned_data['company_size'], 'N/A'
-)}
-- Industry: {form.cleaned_data.get('industry') or 'Not specified'}
+- Company Name: {form.cleaned_data["company_name"]}
+- Company Size: {dict(form.fields["company_size"].choices).get(form.cleaned_data["company_size"], "N/A")}
+- Industry: {form.cleaned_data.get("industry") or "Not specified"}
 
 Contact Information:
-- Name: {form.cleaned_data['first_name']} {form.cleaned_data['last_name']}
-- Email: {form.cleaned_data['email']}
-- Phone: {form.cleaned_data.get('phone') or 'Not provided'}
-- Job Title: {form.cleaned_data.get('job_title') or 'Not specified'}
+- Name: {form.cleaned_data["first_name"]} {form.cleaned_data["last_name"]}
+- Email: {form.cleaned_data["email"]}
+- Phone: {form.cleaned_data.get("phone") or "Not provided"}
+- Job Title: {form.cleaned_data.get("job_title") or "Not specified"}
 
 Project Details:
-- Primary Use Case: {dict(form.fields['primary_use_case'].choices).get(
-    form.cleaned_data['primary_use_case'], 'N/A'
-)}
-- Timeline: {form.cleaned_data.get('timeline') or 'Not specified'}
+- Primary Use Case: {dict(form.fields["primary_use_case"].choices).get(form.cleaned_data["primary_use_case"], "N/A")}
+- Timeline: {form.cleaned_data.get("timeline") or "Not specified"}
 
 Message:
-{form.cleaned_data['message']}
+{form.cleaned_data["message"]}
 
-Newsletter Signup: {'Yes' if form.cleaned_data.get('newsletter_signup') else 'No'}
+Newsletter Signup: {"Yes" if form.cleaned_data.get("newsletter_signup") else "No"}
 
-Submitted by user: {request.user.email} ({
-    request.user.get_full_name() or request.user.username
-})
-Submitted at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+Submitted by user: {request.user.email} ({request.user.get_full_name() or request.user.username})
+Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
 """
 
                 # Send email to sales team
@@ -90,15 +84,13 @@ Submitted at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
                 # Send confirmation email to the user
                 confirmation_subject = "Thank you for your Enterprise inquiry"
                 confirmation_message = f"""
-Dear {form.cleaned_data['first_name']},
+Dear {form.cleaned_data["first_name"]},
 
 Thank you for your interest in sbomify Enterprise. We have received your inquiry and will get back \
 to you within 1-2 business days.
 
 Our sales team will review your requirements and reach out to discuss how sbomify
-Enterprise can meet {
-    form.cleaned_data['company_name']
-}'s specific needs.
+Enterprise can meet {form.cleaned_data["company_name"]}'s specific needs.
 
 Best regards,
 The sbomify Team
@@ -164,33 +156,29 @@ def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
 New Enterprise Plan Inquiry (Public Form)
 
 Company Information:
-- Company Name: {form.cleaned_data['company_name']}
-- Company Size: {dict(form.fields['company_size'].choices).get(
-    form.cleaned_data['company_size'], 'N/A'
-)}
-- Industry: {form.cleaned_data.get('industry') or 'Not specified'}
+- Company Name: {form.cleaned_data["company_name"]}
+- Company Size: {dict(form.fields["company_size"].choices).get(form.cleaned_data["company_size"], "N/A")}
+- Industry: {form.cleaned_data.get("industry") or "Not specified"}
 
 Contact Information:
-- Name: {form.cleaned_data['first_name']} {form.cleaned_data['last_name']}
-- Email: {form.cleaned_data['email']}
-- Phone: {form.cleaned_data.get('phone') or 'Not provided'}
-- Job Title: {form.cleaned_data.get('job_title') or 'Not specified'}
+- Name: {form.cleaned_data["first_name"]} {form.cleaned_data["last_name"]}
+- Email: {form.cleaned_data["email"]}
+- Phone: {form.cleaned_data.get("phone") or "Not provided"}
+- Job Title: {form.cleaned_data.get("job_title") or "Not specified"}
 
 Project Details:
-- Primary Use Case: {dict(form.fields['primary_use_case'].choices).get(
-    form.cleaned_data['primary_use_case'], 'N/A'
-)}
-- Timeline: {form.cleaned_data.get('timeline') or 'Not specified'}
+- Primary Use Case: {dict(form.fields["primary_use_case"].choices).get(form.cleaned_data["primary_use_case"], "N/A")}
+- Timeline: {form.cleaned_data.get("timeline") or "Not specified"}
 
 Message:
-{form.cleaned_data['message']}
+{form.cleaned_data["message"]}
 
-Newsletter Signup: {'Yes' if form.cleaned_data.get('newsletter_signup') else 'No'}
+Newsletter Signup: {"Yes" if form.cleaned_data.get("newsletter_signup") else "No"}
 
 Submitted from: Public Enterprise Contact Form
-Submitted at: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-Source IP: {request.META.get('REMOTE_ADDR', 'Unknown')}
-User Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}
+Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
+Source IP: {request.META.get("REMOTE_ADDR", "Unknown")}
+User Agent: {request.META.get("HTTP_USER_AGENT", "Unknown")}
 """
 
                 # Send email to sales team
@@ -206,14 +194,14 @@ User Agent: {request.META.get('HTTP_USER_AGENT', 'Unknown')}
                 # Send confirmation email to the user
                 confirmation_subject = "Thank you for your Enterprise inquiry"
                 confirmation_message = f"""
-Dear {form.cleaned_data['first_name']},
+Dear {form.cleaned_data["first_name"]},
 
 Thank you for your interest in sbomify Enterprise! We've received your inquiry and our sales team will \
 reach out to you within 1-2 business days.
 
 Our team will review your requirements and discuss how sbomify Enterprise can meet {
-    form.cleaned_data['company_name']
-}'s specific needs.
+                    form.cleaned_data["company_name"]
+                }'s specific needs.
 
 Best regards,
 The sbomify Team

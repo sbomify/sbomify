@@ -96,7 +96,7 @@ class Command(BaseCommand):
                     # Modify the SBOM name to make it unique
                     if "spdxVersion" in sbom_data_dict:
                         # SPDX format
-                        sbom_data_dict["name"] = f"test-sbom-{i+1:03d}-{test_file.replace('.json', '')}"
+                        sbom_data_dict["name"] = f"test-sbom-{i + 1:03d}-{test_file.replace('.json', '')}"
                         if "documentName" in sbom_data_dict:
                             sbom_data_dict["documentName"] = sbom_data_dict["name"]
                     else:
@@ -106,7 +106,7 @@ class Command(BaseCommand):
                         if "component" not in sbom_data_dict["metadata"]:
                             sbom_data_dict["metadata"]["component"] = {}
                         sbom_data_dict["metadata"]["component"]["name"] = (
-                            f"test-sbom-{i+1:03d}-{test_file.replace('.json', '')}"
+                            f"test-sbom-{i + 1:03d}-{test_file.replace('.json', '')}"
                         )
 
                     # Prepare mock request for API call
@@ -138,10 +138,12 @@ class Command(BaseCommand):
                             if created_count % 10 == 0:  # Progress update every 10 SBOMs
                                 self.stdout.write(f"Created {created_count}/{count} SBOMs...")
                         else:
-                            self.stdout.write(self.style.WARNING(f"Failed to create SBOM {i+1}: Status {status_code}"))
+                            self.stdout.write(
+                                self.style.WARNING(f"Failed to create SBOM {i + 1}: Status {status_code}")
+                            )
 
                 except Exception as e:
-                    self.stdout.write(self.style.WARNING(f"Error creating SBOM {i+1}: {e}"))
+                    self.stdout.write(self.style.WARNING(f"Error creating SBOM {i + 1}: {e}"))
                     continue
 
         self.stdout.write(

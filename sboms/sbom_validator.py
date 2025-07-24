@@ -32,7 +32,7 @@ class SPDXValidator(SBOMValidator):
         """Validate SPDX version-specific requirements."""
         if sbom_data.get("spdxVersion") != f"SPDX-{self.version}":
             raise SBOMSchemaError(
-                f"SPDX version mismatch: expected SPDX-{self.version}, " f"got {sbom_data.get('spdxVersion')}"
+                f"SPDX version mismatch: expected SPDX-{self.version}, got {sbom_data.get('spdxVersion')}"
             )
 
     def get_version_specific_fields(self) -> Dict[str, List[str]]:
