@@ -53,7 +53,7 @@
             {% endif %}
             {% if sbom.ntia_compliance_status == 'compliant' %}
                 <small class="ntia-compliance">
-                    <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="true">
+                    <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="true" team-billing-plan="{{ team_billing_plan }}">
                     </vc-ntia-compliance-badge>
                 </small>
             {% endif %}

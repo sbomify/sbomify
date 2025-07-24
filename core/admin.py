@@ -16,6 +16,18 @@ from documents.models import Document
 from sboms.models import SBOM  # SBOM still lives in sboms app
 from teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
 from teams.models import Invitation, Member, Team
+from vulnerability_scanning.admin import (
+    ComponentDependencyTrackMappingAdmin,
+    DependencyTrackServerAdmin,
+    TeamVulnerabilitySettingsAdmin,
+    VulnerabilityScanResultAdmin,
+)
+from vulnerability_scanning.models import (
+    ComponentDependencyTrackMapping,
+    DependencyTrackServer,
+    TeamVulnerabilitySettings,
+    VulnerabilityScanResult,
+)
 
 from .models import Component, Product, Project, User
 
@@ -243,3 +255,9 @@ admin_site.register(Project)
 admin_site.register(Component)
 admin_site.register(SBOM)
 admin_site.register(Document, DocumentAdmin)
+
+# Register vulnerability scanning models
+admin_site.register(DependencyTrackServer, DependencyTrackServerAdmin)
+admin_site.register(TeamVulnerabilitySettings, TeamVulnerabilitySettingsAdmin)
+admin_site.register(ComponentDependencyTrackMapping, ComponentDependencyTrackMappingAdmin)
+admin_site.register(VulnerabilityScanResult, VulnerabilityScanResultAdmin)

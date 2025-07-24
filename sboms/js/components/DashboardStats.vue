@@ -57,7 +57,7 @@ const props = defineProps<{
 }>();
 
 const sizeClasses = computed(() => {
-  return props.size === 'small' ? 'col-md-3' : 'col-md-6';
+  return props.size === 'small' ? 'col-md-3' : 'col-md-4';
 });
 
 const cardSize = computed(() => {

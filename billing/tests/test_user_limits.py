@@ -207,9 +207,15 @@ class NTIAFeatureGatingTestCase(TestCase):
 
     def test_billing_plan_has_vulnerability_scanning_property(self):
         """Test that billing plans have correct vulnerability scanning properties."""
-        self.assertFalse(self.community_plan.has_vulnerability_scanning)
+        # OSV vulnerability scanning is now available for all teams
+        self.assertTrue(self.community_plan.has_vulnerability_scanning)
         self.assertTrue(self.business_plan.has_vulnerability_scanning)
         self.assertTrue(self.enterprise_plan.has_vulnerability_scanning)
+
+        # But Dependency Track access is only for business/enterprise
+        self.assertFalse(self.community_plan.has_dependency_track_access)
+        self.assertTrue(self.business_plan.has_dependency_track_access)
+        self.assertTrue(self.enterprise_plan.has_dependency_track_access)
 
     @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_not_triggered_for_community(self, mock_task):
@@ -296,24 +302,24 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should not be called
         mock_task.assert_not_called()
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities.send_with_options")
-    def test_vulnerability_scan_not_triggered_for_community(self, mock_task):
-        """Test that vulnerability scanning is not triggered for community plans."""
+    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    def test_vulnerability_scan_triggered_for_community(self, mock_task):
+        """Test that vulnerability scanning is triggered for community plans (using OSV)."""
         team = Team.objects.create(name="Community Team", billing_plan="community")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
-        # Create SBOM - this should not trigger vulnerability scan
-        _sbom = SBOM.objects.create(
+        # Create SBOM - this should trigger vulnerability scan with OSV
+        sbom = SBOM.objects.create(
             name="test-sbom",
             component=component,
             format="spdx"
         )
 
-        # Vulnerability scan task should not be called
-        mock_task.assert_not_called()
+        # Vulnerability scan task should be called
+        mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities.send_with_options")
+    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_business(self, mock_task):
         """Test that vulnerability scanning is triggered for business plans."""
         team = Team.objects.create(name="Business Team", billing_plan="business")
@@ -330,7 +336,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities.send_with_options")
+    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_enterprise(self, mock_task):
         """Test that vulnerability scanning is triggered for enterprise plans."""
         team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
@@ -347,39 +353,39 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities.send_with_options")
-    def test_vulnerability_scan_not_triggered_for_no_plan(self, mock_task):
-        """Test that vulnerability scanning is not triggered when team has no billing plan."""
+    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    def test_vulnerability_scan_triggered_for_no_plan(self, mock_task):
+        """Test that vulnerability scanning is triggered when team has no billing plan (using OSV)."""
         team = Team.objects.create(name="No Plan Team")  # No billing_plan set
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
-        # Create SBOM - this should not trigger vulnerability scan
-        _sbom = SBOM.objects.create(
+        # Create SBOM - this should trigger vulnerability scan with OSV
+        sbom = SBOM.objects.create(
             name="test-sbom",
             component=component,
             format="spdx"
         )
 
-        # Vulnerability scan task should not be called
-        mock_task.assert_not_called()
+        # Vulnerability scan task should be called
+        mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities.send_with_options")
-    def test_vulnerability_scan_not_triggered_for_invalid_plan(self, mock_task):
-        """Test that vulnerability scanning is not triggered for invalid billing plans."""
+    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    def test_vulnerability_scan_triggered_for_invalid_plan(self, mock_task):
+        """Test that vulnerability scanning is triggered for invalid billing plans (using OSV)."""
         team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
-        # Create SBOM - this should not trigger vulnerability scan
-        _sbom = SBOM.objects.create(
+        # Create SBOM - this should trigger vulnerability scan with OSV
+        sbom = SBOM.objects.create(
             name="test-sbom",
             component=component,
             format="spdx"
         )
 
-        # Vulnerability scan task should not be called
-        mock_task.assert_not_called()
+        # Vulnerability scan task should be called
+        mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
 
 class InvitationUserLimitsTestCase(TestCase):

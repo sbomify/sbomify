@@ -37,6 +37,13 @@ OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS = int(os.environ.get("OSV_SCANNER_RAW_RESU
 # OSV Scanner subprocess timeout in seconds (default: 5 minutes, less than Dramatiq's 6-minute time limit)
 OSV_SCANNER_TIMEOUT_SECONDS = int(os.environ.get("OSV_SCANNER_TIMEOUT_SECONDS", 300))
 
+# Vulnerability scanning cache TTL in seconds (default: 1 hour)
+VULNERABILITY_SCAN_CACHE_TTL = int(os.environ.get("VULNERABILITY_SCAN_CACHE_TTL", 3600))
+
+# Dependency Track processing delay in seconds (default: 5 seconds)
+# Time to wait after SBOM upload before retrieving results to allow DT to process
+DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -92,6 +99,7 @@ INSTALLED_APPS = [
     "access_tokens",
     "billing",
     "notifications",
+    "vulnerability_scanning",
     "health_check",
     "health_check.db",
     "anymail",

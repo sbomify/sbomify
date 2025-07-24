@@ -14,6 +14,16 @@ interface PlanData {
   team_key: string
 }
 
+interface Plan {
+  key: string;
+  name: string;
+  description: string;
+  max_products: number | null;
+  max_projects: number | null;
+  max_components: number | null;
+  max_users: number | null;
+}
+
 interface ApiError extends Error {
   response?: {
     data: {
@@ -24,8 +34,9 @@ interface ApiError extends Error {
 
 // Mock axios
 const mockAxios = {
-  get: mock(() => Promise.resolve({ data: [] as any })),
-  post: mock((...args: any[]) => Promise.resolve({ data: {} as any }))
+  get: mock(() => Promise.resolve({ data: [] as Plan[] })),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  post: mock((..._args: unknown[]) => Promise.resolve({ data: {} }))
 }
 
 mock.module('../../../core/js/utils', () => ({

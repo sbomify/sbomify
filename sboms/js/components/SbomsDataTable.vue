@@ -34,6 +34,7 @@
             <NTIAComplianceBadge
               :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
               :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
+              :teamBillingPlan="teamBillingPlan"
             />
           </td>
                       <td>{{ utils.formatDate(itemData.sbom.created_at) }}</td>
@@ -59,6 +60,7 @@
               <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
                 <i class="fas fa-download"></i>
               </a>
+              <!-- Manual scan button removed - vulnerability scans now run weekly automatically -->
               <button
                 v-if="showDeleteButton"
                 class="btn btn-sm btn-outline-danger action-btn"
@@ -129,15 +131,17 @@ const props = defineProps<{
   showVulnerabilities?: boolean
   showDeleteButton?: boolean
   isDeleting?: string | null
+  teamBillingPlan?: string
 }>()
 
 // Use composables
 const utils = useCommonUtils()
 const urlGen = useUrlGeneration(props.isPublicView)
 
-defineEmits<{
-  delete: [sbom: Sbom]
-}>()
+// defineEmits removed - using $emit directly in template
+
+// State for vulnerability scanning
+// isScanning state removed - manual scanning no longer needed
 
 const getSbomDetailUrl = (sbomId: string): string => {
   return urlGen.getSbomDetailUrl(sbomId, props.componentId)
@@ -170,11 +174,9 @@ const truncateText = (text: string | null | undefined, maxLength: number): strin
   return text.substring(0, maxLength) + '...'
 }
 
+// getCsrfToken function removed - manual scanning no longer needed
 
-
-
-
-
+// Manual scan functionality removed - vulnerability scans now run weekly automatically
 </script>
 
 <style scoped>
@@ -260,6 +262,14 @@ const truncateText = (text: string | null | undefined, maxLength: number): strin
   color: #000;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(255, 193, 7, 0.3);
+}
+
+.action-btn.btn-outline-success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10b981, #047857);
+  border-color: #10b981;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
 }
 
 .action-btn:disabled {

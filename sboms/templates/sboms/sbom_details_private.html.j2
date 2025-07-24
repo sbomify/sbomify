@@ -46,7 +46,7 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             {% endif %}
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="false">
+                <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="false" team-billing-plan="{{ team_billing_plan }}">
                 </vc-ntia-compliance-badge>
             </span>
         </div>

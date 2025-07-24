@@ -54,32 +54,34 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
         },
         "tags": [
             {
-                "name": "Products",
-                "description": "Manage products, their identifiers (CPE, PURL, etc.), and external links. "
-                "Products are the top-level organizational unit in sbomify and can contain multiple projects.",
+                "name": "SBOMs",
+                "description": "Manage Software Bill of Materials with upload, validation, and security analysis. "
+                "SBOMs are automatically scanned for vulnerabilities and compliance.",
             },
             {
-                "name": "Projects",
-                "description": "Manage projects within products. Projects help organize components and provide "
-                "logical groupings for development workflows and release planning.",
+                "name": "Documents",
+                "description": "Upload and manage document artifacts like security advisories, compliance reports, "
+                "and technical documentation associated with your components.",
             },
             {
                 "name": "Components",
-                "description": "Manage components as organizational containers for artifacts. "
-                "Components help structure and organize your SBOMs and documents.",
+                "description": "Organize and manage software components that contain SBOMs and documents. "
+                "Components provide logical grouping and access control.",
             },
             {
-                "name": "Artifacts",
-                "description": "Upload and manage SBOMs (Software Bill of Materials) and documents. "
-                "Supports CycloneDX/SPDX formats with vulnerability scanning and various document types. "
-                "Includes signed URL endpoints for secure, time-limited access to private artifacts.",
+                "name": "Products & Projects",
+                "description": "Structure your software inventory with products and projects for better organization "
+                "and release management.",
             },
             {
                 "name": "Releases",
-                "description": (
-                    "Manage product releases and associate artifacts (SBOMs, documents) with specific versions. "
-                    "Includes bulk download capabilities and release artifact management."
-                ),
+                "description": "Tag and manage product releases with downloadable artifacts and version tracking. "
+                "Create public or private releases with secure access controls.",
+            },
+            {
+                "name": "Access Tokens",
+                "description": "Manage API authentication tokens for programmatic access to sbomify. "
+                "Create and revoke personal access tokens for secure API integration.",
             },
             {
                 "name": "Teams",
@@ -97,6 +99,11 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "current user and team.",
             },
             {
+                "name": "Vulnerability Scanning",
+                "description": "Configure and manage vulnerability scanning providers including OSV and "
+                "Dependency Track. View scanning statistics and configure team preferences.",
+            },
+            {
                 "name": "Licensing",
                 "description": "Validate license expressions, manage custom licenses, and access "
                 "comprehensive license information database.",
@@ -111,4 +118,5 @@ api.add_router("/teams", "teams.apis.router")
 api.add_router("/", "core.apis.router")
 api.add_router("/billing", "billing.apis.router")
 api.add_router("/notifications", "notifications.apis.router")
+api.add_router("/vulnerability-scanning", "vulnerability_scanning.apis.router")
 api.add_router("/licensing", "licensing.api.router")

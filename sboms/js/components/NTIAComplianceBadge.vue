@@ -26,16 +26,19 @@
       <span>Not Compliant</span>
     </div>
 
-    <!-- Unknown Badge (only show on private view) -->
+    <!-- Unknown Badge - check if NTIA compliance is available -->
     <div
       v-else-if="status === 'unknown' && !isPublicView"
-      class="badge bg-info-subtle text-info d-flex align-items-center gap-1 ntia-checking"
+      class="badge d-flex align-items-center gap-1"
+      :class="getUnknownBadgeClasses()"
       data-bs-toggle="tooltip"
       data-bs-placement="top"
       :title="getTooltipText()"
+      :style="getUnknownBadgeStyle()"
+      @click="handleUnknownBadgeClick()"
     >
-      <i class="fas fa-clock fa-pulse"></i>
-      <span>Checking...</span>
+      <i :class="getUnknownIconClass()"></i>
+      <span>{{ getUnknownStatusText() }}</span>
     </div>
 
     <!-- Details Modal for Non-Compliant Status -->
@@ -176,11 +179,13 @@ interface Props {
     error_count?: number
   }
   isPublicView?: boolean
+  teamBillingPlan?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   complianceDetails: () => ({}),
-  isPublicView: false
+  isPublicView: false,
+  teamBillingPlan: 'community'
 })
 
 const showDetailsModal = ref(false)
@@ -199,6 +204,48 @@ const toggleIssue = (index: number): void => {
   }
 }
 
+const isNtiaAvailable = (): boolean => {
+  return props.teamBillingPlan === 'business' || props.teamBillingPlan === 'enterprise'
+}
+
+const getUnknownBadgeClasses = (): string => {
+  if (isNtiaAvailable()) {
+    return 'bg-info-subtle text-info ntia-checking'
+  } else {
+    return 'bg-secondary-subtle text-secondary'
+  }
+}
+
+const getUnknownBadgeStyle = (): string => {
+  if (!isNtiaAvailable()) {
+    return 'cursor: pointer;'
+  }
+  return ''
+}
+
+const getUnknownIconClass = (): string => {
+  if (isNtiaAvailable()) {
+    return 'fas fa-clock fa-pulse'
+  } else {
+    return 'fas fa-lock'
+  }
+}
+
+const getUnknownStatusText = (): string => {
+  if (isNtiaAvailable()) {
+    return 'Checking...'
+  } else {
+    return 'Upgrade Required'
+  }
+}
+
+const handleUnknownBadgeClick = (): void => {
+  if (!isNtiaAvailable()) {
+    // Redirect to billing page - we'll need to get the team key from somewhere
+    window.location.href = '/billing/select-plan/'
+  }
+}
+
 const getTooltipText = (): string => {
   switch (props.status) {
     case 'compliant':
@@ -207,7 +254,11 @@ const getTooltipText = (): string => {
       const errorCount = props.complianceDetails?.error_count || complianceErrors.value.length
       return `This SBOM has ${errorCount} NTIA compliance issue${errorCount !== 1 ? 's' : ''}. Click for details.`
     case 'unknown':
-      return 'NTIA compliance check is being performed in the background. This usually takes a few minutes to complete.'
+      if (isNtiaAvailable()) {
+        return 'NTIA compliance check is being performed in the background. This usually takes a few minutes to complete.'
+      } else {
+        return `NTIA Minimum Elements compliance is available with Business and Enterprise plans. Upgrade to unlock this feature.`
+      }
     default:
       return 'NTIA compliance status unknown'
   }

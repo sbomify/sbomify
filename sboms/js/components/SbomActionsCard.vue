@@ -27,15 +27,17 @@
           <i class="fas fa-shield-alt"></i>
         </div>
         <div class="action-content">
-          <h6 class="action-title">Security Analysis</h6>
-          <p class="action-description">View vulnerability analysis and security insights</p>
+          <h6 class="action-title">Vulnerability Analysis</h6>
+          <p class="action-description">View vulnerability scan results, security insights, and trends from automatic weekly scans</p>
           <a :href="vulnerabilitiesUrl" class="btn btn-warning btn-action">
             <i class="fas fa-shield-alt me-2"></i>
-            View Vulnerabilities
+            View Vulnerability Report
           </a>
         </div>
       </div>
     </div>
+
+
   </StandardCard>
 </template>
 
@@ -47,55 +49,81 @@ interface Props {
   sbomId: string
 }
 
+// ScanResult interface removed - manual scanning no longer needed
+
 const props = defineProps<Props>()
 
+// Computed URLs
 const downloadUrl = computed(() => `/api/v1/sboms/${props.sbomId}/download`)
 const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities`)
+
+
+
+// Manual scan functionality removed - vulnerability scans now run weekly automatically
 </script>
 
 <style scoped>
 .actions-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 768px) {
   .actions-grid {
-    grid-template-columns: 1fr 1fr;
+    flex-direction: row;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .action-item {
+    padding: 1.25rem;
+  }
+
+  .action-description {
+    max-width: none;
   }
 }
 
 .action-item {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 1rem;
   padding: 1.5rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
-  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
   transition: all 0.2s ease;
+  flex: 1;
+  min-width: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .action-item:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  transform: translateY(-1px);
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .action-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   color: white;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .download-icon {
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
 }
 
 .vulnerability-icon {
@@ -103,77 +131,120 @@ const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities
 }
 
 .action-content {
-  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
 .action-title {
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: #374151;
-  margin: 0 0 0.5rem 0;
-  word-wrap: break-word;
-  hyphens: auto;
+  color: #1f2937;
+  margin: 0;
+  text-align: center;
 }
 
 .action-description {
   font-size: 0.875rem;
   color: #6b7280;
-  margin: 0 0 1rem 0;
+  margin: 0;
   line-height: 1.5;
+  text-align: center;
+  max-width: 250px;
 }
 
 .btn-action {
-  padding: 0.625rem 1.25rem;
+  padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 0.5rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
   transition: all 0.2s ease;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  border: none;
+  justify-content: center;
   white-space: nowrap;
-  min-width: 0;
-  flex-shrink: 1;
+  min-width: 140px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.btn-primary.btn-action {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-}
-
-.btn-primary.btn-action:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  color: white;
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   text-decoration: none;
 }
 
-.btn-warning.btn-action {
+.btn-action:active {
+  transform: translateY(0);
+}
+
+.btn-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+}
+
+.btn-warning {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: white;
-  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
 }
 
-.btn-warning.btn-action:hover {
-  background: linear-gradient(135deg, #d97706, #b45309);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #047857);
   color: white;
-  text-decoration: none;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+}
+
+.form-check {
+  margin-top: 0.5rem;
+}
+
+.form-check-label {
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.alert {
+  border-radius: 6px;
+  border: none;
+}
+
+.btn-close {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 1199px) {
+  .actions-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 767px) {
+  .actions-grid {
+    grid-template-columns: 1fr;
+  }
+
   .action-item {
-    flex-direction: column;
-    text-align: center;
-    gap: 1rem;
+    padding: 1rem;
+    gap: 0.75rem;
   }
 
   .action-icon {
-    align-self: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1rem;
   }
 }
 </style>

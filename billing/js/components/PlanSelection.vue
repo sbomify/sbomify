@@ -272,6 +272,7 @@ const getFeatures = (planKey: string): PlanFeature[] => {
     baseFeatures.push(
       { key: 'user-limit', label: '1 user (owner only)' },
       { key: 'public-only', label: 'All data is public' },
+      { key: 'vulnerability-scanning', label: 'Weekly vulnerability scans' },
       { key: 'community-support', label: 'Community support' },
       { key: 'api-access', label: 'API access' }
     );
@@ -281,7 +282,7 @@ const getFeatures = (planKey: string): PlanFeature[] => {
       { key: 'user-limit', label: 'Up to 5 users' },
       { key: 'private-data', label: 'Private components/projects/products' },
       { key: 'ntia-compliance', label: 'NTIA Minimum Elements check' },
-      { key: 'vulnerability-scanning', label: 'Vulnerability scanning' },
+      { key: 'vulnerability-scanning', label: 'Advanced vulnerability scanning (every 12 hours)' },
       { key: 'product-identifiers', label: 'Product identifiers (SKUs/barcodes)' },
       { key: 'priority-support', label: 'Priority support' },
       { key: 'team-management', label: 'Team management' }
@@ -290,6 +291,7 @@ const getFeatures = (planKey: string): PlanFeature[] => {
     baseFeatures.push(
       { key: 'includes-business', label: 'Everything in Business, plus:' },
       { key: 'user-limit', label: 'Unlimited users' },
+      { key: 'custom-dt-servers', label: 'Custom Dependency Track servers' },
       { key: 'dedicated-support', label: 'Dedicated support' },
       { key: 'custom-integrations', label: 'Custom integrations' },
       { key: 'sla-guarantee', label: 'SLA guarantee' },

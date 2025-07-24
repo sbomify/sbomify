@@ -85,6 +85,7 @@ export default defineConfig({
         teams: resolve('./teams/js/main.ts'),
         billing: resolve('./billing/js/main.ts'),
         documents: resolve('./documents/js/main.ts'),
+        vulnerability_scanning: resolve('./vulnerability_scanning/js/main.ts'),
         alerts: resolve('./core/js/alerts-global.ts'),
         djangoMessages: resolve('./core/js/django-messages.ts'),
       },
@@ -92,6 +93,12 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5170
+    port: 5170,
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
   }
 })

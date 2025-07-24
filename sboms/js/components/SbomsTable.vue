@@ -33,7 +33,9 @@
         :show-vulnerabilities="!isPublicView"
         :show-delete-button="hasCrudPermissions"
         :is-deleting="isDeleting"
+        :team-billing-plan="teamBillingPlan"
         @delete="confirmDelete"
+        @scan-completed="handleScanCompleted"
       />
 
       <!-- Pagination Controls -->
@@ -76,7 +78,9 @@
         :show-vulnerabilities="false"
         :show-delete-button="false"
         :is-deleting="null"
+        :team-billing-plan="teamBillingPlan"
         @delete="confirmDelete"
+        @scan-completed="handleScanCompleted"
       />
 
       <!-- Pagination Controls -->
@@ -168,6 +172,7 @@ const props = defineProps<{
   componentId?: string
   hasCrudPermissions?: boolean | string
   isPublicView?: boolean
+  teamBillingPlan?: string
 }>()
 
 // State
@@ -269,7 +274,7 @@ const deleteSbom = async () => {
   isDeleting.value = sbomId
 
   try {
-    const response = await $axios.delete(`/api/v1/sboms/${sbomId}`)
+    const response = await $axios.delete(`/api/v1/sboms/sbom/${sbomId}`)
 
     if (response.status === 204 || response.status === 200) {
       showSuccess('SBOM deleted successfully')
@@ -289,6 +294,12 @@ const deleteSbom = async () => {
     isDeleting.value = null
     cancelDelete()
   }
+}
+
+const handleScanCompleted = async (sbomId: string) => {
+  console.log(`Scan completed for SBOM ${sbomId}, refreshing data...`)
+  // Refresh the data to update the has_vulnerabilities_report flag
+  await loadSboms()
 }
 
 // Watchers for pagination changes

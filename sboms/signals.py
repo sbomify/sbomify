@@ -9,14 +9,8 @@ from .models import SBOM
 logger = getLogger(__name__)
 
 
-@receiver(post_save, sender=SBOM)
-def trigger_license_processing(sender, instance, created, **kwargs):
-    """Trigger license processing task when a new SBOM is created."""
-    if created:
-        from sbomify.tasks import process_sbom_licenses
-
-        # Add a 30 second delay to ensure transaction is committed
-        process_sbom_licenses.send_with_options(args=[instance.id], delay=30000)
+# License processing task has been removed - functionality moved to native model fields
+# License processing is now handled directly during SBOM upload via ComponentLicense model
 
 
 @receiver(post_save, sender=SBOM)
@@ -59,33 +53,25 @@ def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
 def trigger_vulnerability_scan(sender, instance, created, **kwargs):
     """Trigger vulnerability scanning task when a new SBOM is created."""
     if created:
-        # Check if the team's billing plan includes vulnerability scanning
         team = instance.component.team
 
-        # If no billing plan, skip vulnerability scan (community default)
-        if not team.billing_plan:
-            logger.info(f"Skipping vulnerability scan for SBOM {instance.id} - no billing plan (community)")
-            return
+        # OSV vulnerability scanning is available for ALL teams (community, business, enterprise)
+        # The VulnerabilityScanningService will handle provider selection:
+        # - Community teams: OSV only
+        # - Business/Enterprise teams: OSV or Dependency Track based on team settings
 
-        try:
-            plan = BillingPlan.objects.get(key=team.billing_plan)
-            if not plan.has_vulnerability_scanning:
-                logger.info(
-                    f"Skipping vulnerability scan for SBOM {instance.id} - "
-                    f"plan '{plan.key}' does not include vulnerability scanning"
-                )
-                return
-        except BillingPlan.DoesNotExist:
-            logger.warning(
-                f"Billing plan '{team.billing_plan}' not found for team {team.key}, skipping vulnerability scan"
-            )
-            return
+        from sbomify.tasks import scan_sbom_for_vulnerabilities_unified
 
-        # Proceed with vulnerability scan for business/enterprise plans
-        from sbomify.tasks import scan_sbom_for_vulnerabilities
+        # Determine plan type for logging
+        plan_info = "community (no billing plan)"
+        if team.billing_plan:
+            try:
+                plan = BillingPlan.objects.get(key=team.billing_plan)
+                plan_info = f"'{plan.key}' plan"
+            except BillingPlan.DoesNotExist:
+                plan_info = f"unknown plan '{team.billing_plan}'"
 
-        logger.info(
-            f"Triggering vulnerability scan for SBOM {instance.id} - plan '{plan.key}' includes vulnerability scanning"
-        )
+        logger.info(f"Triggering vulnerability scan for SBOM {instance.id} - team {team.key} with {plan_info}")
+
         # Add a 90 second delay to ensure transaction is committed and to stagger after NTIA compliance
-        scan_sbom_for_vulnerabilities.send_with_options(args=[instance.id], delay=90000)
+        scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)

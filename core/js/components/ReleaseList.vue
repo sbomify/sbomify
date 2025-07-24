@@ -1,50 +1,53 @@
 <template>
   <div v-if="releases && releases.length > 0" class="releases-display">
     <div class="releases-list">
-      <div
+      <a
         v-for="release in displayedReleases"
         :key="release.id"
-        class="release-item"
+        :href="releaseDisplay.getReleaseUrl(release)"
+        class="release-link"
+        :title="`View ${release.product_name} - ${release.name}`"
       >
-        <a
-          :href="releaseDisplay.getReleaseUrl(release)"
-          class="release-link"
-          :title="`View ${release.product_name} - ${release.name}`"
-        >
-          <span class="product-name">{{ release.product_name }}</span>:
-          <span class="release-version">{{ release.is_latest ? 'latest' : release.name }}</span>
-        </a>
-      </div>
+        <span class="product-name">{{ release.product_name }}</span>
+        <span class="version-info">
+          <span class="version-text" :class="{ 'is-latest': release.is_latest }">
+            {{ release.is_latest ? 'latest' : release.name }}
+          </span>
+          <span v-if="release.is_prerelease" class="prerelease-label">pre</span>
+        </span>
+      </a>
+    </div>
 
-      <!-- Expansion controls -->
-      <div v-if="releaseDisplay.shouldShowExpansion(releases)" class="release-expand">
+    <!-- Expansion controls -->
+    <div v-if="releaseDisplay.shouldShowExpansion(releases)" class="release-expand">
+      <button
+        v-if="!releaseDisplay.shouldShowViewAll(releases)"
+        class="expand-btn"
+        @click="handleToggleExpansion"
+      >
+        {{ releaseDisplay.getExpansionButtonText(releases, expansionKey) }}
+      </button>
+      <div v-else class="release-actions">
         <button
-          v-if="!releaseDisplay.shouldShowViewAll(releases)"
-          class="btn btn-sm btn-link text-muted p-0"
+          class="expand-btn"
           @click="handleToggleExpansion"
         >
           {{ releaseDisplay.getExpansionButtonText(releases, expansionKey) }}
         </button>
-        <div v-else class="release-actions">
-          <button
-            class="btn btn-sm btn-link text-muted p-0"
-            @click="handleToggleExpansion"
-          >
-            {{ releaseDisplay.getExpansionButtonText(releases, expansionKey) }}
-          </button>
-          <a
-            v-if="viewAllUrl"
-            :href="viewAllUrl"
-            class="btn btn-sm btn-link text-primary p-0 ms-2"
-            title="View all releases"
-          >
-            View all {{ releases.length }} releases →
-          </a>
-        </div>
+        <a
+          v-if="viewAllUrl"
+          :href="viewAllUrl"
+          class="view-all-btn"
+          title="View all releases"
+        >
+          View all {{ releases.length }} →
+        </a>
       </div>
     </div>
   </div>
-  <span v-else class="text-muted">None</span>
+  <div v-else class="empty-releases">
+    <span>No releases</span>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -81,97 +84,125 @@ const handleToggleExpansion = () => {
 </script>
 
 <style scoped>
-/* Fix bullet point alignment for release lists on product pages */
 .releases-display {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
   font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .releases-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
   margin: 0;
-  padding-left: 1.5rem;
-  list-style: none;
-}
-
-.release-item {
-  position: relative;
-  margin-bottom: 0.25rem;
-  line-height: 1.5;
-}
-
-.release-item::before {
-  content: "•";
-  position: absolute;
-  left: -1.25rem;
-  top: 0;
-  color: #6b7280;
-  font-weight: bold;
-  width: 1rem;
-  text-align: center;
-  line-height: 1.5;
+  padding: 0;
 }
 
 .release-link {
-  color: #3b82f6;
-  text-decoration: none;
-  font-size: 0.875rem;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: space-between;
+  text-decoration: none;
+  color: #374151;
+  padding: 0.25rem 0.5rem;
+  margin: 0 -0.5rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .release-link:hover {
-  text-decoration: underline;
-  color: #2563eb;
+  background: #f8fafc;
+  color: #1e293b;
+  text-decoration: none;
+  transform: translateX(2px);
 }
 
 .product-name {
   font-weight: 500;
-  color: #374151;
+  color: inherit;
+  flex: 1;
 }
 
-.release-version {
-  color: #6b7280;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.version-text {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace;
   font-size: 0.8125rem;
-  background: #f3f4f6;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.version-text.is-latest {
+  color: #059669;
+  font-weight: 600;
+}
+
+.prerelease-label {
+  font-size: 0.6875rem;
+  color: #7c3aed;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  opacity: 0.8;
 }
 
 .release-expand {
-  margin-top: 0.25rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
 }
 
-.release-expand button {
-  font-size: 0.75rem;
-  text-decoration: none;
-  border: none;
+.expand-btn {
   background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  font-weight: 500;
 }
 
-.release-expand button:hover {
-  text-decoration: underline;
+.expand-btn:hover {
+  background: #f8fafc;
+  color: #475569;
 }
 
 .release-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.release-actions a {
-  font-size: 0.75rem;
+.view-all-btn {
+  color: #3b82f6;
+  font-size: 0.8125rem;
+  font-weight: 500;
   text-decoration: none;
-  border: none;
-  background: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
-.release-actions a:hover {
-  text-decoration: underline;
+.view-all-btn:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.empty-releases {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  font-style: italic;
+  padding: 0.5rem;
 }
 </style>

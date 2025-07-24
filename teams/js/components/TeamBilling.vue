@@ -186,7 +186,7 @@ const getPlanFeatures = (): string[] => {
     case 'business':
       return [
         'Advanced SBOM analysis',
-        'Vulnerability scanning',
+        'Advanced vulnerability scanning (every 12 hours)',
         'API access',
         'Priority support',
         'Custom branding'

@@ -6,9 +6,7 @@ import typing
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
 
-import json
 
-import redis
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import (
@@ -48,7 +46,11 @@ def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
     return render(
         request,
         "sboms/sbom_details_public.html.j2",
-        {"sbom": sbom, "brand": branding_info},
+        {
+            "sbom": sbom,
+            "brand": branding_info,
+            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
+        },
     )
 
 
@@ -65,7 +67,11 @@ def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
     return render(
         request,
         "sboms/sbom_details_private.html.j2",
-        {"sbom": sbom, "APP_BASE_URL": settings.APP_BASE_URL},
+        {
+            "sbom": sbom,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
+        },
     )
 
 
@@ -82,50 +88,125 @@ def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
     if not verify_item_access(request, sbom, ["guest", "owner", "admin"]):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    redis_client = None
     vulnerabilities_data = None
     scan_timestamp_str = None
     error_message = None
     error_details = None
+    is_processing = False
+    processing_message = None
+
+    # Initialize default values for template context
+    sbom_version_info = None
 
     try:
-        redis_url = settings.REDIS_WORKER_URL
-        redis_client = redis.from_url(redis_url)
-        # Fetch the latest scan result. Keys are like "osv_scan_result:SBOM_ID:TIMESTAMP"
-        keys = redis_client.keys(f"osv_scan_result:{sbom_id}:*")
-        if keys:
-            latest_key = sorted(keys, reverse=True)[0]
-            if isinstance(latest_key, bytes):  # redis-py can return bytes
-                latest_key = latest_key.decode("utf-8")
+        # Fetch the latest vulnerability scan result from PostgreSQL
+        from vulnerability_scanning.models import VulnerabilityScanResult
 
-            scan_timestamp_str = latest_key.split(":")[-1]
-            raw_data = redis_client.get(latest_key)
-            if raw_data:
-                if isinstance(raw_data, bytes):  # redis-py can return bytes
-                    raw_data = raw_data.decode("utf-8")
-                try:
-                    vulnerabilities_data = json.loads(raw_data)
-                    # Check if the loaded data is an error message from the scanner task
-                    if isinstance(vulnerabilities_data, dict) and "error" in vulnerabilities_data:
-                        error_message = (
-                            f"Vulnerability scan failed: {vulnerabilities_data.get('error', 'Unknown error')}"
-                        )
-                        error_details = vulnerabilities_data.get("details") or vulnerabilities_data.get("stderr")
-                        vulnerabilities_data = None  # Clear data so template shows error
-                except json.JSONDecodeError:
-                    error_message = "Failed to parse vulnerability data from Redis. The data might be corrupted."
-                    logger.error(
-                        f"Failed to parse JSON from Redis for key {latest_key}. Data: {raw_data[:200]}..."
-                    )  # Log a snippet
+        latest_result = VulnerabilityScanResult.objects.filter(sbom=sbom).order_by("-created_at").first()
+
+        if latest_result:
+            # Check if this is a processing state for any provider
+            scan_metadata = latest_result.scan_metadata or {}
+            if scan_metadata.get("processing"):
+                is_processing = True
+                processing_message = scan_metadata.get("expected_completion", "Processing vulnerability data...")
+                scan_timestamp_str = latest_result.created_at.strftime("%B %d, %Y at %I:%M %p %Z")
+
+                # Get SBOM info for display
+                sbom_version_info = {
+                    "name": sbom.name,
+                    "version": sbom.version,
+                    "component_name": sbom.component.name,
+                    "format": sbom.format,
+                    "format_version": sbom.format_version,
+                    "source": sbom.source_display,
+                }
             else:
-                error_message = "Scan result not found in Redis though a key was present."
-        else:
-            # This case is handled by the template's "else" for "if vulnerabilities"
-            pass
+                # Normal scan results processing
+                # Format timestamp to be human-readable
+                scan_timestamp_str = latest_result.created_at.strftime("%B %d, %Y at %I:%M %p %Z")
 
-    except redis.exceptions.ConnectionError:
-        error_message = "Could not connect to Redis to fetch vulnerability data."
-        logger.error("Redis connection error in sbom_vulnerabilities view.")
+                # Get SBOM version information for context
+                scanned_sbom = latest_result.sbom
+                sbom_version_info = {
+                    "name": scanned_sbom.name,
+                    "version": scanned_sbom.version,
+                    "component_name": scanned_sbom.component.name,
+                    "format": scanned_sbom.format,
+                    "format_version": scanned_sbom.format_version,
+                    "source": scanned_sbom.source_display,
+                }
+
+                # Transform PostgreSQL data to format expected by template
+                findings = latest_result.findings or []
+
+                # Handle both old nested format and new direct array format for backward compatibility
+                if isinstance(findings, dict) and "vulnerabilities" in findings:
+                    # Old nested format - use as is
+                    vulnerabilities_data = findings
+                elif isinstance(findings, list):
+                    # New standardized direct array format - wrap in expected structure
+                    vulnerabilities_data = {
+                        "results": [
+                            {"source": {"file_path": f"{sbom.name} ({latest_result.provider})"}, "packages": []}
+                        ]
+                    }
+
+                    # Group vulnerabilities by component/package for display
+                    packages_dict = {}
+                    for vuln in findings:
+                        component = vuln.get("component", {})
+                        package_name = component.get("name", "Unknown Package")
+                        package_version = component.get("version", "Unknown Version")
+                        # Ensure ecosystem is properly extracted and not empty
+                        package_ecosystem = component.get("ecosystem", "Unknown")
+                        if not package_ecosystem or package_ecosystem in ["Unknown", "unknown"]:
+                            # Try to derive from PURL if ecosystem is missing or unknown
+                            purl = component.get("purl", "")
+                            if purl.startswith("pkg:"):
+                                try:
+                                    package_ecosystem = purl.split(":")[1].split("/")[0]
+                                except (IndexError, AttributeError):
+                                    package_ecosystem = "Unknown"
+
+                        package_key = f"{package_name}:{package_version}:{package_ecosystem}"
+
+                        if package_key not in packages_dict:
+                            packages_dict[package_key] = {
+                                "package": {
+                                    "name": package_name,
+                                    "version": package_version,
+                                    "ecosystem": package_ecosystem,
+                                },
+                                "vulnerabilities": [],
+                            }
+
+                        # Convert to template-expected format with all needed fields
+                        template_vuln = {
+                            "id": vuln.get("id", "Unknown"),
+                            "aliases": vuln.get("aliases", []),
+                            "summary": vuln.get("title") or vuln.get("summary", ""),
+                            "details": vuln.get("description", ""),
+                            "severity": vuln.get("severity", "medium"),  # Include severity for badge styling
+                            "cvss_score": vuln.get("cvss_score"),  # Include CVSS score
+                            "references": vuln.get("references", []),  # Include references
+                            "source": vuln.get("source", "Unknown"),  # Include data source
+                            "affected": vuln.get("affected", []),
+                        }
+
+                        packages_dict[package_key]["vulnerabilities"].append(template_vuln)
+
+                    vulnerabilities_data["results"][0]["packages"] = list(packages_dict.values())
+
+            # Check if the scan had errors
+            scan_metadata = latest_result.scan_metadata or {}
+            if scan_metadata.get("parse_error"):
+                error_message = f"Vulnerability scan had parsing errors: {scan_metadata['parse_error']}"
+                error_details = scan_metadata.get("raw_output", "")
+        else:
+            # No scan results found
+            vulnerabilities_data = None
+
     except Exception as e:
         error_message = f"An unexpected error occurred while fetching vulnerability data: {str(e)}"
         logger.error(f"Unexpected error in sbom_vulnerabilities view for SBOM {sbom_id}: {e}", exc_info=True)
@@ -137,9 +218,16 @@ def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
             "sbom": sbom,
             "vulnerabilities": vulnerabilities_data,
             "scan_timestamp": scan_timestamp_str,
+            "sbom_version_info": sbom_version_info,
             "error_message": error_message,
             "error_details": error_details,
             "APP_BASE_URL": settings.APP_BASE_URL,
+            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
+            "is_processing": is_processing,
+            "processing_message": processing_message,
+            "processing_provider": latest_result.provider.replace("_", " ").title()
+            if latest_result and is_processing
+            else None,
         },
     )
 

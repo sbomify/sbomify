@@ -6,7 +6,9 @@ import { describe, it, expect, mock } from 'bun:test'
 
 // Mock the alerts module using Bun's mocking
 const mockAlerts = {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showSuccess: mock((_message: string) => {}),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showError: mock((_message: string) => {})
 }
 

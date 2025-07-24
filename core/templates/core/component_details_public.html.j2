@@ -30,29 +30,29 @@ brand - BrandingInfo object
          data-component-type="{{ component.component_type }}"
          data-component-display-type="{{ component.get_component_type_display }}">
         <template data-slot="subtitle">
-            <small class="component-meta">
-                <i class="fas fa-cube me-1"></i>Component
-            </small>
-            <small class="component-type">
-                <i class="fas fa-tag me-1"></i>{{ component.get_component_type_display }}
-            </small>
-            <small class="component-id">
-                <i class="fas fa-fingerprint me-1"></i>
+            <span class="meta-badge meta-badge--primary">
+                <i class="fas fa-cube"></i>
+                Component
+            </span>
+            <span class="meta-badge meta-badge--secondary">
+                <i class="fas fa-tag"></i>
+                {{ component.get_component_type_display }}
+            </span>
+            <span class="meta-badge meta-badge--secondary">
+                <i class="fas fa-fingerprint"></i>
                 <span class="vc-copyable-value"
                       data-value="{{ component.id }}"
                       title="Component ID: {{ component.id }} (click to copy)">{{ component.id }}</span>
-            </small>
+            </span>
         </template>
-        <!-- Component-specific content as slot content -->
         <!-- Content is now handled by PublicPageLayout Vue component -->
     </div>
 {% endblock %}
 {% block scripts %}
-    {% comment %}Load component-specific scripts BEFORE core/main.ts to ensure proper mounting order{% endcomment %}
+    {% vite_asset 'core/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
         {% vite_asset 'sboms/js/main.ts' %}
     {% elif component.component_type == 'document' %}
         {% vite_asset 'documents/js/main.ts' %}
     {% endif %}
-    {% vite_asset 'core/js/main.ts' %}
 {% endblock %}

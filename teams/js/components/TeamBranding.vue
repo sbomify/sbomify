@@ -195,7 +195,7 @@ const validateAndUpdateColor = (event: Event, field: string) => {
 
 const updateField = async (field: string) => {
   try {
-    const payload: any = {};
+    const payload: Record<string, unknown> = {};
     payload[field] = brandingInfo.value[field];
 
     await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, payload);
