@@ -169,8 +169,7 @@ class TeamAdmin(admin.ModelAdmin):
         try:
             plan = BillingPlan.objects.get(key=obj.billing_plan)
             return format_html(
-                '<span style="color: #28a745; font-weight: bold;">{}</span><br>'
-                '<small style="color: #666;">{}</small>',
+                '<span style="color: #28a745; font-weight: bold;">{}</span><br><small style="color: #666;">{}</small>',
                 plan.name,
                 plan.description or "No description",
             )

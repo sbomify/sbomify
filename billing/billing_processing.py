@@ -267,9 +267,7 @@ def handle_subscription_updated(subscription):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_failed(team, member, None)
-                logger.warning(
-                    f"Initial payment failed notification sent for team {team.key} " f"to {member.user.email}"
-                )
+                logger.warning(f"Initial payment failed notification sent for team {team.key} to {member.user.email}")
 
         team.save()
         logger.info(f"Updated subscription status for team {team.key} to {subscription.status}")

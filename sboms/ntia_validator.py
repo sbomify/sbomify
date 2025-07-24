@@ -111,7 +111,7 @@ class NTIAValidator:
 
         # Check each package for required elements
         for i, package in enumerate(packages):
-            package_name = package.get("name", f"Package {i+1}")
+            package_name = package.get("name", f"Package {i + 1}")
 
             # 1. Supplier name
             if not package.get("supplier"):
@@ -225,7 +225,7 @@ class NTIAValidator:
 
         # Check each component for required elements
         for i, component in enumerate(components):
-            component_name = component.get("name", f"Component {i+1}")
+            component_name = component.get("name", f"Component {i + 1}")
 
             # 1. Supplier name
             supplier = component.get("publisher") or component.get("supplier", {}).get("name")

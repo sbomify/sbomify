@@ -322,8 +322,7 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
                     "replaced": False,
                     "artifact": None,
                     "error": (
-                        f"Release already contains an SBOM of format {sbom.format} "
-                        f"from component {sbom.component.name}"
+                        f"Release already contains an SBOM of format {sbom.format} from component {sbom.component.name}"
                     ),
                 }
             else:

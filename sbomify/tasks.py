@@ -179,8 +179,7 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
                 return {"error": f"Failed to download SBOM {sbom.sbom_filename} from S3 (empty data)."}
 
             logger.debug(
-                f"[TASK_check_sbom_ntia_compliance] Downloaded {len(sbom_data_bytes)} bytes "
-                f"for {sbom.sbom_filename}."
+                f"[TASK_check_sbom_ntia_compliance] Downloaded {len(sbom_data_bytes)} bytes for {sbom.sbom_filename}."
             )
 
             # Parse SBOM data
@@ -306,8 +305,7 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         try:
             json.loads(sbom_data_bytes.decode("utf-8"))
             logger.debug(
-                f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} "
-                f"successfully parsed as JSON."
+                f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON."
             )
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(
@@ -316,7 +314,7 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
                 f"First 200 chars: {sbom_data_bytes[:200]}"
             )
             return {
-                "error": (f"SBOM {sbom_instance.sbom_filename} content is not valid JSON " f"or has encoding issues."),
+                "error": (f"SBOM {sbom_instance.sbom_filename} content is not valid JSON or has encoding issues."),
                 "details": str(e),
             }
 
@@ -460,20 +458,19 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         return error_detail
     except (DatabaseError, OperationalError) as db_err:
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] Database error occurred processing " f"SBOM ID {sbom_id}: {db_err}",
+            f"[TASK_scan_sbom_for_vulnerabilities] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
             exc_info=True,
         )
         raise  # Re-raise to allow tenacity to handle retries
     except ConnectionError as conn_err:  # General connection error
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] Connection error occurred processing "
-            f"SBOM ID {sbom_id}: {conn_err}",
+            f"[TASK_scan_sbom_for_vulnerabilities] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
             exc_info=True,
         )
         raise  # Re-raise to allow tenacity to handle retries
     except Exception as e:
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] An unexpected error occurred processing " f"SBOM ID {sbom_id}: {e}",
+            f"[TASK_scan_sbom_for_vulnerabilities] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
             exc_info=True,
         )
         # For unexpected errors, it's often better to let Dramatiq handle retries if configured.
