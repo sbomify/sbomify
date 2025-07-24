@@ -23,6 +23,6 @@ updates:
     schedule:
       interval: "daily"
     groups:
-      npm:
+      pip:
         patterns:
           - "*"
