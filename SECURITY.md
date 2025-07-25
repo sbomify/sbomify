@@ -4,8 +4,8 @@ This document outlines security procedures and general policies for the
 sbomify Open Source projects as found on the
 [sbomify GitHub org](https://github.com/sbomify).
 
-* [Reporting a Vulnerability](#reporting-a-vulnerability)
-* [Disclosure Policy](#disclosure-policy)
+- [Reporting a Vulnerability](#reporting-a-vulnerability)
+- [Disclosure Policy](#disclosure-policy)
 
 ## Reporting a Vulnerability
 
@@ -33,7 +33,7 @@ When the security team receives a security bug report, they will assign it
 to a primary handler. This person will coordinate the fix and release
 process, involving the following steps:
 
-* Confirm the problem and determine the affected versions.
-* Audit code to find any potential similar problems.
-* Prepare fixes for all releases still under maintenance. These fixes
+- Confirm the problem and determine the affected versions.
+- Audit code to find any potential similar problems.
+- Prepare fixes for all releases still under maintenance. These fixes
   will be released as fast as possible to pub.dev where applicable.

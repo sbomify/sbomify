@@ -25,7 +25,7 @@ guidelines describe.
 To prepare your dedicated GitHub repository:
 
 1. Fork in GitHub <https://github.com/sbomify/sbomify>
-2. Clone *your forked repository* (e.g., `git clone git@github.com:yourname/sbomify`)
+2. Clone _your forked repository_ (e.g., `git clone git@github.com:yourname/sbomify`)
 3. Set your remotes as follows:
 
    ```sh
@@ -76,7 +76,7 @@ To prepare your dedicated GitHub repository:
 
 1. How to run tests:
 
-   ``` sh
+   ```sh
    # explain tests here
    ```
 

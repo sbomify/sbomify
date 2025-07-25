@@ -48,6 +48,34 @@ test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypo
 trio = ["trio (>=0.26.1)"]
 
 [[package]]
+name = "apscheduler"
+version = "3.11.0"
+description = "In-process task scheduler with Cron-like capabilities"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "APScheduler-3.11.0-py3-none-any.whl", hash = "sha256:fc134ca32e50f5eadcc4938e3a4545ab19131435e851abb40b34d63d5141c6da"},
+    {file = "apscheduler-3.11.0.tar.gz", hash = "sha256:4c622d250b0955a65d5d0eb91c33e6d43fd879834bf541e0a18661ae60460133"},
+]
+
+[package.dependencies]
+tzlocal = ">=3.0"
+
+[package.extras]
+doc = ["packaging", "sphinx", "sphinx-rtd-theme (>=1.3.0)"]
+etcd = ["etcd3", "protobuf (<=3.21.0)"]
+gevent = ["gevent"]
+mongodb = ["pymongo (>=3.0)"]
+redis = ["redis (>=3.0)"]
+rethinkdb = ["rethinkdb (>=2.4.0)"]
+sqlalchemy = ["sqlalchemy (>=1.4)"]
+test = ["APScheduler[etcd,mongodb,redis,rethinkdb,sqlalchemy,tornado,zookeeper]", "PySide6 ; platform_python_implementation == \"CPython\" and python_version < \"3.14\"", "anyio (>=4.5.2)", "gevent ; python_version < \"3.14\"", "pytest", "pytz", "twisted ; python_version < \"3.14\""]
+tornado = ["tornado (>=4.3)"]
+twisted = ["twisted"]
+zookeeper = ["kazoo"]
+
+[[package]]
 name = "argcomplete"
 version = "3.5.2"
 description = "Bash tab completion for argparse"
@@ -1137,6 +1165,29 @@ memcached = ["pylibmc (>=1.5,<2.0)"]
 rabbitmq = ["pika (>=1.0,<2.0)"]
 redis = ["redis (>=2.0,<7.0)"]
 watch = ["watchdog (>=4.0)", "watchdog_gevent (>=0.2)"]
+
+[[package]]
+name = "dramatiq-crontab"
+version = "1.0.11"
+description = "Cron style scheduler for asynchronous Dramatiq tasks in Django."
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "dramatiq_crontab-1.0.11-py3-none-any.whl", hash = "sha256:727baa8be76b495e83dd9bb7750e90dc22cd14f9bb394d76463359eedc00c9d3"},
+    {file = "dramatiq_crontab-1.0.11.tar.gz", hash = "sha256:4ba88d1a47bc7084e999717c1db238f648f6afa4253e4576b1541da559369b89"},
+]
+
+[package.dependencies]
+apscheduler = "*"
+django = "*"
+dramatiq = "*"
+
+[package.extras]
+lint = ["black (==25.1.0)", "ruff (==0.12.3)"]
+redis = ["redis"]
+sentry = ["sentry-sdk"]
+test = ["backports.zoneinfo ; python_version < \"3.9\"", "dramatiq", "pytest", "pytest-cov", "pytest-django"]
 
 [[package]]
 name = "dulwich"
@@ -2446,7 +2497,6 @@ files = [
     {file = "psycopg2-2.9.10-cp311-cp311-win_amd64.whl", hash = "sha256:0435034157049f6846e95103bd8f5a668788dd913a7c30162ca9503fdf542cb4"},
     {file = "psycopg2-2.9.10-cp312-cp312-win32.whl", hash = "sha256:65a63d7ab0e067e2cdb3cf266de39663203d38d6a8ed97f5ca0cb315c73fe067"},
     {file = "psycopg2-2.9.10-cp312-cp312-win_amd64.whl", hash = "sha256:4a579d6243da40a7b3182e0430493dbd55950c493d8c68f4eec0b302f6bbf20e"},
-    {file = "psycopg2-2.9.10-cp313-cp313-win_amd64.whl", hash = "sha256:91fd603a2155da8d0cfcdbf8ab24a2d54bca72795b90d2a3ed2b6da8d979dee2"},
     {file = "psycopg2-2.9.10-cp39-cp39-win32.whl", hash = "sha256:9d5b3b94b79a844a986d029eee38998232451119ad653aea42bb9220a8c5066b"},
     {file = "psycopg2-2.9.10-cp39-cp39-win_amd64.whl", hash = "sha256:88138c8dedcbfa96408023ea2b0c369eda40fe5d75002c0964c78f46f11fa442"},
     {file = "psycopg2-2.9.10.tar.gz", hash = "sha256:12ec0b40b0273f95296233e8750441339298e6a572f7039da5b260e3c8b60e11"},
@@ -3692,11 +3742,29 @@ description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
 groups = ["main", "dev"]
-markers = "sys_platform == \"win32\""
 files = [
     {file = "tzdata-2024.2-py2.py3-none-any.whl", hash = "sha256:a48093786cdcde33cad18c2555e8532f34422074448fbc874186f0abd79565cd"},
     {file = "tzdata-2024.2.tar.gz", hash = "sha256:7d85cc416e9382e69095b7bdf4afd9e3880418a2413feec7069d533d6b4e31cc"},
 ]
+markers = {main = "sys_platform == \"win32\" or platform_system == \"Windows\"", dev = "sys_platform == \"win32\""}
+
+[[package]]
+name = "tzlocal"
+version = "5.3.1"
+description = "tzinfo object for the local timezone"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "tzlocal-5.3.1-py3-none-any.whl", hash = "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d"},
+    {file = "tzlocal-5.3.1.tar.gz", hash = "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd"},
+]
+
+[package.dependencies]
+tzdata = {version = "*", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)", "zest.releaser"]
 
 [[package]]
 name = "urllib3"
@@ -4112,4 +4180,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "972cba636c13696c5910964ac3068ae99d99b5828ae6fa237cafe64c5ba92c00"
+content-hash = "4ed9dba7155f681903ad0f249368a3dc2ec33f4aa5415de0ccf378de8ab21acc"

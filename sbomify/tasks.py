@@ -1,15 +1,43 @@
-"""
-Dramatiq tasks for the sbomify application.
+# IMPORTANT: Queue name changes and task reorganization
+# =====================================================
+#
+# This file contains SBOM processing tasks. The following changes have been made:
+#
+# 1. Queue Name Changes:
+#    - OLD: queue_name="sbom_vulnerability_scanning"
+#    - NEW: queue_name="sbom_processing"
+#
+#    MIGRATION REQUIRED: Update worker configurations to process the new queue names
+#    Workers should be configured to handle both old and new queue names during transition
+#
+# 2. Task Reorganization:
+#    - Vulnerability scanning tasks moved to vulnerability_scanning.tasks module
+#    - This module now focuses on SBOM processing and component creation
+#    - NTIA compliance checking task removed (functionality moved elsewhere)
+#
+# 3. Worker Configuration Notes:
+#    - Ensure workers are configured to process "sbom_processing" queue
+#    - Vulnerability scanning workers should process vulnerability_scanning queues:
+#      * sbom_vulnerability_scanning (for compatibility)
+#      * weekly_vulnerability_scan
+#      * dt_health_check
+#      * dt_periodic_polling
+#      * dt_hourly_setup
+#
+# 4. Deployment Considerations:
+#    - Deploy workers with new queue configurations before deploying this code
+#    - Monitor queue depths during transition period
+#    - Old queue names can be deprecated after successful migration
 
-This module contains all the background tasks that are processed by Dramatiq workers.
-"""
+"""Dramatiq tasks for SBOM processing and component management."""
 
+import json
 import logging
 import os
 from typing import Any, Dict
 
 import dramatiq
-from django.db import transaction
+from django.db import DatabaseError, OperationalError, connection, transaction
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
@@ -28,11 +56,7 @@ import django  # noqa: E402
 django.setup()
 
 
-import json  # noqa: E402
-
 from django.conf import settings  # noqa: E402
-from django.db import connection  # noqa: E402
-from django.db.utils import DatabaseError, OperationalError  # noqa: E402
 
 from core.object_store import S3Client  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
@@ -150,18 +174,37 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
         return results
 
     except SBOM.DoesNotExist:
-        logger.error(f"[TASK_process_sbom] SBOM with ID {sbom_id} not found.")
-        return {"error": f"SBOM with ID {sbom_id} not found"}
+        error_msg = f"SBOM with ID {sbom_id} not found"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
     except (DatabaseError, OperationalError) as db_err:
-        logger.error(
-            f"[TASK_process_sbom] Database error occurred processing SBOM ID {sbom_id}: {db_err}", exc_info=True
-        )
-        raise  # Re-raise to allow tenacity to handle retries
+        error_msg = f"Database error occurred processing SBOM ID {sbom_id}: {db_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
+        # Critical database errors should be retried
+        raise
+    except json.JSONDecodeError as json_err:
+        error_msg = f"SBOM {sbom_id} contains invalid JSON: {json_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        # JSON errors are not retryable - return failure immediately
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+    except FileNotFoundError as file_err:
+        error_msg = f"SBOM file not found for ID {sbom_id}: {file_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        # File not found is not retryable - return failure immediately
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+    except ImportError as import_err:
+        error_msg = f"Missing required module for SBOM processing: {import_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
+        # Import errors indicate environment issues - should not retry automatically
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
     except Exception as e:
+        # Log the full exception details for debugging
         logger.error(
-            f"[TASK_process_sbom] An unexpected error occurred processing SBOM ID {sbom_id}: {e}", exc_info=True
+            f"[TASK_process_sbom] Unexpected error processing SBOM ID {sbom_id}: {type(e).__name__}: {e}",
+            exc_info=True,
+            extra={"sbom_id": sbom_id, "error_type": type(e).__name__},
         )
-        # For unexpected errors, it's often better to let Dramatiq handle retries if configured.
+        # For truly unexpected errors, let Dramatiq handle retries
         raise
 
 
