@@ -258,18 +258,18 @@ testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
 name = "boto3"
-version = "1.39.13"
+version = "1.39.14"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "boto3-1.39.13-py3-none-any.whl", hash = "sha256:8e62c5724dc06a1934fde155a2eb48cb851cc17ad0b5142da9eb9e46fe0355d3"},
-    {file = "boto3-1.39.13.tar.gz", hash = "sha256:ace50ccfc4caba235b020e7d36f0191aa399771cb6fe6e34b4359b671aab1a4b"},
+    {file = "boto3-1.39.14-py3-none-any.whl", hash = "sha256:82c6868cad18c3bd4170915e9525f9af5f83e9779c528417f8863629558fc2d0"},
+    {file = "boto3-1.39.14.tar.gz", hash = "sha256:fabb16360a93b449d5241006485bcc761c26694e75ac01009f4459f114acc06e"},
 ]
 
 [package.dependencies]
-botocore = ">=1.39.13,<1.40.0"
+botocore = ">=1.39.14,<1.40.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.13.0,<0.14.0"
 
@@ -278,14 +278,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.39.13"
+version = "1.39.14"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "botocore-1.39.13-py3-none-any.whl", hash = "sha256:6318ae28984d05aaabe92160446d37a2c498951b34a4d5431bc1ec7eb0376417"},
-    {file = "botocore-1.39.13.tar.gz", hash = "sha256:ee8053f34e425a40843daccfa78820d6891f0d4f85fc647ab98f9ba28c36f9e7"},
+    {file = "botocore-1.39.14-py3-none-any.whl", hash = "sha256:4ed551c77194167b7e8063f33059bc2f9b2ead0ed4ee33dc7857273648ed4349"},
+    {file = "botocore-1.39.14.tar.gz", hash = "sha256:7fc44d4ad13b524e5d8a6296785776ef5898ac026ff74df9b35313831d507926"},
 ]
 
 [package.dependencies]
@@ -801,14 +801,14 @@ six = ">=1.13.0"
 
 [[package]]
 name = "datamodel-code-generator"
-version = "0.31.2"
+version = "0.32.0"
 description = "Datamodel Code Generator"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "datamodel_code_generator-0.31.2-py3-none-any.whl", hash = "sha256:78f200a9e673ee4d041e96e82a835273baf4ce15e446d46501c0433d82af3ef5"},
-    {file = "datamodel_code_generator-0.31.2.tar.gz", hash = "sha256:47887b8aa6fd69865e07e2893c1e76e34dae753b9a97f1020357af8337bc4cdb"},
+    {file = "datamodel_code_generator-0.32.0-py3-none-any.whl", hash = "sha256:48f3cabbb792398112ee756b23a319e17b001ee534896b324893a98ff10e0a55"},
+    {file = "datamodel_code_generator-0.32.0.tar.gz", hash = "sha256:c6f84a6a7683ef9841940b0931aa1ee338b19950ba5b10c920f9c7ad6f5e5b72"},
 ]
 
 [package.dependencies]
@@ -932,14 +932,14 @@ steam = ["python3-openid (>=3.0.8,<4)"]
 
 [[package]]
 name = "django-anymail"
-version = "13.0"
+version = "13.0.1"
 description = "Django email backends and webhooks for Amazon SES, Brevo,  MailerSend, Mailgun, Mailjet, Mandrill, Postal, Postmark, Resend,  SendGrid, SparkPost and Unisender Go  (EmailBackend, transactional email tracking and inbound email signals)"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "django_anymail-13.0-py3-none-any.whl", hash = "sha256:6da4465eff18f679955f74332501a3a4299e34079015d91e1fce9c049d784d6c"},
-    {file = "django_anymail-13.0.tar.gz", hash = "sha256:87f42d9ff12a9a029d5e88edaaf62a4b880aa9a6a7ef937042b7e96579e6db07"},
+    {file = "django_anymail-13.0.1-py3-none-any.whl", hash = "sha256:f2c20c9f240d93789aa8da2ee54d701c6b0345d101133d65d67e9355a914af81"},
+    {file = "django_anymail-13.0.1.tar.gz", hash = "sha256:fd93b36c167eb968bd68a351218c29ae23a68682e67340ae8554478cf27f9d56"},
 ]
 
 [package.dependencies]
@@ -948,7 +948,7 @@ requests = ">=2.4.3"
 urllib3 = ">=1.25.0"
 
 [package.extras]
-amazon-ses = ["boto3 (>=1.10.17)"]
+amazon-ses = ["boto3 (>=1.24.6)"]
 postal = ["cryptography ; python_version >= \"3.9\""]
 resend = ["svix"]
 
@@ -4181,4 +4181,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "dd3f798b25999241006d21f3ed620a2e4caa897d8d346222baa4dc7e79498fd8"
+content-hash = "bace6b514989a2711e1c7ae1e0794d242c2454dc92031e0e62c26425df14d451"
