@@ -3,6 +3,332 @@
 {% load static %}
 {% load django_vite %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
+{% block extra_head %}
+    <style>
+.scan-context {
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.version-info, .format-info, .source-info {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.version-highlight {
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border-radius: 8px;
+    border: 1px solid #93c5fd;
+}
+
+.version-highlight .h4 {
+    font-weight: 700;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Improved vulnerability table styling */
+.vulnerability-table {
+    margin-bottom: 0;
+}
+
+.vulnerability-table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    padding: 1rem 0.75rem;
+}
+
+.vulnerability-table td {
+    padding: 1rem 0.75rem;
+    vertical-align: top;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.package-name {
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.package-version {
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 0.875rem;
+    background: #f7fafc;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.ecosystem-badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+}
+
+/* Severity badge styling */
+.severity-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.severity-critical {
+    background-color: #dc2626;
+    color: white;
+}
+
+.severity-high {
+    background-color: #ea580c;
+    color: white;
+}
+
+.severity-medium {
+    background-color: #d97706;
+    color: white;
+}
+
+.severity-low {
+    background-color: #65a30d;
+    color: white;
+}
+
+.severity-info {
+    background-color: #0284c7;
+    color: white;
+}
+
+/* CVSS score styling */
+.cvss-score {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+/* References styling */
+.vulnerability-references {
+    margin-top: 0.5rem;
+}
+
+.reference-link {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: #3b82f6;
+    text-decoration: none;
+    margin-right: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.reference-link:hover {
+    text-decoration: underline;
+}
+
+/* Collapsible references styling */
+.references-details {
+    margin-top: 0.5rem;
+}
+
+.references-details summary {
+    display: flex;
+    align-items: center;
+}
+
+.references-summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.25rem 0;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease;
+    outline: none;
+    user-select: none;
+}
+
+.references-summary:hover {
+    background-color: #f8f9fa;
+}
+
+.references-summary::-webkit-details-marker {
+    display: none;
+}
+
+.references-content {
+    padding-left: 1rem;
+    border-left: 2px solid #e9ecef;
+}
+
+.references-content .reference-link {
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
+}
+
+/* Chevron animation */
+.references-summary .fa-chevron-right {
+    transition: transform 0.2s ease;
+}
+
+/* Rotate chevron when expanded */
+details[open] .references-summary .fa-chevron-right {
+    transform: rotate(90deg);
+}
+
+/* Vulnerability card styling */
+.vulnerability-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.vulnerability-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e0;
+}
+
+.vulnerability-header {
+    display: flex;
+    justify-content: between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.vulnerability-id {
+    font-weight: 600;
+    color: #2b6cb0;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+
+.vulnerability-id:hover {
+    color: #2c5282;
+    text-decoration: underline;
+}
+
+.vulnerability-aliases {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.vulnerability-summary {
+    color: #4a5568;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+}
+
+/* Severity badges */
+.severity-badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.severity-critical {
+    background: #fed7d7;
+    color: #9b2c2c;
+    border: 1px solid #feb2b2;
+}
+
+.severity-high {
+    background: #fed7d7;
+    color: #c53030;
+    border: 1px solid #feb2b2;
+}
+
+.severity-medium {
+    background: #faf089;
+    color: #975a16;
+    border: 1px solid #f6e05e;
+}
+
+.severity-low {
+    background: #c6f6d5;
+    color: #276749;
+    border: 1px solid #9ae6b4;
+}
+
+.severity-unknown {
+    background: #e2e8f0;
+    color: #4a5568;
+    border: 1px solid #cbd5e0;
+}
+
+/* Empty state styling */
+.no-vulnerabilities {
+    text-align: center;
+    padding: 2rem;
+    color: #48bb78;
+    background: #f0fff4;
+    border: 1px solid #9ae6b4;
+    border-radius: 8px;
+}
+
+.source-section {
+    margin-bottom: 2rem;
+}
+
+.source-title {
+    color: #2d3748;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .scan-context .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem !important;
+    }
+
+    .version-highlight {
+        margin-top: 1rem;
+        text-align: center !important;
+    }
+
+    .vulnerability-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .vulnerability-table th,
+    .vulnerability-table td {
+        padding: 0.5rem;
+    }
+}
+
+/* Vulnerability table column widths */
+.vulnerability-table th.col-package {
+    width: 20%;
+}
+
+.vulnerability-table th.col-version {
+    width: 15%;
+}
+
+.vulnerability-table th.col-ecosystem {
+    width: 15%;
+}
+
+.vulnerability-table th.col-vulnerabilities {
+    width: 50%;
+}
+    </style>
+{% endblock %}
 {% block content %}
     <div class="container-fluid p-0">
         <h3 class="page-title">Vulnerabilities for SBOM: {{ sbom.name }}</h3>
@@ -10,75 +336,202 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Scan Results</h5>
-                        {% if scan_timestamp %}<small class="text-muted">Last scanned: {{ scan_timestamp }}</small>{% endif %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title mb-0">Scan Results</h5>
+                                {% if sbom_version_info %}
+                                    <div class="scan-context mt-2">
+                                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                                            <div class="version-info">
+                                                <i class="fas fa-tag me-1 text-primary"></i>
+                                                <strong>{{ sbom_version_info.name }}</strong>
+                                                {% if sbom_version_info.version %}
+                                                    <span class="badge bg-primary ms-1">{{ sbom_version_info.version }}</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="format-info">
+                                                <i class="fas fa-file-code me-1 text-success"></i>
+                                                <span class="badge bg-success-subtle text-success">
+                                                    {{ sbom_version_info.format|upper }} {{ sbom_version_info.format_version }}
+                                                </span>
+                                            </div>
+                                            <div class="source-info">
+                                                <i class="fas fa-source-branch me-1 text-info"></i>
+                                                <span class="badge bg-info-subtle text-info">{{ sbom_version_info.source }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                {% if scan_timestamp %}<small class="text-muted d-block mt-2">Last scanned: {{ scan_timestamp }}</small>{% endif %}
+                            </div>
+                            {% if sbom_version_info and sbom_version_info.version %}
+                                <div class="version-highlight">
+                                    <div class="text-end">
+                                        <div class="text-muted small">Scanning Version</div>
+                                        <div class="h4 mb-0 text-primary">{{ sbom_version_info.version }}</div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="card-body">
                         {% if vulnerabilities %}
                             {% if vulnerabilities.results %}
                                 {% for result in vulnerabilities.results %}
-                                    <div class="mb-4">
-                                        <h5>Source: {{ result.source.file_path }}</h5>
+                                    <div class="source-section">
+                                        <h5 class="source-title">
+                                            <i class="fas fa-file-code me-2"></i>
+                                            Source: {{ result.source.file_path }}
+                                        </h5>
                                         {% if result.packages %}
-                                            <table class="table table-sm table-striped">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Package Name</th>
-                                                        <th>Version</th>
-                                                        <th>Ecosystem</th>
-                                                        <th>Vulnerabilities</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for pkg_vuln_info in result.packages %}
+                                            <div class="table-responsive">
+                                                <table class="table vulnerability-table">
+                                                    <thead>
                                                         <tr>
-                                                            <td>{{ pkg_vuln_info.package.name }}</td>
-                                                            <td>{{ pkg_vuln_info.package.version }}</td>
-                                                            <td>{{ pkg_vuln_info.package.ecosystem }}</td>
-                                                            <td>
-                                                                {% if pkg_vuln_info.vulnerabilities %}
-                                                                    <ul class="list-unstyled mb-0">
-                                                                        {% for vuln in pkg_vuln_info.vulnerabilities %}
-                                                                            <li>
-                                                                                <a href="https://osv.dev/vulnerability/{{ vuln.id }}" target="_blank">{{ vuln.id }}</a>
-                                                                                {% if vuln.aliases %}(Aliases: {{ vuln.aliases|join:", " }}){% endif %}
-                                                                                <p class="small text-muted mb-1">{{ vuln.summary|default_if_none:vuln.details|truncatewords:30 }}</p>
-                                                                                {% if vuln.affected %}
-                                                                                    {% for affected_pkg in vuln.affected %}
-                                                                                        {% if affected_pkg.ranges %}
-                                                                                            Severity:
-                                                                                            {% for range_item in affected_pkg.ranges %}
-                                                                                                {% for sev in range_item.database_specific.severity %}<span class="badge bg-danger">{{ sev }}</span>{% endfor %}
-                                                                                            {% endfor %}
-                                                                                        {% endif %}
-                                                                                    {% endfor %}
-                                                                                {% endif %}
-                                                                            </li>
-                                                                        {% endfor %}
-                                                                    </ul>
-                                                                {% else %}
-                                                                    <span class="text-success">No vulnerabilities found for this package.</span>
-                                                                {% endif %}
-                                                            </td>
+                                                            <th class="col-package">Package</th>
+                                                            <th class="col-version">Version</th>
+                                                            <th class="col-ecosystem">Ecosystem</th>
+                                                            <th class="col-vulnerabilities">Vulnerabilities</th>
                                                         </tr>
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for pkg_vuln_info in result.packages %}
+                                                            <tr>
+                                                                <td>
+                                                                    <div class="package-name">{{ pkg_vuln_info.package.name }}</div>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="package-version">{{ pkg_vuln_info.package.version }}</span>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="badge bg-secondary-subtle text-secondary ecosystem-badge">{{ pkg_vuln_info.package.ecosystem }}</span>
+                                                                </td>
+                                                                <td>
+                                                                    {% if pkg_vuln_info.vulnerabilities %}
+                                                                        {% for vuln in pkg_vuln_info.vulnerabilities %}
+                                                                            <div class="vulnerability-card">
+                                                                                <div class="vulnerability-header">
+                                                                                    <div class="flex-grow-1">
+                                                                                        {# Smart external links based on vulnerability source #}
+                                                                                        {% if vuln.source == "Dependency Track" %}
+                                                                                            {% if vuln.id|slice:":4" == "CVE-" %}
+                                                                                                <a href="https://www.cve.org/CVERecord?id={{ vuln.id }}"
+                                                                                                   target="_blank"
+                                                                                                   class="vulnerability-id">
+                                                                                                    <i class="fas fa-external-link-alt me-1"></i>
+                                                                                                    {{ vuln.id }}
+                                                                                                </a>
+                                                                                            {% elif vuln.id|slice:":5" == "GHSA-" %}
+                                                                                                <a href="https://github.com/advisories/{{ vuln.id }}"
+                                                                                                   target="_blank"
+                                                                                                   class="vulnerability-id">
+                                                                                                    <i class="fas fa-external-link-alt me-1"></i>
+                                                                                                    {{ vuln.id }}
+                                                                                                </a>
+                                                                                            {% else %}
+                                                                                                <span class="vulnerability-id">
+                                                                                                    <i class="fas fa-bug me-1"></i>
+                                                                                                    {{ vuln.id }}
+                                                                                                </span>
+                                                                                            {% endif %}
+                                                                                        {% else %}
+                                                                                            <a href="https://osv.dev/vulnerability/{{ vuln.id }}"
+                                                                                               target="_blank"
+                                                                                               class="vulnerability-id">
+                                                                                                <i class="fas fa-external-link-alt me-1"></i>
+                                                                                                {{ vuln.id }}
+                                                                                            </a>
+                                                                                        {% endif %}
+                                                                                        {% if vuln.aliases %}<div class="vulnerability-aliases">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
+                                                                                    </div>
+                                                                                    <div class="ms-2 d-flex align-items-center gap-2">
+                                                                                        {# Use normalized severity field from StandardizedVulnerabilityData #}
+                                                                                        {% if vuln.severity and vuln.severity != 'unknown' %}
+                                                                                            <span class="severity-badge severity-{{ vuln.severity|lower }}">{{ vuln.severity|upper }}</span>
+                                                                                        {% else %}
+                                                                                            <span class="severity-badge severity-medium">Medium</span>
+                                                                                        {% endif %}
+                                                                                        {# Show CVSS score if available #}
+                                                                                        {% if vuln.cvss_score %}<span class="cvss-score">CVSS: {{ vuln.cvss_score }}</span>{% endif %}
+                                                                                    </div>
+                                                                                </div>
+                                                                                {# Show full summary with less truncation #}
+                                                                                {% if vuln.summary or vuln.details %}
+                                                                                    <div class="vulnerability-summary mb-2">{{ vuln.summary|default_if_none:vuln.details|truncatewords:50 }}</div>
+                                                                                {% endif %}
+                                                                                {# Show references if available with collapsible section #}
+                                                                                {% if vuln.references and vuln.references|length > 0 %}
+                                                                                    <div class="vulnerability-references">
+                                                                                        {% if vuln.references|length <= 3 %}
+                                                                                            {# Show all references if 3 or fewer #}
+                                                                                            <small class="text-muted">References:</small>
+                                                                                            {% for ref in vuln.references %}
+                                                                                                {% if ref and ref != "" %}
+                                                                                                    <a href="{{ ref }}" target="_blank" class="reference-link">
+                                                                                                        <i class="fas fa-external-link-alt"></i>
+                                                                                                        Reference
+                                                                                                    </a>
+                                                                                                {% endif %}
+                                                                                            {% endfor %}
+                                                                                        {% else %}
+                                                                                            {# Collapsible section for many references #}
+                                                                                            <details class="references-details">
+                                                                                                <summary class="references-summary">
+                                                                                                    <small class="text-muted">
+                                                                                                        <i class="fas fa-chevron-right me-1"></i>
+                                                                                                        {{ vuln.references|length }} References (click to expand)
+                                                                                                    </small>
+                                                                                                </summary>
+                                                                                                <div class="references-content mt-2">
+                                                                                                    {% for ref in vuln.references %}
+                                                                                                        {% if ref and ref != "" %}
+                                                                                                            <a href="{{ ref }}" target="_blank" class="reference-link d-block">
+                                                                                                                <i class="fas fa-external-link-alt"></i>
+                                                                                                                {{ ref|truncatechars:60 }}
+                                                                                                            </a>
+                                                                                                        {% endif %}
+                                                                                                    {% endfor %}
+                                                                                                </div>
+                                                                                            </details>
+                                                                                        {% endif %}
+                                                                                    </div>
+                                                                                {% endif %}
+                                                                            </div>
+                                                                        {% endfor %}
+                                                                    {% else %}
+                                                                        <div class="no-vulnerabilities">
+                                                                            <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                                                                            <div>No vulnerabilities found for this package</div>
+                                                                        </div>
+                                                                    {% endif %}
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         {% else %}
-                                            <p class="text-info">No packages with vulnerability information found in this result.</p>
+                                            <div class="alert alert-info" role="alert">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                No packages with vulnerability information found in this result.
+                                            </div>
                                         {% endif %}
                                     </div>
-                                    <hr />
+                                    {% if not forloop.last %}<hr class="my-4" />{% endif %}
                                 {% endfor %}
                             {% else %}
-                                <p class="text-info">
+                                <div class="alert alert-info" role="alert">
+                                    <i class="fas fa-info-circle me-2"></i>
                                     Vulnerability scan data found, but no specific results or packages identified. The SBOM
                                     might be empty or not analyzable by the scanner.
-                                </p>
+                                </div>
                             {% endif %}
                         {% elif error_message %}
                             <div class="alert alert-danger" role="alert">
-                                <h4 class="alert-heading">Error!</h4>
+                                <h4 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Error!
+                                </h4>
                                 <p>{{ error_message }}</p>
                                 {% if error_details %}
                                     <hr />
@@ -88,14 +541,55 @@
                                 {% endif %}
                             </div>
                         {% else %}
-                            <p class="text-warning">
-                                No vulnerability scan data found for this SBOM, or the scan is still in progress. Please
-                                try again later.
-                            </p>
-                            <p>
-                                <small>Note: Scans are performed asynchronously. If you just uploaded this SBOM, the scan
-                                might not be complete yet.</small>
-                            </p>
+                            {% if is_processing %}
+                                <div class="alert alert-info" role="alert">
+                                    <h4 class="alert-heading">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                        Processing Vulnerability Scan
+                                    </h4>
+                                    <p>
+                                        Your SBOM has been uploaded to {{ processing_provider|default:"the vulnerability scanner" }} and is currently being analyzed for vulnerabilities.
+                                        This process typically takes {{ processing_message }}.
+                                    </p>
+                                    <p class="mb-3">
+                                        <small>
+                                            <i class="fas fa-clock me-1"></i>
+                                            Started: {{ scan_timestamp }}
+                                        </small>
+                                    </p>
+                                    <div class="d-flex align-items-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                                            <i class="fas fa-sync-alt me-1"></i>
+                                            Refresh Page
+                                        </button>
+                                        <small class="text-muted ms-3">This page will update automatically once processing is complete.</small>
+                                    </div>
+                                </div>
+                                <script>
+                                    // Auto-refresh every 30 seconds when processing
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 30000);
+                                </script>
+                            {% else %}
+                                <div class="alert alert-warning" role="alert">
+                                    <h4 class="alert-heading">
+                                        <i class="fas fa-hourglass-half me-2"></i>
+                                        No Scan Data Available
+                                    </h4>
+                                    <p>
+                                        No vulnerability scan data found for this SBOM, or the scan is still in progress. Please
+                                        try again later.
+                                    </p>
+                                    <p class="mb-0">
+                                        <small>
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Note: Scans are performed asynchronously. If you just uploaded this SBOM, the scan
+                                            might not be complete yet.
+                                        </small>
+                                    </p>
+                                </div>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -104,7 +598,8 @@
         <div class="mt-3">
             <a href="{% url 'sboms:sbom_details' sbom.id %}"
                class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> Back to SBOM Details
+                <i class="fas fa-arrow-left me-2"></i>
+                Back to SBOM Details
             </a>
         </div>
     </div>

@@ -126,8 +126,8 @@
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
-          @click="clearSelectedFile"
           title="Remove file"
+          @click="clearSelectedFile"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -157,8 +157,8 @@
         <button
           type="button"
           class="btn btn-primary"
-          @click="saveDocument"
           :disabled="!isFormValid"
+          @click="saveDocument"
         >
           <i class="fas fa-save me-1"></i>
           Save Document

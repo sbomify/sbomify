@@ -7,7 +7,6 @@ from pathlib import Path
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
 
-import redis
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout as django_logout
@@ -558,6 +557,7 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
         "component": component,
         "brand": BrandingInfo(**component.team.branding_info),
         "APP_BASE_URL": settings.APP_BASE_URL,
+        "team_billing_plan": getattr(component.team, "billing_plan", "community"),
     }
 
     # Add component-specific data based on type
@@ -578,78 +578,55 @@ def component_details_public(request: HttpRequest, component_id: str) -> HttpRes
                     release_artifacts_map[artifact.sbom_id] = []
                 release_artifacts_map[artifact.sbom_id].append(artifact)
 
+        def check_vulnerability_report(sbom_id: str) -> bool:
+            """Check if vulnerability report exists for an SBOM."""
+            try:
+                # Check the VulnerabilityScanResult model for any scan results
+                from vulnerability_scanning.models import VulnerabilityScanResult
+
+                result = VulnerabilityScanResult.objects.filter(sbom_id=sbom_id).first()
+
+                return result is not None
+            except Exception as e:
+                logger.warning(f"Error checking vulnerability report for SBOM {sbom_id}: {e}")
+                return False
+
         sboms_with_vuln_status = []
-        try:
-            redis_client = redis.from_url(settings.REDIS_WORKER_URL)
-            for sbom_item in sboms_queryset:
-                keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+        for sbom_item in sboms_queryset:
+            has_vuln_report = check_vulnerability_report(sbom_item.id)
 
-                # Get releases that contain this SBOM using pre-fetched data (only public releases)
-                releases = []
-                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
-                for artifact in artifacts_for_sbom:
-                    releases.append(
-                        {
-                            "id": str(artifact.release.id),
-                            "name": artifact.release.name,
-                            "product_name": artifact.release.product.name,
-                            "is_latest": artifact.release.is_latest,
-                            "is_prerelease": artifact.release.is_prerelease,
-                            "is_public": artifact.release.product.is_public,
-                        }
-                    )
-
-                sboms_with_vuln_status.append(
+            # Get releases that contain this SBOM using pre-fetched data (only public releases)
+            releases = []
+            artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+            for artifact in artifacts_for_sbom:
+                releases.append(
                     {
-                        "sbom": {
-                            "id": str(sbom_item.id),
-                            "name": sbom_item.name,
-                            "format": sbom_item.format,
-                            "format_version": sbom_item.format_version,
-                            "version": sbom_item.version,
-                            "created_at": sbom_item.created_at.isoformat(),
-                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
-                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
-                        },
-                        "has_vulnerabilities_report": bool(keys),
-                        "releases": releases,
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
                     }
                 )
-        except redis.exceptions.ConnectionError:
-            for sbom_item in sboms_queryset:
-                # Get releases that contain this SBOM using pre-fetched data (only public releases)
-                releases = []
-                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
-                for artifact in artifacts_for_sbom:
-                    releases.append(
-                        {
-                            "id": str(artifact.release.id),
-                            "name": artifact.release.name,
-                            "product_name": artifact.release.product.name,
-                            "is_latest": artifact.release.is_latest,
-                            "is_prerelease": artifact.release.is_prerelease,
-                            "is_public": artifact.release.product.is_public,
-                        }
-                    )
 
-                sboms_with_vuln_status.append(
-                    {
-                        "sbom": {
-                            "id": str(sbom_item.id),
-                            "name": sbom_item.name,
-                            "format": sbom_item.format,
-                            "format_version": sbom_item.format_version,
-                            "version": sbom_item.version,
-                            "created_at": sbom_item.created_at.isoformat(),
-                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
-                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
-                        },
-                        "has_vulnerabilities_report": False,
-                        "releases": releases,
-                    }
-                )
-            # No messages.error for public view, just log or fail silently
-            logger.warning("Could not connect to Redis in public component view.")
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                        "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                        "ntia_compliance_details": sbom_item.ntia_compliance_details,
+                    },
+                    "has_vulnerabilities_report": has_vuln_report,
+                    "releases": releases,
+                }
+            )
+
         context["sboms_data"] = sboms_with_vuln_status
 
     elif component.component_type == Component.ComponentType.DOCUMENT:
@@ -725,6 +702,7 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
         "is_owner": is_owner,
         "APP_BASE_URL": settings.APP_BASE_URL,
         "current_team": request.session.get("current_team", {}),
+        "team_billing_plan": getattr(component.team, "billing_plan", "community"),
     }
 
     if component.component_type == Component.ComponentType.SBOM:
@@ -744,79 +722,53 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                     release_artifacts_map[artifact.sbom_id] = []
                 release_artifacts_map[artifact.sbom_id].append(artifact)
 
+        def check_vulnerability_report_private(sbom_id: str) -> bool:
+            """Check if vulnerability report exists for an SBOM."""
+            try:
+                # Check the VulnerabilityScanResult model for any scan results
+                from vulnerability_scanning.models import VulnerabilityScanResult
+
+                result = VulnerabilityScanResult.objects.filter(sbom_id=sbom_id).first()
+
+                return result is not None
+            except Exception as e:
+                logger.warning(f"Error checking vulnerability report for SBOM {sbom_id}: {e}")
+                return False
+
         sboms_with_vuln_status = []
-        try:
-            redis_client = redis.from_url(settings.REDIS_WORKER_URL)
-            for sbom_item in sboms_queryset:
-                keys = redis_client.keys(f"osv_scan_result:{sbom_item.id}:*")
+        for sbom_item in sboms_queryset:
+            has_vuln_report = check_vulnerability_report_private(sbom_item.id)
 
-                # Get releases that contain this SBOM using pre-fetched data
-                releases = []
-                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
-                for artifact in artifacts_for_sbom:
-                    releases.append(
-                        {
-                            "id": str(artifact.release.id),
-                            "name": artifact.release.name,
-                            "product_name": artifact.release.product.name,
-                            "is_latest": artifact.release.is_latest,
-                            "is_prerelease": artifact.release.is_prerelease,
-                            "is_public": artifact.release.product.is_public,
-                        }
-                    )
-
-                sboms_with_vuln_status.append(
+            # Get releases that contain this SBOM using pre-fetched data
+            releases = []
+            artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
+            for artifact in artifacts_for_sbom:
+                releases.append(
                     {
-                        "sbom": {
-                            "id": str(sbom_item.id),
-                            "name": sbom_item.name,
-                            "format": sbom_item.format,
-                            "format_version": sbom_item.format_version,
-                            "version": sbom_item.version,
-                            "created_at": sbom_item.created_at.isoformat(),
-                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
-                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
-                        },
-                        "has_vulnerabilities_report": bool(keys),
-                        "releases": releases,
+                        "id": str(artifact.release.id),
+                        "name": artifact.release.name,
+                        "product_name": artifact.release.product.name,
+                        "is_latest": artifact.release.is_latest,
+                        "is_prerelease": artifact.release.is_prerelease,
+                        "is_public": artifact.release.product.is_public,
                     }
                 )
-        except redis.exceptions.ConnectionError:
-            # If Redis is down, assume no reports are available for simplicity
-            for sbom_item in sboms_queryset:
-                # Get releases that contain this SBOM using pre-fetched data
-                releases = []
-                artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
-                for artifact in artifacts_for_sbom:
-                    releases.append(
-                        {
-                            "id": str(artifact.release.id),
-                            "name": artifact.release.name,
-                            "product_name": artifact.release.product.name,
-                            "is_latest": artifact.release.is_latest,
-                            "is_prerelease": artifact.release.is_prerelease,
-                            "is_public": artifact.release.product.is_public,
-                        }
-                    )
 
-                sboms_with_vuln_status.append(
-                    {
-                        "sbom": {
-                            "id": str(sbom_item.id),
-                            "name": sbom_item.name,
-                            "format": sbom_item.format,
-                            "format_version": sbom_item.format_version,
-                            "version": sbom_item.version,
-                            "created_at": sbom_item.created_at.isoformat(),
-                            "ntia_compliance_status": sbom_item.ntia_compliance_status,
-                            "ntia_compliance_details": sbom_item.ntia_compliance_details,
-                        },
-                        "has_vulnerabilities_report": False,
-                        "releases": releases,
-                    }
-                )
-            messages.error(
-                request, "Could not connect to Redis to check for vulnerability reports. Status may be inaccurate."
+            sboms_with_vuln_status.append(
+                {
+                    "sbom": {
+                        "id": str(sbom_item.id),
+                        "name": sbom_item.name,
+                        "format": sbom_item.format,
+                        "format_version": sbom_item.format_version,
+                        "version": sbom_item.version,
+                        "created_at": sbom_item.created_at.isoformat(),
+                        "ntia_compliance_status": sbom_item.ntia_compliance_status,
+                        "ntia_compliance_details": sbom_item.ntia_compliance_details,
+                    },
+                    "has_vulnerabilities_report": has_vuln_report,
+                    "releases": releases,
+                }
             )
         context["sboms_data"] = sboms_with_vuln_status
 

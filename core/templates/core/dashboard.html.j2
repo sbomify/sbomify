@@ -28,7 +28,17 @@
             </div>
         </div>
     </div>
+    {# Vulnerability Time Series Chart #}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="vc-vulnerability-timeseries"
+                 data-team-key="{{ current_team.key }}"
+                 data-default-days="30"
+                 data-show-product-filter="true"></div>
+        </div>
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
+    {% vite_asset 'vulnerability_scanning/js/main.ts' %}
 {% endblock %}

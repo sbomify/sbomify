@@ -6,8 +6,8 @@ import { describe, it, expect, mock } from 'bun:test'
 
 // Mock the alerts module using Bun's mocking
 const mockAlerts = {
-  showSuccess: mock((_message: string) => {}),
-  showError: mock((_message: string) => {})
+  showSuccess: mock((message: string) => { void message; }),
+  showError: mock((message: string) => { void message; })
 }
 
 mock.module('../../core/js/alerts', () => mockAlerts)

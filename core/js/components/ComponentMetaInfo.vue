@@ -65,8 +65,8 @@
       const sourceMetadata = sourceResponse.data;
 
       // Remove component-specific fields (id, name) that shouldn't be copied
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceMetadata;
+      void id; void name;  // Mark as intentionally unused
 
       // Then, patch the target component with the copied metadata
       const targetResponse = await $axios.patch(`/api/v1/components/${props.componentId}/metadata`, metadataToCopy);

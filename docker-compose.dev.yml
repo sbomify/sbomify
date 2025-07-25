@@ -46,6 +46,13 @@ services:
     environment:
       NODE_ENV: development
       VITE_API_BASE_URL: http://127.0.0.1:8000
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    restart: unless-stopped
 
 # Dev-specific volumes or networks could be defined here if needed.
 # Example placeholder comments for DB/Redis are removed as they are defined in the base docker-compose.yml

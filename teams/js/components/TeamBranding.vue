@@ -85,8 +85,8 @@
                                      <FileDragAndDrop
                      v-model="brandingInfo.icon"
                      accept="image/*"
-                     @update:modelValue="(file) => handleFileUpload('icon', file || null)"
                      class="modern-upload"
+                     @update:modelValue="(file) => handleFileUpload('icon', file || null)"
                    />
                 </div>
                 <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
@@ -99,8 +99,8 @@
                                      <FileDragAndDrop
                      v-model="brandingInfo.logo"
                      accept="image/*"
-                     @update:modelValue="(file) => handleFileUpload('logo', file || null)"
                      class="modern-upload"
+                     @update:modelValue="(file) => handleFileUpload('logo', file || null)"
                    />
                 </div>
                 <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
@@ -195,7 +195,7 @@ const validateAndUpdateColor = (event: Event, field: string) => {
 
 const updateField = async (field: string) => {
   try {
-    const payload: any = {};
+    const payload: Record<string, unknown> = {};
     payload[field] = brandingInfo.value[field];
 
     await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, payload);

@@ -33,7 +33,17 @@ class BillingPlan(models.Model):
 
     @property
     def has_vulnerability_scanning(self) -> bool:
-        """Check if this plan includes vulnerability scanning."""
+        """Check if this plan includes vulnerability scanning.
+
+        Note: OSV vulnerability scanning is available for ALL teams.
+        This property now indicates if Dependency Track is available.
+        """
+        # OSV is available for all teams, Dependency Track only for business/enterprise
+        return True
+
+    @property
+    def has_dependency_track_access(self) -> bool:
+        """Check if this plan includes Dependency Track access."""
         return self.key in ["business", "enterprise"]
 
     @property

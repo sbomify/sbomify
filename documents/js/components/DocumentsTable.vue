@@ -204,7 +204,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Edit Document</h5>
-          <button type="button" class="btn-close" @click="cancelEdit" aria-label="Close"></button>
+          <button type="button" class="btn-close" aria-label="Close" @click="cancelEdit"></button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="updateDocument">

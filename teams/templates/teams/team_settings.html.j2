@@ -43,6 +43,13 @@
             {% if request.session.current_team.role == 'owner' %}
                 <a class="nav-link"
                    data-bs-toggle="pill"
+                   href="#integrations"
+                   data-tab="integrations">
+                    <i class="fas fa-plug me-2"></i>
+                    Integrations
+                </a>
+                <a class="nav-link"
+                   data-bs-toggle="pill"
                    href="#billing"
                    data-tab="billing">
                     <i class="fas fa-credit-card me-2"></i>
@@ -92,6 +99,18 @@
             </div>
         </div>
         {% if request.session.current_team.role == 'owner' %}
+            <!-- Integrations Tab -->
+            <div class="tab-pane fade" id="integrations">
+                <div class="row">
+                    <div class="col-12">
+                        <!-- Vulnerability Scanning Settings Component -->
+                        <div class="vc-vulnerability-settings"
+                             data-team-key="{{ team.key }}"
+                             data-billing-plan="{{ team.billing_plan }}"
+                             data-user-role="{{ request.session.current_team.role }}"></div>
+                    </div>
+                </div>
+            </div>
             <!-- Billing Tab -->
             <div class="tab-pane fade" id="billing">
                 <div class="row">
@@ -116,6 +135,7 @@
             // Get available tabs
             const availableTabs = ['members', 'branding'];
             {% if request.session.current_team.role == 'owner' %}
+                availableTabs.push('integrations');
                 availableTabs.push('billing');
             {% endif %}
 

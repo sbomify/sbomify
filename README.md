@@ -325,6 +325,71 @@ Benefits of separate buckets:
 - **Organization**: Clear separation of content types
 - **Backup**: Independent backup strategies for different data types
 
+#### Dependency Track Integration
+
+sbomify supports integration with [Dependency Track](https://dependencytrack.org/) for advanced vulnerability management and analysis. Dependency Track integration is available for Business and Enterprise plans.
+
+**Note:** Dependency Track only supports CycloneDX format SBOMs. SPDX SBOMs will automatically use OSV scanning regardless of team configuration.
+
+##### Environment-Based Project Naming
+
+When using a shared Dependency Track instance across multiple environments (development, staging, production), sbomify automatically prefixes project names with the environment to help differentiate them:
+
+**Examples:**
+
+- **Production** (`https://app.sbomify.com`): `prod-sbomify-{component-id}`
+- **Staging** (`https://staging.sbomify.com`): `staging-sbomify-{component-id}`
+- **Development** (`https://dev.sbomify.com`): `dev-sbomify-{component-id}`
+- **Local** (`http://localhost:8000`): `local-sbomify-{component-id}`
+
+**Custom Environment Prefix:**
+You can override the automatic detection by setting the `DT_ENVIRONMENT_PREFIX` environment variable:
+
+```bash
+export DT_ENVIRONMENT_PREFIX="my-custom-env"
+# Results in: my-custom-env-sbomify-{component-id}
+```
+
+This makes it easy to identify which environment a project belongs to when viewing your Dependency Track dashboard.
+
+##### Required Permissions
+
+To integrate with Dependency Track, you need to create an API token with the following permissions:
+
+- `BOM_UPLOAD`
+- `PROJECT_CREATION_UPLOAD`
+- `VIEW_PORTFOLIO`
+- `VIEW_VULNERABILITY`
+
+You can create a token under **Administration → Access Management → Teams** in your Dependency Track instance.
+
+##### DT Configuration
+
+1. **Add Dependency Track Server** via Django admin:
+   - Navigate to `/admin/vulnerability_scanning/dependencytrackserver/`
+   - Click "Add Dependency Track Server"
+   - Fill in the server details:
+     - **Name**: Friendly name for the server
+     - **URL**: Base URL of your Dependency Track instance
+     - **API Key**: Token with required permissions
+     - **Priority**: Lower numbers = higher priority for load balancing
+     - **Max Concurrent Scans**: Maximum number of simultaneous SBOM uploads
+
+2. **Configure Team Settings**:
+   - Business/Enterprise teams can choose Dependency Track in **Settings → Integrations**
+   - Enterprise teams can optionally configure custom Dependency Track instances
+   - Business teams use the shared server pool
+
+##### DT Features
+
+- **Automatic Vulnerability Scanning**:
+  - Community teams: Weekly vulnerability scans using OSV
+  - Business/Enterprise teams: Vulnerability updates every 12 hours using Dependency Track
+- **Load Balancing**: Distribute scans across multiple Dependency Track servers
+- **Health Monitoring**: Automatic server health checks and capacity management
+- **Historical Tracking**: Complete scan result history for trend analysis
+- **Unified Results**: Consistent vulnerability data format across OSV and Dependency Track
+
 ### Running test cases
 
 Run the tests using Django's test profile:

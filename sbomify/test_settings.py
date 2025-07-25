@@ -128,6 +128,18 @@ manifest = {
         "src": "sboms/js/main.ts",
         "isEntry": True,
         "css": ["assets/sboms.css"]
+    },
+    "vulnerability_scanning/js/main.ts": {
+        "file": "assets/vulnerability_scanning.js",
+        "src": "vulnerability_scanning/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/vulnerability_scanning.css"]
+    },
+    "documents/js/main.ts": {
+        "file": "assets/documents.js",
+        "src": "documents/js/main.ts",
+        "isEntry": True,
+        "css": ["assets/documents.css"]
     }
 }
 

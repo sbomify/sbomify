@@ -11,6 +11,7 @@ from typing import Any, Dict
 
 import dramatiq
 from django.db import transaction
+from django.utils import timezone as django_timezone
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
@@ -30,8 +31,6 @@ django.setup()
 
 
 import json  # noqa: E402
-import subprocess  # noqa: E402
-import tempfile  # noqa: E402
 
 from django.conf import settings  # noqa: E402
 from django.db import connection  # noqa: E402
@@ -58,80 +57,8 @@ def log_retry_attempt(retry_state):
     )
 
 
-@dramatiq.actor(queue_name="sbom_license_processing", max_retries=3, time_limit=300000, store_results=True)
-@retry(
-    retry=retry_if_exception_type((OperationalError, ConnectionError)),
-    wait=wait_exponential(multiplier=1, min=1, max=5),  # Start with 1s, max 5s between retries
-    stop=stop_after_delay(30),  # Stop after 30s total
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
-def process_sbom_licenses(sbom_id: str) -> Dict[str, Any]:
-    """
-    Process and analyze license data from an SBOM asynchronously.
-    This now also extracts and populates the packages_licenses field from the SBOM file or data.
-    """
-    logger.info(f"[TASK_process_sbom_licenses] Received task for SBOM ID: {sbom_id}")
-    try:
-        with transaction.atomic():
-            # Ensure database connection is alive
-            connection.ensure_connection()
-
-            logger.info(f"[TASK_process_sbom_licenses] Attempting to fetch SBOM ID: {sbom_id} from database.")
-            sbom = SBOM.objects.select_for_update().get(id=sbom_id)
-            logger.info(
-                (
-                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} fetched. "
-                    f"Format: {sbom.format}, Filename: {sbom.sbom_filename}"
-                )
-            )
-
-            # The incorrect license processing logic, including SBOM data loading, has been removed.
-            # The SBOM model fields `licenses` and `packages_licenses` have also been removed.
-            # Future implementation will handle license expressions correctly and store them appropriately.
-            logger.info(
-                f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - Current license extraction and "
-                f"analysis logic has been removed. Associated model fields are also removed."
-            )
-
-            # The SBOM is saved.
-            sbom.save()
-            logger.debug(
-                (
-                    f"[TASK_process_sbom_licenses] SBOM ID: {sbom_id} - "
-                    f"Saved SBOM. License-related model fields have been removed."
-                )
-            )
-
-            return {
-                "sbom_id": sbom_id,
-                "status": "License processing temporarily bypassed. Model fields removed.",
-                "message": (
-                    "Incorrect license logic and associated model fields (licenses, packages_licenses) removed. "
-                    "Awaiting updated implementation for license expressions."
-                ),
-            }
-
-    except SBOM.DoesNotExist:
-        logger.error(f"[TASK_process_sbom_licenses] SBOM with ID {sbom_id} not found.")
-        return {"error": f"SBOM with ID {sbom_id} not found"}
-    except (DatabaseError, OperationalError) as db_err:
-        logger.error(
-            f"[TASK_process_sbom_licenses] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
-    except ConnectionError as conn_err:
-        logger.error(
-            f"[TASK_process_sbom_licenses] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
-    except Exception as e:
-        logger.error(
-            f"[TASK_process_sbom_licenses] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow Dramatiq to handle retries
+# License processing task has been removed - functionality moved to native model fields
+# License processing is now handled directly during SBOM upload via ComponentLicense model
 
 
 @dramatiq.actor(queue_name="sbom_ntia_compliance", max_retries=3, time_limit=300000, store_results=True)
@@ -254,50 +181,51 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
 
 @dramatiq.actor(queue_name="sbom_vulnerability_scanning", max_retries=3, time_limit=360000, store_results=True)
 @retry(
-    retry=retry_if_exception_type((OperationalError, ConnectionError, subprocess.CalledProcessError)),
-    wait=wait_exponential(multiplier=1, min=1, max=10),  # Start with 1s, max 10s
-    stop=stop_after_delay(60),  # Stop after 60s total
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
     before_sleep=before_sleep_log(logger, logging.WARNING),
-    # Note: subprocess.TimeoutExpired is not included in retry_if_exception_type
-    # because timeouts are handled gracefully and should not be retried
 )
-def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
+def scan_sbom_for_vulnerabilities_unified(sbom_id: str) -> Dict[str, Any]:
     """
-    Downloads an SBOM from S3, scans it with osv-scanner, and stores the results in Redis.
+    Unified vulnerability scanning task that routes to OSV or Dependency Track based on team settings.
+
+    This replaces the original OSV-only scanning task with a provider-agnostic approach.
     """
-    logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Starting vulnerability scan for SBOM ID: {sbom_id}")
+    logger.info(f"[TASK_scan_sbom_for_vulnerabilities_unified] Starting vulnerability scan for SBOM ID: {sbom_id}")
     sbom_instance = None
-    temp_sbom_file = None
 
     try:
         # 1. Fetch SBOM metadata
         with transaction.atomic():
             connection.ensure_connection()
-            logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Attempting to fetch SBOM ID: {sbom_id} from database.")
+            logger.debug(f"[TASK_scan_sbom_for_vulnerabilities_unified] Fetching SBOM ID: {sbom_id} from database.")
             sbom_instance = SBOM.objects.get(id=sbom_id)
             logger.debug(
-                f"[TASK_scan_sbom_for_vulnerabilities] SBOM ID: {sbom_id} fetched. "
-                f"Filename: {sbom_instance.sbom_filename}"
+                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM ID: {sbom_id} fetched. "
+                f"Filename: {sbom_instance.sbom_filename}, Team: {sbom_instance.component.team.key}"
             )
 
         if not sbom_instance.sbom_filename:
-            logger.error(f"[TASK_scan_sbom_for_vulnerabilities] SBOM ID: {sbom_id} has no sbom_filename.")
+            logger.error(f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM ID: {sbom_id} has no sbom_filename.")
             return {"error": f"SBOM ID: {sbom_id} has no sbom_filename."}
 
         # 2. Download SBOM from S3
-        logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Downloading SBOM {sbom_instance.sbom_filename} from S3.")
+        logger.debug(
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] Downloading SBOM {sbom_instance.sbom_filename} from S3."
+        )
         s3_client = S3Client(bucket_type="SBOMS")
         sbom_data_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
         if not sbom_data_bytes:
             logger.error(
-                f"[TASK_scan_sbom_for_vulnerabilities] Failed to download SBOM "
+                f"[TASK_scan_sbom_for_vulnerabilities_unified] Failed to download SBOM "
                 f"{sbom_instance.sbom_filename} from S3 (empty data)."
             )
             return {"error": f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."}
 
         logger.debug(
-            f"[TASK_scan_sbom_for_vulnerabilities] Downloaded {len(sbom_data_bytes)} bytes "
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] Downloaded {len(sbom_data_bytes)} bytes "
             f"for {sbom_instance.sbom_filename}."
         )
 
@@ -305,11 +233,12 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
         try:
             json.loads(sbom_data_bytes.decode("utf-8"))
             logger.debug(
-                f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON."
+                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM {sbom_instance.sbom_filename} "
+                f"successfully parsed as JSON."
             )
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(
-                f"[TASK_scan_sbom_for_vulnerabilities] SBOM {sbom_instance.sbom_filename} "
+                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM {sbom_instance.sbom_filename} "
                 f"is not valid JSON or has encoding issues. Error: {e}. "
                 f"First 200 chars: {sbom_data_bytes[:200]}"
             )
@@ -318,163 +247,112 @@ def scan_sbom_for_vulnerabilities(sbom_id: str) -> Dict[str, Any]:
                 "details": str(e),
             }
 
-        file_suffix = ".json"  # Default
-        if sbom_instance.format:
-            if "cyclonedx" in sbom_instance.format.lower():
-                file_suffix = ".cdx.json"
-            elif "spdx" in sbom_instance.format.lower():
-                file_suffix = ".spdx.json"
+        # 3. Perform vulnerability scan using the unified service
+        from vulnerability_scanning.services import VulnerabilityScanningService
 
-        with tempfile.NamedTemporaryFile(delete=False, mode="wb", suffix=file_suffix) as temp_file:
-            temp_sbom_file = temp_file.name
-            temp_file.write(sbom_data_bytes)  # Write the original bytes
+        service = VulnerabilityScanningService()
+        results = service.scan_sbom_for_vulnerabilities(sbom_instance, sbom_data_bytes, scan_trigger="upload")
 
-        # Execute osv-scanner
-        osv_scanner_path = "/usr/local/bin/osv-scanner"  # As defined in Dockerfile
-        scan_command = [
-            osv_scanner_path,
-            "scan",
-            "source",  # Using "scan source" as it worked in local tests
-            "--sbom",
-            temp_sbom_file,
-            "--format",
-            "json",
-        ]
-        scan_command_str = " ".join(scan_command)
-        logger.debug(f"[OSV_SCAN] Executing command: {scan_command_str}")
+        logger.info(
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] Completed vulnerability scan for SBOM ID: {sbom_id}. "
+            f"Results: {results.get('summary', 'No summary available')}"
+        )
 
-        try:
-            # Use timeout to prevent hanging scans
-            process = subprocess.run(
-                scan_command, capture_output=True, text=True, timeout=settings.OSV_SCANNER_TIMEOUT_SECONDS
-            )
-
-            stderr_content = process.stderr.strip() if process.stderr else ""
-
-            if stderr_content:
-                if process.returncode == 0 or process.returncode == 1:  # Success or success with findings
-                    lines = stderr_content.split("\n")
-                    is_purely_informational = all(
-                        not line.strip()
-                        or "Neither CPE nor PURL found for package" in line
-                        or ("Filtered" in line and "package/s from the scan" in line)
-                        or ("Scanned" in line and "file and found" in line and "package" in line)
-                        for line in lines
-                    )
-                    if is_purely_informational:
-                        logger.debug(
-                            f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner info for SBOM ID {sbom_id} "
-                            f"(code {process.returncode}): {stderr_content}"
-                        )
-                    else:
-                        logger.warning(
-                            f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner stderr for SBOM ID {sbom_id} "
-                            f"(code {process.returncode}): {stderr_content}"
-                        )
-                else:  # Bad exit code (neither 0 nor 1), but there was stderr
-                    logger.warning(
-                        f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner failure context for SBOM ID {sbom_id} "
-                        f"(code {process.returncode}): {stderr_content}"
-                    )
-
-            # For non-zero exit codes that are not 1 (vulns found), raise the exception
-            if process.returncode != 0 and process.returncode != 1:
-                raise subprocess.CalledProcessError(
-                    process.returncode, scan_command_str, process.stdout, process.stderr
-                )
-
-            logger.info(f"[TASK_scan_sbom_for_vulnerabilities] Completed vulnerability scan for SBOM ID: {sbom_id}")
-
-            # Store results in Redis
-            redis_client = dramatiq.get_broker().client
-            redis_client.set(
-                f"osv_scan_result:{sbom_id}:{datetime.now(timezone.utc).isoformat()}",
-                process.stdout,
-                ex=settings.OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS,  # Use setting here
-            )
-            logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Scan results for SBOM ID {sbom_id} stored in Redis")
-
-        except subprocess.TimeoutExpired:
-            logger.error(
-                f"[TASK_scan_sbom_for_vulnerabilities] OSV scanner timed out after "
-                f"{settings.OSV_SCANNER_TIMEOUT_SECONDS} seconds for SBOM ID {sbom_id}. Command: {scan_command_str}",
-                exc_info=True,
-            )
-            # Store timeout error in Redis so the UI can display it
-            error_data = {
-                "error": "Vulnerability scan timed out",
-                "details": (
-                    f"The scan exceeded the maximum allowed time of {settings.OSV_SCANNER_TIMEOUT_SECONDS} seconds. "
-                    f"This may indicate a very large SBOM or slow network connectivity to vulnerability databases."
-                ),
-                "timeout_seconds": settings.OSV_SCANNER_TIMEOUT_SECONDS,
-                "sbom_filename": sbom_instance.sbom_filename if sbom_instance else None,
-            }
-            redis_client = dramatiq.get_broker().client
-            redis_client.set(
-                f"osv_scan_result:{sbom_id}:{datetime.now(timezone.utc).isoformat()}",
-                json.dumps(error_data),
-                ex=settings.OSV_SCANNER_RAW_RESULT_EXPIRY_SECONDS,
-            )
-            # Return error instead of raising to prevent retries on timeout
-            return error_data
-
-        finally:
-            # 5. Clean up temporary file
-            if os.path.exists(temp_sbom_file):
-                os.remove(temp_sbom_file)
-                logger.debug(f"[TASK_scan_sbom_for_vulnerabilities] Cleaned up temporary file: {temp_sbom_file}")
-
-        return {
-            "sbom_id": sbom_id,
-            "status": "Scan completed.",
-            "message": "Scan successful, results stored in Redis.",
-            "scan_output_preview": json.loads(process.stdout).get("results", [])[:1]
-            if process.stdout
-            else None,  # Preview of first result item
-        }
+        return results
 
     except SBOM.DoesNotExist:
-        logger.error(f"[TASK_scan_sbom_for_vulnerabilities] SBOM with ID {sbom_id} not found.")
+        logger.error(f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM with ID {sbom_id} not found.")
         return {"error": f"SBOM with ID {sbom_id} not found"}
-    except subprocess.CalledProcessError as e:
-        logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] osv-scanner failed for SBOM ID {sbom_id}. "
-            f"Return code: {e.returncode}. Output: {e.output}. Stderr: {e.stderr}",
-            exc_info=True,
-        )
-        # Include scanner output in the error if possible
-        error_detail = {
-            "error": "osv-scanner execution failed.",
-            "return_code": e.returncode,
-            "stdout": e.stdout,
-            "stderr": e.stderr,
-        }
-        if sbom_instance:  # Add sbom_filename if available
-            error_detail["sbom_filename"] = sbom_instance.sbom_filename
-        # Do not re-raise here if tenacity should not retry subprocess errors,
-        # or re-raise if retries are desired for transient scanner issues.
-        # For now, returning error to prevent retry loops on persistent scan failures.
-        return error_detail
     except (DatabaseError, OperationalError) as db_err:
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] Database error occurred "
+            f"processing SBOM ID {sbom_id}: {db_err}",
             exc_info=True,
         )
         raise  # Re-raise to allow tenacity to handle retries
     except ConnectionError as conn_err:  # General connection error
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] Connection error occurred processing SBOM "
+            f"ID {sbom_id}: {conn_err}",
             exc_info=True,
         )
         raise  # Re-raise to allow tenacity to handle retries
     except Exception as e:
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
+            f"[TASK_scan_sbom_for_vulnerabilities_unified] An unexpected error occurred processing "
+            f"SBOM ID {sbom_id}: {e}",
             exc_info=True,
         )
         # For unexpected errors, it's often better to let Dramatiq handle retries if configured.
         raise
+
+
+@dramatiq.actor(queue_name="weekly_vulnerability_scan", max_retries=3, time_limit=900000, store_results=True)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_delay(300),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def weekly_vulnerability_scan_task(
+    days_back: int = 7, team_key: str = None, force_rescan: bool = False, max_releases: int = None
+) -> Dict[str, Any]:
+    """
+    Weekly vulnerability scanning task for all tagged releases.
+
+    This task:
+    1. Finds all releases with tagged SBOMs within the specified timeframe
+    2. Scans each SBOM using the team's configured vulnerability provider
+    3. Stores results in PostgreSQL for time series analysis
+    4. Tracks scan progress and provides detailed reporting
+
+    Args:
+        days_back: Only scan releases created in the last N days (default: 7)
+        team_key: Only scan releases for a specific team (for testing)
+        force_rescan: Force rescan even if recent scans exist
+        max_releases: Maximum number of releases to scan (for testing)
+
+    Returns:
+        Dictionary with scan statistics and results
+    """
+    logger.info("[TASK_weekly_vulnerability_scan] Starting weekly vulnerability scan")
+
+    try:
+        from vulnerability_scanning.services import get_weekly_scan_targets, perform_weekly_scans
+
+        # Get scan targets
+        releases = get_weekly_scan_targets(days_back, team_key, max_releases)
+
+        if not releases:
+            logger.info("[TASK_weekly_vulnerability_scan] No releases found for scanning")
+            return {
+                "status": "completed",
+                "total_releases": 0,
+                "total_sboms": 0,
+                "successful_scans": 0,
+                "failed_scans": 0,
+                "skipped_scans": 0,
+                "message": "No releases found for scanning",
+            }
+
+        # Perform scans (OSV is now available for all teams)
+        scan_results = perform_weekly_scans(releases, force_rescan)
+
+        logger.info(
+            f"[TASK_weekly_vulnerability_scan] Weekly vulnerability scan completed. "
+            f"Processed {scan_results['total_releases']} releases, "
+            f"{scan_results['successful_scans']} successful scans"
+        )
+
+        return {"status": "completed", **scan_results, "completed_at": django_timezone.now().isoformat()}
+
+    except Exception as e:
+        logger.exception("[TASK_weekly_vulnerability_scan] Weekly vulnerability scan failed")
+        return {"status": "failed", "error": str(e), "failed_at": django_timezone.now().isoformat()}
+
+
+# Note: vulnerability_scanning.tasks module still exists but is not imported here
+# to avoid duplicate actor registration. The main tasks are now centralized here.
 
 
 # Example task for testing
