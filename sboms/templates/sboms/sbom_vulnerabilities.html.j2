@@ -136,12 +136,19 @@
     margin-top: 0.5rem;
 }
 
+.references-details summary {
+    display: flex;
+    align-items: center;
+}
+
 .references-summary {
     cursor: pointer;
     list-style: none;
     padding: 0.25rem 0;
     border-radius: 0.25rem;
     transition: background-color 0.2s ease;
+    outline: none;
+    user-select: none;
 }
 
 .references-summary:hover {
@@ -162,10 +169,14 @@
     font-size: 0.8rem;
 }
 
+/* Chevron animation */
+.references-summary .fa-chevron-right {
+    transition: transform 0.2s ease;
+}
+
 /* Rotate chevron when expanded */
 details[open] .references-summary .fa-chevron-right {
     transform: rotate(90deg);
-    transition: transform 0.2s ease;
 }
 
 /* Vulnerability card styling */

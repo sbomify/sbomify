@@ -26,6 +26,7 @@ COPY sboms/js/ ./sboms/js/
 COPY teams/js/ ./teams/js/
 COPY billing/js/ ./billing/js/
 COPY documents/js/ ./documents/js/
+COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
 
 # Run the build for production - assumes output is to 'staticfiles' directory
 RUN bun run build
@@ -47,6 +48,7 @@ COPY sboms/js/ ./sboms/js/
 COPY teams/js/ ./teams/js/
 COPY billing/js/ ./billing/js/
 COPY documents/js/ ./documents/js/
+COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

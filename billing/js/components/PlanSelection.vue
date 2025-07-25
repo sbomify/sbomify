@@ -32,7 +32,7 @@
     </section>
 
     <!-- Current Usage Section -->
-    <section class="usage-section py-4" v-if="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0">
+    <section v-if="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0" class="usage-section py-4">
       <div class="container">
         <div class="row justify-content-center">
           <div class="col-lg-8">
@@ -71,14 +71,14 @@
     <section class="pricing-section py-5">
       <div class="container">
         <div class="row justify-content-center">
-                    <div class="col-lg-4 col-md-6 mb-4" v-for="planKey in ['community', 'business', 'enterprise']" :key="planKey">
-            <div class="pricing-card" v-if="getPlan(planKey)" :class="{
+                    <div v-for="planKey in ['community', 'business', 'enterprise']" :key="planKey" class="col-lg-4 col-md-6 mb-4">
+            <div v-if="getPlan(planKey)" class="pricing-card" :class="{
               'current-plan': isCurrentPlan(getPlan(planKey)!),
               'popular': planKey === 'business',
               'enterprise': planKey === 'enterprise'
             }">
               <!-- Popular Badge -->
-              <div class="popular-badge" v-if="planKey === 'business'">
+              <div v-if="planKey === 'business'" class="popular-badge">
                 <i class="fas fa-star me-1"></i>
                 Most Popular
               </div>
@@ -94,7 +94,7 @@
                   <template v-else-if="planKey === 'business'">
                     <span class="price-main">${{ billingPeriod === 'monthly' ? '199' : '159' }}</span>
                     <span class="price-period">/month</span>
-                    <div class="billing-note" v-if="billingPeriod === 'annual'">
+                    <div v-if="billingPeriod === 'annual'" class="billing-note">
                       <span class="original-price">$199/mo</span>
                       <span class="savings">Save $480/year</span>
                     </div>
@@ -135,7 +135,7 @@
                  </button>
 
                  <!-- Warning Message -->
-                 <div class="warning-message" v-if="!canDowngrade(getPlan(planKey)!).can">
+                 <div v-if="!canDowngrade(getPlan(planKey)!).can" class="warning-message">
                    <i class="fas fa-exclamation-triangle me-1"></i>
                    {{ canDowngrade(getPlan(planKey)!).message }}
                  </div>
@@ -158,12 +158,12 @@
             </div>
 
             <div class="faq-list">
-              <div class="faq-item" v-for="faq in getFAQs()" :key="faq.id">
+              <div v-for="faq in getFAQs()" :key="faq.id" class="faq-item">
                 <div class="faq-question" @click="toggleFAQ(faq.id)">
                   <span>{{ faq.question }}</span>
                   <i class="fas fa-chevron-down" :class="{ 'rotated': faq.expanded }"></i>
                 </div>
-                <div class="faq-answer" v-if="faq.expanded">
+                <div v-if="faq.expanded" class="faq-answer">
                   <p>{{ faq.answer }}</p>
                 </div>
               </div>
