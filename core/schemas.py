@@ -164,12 +164,14 @@ class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    description: str = Field(default="", max_length=1000)
 
 
 class ProductUpdateSchema(BaseModel):
     """Schema for updating a Product."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    description: str = Field(default="", max_length=1000)
     is_public: bool = False
 
 
@@ -177,6 +179,7 @@ class ProductPatchSchema(BaseModel):
     """Schema for partially updating a Product using PATCH."""
 
     name: str | None = Field(None, max_length=255, min_length=1)
+    description: str | None = Field(None, max_length=1000)
     is_public: bool | None = None
     project_ids: list[str] | None = None
 
@@ -186,6 +189,7 @@ class ProductResponseSchema(BaseModel):
 
     id: str
     name: str
+    description: str
     team_id: str
     created_at: datetime
     is_public: bool

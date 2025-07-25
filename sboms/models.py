@@ -21,6 +21,7 @@ class Product(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, blank=False)
+    description = models.TextField(blank=True, help_text="Optional product description")
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
     projects = models.ManyToManyField("sboms.Project", through="sboms.ProductProject")

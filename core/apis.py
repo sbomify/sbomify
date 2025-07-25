@@ -148,6 +148,7 @@ def _build_item_response(item, item_type: str):
     }
 
     if item_type == "product":
+        base_response["description"] = item.description
         base_response["project_count"] = item.projects.count()
         # Include actual projects data for frontend
         base_response["projects"] = [
@@ -320,6 +321,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
         with transaction.atomic():
             product = Product.objects.create(
                 name=payload.name,
+                description=payload.description,
                 team_id=team_id,
             )
 
@@ -424,6 +426,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
     try:
         with transaction.atomic():
             product.name = payload.name
+            product.description = payload.description
             product.is_public = payload.is_public
             product.save()
 
