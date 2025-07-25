@@ -1,5 +1,42 @@
 import 'vite/modulepreload-polyfill';
 
+// Bootstrap CSS and JS
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
+// Chart.js - make available globally for admin dashboard
+import {
+  Chart,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+// Register Chart.js components
+Chart.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+// Make Chart available globally
+declare global {
+  interface Window {
+    Chart: typeof Chart;
+  }
+}
+window.Chart = Chart;
+
+// Feather Icons - import with proper typing
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const feather = require('feather-icons') as { replace(): void; icons: Record<string, unknown> };
+
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
 import { eventBus, EVENTS } from './utils';
@@ -87,12 +124,9 @@ mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
 mountVueComponent('vc-releases-list', ReleasesList);
 mountVueComponent('vc-release-list', ReleaseList);
 
-// Declare the global feather variable
+// Declare global variables
 declare global {
   interface Window {
-    feather: {
-      replace(): void;
-    };
     eventBus: typeof eventBus;
     EVENTS: typeof EVENTS;
   }
@@ -122,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Initialize Feather icons
-  window.feather.replace();
+  feather.replace();
 });
 
 // Export something to make TypeScript happy
