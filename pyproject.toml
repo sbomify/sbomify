@@ -41,7 +41,7 @@ dramatiq-crontab = "^1.0.11"
 ipython = "^8.37.0"
 ruff = "^0.12.5"
 bandit = "^1.8.6"
-django-debug-toolbar = "^5.2.0"
+django-debug-toolbar = "^6.0.0"
 pre-commit = "^4.2.0"
 datamodel-code-generator = {extras = ["http"], version = "^0.31.2"}
 pytest-json-report = "^1.5.0"
