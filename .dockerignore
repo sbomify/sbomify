@@ -6,3 +6,4 @@ fly.toml
 poetry.toml
 localstack-volume/
 test_env
+sboms/tests/test_data/osv-scanner.toml

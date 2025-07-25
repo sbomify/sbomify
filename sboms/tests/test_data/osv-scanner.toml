@@ -1,0 +1,5 @@
+# ignore everything in the sboms/tests/test_data directory so that scorecard
+# checks don't scan test SBOMs (and report false positives from them)
+[[PackageOverrides]]
+ignore = true
+reason = "Test SBOMs should not be included in Scorecard checks"
