@@ -1,17 +1,43 @@
-"""
-Dramatiq tasks for the sbomify application.
+# IMPORTANT: Queue name changes and task reorganization
+# =====================================================
+#
+# This file contains SBOM processing tasks. The following changes have been made:
+#
+# 1. Queue Name Changes:
+#    - OLD: queue_name="sbom_vulnerability_scanning"
+#    - NEW: queue_name="sbom_processing"
+#
+#    MIGRATION REQUIRED: Update worker configurations to process the new queue names
+#    Workers should be configured to handle both old and new queue names during transition
+#
+# 2. Task Reorganization:
+#    - Vulnerability scanning tasks moved to vulnerability_scanning.tasks module
+#    - This module now focuses on SBOM processing and component creation
+#    - NTIA compliance checking task removed (functionality moved elsewhere)
+#
+# 3. Worker Configuration Notes:
+#    - Ensure workers are configured to process "sbom_processing" queue
+#    - Vulnerability scanning workers should process vulnerability_scanning queues:
+#      * sbom_vulnerability_scanning (for compatibility)
+#      * weekly_vulnerability_scan
+#      * dt_health_check
+#      * dt_periodic_polling
+#      * dt_hourly_setup
+#
+# 4. Deployment Considerations:
+#    - Deploy workers with new queue configurations before deploying this code
+#    - Monitor queue depths during transition period
+#    - Old queue names can be deprecated after successful migration
 
-This module contains all the background tasks that are processed by Dramatiq workers.
-"""
+"""Dramatiq tasks for SBOM processing and component management."""
 
+import json
 import logging
 import os
-from datetime import datetime, timezone
 from typing import Any, Dict
 
 import dramatiq
-from django.db import transaction
-from django.utils import timezone as django_timezone
+from django.db import DatabaseError, OperationalError, connection, transaction
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
@@ -30,11 +56,7 @@ import django  # noqa: E402
 django.setup()
 
 
-import json  # noqa: E402
-
 from django.conf import settings  # noqa: E402
-from django.db import connection  # noqa: E402
-from django.db.utils import DatabaseError, OperationalError  # noqa: E402
 
 from core.object_store import S3Client  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
@@ -57,302 +79,141 @@ def log_retry_attempt(retry_state):
     )
 
 
-# License processing task has been removed - functionality moved to native model fields
-# License processing is now handled directly during SBOM upload via ComponentLicense model
-
-
-@dramatiq.actor(queue_name="sbom_ntia_compliance", max_retries=3, time_limit=300000, store_results=True)
-@retry(
-    retry=retry_if_exception_type((OperationalError, ConnectionError)),
-    wait=wait_exponential(multiplier=1, min=1, max=5),  # Start with 1s, max 5s between retries
-    stop=stop_after_delay(30),  # Stop after 30s total
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
-def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
-    """
-    Check SBOM for NTIA minimum elements compliance.
-
-    Downloads the SBOM from S3, validates it against NTIA requirements,
-    and stores the results in the database.
-    """
-    logger.info(f"[TASK_check_sbom_ntia_compliance] Starting NTIA compliance check for SBOM ID: {sbom_id}")
-
-    try:
-        with transaction.atomic():
-            # Ensure database connection is alive
-            connection.ensure_connection()
-
-            logger.info(f"[TASK_check_sbom_ntia_compliance] Fetching SBOM ID: {sbom_id} from database.")
-            sbom = SBOM.objects.select_for_update().get(id=sbom_id)
-            logger.info(
-                f"[TASK_check_sbom_ntia_compliance] SBOM ID: {sbom_id} fetched. "
-                f"Format: {sbom.format}, Filename: {sbom.sbom_filename}"
-            )
-
-            if not sbom.sbom_filename:
-                logger.error(f"[TASK_check_sbom_ntia_compliance] SBOM ID: {sbom_id} has no sbom_filename.")
-                return {"error": f"SBOM ID: {sbom_id} has no sbom_filename."}
-
-            # Download SBOM from S3
-            logger.debug(f"[TASK_check_sbom_ntia_compliance] Downloading SBOM {sbom.sbom_filename} from S3.")
-            s3_client = S3Client(bucket_type="SBOMS")
-            sbom_data_bytes = s3_client.get_sbom_data(sbom.sbom_filename)
-
-            if not sbom_data_bytes:
-                logger.error(
-                    f"[TASK_check_sbom_ntia_compliance] Failed to download SBOM "
-                    f"{sbom.sbom_filename} from S3 (empty data)."
-                )
-                return {"error": f"Failed to download SBOM {sbom.sbom_filename} from S3 (empty data)."}
-
-            logger.debug(
-                f"[TASK_check_sbom_ntia_compliance] Downloaded {len(sbom_data_bytes)} bytes for {sbom.sbom_filename}."
-            )
-
-            # Parse SBOM data
-            try:
-                sbom_data_str = sbom_data_bytes.decode("utf-8")
-                sbom_data = json.loads(sbom_data_str)
-                logger.debug(
-                    f"[TASK_check_sbom_ntia_compliance] SBOM {sbom.sbom_filename} successfully parsed as JSON."
-                )
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.error(
-                    f"[TASK_check_sbom_ntia_compliance] SBOM {sbom.sbom_filename} "
-                    f"is not valid JSON or has encoding issues. Error: {e}"
-                )
-                return {
-                    "error": f"SBOM {sbom.sbom_filename} content is not valid JSON or has encoding issues.",
-                    "details": str(e),
-                }
-
-            # Perform NTIA compliance validation
-            from sboms.ntia_validator import validate_sbom_ntia_compliance
-
-            logger.debug(f"[TASK_check_sbom_ntia_compliance] Running NTIA validation for SBOM {sbom_id}")
-            validation_result = validate_sbom_ntia_compliance(sbom_data, sbom.format)
-
-            # Update SBOM with validation results
-            sbom.ntia_compliance_status = validation_result.status.value
-            # Convert result to dict with JSON-serializable datetime
-            result_dict = validation_result.dict()
-            if "checked_at" in result_dict and result_dict["checked_at"]:
-                result_dict["checked_at"] = result_dict["checked_at"].isoformat()
-            sbom.ntia_compliance_details = result_dict
-            sbom.ntia_compliance_checked_at = datetime.now(timezone.utc)
-            sbom.save()
-
-            logger.info(
-                f"[TASK_check_sbom_ntia_compliance] NTIA compliance check completed for SBOM ID: {sbom_id}. "
-                f"Status: {validation_result.status.value}, Errors: {validation_result.error_count}"
-            )
-
-            return {
-                "sbom_id": sbom_id,
-                "status": "NTIA compliance check completed",
-                "compliance_status": validation_result.status.value,
-                "is_compliant": validation_result.is_compliant,
-                "error_count": validation_result.error_count,
-                "message": "NTIA compliance check completed successfully",
-            }
-
-    except SBOM.DoesNotExist:
-        logger.error(f"[TASK_check_sbom_ntia_compliance] SBOM with ID {sbom_id} not found.")
-        return {"error": f"SBOM with ID {sbom_id} not found"}
-    except (DatabaseError, OperationalError) as db_err:
-        logger.error(
-            f"[TASK_check_sbom_ntia_compliance] Database error occurred processing SBOM ID {sbom_id}: {db_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
-    except ConnectionError as conn_err:
-        logger.error(
-            f"[TASK_check_sbom_ntia_compliance] Connection error occurred processing SBOM ID {sbom_id}: {conn_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
-    except Exception as e:
-        logger.error(
-            f"[TASK_check_sbom_ntia_compliance] An unexpected error occurred processing SBOM ID {sbom_id}: {e}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow Dramatiq to handle retries
-
-
-@dramatiq.actor(queue_name="sbom_vulnerability_scanning", max_retries=3, time_limit=360000, store_results=True)
+@dramatiq.actor(queue_name="sbom_processing", max_retries=3, time_limit=300000, store_results=True)
 @retry(
     retry=retry_if_exception_type((OperationalError, DatabaseError)),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     stop=stop_after_delay(60),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def scan_sbom_for_vulnerabilities_unified(sbom_id: str) -> Dict[str, Any]:
+def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
     """
-    Unified vulnerability scanning task that routes to OSV or Dependency Track based on team settings.
+    Process an SBOM file and create Component instances.
 
-    This replaces the original OSV-only scanning task with a provider-agnostic approach.
+    This is a comprehensive task that:
+    1. Downloads SBOM from S3
+    2. Parses SBOM metadata
+    3. Creates/updates Component instances
+    4. Creates License mappings
+    5. Handles packaging metadata
+    6. Stores vulnerabilities from the SBOM
+    7. Queues vulnerability scanning task
+
+    Args:
+        sbom_id: UUID of the SBOM to process
+
+    Returns:
+        Dictionary with processing results and statistics
     """
-    logger.info(f"[TASK_scan_sbom_for_vulnerabilities_unified] Starting vulnerability scan for SBOM ID: {sbom_id}")
+    logger.info(f"[TASK_process_sbom] Starting SBOM processing for ID: {sbom_id}")
     sbom_instance = None
 
     try:
         # 1. Fetch SBOM metadata
         with transaction.atomic():
             connection.ensure_connection()
-            logger.debug(f"[TASK_scan_sbom_for_vulnerabilities_unified] Fetching SBOM ID: {sbom_id} from database.")
+            logger.debug(f"[TASK_process_sbom] Fetching SBOM ID: {sbom_id} from database.")
             sbom_instance = SBOM.objects.get(id=sbom_id)
             logger.debug(
-                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM ID: {sbom_id} fetched. "
+                f"[TASK_process_sbom] SBOM ID: {sbom_id} fetched. "
                 f"Filename: {sbom_instance.sbom_filename}, Team: {sbom_instance.component.team.key}"
             )
 
         if not sbom_instance.sbom_filename:
-            logger.error(f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM ID: {sbom_id} has no sbom_filename.")
+            logger.error(f"[TASK_process_sbom] SBOM ID: {sbom_id} has no sbom_filename.")
             return {"error": f"SBOM ID: {sbom_id} has no sbom_filename."}
 
         # 2. Download SBOM from S3
-        logger.debug(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] Downloading SBOM {sbom_instance.sbom_filename} from S3."
-        )
+        logger.debug(f"[TASK_process_sbom] Downloading SBOM {sbom_instance.sbom_filename} from S3.")
         s3_client = S3Client(bucket_type="SBOMS")
         sbom_data_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
         if not sbom_data_bytes:
             logger.error(
-                f"[TASK_scan_sbom_for_vulnerabilities_unified] Failed to download SBOM "
-                f"{sbom_instance.sbom_filename} from S3 (empty data)."
+                f"[TASK_process_sbom] Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."
             )
             return {"error": f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."}
 
-        logger.debug(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] Downloaded {len(sbom_data_bytes)} bytes "
-            f"for {sbom_instance.sbom_filename}."
-        )
+        logger.debug(f"[TASK_process_sbom] Downloaded {len(sbom_data_bytes)} bytes for {sbom_instance.sbom_filename}.")
 
         # Attempt to parse as JSON to check basic integrity
         try:
-            json.loads(sbom_data_bytes.decode("utf-8"))
-            logger.debug(
-                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM {sbom_instance.sbom_filename} "
-                f"successfully parsed as JSON."
-            )
+            sbom_data = json.loads(sbom_data_bytes.decode("utf-8"))
+            logger.debug(f"[TASK_process_sbom] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON.")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(
-                f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM {sbom_instance.sbom_filename} "
-                f"is not valid JSON or has encoding issues. Error: {e}. "
-                f"First 200 chars: {sbom_data_bytes[:200]}"
+                f"[TASK_process_sbom] SBOM {sbom_instance.sbom_filename} is not valid JSON or has encoding issues. "
+                f"Error: {e}. First 200 chars: {sbom_data_bytes[:200]}"
             )
             return {
                 "error": (f"SBOM {sbom_instance.sbom_filename} content is not valid JSON or has encoding issues."),
                 "details": str(e),
             }
 
-        # 3. Perform vulnerability scan using the unified service
-        from vulnerability_scanning.services import VulnerabilityScanningService
+        # 3. Process SBOM using unified processor
+        from sboms.utils import process_sbom_data
 
-        service = VulnerabilityScanningService()
-        results = service.scan_sbom_for_vulnerabilities(sbom_instance, sbom_data_bytes, scan_trigger="upload")
+        results = process_sbom_data(sbom_instance, sbom_data)
 
         logger.info(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] Completed vulnerability scan for SBOM ID: {sbom_id}. "
-            f"Results: {results.get('summary', 'No summary available')}"
+            f"[TASK_process_sbom] Completed SBOM processing for ID: {sbom_id}. "
+            f"Created/updated {results.get('components_processed', 0)} components"
         )
+
+        # 4. Queue vulnerability scanning task
+        try:
+            from vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
+
+            scan_task = scan_sbom_for_vulnerabilities_unified.send(sbom_id)
+            logger.info(f"[TASK_process_sbom] Queued vulnerability scan task {scan_task.message_id} for SBOM {sbom_id}")
+            results["vulnerability_scan_queued"] = scan_task.message_id
+        except Exception as e:
+            logger.warning(f"[TASK_process_sbom] Failed to queue vulnerability scan for SBOM {sbom_id}: {e}")
+            results["vulnerability_scan_error"] = str(e)
 
         return results
 
     except SBOM.DoesNotExist:
-        logger.error(f"[TASK_scan_sbom_for_vulnerabilities_unified] SBOM with ID {sbom_id} not found.")
-        return {"error": f"SBOM with ID {sbom_id} not found"}
+        error_msg = f"SBOM with ID {sbom_id} not found"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
     except (DatabaseError, OperationalError) as db_err:
-        logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] Database error occurred "
-            f"processing SBOM ID {sbom_id}: {db_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
-    except ConnectionError as conn_err:  # General connection error
-        logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] Connection error occurred processing SBOM "
-            f"ID {sbom_id}: {conn_err}",
-            exc_info=True,
-        )
-        raise  # Re-raise to allow tenacity to handle retries
+        error_msg = f"Database error occurred processing SBOM ID {sbom_id}: {db_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
+        # Critical database errors should be retried
+        raise
+    except json.JSONDecodeError as json_err:
+        error_msg = f"SBOM {sbom_id} contains invalid JSON: {json_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        # JSON errors are not retryable - return failure immediately
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+    except FileNotFoundError as file_err:
+        error_msg = f"SBOM file not found for ID {sbom_id}: {file_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}")
+        # File not found is not retryable - return failure immediately
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+    except ImportError as import_err:
+        error_msg = f"Missing required module for SBOM processing: {import_err}"
+        logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
+        # Import errors indicate environment issues - should not retry automatically
+        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
     except Exception as e:
+        # Log the full exception details for debugging
         logger.error(
-            f"[TASK_scan_sbom_for_vulnerabilities_unified] An unexpected error occurred processing "
-            f"SBOM ID {sbom_id}: {e}",
+            f"[TASK_process_sbom] Unexpected error processing SBOM ID {sbom_id}: {type(e).__name__}: {e}",
             exc_info=True,
+            extra={"sbom_id": sbom_id, "error_type": type(e).__name__},
         )
-        # For unexpected errors, it's often better to let Dramatiq handle retries if configured.
+        # For truly unexpected errors, let Dramatiq handle retries
         raise
 
 
-@dramatiq.actor(queue_name="weekly_vulnerability_scan", max_retries=3, time_limit=900000, store_results=True)
-@retry(
-    retry=retry_if_exception_type((OperationalError, DatabaseError)),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-    stop=stop_after_delay(300),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
-def weekly_vulnerability_scan_task(
-    days_back: int = 7, team_key: str = None, force_rescan: bool = False, max_releases: int = None
-) -> Dict[str, Any]:
-    """
-    Weekly vulnerability scanning task for all tagged releases.
-
-    This task:
-    1. Finds all releases with tagged SBOMs within the specified timeframe
-    2. Scans each SBOM using the team's configured vulnerability provider
-    3. Stores results in PostgreSQL for time series analysis
-    4. Tracks scan progress and provides detailed reporting
-
-    Args:
-        days_back: Only scan releases created in the last N days (default: 7)
-        team_key: Only scan releases for a specific team (for testing)
-        force_rescan: Force rescan even if recent scans exist
-        max_releases: Maximum number of releases to scan (for testing)
-
-    Returns:
-        Dictionary with scan statistics and results
-    """
-    logger.info("[TASK_weekly_vulnerability_scan] Starting weekly vulnerability scan")
-
-    try:
-        from vulnerability_scanning.services import get_weekly_scan_targets, perform_weekly_scans
-
-        # Get scan targets
-        releases = get_weekly_scan_targets(days_back, team_key, max_releases)
-
-        if not releases:
-            logger.info("[TASK_weekly_vulnerability_scan] No releases found for scanning")
-            return {
-                "status": "completed",
-                "total_releases": 0,
-                "total_sboms": 0,
-                "successful_scans": 0,
-                "failed_scans": 0,
-                "skipped_scans": 0,
-                "message": "No releases found for scanning",
-            }
-
-        # Perform scans (OSV is now available for all teams)
-        scan_results = perform_weekly_scans(releases, force_rescan)
-
-        logger.info(
-            f"[TASK_weekly_vulnerability_scan] Weekly vulnerability scan completed. "
-            f"Processed {scan_results['total_releases']} releases, "
-            f"{scan_results['successful_scans']} successful scans"
-        )
-
-        return {"status": "completed", **scan_results, "completed_at": django_timezone.now().isoformat()}
-
-    except Exception:
-        logger.exception("[TASK_weekly_vulnerability_scan] Weekly vulnerability scan failed")
-        return {"status": "failed", "error": "Task failed", "failed_at": django_timezone.now().isoformat()}
-
-
-# Note: vulnerability_scanning.tasks module still exists but is not imported here
-# to avoid duplicate actor registration. The main tasks are now centralized here.
+# Note: Vulnerability scanning tasks have been moved to vulnerability_scanning.tasks module
+# to avoid duplication and provide better organization. This includes:
+# - scan_sbom_for_vulnerabilities_unified
+# - weekly_vulnerability_scan_task
+# - periodic_dependency_track_polling_task
+# - recurring_dependency_track_backfill_task
 
 
 # Example task for testing
