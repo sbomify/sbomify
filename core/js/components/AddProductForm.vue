@@ -8,7 +8,7 @@
         </div>
         <div class="modal-body pt-3">
           <form @submit.prevent="createProduct">
-            <div class="mb-4">
+            <div class="mb-3">
               <label class="form-label text-secondary fw-medium" for="productName">
                 Name
                 <span class="text-danger">*</span>
@@ -25,6 +25,18 @@
               <div v-if="errorMessage" class="invalid-feedback d-block">
                 {{ errorMessage }}
               </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label text-secondary fw-medium" for="productDescription">
+                Description (Optional)
+              </label>
+              <textarea
+                id="productDescription"
+                v-model="productDescription"
+                class="form-control"
+                rows="3"
+                placeholder="Describe your product..."
+              ></textarea>
             </div>
             <div class="d-flex justify-content-end gap-2 mt-4">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -45,6 +57,7 @@ import { showSuccess, showError } from '../../../core/js/alerts'
 import { eventBus, EVENTS } from '../../../core/js/utils'
 
 const productName = ref('')
+const productDescription = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const nameInput = ref<HTMLInputElement>()
@@ -67,7 +80,8 @@ const createProduct = async () => {
         'Accept': 'application/json'
       },
       body: JSON.stringify({
-        name: productName.value.trim()
+        name: productName.value.trim(),
+        description: productDescription.value.trim()
       })
     })
 
@@ -94,6 +108,7 @@ const createProduct = async () => {
 
 const resetForm = () => {
   productName.value = ''
+  productDescription.value = ''
   errorMessage.value = ''
   isLoading.value = false
 }
