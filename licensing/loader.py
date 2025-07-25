@@ -65,10 +65,10 @@ def validate_expression(expr: str) -> dict:
 
     try:
         tree = licensing.parse(expr, validate=False)
-    except ExpressionError as e:
-        return {"status": 400, "error": str(e)}
-    except Exception as e:
-        return {"status": 400, "error": f"Invalid expression: {str(e)}"}
+    except ExpressionError:
+        return {"status": 400, "error": "Processing error"}
+    except Exception:
+        return {"status": 400, "error": "Invalid expression"}
 
     # Get tokens from the parsed tree - these are the individual license identifiers
     tokens = []

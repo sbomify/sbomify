@@ -165,5 +165,5 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
         return 404, {"detail": "Team not found"}
     except BillingPlan.DoesNotExist:
         return 400, {"detail": "Invalid plan"}
-    except Exception as e:
-        return 400, {"detail": str(e)}
+    except Exception:
+        return 400, {"detail": "Invalid request"}

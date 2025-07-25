@@ -346,9 +346,9 @@ def weekly_vulnerability_scan_task(
 
         return {"status": "completed", **scan_results, "completed_at": django_timezone.now().isoformat()}
 
-    except Exception as e:
+    except Exception:
         logger.exception("[TASK_weekly_vulnerability_scan] Weekly vulnerability scan failed")
-        return {"status": "failed", "error": str(e), "failed_at": django_timezone.now().isoformat()}
+        return {"status": "failed", "error": "Task failed", "failed_at": django_timezone.now().isoformat()}
 
 
 # Note: vulnerability_scanning.tasks module still exists but is not imported here

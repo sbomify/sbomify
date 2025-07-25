@@ -336,7 +336,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
         return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating product: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -376,7 +376,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing products: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -439,7 +439,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         }
     except Exception as e:
         log.error(f"Error updating product {product_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -532,7 +532,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         }
     except Exception as e:
         log.error(f"Error patching product {product_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -554,7 +554,7 @@ def delete_product(request: HttpRequest, product_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product {product_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -614,7 +614,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         }
     except Exception as e:
         log.error(f"Error creating product identifier: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -660,7 +660,7 @@ def list_product_identifiers(request: HttpRequest, product_id: str, page: int = 
         return 200, {"items": items, "pagination": pagination_meta}
     except Exception as e:
         log.error(f"Error listing product identifiers: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -719,7 +719,7 @@ def update_product_identifier(
         }
     except Exception as e:
         log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -759,7 +759,7 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product identifier {identifier_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -821,7 +821,7 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
         }
     except Exception as e:
         log.error(f"Error bulk updating product identifiers: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -872,7 +872,7 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
         }
     except Exception as e:
         log.error(f"Error creating product link: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -920,7 +920,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         return 200, {"items": items, "pagination": pagination_meta}
     except Exception as e:
         log.error(f"Error listing product links: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -968,7 +968,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
         }
     except Exception as e:
         log.error(f"Error updating product link {link_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -998,7 +998,7 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting product link {link_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
@@ -1054,7 +1054,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
         }
     except Exception as e:
         log.error(f"Error bulk updating product links: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1102,7 +1102,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
         return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating project: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1135,7 +1135,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing projects: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1197,7 +1197,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
         }
     except Exception as e:
         log.error(f"Error updating project {project_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -1303,7 +1303,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
         }
     except Exception as e:
         log.error(f"Error patching project {project_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -1326,7 +1326,7 @@ def delete_project(request: HttpRequest, project_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting project {project_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1375,7 +1375,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
         return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating component: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1408,7 +1408,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
         log.error(f"Error listing components: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1471,7 +1471,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
         }
     except Exception as e:
         log.error(f"Error updating component {component_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -1536,7 +1536,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         }
     except Exception as e:
         log.error(f"Error patching component {component_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -1571,7 +1571,7 @@ def delete_component(request: HttpRequest, component_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting component {component_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1782,7 +1782,7 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         return 422, {"detail": str(ve.errors())}
     except Exception as e:
         log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1876,7 +1876,7 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
 
     except Exception as e:
         log.error(f"Error listing releases for component {component_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2042,7 +2042,7 @@ def download_project_sbom(request: HttpRequest, project_id: str):
             return response
     except Exception as e:
         log.error(f"Error generating project SBOM {project_id}: {e}")
-        return 500, {"detail": f"Error generating project SBOM: {str(e)}"}
+        return 500, {"detail": "Error generating project SBOM"}
 
 
 @router.get(
@@ -2077,7 +2077,7 @@ def download_product_sbom(request: HttpRequest, product_id: str):
             return response
     except Exception as e:
         log.error(f"Error generating product SBOM {product_id}: {e}")
-        return 500, {"detail": f"Error generating product SBOM: {str(e)}"}
+        return 500, {"detail": "Error generating product SBOM"}
 
 
 # =============================================================================
@@ -2181,7 +2181,7 @@ def list_all_releases(
 
     except Exception as e:
         log.error(f"Error listing all releases: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 def _build_release_response(release: Release, include_artifacts: bool = False) -> dict:
@@ -2302,7 +2302,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
         }
     except Exception as e:
         log.error(f"Error creating release: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -2381,7 +2381,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         }
     except Exception as e:
         log.error(f"Error updating release {release_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
@@ -2443,7 +2443,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         }
     except Exception as e:
         log.error(f"Error patching release {release_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
@@ -2475,7 +2475,7 @@ def delete_release(request: HttpRequest, release_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting release {release_id}: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2530,9 +2530,10 @@ def download_release(request: HttpRequest, release_id: str):
             return response
 
     except Exception as e:
+        log.error(f"Error generating release SBOM: {str(e)}")
         return HttpResponse(
             status=500,
-            content=f'{{"detail": "Error generating release SBOM: {str(e)}"}}',
+            content='{"detail": "Error generating release SBOM"}',
             content_type="application/json",
         )
 
@@ -2788,7 +2789,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": None,
             }
         except Exception as e:
-            return 400, {"detail": f"Error processing SBOM: {str(e)}", "error_code": ErrorCode.INTERNAL_ERROR}
+            log.error(f"Error processing SBOM: {e}")
+            return 400, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
 
     # Handle Document
     if payload.document_id:
@@ -2820,7 +2822,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_version": artifact.document.version or "",
             }
         except Exception as e:
-            return 400, {"detail": f"Error processing document: {str(e)}", "error_code": ErrorCode.INTERNAL_ERROR}
+            log.error(f"Error processing document: {e}")
+            return 400, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
 
     return 400, {"detail": "Either sbom_id or document_id must be provided", "error_code": ErrorCode.BAD_REQUEST}
 
@@ -3347,7 +3350,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 
     except Exception as e:
         log.error(f"Error listing component SBOMs: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -3425,4 +3428,4 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
 
     except Exception as e:
         log.error(f"Error listing component documents: {e}")
-        return 400, {"detail": str(e), "error_code": ErrorCode.INTERNAL_ERROR}
+        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}

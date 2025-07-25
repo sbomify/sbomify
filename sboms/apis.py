@@ -100,8 +100,8 @@ def sbom_upload_cyclonedx(
 
         return 201, {"id": sbom.id}
 
-    except Exception as e:
-        return 400, {"detail": str(e)}
+    except Exception:
+        return 400, {"detail": "Invalid request"}
 
 
 @router.post(
@@ -175,8 +175,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
 
         return 201, {"id": sbom.id}
 
-    except Exception as e:
-        return 400, {"detail": str(e)}
+    except Exception:
+        return 400, {"detail": "Invalid request"}
 
 
 # Moved component metadata endpoints to core API at /api/v1/components/{id}/metadata
@@ -312,7 +312,7 @@ def download_sbom(request: HttpRequest, sbom_id: str):
 
         except Exception as e:
             log.error(f"Error retrieving SBOM {sbom_id}: {e}")
-            return 500, {"detail": f"Error retrieving SBOM: {str(e)}"}
+            return 500, {"detail": "Error retrieving SBOM"}
     else:
         return 403, {"detail": "Access denied"}
 
@@ -400,7 +400,7 @@ def download_sbom_signed(request: HttpRequest, sbom_id: str, token: str = Query(
 
     except Exception as e:
         log.error(f"Error retrieving SBOM {sbom_id} via signed URL: {e}")
-        return 500, {"detail": f"Error retrieving SBOM: {str(e)}"}
+        return 500, {"detail": "Error retrieving SBOM"}
 
 
 @router.post(
@@ -495,8 +495,8 @@ def sbom_upload_file(
 
                 return 201, {"id": sbom.id}
 
-            except ValidationError as e:
-                return 400, {"detail": f"Invalid SPDX format: {str(e)}"}
+            except ValidationError:
+                return 400, {"detail": "Invalid SPDX format"}
 
         elif "specVersion" in sbom_data:
             # CycloneDX format
@@ -536,15 +536,15 @@ def sbom_upload_file(
 
                 return 201, {"id": sbom.id}
 
-            except ValidationError as e:
-                return 400, {"detail": f"Invalid CycloneDX format: {str(e)}"}
+            except ValidationError:
+                return 400, {"detail": "Invalid CycloneDX format"}
 
         else:
             return 400, {"detail": "Unrecognized SBOM format. Must be SPDX or CycloneDX."}
 
     except Exception as e:
         log.error(f"Error processing file upload: {str(e)}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": "Invalid request"}
 
 
 # =============================================================================

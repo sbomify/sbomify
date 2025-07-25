@@ -4,22 +4,16 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
 from django.test import Client, RequestFactory
 from django.urls import reverse
-from django.utils import timezone
 
 from billing import billing_processing
 from billing.models import BillingPlan
-from core.tests.shared_fixtures import team_with_business_plan, sample_user, guest_user
-from teams.models import Member, Team
-from core.utils import number_to_random_token
-
-User = get_user_model()
+from teams.models import Team
 
 from .fixtures import (  # noqa: F401
     business_plan,
@@ -27,6 +21,8 @@ from .fixtures import (  # noqa: F401
     enterprise_plan,
     mock_stripe,  # Use the new comprehensive mock
 )
+
+User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
@@ -124,7 +120,10 @@ def test_select_business_plan(
 
     # Should redirect to Stripe checkout
     assert response.status_code == 302
-    assert "checkout.stripe.com/test" in response.url
+    # Verify URL starts with expected Stripe checkout domain for security
+    from urllib.parse import urlparse
+    parsed_url = urlparse(response.url)
+    assert parsed_url.netloc == "checkout.stripe.com"
 
 
 @pytest.mark.django_db
@@ -171,7 +170,7 @@ def test_stripe_webhook_checkout_completed(factory, team_with_business_plan):
 
     with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_checkout_completed") as mock_handler:
+        with patch("billing.billing_processing.handle_checkout_completed"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -204,7 +203,7 @@ def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
 
     with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_subscription_updated") as mock_handler:
+        with patch("billing.billing_processing.handle_subscription_updated"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -236,7 +235,7 @@ def test_stripe_webhook_payment_failed(factory, team_with_business_plan):
 
     with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_payment_failed") as mock_handler:
+        with patch("billing.billing_processing.handle_payment_failed"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -263,7 +262,7 @@ def test_stripe_webhook_error_handling(factory):
 
 
 @pytest.mark.django_db
-def test_billing_redirect_trial(client, team_with_business_plan, business_plan):
+def test_billing_redirect_trial(client, team_with_business_plan):
     """Test billing redirect with trial period."""
     member = team_with_business_plan.member_set.first()
     client.force_login(member.user)

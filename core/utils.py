@@ -3,6 +3,7 @@ Utility code used by multiple apps.
 """
 
 import collections.abc
+import logging
 import string
 import uuid
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from secrets import token_urlsafe
 from typing import Any
 
 from django.http import HttpRequest
+
+logger = logging.getLogger(__name__)
 
 TRANSLATION_STRING = "abcdefghij"
 
@@ -416,4 +419,5 @@ def create_release_download_response(release):
             return response
 
     except Exception as e:
-        return JsonResponse({"detail": f"Error generating release SBOM: {str(e)}"}, status=500)
+        logger.exception(f"Error generating release SBOM: {str(e)}")
+        return JsonResponse({"detail": "Error generating release SBOM"}, status=500)

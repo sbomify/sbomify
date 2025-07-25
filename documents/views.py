@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
@@ -9,6 +11,8 @@ from core.utils import verify_item_access
 from teams.schemas import BrandingInfo
 
 from .models import Document
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -71,6 +75,7 @@ def document_download(request: HttpRequest, document_id: str) -> HttpResponse:
                 return error_response(request, HttpResponseNotFound("Document file not found"))
 
         except Exception as e:
-            return error_response(request, HttpResponse(f"Error retrieving document: {str(e)}", status=500))
+            logger.exception(f"Error retrieving document: {str(e)}")
+            return error_response(request, HttpResponse("Error retrieving document", status=500))
     else:
         return error_response(request, HttpResponseForbidden("Access denied"))
