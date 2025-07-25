@@ -186,12 +186,11 @@ class Command(BaseCommand):
                             status_code, response_data = sbom_upload_spdx(mock_request, component.id, payload)
                             if status_code == 201:
                                 sbom_id = response_data.get("id")
-                                success_msg = f"API call successful for {sbom_file}, " f"SBOM ID: {sbom_id}"
+                                success_msg = f"API call successful for {sbom_file}, SBOM ID: {sbom_id}"
                                 self.stdout.write(self.style.SUCCESS(success_msg))
                             else:
                                 error_msg = (
-                                    f"API call failed for {sbom_file}: "
-                                    f"Status {status_code}, Response: {response_data}"
+                                    f"API call failed for {sbom_file}: Status {status_code}, Response: {response_data}"
                                 )
                                 self.stdout.write(self.style.ERROR(error_msg))
                         except Exception as e:
@@ -218,12 +217,11 @@ class Command(BaseCommand):
                             status_code, response_data = sbom_upload_cyclonedx(mock_request, component.id, payload)
                             if status_code == 201:
                                 sbom_id = response_data.get("id")
-                                success_msg = f"API call successful for {sbom_file}, " f"SBOM ID: {sbom_id}"
+                                success_msg = f"API call successful for {sbom_file}, SBOM ID: {sbom_id}"
                                 self.stdout.write(self.style.SUCCESS(success_msg))
                             else:
                                 error_msg = (
-                                    f"API call failed for {sbom_file}: "
-                                    f"Status {status_code}, Response: {response_data}"
+                                    f"API call failed for {sbom_file}: Status {status_code}, Response: {response_data}"
                                 )
                                 self.stdout.write(self.style.ERROR(error_msg))
                         except Exception as e:
@@ -235,8 +233,7 @@ class Command(BaseCommand):
 
                 if format_type:  # Only print if format_type was set (i.e., processing happened)
                     success_msg = (
-                        f"Successfully processed {format_type.upper()} SBOM "
-                        f"for component {component.name} via API call"
+                        f"Successfully processed {format_type.upper()} SBOM for component {component.name} via API call"
                     )
                     self.stdout.write(self.style.SUCCESS(success_msg))
 

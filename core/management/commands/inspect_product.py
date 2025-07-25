@@ -88,7 +88,7 @@ class Command(BaseCommand):
                 ref_type = getattr(ref, "type", "unknown")
                 ref_url = getattr(ref, "url", "unknown")
                 ref_comment = getattr(ref, "comment", None)
-                self.stdout.write(f"  {i+1}. Type: {ref_type}, URL: {ref_url}")
+                self.stdout.write(f"  {i + 1}. Type: {ref_type}, URL: {ref_url}")
                 if ref_comment:
                     self.stdout.write(f"     Comment: {ref_comment}")
 

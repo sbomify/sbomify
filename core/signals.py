@@ -33,9 +33,7 @@ def _update_latest_release_for_sbom(sbom_instance):
             # Add the SBOM to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(sbom_instance)
 
-            logger.info(
-                f"Added SBOM {sbom_instance.id} to latest release {latest_release.id} " f"for product {product.id}"
-            )
+            logger.info(f"Added SBOM {sbom_instance.id} to latest release {latest_release.id} for product {product.id}")
     except Exception as e:
         logger.error(f"Error updating latest release for SBOM {sbom_instance.id}: {e}")
 
@@ -68,8 +66,7 @@ def _update_latest_release_for_document(document_instance):
             latest_release.add_artifact_to_latest_release(document_instance)
 
             logger.info(
-                f"Added Document {document_instance.id} to latest release {latest_release.id} "
-                f"for product {product.id}"
+                f"Added Document {document_instance.id} to latest release {latest_release.id} for product {product.id}"
             )
     except Exception as e:
         logger.error(f"Error updating latest release for Document {document_instance.id}: {e}")
@@ -91,6 +88,6 @@ def update_latest_release_on_product_projects_changed(sender, instance, action, 
         # Refresh the artifacts in the latest release
         latest_release.refresh_latest_artifacts()
 
-        logger.info(f"Refreshed latest release {latest_release.id} for product {instance.id} " f"after project changes")
+        logger.info(f"Refreshed latest release {latest_release.id} for product {instance.id} after project changes")
     except Exception as e:
         logger.error(f"Error updating latest release for product {instance.id}: {e}")
