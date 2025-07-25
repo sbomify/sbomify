@@ -1,11 +1,11 @@
 # Base Python version
-ARG PYTHON_VERSION=3.12-slim-bookworm
+ARG PYTHON_VERSION=3.12-slim-bookworm@sha256:9c1d9ed7593f2552a4ea47362ec0d2ddf5923458a53d0c8e30edf8b398c94a31
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.2-debian AS js-build-prod
+FROM oven/bun:1.2-debian@sha256:1948867287ef9e68805415d24723c79f338222a7d02830666478f2fc98a48cb0 AS js-build-prod
 
 WORKDIR /js-build
 
@@ -32,7 +32,7 @@ COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
 RUN bun run build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.2-debian AS frontend-dev-server
+FROM oven/bun:1.2-debian@sha256:1948867287ef9e68805415d24723c79f338222a7d02830666478f2fc98a48cb0 AS frontend-dev-server
 
 WORKDIR /app-frontend
 
@@ -98,7 +98,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
-FROM golang:1.24-alpine AS go-builder
+FROM golang:1.24-alpine@sha256:daae04ebad0c21149979cd8e9db38f565ecefd8547cf4a591240dc1972cf1399 AS go-builder
 ARG OSV_SCANNER_VERSION
 ARG CYCLONEDX_GOMOD_VERSION
 
