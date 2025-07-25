@@ -167,8 +167,7 @@
                 </div>
             </footer>
         </div>
-        <!-- Scripts -->
-        <script src="{% static 'js/app.js' %}"></script>
+        <!-- Scripts - now managed via Vite bundles -->
         {% block scripts %}{% endblock %}
         {% vite_asset 'core/js/main.ts' %}
     </body>
