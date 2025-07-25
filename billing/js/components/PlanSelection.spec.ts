@@ -35,8 +35,10 @@ interface ApiError extends Error {
 // Mock axios
 const mockAxios = {
   get: mock(() => Promise.resolve({ data: [] as Plan[] })),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  post: mock((..._args: unknown[]) => Promise.resolve({ data: {} }))
+  post: mock((...args: unknown[]) => {
+    void args  // Mark as intentionally unused
+    return Promise.resolve({ data: {} })
+  })
 }
 
 mock.module('../../../core/js/utils', () => ({

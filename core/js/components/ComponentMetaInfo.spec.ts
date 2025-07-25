@@ -96,8 +96,8 @@ describe('ComponentMetaInfo Business Logic', () => {
       // Simulate the new copy logic: GET source + PATCH target
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       expect(mockAxios.get).toHaveBeenCalledWith(`/api/v1/components/${mockSourceComponentId}/metadata`)
@@ -119,8 +119,8 @@ describe('ComponentMetaInfo Business Logic', () => {
       // Simulate the copy process
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       const patchResponse = await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       // Simulate success handling
@@ -168,8 +168,8 @@ describe('ComponentMetaInfo Business Logic', () => {
       try {
         const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
         const sourceData = sourceResponse.data as typeof sourceMetadata
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { id, name, ...metadataToCopy } = sourceData
+        void id; void name  // Mark as intentionally unused
         await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
         expect(true).toBe(false) // Should not reach here
       } catch {
@@ -193,8 +193,8 @@ describe('ComponentMetaInfo Business Logic', () => {
 
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       // Verify the PATCH call excludes id and name
@@ -218,8 +218,8 @@ describe('ComponentMetaInfo Business Logic', () => {
 
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       // Should still make the PATCH call even with empty metadata
@@ -277,8 +277,8 @@ describe('ComponentMetaInfo Business Logic', () => {
       // Simulate successful copy operation
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       // Simulate incrementing the key to force re-render
@@ -330,8 +330,8 @@ describe('ComponentMetaInfo Business Logic', () => {
       try {
         const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
         const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id, name, ...metadataToCopy } = sourceData
+        const { id, name, ...metadataToCopy } = sourceData
+        void id; void name  // Mark as intentionally unused
         await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
       } catch {
         mockShowError('Failed to copy metadata')
@@ -348,8 +348,8 @@ describe('ComponentMetaInfo Business Logic', () => {
 
       const sourceResponse = await mockAxios.get(`/api/v1/components/${mockSourceComponentId}/metadata`)
       const sourceData = sourceResponse.data as typeof sourceMetadata
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, name, ...metadataToCopy } = sourceData
+      void id; void name  // Mark as intentionally unused
       const patchResponse = await mockAxios.patch(`/api/v1/components/${mockComponentId}/metadata`, metadataToCopy)
 
       // Simulate status code validation
