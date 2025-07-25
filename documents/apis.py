@@ -121,7 +121,7 @@ def create_document(
 
     except Exception as e:
         log.error(f"Error creating document: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": "Invalid request"}
 
 
 @router.patch(
@@ -245,7 +245,7 @@ def download_document(request: HttpRequest, document_id: str):
 
         except Exception as e:
             log.error(f"Error retrieving document {document_id}: {e}")
-            return 500, {"detail": f"Error retrieving document: {str(e)}"}
+            return 500, {"detail": "Error retrieving document"}
     else:
         return 403, {"detail": "Access denied"}
 
@@ -333,7 +333,7 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
 
     except Exception as e:
         log.error(f"Error retrieving document {document_id} via signed URL: {e}")
-        return 500, {"detail": f"Error retrieving document: {str(e)}"}
+        return 500, {"detail": "Error retrieving document"}
 
 
 @router.delete(
@@ -355,4 +355,4 @@ def delete_document(request: HttpRequest, document_id: str):
         return 204, None
     except Exception as e:
         log.error(f"Error deleting document {document_id}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": "Invalid request"}

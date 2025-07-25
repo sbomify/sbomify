@@ -498,7 +498,7 @@ def redirect_to_stripe_checkout(request, plan_key):
 
     except StripeError as e:
         logger.error(f"Stripe error: {str(e)}")
-        return error_response(request, HttpResponseForbidden(str(e)))
+        return error_response(request, HttpResponseForbidden("Payment processing error"))
     except Exception as e:
         logger.exception(f"Unexpected error: {str(e)}")
         return error_response(request, HttpResponseForbidden("An unexpected error occurred"))
@@ -553,7 +553,7 @@ def stripe_webhook(request):
 
     except StripeError as e:
         logger.error(f"Stripe error: {str(e)}")
-        return HttpResponseForbidden(str(e))
+        return HttpResponseForbidden("Payment processing error")
     except Exception as e:
         logger.exception(f"Unexpected error: {str(e)}")
         return HttpResponseForbidden("An unexpected error occurred")

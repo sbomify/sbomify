@@ -178,12 +178,11 @@ class Command(BaseCommand):
         random_password = self.generate_random_password()
         keycloak_manager.set_temporary_password(user_id, random_password, True)
 
-        # In development mode, log the password for testing purposes
+        # In development mode, indicate that password was set without showing it
         if settings.DEBUG:
             self.stdout.write(
                 self.style.WARNING(
-                    f"  DEV MODE: Temporary password for {user.username} is '{random_password}' "
-                    "(not shown in production)"
+                    f"  DEV MODE: Temporary password set for {user.username} (password not displayed for security)"
                 )
             )
 

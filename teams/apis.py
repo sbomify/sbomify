@@ -183,7 +183,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
         return 400, {"detail": "A team with this name already exists"}
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": "Invalid request"}
 
 
 @router.patch(
@@ -226,7 +226,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
         return 400, {"detail": "A team with this name already exists"}
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
-        return 400, {"detail": str(e)}
+        return 400, {"detail": "Invalid request"}
 
 
 @router.get("/", response={200: list[TeamResponseSchema], 403: ErrorResponse})

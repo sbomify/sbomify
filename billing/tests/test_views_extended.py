@@ -10,7 +10,6 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
 from django.test import Client, RequestFactory
 from django.urls import reverse
-from django.utils import timezone
 
 from billing.models import BillingPlan
 from billing.tests.fixtures import (  # noqa: F401
@@ -280,7 +279,10 @@ class TestBillingRedirectEdgeCases:
         )
 
         assert response.status_code == 302
-        assert "checkout.stripe.com" in response.url
+        # Verify URL starts with expected Stripe checkout domain for security
+        from urllib.parse import urlparse
+        parsed_url = urlparse(response.url)
+        assert parsed_url.netloc == "checkout.stripe.com"
 
         mock_customer_create.assert_called_once_with(
             id=f"c_{team_with_business_plan.key}",
@@ -326,7 +328,10 @@ class TestBillingRedirectEdgeCases:
         )
 
         assert response.status_code == 302
-        assert "checkout.stripe.com" in response.url
+        # Verify URL starts with expected Stripe checkout domain for security
+        from urllib.parse import urlparse
+        parsed_url = urlparse(response.url)
+        assert parsed_url.netloc == "checkout.stripe.com"
 
         # Verify that annual price ID was used
         call_args = mock_session_create.call_args[1]
@@ -337,7 +342,7 @@ class TestBillingRedirectEdgeCases:
     ):
         """Test billing redirect with missing price ID."""
         # Create plan without price IDs
-        plan = BillingPlan.objects.create(
+        BillingPlan.objects.create(
             key="test_plan", name="Test Plan", stripe_price_monthly_id=None, stripe_price_annual_id=None
         )
 
