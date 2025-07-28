@@ -1,8 +1,16 @@
 import 'vite/modulepreload-polyfill';
 
-// Bootstrap CSS and JS
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+// Bootstrap JS - make available globally for Vue components
+import * as bootstrap from 'bootstrap';
+
+// Extend the Window interface to include bootstrap
+declare global {
+  interface Window {
+    bootstrap: typeof bootstrap;
+  }
+}
+
+window.bootstrap = bootstrap;
 
 // Chart.js - make available globally for admin dashboard
 import {
@@ -33,9 +41,7 @@ declare global {
 }
 window.Chart = Chart;
 
-// Feather Icons - import with proper typing
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const feather = require('feather-icons') as { replace(): void; icons: Record<string, unknown> };
+// FontAwesome CSS - loaded via Django templates, not needed here
 
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
@@ -155,8 +161,43 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Initialize Feather icons
-  feather.replace();
+  // Initialize sidebar toggle functionality
+  const sidebarToggle = document.querySelector('.js-sidebar-toggle') as HTMLElement;
+  const sidebar = document.querySelector('.sidebar') as HTMLElement;
+  const body = document.body;
+
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // For mobile: toggle visibility
+      if (window.innerWidth < 992) {
+        body.classList.toggle('sidebar-show');
+      } else {
+        // For desktop: toggle collapsed state
+        body.classList.toggle('sidebar-collapsed');
+      }
+    });
+
+    // Close sidebar on mobile when clicking outside
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth < 992 && body.classList.contains('sidebar-show')) {
+        const target = e.target as HTMLElement;
+        if (!sidebar.contains(target) && !sidebarToggle.contains(target)) {
+          body.classList.remove('sidebar-show');
+        }
+      }
+    });
+
+    // Handle resize events
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 992) {
+        body.classList.remove('sidebar-show');
+      }
+    });
+  }
+
+  // FontAwesome icons are loaded via CSS, no initialization needed
 });
 
 // Export something to make TypeScript happy

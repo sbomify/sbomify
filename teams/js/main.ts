@@ -1,13 +1,7 @@
 import 'vite/modulepreload-polyfill';
 import { createApp, type Component } from 'vue';
 
-// Vuetify setup (copied from common_vue.js)
-import 'vuetify/styles'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
-import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
-
+// Vue components (using standard Bootstrap/HTML classes provided by our CSS system)
 import TeamBilling from './components/TeamBilling.vue';
 import TeamBranding from './components/TeamBranding.vue';
 import TeamDangerZone from './components/TeamDangerZone.vue';
@@ -15,31 +9,6 @@ import TeamInvitations from './components/TeamInvitations.vue';
 import TeamMembers from './components/TeamMembers.vue';
 import VulnerabilitySettings from './components/VulnerabilitySettings.vue';
 import TeamsList from './components/TeamsList.vue';
-
-// Create vuetify instance with icons
-const vuetify = createVuetify({
-  components,
-  directives,
-  theme: {
-    defaultTheme: 'light',
-    themes: {
-      light: {
-        colors: {
-          primary: '#3B7DDD',
-          secondary: '#6c757d',
-          success: '#28a745',
-          warning: '#ffc107',
-          danger: '#dc3545'
-        }
-      }
-    }
-  },
-  icons: {
-    defaultSet: 'mdi',
-    aliases,
-    sets: { mdi }
-  }
-});
 
 // Function to mount Vue components with teams-specific data handling
 function mountVueComponent(selector: string, component: Component, props: Record<string, unknown> = {}) {
@@ -99,9 +68,8 @@ function mountVueComponent(selector: string, component: Component, props: Record
       elementProps.billingPlanLimits = null;
     }
 
-    // Create Vue app with Vuetify
+    // Create Vue app (using our modular CSS system)
     const app = createApp(component, elementProps);
-    app.use(vuetify);
     app.mount(element);
   });
 }

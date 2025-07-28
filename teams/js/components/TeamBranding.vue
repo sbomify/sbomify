@@ -7,11 +7,24 @@
   >
     <p class="subtitle mb-5">Customize your workspace's visual identity for public SBOMs and shared content.</p>
 
-    <v-skeleton-loader
-      v-show="isLoading"
-      type="article"
-      class="mb-4"
-    ></v-skeleton-loader>
+    <div v-show="isLoading" class="skeleton-loader mb-4">
+      <div class="skeleton-card">
+        <div class="skeleton-header">
+          <div class="skeleton-line skeleton-title"></div>
+          <div class="skeleton-line skeleton-subtitle"></div>
+        </div>
+        <div class="skeleton-content">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="skeleton-line skeleton-field"></div>
+            </div>
+            <div class="col-md-6">
+              <div class="skeleton-line skeleton-field"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div v-show="!isLoading" class="branding-form">
       <!-- Colors Section -->
@@ -123,15 +136,17 @@
               <p class="preference-description">When both logo and icon are available, prioritize showing the logo in branding areas.</p>
             </div>
             <div class="preference-control">
-              <v-switch
-                id="prefer_logo_over_icon_switch"
-                v-model="brandingInfo.prefer_logo_over_icon"
-                hide-details
-                density="compact"
-                color="primary"
-                inset
-                @change="updateField('prefer_logo_over_icon')"
-              />
+              <div class="form-check form-switch">
+                <input
+                  id="prefer_logo_over_icon_switch"
+                  v-model="brandingInfo.prefer_logo_over_icon"
+                  class="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  @change="updateField('prefer_logo_over_icon')"
+                >
+                <label class="form-check-label" for="prefer_logo_over_icon_switch"></label>
+              </div>
             </div>
           </div>
         </div>
@@ -518,6 +533,96 @@ onMounted(async () => {
   .section-content {
     padding: 0.75rem;
   }
+}
+
+/* Skeleton Loader */
+.skeleton-loader {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-card {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.skeleton-header {
+  padding: 1.5rem 1.5rem 1rem;
+  background: linear-gradient(135deg, #ffffff, #f9fafb);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.skeleton-content {
+  padding: 1.5rem;
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.skeleton-title {
+  height: 1.5rem;
+  width: 60%;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-subtitle {
+  height: 1rem;
+  width: 80%;
+  margin-bottom: 0;
+}
+
+.skeleton-field {
+  height: 2.5rem;
+  width: 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Switch Styling */
+.form-check.form-switch {
+  min-height: auto;
+  padding-left: 0;
+}
+
+.form-check.form-switch .form-check-input {
+  width: 3rem;
+  height: 1.5rem;
+  margin-left: 0;
+  background-color: #e5e7eb;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+}
+
+.form-check.form-switch .form-check-input:checked {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.form-check.form-switch .form-check-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
 }
 
 /* Floating Alert Styling */

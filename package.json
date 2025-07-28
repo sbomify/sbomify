@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "copy-bootstrap": "cp node_modules/bootstrap/dist/css/bootstrap.min.css static/css/ && cp node_modules/bootstrap/dist/css/bootstrap.min.css.map static/css/",
+    "copy-fontawesome": "cp -r node_modules/@fortawesome/fontawesome-free/webfonts static/ && cp node_modules/@fortawesome/fontawesome-free/css/all.min.css static/css/fontawesome.min.css && sed -i '' 's|../webfonts/|../webfonts/|g' static/css/fontawesome.min.css",
+    "copy-deps": "bun run copy-bootstrap && bun run copy-fontawesome",
+    "build": "bun run copy-deps && vue-tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint \"core/js/**/*.{js,ts,vue}\" \"sboms/js/**/*.{js,ts,vue}\" \"teams/js/**/*.{js,ts,vue}\" \"billing/js/**/*.{js,ts,vue}\" \"documents/js/**/*.{js,ts,vue}\" \"vulnerability_scanning/js/**/*.{js,ts,vue}\" \"*.{js,ts}\"",
     "lint-fix": "eslint \"core/js/**/*.{js,ts,vue}\" \"sboms/js/**/*.{js,ts,vue}\" \"teams/js/**/*.{js,ts,vue}\" \"billing/js/**/*.{js,ts,vue}\" \"documents/js/**/*.{js,ts,vue}\" \"vulnerability_scanning/js/**/*.{js,ts,vue}\" \"*.{js,ts}\" --fix",
@@ -26,7 +29,6 @@
     "chart.js": "^4.5.0",
     "clipboard": "^2.0.11",
     "dotenv": "^17.2.1",
-    "feather-icons": "^4.29.2",
     "highlight.js": "^11.11.1",
     "js-cookie": "^3.0.5",
     "jsbarcode": "^3.12.1",
@@ -41,7 +43,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
-    "@types/feather-icons": "^4.29.4",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "eslint": "^9.31.0",

@@ -118,7 +118,7 @@
                     <form action="{% url 'teams:teams_dashboard' %}" method="post">
                         {% csrf_token %}
                         {% for hidden in add_team_form.hidden_fields %}{{ hidden }}{% endfor %}
-                        <div class="form-group mb-3">
+                        <div class="mb-3">
                             <label for="{{ add_team_form.name.id_for_label }}" class="form-label">{{ add_team_form.name.label }}</label>
                             {{ add_team_form.name|add_class:'form-control'|attr:"tabindex:1"|attr:"placeholder:Enter workspace name" }}
                             {% for error in add_team_form.name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}

@@ -178,6 +178,12 @@ cython_debug/
 
 # Django static files
 staticfiles/
+
+# Copied dependencies (build artifacts)
+static/css/bootstrap.min.css
+static/css/bootstrap.min.css.map
+static/css/fontawesome.min.css
+static/webfonts/
 .DS_Store
 
 .ruff_cache

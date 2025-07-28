@@ -1,0 +1,143 @@
+/*!
+ * sbomify Base Styles
+ * Reset, typography, and base element styles
+ */
+
+/* ===== RESET & BASE ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== TYPOGRAPHY ===== */
+.h1, .h2, .h3, .h4, .h5, .h6,
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+}
+
+p, label, th, td {
+  color: var(--text-primary);
+}
+
+.page-title {
+  color: var(--text-title);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  margin-bottom: var(--spacing-xl);
+  letter-spacing: -0.025em;
+}
+
+/* Page title icons */
+.item-title .fas {
+  font-size: 2.5rem;
+  width: auto;
+  height: auto;
+}
+
+/* ===== LINKS ===== */
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: color var(--transition-normal);
+}
+
+a:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+}
+
+.icon-link {
+  text-decoration: none !important;
+}
+
+.version-link {
+  color: var(--brand-primary) !important;
+  text-decoration: none;
+}
+
+.version-link:hover {
+  text-decoration: underline;
+}
+
+/* ===== CODE ===== */
+code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-lg);
+  color: var(--text-title);
+  background-color: var(--gray-100);
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== ACCESSIBILITY ===== */
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.nav-link:focus-visible,
+.sidebar-link:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .btn {
+    border-width: 2px;
+  }
+
+  .card {
+    border-width: 2px;
+  }
+
+  .form-control,
+  .form-select {
+    border-width: 2px;
+  }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+  .sidebar,
+  .navbar,
+  .btn,
+  .card-header[data-bs-toggle="collapse"],
+  .messages-container {
+    display: none !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #000 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
