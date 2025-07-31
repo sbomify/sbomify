@@ -31,8 +31,8 @@ COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
 # Create static directory structure for build scripts
 RUN mkdir -p static/css static/webfonts
 
-# Run the build for production - assumes output is to 'staticfiles' directory
-RUN bun run build
+# Run the build for production (skip TypeScript checking to avoid needing dev dependencies)
+RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
 FROM oven/bun:1.2-debian@sha256:1948867287ef9e68805415d24723c79f338222a7d02830666478f2fc98a48cb0 AS frontend-dev-server

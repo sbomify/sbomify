@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "copy-bootstrap": "cp node_modules/bootstrap/dist/css/bootstrap.min.css static/css/ && cp node_modules/bootstrap/dist/css/bootstrap.min.css.map static/css/",
-    "copy-fontawesome": "cp -r node_modules/@fortawesome/fontawesome-free/webfonts static/ && cp node_modules/@fortawesome/fontawesome-free/css/all.min.css static/css/fontawesome.min.css && sed -i '' 's|../webfonts/|../webfonts/|g' static/css/fontawesome.min.css",
+    "copy-fontawesome": "cp -r node_modules/@fortawesome/fontawesome-free/webfonts static/ && cp node_modules/@fortawesome/fontawesome-free/css/all.min.css static/css/fontawesome.min.css",
     "copy-deps": "bun run copy-bootstrap && bun run copy-fontawesome",
     "build": "bun run copy-deps && vue-tsc -b && vite build",
     "preview": "vite preview",

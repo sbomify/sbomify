@@ -1,5 +1,8 @@
 import 'vite/modulepreload-polyfill';
 
+// Type declaration for bootstrap module (avoids needing @types/bootstrap in production)
+declare module 'bootstrap';
+
 // Bootstrap JS - make available globally for Vue components
 import * as bootstrap from 'bootstrap';
 
