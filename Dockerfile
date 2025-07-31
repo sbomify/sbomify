@@ -28,6 +28,9 @@ COPY billing/js/ ./billing/js/
 COPY documents/js/ ./documents/js/
 COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
 
+# Create static directory structure for build scripts
+RUN mkdir -p static/css static/webfonts
+
 # Run the build for production - assumes output is to 'staticfiles' directory
 RUN bun run build
 
