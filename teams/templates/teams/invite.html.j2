@@ -6,7 +6,7 @@
         <button type="button"
                 onclick="history.back()"
                 class="back-btn btn btn-link text-decoration-none mb-3 border-0 p-0">
-            <i data-feather="chevron-left"></i>
+            <i class="fas fa-chevron-left"></i>
         </button>
         <div class="d-flex flex-column justify-content-center align-items-center">
             <div class="invite-form">
@@ -21,12 +21,12 @@
                                     {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
                                 </div>
                             {% endif %}
-                            <div class="form-group">
+                            <div class="mb-3">
                                 <label for="{{ invite_user_form.email.id_for_label }}">{{ invite_user_form.email.label }}</label>
                                 {{ invite_user_form.email|add_class:'form-control mb-3' }}
                                 {% for error in invite_user_form.email.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
                             </div>
-                            <div class="form-group">
+                            <div class="mb-3">
                                 <label for="{{ invite_user_form.role.id_for_label }}">{{ invite_user_form.role.label }}</label>
                                 {{ invite_user_form.role|add_class:'form-select mb-3' }}
                                 {% for error in invite_user_form.role.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
@@ -42,7 +42,7 @@
                                     </li>
                                 </ul>
                             </div>
-                            <div class="col col-12 text-end form-group">
+                            <div class="col col-12 text-end">
                                 <input type="submit" class="btn btn-primary" value="Invite to team" />
                             </div>
                         </form>

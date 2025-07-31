@@ -25,7 +25,7 @@
 
     <div class="license-expression-input">
       <div class="license-input-container">
-        <div class="input-with-button">
+        <div class="input-group mb-3">
           <input
             ref="licenseInputRef"
             v-model="licenseExpression"
@@ -40,15 +40,15 @@
           >
           <button
             type="button"
-            class="btn btn-secondary add-custom-btn"
+            class="btn btn-outline-secondary"
             title="Add custom license"
             @click="showCustomLicenseForm = true"
           >
-            + Custom
+            <i class="fa-solid fa-plus me-1"></i>Custom
           </button>
           <button
             type="button"
-            class="btn btn-primary add-license-btn"
+            class="btn btn-primary"
             :disabled="!licenseExpression.trim()"
             title="Add license as tag"
             @click="addCurrentExpression"
@@ -69,9 +69,9 @@
             <div v-if="license.category" class="license-category" :class="{ 'operator': license.category === 'operator' }">{{ license.category }}</div>
           </div>
         </div>
-      </div>
-      <div v-if="validationError" class="invalid-feedback">
-        {{ validationError }}
+        <div v-if="validationError" class="invalid-feedback d-block">
+          {{ validationError }}
+        </div>
       </div>
     </div>
 
@@ -110,7 +110,7 @@
           <form @submit.prevent="submitCustomLicense">
             <div class="form-row">
               <div class="form-col">
-                <div class="form-group">
+                <div class="mb-3">
                   <label class="form-label">License Name <span class="text-danger">*</span></label>
                   <input
                     v-model="customLicense.name"
@@ -126,7 +126,7 @@
                 </div>
               </div>
               <div class="form-col">
-                <div class="form-group">
+                <div class="mb-3">
                   <label class="form-label">License URL</label>
                   <input
                     v-model="customLicense.url"
@@ -141,7 +141,7 @@
                 </div>
               </div>
             </div>
-            <div class="form-group mt-3">
+            <div class="mb-3 mt-3">
               <label class="form-label">License Text</label>
               <textarea
                 v-model="customLicense.text"
@@ -722,7 +722,7 @@ async function submitCustomLicense() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   padding: 0.75rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
@@ -810,67 +810,38 @@ async function submitCustomLicense() {
 }
 
 .license-expression-input {
-  margin-bottom: 0;
+  margin-bottom: 1.5rem;
 }
 
 .license-input-container {
   position: relative;
+  z-index: 10;
 }
 
-.input-with-button {
-  display: flex;
-  gap: 0.75rem;
-  align-items: stretch;
-  margin-bottom: 1.5rem;
+/* Ensure parent cards don't clip the dropdown */
+.licenses-editor {
+  width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
-.input-with-button .form-control {
-  flex: 1;
-  height: 2.75rem;
-}
+/* Parent container overflow is handled by the licenses-card-container class */
 
-.add-custom-btn {
-  white-space: nowrap;
-  padding: 0;
-  font-size: 0.875rem;
-  border-radius: 0.375rem;
-  flex-shrink: 0;
-  font-weight: 500;
-  transition: all 0.2s ease-in-out;
-  height: 2.75rem;
-  min-width: 7rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-license-btn {
-  white-space: nowrap;
-  padding: 0;
-  font-size: 0.875rem;
-  border-radius: 0.375rem;
-  flex-shrink: 0;
-  font-weight: 500;
-  transition: all 0.2s ease-in-out;
-  height: 2.75rem;
-  min-width: 5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+/* Bootstrap 5 input-group handles the layout automatically */
 
 .license-suggestions {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 1000;
+  z-index: 9999;
   max-height: 300px;
   overflow-y: auto;
   background-color: white;
   border: 1px solid #dee2e6;
   border-radius: 0.25rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 0.25rem;
 }
 
 .license-suggestion {
@@ -1034,9 +1005,7 @@ async function submitCustomLicense() {
   min-width: 0;
 }
 
-.form-group {
-  margin-bottom: 1.5rem;
-}
+
 
 .form-label {
   font-weight: 600;

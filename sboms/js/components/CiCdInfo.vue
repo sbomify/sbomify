@@ -207,31 +207,9 @@ import 'highlight.js/styles/github-dark.css';
 import CopyableValue from '../../../core/js/components/CopyableValue.vue';
 import StandardCard from '../../../core/js/components/StandardCard.vue';
 
-interface BootstrapTooltipOptions {
-  placement?: 'top' | 'bottom' | 'left' | 'right';
-  trigger?: string;
-  title?: string;
-  container?: string | boolean | Element;
-  animation?: boolean;
-}
 
-interface BootstrapTooltip {
-  dispose(): void;
-  enable(): void;
-  disable(): void;
-  toggleEnabled(): void;
-  toggle(): void;
-  show(): void;
-  hide(): void;
-}
 
-declare global {
-  interface Window {
-    bootstrap: {
-      Tooltip: new (element: Element, options?: BootstrapTooltipOptions) => BootstrapTooltip;
-    };
-  }
-}
+
 
 // Register the languages
 hljs.registerLanguage('yaml', yaml);

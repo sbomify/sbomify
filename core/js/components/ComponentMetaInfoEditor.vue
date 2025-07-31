@@ -11,8 +11,8 @@
 
       <div>
         <div class="container-fluid p-0">
-          <div class="row">
-            <div class="col-sm-12 col-lg-6">
+          <div class="row g-4">
+            <div class="col-12 col-lg-6">
               <StandardCard
                 variant="settings"
                 shadow="sm"
@@ -33,61 +33,63 @@
             </div>
 
             <div class="col-12 col-lg-6">
-              <StandardCard
-                variant="settings"
-                shadow="sm"
-              >
-                <template #title>
-                  Lifecycle Phase
-                  <i class="fa-regular fa-circle-question help-icon">
-                    <span class="tooltiptext">Current phase in the component's lifecycle</span>
-                  </i>
-                </template>
+              <div class="d-flex flex-column gap-3">
+                <StandardCard
+                  variant="settings"
+                  shadow="sm"
+                >
+                  <template #title>
+                    Lifecycle Phase
+                    <i class="fa-regular fa-circle-question help-icon">
+                      <span class="tooltiptext">Current phase in the component's lifecycle</span>
+                    </i>
+                  </template>
 
-                <div class="form-group">
-                  <select
-                    v-model="metadata.lifecycle_phase"
-                    class="form-select"
-                    :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
-                  >
-                    <option :value="null">Select a phase...</option>
-                    <option
-                      v-for="phase in orderedLifecyclePhases"
-                      :key="phase.value"
-                      :value="phase.value"
+                  <div class="mb-3">
+                    <select
+                      v-model="metadata.lifecycle_phase"
+                      class="form-select"
+                      :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
                     >
-                      {{ phase.label }}
-                    </option>
-                  </select>
-                  <div v-if="validationErrors.lifecycle_phase" class="invalid-feedback">
-                    {{ validationErrors.lifecycle_phase }}
+                      <option :value="null">Select a phase...</option>
+                      <option
+                        v-for="phase in orderedLifecyclePhases"
+                        :key="phase.value"
+                        :value="phase.value"
+                      >
+                        {{ phase.label }}
+                      </option>
+                    </select>
+                    <div v-if="validationErrors.lifecycle_phase" class="invalid-feedback">
+                      {{ validationErrors.lifecycle_phase }}
+                    </div>
                   </div>
-                </div>
-              </StandardCard>
+                </StandardCard>
 
-              <StandardCard
-                variant="settings"
-                shadow="sm"
-              >
-                <template #title>
-                  Licenses
-                  <i class="fa-regular fa-circle-question help-icon">
-                    <span class="tooltiptext">Software licenses that apply to this component</span>
-                  </i>
-                </template>
+                <StandardCard
+                  variant="settings"
+                  shadow="sm"
+                  class="licenses-card-container"
+                >
+                  <template #title>
+                    Licenses
+                    <i class="fa-regular fa-circle-question help-icon">
+                      <span class="tooltiptext">Software licenses that apply to this component</span>
+                    </i>
+                  </template>
 
-                <LicensesEditor
-                  v-model="metadata.licenses"
-                  :validation-errors="validationErrors.licenses"
-                  :validationResponse="{ status: 200, unknown_tokens: [] }"
-                  @update:modelValue="validateLicenses"
-                />
-              </StandardCard>
+                  <LicensesEditor
+                    v-model="metadata.licenses"
+                    :validation-errors="validationErrors.licenses"
+                    :validationResponse="{ status: 200, unknown_tokens: [] }"
+                    @update:modelValue="validateLicenses"
+                  />
+                </StandardCard>
 
-              <StandardCard
-                variant="settings"
-                shadow="sm"
-              >
+                <StandardCard
+                  variant="settings"
+                  shadow="sm"
+                >
                 <template #title>
                   Authors
                   <i class="fa-regular fa-circle-question help-icon">
@@ -102,6 +104,7 @@
                   @update:modelValue="validateAuthors"
                 />
               </StandardCard>
+              </div>
             </div>
           </div>
 
@@ -464,9 +467,7 @@
   --surface-color: #f8fafc;
 }
 
-.form-group {
-  margin-bottom: 1.5rem;
-}
+
 
 .form-label {
   font-weight: 500;
@@ -726,6 +727,19 @@
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
+}
+
+/* Ensure the licenses card doesn't clip dropdown suggestions */
+.licenses-card-container {
+  overflow: visible !important;
+}
+
+.licenses-card-container :deep(.card) {
+  overflow: visible !important;
+}
+
+.licenses-card-container :deep(.card-body) {
+  overflow: visible !important;
 }
 </style>
 

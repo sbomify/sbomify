@@ -9,7 +9,7 @@
                     <div class="card-header border-0 pb-0">
                         <div class="card-actions float-end">
                             <a href="{% url 'core:dashboard' %}" class="btn btn-link text-muted">
-                                <i class="align-middle" data-feather="x"></i>
+                                <i class="align-middle fas fa-times"></i>
                             </a>
                         </div>
                         <h1 class="h3 mb-3">Create Your First Component</h1>
@@ -55,7 +55,7 @@
                                                 <div class="bg-light border-start border-4 border-primary p-3 mb-3">
                                                     <div class="d-flex">
                                                         <div class="flex-shrink-0">
-                                                            <i class="align-middle text-primary" data-feather="info"></i>
+                                                            <i class="align-middle text-primary fas fa-info-circle"></i>
                                                         </div>
                                                         <div class="flex-grow-1 ms-3">{{ field.help_text }}</div>
                                                     </div>
@@ -94,8 +94,7 @@
                                 <!-- Success icon -->
                                 <div class="mb-5">
                                     <div class="bg-success-subtle d-inline-flex p-4 rounded-circle">
-                                        <i class="align-middle text-success large-check-icon"
-                                           data-feather="check"></i>
+                                        <i class="align-middle text-success large-check-icon fas fa-check"></i>
                                     </div>
                                 </div>
                                 <!-- Title -->
@@ -107,8 +106,7 @@
                                             <div class="card-body p-4">
                                                 <div class="d-flex align-items-center mb-3">
                                                     <div class="bg-primary-subtle rounded-circle p-2 me-3">
-                                                        <i class="align-middle text-primary medium-icon"
-                                                           data-feather="file-text"></i>
+                                                        <i class="align-middle text-primary medium-icon fas fa-file-alt"></i>
                                                     </div>
                                                     <h5 class="fw-bold mb-0">1. Complete Your Metadata</h5>
                                                 </div>
@@ -122,8 +120,7 @@
                                             <div class="card-body p-4">
                                                 <div class="d-flex align-items-center mb-3">
                                                     <div class="bg-primary-subtle rounded-circle p-2 me-3">
-                                                        <i class="align-middle text-primary medium-icon"
-                                                           data-feather="upload-cloud"></i>
+                                                        <i class="align-middle text-primary medium-icon fas fa-cloud-upload-alt"></i>
                                                     </div>
                                                     <h5 class="fw-bold mb-0">2. Upload Your First SBOM</h5>
                                                 </div>
@@ -137,7 +134,7 @@
                                 <a href="{% url 'core:component_details' component_id=component_id %}"
                                    class="btn btn-lg btn-primary px-4">
                                     View Component
-                                    <i class="align-middle ms-2" data-feather="arrow-right"></i>
+                                    <i class="align-middle ms-2 fas fa-arrow-right"></i>
                                 </a>
                             </div>
                         {% endif %}

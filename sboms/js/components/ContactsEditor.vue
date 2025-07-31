@@ -7,7 +7,7 @@
   </div>
 
   <div v-if="addingContact" class="contact-form">
-    <div class="form-group">
+    <div class="mb-3">
       <label class="form-label">Name <span class="text-danger">*</span></label>
       <input
         v-model="newContactData.name"
@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <div class="mb-3">
       <label class="form-label">Email</label>
       <input
         v-model="newContactData.email"
@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <div class="form-group">
+    <div class="mb-3">
       <label class="form-label">Phone</label>
       <input
         v-model="newContactData.phone"
@@ -238,9 +238,7 @@ const removeContact = (contactIndex: number) => {
   margin-bottom: 1rem;
 }
 
-.form-group {
-  margin-bottom: 1rem;
-}
+
 
 .form-label {
   font-weight: 500;

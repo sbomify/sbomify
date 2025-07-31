@@ -20,7 +20,7 @@
                 <div class="card-body">
                     <form method="post" id="tokenGenerationForm">
                         {% csrf_token %}
-                        <div class="form-group mb-3">
+                        <div class="mb-3">
                             {% for field in create_access_token_form %}
                                 <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                                 {{ field|add_class:'form-control' }}

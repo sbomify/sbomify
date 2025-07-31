@@ -20,7 +20,7 @@
       </div>
       <form :action="`/component/${componentId}/transfer`" method="post" class="transfer-form">
         <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken">
-        <div class="form-group">
+        <div class="mb-3">
           <label for="team_key" class="form-label">Select Team</label>
           <div class="input-group">
             <select id="team_key" name="team_key" class="form-select modern-select">
@@ -259,9 +259,7 @@ onMounted(() => {
   margin-top: 1rem;
 }
 
-.form-group {
-  margin-bottom: 0;
-}
+
 
 .form-label {
   font-size: 0.875rem;

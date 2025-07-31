@@ -1,0 +1,602 @@
+/*!
+ * sbomify Layout Components
+ * Navigation, sidebar, and page structure
+ * Core AdminKit-style layout system for Django templates
+ */
+
+/* ===== MAIN LAYOUT CONTAINER ===== */
+.wrapper {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+/* ===== MAIN CONTENT AREA ===== */
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0; /* Prevent flex item from overflowing */
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem;
+  background-color: var(--bg-primary);
+}
+
+/* ===== TOP NAVIGATION ===== */
+.navbar {
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 0.75rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-fixed);
+}
+
+.navbar-bg {
+  background-color: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.navbar-light .navbar-nav .nav-link {
+  color: var(--text-primary);
+}
+
+.navbar-align {
+  margin-left: auto;
+}
+
+/* Navigation icons and links */
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  text-decoration: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+}
+
+.nav-icon:hover {
+  background-color: var(--gray-100);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+}
+
+.nav-link:hover {
+  background-color: var(--gray-100);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+/* Dropdown styling */
+.dropdown-menu {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem 0;
+  margin-top: 0.5rem;
+  min-width: 12rem;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background-color var(--transition-normal);
+}
+
+.dropdown-item:hover {
+  background-color: var(--gray-100);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.dropdown-item.active {
+  background-color: var(--brand-primary);
+  color: var(--white);
+}
+
+.dropdown-divider {
+  height: 0;
+  margin: 0.5rem 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Avatar styling */
+.avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+/* Align middle utility for icons */
+.align-middle {
+  vertical-align: middle;
+}
+
+.align-self-center {
+  align-self: center;
+}
+
+/* Text utilities for navbar */
+.text-dark {
+  color: var(--text-title) !important;
+}
+
+/* FontAwesome icon styling */
+.fas, .far, .fab {
+  display: inline-block;
+  font-style: normal;
+  font-variant: normal;
+  text-rendering: auto;
+  line-height: 1;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-right: 1rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--transition-normal);
+}
+
+.sidebar-toggle:hover {
+  background-color: var(--gray-100);
+}
+
+.hamburger {
+  width: 1.5rem;
+  height: 1.5rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hamburger::before,
+.hamburger::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--text-primary);
+  transition: all var(--transition-normal);
+}
+
+.hamburger::before {
+  top: 4px;
+  box-shadow: 0 6px 0 var(--text-primary);
+}
+
+.hamburger::after {
+  bottom: 4px;
+}
+
+/* FontAwesome hamburger icon */
+.hamburger .fas {
+  font-size: 1.25rem;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 250px;
+  min-height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-fixed);
+  transform: translateX(0);
+  transition: transform var(--transition-normal);
+}
+
+.sidebar-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Simplebar scrollbar styling */
+.js-simplebar {
+  overflow: hidden;
+}
+
+/* Sidebar Brand/Logo */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.sidebar-brand:hover {
+  text-decoration: none;
+}
+
+/* Sidebar Navigation */
+.sidebar-nav {
+  flex: 1;
+  padding: 1rem 0;
+  margin: 0;
+  list-style: none;
+}
+
+.sidebar-header {
+  padding: 0.5rem 1.5rem 0.25rem;
+  margin-top: 1rem;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.sidebar-item {
+  margin: 0.125rem 0.75rem;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.sidebar-link:hover {
+  background-color: var(--gray-100);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.sidebar-link i,
+.sidebar-link svg {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Active sidebar item */
+.sidebar-item.active > .sidebar-link {
+  background-color: var(--brand-primary);
+  color: var(--white);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sidebar-item.active > .sidebar-link:hover {
+  background-color: var(--brand-primary);
+  color: var(--white);
+}
+
+.sidebar-item.active > .sidebar-link i,
+.sidebar-item.active > .sidebar-link svg {
+  color: var(--white);
+}
+
+/* Adjust main content to account for fixed sidebar */
+body:not(.sidebar-collapsed) .main {
+  margin-left: 250px;
+}
+
+/* Responsive logo styling */
+.sidebar-logo {
+  height: 1.875rem;
+  width: auto;
+  max-width: 7.5rem;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  transition: transform var(--transition-normal);
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .sidebar-logo {
+    height: 2rem;
+    max-width: 8rem;
+  }
+}
+
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 288dpi) {
+  .sidebar-logo {
+    height: 2.125rem;
+    max-width: 8.5rem;
+  }
+}
+
+.sidebar-brand:hover .sidebar-logo {
+  transform: scale(1.05);
+}
+
+/* ===== PUBLIC PAGES ===== */
+.public-page {
+  font-family: var(--font-family-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  line-height: var(--line-height-relaxed);
+  margin: 0;
+  padding: 0 0 80px;
+}
+
+.public-page-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-header {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+  padding: var(--spacing-xl) 0;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-color);
+  border-top: 3px solid var(--brand-primary);
+}
+
+.public-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(59, 125, 221, 0.03) 100%);
+  pointer-events: none;
+}
+
+.public-header-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  text-align: center;
+}
+
+.pp-content {
+  max-width: 80%;
+  margin: 0 auto;
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 0;
+  background-color: gainsboro;
+  margin: 0 auto 0;
+}
+
+.brand img {
+  width: 200px;
+  height: auto;
+}
+
+.pp-content-container {
+  position: relative;
+}
+
+.pp-content-bg {
+  position: absolute;
+  top: 0;
+  height: 100px;
+  width: 100%;
+  background-color: gainsboro;
+}
+
+.pp-content {
+  position: relative;
+  max-width: 80%;
+  margin: 0 auto;
+  background-color: var(--white);
+  padding: 30px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+  justify-content: space-between;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color-light);
+  z-index: 99;
+}
+
+.pp-main {
+  flex: 1;
+}
+
+.credits {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  margin: var(--spacing-sm) 0 20px;
+}
+
+.credits img {
+  width: 80px;
+}
+
+.public-footer {
+  margin-top: auto;
+  padding: var(--spacing-xl) 0;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.public-footer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-branding {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.footer-brand-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.footer-powered-by a {
+  color: var(--brand-primary);
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+/* ===== MESSAGES CONTAINER ===== */
+.messages-container {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: var(--z-modal);
+  max-width: 350px;
+  pointer-events: none;
+}
+
+/* ===== RESPONSIVE LAYOUT ===== */
+
+/* Mobile-first responsive design */
+@media (max-width: 991.98px) {
+  /* Hide sidebar by default on mobile */
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  /* Adjust main content for mobile */
+  body:not(.sidebar-collapsed) .main {
+    margin-left: 0;
+  }
+
+  /* Show sidebar when toggled */
+  .sidebar-show .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Add overlay when sidebar is open on mobile */
+  .sidebar-show::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: calc(var(--z-fixed) - 1);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar-logo {
+    height: 1.75rem;
+    max-width: 7rem;
+  }
+
+  .messages-container {
+    top: 1rem;
+    right: 1rem;
+    max-width: 300px;
+  }
+
+  .content {
+    padding: 1rem;
+  }
+
+  .navbar {
+    padding: 0.5rem 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .messages-container {
+    top: 0.5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    max-width: none;
+  }
+
+  .content {
+    padding: 0.75rem;
+  }
+
+  .sidebar {
+    width: 280px; /* Slightly wider on very small screens */
+  }
+}
+
+/* Desktop adjustments */
+@media (min-width: 992px) {
+  /* Ensure sidebar is always visible on desktop */
+  .sidebar {
+    transform: translateX(0) !important;
+  }
+
+  /* Make sure main content has proper margin */
+  .main {
+    margin-left: 250px !important;
+  }
+}

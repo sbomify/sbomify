@@ -102,10 +102,12 @@ const resetForm = () => {
 const closeModal = () => {
   const modal = document.getElementById('addProjectModal')
   if (modal) {
-    const bootstrap = (window as unknown as { bootstrap?: { Modal?: { getInstance(el: HTMLElement): { hide(): void } | null } } }).bootstrap
-    const bootstrapModal = bootstrap?.Modal?.getInstance(modal)
-    if (bootstrapModal) {
-      bootstrapModal.hide()
+    const bootstrap = window.bootstrap
+    if (bootstrap && bootstrap.Modal) {
+      const bootstrapModal = bootstrap.Modal.getInstance(modal)
+      if (bootstrapModal) {
+        bootstrapModal.hide()
+      }
     }
   }
 }

@@ -1,49 +1,7 @@
 import { createApp } from 'vue'
 
-// Vuetify
-import 'vuetify/styles'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
-import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'  // Use SVG icons instead of font
-
-// Create vuetify instance with icons
-const vuetify = createVuetify({
-  components,
-  directives,
-  theme: {
-    defaultTheme: 'light',
-    themes: {
-      light: {
-        colors: {
-          primary: '#3B7DDD',
-          secondary: '#6c757d',
-          success: '#28a745',
-          warning: '#ffc107',
-          danger: '#dc3545'
-        }
-      }
-    }
-  },
-  blueprints: {
-    defaults: {
-      VBtn: {
-        color: 'primary',
-        variant: 'flat'
-      }
-    }
-  },
-  directives: {
-    defaults: {
-      'global': { disableGlobalStyles: true }
-    }
-  },
-  icons: {
-    defaultSet: 'mdi',
-    aliases,
-    sets: { mdi }
-  }
-})
+// Note: Vuetify removed as components use standard Bootstrap/HTML classes
+// which are now provided by our modular CSS system
 
 function mountVueComponent(elementClass, Component) {
   console.log('Mounting Vue component', elementClass);
@@ -78,7 +36,6 @@ function mountVueComponent(elementClass, Component) {
         }
 
         const app = createApp(Component, dataProps);
-        app.use(vuetify);
         app.mount(elements[i]);
         console.log('Mounted Vue component', elementClass, 'with props:', dataProps);
       } catch (error) {
