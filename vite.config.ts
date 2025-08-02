@@ -74,9 +74,9 @@ export default defineConfig({
   ],
   build: {
     target: 'esnext',
-    outDir: resolve('./staticfiles/'),
-    emptyOutDir: false,
-    assetsDir: '',
+    outDir: resolve('./static/dist/'),
+    emptyOutDir: true,
+    assetsDir: 'assets',
     manifest: 'manifest.json',
     rollupOptions: {
       input: {

@@ -170,13 +170,22 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Django Vite
+# Enable WhiteNoise compression and proper headers for production
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# WhiteNoise configuration for better static file serving
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
+WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0  # 1 year cache for production
+
+# Django Vite - now outputs to static/dist/ to avoid conflicts
 DJANGO_VITE = {
     "default": {
         "dev_mode": DEBUG,
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(STATIC_ROOT / "manifest.json"),
+        "manifest_path": str(BASE_DIR / "static" / "dist" / "manifest.json"),
     }
 }
 
