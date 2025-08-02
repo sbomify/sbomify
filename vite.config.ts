@@ -16,7 +16,7 @@ const STATIC_URL = process.env.STATIC_URL || '/static/'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: `${STATIC_URL}`,
+  base: `${STATIC_URL}dist/`,
   css: {
     devSourcemap: true,
   },
