@@ -12,11 +12,9 @@ if(fs.existsSync(envFilePath)) {
   config({ path: path.join(__dirname, '.env') })
 }
 
-const STATIC_URL = process.env.STATIC_URL || '/static/'
-
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: `${STATIC_URL}dist/`,
+  base: '/dist/',  // Keep leading slash for Vite, Django will prepend STATIC_URL
   css: {
     devSourcemap: true,
   },
