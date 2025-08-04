@@ -84,6 +84,11 @@
   text-decoration: none;
 }
 
+/* Fix spacing for team dropdown */
+.nav-item.dropdown .nav-link.dropdown-toggle {
+  padding: 0.5rem 1rem;
+}
+
 /* Dropdown styling */
 .dropdown-menu {
   background-color: var(--bg-secondary);

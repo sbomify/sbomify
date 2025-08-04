@@ -14,7 +14,7 @@ if(fs.existsSync(envFilePath)) {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/dist/',  // Keep leading slash for Vite, Django will prepend STATIC_URL
+  base: '/dist/',  // Keep leading slash for Vite, Django will prepend STATIC_URL automatically
   css: {
     devSourcemap: true,
   },

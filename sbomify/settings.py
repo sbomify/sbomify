@@ -180,15 +180,27 @@ WHITENOISE_AUTOREFRESH = DEBUG
 WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0  # 1 year cache for production
 
 # Django Vite - now outputs to static/dist/ to avoid conflicts
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": DEBUG,
-        "dev_server_host": "127.0.0.1",
-        "dev_server_port": 5170,
-        "manifest_path": str(BASE_DIR / "static" / "dist" / "manifest.json"),
-        "static_url_prefix": "dist/",  # Removed /static/ prefix - Django adds STATIC_URL automatically
+USE_VITE_DEV_SERVER = os.environ.get("USE_VITE_DEV_SERVER", "False").lower() == "true"
+
+if USE_VITE_DEV_SERVER:
+    # Development mode - Vite dev server serves at /dist/
+    DJANGO_VITE = {
+        "default": {
+            "dev_mode": True,
+            "dev_server_host": "127.0.0.1",
+            "dev_server_port": 5170,
+            "static_url_prefix": "/dist/",
+        }
     }
-}
+else:
+    # Production mode - built assets are in static/dist/
+    DJANGO_VITE = {
+        "default": {
+            "dev_mode": False,
+            "manifest_path": str(BASE_DIR / "static" / "dist" / "manifest.json"),
+            "static_url_prefix": "dist/",
+        }
+    }
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
