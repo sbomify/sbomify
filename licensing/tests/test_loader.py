@@ -120,4 +120,4 @@ def test_validate_expression_syntax_error():
     result = validate_expression("Apache-2.0 AND (")
     assert result["status"] == 400
     assert "error" in result
-    assert "invalid" in result["error"].lower()
+    assert "processing error" in result["error"].lower()

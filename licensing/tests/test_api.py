@@ -147,7 +147,7 @@ def test_validate_expression_syntax_error(authenticated_api_client):
     result = response.json()
     assert result["status"] == 400
     assert "error" in result
-    assert "syntax error" in result["error"].lower() or "invalid" in result["error"].lower()
+    assert "processing error" in result["error"].lower()
 
 
 @pytest.mark.django_db

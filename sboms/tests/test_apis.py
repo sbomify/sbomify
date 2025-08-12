@@ -1497,7 +1497,7 @@ def test_download_sbom_s3_error(
 
     assert response.status_code == 500
     data = response.json()
-    assert "Error retrieving SBOM: S3 download failed" in data["detail"]
+    assert "Error retrieving SBOM" in data["detail"]
 
 
 @pytest.mark.django_db

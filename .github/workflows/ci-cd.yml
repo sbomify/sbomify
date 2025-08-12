@@ -83,7 +83,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         test-group:
           - name: "Core Tests"
@@ -151,9 +151,9 @@ jobs:
           echo "Test count: $(poetry run pytest --collect-only --quiet ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Run tests for this specific group
+          # Run tests for this specific group and capture exit code properly
           poetry run pytest --tb=short -v ${{ matrix.test-group.path }} | tee test_results.txt
-          PYTEST_EXIT_CODE=$?
+          PYTEST_EXIT_CODE=${PIPESTATUS[0]}
 
           # Add summary to GitHub
           echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
