@@ -16,6 +16,9 @@ from sboms.models import SBOM, Component
 from teams.models import Team
 from sbomify.tasks import check_sbom_ntia_compliance
 
+# Import S3 fixtures
+pytest_plugins = ["core.tests.s3_fixtures"]
+
 
 @pytest.mark.django_db
 class TestNTIAComplianceTask:
@@ -98,33 +101,32 @@ class TestNTIAComplianceTask:
             }
         }
 
-    def test_successful_compliant_check(self, sbom, compliant_cyclonedx_data):
+    def test_successful_compliant_check(self, sbom, compliant_cyclonedx_data, s3_sboms_mock):
         """Test successful NTIA compliance check for compliant SBOM."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
-            mock_s3_instance = mock_s3_class.return_value
-            mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_data).encode('utf-8')
+        # Set up SBOM data in S3 mock
+        s3_sboms_mock.uploaded_files[sbom.sbom_filename] = json.dumps(compliant_cyclonedx_data).encode('utf-8')
 
-            # Run the task
-            result = check_sbom_ntia_compliance(str(sbom.id))
+        # Run the task
+        result = check_sbom_ntia_compliance(str(sbom.id))
 
-            # Verify result
-            assert result["status"] == "NTIA compliance check completed"
-            assert result["compliance_status"] == "compliant"
-            assert result["is_compliant"] is True
-            assert result["error_count"] == 0
+        # Verify result
+        assert result["status"] == "NTIA compliance check completed"
+        assert result["compliance_status"] == "compliant"
+        assert result["is_compliant"] is True
+        assert result["error_count"] == 0
 
-            # Verify SBOM was updated
-            sbom.refresh_from_db()
-            assert sbom.ntia_compliance_status == SBOM.NTIAComplianceStatus.COMPLIANT
-            assert sbom.ntia_compliance_details is not None
-            assert sbom.ntia_compliance_checked_at is not None
-            assert isinstance(sbom.ntia_compliance_checked_at, datetime)
+        # Verify SBOM was updated
+        sbom.refresh_from_db()
+        assert sbom.ntia_compliance_status == SBOM.NTIAComplianceStatus.COMPLIANT
+        assert sbom.ntia_compliance_details is not None
+        assert sbom.ntia_compliance_checked_at is not None
+        assert isinstance(sbom.ntia_compliance_checked_at, datetime)
 
     def test_successful_non_compliant_check(self, sbom, non_compliant_cyclonedx_data):
         """Test successful NTIA compliance check for non-compliant SBOM."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(non_compliant_cyclonedx_data).encode('utf-8')
 
@@ -241,8 +243,9 @@ class TestNTIAComplianceTask:
             }
         }
 
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(spdx_data).encode('utf-8')
 
@@ -260,8 +263,9 @@ class TestNTIAComplianceTask:
     @patch('sbomify.tasks.logger')
     def test_logging_behavior(self, mock_logger, sbom, compliant_cyclonedx_data):
         """Test that appropriate logging occurs during task execution."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_data).encode('utf-8')
 
@@ -282,8 +286,9 @@ class TestNTIAComplianceTask:
 
     def test_database_transaction_rollback(self, sbom, compliant_cyclonedx_data):
         """Test that database transaction is rolled back on error."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_data).encode('utf-8')
 
@@ -302,8 +307,9 @@ class TestNTIAComplianceTask:
     @patch('sbomify.tasks.connection')
     def test_database_connection_check(self, mock_connection, sbom, compliant_cyclonedx_data):
         """Test that database connection is ensured during task execution."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_data).encode('utf-8')
 
@@ -315,8 +321,9 @@ class TestNTIAComplianceTask:
 
     def test_validation_result_serialization(self, sbom, non_compliant_cyclonedx_data):
         """Test that validation results are properly serialized to JSON."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(non_compliant_cyclonedx_data).encode('utf-8')
 
@@ -338,8 +345,9 @@ class TestNTIAComplianceTask:
 
     def test_task_return_values(self, sbom, compliant_cyclonedx_data):
         """Test that task returns expected values for monitoring/debugging."""
-        # Mock S3 client
-        with patch('sbomify.tasks.S3Client') as mock_s3_class:
+        # Mock S3 client in both locations
+        with patch('sbomify.tasks.S3Client') as mock_s3_class, \
+             patch('sboms.utils.S3Client', mock_s3_class):
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_data).encode('utf-8')
 
