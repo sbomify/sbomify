@@ -57,8 +57,6 @@ django.setup()
 
 from django.conf import settings  # noqa: E402
 
-# Import vulnerability scanning tasks to register them with the broker
-import vulnerability_scanning.tasks  # noqa: F401, E402
 from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
 from sboms.ntia_validator import (  # noqa: E402
@@ -75,6 +73,9 @@ if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TE
     dramatiq.set_broker(redis_broker)
 
 logger = logging.getLogger(__name__)
+
+# Import vulnerability scanning tasks to register them with the broker (AFTER broker config)
+import vulnerability_scanning.tasks  # noqa: F401, E402
 
 
 def log_retry_attempt(retry_state):
