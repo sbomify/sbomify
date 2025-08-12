@@ -477,7 +477,7 @@ def test_download_product_sbom_schema_error(
 
     assert response.status_code == 500
     assert "Error generating product SBOM" in response.json()["detail"]
-    assert "Type3" in response.json()["detail"]
+    # Note: Specific error details are logged but not exposed in API response for security
 
 
 @pytest.mark.django_db

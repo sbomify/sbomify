@@ -438,7 +438,7 @@ def test_create_document_with_s3_error(
 
     assert response.status_code == 400
     data = json.loads(response.content)
-    assert "S3 upload failed" in data["detail"]
+    assert "Invalid request" in data["detail"]
 
 
 @pytest.mark.django_db
@@ -695,7 +695,7 @@ def test_download_document_s3_error(
 
     assert response.status_code == 500
     data = json.loads(response.content)
-    assert "Error retrieving document: S3 download failed" in data["detail"]
+    assert "Error retrieving document" in data["detail"]
 
 
 @pytest.mark.django_db
