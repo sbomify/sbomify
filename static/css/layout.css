@@ -4,6 +4,11 @@
  * Core AdminKit-style layout system for Django templates
  */
 
+/* ===== CSS VARIABLES ===== */
+:root {
+  --sidebar-width: 250px;
+}
+
 /* ===== MAIN LAYOUT CONTAINER ===== */
 .wrapper {
   display: flex;
@@ -213,7 +218,7 @@
 
 /* ===== SIDEBAR ===== */
 .sidebar {
-  width: 250px;
+  width: var(--sidebar-width);
   min-height: 100vh;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
@@ -324,7 +329,7 @@
 
 /* Adjust main content to account for fixed sidebar */
 body:not(.sidebar-collapsed) .main {
-  margin-left: 250px;
+  margin-left: var(--sidebar-width);
 }
 
 /* Responsive logo styling */
@@ -507,10 +512,49 @@ body:not(.sidebar-collapsed) .main {
 
 /* ===== FOOTER ===== */
 .footer {
-  padding: 1rem 1.5rem;
+  padding: 0.75rem 0; /* vertical only; allow full-bleed horizontally */
   background-color: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   margin-top: auto;
+}
+
+/* Ensure footer grid consumes full width and aligns edges */
+.footer .container-fluid {
+  padding-left: 0;   /* full-bleed to viewport edges */
+  padding-right: 0;
+}
+
+.footer .row {
+  width: 100%;
+}
+
+.footer .col-left {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.footer .col-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Remove default link paddings in footer edge links */
+.footer .footer-link {
+  padding: 0 !important;
+}
+
+/* Full-bleed footer background under fixed sidebar on desktop */
+@media (min-width: 992px) {
+  .main > .footer {
+    margin-left: calc(-1 * var(--sidebar-width));   /* negate .main's sidebar offset */
+    width: calc(100% + var(--sidebar-width));       /* extend background under sidebar */
+  }
+
+  body.sidebar-collapsed .main > .footer {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 /* ===== MESSAGES CONTAINER ===== */
@@ -602,6 +646,6 @@ body:not(.sidebar-collapsed) .main {
 
   /* Make sure main content has proper margin */
   .main {
-    margin-left: 250px !important;
+    margin-left: var(--sidebar-width) !important;
   }
 }
