@@ -31,13 +31,12 @@
 
 """Dramatiq tasks for SBOM processing and component management."""
 
-import json
 import logging
 import os
 from typing import Any, Dict
 
 import dramatiq
-from django.db import DatabaseError, OperationalError, connection, transaction
+from django.db import DatabaseError, OperationalError
 from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends import RedisBackend
@@ -58,12 +57,13 @@ django.setup()
 
 from django.conf import settings  # noqa: E402
 
-from core.object_store import S3Client  # noqa: E402
+from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
 from sboms.models import SBOM  # noqa: E402
 from sboms.ntia_validator import (  # noqa: E402
     NTIAComplianceStatus,
     validate_sbom_ntia_compliance,
 )
+from sboms.utils import SBOMDataError, get_sbom_data, serialize_validation_errors  # noqa: E402
 
 # Configure Dramatiq
 if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):
@@ -113,46 +113,12 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
     sbom_instance = None
 
     try:
-        # 1. Fetch SBOM metadata
-        with transaction.atomic():
-            connection.ensure_connection()
-            logger.debug(f"[TASK_process_sbom] Fetching SBOM ID: {sbom_id} from database.")
-            sbom_instance = SBOM.objects.get(id=sbom_id)
-            logger.debug(
-                f"[TASK_process_sbom] SBOM ID: {sbom_id} fetched. "
-                f"Filename: {sbom_instance.sbom_filename}, Team: {sbom_instance.component.team.key}"
-            )
-
-        if not sbom_instance.sbom_filename:
-            logger.error(f"[TASK_process_sbom] SBOM ID: {sbom_id} has no sbom_filename.")
-            return {"error": f"SBOM ID: {sbom_id} has no sbom_filename."}
-
-        # 2. Download SBOM from S3
-        logger.debug(f"[TASK_process_sbom] Downloading SBOM {sbom_instance.sbom_filename} from S3.")
-        s3_client = S3Client(bucket_type="SBOMS")
-        sbom_data_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
-
-        if not sbom_data_bytes:
-            logger.error(
-                f"[TASK_process_sbom] Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."
-            )
-            return {"error": f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."}
-
-        logger.debug(f"[TASK_process_sbom] Downloaded {len(sbom_data_bytes)} bytes for {sbom_instance.sbom_filename}.")
-
-        # Attempt to parse as JSON to check basic integrity
-        try:
-            sbom_data = json.loads(sbom_data_bytes.decode("utf-8"))
-            logger.debug(f"[TASK_process_sbom] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON.")
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            logger.error(
-                f"[TASK_process_sbom] SBOM {sbom_instance.sbom_filename} is not valid JSON or has encoding issues. "
-                f"Error: {e}. First 200 chars: {sbom_data_bytes[:200]}"
-            )
-            return {
-                "error": (f"SBOM {sbom_instance.sbom_filename} content is not valid JSON or has encoding issues."),
-                "details": str(e),
-            }
+        # 1. Fetch SBOM data using shared utility
+        sbom_instance, sbom_data = get_sbom_data(sbom_id)
+        logger.debug(
+            f"[TASK_process_sbom] SBOM ID: {sbom_id} fetched. "
+            f"Filename: {sbom_instance.sbom_filename}, Team: {sbom_instance.component.team.key}"
+        )
 
         # 3. Process SBOM using unified processor
         from sboms.utils import process_sbom_data
@@ -177,30 +143,18 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
 
         return results
 
-    except SBOM.DoesNotExist:
-        error_msg = f"SBOM with ID {sbom_id} not found"
-        logger.error(f"[TASK_process_sbom] {error_msg}")
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+    except SBOMDataError as e:
+        return format_task_error("process_sbom_and_create_components", sbom_id, str(e))
     except (DatabaseError, OperationalError) as db_err:
         error_msg = f"Database error occurred processing SBOM ID {sbom_id}: {db_err}"
         logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
         # Critical database errors should be retried
         raise
-    except json.JSONDecodeError as json_err:
-        error_msg = f"SBOM {sbom_id} contains invalid JSON: {json_err}"
-        logger.error(f"[TASK_process_sbom] {error_msg}")
-        # JSON errors are not retryable - return failure immediately
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
-    except FileNotFoundError as file_err:
-        error_msg = f"SBOM file not found for ID {sbom_id}: {file_err}"
-        logger.error(f"[TASK_process_sbom] {error_msg}")
-        # File not found is not retryable - return failure immediately
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
     except ImportError as import_err:
         error_msg = f"Missing required module for SBOM processing: {import_err}"
         logger.error(f"[TASK_process_sbom] {error_msg}", exc_info=True)
         # Import errors indicate environment issues - should not retry automatically
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+        return format_task_error("process_sbom_and_create_components", sbom_id, error_msg)
     except Exception as e:
         # Log the full exception details for debugging
         logger.error(
@@ -241,13 +195,7 @@ class _ActorProxy:
 scan_sbom_for_vulnerabilities_unified = _ActorProxy()
 
 
-@dramatiq.actor(queue_name="sbom_processing", max_retries=3, time_limit=300000, store_results=True)
-@retry(
-    retry=retry_if_exception_type((OperationalError, DatabaseError)),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    stop=stop_after_delay(60),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
+@sbom_processing_task()
 def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
     """
     Validate an SBOM against NTIA minimum elements and persist the results.
@@ -256,84 +204,31 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
     """
     logger.info(f"[TASK_check_sbom_ntia_compliance] Starting NTIA compliance check for SBOM ID: {sbom_id}")
 
-    # 1) Fetch SBOM and basic checks
-    with transaction.atomic():
-        connection.ensure_connection()
-        try:
-            sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
-        except SBOM.DoesNotExist:
-            error_msg = f"SBOM with ID {sbom_id} not found"
-            logger.error(f"[TASK_check_sbom_ntia_compliance] {error_msg}")
-            return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
-
-        if not sbom_instance.sbom_filename:
-            error_msg = f"SBOM ID: {sbom_id} has no sbom_filename"
-            logger.error(f"[TASK_check_sbom_ntia_compliance] {error_msg}")
-            return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
-
-    # 2) Download SBOM data
-    s3_client = S3Client(bucket_type="SBOMS")
-    sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
-    if not sbom_bytes:
-        error_msg = f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)."
-        logger.error(f"[TASK_check_sbom_ntia_compliance] {error_msg}")
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
-
-    # 3) Decode and parse JSON
     try:
-        sbom_text = sbom_bytes.decode("utf-8")
-    except UnicodeDecodeError as e:
-        error_msg = f"SBOM {sbom_instance.sbom_filename} is not valid JSON or has encoding issues. Error: {e}."
-        # Ensure tests see the expected phrase
-        if "encoding issues" not in error_msg:
-            error_msg += " encoding issues"
-        logger.error(f"[TASK_check_sbom_ntia_compliance] {error_msg}")
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+        # 1) Fetch SBOM data using shared utility
+        sbom_instance, sbom_data = get_sbom_data(sbom_id)
 
-    try:
-        sbom_data = json.loads(sbom_text)
-    except json.JSONDecodeError as e:
-        error_msg = (
-            f"SBOM {sbom_instance.sbom_filename} content is not valid JSON. Error: {e}. "
-            f"First 200 chars: {sbom_text[:200]}"
+        # 2) Validate using NTIA validator
+        validation = validate_sbom_ntia_compliance(sbom_data, sbom_instance.format)
+        is_compliant = bool(getattr(validation, "is_compliant", False))
+        status_value = (
+            validation.status.value if isinstance(validation.status, NTIAComplianceStatus) else str(validation.status)
         )
-        logger.error(f"[TASK_check_sbom_ntia_compliance] {error_msg}")
-        return {"error": error_msg, "status": "failed", "sbom_id": sbom_id}
+        error_count = int(getattr(validation, "error_count", len(getattr(validation, "errors", []))))
 
-    logger.debug(f"[TASK_check_sbom_ntia_compliance] SBOM {sbom_instance.sbom_filename} successfully parsed as JSON.")
+        # 3) Build JSON-serializable details using shared utility
+        details: Dict[str, Any] = {
+            "is_compliant": is_compliant,
+            "status": status_value,
+            "errors": serialize_validation_errors(getattr(validation, "errors", [])),
+            "checked_at": getattr(validation, "checked_at", None).isoformat()
+            if getattr(validation, "checked_at", None)
+            else None,
+        }
 
-    # 4) Validate using NTIA validator
-    validation = validate_sbom_ntia_compliance(sbom_data, sbom_instance.format)
-    is_compliant = bool(getattr(validation, "is_compliant", False))
-    status_value = (
-        validation.status.value if isinstance(validation.status, NTIAComplianceStatus) else str(validation.status)
-    )
-    error_count = int(getattr(validation, "error_count", len(getattr(validation, "errors", []))))
+        # 4) Persist results
+        from django.utils import timezone as django_timezone
 
-    # Build JSON-serializable details
-    errors_list = []
-    for err in getattr(validation, "errors", []) or []:
-        if hasattr(err, "model_dump"):
-            errors_list.append(err.model_dump())
-        elif hasattr(err, "dict"):
-            errors_list.append(err.dict())
-        else:
-            errors_list.append(err)
-
-    details: Dict[str, Any] = {
-        "is_compliant": is_compliant,
-        "status": status_value,
-        "errors": errors_list,
-        "checked_at": getattr(validation, "checked_at", None).isoformat()
-        if getattr(validation, "checked_at", None)
-        else None,
-    }
-
-    # 5) Persist results
-    from django.utils import timezone as django_timezone
-
-    with transaction.atomic():
-        connection.ensure_connection()
         sbom_update = SBOM.objects.select_for_update().get(id=sbom_id)
         if status_value == NTIAComplianceStatus.UNKNOWN.value:
             sbom_update.ntia_compliance_status = SBOM.NTIAComplianceStatus.UNKNOWN
@@ -345,19 +240,22 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
         sbom_update.ntia_compliance_checked_at = django_timezone.now()
         sbom_update.save()
 
-    logger.info(
-        f"[TASK_check_sbom_ntia_compliance] NTIA compliance check completed for SBOM ID: {sbom_id}. "
-        f"Status: {status_value}, Errors: {error_count}"
-    )
+        logger.info(
+            f"[TASK_check_sbom_ntia_compliance] NTIA compliance check completed for SBOM ID: {sbom_id}. "
+            f"Status: {status_value}, Errors: {error_count}"
+        )
 
-    return {
-        "sbom_id": str(sbom_id),
-        "status": "NTIA compliance check completed",
-        "compliance_status": status_value,
-        "is_compliant": is_compliant,
-        "error_count": error_count,
-        "message": "Validation completed",
-    }
+        return {
+            "sbom_id": str(sbom_id),
+            "status": "NTIA compliance check completed",
+            "compliance_status": status_value,
+            "is_compliant": is_compliant,
+            "error_count": error_count,
+            "message": "Validation completed",
+        }
+
+    except SBOMDataError as e:
+        return format_task_error("check_sbom_ntia_compliance", sbom_id, str(e))
 
 
 # Example task for testing

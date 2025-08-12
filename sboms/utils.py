@@ -16,6 +16,8 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from core.models import Component, Product, Project
+
+# S3Client import moved to function level to support test mocking
 from sboms.models import SBOM
 from sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
@@ -47,6 +49,137 @@ log = logging.getLogger(__name__)
 
 # Signed URL constants
 SIGNED_URL_MAX_AGE = 7 * 24 * 3600  # 7 days in seconds
+
+
+# =============================================================================
+# SHARED SBOM DATA PROCESSING UTILITIES
+# =============================================================================
+
+
+class SBOMDataError(Exception):
+    """Custom exception for SBOM data processing errors."""
+
+    pass
+
+
+def get_sbom_data(sbom_id: str) -> Tuple[SBOM, Dict[str, Any]]:
+    """
+    Fetch SBOM instance and parsed JSON data with proper error handling.
+
+    This function consolidates the common pattern of:
+    1. Fetching SBOM from database
+    2. Downloading SBOM data from S3
+    3. Parsing JSON with proper error handling
+
+    Args:
+        sbom_id: The SBOM ID to fetch
+
+    Returns:
+        Tuple of (SBOM instance, parsed JSON data)
+
+    Raises:
+        SBOMDataError: If any step fails with descriptive error message
+    """
+    # 1) Fetch SBOM from database
+    try:
+        sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
+    except SBOM.DoesNotExist:
+        raise SBOMDataError(f"SBOM with ID {sbom_id} not found")
+
+    if not sbom_instance.sbom_filename:
+        raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
+
+    # 2) Download SBOM data from S3
+    from core.object_store import S3Client
+
+    s3_client = S3Client(bucket_type="SBOMS")
+    sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
+
+    if not sbom_bytes:
+        raise SBOMDataError(f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)")
+
+    # 3) Decode and parse JSON
+    try:
+        sbom_text = sbom_bytes.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise SBOMDataError(f"SBOM {sbom_instance.sbom_filename} has encoding issues: {e}")
+
+    try:
+        sbom_data = json.loads(sbom_text)
+    except json.JSONDecodeError as e:
+        raise SBOMDataError(
+            f"SBOM {sbom_instance.sbom_filename} content is not valid JSON. Error: {e}. "
+            f"First 200 chars: {sbom_text[:200]}"
+        )
+
+    log.debug(f"SBOM {sbom_instance.sbom_filename} successfully fetched and parsed as JSON")
+    return sbom_instance, sbom_data
+
+
+def get_sbom_data_bytes(sbom_id: str) -> Tuple[SBOM, bytes]:
+    """
+    Fetch SBOM instance and raw bytes data for services that need bytes.
+
+    This function is similar to get_sbom_data() but returns the raw bytes
+    instead of parsed JSON, useful for services that need the original bytes.
+
+    Args:
+        sbom_id: The SBOM ID to fetch
+
+    Returns:
+        Tuple of (SBOM instance, raw bytes data)
+
+    Raises:
+        SBOMDataError: If any step fails with descriptive error message
+    """
+    # 1) Fetch SBOM from database
+    try:
+        sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
+    except SBOM.DoesNotExist:
+        raise SBOMDataError(f"SBOM with ID {sbom_id} not found")
+
+    if not sbom_instance.sbom_filename:
+        raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
+
+    # 2) Download SBOM data from S3
+    from core.object_store import S3Client
+
+    s3_client = S3Client(bucket_type="SBOMS")
+    sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
+
+    if not sbom_bytes:
+        raise SBOMDataError(f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)")
+
+    # 3) Validate that it's valid data (basic check without parsing)
+    try:
+        sbom_bytes.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise SBOMDataError(f"SBOM {sbom_instance.sbom_filename} has encoding issues: {e}")
+
+    log.debug(f"SBOM {sbom_instance.sbom_filename} successfully fetched as bytes")
+    return sbom_instance, sbom_bytes
+
+
+def serialize_validation_errors(errors: list) -> list:
+    """
+    Convert Pydantic validation errors to JSON-serializable format.
+
+    Args:
+        errors: List of validation error objects
+
+    Returns:
+        List of serializable error dictionaries
+    """
+    errors_list = []
+    for err in errors or []:
+        if hasattr(err, "model_dump"):
+            errors_list.append(err.model_dump())
+        elif hasattr(err, "dict"):
+            errors_list.append(err.dict())
+        else:
+            errors_list.append(err)
+    return errors_list
+
 
 # Lazy initialization of signer to avoid issues when Django settings aren't configured
 _signer = None
