@@ -2,8 +2,8 @@
 {% if debug %}
     <footer class="footer mt-auto py-3 border-top">
         <div class="container-fluid">
-            <div class="row align-items-center">
-                <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
+            <div class="row align-items-center gx-0">
+                <div class="col-lg-6 col-left text-lg-start text-center mb-2 mb-lg-0">
                     <a href="https://sbomify.com" class="text-decoration-none">
                         <strong class="text-primary">sbomify</strong>
                     </a>
@@ -17,9 +17,10 @@
                         <span class="text-muted">© {% now "Y" %} sbomify, ltd</span>
                     </span>
                 </div>
-                <div class="col-lg-6 text-lg-end text-center">
+                <div class="col-lg-6 col-right text-lg-end text-center">
                     <nav class="nav justify-content-lg-end justify-content-center">
-                        <a class="nav-link px-2 text-muted" href="mailto:hello@sbomify.com">Contact Support</a>
+                        <a class="nav-link footer-link text-muted"
+                           href="mailto:hello@sbomify.com">Contact Support</a>
                     </nav>
                 </div>
             </div>
@@ -29,7 +30,7 @@
     {% cache 3600 'footer' app_version %}
     <footer class="footer mt-auto py-3 border-top">
         <div class="container-fluid">
-            <div class="row align-items-center">
+            <div class="row align-items-center gx-0">
                 <div class="col-lg-6 text-lg-start text-center mb-2 mb-lg-0">
                     <a href="https://sbomify.com" class="text-decoration-none">
                         <strong class="text-primary">sbomify</strong>

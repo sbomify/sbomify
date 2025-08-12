@@ -12,6 +12,7 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
+            {# Keep footer inside .main for stickiness; CSS makes it full-bleed under sidebar #}
             {% include "core/components/footer.html.j2" %}
         </div>
     </div>
