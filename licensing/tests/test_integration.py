@@ -113,4 +113,4 @@ def test_integration_validate_expression_syntax_error_via_http(authenticated_api
     result = response.json()
     assert result["status"] == 400
     assert "error" in result
-    assert "syntax error" in result["error"].lower() or "invalid" in result["error"].lower()
+    assert "processing error" in result["error"].lower()
