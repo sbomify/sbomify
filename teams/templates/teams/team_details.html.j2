@@ -1,6 +1,7 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
 {% load django_vite %}
+{% load json_extras %}
 {% block title %}sbomify Team: {{ team.name }}{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
@@ -181,7 +182,7 @@
                 <div class="vc-team-billing"
                      data-team-key="{{ team.key }}"
                      data-billing-plan="{{ team.billing_plan }}"
-                     data-billing-plan-limits="{{ team.billing_plan_limits|default:''|escape }}"
+                     data-billing-plan-limits="{{ team.billing_plan_limits|jsonify|escape }}"
                      data-user-role="{{ request.session.current_team.role }}"></div>
             </div>
         </div>

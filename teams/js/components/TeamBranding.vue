@@ -39,20 +39,16 @@
               <div class="color-field">
                 <label for="brand_color" class="field-label">Primary Brand Color</label>
                 <div class="color-input-group">
-                  <div class="color-preview" :style="{ backgroundColor: brandingInfo.brand_color || '#000000' }"></div>
                   <input
-                    v-model="brandingInfo.brand_color"
-                    type="text"
-                    class="form-control color-text"
-                    placeholder="#000000"
-                    @input="validateAndUpdateColor($event, 'brand_color')"
-                  >
-                  <input
-                    v-model="brandingInfo.brand_color"
+                    v-model="localBrandingInfo.brand_color"
                     type="color"
-                    class="color-picker"
-                    @change="updateField('brand_color')"
+                    class="color-picker-modern"
+                    @input="handleColorPickerChange($event, 'brand_color')"
                   >
+                  <div class="color-info">
+                    <span class="color-hex">{{ localBrandingInfo.brand_color || 'Not set' }}</span>
+                    <small class="color-hint">Click to choose color</small>
+                  </div>
                 </div>
                 <small class="field-hint">Used for primary branding elements and headers</small>
               </div>
@@ -61,20 +57,16 @@
               <div class="color-field">
                 <label for="accent_color" class="field-label">Accent Color</label>
                 <div class="color-input-group">
-                  <div class="color-preview" :style="{ backgroundColor: brandingInfo.accent_color || '#000000' }"></div>
                   <input
-                    v-model="brandingInfo.accent_color"
-                    type="text"
-                    class="form-control color-text"
-                    placeholder="#000000"
-                    @input="validateAndUpdateColor($event, 'accent_color')"
-                  >
-                  <input
-                    v-model="brandingInfo.accent_color"
+                    v-model="localBrandingInfo.accent_color"
                     type="color"
-                    class="color-picker"
-                    @change="updateField('accent_color')"
+                    class="color-picker-modern"
+                    @input="handleColorPickerChange($event, 'accent_color')"
                   >
+                  <div class="color-info">
+                    <span class="color-hex">{{ localBrandingInfo.accent_color || 'Not set' }}</span>
+                    <small class="color-hint">Click to choose color</small>
+                  </div>
                 </div>
                 <small class="field-hint">Used for buttons, links, and highlights</small>
               </div>
@@ -96,10 +88,10 @@
                 <label class="field-label">Brand Icon</label>
                 <div class="upload-container">
                                      <FileDragAndDrop
-                     v-model="brandingInfo.icon"
+                     v-model="localBrandingInfo.icon"
                      accept="image/*"
                      class="modern-upload"
-                     @update:modelValue="(file) => handleFileUpload('icon', file || null)"
+                     @update:modelValue="(file) => handleFileChange('icon', file || null)"
                    />
                 </div>
                 <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
@@ -110,10 +102,10 @@
                 <label class="field-label">Brand Logo</label>
                 <div class="upload-container">
                                      <FileDragAndDrop
-                     v-model="brandingInfo.logo"
+                     v-model="localBrandingInfo.logo"
                      accept="image/*"
                      class="modern-upload"
-                     @update:modelValue="(file) => handleFileUpload('logo', file || null)"
+                     @update:modelValue="(file) => handleFileChange('logo', file || null)"
                    />
                 </div>
                 <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
@@ -132,18 +124,21 @@
         <div class="section-content">
           <div class="preference-row">
             <div class="preference-content">
-              <label for="prefer_logo_over_icon_switch" class="preference-label">Prefer Logo Over Icon</label>
-              <p class="preference-description">When both logo and icon are available, prioritize showing the logo in branding areas.</p>
+              <label for="prefer_logo_over_icon_switch" class="preference-label">Primary Brand Asset</label>
+              <p class="preference-description">
+                When you upload both an icon and logo, choose which one takes priority in public pages.
+                <br><strong>Icon:</strong> Better for compact spaces (headers, favicons)
+                <br><strong>Logo:</strong> Better for prominent branding areas
+              </p>
             </div>
             <div class="preference-control">
               <div class="form-check form-switch">
                 <input
                   id="prefer_logo_over_icon_switch"
-                  v-model="brandingInfo.prefer_logo_over_icon"
+                  v-model="localBrandingInfo.prefer_logo_over_icon"
                   class="form-check-input"
                   type="checkbox"
                   role="switch"
-                  @change="updateField('prefer_logo_over_icon')"
                 >
                 <label class="form-check-label" for="prefer_logo_over_icon_switch"></label>
               </div>
@@ -152,11 +147,32 @@
         </div>
       </div>
     </div>
+
+    <!-- Save Actions -->
+    <div class="save-actions">
+      <button
+        v-if="hasUnsavedChanges && !isSaving"
+        class="btn btn-outline-secondary btn-cancel"
+        @click="resetChanges"
+      >
+        <i class="fas fa-undo me-2"></i>
+        Cancel
+      </button>
+      <button
+        v-if="hasUnsavedChanges"
+        :disabled="isSaving"
+        class="btn btn-primary btn-save"
+        @click="saveAllChanges"
+      >
+        <i class="fas fa-save me-2"></i>
+        {{ isSaving ? 'Saving...' : 'Save Changes' }}
+      </button>
+    </div>
   </StandardCard>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { isAxiosError } from 'axios';
 import $axios from '../../../core/js/utils';
 import FileDragAndDrop from '../../../core/js/components/FileDragAndDrop.vue';
@@ -180,6 +196,9 @@ interface BrandingInfo {
 
 const props = defineProps<Props>();
 const isLoading = ref(true);
+const isSaving = ref(false);
+
+// Original server data
 const brandingInfo = ref<BrandingInfo>({
   brand_color: "",
   accent_color: "",
@@ -190,62 +209,129 @@ const brandingInfo = ref<BrandingInfo>({
   prefer_logo_over_icon: false
 });
 
-const validateAndUpdateColor = (event: Event, field: string) => {
+// Local form state
+const localBrandingInfo = ref<BrandingInfo>({
+  brand_color: "",
+  accent_color: "",
+  icon: null,
+  logo: null,
+  icon_url: "",
+  logo_url: "",
+  prefer_logo_over_icon: false
+});
+
+// Track changes
+const hasUnsavedChanges = computed(() => {
+  if (isLoading.value) return false;
+
+  // Compare with original server values (not defaults)
+  const originalBrandColor = brandingInfo.value.brand_color || '';
+  const originalAccentColor = brandingInfo.value.accent_color || '';
+  const currentBrandColor = localBrandingInfo.value.brand_color || '';
+  const currentAccentColor = localBrandingInfo.value.accent_color || '';
+
+  return (
+    currentBrandColor !== originalBrandColor ||
+    currentAccentColor !== originalAccentColor ||
+    localBrandingInfo.value.prefer_logo_over_icon !== brandingInfo.value.prefer_logo_over_icon ||
+    localBrandingInfo.value.icon !== null ||
+    localBrandingInfo.value.logo !== null
+  );
+});
+
+
+
+const handleColorPickerChange = (event: Event, field: string) => {
   const target = event.target as HTMLInputElement;
-  let value = target.value;
-
-  // Add # if not present and value is not empty
-  if (value && !value.startsWith('#')) {
-    value = '#' + value;
-    target.value = value;
-  }
-
-  // Validate hex color format
-  const hexPattern = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
-  if (value === '' || hexPattern.test(value)) {
-    brandingInfo.value[field] = value;
-    updateField(field);
-  }
+  localBrandingInfo.value[field] = target.value;
 };
 
-const updateField = async (field: string) => {
-  try {
-    const payload: Record<string, unknown> = {};
-    payload[field] = brandingInfo.value[field];
+const handleFileChange = (field: string, file: File | null) => {
+  localBrandingInfo.value[field] = file;
+};
 
-    await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, payload);
+const resetChanges = () => {
+  console.log('Resetting changes...');
+  console.log('Original server data:', brandingInfo.value);
+
+  // Reset local state to exactly match server state
+  Object.assign(localBrandingInfo.value, {
+    brand_color: brandingInfo.value.brand_color || '',
+    accent_color: brandingInfo.value.accent_color || '',
+    prefer_logo_over_icon: brandingInfo.value.prefer_logo_over_icon,
+    icon_url: brandingInfo.value.icon_url || '',
+    logo_url: brandingInfo.value.logo_url || '',
+    icon: null, // Always reset file uploads
+    logo: null, // Always reset file uploads
+  });
+
+  console.log('Reset to:', localBrandingInfo.value);
+};
+
+const saveAllChanges = async () => {
+  if (!hasUnsavedChanges.value || isSaving.value) return;
+
+  isSaving.value = true;
+
+  try {
+    // Save individual field changes using the correct API endpoints
+    if (localBrandingInfo.value.brand_color !== brandingInfo.value.brand_color) {
+      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/brand_color`, {
+        value: localBrandingInfo.value.brand_color
+      });
+    }
+
+    if (localBrandingInfo.value.accent_color !== brandingInfo.value.accent_color) {
+      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/accent_color`, {
+        value: localBrandingInfo.value.accent_color
+      });
+    }
+
+    if (localBrandingInfo.value.prefer_logo_over_icon !== brandingInfo.value.prefer_logo_over_icon) {
+      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/prefer_logo_over_icon`, {
+        value: localBrandingInfo.value.prefer_logo_over_icon
+      });
+    }
+
+    // Upload new files using the correct upload endpoints
+    if (localBrandingInfo.value.icon) {
+      const iconFormData = new FormData();
+      iconFormData.append('file', localBrandingInfo.value.icon);
+      await $axios.post(`/api/v1/teams/${props.teamKey}/branding/upload/icon`, iconFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+
+    if (localBrandingInfo.value.logo) {
+      const logoFormData = new FormData();
+      logoFormData.append('file', localBrandingInfo.value.logo);
+      await $axios.post(`/api/v1/teams/${props.teamKey}/branding/upload/logo`, logoFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+
+    // Reload the current data from server
+    const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
+    if (response.data) {
+      Object.assign(brandingInfo.value, response.data);
+      // Reset local state to match server
+      Object.assign(localBrandingInfo.value, {
+        ...response.data,
+        icon: null,
+        logo: null,
+      });
+    }
+
     showSuccess('Branding updated successfully');
   } catch (error) {
-    console.error('Error updating branding:', error);
+    console.error('Error saving branding:', error);
     if (isAxiosError(error)) {
-      showError(error.response?.data?.message || 'Failed to update branding');
+      showError(error.response?.data?.message || 'Failed to save branding');
     } else {
-      showError('Failed to update branding');
+      showError('Failed to save branding');
     }
-  }
-};
-
-const handleFileUpload = async (field: string, file: File | null) => {
-  if (!file) return;
-
-  try {
-    const formData = new FormData();
-    formData.append(field, file);
-
-    await $axios.patch(`/api/v1/teams/${props.teamKey}/branding`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    showSuccess(`${field.charAt(0).toUpperCase() + field.slice(1)} uploaded successfully`);
-  } catch (error) {
-    console.error(`Error uploading ${field}:`, error);
-    if (isAxiosError(error)) {
-      showError(error.response?.data?.message || `Failed to upload ${field}`);
-    } else {
-      showError(`Failed to upload ${field}`);
-    }
+  } finally {
+    isSaving.value = false;
   }
 };
 
@@ -254,6 +340,12 @@ onMounted(async () => {
     const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
     if (response.data) {
       Object.assign(brandingInfo.value, response.data);
+      // Initialize local state with server data (no defaults)
+      Object.assign(localBrandingInfo.value, {
+        ...response.data,
+        icon: null,
+        logo: null,
+      });
     }
   } catch (error) {
     console.error('Error loading branding info:', error);
@@ -348,11 +440,11 @@ onMounted(async () => {
 .color-input-group {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   background: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  padding: 0.5rem;
+  padding: 1rem;
   transition: all 0.2s ease;
 }
 
@@ -361,46 +453,53 @@ onMounted(async () => {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.color-preview {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 2px solid #e5e7eb;
-  flex-shrink: 0;
-  transition: border-color 0.2s ease;
-}
-
-.color-text {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  padding: 0.25rem 0.5rem;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 0.875rem;
-  color: #374151;
-}
-
-.color-picker {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 6px;
+.color-picker-modern {
+  width: 60px;
+  height: 60px;
+  border: 3px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
   background: none;
   padding: 0;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
-.color-picker::-webkit-color-swatch-wrapper {
+.color-picker-modern:hover {
+  border-color: #9ca3af;
+  transform: scale(1.05);
+}
+
+.color-picker-modern::-webkit-color-swatch-wrapper {
   padding: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
-.color-picker::-webkit-color-swatch {
+.color-picker-modern::-webkit-color-swatch {
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+}
+
+.color-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.color-hex {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  letter-spacing: 0.05em;
+}
+
+.color-hint {
+  color: #6b7280;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 /* Upload Fields */
@@ -501,13 +600,14 @@ onMounted(async () => {
 
   .color-input-group {
     flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.75rem;
     padding: 0.75rem;
   }
 
-  .color-preview {
-    align-self: center;
+  .color-picker-modern {
+    width: 50px;
+    height: 50px;
   }
 
   .preference-row {
@@ -518,6 +618,16 @@ onMounted(async () => {
 
   .preference-control {
     justify-content: flex-start;
+  }
+
+  .save-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .btn-save {
+    width: 100%;
   }
 }
 
@@ -623,6 +733,35 @@ onMounted(async () => {
 .form-check.form-switch .form-check-input:focus {
   box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
   border-color: #3b82f6;
+}
+
+/* Save Actions */
+.save-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 2rem 0 0.5rem;
+  margin-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+  gap: 1rem;
+}
+
+.btn-save {
+  min-width: 140px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 /* Floating Alert Styling */
