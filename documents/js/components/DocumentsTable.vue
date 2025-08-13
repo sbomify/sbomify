@@ -27,7 +27,7 @@
     <!-- Data table -->
     <div v-else>
       <div class="data-table">
-        <table class="table">
+        <table class="table dashboard-table">
           <thead>
             <tr>
               <th scope="col">Name</th>
@@ -41,20 +41,20 @@
           </thead>
           <tbody>
             <tr v-for="item in documentsData" :key="item.document.id">
-              <td>
+              <td data-label="Name">
                 <a :href="getDocumentDetailUrl(item.document.id)" title="Details" class="icon-link">
                   {{ item.document.name }}
                 </a>
               </td>
-              <td>Document</td>
-              <td>
+              <td data-label="Artifact Type">Document</td>
+              <td data-label="Type">
                 <span class="badge bg-warning-subtle text-warning">{{ getDocumentTypeDisplay(item.document.document_type) }}</span>
               </td>
-              <td :title="item.document.version">
+              <td data-label="Version" :title="item.document.version">
                 {{ utils.truncateText(item.document.version, 20) }}
               </td>
-              <td>{{ utils.formatDate(item.document.created_at) }}</td>
-              <td>
+              <td data-label="Created">{{ utils.formatDate(item.document.created_at) }}</td>
+              <td data-label="Releases">
                 <ReleaseList
                   :releases="item.releases"
                   :item-id="item.document.id"
@@ -62,7 +62,7 @@
                   :view-all-url="getDocumentReleasesUrl(item.document.id)"
                 />
               </td>
-              <td>
+              <td data-label="Actions">
                 <div class="d-flex gap-2">
                   <a :href="getDocumentDownloadUrl(item.document.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
                     <i class="fas fa-download"></i>

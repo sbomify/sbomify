@@ -476,12 +476,32 @@ body {
   }
 
   .content {
-    padding: 0.75rem 1rem;
+    padding: 1rem 0.75rem;
   }
 
   .navbar {
-    padding: 0.5rem 1rem;
-    height: var(--topnav-height-mobile);
+    padding: 0.75rem 1rem;
+    height: auto;
+    min-height: var(--topnav-height-mobile);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Optimize navbar layout for mobile */
+  .navbar .workspace-selector {
+    order: 1;
+    flex: 1;
+    max-width: calc(100% - 120px);
+  }
+
+  .navbar .navbar-collapse {
+    order: 2;
+    flex-shrink: 0;
+  }
+
+  .sidebar-toggle {
+    order: 0;
+    margin-right: 1rem;
   }
 
   .sidebar-header-row {

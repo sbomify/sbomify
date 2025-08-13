@@ -46,7 +46,7 @@
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id">
-            <td>
+            <td data-label="Name">
               <a
                 :href="getItemDetailUrl(item)"
                 class="text-primary text-decoration-none"
@@ -54,12 +54,12 @@
                 {{ item.name }}
               </a>
             </td>
-            <td v-if="itemType === 'component'">
+            <td v-if="itemType === 'component'" data-label="Type">
               <span class="badge bg-info-subtle text-info">
                 {{ getComponentTypeDisplayName((item as Component).component_type) }}
               </span>
             </td>
-            <td>
+            <td :data-label="getRelationshipColumnHeader()">
                <div v-if="itemType === 'product'">
                  <span v-if="(item as Product).projects.length === 0" class="text-muted">
                    No projects
@@ -115,7 +115,7 @@
 
                <span v-else>-</span>
              </td>
-            <td class="text-center">
+            <td class="text-center" data-label="Public?">
               <span
                 v-if="item.is_public"
                 class="badge bg-success-subtle text-success"
