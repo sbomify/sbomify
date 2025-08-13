@@ -1,19 +1,8 @@
 {% extends "./base.html.j2" %}
 {% block title %}sbomify{% endblock %}
-{% block main %}
-    <div class="wrapper">
-        {% include "core/sidebar.html.j2" %}
-        <div class="main">
-            {% include "core/topnav.html.j2" %}
-            {% include "core/components/site_notifications.html.j2" %}
-            <main class="content">
-                <div class="container-fluid p-0">
-                    {% include "core/components/messages.html.j2" %}
-                    {% block content %}{% endblock %}
-                </div>
-            </main>
-            {# Keep footer inside .main for stickiness; CSS makes it full-bleed under sidebar #}
-            {% include "core/components/footer.html.j2" %}
-        </div>
-    </div>
+{% block content %}
+    <!-- Site notifications -->
+    {% include "core/components/site_notifications.html.j2" %}
+    <!-- Dashboard content -->
+    {% block dashboard_content %}{% endblock %}
 {% endblock %}

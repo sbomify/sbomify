@@ -437,6 +437,12 @@
   max-width: 200px;
 }
 
+/* ===== USER AVATAR ===== */
+.user-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+}
+
 .login-card {
   max-width: 600px;
   margin: var(--spacing-2xl) auto;

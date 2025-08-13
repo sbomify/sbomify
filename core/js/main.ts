@@ -42,10 +42,71 @@ declare global {
     Chart: typeof Chart;
   }
 }
+
 window.Chart = Chart;
 
-// FontAwesome CSS - loaded via Django templates, not needed here
+/**
+ * Workspace switching functionality
+ */
+function initializeWorkspaceSelector() {
+  // Handle workspace dropdown button clicks
+  document.addEventListener('click', function(event) {
+    const target = event.target as HTMLElement;
+    const workspaceButton = target.closest('[data-workspace-key]') as HTMLElement;
 
+    if (workspaceButton && workspaceButton.tagName === 'BUTTON') {
+      const workspaceKey = workspaceButton.getAttribute('data-workspace-key');
+      const workspaceName = workspaceButton.getAttribute('data-workspace-name');
+
+      if (workspaceKey) {
+        console.log('Switching to workspace:', workspaceName, 'Key:', workspaceKey);
+
+        // Construct the team switch URL - matches the URL pattern from teams/urls.py
+        const switchUrl = `/teams/switch/${workspaceKey}/`;
+
+        // Get current view name for preserving context
+        const currentPath = window.location.pathname;
+        const targetUrl = `${switchUrl}?next=${encodeURIComponent(currentPath)}`;
+
+        console.log('Redirecting to:', targetUrl);
+        window.location.href = targetUrl;
+      }
+    }
+  });
+}
+
+/**
+ * Initialize custom components
+ */
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize workspace selector
+  initializeWorkspaceSelector();
+
+  // Initialize Bootstrap tooltips
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map((tooltipTriggerEl) => {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
+
+  // Handle modal UX improvements
+  document.querySelectorAll('.modal').forEach(modalElement => {
+    const modal = modalElement as HTMLElement;
+
+    modal.addEventListener('shown.bs.modal', () => {
+      const input = modal.querySelector('input[type="text"]') as HTMLInputElement;
+      if (input) {
+        setTimeout(() => {
+          input.focus();
+          input.select();
+        }, 50);
+      }
+    });
+  });
+
+  console.log('Main.ts loaded successfully - workspace selector initialized');
+});
+
+// Import Vue component mounting utility
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
 import { eventBus, EVENTS } from './utils';
@@ -89,7 +150,6 @@ import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
 import ReleasesList from './components/ReleasesList.vue';
 import ReleaseList from './components/ReleaseList.vue';
-
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -144,64 +204,6 @@ declare global {
 // Make eventBus available globally for inline scripts
 window.eventBus = eventBus;
 window.EVENTS = EVENTS;
-
-
-
-// Handle modal UX improvements
-document.addEventListener('DOMContentLoaded', function() {
-  // Initialize modals with custom focus management
-  document.querySelectorAll('.modal').forEach(modalElement => {
-    const modal = modalElement as HTMLElement;
-
-    modal.addEventListener('shown.bs.modal', () => {
-      const input = modal.querySelector('input[type="text"]') as HTMLInputElement;
-      if (input) {
-        setTimeout(() => {
-          input.focus();
-          input.select();
-        }, 50);
-      }
-    });
-  });
-
-  // Initialize sidebar toggle functionality
-  const sidebarToggle = document.querySelector('.js-sidebar-toggle') as HTMLElement;
-  const sidebar = document.querySelector('.sidebar') as HTMLElement;
-  const body = document.body;
-
-  if (sidebarToggle && sidebar) {
-    sidebarToggle.addEventListener('click', (e) => {
-      e.preventDefault();
-
-      // For mobile: toggle visibility
-      if (window.innerWidth < 992) {
-        body.classList.toggle('sidebar-show');
-      } else {
-        // For desktop: toggle collapsed state
-        body.classList.toggle('sidebar-collapsed');
-      }
-    });
-
-    // Close sidebar on mobile when clicking outside
-    document.addEventListener('click', (e) => {
-      if (window.innerWidth < 992 && body.classList.contains('sidebar-show')) {
-        const target = e.target as HTMLElement;
-        if (!sidebar.contains(target) && !sidebarToggle.contains(target)) {
-          body.classList.remove('sidebar-show');
-        }
-      }
-    });
-
-    // Handle resize events
-    window.addEventListener('resize', () => {
-      if (window.innerWidth >= 992) {
-        body.classList.remove('sidebar-show');
-      }
-    });
-  }
-
-  // FontAwesome icons are loaded via CSS, no initialization needed
-});
 
 // Export something to make TypeScript happy
 export {};
