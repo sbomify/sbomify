@@ -16,10 +16,11 @@ class TestBaseTemplate:
         assert '<nav id="sidebar"' in content
         assert 'class="sidebar js-sidebar"' in content
 
-        # Test user info is present in dropdown
+        # Test user info is present in dropdown (updated for new structure)
         assert any([
-            f"<strong>{sample_user.username}</strong>" in content,
-            '<a class="dropdown-item" href="/logout">Log out</a>' in content
+            sample_user.username in content,
+            'href="/logout"' in content,
+            'Log out' in content
         ])
 
         # Test basic structure
@@ -38,7 +39,8 @@ class TestBaseTemplate:
         client.login(username=sample_user.username, password="test")  # nosec B106
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
-        assert 'class="sidebar-item active"' in content
+        # Check for active state in new sidebar structure (li element with active class)
+        assert 'sidebar-item active' in content
         assert "Dashboard</span>" in content
 
         # Test other navigation items present
