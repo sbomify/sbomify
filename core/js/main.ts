@@ -61,8 +61,14 @@ function initializeWorkspaceSelector() {
       if (workspaceKey) {
         console.log('Switching to workspace:', workspaceName, 'Key:', workspaceKey);
 
+        // Validate workspaceKey to ensure it matches the expected pattern (e.g., ^[a-zA-Z0-9_-]+$)
+        if (!/^[a-zA-Z0-9_-]+$/.test(workspaceKey)) {
+          console.error('Invalid workspace key format:', workspaceKey);
+          return;
+        }
+
         // Construct the team switch URL - matches the URL pattern from teams/urls.py
-        const switchUrl = `/teams/switch/${workspaceKey}/`;
+        const switchUrl = `/teams/switch/${encodeURIComponent(workspaceKey)}/`;
 
         // Get current view name for preserving context
         const currentPath = window.location.pathname;
