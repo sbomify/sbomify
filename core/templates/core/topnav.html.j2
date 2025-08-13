@@ -1,7 +1,15 @@
-<nav class="navbar navbar-expand navbar-light navbar-bg">
-    <a class="sidebar-toggle js-sidebar-toggle">
-        <i class="hamburger align-self-center"></i>
-    </a>
+{# Modern Bootstrap 5.3 Navigation with Enhanced Accessibility #}
+<nav class="navbar navbar-expand navbar-light navbar-bg"
+     role="navigation"
+     aria-label="Main navigation">
+    {# Mobile Sidebar Toggle #}
+    <button class="sidebar-toggle js-sidebar-toggle d-lg-none"
+            type="button"
+            aria-controls="sidebar"
+            aria-expanded="false"
+            aria-label="Open navigation menu">
+        <span class="hamburger" aria-hidden="true"></span>
+    </button>
     {% include "teams/team_selection_dropdown.html.j2" %}
     <div class="navbar-collapse collapse">
         <ul class="navbar-nav navbar-align">

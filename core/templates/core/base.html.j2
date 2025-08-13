@@ -8,8 +8,9 @@
         {% block head %}
             <meta charset="utf-8">
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
-            <meta name="viewport"
-                  content="width=device-width, initial-scale=1, shrink-to-fit=no">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="color-scheme" content="light">
+            <meta name="theme-color" content="#3b7ddd">
             <meta name="description" content="Software Bill of Materials management">
             <meta name="keywords"
                   content="SBOM SBOMs software bill of materials security">
@@ -49,7 +50,8 @@
                   content="{% block twitter_description %} Manage and track your software bill of materials with ease. Secure your software supply chain with sbomify. {% endblock %}">
             <meta property="twitter:image"
                   content="{% static 'img/favicons/android-chrome-512x512.png' %}">
-            <link rel="preconnect" href="https://fonts.gstatic.com">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                   rel="stylesheet">
             <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
@@ -58,6 +60,7 @@
             <link href="{% static 'css/base.css' %}" rel="stylesheet">
             <link href="{% static 'css/layout.css' %}" rel="stylesheet">
             <link href="{% static 'css/components.css' %}" rel="stylesheet">
+            <link href="{% static 'css/responsive.css' %}" rel="stylesheet">
             <link href="{% static 'css/pages.css' %}" rel="stylesheet">
             <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
             <title>
@@ -66,45 +69,56 @@
         {% endblock %}
         {% vite_hmr_client %}
     </head>
-    <body data-theme="default"
-          data-layout="fluid"
-          data-sidebar-position="left"
-          data-sidebar-layout="default">
+    <body>
         {% block main %}
             {% if request.user.is_authenticated %}
-                {% cache 300 'header' request.user.id %}
-                {% include "core/components/topnav.html.j2" %}
-            {% endcache %}
-        {% endif %}
-        <div class="container-fluid">
-            {% if request.user.is_authenticated %}
-                <div class="row">
+                <!-- AdminKit-style Layout -->
+                <div class="wrapper">
+                    <!-- Sidebar -->
                     {% cache 300 'sidebar' request.user.id request.session.current_team.id %}
                     {% include "core/components/sidebar.html.j2" %}
                 {% endcache %}
-                <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                    <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                    {% block content %}{% endblock %}
-                </main>
-            </div>
-        {% else %}
-            <div class="row justify-content-center">
-                <div class="col-md-6 col-lg-4 mt-5">
-                    <div class="text-center mb-4">
-                        <img src="{% static 'img/logo.svg' %}"
-                             alt="sbomify Logo"
-                             class="img-fluid mb-3 login-logo"
-                             width="200"
-                             height="60">
+                <!-- Main content area -->
+                <div class="main">
+                    <!-- Top navigation -->
+                    {% cache 300 'header' request.user.id %}
+                    {% include "core/components/topnav.html.j2" %}
+                {% endcache %}
+                <!-- Main content -->
+                <main class="content">
+                    <div class="container-fluid p-0">
+                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                        {% block content %}{% endblock %}
                     </div>
-                    <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                    <div class="login-content">
-                        {% block login_content %}{% endblock %}
+                </main>
+                <!-- Footer -->
+                {% include "core/components/footer.html.j2" %}
+            </div>
+        </div>
+    {% else %}
+        <!-- Login layout -->
+        <div class="bg-light min-vh-100 d-flex align-items-center">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-md-6 col-lg-4">
+                        <div class="text-center mb-4">
+                            <img src="{% static 'img/logo.svg' %}"
+                                 alt="sbomify Logo"
+                                 class="img-fluid mb-3 login-logo"
+                                 width="200"
+                                 height="36">
+                        </div>
+                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                        <div class="card shadow">
+                            <div class="card-body p-4">
+                                {% block login_content %}{% endblock %}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        {% endif %}
-    </div>
+        </div>
+    {% endif %}
 {% endblock %}
 <!-- Scripts now managed via Vite bundles -->
 {% block scripts %}{% endblock %}

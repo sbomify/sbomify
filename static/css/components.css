@@ -3,33 +3,88 @@
  * Buttons, forms, cards, badges, tables, and other UI elements
  */
 
-/* ===== BUTTON SYSTEM ===== */
+/* ===== ENHANCED BUTTON SYSTEM ===== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.625rem 1.25rem;
+  padding: 0.75rem 1.5rem;
   font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   line-height: 1.4;
   letter-spacing: 0.025em;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border: 2px solid transparent;
   transition: all var(--transition-normal);
   cursor: pointer;
   text-decoration: none;
   user-select: none;
+  min-height: 44px; /* Touch target minimum */
+  position: relative;
+  overflow: hidden;
+}
+
+/* Enhanced touch interactions */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+  .btn:active:not(:disabled) {
+    transform: scale(0.98);
+    transition-duration: 0.1s;
+  }
 }
 
 .btn:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 125, 221, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.3);
+  z-index: 1;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
   transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Mobile button improvements */
+@media (max-width: 768px) {
+  .btn {
+    padding: 1rem 1.5rem;
+    font-size: 16px; /* Prevent iOS zoom */
+    min-height: 48px;
+    border-radius: 0.5rem;
+  }
+
+  .btn-sm {
+    padding: 0.75rem 1rem;
+    font-size: 14px;
+    min-height: 40px;
+  }
+
+  .btn-lg {
+    padding: 1.25rem 2rem;
+    font-size: 18px;
+    min-height: 56px;
+  }
+
+  /* Full width buttons on mobile for primary actions */
+  .btn-primary.btn-block,
+  .btn-primary.w-100 {
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
 }
 
 .btn-primary {
@@ -101,23 +156,54 @@
   box-shadow: var(--shadow-lg);
 }
 
-/* ===== FORM COMPONENTS ===== */
+/* ===== ENHANCED FORM COMPONENTS ===== */
 .form-control, .form-select {
-  padding: 0.5rem 0.75rem;
-  font-size: var(--font-size-sm);
+  padding: 0.75rem 1rem;
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-normal);
   line-height: var(--line-height-normal);
   color: var(--text-primary);
   background-color: var(--white);
-  border: 1px solid var(--form-control-border);
+  border: 2px solid var(--form-control-border);
   border-radius: var(--radius-md);
-  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  transition: all var(--transition-normal);
+  min-height: 44px; /* Touch target minimum */
 }
 
 .form-control:focus, .form-select:focus {
   border-color: var(--brand-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 125, 221, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Enhanced mobile form styling */
+@media (max-width: 768px) {
+  .form-control, .form-select {
+    font-size: 16px; /* Prevent iOS zoom */
+    padding: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  .form-label {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Stack form groups vertically with proper spacing */
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .input-group {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .input-group .btn {
+    border-radius: 0.5rem;
+  }
 }
 
 .form-control.is-invalid {
@@ -160,7 +246,7 @@
   padding-right: 3px;
 }
 
-/* ===== CARD SYSTEM ===== */
+/* ===== ENHANCED CARD SYSTEM ===== */
 .card {
   background-color: var(--white);
   border: 1px solid var(--border-color);
@@ -168,6 +254,32 @@
   box-shadow: var(--shadow-sm);
   margin-bottom: var(--spacing-lg);
   overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Mobile card improvements */
+@media (max-width: 768px) {
+  .card {
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .card-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .card-body {
+    padding: 1rem 1.25rem;
+  }
+
+  .card-footer {
+    padding: 1rem 1.25rem;
+  }
 }
 
 .card-header {
@@ -326,7 +438,7 @@
   font-weight: var(--font-weight-normal);
 }
 
-/* ===== TABLE SYSTEM ===== */
+/* ===== ENHANCED TABLE SYSTEM ===== */
 .table {
   width: 100%;
   margin-bottom: 0;
@@ -335,9 +447,41 @@
 
 .table th,
 .table td {
-  padding: 0.75rem;
+  padding: 1rem 0.75rem;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-color);
+}
+
+/* Mobile table improvements */
+@media (max-width: 768px) {
+  .table-responsive {
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .table th,
+  .table td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .table th {
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Stack table actions vertically on mobile */
+  .table .actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .table .actions .btn {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    min-height: 36px;
+  }
 }
 
 .table thead th {
@@ -435,6 +579,12 @@
 /* ===== LOGIN COMPONENTS ===== */
 .login-logo {
   max-width: 200px;
+}
+
+/* ===== USER AVATAR ===== */
+.user-avatar-placeholder {
+  width: 32px;
+  height: 32px;
 }
 
 .login-card {

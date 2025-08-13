@@ -1,6 +1,6 @@
 <template>
   <div class="data-table">
-    <table class="table">
+    <table class="table dashboard-table">
       <thead>
         <tr>
           <th scope="col">Name</th>
@@ -16,37 +16,37 @@
       </thead>
       <tbody>
         <tr v-for="itemData in sbomsData" :key="itemData.sbom.id">
-          <td>
+          <td data-label="Name">
             <a :href="getSbomDetailUrl(itemData.sbom.id)" title="Details" class="icon-link">
               {{ itemData.sbom.name }}
             </a>
           </td>
-          <td>SBOM</td>
-          <td>
+          <td data-label="Artifact Type">SBOM</td>
+          <td data-label="Format">
             <span class="badge bg-success-subtle text-success">
               {{ getFormatDisplay(itemData.sbom.format) }} {{ itemData.sbom.format_version }}
             </span>
           </td>
-          <td :title="itemData.sbom.version">
+          <td data-label="Version" :title="itemData.sbom.version">
             {{ truncateText(itemData.sbom.version, 20) }}
           </td>
-          <td>
+          <td data-label="NTIA Compliant">
             <NTIAComplianceBadge
               :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
               :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
               :teamBillingPlan="teamBillingPlan"
             />
           </td>
-                      <td>{{ utils.formatDate(itemData.sbom.created_at) }}</td>
-          <td>
-                        <ReleaseList
+          <td data-label="Created">{{ utils.formatDate(itemData.sbom.created_at) }}</td>
+          <td data-label="Releases">
+            <ReleaseList
               :releases="itemData.releases"
               :item-id="itemData.sbom.id"
               :is-public-view="isPublicView"
               :view-all-url="getSbomReleasesUrl(itemData.sbom.id)"
             />
           </td>
-          <td v-if="showVulnerabilities">
+          <td v-if="showVulnerabilities" data-label="Vulnerabilities">
             <a
               :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
               title="Vulnerabilities"
@@ -55,7 +55,7 @@
               <i class="fas fa-shield-alt me-1"></i> View
             </a>
           </td>
-          <td>
+          <td data-label="Actions">
             <div class="d-flex gap-2">
               <a :href="getSbomDownloadUrl(itemData.sbom.id)" title="Download" class="btn btn-outline-primary btn-sm action-btn">
                 <i class="fas fa-download"></i>

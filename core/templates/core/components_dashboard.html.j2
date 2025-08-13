@@ -51,14 +51,51 @@
         }
 
         @media (max-width: 768px) {
+            .page-header {
+                padding: 1.5rem 1rem;
+                margin-bottom: 1.5rem;
+            }
+
             .item-title {
-                font-size: 2rem;
+                font-size: 1.75rem;
+            }
+
+            .item-title .fas {
+                font-size: 1.5rem;
+                margin-right: 0.75rem !important;
+            }
+
+            .item-subtitle {
+                font-size: 1rem;
+                margin-top: 0.75rem;
             }
 
             .header-main {
                 flex-direction: column;
                 gap: 1.5rem;
                 align-items: stretch;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .page-header {
+                padding: 1rem 0.75rem;
+                margin-bottom: 1rem;
+                border-radius: 8px;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .item-title .fas {
+                font-size: 1.25rem;
+                margin-right: 0.5rem !important;
+            }
+
+            .item-subtitle {
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
             }
         }
     </style>
