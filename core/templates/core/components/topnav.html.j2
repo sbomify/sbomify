@@ -1,109 +1,19 @@
-{% load static %}
 {# Modern Bootstrap 5.3 Navigation with Enhanced Accessibility #}
 <nav class="navbar navbar-expand navbar-light navbar-bg"
      role="navigation"
      aria-label="Main navigation">
-    {# Workspace Selector #}
-    {% if request.session.user_teams %}
-        <div class="navbar-nav me-auto workspace-selector">
-            <div class="nav-item dropdown">
-                <button class="nav-link dropdown-toggle btn btn-link d-flex align-items-center border-0 bg-transparent"
-                        type="button"
-                        id="workspaceDropdown"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                        aria-haspopup="true"
-                        aria-label="Select workspace">
-                    <i class="fas fa-briefcase me-2" aria-hidden="true"></i>
-                    <span class="fw-medium">
-                        {% if request.session.current_team %}
-                            {{ request.session.current_team.name }}
-                        {% else %}
-                            Select Workspace
-                        {% endif %}
-                    </span>
-                </button>
-                <ul class="dropdown-menu shadow-sm"
-                    aria-labelledby="workspaceDropdown"
-                    role="menu">
-                    <li role="presentation">
-                        <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
-                    </li>
-                    {% for team_key, team in request.session.user_teams.items %}
-                        <li role="presentation">
-                            <button class="dropdown-item {% if request.session.current_team.key and request.session.current_team.key == team_key %}active{% endif %}"
-                                    type="button"
-                                    role="menuitem"
-                                    data-workspace-key="{{ team_key }}"
-                                    data-workspace-name="{{ team.name }}"
-                                    {% if request.session.current_team.key and request.session.current_team.key == team_key %}aria-current="page"{% endif %}>
-                                <i class="fas fa-folder me-2" aria-hidden="true"></i>
-                                {{ team.name }}
-                                {% if request.session.current_team.key and request.session.current_team.key == team_key %}
-                                    <i class="fas fa-check ms-auto text-success" aria-hidden="true"></i>
-                                    <span class="visually-hidden">(current workspace)</span>
-                                {% endif %}
-                            </button>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    {% endif %}
+    {# Mobile Sidebar Toggle #}
+    <button class="sidebar-toggle js-sidebar-toggle d-lg-none"
+            type="button"
+            aria-controls="sidebar"
+            aria-expanded="false"
+            aria-label="Open navigation menu">
+        <span class="hamburger" aria-hidden="true"></span>
+    </button>
+    {% include "teams/team_selection_dropdown.html.j2" %}
     <div class="navbar-collapse collapse">
-        <ul class="navbar-nav ms-auto">
-            {# User dropdown #}
-            <li class="nav-item dropdown">
-                <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent"
-                        type="button"
-                        id="userDropdown"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                        aria-haspopup="true"
-                        aria-label="User menu">
-                    <div class="position-relative">
-                        {% if request.session.user_photo %}
-                            <img src="{{ request.session.user_photo }}"
-                                 class="avatar img-fluid rounded"
-                                 alt="{{ request.user.get_full_name|default:request.user.username }}"
-                                 width="32"
-                                 height="32" />
-                        {% else %}
-                            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center user-avatar-placeholder">
-                                <i class="fas fa-user text-white" aria-hidden="true"></i>
-                            </div>
-                        {% endif %}
-                    </div>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm"
-                    aria-labelledby="userDropdown"
-                    role="menu">
-                    <li role="presentation">
-                        <h6 class="dropdown-header" role="heading" aria-level="2">
-                            {{ request.user.get_full_name|default:request.user.username }}
-                        </h6>
-                    </li>
-                    <li role="presentation">
-                        <a class="dropdown-item"
-                           href="{% url 'core:settings' %}"
-                           role="menuitem">
-                            <i class="align-middle me-2 fas fa-cog" aria-hidden="true"></i>
-                            Settings
-                        </a>
-                    </li>
-                    <li role="presentation">
-                        <hr class="dropdown-divider">
-                    </li>
-                    <li role="presentation">
-                        <a class="dropdown-item text-danger"
-                           href="{% url 'core:logout' %}"
-                           role="menuitem">
-                            <i class="align-middle me-2 fas fa-sign-out-alt" aria-hidden="true"></i>
-                            Log out
-                        </a>
-                    </li>
-                </ul>
-            </li>
+        <ul class="navbar-nav navbar-align">
+            {% include "core/user-dropdown.html.j2" %}
         </ul>
     </div>
 </nav>

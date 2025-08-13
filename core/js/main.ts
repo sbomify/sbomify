@@ -76,11 +76,195 @@ function initializeWorkspaceSelector() {
 }
 
 /**
+ * Sidebar functionality with enhanced mobile and keyboard support
+ */
+function initializeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const main = document.querySelector('.main');
+  const sidebarToggle = document.querySelector('.js-sidebar-toggle');
+  const sidebarClose = document.querySelector('.js-sidebar-close');
+
+  if (!sidebar || !main || !sidebarToggle) {
+    console.warn('Sidebar elements not found');
+    return;
+  }
+
+  let sidebarOpen = false;
+
+    // Function to toggle sidebar
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+
+    if (sidebarOpen) {
+      sidebar!.classList.add('sidebar-mobile-show');
+      main!.classList.add('sidebar-mobile-show');
+      sidebarToggle!.setAttribute('aria-expanded', 'true');
+      sidebarToggle!.setAttribute('aria-label', 'Close navigation menu');
+
+      // Focus first link in sidebar for accessibility
+      const firstLink = sidebar!.querySelector('.sidebar-link') as HTMLElement;
+      if (firstLink) {
+        firstLink.focus();
+      }
+    } else {
+      sidebar!.classList.remove('sidebar-mobile-show');
+      main!.classList.remove('sidebar-mobile-show');
+      sidebarToggle!.setAttribute('aria-expanded', 'false');
+      sidebarToggle!.setAttribute('aria-label', 'Open navigation menu');
+    }
+  }
+
+  // Function to close sidebar
+  function closeSidebar() {
+    if (sidebarOpen) {
+      sidebarOpen = false;
+      sidebar!.classList.remove('sidebar-mobile-show');
+      main!.classList.remove('sidebar-mobile-show');
+      sidebarToggle!.setAttribute('aria-expanded', 'false');
+      sidebarToggle!.setAttribute('aria-label', 'Open navigation menu');
+    }
+  }
+
+  // Toggle button click handler
+  sidebarToggle.addEventListener('click', function(e) {
+    e.preventDefault();
+    toggleSidebar();
+  });
+
+  // Close button click handler (if present)
+  if (sidebarClose) {
+    sidebarClose.addEventListener('click', function(e) {
+      e.preventDefault();
+      closeSidebar();
+    });
+  }
+
+  // Close sidebar when clicking overlay
+  main.addEventListener('click', function(e) {
+    if (sidebarOpen && main.classList.contains('sidebar-mobile-show')) {
+      const target = e.target as HTMLElement;
+
+      // Check if click is on the overlay (::before pseudo-element area)
+      if (target === main) {
+        closeSidebar();
+      }
+    }
+  });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', function(e) {
+    // ESC key closes sidebar
+    if (e.key === 'Escape' && sidebarOpen) {
+      closeSidebar();
+      (sidebarToggle as HTMLElement).focus();
+    }
+
+    // Ctrl+M or Cmd+M toggles sidebar (like many code editors)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+
+  // Handle window resize
+  window.addEventListener('resize', function() {
+    // Close sidebar on larger screens
+    if (window.innerWidth > 991.98 && sidebarOpen) {
+      closeSidebar();
+    }
+  });
+
+  // Touch/swipe support
+  let touchStartX = 0;
+  let touchEndX = 0;
+
+  // Touch start
+  document.addEventListener('touchstart', function(e) {
+    touchStartX = e.changedTouches[0].screenX;
+  }, { passive: true });
+
+  // Touch end
+  document.addEventListener('touchend', function(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+  }, { passive: true });
+
+  function handleSwipe() {
+    const swipeThreshold = 100;
+    const swipeDistance = touchEndX - touchStartX;
+
+    // Swipe right from left edge to open sidebar
+    if (touchStartX < 50 && swipeDistance > swipeThreshold && !sidebarOpen) {
+      toggleSidebar();
+    }
+
+    // Swipe left to close sidebar when open
+    if (swipeDistance < -swipeThreshold && sidebarOpen) {
+      closeSidebar();
+    }
+  }
+
+  // Initialize ARIA attributes
+  sidebarToggle.setAttribute('aria-expanded', 'false');
+  sidebarToggle.setAttribute('aria-label', 'Open navigation menu');
+  sidebarToggle.setAttribute('aria-controls', 'sidebar');
+
+  console.log('Sidebar functionality initialized');
+}
+
+/**
+ * Enhanced keyboard navigation for sidebar
+ */
+function initializeSidebarKeyboardNavigation() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+
+  const sidebarLinks = sidebar.querySelectorAll('.sidebar-link');
+
+  sidebarLinks.forEach((link, index) => {
+    link.addEventListener('keydown', function(e) {
+      const keyboardEvent = e as KeyboardEvent;
+      const currentIndex = index;
+      let targetIndex = -1;
+
+      switch(keyboardEvent.key) {
+        case 'ArrowDown':
+          keyboardEvent.preventDefault();
+          targetIndex = currentIndex + 1;
+          break;
+        case 'ArrowUp':
+          keyboardEvent.preventDefault();
+          targetIndex = currentIndex - 1;
+          break;
+        case 'Home':
+          keyboardEvent.preventDefault();
+          targetIndex = 0;
+          break;
+        case 'End':
+          keyboardEvent.preventDefault();
+          targetIndex = sidebarLinks.length - 1;
+          break;
+      }
+
+      if (targetIndex >= 0 && targetIndex < sidebarLinks.length) {
+        (sidebarLinks[targetIndex] as HTMLElement).focus();
+      }
+    });
+  });
+
+  console.log('Sidebar keyboard navigation initialized');
+}
+
+/**
  * Initialize custom components
  */
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize workspace selector
   initializeWorkspaceSelector();
+
+  // Initialize sidebar functionality
+  initializeSidebar();
+  initializeSidebarKeyboardNavigation();
 
   // Initialize Bootstrap tooltips
   const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -103,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  console.log('Main.ts loaded successfully - workspace selector initialized');
+  console.log('Main.ts loaded successfully - all components initialized');
 });
 
 // Import Vue component mounting utility
