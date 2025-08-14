@@ -32,7 +32,7 @@
     "highlight.js": "^11.11.1",
     "js-cookie": "^3.0.5",
     "jsbarcode": "^3.12.1",
-    "sweetalert2": "^11.22.3",
+    "sweetalert2": "^11.22.4",
     "typescript": "^5.9.2",
     "vite": "^7.1.2",
     "vite-plugin-pwa": "^1.0.2",
