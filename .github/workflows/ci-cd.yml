@@ -292,7 +292,8 @@ jobs:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
           COMPONENT_NAME: 'sbomify-backend'
-          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           LOCK_FILE: 'poetry.lock'
           AUGMENT: true
           ENRICH: true
@@ -304,7 +305,8 @@ jobs:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
           COMPONENT_NAME: 'sbomify-frontend'
-          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-{1}', github.ref_name, github.sha) }}
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           LOCK_FILE: 'bun.lock'
           ENRICH: true
           AUGMENT: true
