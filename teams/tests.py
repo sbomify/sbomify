@@ -612,6 +612,25 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     # Clean up test file
     os.remove("test_icon.png")
 
+    # Test that uploaded file URL is correctly generated
+    # The bug was that URLs were generated from old branding data before upload
+    with open("test_logo.png", "wb") as f:
+        f.write(b"fake logo content")
+
+    with open("test_logo.png", "rb") as f:
+        response = client.post(f"{base_uri}/upload/logo",
+                             {"file": f},
+                             format="multipart")
+        assert response.status_code == 200
+        data = response.json()
+        # Ensure the returned URL contains the correct filename that was just uploaded
+        expected_filename = f"{team_key}_logo.png"
+        assert data["logo"] == expected_filename
+        assert expected_filename in data["logo_url"]
+
+    # Clean up test file
+    os.remove("test_logo.png")
+
     # Test file deletion
     response = client.patch(f"{base_uri}/icon",
                           {"value": None},
