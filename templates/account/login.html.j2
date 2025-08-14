@@ -1,14 +1,10 @@
 {% extends "core/base.html.j2" %}
 {% block title %}sbomify Login{% endblock %}
 {% block login_content %}
-    <div class="card shadow login-card">
-        <div class="card-body p-5 text-center">
-            <h1 class="h3 mb-4">Log In / Register</h1>
-            <p class="mb-4">Please log in or register to access your account.</p>
-            <form method="post" action="{% url 'openid_connect_login' 'keycloak' %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-lg w-100">Log In / Register</button>
-            </form>
-        </div>
-    </div>
+    <h1 class="h3 mb-4 text-center">Log In / Register</h1>
+    <p class="mb-4 text-center">Please log in or register to access your account.</p>
+    <form method="post" action="{% url 'openid_connect_login' 'keycloak' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-lg w-100">Log In / Register</button>
+    </form>
 {% endblock %}
