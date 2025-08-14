@@ -75,7 +75,7 @@
                 <!-- AdminKit-style Layout -->
                 <div class="wrapper">
                     <!-- Sidebar -->
-                    {% cache 300 'sidebar' request.user.id request.session.current_team.id %}
+                    {% cache 300 'sidebar' request.user.id request.session.current_team.id request.resolver_match.url_name %}
                     {% include "core/components/sidebar.html.j2" %}
                 {% endcache %}
                 <!-- Main content area -->
