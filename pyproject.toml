@@ -18,10 +18,10 @@ pyjwt = "^2.10.1"
 pydantic = "^2.11.7"
 django-anymail = {extras = ["sendgrid"], version = "^13.0"}
 whitenoise = "^6.9.0"
-sentry-sdk = "^2.34.1"
+sentry-sdk = "^2.35.0"
 django-ninja = "^1.4.3"
 ruid = "^0.1.2"
-boto3 = "^1.40.9"
+boto3 = "^1.40.10"
 dj-database-url = "^3.0.1"
 django-vite = "^3.1.0"
 django-health-check = "^3.20.0"
@@ -39,11 +39,11 @@ dramatiq-crontab = "^1.0.12"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.37.0"
-ruff = "^0.12.8"
+ruff = "^0.12.9"
 bandit = "^1.8.6"
 django-debug-toolbar = "^6.0.0"
 pre-commit = "^4.3.0"
-datamodel-code-generator = {extras = ["http"], version = "^0.32.0"}
+datamodel-code-generator = {extras = ["http"], version = "^0.33.0"}
 pytest-json-report = "^1.5.0"
 pytest-playwright = "^0.7.0"
 djlint = "^1.36.4"
