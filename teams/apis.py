@@ -91,7 +91,7 @@ def update_team_branding(
     team.branding_info = update_data
     team.save()
 
-    # Create new branding instance with updated data to generate correct URLs
+    # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding = BrandingInfo(**team.branding_info)
     response_data = {
         **team.branding_info,
@@ -140,7 +140,7 @@ def upload_branding_file(
     team.branding_info = update_data
     team.save()
 
-    # Create new branding instance with updated data to generate correct URLs
+    # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding = BrandingInfo(**team.branding_info)
     response_data = {
         **team.branding_info,

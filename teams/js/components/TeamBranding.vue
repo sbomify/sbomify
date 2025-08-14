@@ -91,7 +91,9 @@
                      v-model="localBrandingInfo.icon"
                      accept="image/*"
                      class="modern-upload"
+                     :existingUrl="localBrandingInfo.icon_url"
                      @update:modelValue="(file) => handleFileChange('icon', file || null)"
+                     @existing-file-removed="() => handleExistingFileRemoval('icon')"
                    />
                 </div>
                 <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
@@ -105,7 +107,9 @@
                      v-model="localBrandingInfo.logo"
                      accept="image/*"
                      class="modern-upload"
+                     :existingUrl="localBrandingInfo.logo_url"
                      @update:modelValue="(file) => handleFileChange('logo', file || null)"
+                     @existing-file-removed="() => handleExistingFileRemoval('logo')"
                    />
                 </div>
                 <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
@@ -191,7 +195,9 @@ interface BrandingInfo {
   icon_url: string;
   logo_url: string;
   prefer_logo_over_icon: boolean;
-  [key: string]: string | boolean | File | null;
+  icon_pending_deletion?: boolean;
+  logo_pending_deletion?: boolean;
+  [key: string]: string | boolean | File | null | undefined;
 }
 
 const props = defineProps<Props>();
@@ -206,7 +212,9 @@ const brandingInfo = ref<BrandingInfo>({
   logo: null,
   icon_url: "",
   logo_url: "",
-  prefer_logo_over_icon: false
+  prefer_logo_over_icon: false,
+  icon_pending_deletion: false,
+  logo_pending_deletion: false
 });
 
 // Local form state
@@ -217,7 +225,9 @@ const localBrandingInfo = ref<BrandingInfo>({
   logo: null,
   icon_url: "",
   logo_url: "",
-  prefer_logo_over_icon: false
+  prefer_logo_over_icon: false,
+  icon_pending_deletion: false,
+  logo_pending_deletion: false
 });
 
 // Track changes
@@ -235,7 +245,9 @@ const hasUnsavedChanges = computed(() => {
     currentAccentColor !== originalAccentColor ||
     localBrandingInfo.value.prefer_logo_over_icon !== brandingInfo.value.prefer_logo_over_icon ||
     localBrandingInfo.value.icon !== null ||
-    localBrandingInfo.value.logo !== null
+    localBrandingInfo.value.logo !== null ||
+    localBrandingInfo.value.icon_pending_deletion ||
+    localBrandingInfo.value.logo_pending_deletion
   );
 });
 
@@ -248,6 +260,16 @@ const handleColorPickerChange = (event: Event, field: string) => {
 
 const handleFileChange = (field: string, file: File | null) => {
   localBrandingInfo.value[field] = file;
+  // Clear pending deletion if a new file is selected
+  if (file) {
+    localBrandingInfo.value[`${field}_pending_deletion` as keyof BrandingInfo] = false;
+  }
+};
+
+const handleExistingFileRemoval = (field: string) => {
+  // Mark for deletion and clear the URL to hide the preview
+  localBrandingInfo.value[`${field}_pending_deletion` as keyof BrandingInfo] = true;
+  localBrandingInfo.value[`${field}_url` as keyof BrandingInfo] = "";
 };
 
 const resetChanges = () => {
@@ -263,6 +285,8 @@ const resetChanges = () => {
     logo_url: brandingInfo.value.logo_url || '',
     icon: null, // Always reset file uploads
     logo: null, // Always reset file uploads
+    icon_pending_deletion: false,
+    logo_pending_deletion: false,
   });
 
   console.log('Reset to:', localBrandingInfo.value);
@@ -293,6 +317,19 @@ const saveAllChanges = async () => {
       });
     }
 
+    // Handle file deletions
+    if (localBrandingInfo.value.icon_pending_deletion) {
+      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/icon`, {
+        value: null
+      });
+    }
+
+    if (localBrandingInfo.value.logo_pending_deletion) {
+      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/logo`, {
+        value: null
+      });
+    }
+
     // Upload new files using the correct upload endpoints
     if (localBrandingInfo.value.icon) {
       const iconFormData = new FormData();
@@ -319,6 +356,8 @@ const saveAllChanges = async () => {
         ...response.data,
         icon: null,
         logo: null,
+        icon_pending_deletion: false,
+        logo_pending_deletion: false,
       });
     }
 
@@ -345,6 +384,8 @@ onMounted(async () => {
         ...response.data,
         icon: null,
         logo: null,
+        icon_pending_deletion: false,
+        logo_pending_deletion: false,
       });
     }
   } catch (error) {
