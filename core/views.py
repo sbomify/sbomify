@@ -33,7 +33,7 @@ from sboms.utils import get_product_sbom_package, get_project_sbom_package
 from teams.schemas import BrandingInfo
 
 from .errors import error_response
-from .forms import CreateAccessTokenForm
+from .forms import CreateAccessTokenForm, SupportContactForm
 from .models import Component, Product, Project, Release, ReleaseArtifact
 
 logger = logging.getLogger(__name__)
@@ -1012,3 +1012,122 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     metadata = component.metadata or {}
     metadata.setdefault("supplier", None)
     return JsonResponse(metadata)
+
+
+@login_required
+def support_contact(request: HttpRequest) -> HttpResponse:
+    """Display support contact form and handle submissions."""
+    from django.core.mail import EmailMessage
+    from django.utils import timezone
+
+    if request.method == "POST":
+        form = SupportContactForm(request.POST)
+        if form.is_valid():
+            # Form is valid, proceed with email sending
+
+            try:
+                # Get support type display name
+                support_type_display = dict(form.fields["support_type"].choices).get(
+                    form.cleaned_data["support_type"], "Unknown"
+                )
+
+                # Create email subject
+                subject = f"[{support_type_display}] {form.cleaned_data['subject']}"
+
+                # Create email content
+                message_content = f"""
+New Support Request
+
+Support Type: {support_type_display}
+Subject: {form.cleaned_data["subject"]}
+
+Contact Information:
+- Name: {form.cleaned_data["first_name"]} {form.cleaned_data["last_name"]}
+- Email: {form.cleaned_data["email"]}
+
+Browser/System Info: {form.cleaned_data.get("browser_info") or "Not provided"}
+
+Message:
+{form.cleaned_data["message"]}
+
+Submitted by: {request.user.email} ({request.user.get_full_name() or request.user.username})
+Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
+Source IP: {request.META.get("REMOTE_ADDR", "Unknown")}
+User Agent: {request.META.get("HTTP_USER_AGENT", "Unknown")}
+"""
+
+                # Send email to support team
+                support_email = EmailMessage(
+                    subject=subject,
+                    body=message_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=["hello@sbomify.com"],
+                    reply_to=[form.cleaned_data["email"]],
+                )
+                support_email.send(fail_silently=False)
+
+                # Send confirmation email to the user
+                confirmation_subject = "Thank you for contacting sbomify support"
+                confirmation_message = f"""
+Hi {form.cleaned_data["first_name"]},
+
+Thank you for reaching out to sbomify support. We have received your message about:
+
+Subject: {form.cleaned_data["subject"]}
+Support Type: {support_type_display}
+
+We will review your request and get back to you as soon as possible.
+Our typical response time is within 1-2 business days.
+
+If you have any urgent issues, you can reply to this email directly.
+
+Best regards,
+The sbomify Support Team
+
+---
+Original message:
+{form.cleaned_data["message"]}
+"""
+
+                confirmation_email = EmailMessage(
+                    subject=confirmation_subject,
+                    body=confirmation_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[form.cleaned_data["email"]],
+                    reply_to=["hello@sbomify.com"],
+                )
+                confirmation_email.send(fail_silently=False)
+
+                return redirect("core:support_contact_success")
+
+            except Exception as e:
+                logger.error(f"Failed to send support contact email: {e}")
+                messages.error(
+                    request,
+                    "Sorry, there was an error sending your message. Please try again later or contact us directly "
+                    "at hello@sbomify.com",
+                )
+
+    else:
+        # Pre-populate form with user information
+        initial_data = {
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "email": request.user.email,
+        }
+        form = SupportContactForm(initial=initial_data)
+
+    return render(
+        request,
+        "core/support_contact.html.j2",
+        {
+            "form": form,
+            "turnstile_site_key": settings.TURNSTILE_SITE_KEY,
+        },
+    )
+
+
+@login_required
+def support_contact_success(request: HttpRequest) -> HttpResponse:
+    """Display support contact success page."""
+    return render(request, "core/support_contact_success.html.j2")

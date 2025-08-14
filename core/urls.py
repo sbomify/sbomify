@@ -121,4 +121,7 @@ urlpatterns = [
         views.get_component_metadata,
         name="get_component_metadata",
     ),
+    # Support contact pages
+    path("support/contact/", views.support_contact, name="support_contact"),
+    path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
 ]
