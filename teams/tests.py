@@ -605,9 +605,10 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         assert response.status_code == 200
         data = response.json()
         assert "icon_url" in data
-        # Verify the filename matches what we expect
-        assert mock_upload.filename == f"{team_key}_icon.png"
-        assert data["icon"].endswith(mock_upload.filename)
+        # Verify the filename uses the new UUID format
+        assert mock_upload.filename.startswith(f"team_{team_key}_icon_")
+        assert mock_upload.filename.endswith(".png")
+        assert data["icon"] == mock_upload.filename
 
     # Clean up test file
     os.remove("test_icon.png")
@@ -624,9 +625,9 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         assert response.status_code == 200
         data = response.json()
         # Ensure the returned URL contains the correct filename that was just uploaded
-        expected_filename = f"{team_key}_logo.png"
-        assert data["logo"] == expected_filename
-        assert expected_filename in data["logo_url"]
+        assert data["logo"].startswith(f"team_{team_key}_logo_")
+        assert data["logo"].endswith(".png")
+        assert data["logo"] in data["logo_url"]
 
     # Clean up test file
     os.remove("test_logo.png")
@@ -640,6 +641,132 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     assert data["icon"] == ""
     # Verify delete was called
     mock_delete.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mocker):  # noqa: F811
+    """Test that branding file uploads are atomic - proper cleanup on failures."""
+    client = Client()
+    
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
+    
+    team_key = sample_team_with_owner_member.team.key
+    base_uri = f"/api/v1/teams/{team_key}/branding"
+    
+    # Mock S3 client methods
+    mock_upload = mocker.patch("core.object_store.S3Client.upload_media")
+    mock_delete = mocker.patch("core.object_store.S3Client.delete_object")
+    
+    uploaded_files = []
+    deleted_files = []
+    
+    def upload_side_effect(filename, data):
+        uploaded_files.append(filename)
+        
+    def delete_side_effect(bucket, filename):
+        deleted_files.append(filename)
+        
+    mock_upload.side_effect = upload_side_effect
+    mock_delete.side_effect = delete_side_effect
+    
+    # Test 1: Successful upload with old file cleanup for ICON
+    team = sample_team_with_owner_member.team
+    team.branding_info = {"icon": "old_icon_file.png", "logo": "", "brand_color": "", "accent_color": ""}
+    team.save()
+    
+    # Upload new icon
+    with open("test_icon.png", "wb") as f:
+        f.write(b"fake icon content")
+    
+    with open("test_icon.png", "rb") as f:
+        response = client.post(f"{base_uri}/upload/icon",
+                             {"file": f},
+                             format="multipart")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify new file was uploaded with UUID-based filename
+        assert len(uploaded_files) == 1
+        new_filename = uploaded_files[0]
+        assert new_filename.startswith(f"team_{team_key}_icon_")
+        assert new_filename.endswith(".png")
+        assert len(new_filename.split("_")) >= 4  # team_KEY_icon_UUID.ext
+        
+        # Verify old file was deleted
+        assert len(deleted_files) == 1
+        assert deleted_files[0] == "old_icon_file.png"
+        
+        # Verify database was updated
+        team.refresh_from_db()
+        assert team.branding_info["icon"] == new_filename
+        assert data["icon"] == new_filename
+    
+    os.remove("test_icon.png")
+    
+    # Test 2: Successful upload with old file cleanup for LOGO
+    uploaded_files.clear()
+    deleted_files.clear()
+    
+    # Set up existing logo
+    team.branding_info = {"icon": new_filename, "logo": "old_logo_file.jpg", "brand_color": "", "accent_color": ""}
+    team.save()
+    
+    with open("test_logo.jpg", "wb") as f:
+        f.write(b"fake logo content")
+    
+    with open("test_logo.jpg", "rb") as f:
+        response = client.post(f"{base_uri}/upload/logo",
+                             {"file": f},
+                             format="multipart")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify new file was uploaded with UUID-based filename
+        assert len(uploaded_files) == 1
+        new_logo_filename = uploaded_files[0]
+        assert new_logo_filename.startswith(f"team_{team_key}_logo_")
+        assert new_logo_filename.endswith(".jpg")
+        
+        # Verify old file was deleted
+        assert len(deleted_files) == 1
+        assert deleted_files[0] == "old_logo_file.jpg"
+        
+        # Verify database was updated
+        team.refresh_from_db()
+        assert team.branding_info["logo"] == new_logo_filename
+        assert data["logo"] == new_logo_filename
+    
+    os.remove("test_logo.jpg")
+    
+    # Test 3: Upload when no existing file
+    uploaded_files.clear()
+    deleted_files.clear()
+    
+    # Clear existing icon
+    team.branding_info = {"icon": "", "logo": new_logo_filename, "brand_color": "", "accent_color": ""}
+    team.save()
+    
+    with open("test_icon_new.png", "wb") as f:
+        f.write(b"new icon content")
+    
+    with open("test_icon_new.png", "rb") as f:
+        response = client.post(f"{base_uri}/upload/icon",
+                             {"file": f},
+                             format="multipart")
+        assert response.status_code == 200
+        
+        # Should upload new file but not delete anything
+        assert len(uploaded_files) == 1
+        assert len(deleted_files) == 0
+        
+        # Verify unique filename
+        new_icon_filename = uploaded_files[0]
+        assert new_icon_filename.startswith(f"team_{team_key}_icon_")
+        assert new_icon_filename != new_filename  # Different from previous icon
+    
+    os.remove("test_icon_new.png")
 
 
 @pytest.mark.django_db
