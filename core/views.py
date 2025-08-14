@@ -1014,6 +1014,7 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     return JsonResponse(metadata)
 
 
+@login_required
 def support_contact(request: HttpRequest) -> HttpResponse:
     """Display support contact form and handle submissions."""
     from django.core.mail import EmailMessage
@@ -1049,13 +1050,7 @@ Browser/System Info: {form.cleaned_data.get("browser_info") or "Not provided"}
 Message:
 {form.cleaned_data["message"]}
 
-Submitted by: {request.user.email if request.user.is_authenticated else "Anonymous user"} ({
-                    request.user.get_full_name()
-                    if request.user.is_authenticated and request.user.get_full_name()
-                    else request.user.username
-                    if request.user.is_authenticated
-                    else "Guest"
-                })
+Submitted by: {request.user.email} ({request.user.get_full_name() or request.user.username})
 Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
 Source IP: {request.META.get("REMOTE_ADDR", "Unknown")}
 User Agent: {request.META.get("HTTP_USER_AGENT", "Unknown")}
@@ -1114,14 +1109,12 @@ Original message:
                 )
 
     else:
-        # Pre-populate form with user information if authenticated
-        initial_data = {}
-        if request.user.is_authenticated:
-            initial_data = {
-                "first_name": request.user.first_name,
-                "last_name": request.user.last_name,
-                "email": request.user.email,
-            }
+        # Pre-populate form with user information
+        initial_data = {
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "email": request.user.email,
+        }
         form = SupportContactForm(initial=initial_data)
 
     return render(
@@ -1134,6 +1127,7 @@ Original message:
     )
 
 
+@login_required
 def support_contact_success(request: HttpRequest) -> HttpResponse:
     """Display support contact success page."""
     return render(request, "core/support_contact_success.html.j2")
