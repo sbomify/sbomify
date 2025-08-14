@@ -1,0 +1,193 @@
+{% extends "core/base.html.j2" %}
+{% load widget_tweaks %}
+{% block title %}Contact Support - sbomify{% endblock %}
+{% block head %}
+    {{ block.super }}
+    {% if turnstile_site_key and not debug %}
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                async
+                defer></script>
+    {% endif %}
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Page Header -->
+                <div class="text-center mb-5">
+                    <h1 class="display-5 fw-bold text-primary mb-3">Contact Support</h1>
+                    <p class="lead text-muted">
+                        Need help? We're here to assist you. Fill out the form below and we'll get back to you within 1-2 business days.
+                    </p>
+                </div>
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4"
+                             role="alert">
+                            {{ message }}
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="alert"
+                                    aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            <!-- Contact Information Section -->
+                            <div class="mb-5">
+                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <h3 class="h5 fw-semibold mb-0">Contact Information</h3>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.first_name.id_for_label }}"
+                                               class="form-label fw-semibold">
+                                            {{ form.first_name.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {% render_field form.first_name class="form-control" %}
+                                        {% if form.first_name.errors %}<div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="{{ form.last_name.id_for_label }}"
+                                               class="form-label fw-semibold">
+                                            {{ form.last_name.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {% render_field form.last_name class="form-control" %}
+                                        {% if form.last_name.errors %}<div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold">
+                                            {{ form.email.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {% render_field form.email class="form-control" %}
+                                        {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+                                        <div class="form-text">We'll use this email to respond to your support request.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Support Request Details Section -->
+                            <div class="mb-5">
+                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                                        <i class="fas fa-headset"></i>
+                                    </div>
+                                    <h3 class="h5 fw-semibold mb-0">Support Request Details</h3>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="{{ form.support_type.id_for_label }}"
+                                               class="form-label fw-semibold">
+                                            {{ form.support_type.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {% render_field form.support_type class="form-select" %}
+                                        {% if form.support_type.errors %}<div class="text-danger small mt-1">{{ form.support_type.errors.0 }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="{{ form.browser_info.id_for_label }}"
+                                               class="form-label fw-semibold">{{ form.browser_info.label }}</label>
+                                        {% render_field form.browser_info class="form-control" %}
+                                        {% if form.browser_info.errors %}<div class="text-danger small mt-1">{{ form.browser_info.errors.0 }}</div>{% endif %}
+                                        <div class="form-text">{{ form.browser_info.help_text }}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="{{ form.subject.id_for_label }}" class="form-label fw-semibold">
+                                            {{ form.subject.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {% render_field form.subject class="form-control" %}
+                                        {% if form.subject.errors %}<div class="text-danger small mt-1">{{ form.subject.errors.0 }}</div>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Message Section -->
+                            <div class="mb-5">
+                                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                                    <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                                        <i class="fas fa-comment-alt"></i>
+                                    </div>
+                                    <h3 class="h5 fw-semibold mb-0">Describe Your Issue</h3>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="{{ form.message.id_for_label }}" class="form-label fw-semibold">
+                                        {{ form.message.label }} <span class="text-danger">*</span>
+                                    </label>
+                                    {% render_field form.message class="form-control" rows="6" %}
+                                    {% if form.message.errors %}<div class="text-danger small mt-1">{{ form.message.errors.0 }}</div>{% endif %}
+                                    <div class="form-text">
+                                        Please provide as much detail as possible about your issue or question. This helps us provide better support.
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Turnstile CAPTCHA Section -->
+                            {% if turnstile_site_key and not debug %}
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
+                                        <div class="bg-primary text-white rounded d-flex align-items-center justify-content-center me-3 w-10 h-10">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <h3 class="h5 fw-semibold mb-0">Security Verification</h3>
+                                    </div>
+                                    <div class="cf-turnstile"
+                                         data-sitekey="{{ turnstile_site_key }}"
+                                         data-callback="turnstileCallback"
+                                         data-error-callback="turnstileErrorCallback"></div>
+                                    {% render_field form.cf_turnstile_response %}
+                                    {% if form.cf_turnstile_response.errors %}
+                                        <div class="text-danger small mt-2">{{ form.cf_turnstile_response.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <!-- Development Mode Warning -->
+                                <div class="alert alert-warning d-flex align-items-center mb-4">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <span><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
+                                </div>
+                                {% render_field form.cf_turnstile_response %}
+                            {% endif %}
+                            <!-- Support Information -->
+                            <div class="alert alert-info d-flex align-items-start mb-4">
+                                <i class="fas fa-info-circle me-3 mt-1"></i>
+                                <div>
+                                    <strong>Support Information:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>We typically respond within 1-2 business days</li>
+                                        <li>You'll receive a confirmation email once we receive your request</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <!-- Submit Section -->
+                            <div class="d-flex flex-row justify-content-between align-items-center gap-3 pt-4 border-top">
+                                <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                                </a>
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="fas fa-paper-plane me-2"></i>Send Support Request
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% if turnstile_site_key and not debug %}
+        <script>
+// Turnstile callback functions
+function turnstileCallback(token) {
+    document.getElementById('id_cf_turnstile_response').value = token;
+}
+
+function turnstileErrorCallback() {
+    document.getElementById('id_cf_turnstile_response').value = '';
+    console.error('Turnstile error occurred');
+}
+        </script>
+    {% endif %}
+{% endblock %}

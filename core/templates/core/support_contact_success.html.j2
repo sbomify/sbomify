@@ -1,0 +1,52 @@
+{% extends "core/base.html.j2" %}
+{% block title %}Support Request Sent - sbomify{% endblock %}
+{% block content %}
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="text-center">
+                    <!-- Success Icon -->
+                    <div class="mb-4">
+                        <div class="bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center w-20 h-20">
+                            <i class="fas fa-check fa-2x"></i>
+                        </div>
+                    </div>
+                    <!-- Success Message -->
+                    <h1 class="display-5 fw-bold text-success mb-3">Thank You!</h1>
+                    <h2 class="h4 text-muted mb-4">Your support request has been sent successfully</h2>
+                    <div class="card shadow-sm border-0 mb-5">
+                        <div class="card-body p-4">
+                            <div class="text-center">
+                                <h5 class="fw-semibold mb-3">What happens next?</h5>
+                                <ul class="list-unstyled">
+                                    <li class="mb-2">
+                                        <i class="fas fa-clock text-primary me-2"></i>
+                                        <span>We typically respond within 1-2 business days</span>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-envelope text-primary me-2"></i>
+                                        <span>You'll receive a confirmation email shortly</span>
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-user-headset text-primary me-2"></i>
+                                        <span>Our support team will review your request</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Action Buttons -->
+                    <div class="d-flex flex-column flex-md-row justify-content-center gap-3">
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-primary px-4">
+                            <i class="fas fa-tachometer-alt me-2"></i>Back to Dashboard
+                        </a>
+                        <a href="{% url 'core:support_contact' %}"
+                           class="btn btn-outline-secondary px-4">
+                            <i class="fas fa-plus me-2"></i>Submit Another Request
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
