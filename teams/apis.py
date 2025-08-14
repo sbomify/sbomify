@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 
 from django.conf import settings
@@ -83,7 +84,11 @@ def update_team_branding(
 
     # Handle file deletions
     if field in ["icon", "logo"] and data.value is None and update_data.get(field):
-        s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, update_data[field])
+        old_filename = update_data[field]
+        try:
+            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+        except Exception as e:
+            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
         update_data[field] = ""
     else:
         update_data[field] = data.value
@@ -127,18 +132,36 @@ def upload_branding_file(
     update_data = current_branding.dict()
     s3_client = S3Client("MEDIA")
 
-    # Delete existing file if present
-    if update_data.get(file_type):
-        s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, update_data[file_type])
-
-    # Upload new file
+    # Generate new filename first
     file_ext = Path(request.FILES["file"].name).suffix
-    filename = f"{team.key}_{file_type}{file_ext}"
-    s3_client.upload_media(filename, request.FILES["file"].file.read())
-    update_data[file_type] = filename
+    unique_id = str(uuid.uuid4())
+    new_filename = f"team_{team.key}_{file_type}_{unique_id}{file_ext}"
+    old_filename = update_data.get(file_type)
 
-    team.branding_info = update_data
-    team.save()
+    # Upload new file first
+    s3_client.upload_media(new_filename, request.FILES["file"].file.read())
+
+    try:
+        # Update database atomically
+        with transaction.atomic():
+            update_data[file_type] = new_filename
+            team.branding_info = update_data
+            team.save()
+
+        # Only delete old file after successful database commit
+        if old_filename:
+            try:
+                s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
+
+    except Exception as e:
+        # Database save failed, clean up the new file we just uploaded
+        try:
+            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_filename)
+        except Exception as cleanup_error:
+            logger.error(f"Failed to cleanup uploaded file {new_filename} after database error: {cleanup_error}")
+        raise e
 
     # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding = BrandingInfo(**team.branding_info)
