@@ -2,7 +2,7 @@
   <div class="file-upload-container">
     <div
       class="drop-zone"
-      :class="{ 'has-file': modelValue }"
+      :class="{ 'has-file': modelValue || props.existingUrl }"
       @drop.prevent="handleDrop"
       @dragover.prevent="dragover = true"
       @dragleave.prevent="dragover = false"
@@ -16,13 +16,20 @@
         @change="handleFileSelect"
       >
 
-      <div v-if="!modelValue" class="drop-zone-content">
+      <div v-if="!modelValue && !props.existingUrl" class="drop-zone-content">
         <i class="icon-upload"></i>
         <p>Drop file here or click to upload</p>
       </div>
 
-      <div v-else-if="isImage" class="image-preview">
+      <div v-else-if="modelValue && isImage" class="image-preview">
         <img :src="previewUrl!" alt="Preview">
+      </div>
+
+      <div v-else-if="props.existingUrl" class="image-preview existing-file">
+        <img :src="props.existingUrl" alt="Current file">
+        <div class="existing-file-overlay">
+          <p>Click to change</p>
+        </div>
       </div>
     </div>
 
@@ -32,17 +39,26 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
       </button>
     </div>
+
+    <div v-else-if="props.existingUrl" class="file-info existing-file-info">
+      <span class="file-name">Current file</span>
+      <button class="remove-button" @click.prevent="removeExistingFile">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
   import { ref, computed, onBeforeUnmount, watch } from 'vue'
 
-  defineProps<{
+  const props = defineProps<{
     /** Accept property specifies which file types the file input should accept.
      * For example: "image/*" for all images, ".pdf,.doc" for PDFs and DOC files
      */
     accept: string
+    /** Optional URL of an existing file to display when no new file is selected */
+    existingUrl?: string
   }>()
 
   const modelValue = defineModel<File | null>()
@@ -50,6 +66,7 @@
   const emit = defineEmits<{
     (e: 'file-selected', file: File): void
     (e: 'file-removed'): void
+    (e: 'existing-file-removed'): void
   }>()
 
   const dragover = ref(false)
@@ -133,6 +150,10 @@
     (fileInput.value as HTMLInputElement).value = ''
     modelValue.value = null
     emit('file-removed')
+  }
+
+  const removeExistingFile = () => {
+    emit('existing-file-removed')
   }
 
   onBeforeUnmount(() => {
@@ -223,5 +244,39 @@
 
 .remove-button:hover {
   color: #ff4444;
+}
+
+.existing-file {
+  position: relative;
+}
+
+.existing-file-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 4px;
+}
+
+.existing-file:hover .existing-file-overlay {
+  opacity: 1;
+}
+
+.existing-file-overlay p {
+  color: white;
+  font-weight: bold;
+  margin: 0;
+}
+
+.existing-file-info {
+  background-color: #e8f4fd;
+  border: 1px solid #b3d9f2;
 }
 </style>

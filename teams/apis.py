@@ -91,10 +91,12 @@ def update_team_branding(
     team.branding_info = update_data
     team.save()
 
+    # Create a new BrandingInfo object with the updated data to get correct URLs
+    updated_branding = BrandingInfo(**team.branding_info)
     response_data = {
         **team.branding_info,
-        "icon_url": current_branding.brand_icon_url,
-        "logo_url": current_branding.brand_logo_url,
+        "icon_url": updated_branding.brand_icon_url,
+        "logo_url": updated_branding.brand_logo_url,
     }
     return 200, BrandingInfoWithUrls(**response_data)
 
@@ -138,10 +140,12 @@ def upload_branding_file(
     team.branding_info = update_data
     team.save()
 
+    # Create a new BrandingInfo object with the updated data to get correct URLs
+    updated_branding = BrandingInfo(**team.branding_info)
     response_data = {
         **team.branding_info,
-        "icon_url": current_branding.brand_icon_url,
-        "logo_url": current_branding.brand_logo_url,
+        "icon_url": updated_branding.brand_icon_url,
+        "logo_url": updated_branding.brand_logo_url,
     }
     return 200, BrandingInfoWithUrls(**response_data)
 
