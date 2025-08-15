@@ -200,7 +200,7 @@ jobs:
           bun test | tee -a $GITHUB_STEP_SUMMARY
 
   docker-build:
-    name: Docker Build and Push
+    name: Docker Build
     runs-on: ubuntu-latest
     outputs:
       github-image: ${{ steps.meta.outputs.github_image_id }}
@@ -216,6 +216,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -223,6 +224,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
+        if: ${{ github.event_name != 'pull_request' }}
         uses: docker/login-action@v3
         with:
           username: sbomifyhub
@@ -235,8 +237,11 @@ jobs:
           GITHUB_IMAGE_ID=$(echo $GITHUB_IMAGE_ID | tr '[A-Z]' '[a-z]')
           DOCKER_HUB_IMAGE_ID=sbomifyhub/${{ env.IMAGE_NAME }}
 
-          # Determine tags based on trigger
-          if [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
+          # For pull requests, just set dummy tags (won't be pushed anyway)
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TAGS="$GITHUB_IMAGE_ID:pr-${{ github.event.number }}"
+          # Determine tags based on trigger for pushes/releases
+          elif [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
             # For git tags, use the version number (keep 'v' prefix)
             VERSION=$(echo "${{ github.ref }}" | sed -e 's,refs/tags/,,')
             TAGS="$GITHUB_IMAGE_ID:$VERSION,$DOCKER_HUB_IMAGE_ID:$VERSION"
@@ -271,6 +276,14 @@ jobs:
 
           # Sign Docker Hub image
           cosign sign --yes ${{ steps.meta.outputs.docker_hub_image_id }}@${{ steps.build.outputs.digest }}
+
+      - name: Add build summary for PRs
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "## Docker Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Docker image built successfully for PR #${{ github.event.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image will be pushed to registries only after merge to master." >> $GITHUB_STEP_SUMMARY
 
       - name: Add deployment summary
         if: ${{ github.event_name != 'pull_request' }}
