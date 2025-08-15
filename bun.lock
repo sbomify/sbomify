@@ -18,7 +18,7 @@
         "highlight.js": "^11.11.1",
         "js-cookie": "^3.0.5",
         "jsbarcode": "^3.12.1",
-        "sweetalert2": "^11.22.3",
+        "sweetalert2": "^11.22.4",
         "typescript": "^5.9.2",
         "vite": "^7.1.2",
         "vite-plugin-pwa": "^1.0.2",
@@ -1136,7 +1136,7 @@
 
     "supports-preserve-symlinks-flag": ["supports-preserve-symlinks-flag@1.0.0", "", {}, "sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w=="],
 
-    "sweetalert2": ["sweetalert2@11.22.3", "", {}, "sha512-//WtZEvs9XRmyQVs77tz02ERu2JUTATQvrec+MjJYtKtnYSYDDgAmDdWzRWMkcxClj828EQgfHrpM+tI6qcMOg=="],
+    "sweetalert2": ["sweetalert2@11.22.4", "", {}, "sha512-JwcRODfozxiKmspFp+xctZ2izAmLAKbRPcoLMEW7LdugN/YmNrX1LT7hdBW87qsgupEO1ukBBuB17KzKFKW0tg=="],
 
     "synckit": ["synckit@0.11.11", "", { "dependencies": { "@pkgr/core": "^0.2.9" } }, "sha512-MeQTA1r0litLUf0Rp/iisCaL8761lKAZHaimlbGK4j0HysC4PLfqygQj9srcs0m2RdtDYnF8UuYyKpbjHYp7Jw=="],
 
