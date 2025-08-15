@@ -396,7 +396,7 @@ jobs:
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           OUTPUT_FILE: container.cdx.json
-          DOCKER_IMAGE: ${{ needs.docker-build.outputs.github-image }}@${{ needs.docker-build.outputs.image-digest }}
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:${{ github.ref_name }}
           AUGMENT: true
           ENRICH: true
           UPLOAD: true
