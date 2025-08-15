@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core import signing
+from django.db import DatabaseError, OperationalError
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -85,6 +86,27 @@ def get_sbom_data(sbom_id: str) -> Tuple[SBOM, Dict[str, Any]]:
         sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
     except SBOM.DoesNotExist:
         raise SBOMDataError(f"SBOM with ID {sbom_id} not found")
+    except (DatabaseError, OperationalError) as db_err:
+        # Handle database connection errors gracefully
+        error_msg = str(db_err).lower()
+        connection_indicators = [
+            "server closed the connection unexpectedly",
+            "connection terminated",
+            "connection reset by peer",
+            "could not connect to server",
+            "connection refused",
+            "connection timed out",
+            "network is unreachable",
+        ]
+
+        is_connection_error = any(indicator in error_msg for indicator in connection_indicators)
+
+        if is_connection_error:
+            log.warning(f"Database connection error fetching SBOM {sbom_id}: {db_err}")
+            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database connection temporarily unavailable")
+        else:
+            log.error(f"Database error fetching SBOM {sbom_id}: {db_err}")
+            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database error")
 
     if not sbom_instance.sbom_filename:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
@@ -137,6 +159,27 @@ def get_sbom_data_bytes(sbom_id: str) -> Tuple[SBOM, bytes]:
         sbom_instance = SBOM.objects.select_related("component").get(id=sbom_id)
     except SBOM.DoesNotExist:
         raise SBOMDataError(f"SBOM with ID {sbom_id} not found")
+    except (DatabaseError, OperationalError) as db_err:
+        # Handle database connection errors gracefully
+        error_msg = str(db_err).lower()
+        connection_indicators = [
+            "server closed the connection unexpectedly",
+            "connection terminated",
+            "connection reset by peer",
+            "could not connect to server",
+            "connection refused",
+            "connection timed out",
+            "network is unreachable",
+        ]
+
+        is_connection_error = any(indicator in error_msg for indicator in connection_indicators)
+
+        if is_connection_error:
+            log.warning(f"Database connection error fetching SBOM {sbom_id}: {db_err}")
+            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database connection temporarily unavailable")
+        else:
+            log.error(f"Database error fetching SBOM {sbom_id}: {db_err}")
+            raise SBOMDataError(f"Failed to fetch SBOM data for {sbom_id}: database error")
 
     if not sbom_instance.sbom_filename:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")

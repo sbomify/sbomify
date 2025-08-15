@@ -217,9 +217,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Set up test environment variables
-        run: cp .env.example .env
-
       - name: Build Docker Image
         run: |
           docker buildx build \
