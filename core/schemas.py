@@ -42,6 +42,7 @@ class ErrorCode(str, Enum):
 
     # General errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 

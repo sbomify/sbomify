@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.http import HttpRequest, HttpResponse
 from ninja import Query, Router
 from ninja.decorators import decorate_view
@@ -3234,7 +3234,14 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 
 @router.get(
     "/components/{component_id}/sboms",
-    response={200: PaginatedSBOMsResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: PaginatedSBOMsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+        503: ErrorResponse,
+    },
     auth=None,
     tags=["Components"],
 )
@@ -3245,6 +3252,30 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
+    except (DatabaseError, OperationalError) as db_err:
+        # Handle database connection errors gracefully
+        error_msg = str(db_err).lower()
+        connection_indicators = [
+            "server closed the connection unexpectedly",
+            "connection terminated",
+            "connection reset by peer",
+            "could not connect to server",
+            "connection refused",
+            "connection timed out",
+            "network is unreachable",
+        ]
+
+        is_connection_error = any(indicator in error_msg for indicator in connection_indicators)
+
+        if is_connection_error:
+            log.warning(f"Database connection error fetching component {component_id}: {db_err}")
+            return 503, {
+                "detail": "Service temporarily unavailable due to database connection issues",
+                "error_code": ErrorCode.SERVICE_UNAVAILABLE,
+            }
+        else:
+            log.error(f"Database error fetching component {component_id}: {db_err}")
+            return 500, {"detail": "Database error occurred", "error_code": ErrorCode.INTERNAL_ERROR}
 
     # If component is public, allow unauthenticated access
     if component.is_public:
@@ -3301,10 +3332,34 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 log.error(f"Unexpected error checking vulnerability report for SBOM {sbom_id}: {e}")
                 return False
 
-        sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
+        try:
+            sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
+            # Apply pagination
+            paginated_sboms, pagination_meta = _paginate_queryset(sboms_queryset, page, page_size)
+        except (DatabaseError, OperationalError) as db_err:
+            # Handle database connection errors gracefully
+            error_msg = str(db_err).lower()
+            connection_indicators = [
+                "server closed the connection unexpectedly",
+                "connection terminated",
+                "connection reset by peer",
+                "could not connect to server",
+                "connection refused",
+                "connection timed out",
+                "network is unreachable",
+            ]
 
-        # Apply pagination
-        paginated_sboms, pagination_meta = _paginate_queryset(sboms_queryset, page, page_size)
+            is_connection_error = any(indicator in error_msg for indicator in connection_indicators)
+
+            if is_connection_error:
+                log.warning(f"Database connection error fetching SBOMs for component {component_id}: {db_err}")
+                return 503, {
+                    "detail": "Service temporarily unavailable due to database connection issues",
+                    "error_code": ErrorCode.SERVICE_UNAVAILABLE,
+                }
+            else:
+                log.error(f"Database error fetching SBOMs for component {component_id}: {db_err}")
+                return 500, {"detail": "Database error occurred", "error_code": ErrorCode.INTERNAL_ERROR}
 
         # Build response items with vulnerability status and releases
         items = []
@@ -3314,7 +3369,14 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
 
             # Get releases that contain this SBOM
             releases = []
-            release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related("release", "release__product")
+            try:
+                release_artifacts = ReleaseArtifact.objects.filter(sbom=sbom).select_related(
+                    "release", "release__product"
+                )
+            except (DatabaseError, OperationalError) as db_err:
+                # Handle database connection errors gracefully - continue with empty releases list
+                log.warning(f"Database connection error fetching release artifacts for SBOM {sbom.id}: {db_err}")
+                release_artifacts = []
 
             for artifact in release_artifacts:
                 releases.append(
