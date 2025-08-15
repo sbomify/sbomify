@@ -300,32 +300,32 @@ const saveAllChanges = async () => {
   try {
     // Save individual field changes using the correct API endpoints
     if (localBrandingInfo.value.brand_color !== brandingInfo.value.brand_color) {
-      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/brand_color`, {
+      await $axios.patch(`/api/v1/workspaces/${props.teamKey}/branding/brand_color`, {
         value: localBrandingInfo.value.brand_color
       });
     }
 
     if (localBrandingInfo.value.accent_color !== brandingInfo.value.accent_color) {
-      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/accent_color`, {
+      await $axios.patch(`/api/v1/workspaces/${props.teamKey}/branding/accent_color`, {
         value: localBrandingInfo.value.accent_color
       });
     }
 
     if (localBrandingInfo.value.prefer_logo_over_icon !== brandingInfo.value.prefer_logo_over_icon) {
-      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/prefer_logo_over_icon`, {
+      await $axios.patch(`/api/v1/workspaces/${props.teamKey}/branding/prefer_logo_over_icon`, {
         value: localBrandingInfo.value.prefer_logo_over_icon
       });
     }
 
     // Handle file deletions
     if (localBrandingInfo.value.icon_pending_deletion) {
-      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/icon`, {
+      await $axios.patch(`/api/v1/workspaces/${props.teamKey}/branding/icon`, {
         value: null
       });
     }
 
     if (localBrandingInfo.value.logo_pending_deletion) {
-      await $axios.patch(`/api/v1/teams/${props.teamKey}/branding/logo`, {
+      await $axios.patch(`/api/v1/workspaces/${props.teamKey}/branding/logo`, {
         value: null
       });
     }
@@ -334,7 +334,7 @@ const saveAllChanges = async () => {
     if (localBrandingInfo.value.icon) {
       const iconFormData = new FormData();
       iconFormData.append('file', localBrandingInfo.value.icon);
-      await $axios.post(`/api/v1/teams/${props.teamKey}/branding/upload/icon`, iconFormData, {
+      await $axios.post(`/api/v1/workspaces/${props.teamKey}/branding/upload/icon`, iconFormData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     }
@@ -342,13 +342,13 @@ const saveAllChanges = async () => {
     if (localBrandingInfo.value.logo) {
       const logoFormData = new FormData();
       logoFormData.append('file', localBrandingInfo.value.logo);
-      await $axios.post(`/api/v1/teams/${props.teamKey}/branding/upload/logo`, logoFormData, {
+      await $axios.post(`/api/v1/workspaces/${props.teamKey}/branding/upload/logo`, logoFormData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     }
 
     // Reload the current data from server
-    const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
+    const response = await $axios.get(`/api/v1/workspaces/${props.teamKey}/branding`);
     if (response.data) {
       Object.assign(brandingInfo.value, response.data);
       // Reset local state to match server
@@ -376,7 +376,7 @@ const saveAllChanges = async () => {
 
 onMounted(async () => {
   try {
-    const response = await $axios.get(`/api/v1/teams/${props.teamKey}/branding`);
+    const response = await $axios.get(`/api/v1/workspaces/${props.teamKey}/branding`);
     if (response.data) {
       Object.assign(brandingInfo.value, response.data);
       // Initialize local state with server data (no defaults)

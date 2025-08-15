@@ -19,7 +19,7 @@ A comprehensive API for managing Software Bill of Materials (SBOM) and document 
 - **Project Organization**: Manage projects within products for better structure
 - **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
 - **Release Management**: Tag and organize artifacts by product releases with download capabilities
-- **Team Collaboration**: Multi-user access with role-based permissions
+- **Workspace Collaboration**: Multi-user access with role-based permissions (workspaces were previously called teams)
 - **Public & Private Access**: Flexible sharing and access controls with signed URLs for private components
 - **Vulnerability Scanning**: Integrated security analysis with OSV database
 - **Signed URL Security**: Time-limited, secure access to private components without authentication
@@ -84,9 +84,10 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "Create and revoke personal access tokens for secure API integration.",
             },
             {
-                "name": "Teams",
-                "description": "Manage team settings, members, branding, and collaboration features. "
-                "Control access and permissions across your organization.",
+                "name": "Workspaces",
+                "description": "Manage workspace settings, members, branding, and collaboration features. "
+                "Control access and permissions across your organization. "
+                "Note: Workspaces were previously called 'teams' in the internal data model.",
             },
             {
                 "name": "Billing",
@@ -114,7 +115,7 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
 
 api.add_router("/sboms", "sboms.apis.router")
 api.add_router("/documents", "documents.apis.router")
-api.add_router("/teams", "teams.apis.router")
+api.add_router("/workspaces", "teams.apis.router")
 api.add_router("/", "core.apis.router")
 api.add_router("/billing", "billing.apis.router")
 api.add_router("/notifications", "notifications.apis.router")

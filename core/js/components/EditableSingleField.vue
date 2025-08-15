@@ -85,7 +85,7 @@
 
     switch (props.itemType) {
       case 'team':
-        apiUrl = `/api/v1/teams/${props.itemId}`;
+        apiUrl = `/api/v1/workspaces/${props.itemId}`;
         break;
       case 'component':
         apiUrl = `/api/v1/components/${props.itemId}`;

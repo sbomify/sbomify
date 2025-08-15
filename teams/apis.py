@@ -21,7 +21,7 @@ from .utils import get_user_teams
 
 logger = getLogger(__name__)
 
-router = Router(tags=["Teams"], auth=(PersonalAccessTokenAuth(), django_auth))
+router = Router(tags=["Workspaces"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
 class FieldValue(BaseModel):
@@ -30,7 +30,10 @@ class FieldValue(BaseModel):
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
 def get_team_branding(request: HttpRequest, team_key: str):
-    """Get team branding information."""
+    """Get workspace branding information.
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -60,7 +63,10 @@ def update_team_branding(
     field: str,
     data: FieldValue,
 ):
-    """Update a single branding field."""
+    """Update a single workspace branding field.
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
 
     # Validate field name
     valid_fields = {"brand_color", "accent_color", "prefer_logo_over_icon", "icon", "logo"}
@@ -116,7 +122,10 @@ def upload_branding_file(
     file_type: str,
     file: File[UploadedFile],
 ):
-    """Upload team branding files (icon or logo)."""
+    """Upload workspace branding files (icon or logo).
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
     if file_type not in ["icon", "logo"]:
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
@@ -178,7 +187,10 @@ def upload_branding_file(
     response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
-    """Update team information."""
+    """Update workspace information.
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -218,7 +230,10 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
-    """Partially update team information."""
+    """Partially update workspace information.
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -258,7 +273,10 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
 
 @router.get("/", response={200: list[TeamResponseSchema], 403: ErrorResponse})
 def list_teams(request: HttpRequest):
-    """List all teams for the current user."""
+    """List all workspaces for the current user.
+
+    Note: Returns workspace data. Teams are now called workspaces.
+    """
     try:
         user_teams = get_user_teams(request.user)
         teams_list = []
@@ -288,7 +306,10 @@ def list_teams(request: HttpRequest):
     "/{team_key}", response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse}
 )
 def get_team(request: HttpRequest, team_key: str):
-    """Get team information by team key."""
+    """Get workspace information by workspace key.
+
+    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    """
     try:
         team_id = token_to_number(team_key)
     except ValueError:

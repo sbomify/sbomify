@@ -542,7 +542,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
     )
 
     team_key = sample_team_with_owner_member.team.key
-    base_uri = f"/api/v1/teams/{team_key}/branding"
+    base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Mock S3 client methods
     mock_upload = mocker.patch("core.object_store.S3Client.upload_media")
@@ -647,125 +647,125 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
 def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mocker):  # noqa: F811
     """Test that branding file uploads are atomic - proper cleanup on failures."""
     client = Client()
-    
+
     assert client.login(
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
-    
+
     team_key = sample_team_with_owner_member.team.key
-    base_uri = f"/api/v1/teams/{team_key}/branding"
-    
+    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+
     # Mock S3 client methods
     mock_upload = mocker.patch("core.object_store.S3Client.upload_media")
     mock_delete = mocker.patch("core.object_store.S3Client.delete_object")
-    
+
     uploaded_files = []
     deleted_files = []
-    
+
     def upload_side_effect(filename, data):
         uploaded_files.append(filename)
-        
+
     def delete_side_effect(bucket, filename):
         deleted_files.append(filename)
-        
+
     mock_upload.side_effect = upload_side_effect
     mock_delete.side_effect = delete_side_effect
-    
+
     # Test 1: Successful upload with old file cleanup for ICON
     team = sample_team_with_owner_member.team
     team.branding_info = {"icon": "old_icon_file.png", "logo": "", "brand_color": "", "accent_color": ""}
     team.save()
-    
+
     # Upload new icon
     with open("test_icon.png", "wb") as f:
         f.write(b"fake icon content")
-    
+
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon",
                              {"file": f},
                              format="multipart")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify new file was uploaded with UUID-based filename
         assert len(uploaded_files) == 1
         new_filename = uploaded_files[0]
         assert new_filename.startswith(f"team_{team_key}_icon_")
         assert new_filename.endswith(".png")
         assert len(new_filename.split("_")) >= 4  # team_KEY_icon_UUID.ext
-        
+
         # Verify old file was deleted
         assert len(deleted_files) == 1
         assert deleted_files[0] == "old_icon_file.png"
-        
+
         # Verify database was updated
         team.refresh_from_db()
         assert team.branding_info["icon"] == new_filename
         assert data["icon"] == new_filename
-    
+
     os.remove("test_icon.png")
-    
+
     # Test 2: Successful upload with old file cleanup for LOGO
     uploaded_files.clear()
     deleted_files.clear()
-    
+
     # Set up existing logo
     team.branding_info = {"icon": new_filename, "logo": "old_logo_file.jpg", "brand_color": "", "accent_color": ""}
     team.save()
-    
+
     with open("test_logo.jpg", "wb") as f:
         f.write(b"fake logo content")
-    
+
     with open("test_logo.jpg", "rb") as f:
         response = client.post(f"{base_uri}/upload/logo",
                              {"file": f},
                              format="multipart")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify new file was uploaded with UUID-based filename
         assert len(uploaded_files) == 1
         new_logo_filename = uploaded_files[0]
         assert new_logo_filename.startswith(f"team_{team_key}_logo_")
         assert new_logo_filename.endswith(".jpg")
-        
+
         # Verify old file was deleted
         assert len(deleted_files) == 1
         assert deleted_files[0] == "old_logo_file.jpg"
-        
+
         # Verify database was updated
         team.refresh_from_db()
         assert team.branding_info["logo"] == new_logo_filename
         assert data["logo"] == new_logo_filename
-    
+
     os.remove("test_logo.jpg")
-    
+
     # Test 3: Upload when no existing file
     uploaded_files.clear()
     deleted_files.clear()
-    
+
     # Clear existing icon
     team.branding_info = {"icon": "", "logo": new_logo_filename, "brand_color": "", "accent_color": ""}
     team.save()
-    
+
     with open("test_icon_new.png", "wb") as f:
         f.write(b"new icon content")
-    
+
     with open("test_icon_new.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon",
                              {"file": f},
                              format="multipart")
         assert response.status_code == 200
-        
+
         # Should upload new file but not delete anything
         assert len(uploaded_files) == 1
         assert len(deleted_files) == 0
-        
+
         # Verify unique filename
         new_icon_filename = uploaded_files[0]
         assert new_icon_filename.startswith(f"team_{team_key}_icon_")
         assert new_icon_filename != new_filename  # Different from previous icon
-    
+
     os.remove("test_icon_new.png")
 
 
@@ -778,7 +778,7 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
     )
 
     team_key = sample_team_with_guest_member.team.key
-    base_uri = f"/api/v1/teams/{team_key}/branding"
+    base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
     # Test GET branding info as non-owner
     response = client.get(base_uri)
@@ -1009,7 +1009,7 @@ def test_list_teams_api_success(authenticated_api_client, sample_user):  # noqa:
     Member.objects.create(team=team2, user=sample_user, role="admin", is_default_team=False)
 
     # Test the API
-    response = client.get("/api/v1/teams/", **headers)
+    response = client.get("/api/v1/workspaces/", **headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -1037,7 +1037,7 @@ def test_list_teams_api_empty_result(authenticated_api_client, sample_user):  # 
 
     # Don't create any teams for the user
 
-    response = client.get("/api/v1/teams/", **headers)
+    response = client.get("/api/v1/workspaces/", **headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -1048,7 +1048,7 @@ def test_list_teams_api_empty_result(authenticated_api_client, sample_user):  # 
 @pytest.mark.django_db
 def test_list_teams_api_unauthenticated(client):
     """Test that unauthenticated requests are rejected."""
-    response = client.get("/api/v1/teams/")
+    response = client.get("/api/v1/workspaces/")
 
     assert response.status_code == 401
 
@@ -1071,7 +1071,7 @@ def test_list_teams_api_only_user_teams(authenticated_api_client, sample_user, g
     other_team.save()
     Member.objects.create(team=other_team, user=guest_user, role="owner")
 
-    response = client.get("/api/v1/teams/", **headers)
+    response = client.get("/api/v1/workspaces/", **headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -1097,7 +1097,7 @@ def test_get_team_api_success(authenticated_api_client, sample_user):  # noqa: F
     # Add user as member
     Member.objects.create(team=team, user=sample_user, role="owner")
 
-    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+    response = client.get(f"/api/v1/workspaces/{team.key}", **headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -1115,7 +1115,7 @@ def test_get_team_api_invalid_team_key(authenticated_api_client):
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
-    response = client.get("/api/v1/teams/invalid-key", **headers)
+    response = client.get("/api/v1/workspaces/invalid-key", **headers)
 
     assert response.status_code == 404
     data = response.json()
@@ -1131,7 +1131,7 @@ def test_get_team_api_nonexistent_team(authenticated_api_client):
     # Use a valid format team key that doesn't exist
     fake_key = number_to_random_token(99999)
 
-    response = client.get(f"/api/v1/teams/{fake_key}", **headers)
+    response = client.get(f"/api/v1/workspaces/{fake_key}", **headers)
 
     assert response.status_code == 404
     data = response.json()
@@ -1151,7 +1151,7 @@ def test_get_team_api_access_denied(authenticated_api_client, sample_user, guest
     Member.objects.create(team=team, user=guest_user, role="owner")
 
     # sample_user (authenticated user) should not be able to access this team
-    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+    response = client.get(f"/api/v1/workspaces/{team.key}", **headers)
 
     assert response.status_code == 403
     data = response.json()
@@ -1166,7 +1166,7 @@ def test_get_team_api_unauthenticated(client):
     team.key = number_to_random_token(team.pk)
     team.save()
 
-    response = client.get(f"/api/v1/teams/{team.key}")
+    response = client.get(f"/api/v1/workspaces/{team.key}")
 
     assert response.status_code == 401
 
@@ -1187,7 +1187,7 @@ def test_get_team_api_different_roles(authenticated_api_client, guest_api_client
     owner_client, owner_token = authenticated_api_client
     owner_headers = get_api_headers(owner_token)
 
-    response = owner_client.get(f"/api/v1/teams/{team.key}", **owner_headers)
+    response = owner_client.get(f"/api/v1/workspaces/{team.key}", **owner_headers)
     assert response.status_code == 200
     assert response.json()["name"] == "Multi-Role Team"
 
@@ -1195,7 +1195,7 @@ def test_get_team_api_different_roles(authenticated_api_client, guest_api_client
     guest_client, guest_token = guest_api_client
     guest_headers = get_api_headers(guest_token)
 
-    response = guest_client.get(f"/api/v1/teams/{team.key}", **guest_headers)
+    response = guest_client.get(f"/api/v1/workspaces/{team.key}", **guest_headers)
     assert response.status_code == 200
     assert response.json()["name"] == "Multi-Role Team"
 
@@ -1218,7 +1218,7 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     Member.objects.create(team=team, user=sample_user, role="admin")
 
     # Test list teams response schema
-    response = client.get("/api/v1/teams/", **headers)
+    response = client.get("/api/v1/workspaces/", **headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -1231,7 +1231,7 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
         assert field in team_data, f"Field {field} missing from response"
 
     # Test get team response schema
-    response = client.get(f"/api/v1/teams/{team.key}", **headers)
+    response = client.get(f"/api/v1/workspaces/{team.key}", **headers)
     assert response.status_code == 200
     data = response.json()
 

@@ -3,7 +3,10 @@ from pydantic import BaseModel, Field
 
 
 class TeamUpdateSchema(BaseModel):
-    """Schema for updating team information."""
+    """Schema for updating workspace information.
+
+    Note: This schema is used for workspaces (previously called teams).
+    """
 
     class Config:
         str_strip_whitespace = True
@@ -12,7 +15,10 @@ class TeamUpdateSchema(BaseModel):
 
 
 class TeamPatchSchema(BaseModel):
-    """Schema for partially updating team information."""
+    """Schema for partially updating workspace information.
+
+    Note: This schema is used for workspaces (previously called teams).
+    """
 
     class Config:
         str_strip_whitespace = True
@@ -21,7 +27,10 @@ class TeamPatchSchema(BaseModel):
 
 
 class TeamResponseSchema(BaseModel):
-    """Schema for team response data."""
+    """Schema for workspace response data.
+
+    Note: This schema is used for workspaces (previously called teams).
+    """
 
     key: str
     name: str
@@ -31,7 +40,10 @@ class TeamResponseSchema(BaseModel):
 
 
 class TeamListItemSchema(BaseModel):
-    """Schema for team list item in dashboard."""
+    """Schema for workspace list item in dashboard.
+
+    Note: This schema is used for workspaces (previously called teams).
+    """
 
     key: str
     name: str
@@ -52,7 +64,10 @@ class UserSchema(BaseModel):
 
 
 class MemberSchema(BaseModel):
-    """Schema for team member data."""
+    """Schema for workspace member data.
+
+    Note: This schema is used for workspace members (workspaces were previously called teams).
+    """
 
     id: int
     user: UserSchema
@@ -61,7 +76,10 @@ class MemberSchema(BaseModel):
 
 
 class InvitationSchema(BaseModel):
-    """Schema for team invitation data."""
+    """Schema for workspace invitation data.
+
+    Note: This schema is used for workspace invitations (workspaces were previously called teams).
+    """
 
     id: int
     email: str
