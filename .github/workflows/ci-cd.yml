@@ -271,11 +271,12 @@ jobs:
       - name: Sign container images
         if: ${{ github.event_name != 'pull_request' }}
         run: |
-          # Sign GitHub Container Registry image
-          cosign sign --yes ${{ steps.meta.outputs.github_image_id }}@${{ steps.build.outputs.digest }}
-
-          # Sign Docker Hub image
-          cosign sign --yes ${{ steps.meta.outputs.docker_hub_image_id }}@${{ steps.build.outputs.digest }}
+          # Sign all tagged images
+          IFS=',' read -ra TAGS <<< "${{ steps.meta.outputs.tags }}"
+          for tag in "${TAGS[@]}"; do
+            echo "Signing image: $tag"
+            cosign sign --yes "$tag"
+          done
 
       - name: Add build summary for PRs
         if: ${{ github.event_name == 'pull_request' }}
