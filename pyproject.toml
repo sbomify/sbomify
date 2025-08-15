@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sbomify"
-version = "0.17.1"
+version = "0.17.2"
 description = "sbomify - the security artifact hub"
 authors = ["sbomify <hello@sbomify.com>"]
 readme = "README.md"

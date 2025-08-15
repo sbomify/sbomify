@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   code-quality:
@@ -199,37 +200,102 @@ jobs:
           bun test | tee -a $GITHUB_STEP_SUMMARY
 
   docker-build:
-    name: Docker Build Test
+    name: Docker Build
     runs-on: ubuntu-latest
+    outputs:
+      github-image: ${{ steps.meta.outputs.github_image_id }}
+      docker-hub-image: ${{ steps.meta.outputs.docker_hub_image_id }}
+      image-digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+    env:
+      IMAGE_NAME: sbomify
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      # Use Docker's built-in buildx instead of an action
       - name: Set up Docker Buildx
-        run: docker buildx create --use
+        uses: docker/setup-buildx-action@v3
 
-      # Use Docker CLI directly for caching
-      - name: Docker Build Cache
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+      - name: Log in to GitHub Container Registry
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker Image
-        run: |
-          docker buildx build \
-            --cache-from=type=local,src=/tmp/.buildx-cache \
-            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max \
-            --load \
-            .
+      - name: Login to Docker Hub
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: docker/login-action@v3
+        with:
+          username: sbomifyhub
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Cache cleanup
-      - name: Move cache
+      - name: Extract metadata
+        id: meta
         run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          GITHUB_IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          GITHUB_IMAGE_ID=$(echo $GITHUB_IMAGE_ID | tr '[A-Z]' '[a-z]')
+          DOCKER_HUB_IMAGE_ID=sbomifyhub/${{ env.IMAGE_NAME }}
+
+          # For pull requests, just set dummy tags (won't be pushed anyway)
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TAGS="$GITHUB_IMAGE_ID:pr-${{ github.event.number }}"
+          # Determine tags based on trigger for pushes/releases
+          elif [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
+            # For git tags, use the version number (keep 'v' prefix)
+            VERSION=$(echo "${{ github.ref }}" | sed -e 's,refs/tags/,,')
+            TAGS="$GITHUB_IMAGE_ID:$VERSION,$DOCKER_HUB_IMAGE_ID:$VERSION"
+          else
+            # For master branch pushes, use latest
+            TAGS="$GITHUB_IMAGE_ID:latest,$DOCKER_HUB_IMAGE_ID:latest"
+          fi
+
+          echo "github_image_id=$GITHUB_IMAGE_ID" >> $GITHUB_OUTPUT
+          echo "docker_hub_image_id=$DOCKER_HUB_IMAGE_ID" >> $GITHUB_OUTPUT
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push to registries
+        uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install Cosign
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container images
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          # Sign GitHub Container Registry image
+          cosign sign --yes ${{ steps.meta.outputs.github_image_id }}@${{ steps.build.outputs.digest }}
+
+          # Sign Docker Hub image
+          cosign sign --yes ${{ steps.meta.outputs.docker_hub_image_id }}@${{ steps.build.outputs.digest }}
+
+      - name: Add build summary for PRs
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "## Docker Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Docker image built successfully for PR #${{ github.event.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image will be pushed to registries only after merge to master." >> $GITHUB_STEP_SUMMARY
+
+      - name: Add deployment summary
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published Images:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All images have been signed with Cosign for supply chain security." >> $GITHUB_STEP_SUMMARY
 
   deploy-staging:
     name: Deploy to Staging
@@ -279,9 +345,16 @@ jobs:
     name: Generate SBOMs
     runs-on: ubuntu-latest
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
-    needs: [deploy-production]
+    needs: [deploy-production, docker-build]
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload backend SBOM
         uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
@@ -291,10 +364,35 @@ jobs:
           COMPONENT_NAME: 'sbomify-backend'
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
+          OUTPUT_FILE: backend.cdx.json
           LOCK_FILE: 'poetry.lock'
           AUGMENT: true
           ENRICH: true
           UPLOAD: true
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/backend.cdx.json'
+
+      - name: Upload container SBOM
+        uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: iVajxXMIqqyi
+          COMPONENT_NAME: 'sbomify-container'
+          COMPONENT_VERSION: ${{ github.ref_name }}
+          PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
+          OUTPUT_FILE: container.cdx.json
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.github-image }}@${{ needs.docker-build.outputs.image-digest }}
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/container.cdx.json'
 
       - name: Upload frontend SBOM
         uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
@@ -304,7 +402,13 @@ jobs:
           COMPONENT_NAME: 'sbomify-frontend'
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
+          OUTPUT_FILE: frontend.cdx.json
           LOCK_FILE: 'bun.lock'
           ENRICH: true
           AUGMENT: true
           UPLOAD: true
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/frontend.cdx.json'
