@@ -237,7 +237,7 @@ jobs:
         run: |
           GITHUB_IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           GITHUB_IMAGE_ID=$(echo $GITHUB_IMAGE_ID | tr '[A-Z]' '[a-z]')
-          DOCKER_HUB_IMAGE_ID=sbomifyhub/${{ env.IMAGE_NAME }}
+          DOCKER_HUB_IMAGE_ID=docker.io/sbomifyhub/${{ env.IMAGE_NAME }}
 
           # For pull requests, just set dummy tags (won't be pushed anyway)
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
