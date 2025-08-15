@@ -353,6 +353,10 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
     needs: [deploy-production, docker-build]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -378,6 +382,7 @@ jobs:
           UPLOAD: true
 
       - name: Attest
+        if: ${{ success() }}
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
@@ -397,6 +402,7 @@ jobs:
           UPLOAD: true
 
       - name: Attest
+        if: ${{ success() }}
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
@@ -416,6 +422,7 @@ jobs:
           UPLOAD: true
 
       - name: Attest
+        if: ${{ success() }}
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: '${{ github.workspace }}/frontend.cdx.json'
