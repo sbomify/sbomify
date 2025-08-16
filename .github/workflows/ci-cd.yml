@@ -268,7 +268,7 @@ jobs:
 
       - name: Attest GitHub Container Registry image
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.meta.outputs.github_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -276,7 +276,7 @@ jobs:
 
       - name: Attest Docker Hub image
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.meta.outputs.docker_hub_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -383,7 +383,7 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
@@ -403,7 +403,7 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
@@ -423,6 +423,6 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: '${{ github.workspace }}/frontend.cdx.json'
