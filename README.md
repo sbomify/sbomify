@@ -144,10 +144,14 @@ These endpoints are available when running the development server.
 
 ### Setup
 
-Copy `.env.example` to `.env` and adjust values as needed:
+Configure environment variables by setting them in your shell or using Docker Compose override files.
+
+**Important: Add to `/etc/hosts`**
+
+For the development environment to work properly with Keycloak authentication, you must add the following entry to your `/etc/hosts` file:
 
 ```bash
-cp .env.example .env
+127.0.0.1   keycloak
 ```
 
 Start the development environment (recommended method):
@@ -234,23 +238,17 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 
-These settings are preconfigured in the `.env.example` file.
+These settings can be configured using environment variables.
 
 #### Keycloak Authentication Setup
 
 Keycloak is now managed as part of the Docker Compose environment. You do not need to run Keycloak manually.
 
-**Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
-
-```bash
-127.0.0.1   keycloak
-```
-
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
 ##### Keycloak Bootstrapping
 
-Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your `.env` file or Docker Compose configuration to control the bootstrap process.
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
 
 When running in development mode (using `docker-compose.dev.yml`), the bootstrap script automatically:
 
@@ -269,12 +267,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 Keycloak will be available at <http://keycloak:8080/>.
 
-```bash
-127.0.0.1   keycloak
-```
-
-Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
-
 #### S3/Minio Storage
 
 The application uses S3-compatible storage for storing files and assets. In
@@ -284,7 +276,7 @@ development, we use Minio as a local S3 replacement.
 - When running locally (Django outside Docker):
   - Make sure Minio is running via Docker:
     `docker compose up sbomify-minio sbomify-createbuckets -d`
-  - Set `AWS_S3_ENDPOINT_URL=http://localhost:9000` in your `.env`
+  - Set `AWS_ENDPOINT_URL_S3=http://localhost:9000` in your environment variables
   - The required buckets (`sbomify-media`, `sbomify-sboms`, and optionally `sbomify-documents`) will be created
     automatically
 
@@ -544,6 +536,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-You will need to set appropriate environment variables (see `.env.example` for guidance) and ensure your reverse proxy, storage, and database are configured securely.
+You will need to set appropriate environment variables and ensure your reverse proxy, storage, and database are configured securely.
 
 > **Warning:** Do not use the provided production compose setup as-is for real deployments. Review and harden all settings, secrets, and network exposure before using in production.

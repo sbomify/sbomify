@@ -6,7 +6,17 @@ This document provides an introduction to the basic principles and technologies 
 
 ## Running Containers
 
-We use **Docker Compose** and **Docker** for running our containers. This simplifies managing the local environment and dependencies. To set up your local environment, simply run:
+We use **Docker Compose** and **Docker** for running our containers. This simplifies managing the local environment and dependencies.
+
+**Important: Add to `/etc/hosts`**
+
+Before starting the development environment, you must add the following entry to your `/etc/hosts` file for Keycloak authentication to work:
+
+```bash
+127.0.0.1   keycloak
+```
+
+To set up your local environment, simply run:
 
 ```bash
 docker-compose up

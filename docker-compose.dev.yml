@@ -1,63 +1,134 @@
 ---
+# Development-specific environment variable anchors
+x-keycloak-env: &keycloak-env
+  KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
+  KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
+  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
+  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
+
+x-keycloak-admin-env: &keycloak-admin-env
+  KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+  KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+
+x-minio-env: &minio-env
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://sbomify-minio:9000}
+  AWS_SBOMS_STORAGE_BUCKET_NAME: ${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
+  AWS_MEDIA_STORAGE_BUCKET_NAME: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}
+
+x-dev-env: &dev-env
+  DEBUG: ${DEBUG:-"True"}
+  USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-"True"}
+  BUILD_ENV: ${BUILD_ENV:-development}
+
 services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    restart: ${KEYCLOAK_RESTART_POLICY:-always}
+    environment:
+      <<: [*keycloak-env, *keycloak-admin-env]
+      KC_HOSTNAME_STRICT_BACKCHANNEL: ${KC_HOSTNAME_STRICT_BACKCHANNEL:-true}
+      KC_HEALTH_ENABLED: ${KC_HEALTH_ENABLED:-true}
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    command: start-dev
+
+  keycloak-bootstrap:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    depends_on:
+      - keycloak
+    volumes:
+      - ./bin/keycloak-bootstrap.sh:/keycloak-bootstrap.sh
+    entrypoint: /bin/sh /keycloak-bootstrap.sh
+    environment:
+      <<: [*keycloak-env, *keycloak-admin-env]
+      KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
+
+  sbomify-minio:
+    image: ${MINIO_IMAGE:-minio/minio}
+    restart: always
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"  # API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # Console
+    environment:
+      <<: *minio-env
+    volumes:
+      - sbomify_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sbomify-createbuckets:
+    image: ${MINIO_MC_IMAGE:-minio/mc}
+    depends_on:
+      sbomify-minio:
+        condition: service_healthy
+    environment:
+      <<: *minio-env
+    volumes:
+      - ./bin/create-minio-buckets.sh:/opt/bin/create-minio-buckets.sh
+    entrypoint: /bin/sh /opt/bin/create-minio-buckets.sh
+
   sbomify-backend:
     build:
       # context is inherited from docker-compose.yml
-      target: python-app-dev
+      target: ${BUILD_TARGET:-python-app-dev}
       args:
-        BUILD_ENV: development
+        <<: *dev-env
     # ports are inherited from docker-compose.yml
     volumes:
       - .:/code # Mount local code for development
     environment:
-      DEBUG: "True"
-      USE_VITE_DEV_SERVER: "True"
+      <<: *dev-env
 
   sbomify-migrations:
     build:
-      target: python-app-dev
+      target: ${BUILD_TARGET:-python-app-dev}
       args:
-        BUILD_ENV: development
+        <<: *dev-env
     volumes:
       - .:/code # Mount local code for development
     environment:
-      USE_VITE_DEV_SERVER: "True"
-
+      <<: *dev-env
 
   sbomify-worker:
     build:
-      target: python-app-dev
+      target: ${BUILD_TARGET:-python-app-dev}
       args:
-        BUILD_ENV: development
+        <<: *dev-env
     volumes:
       - .:/code # Mount local code for development
     environment:
-      USE_VITE_DEV_SERVER: "True"
-
-  keycloak-bootstrap:
-    environment:
-      KEYCLOAK_DEV_MODE: "true"
+      <<: *dev-env
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
     build:
       context: . # Must be defined as it's a new service
-      target: frontend-dev-server
+      target: ${FRONTEND_BUILD_TARGET:-frontend-dev-server}
     ports:
-      - "5170:5170"
+      - "${FRONTEND_PORT:-5170}:5170"
     volumes:
       - .:/app-frontend # Mount to the WORKDIR of frontend-dev-server stage
       - /app-frontend/node_modules # Prevent host node_modules from overwriting container's
     environment:
-      NODE_ENV: development
-      VITE_API_BASE_URL: http://127.0.0.1:8000
+      NODE_ENV: ${NODE_ENV:-development}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8000}
     deploy:
       resources:
         limits:
           memory: 1G
         reservations:
           memory: 512M
-    restart: unless-stopped
+    restart: ${FRONTEND_RESTART_POLICY:-unless-stopped}
 
-# Dev-specific volumes or networks could be defined here if needed.
-# Example placeholder comments for DB/Redis are removed as they are defined in the base docker-compose.yml
+volumes:
+  keycloak_data:
+  sbomify_minio_data:
