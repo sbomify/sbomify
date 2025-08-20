@@ -1,6 +1,6 @@
 <div class="navbar-nav me-auto workspace-selector">
     <div class="nav-item dropdown">
-        <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none"
+        <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-none"
                 type="button"
                 data-bs-toggle="dropdown"
                 aria-expanded="false"
@@ -9,14 +9,14 @@
             <i class="align-middle fas fa-users"></i>
         </button>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
-            <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center"
+            <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-inline-flex align-items-center"
                     type="button"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
                     aria-haspopup="true"
                     aria-label="Select workspace">
-                <i class="fas fa-briefcase me-2" aria-hidden="true"></i>
-                <span class="fw-medium">
+                <i class="fas fa-folder me-2 text-primary" aria-hidden="true"></i>
+                <span class="fw-medium text-dark">
                     {% if request.session.current_team %}
                         {{ request.session.current_team.name }}
                     {% else %}

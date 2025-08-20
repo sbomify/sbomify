@@ -81,9 +81,13 @@
                 <!-- Main content area -->
                 <div class="main">
                     <!-- Top navigation -->
-                    {% cache 300 'header' request.user.id %}
+                    {% if request.session.current_team.key %}
+                        {% cache 300 'header' request.user.id request.session.current_team.key %}
+                        {% include "core/components/topnav.html.j2" %}
+                    {% endcache %}
+                {% else %}
                     {% include "core/components/topnav.html.j2" %}
-                {% endcache %}
+                {% endif %}
                 <!-- Main content -->
                 <main class="content">
                     <div class="container-fluid p-0">
@@ -123,5 +127,7 @@
 <!-- Scripts now managed via Vite bundles -->
 {% block scripts %}{% endblock %}
 {% vite_asset 'core/js/main.ts' %}
+<!-- Custom overrides loaded after Vite assets -->
+<link href="{% static 'css/workspace-override.css' %}" rel="stylesheet">
 </body>
 </html>

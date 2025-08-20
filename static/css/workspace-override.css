@@ -1,0 +1,28 @@
+/* Workspace Name Display Override Styles */
+/* This file loads after Vite CSS to ensure proper cascade */
+
+.navbar .workspace-selector .nav-link.dropdown-toggle {
+  background-color: rgba(59, 125, 221, 0.08) !important;
+  border-radius: 0.375rem !important;
+  border-left: 3px solid #3b7ddd !important;
+  padding: 0.375rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  max-width: 280px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.navbar .workspace-selector .nav-link.dropdown-toggle:hover {
+  background-color: rgba(59, 125, 221, 0.12) !important;
+}
+
+.navbar .workspace-selector .nav-link.dropdown-toggle:focus {
+  outline: 2px solid rgba(59, 125, 221, 0.5) !important;
+  outline-offset: 2px !important;
+}
+
+.navbar .workspace-selector .nav-link.dropdown-toggle .fas {
+  font-size: 0.875rem !important;
+  flex-shrink: 0 !important;
+}

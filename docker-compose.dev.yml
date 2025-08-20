@@ -25,7 +25,7 @@ x-dev-env: &dev-env
 
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.3}
     restart: ${KEYCLOAK_RESTART_POLICY:-always}
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
@@ -38,7 +38,7 @@ services:
     command: start-dev
 
   keycloak-bootstrap:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.3}
     depends_on:
       - keycloak
     volumes:
@@ -87,6 +87,8 @@ services:
       - .:/code # Mount local code for development
     environment:
       <<: *dev-env
+      DEBUG: ${DEBUG:-"True"}
+      USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-"True"}
 
   sbomify-migrations:
     build:
