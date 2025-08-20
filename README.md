@@ -150,6 +150,14 @@ Copy `.env.example` to `.env` and adjust values as needed:
 cp .env.example .env
 ```
 
+**Important: Add to `/etc/hosts`**
+
+For the development environment to work properly with Keycloak authentication, you must add the following entry to your `/etc/hosts` file:
+
+```bash
+127.0.0.1   keycloak
+```
+
 Start the development environment (recommended method):
 
 ```bash
@@ -240,12 +248,6 @@ These settings are preconfigured in the `.env.example` file.
 
 Keycloak is now managed as part of the Docker Compose environment. You do not need to run Keycloak manually.
 
-**Note:** For the development environment to work, you must have the following entry in your `/etc/hosts` file:
-
-```bash
-127.0.0.1   keycloak
-```
-
 Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
 ##### Keycloak Bootstrapping
@@ -268,12 +270,6 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 Keycloak will be available at <http://keycloak:8080/>.
-
-```bash
-127.0.0.1   keycloak
-```
-
-Persistent storage for Keycloak is managed by Docker using a named volume (`keycloak_data`).
 
 #### S3/Minio Storage
 
