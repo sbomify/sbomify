@@ -1,15 +1,89 @@
 ---
-description: VueJS
-globs: *.vue *.json *.ts *.js
+description: Vue.js Standards - Interactive Elements Only
+globs: ["*.vue", "*.ts", "*.js", "vite.config.ts", "package.json"]
+alwaysApply: false
 ---
-# VueJS Guidelines
 
-- Always use the Vue Composition API script setup style.
-- Leverage VueUse functions where applicable to enhance reactivity and performance.
+# Vue.js Development Guidelines - Selective Usage
 
-# UI and Styling
-- Use Vuetify components where needed unless there is a more specific library available for a component. For example if sweetalert2 is installed, use it for alerts instead of using vuetify alerts.
-- Implement responsive designS; use a mobile-first approach.
-- Build UI components using atomic design principles, organizing them from smallest to largest (e.g., atoms, molecules, organisms, pages).
-- Wrap asynchronous components in Suspense with a fallback UI.
-- Use dynamic loading for non-critical components.
+## Usage Philosophy
+
+### When to Use Vue.js
+**IMPORTANT**: Vue.js should ONLY be used for interactive elements that require dynamic behavior. Default to Django templates for all other UI components.
+
+#### Appropriate Use Cases
+- **Interactive Data Visualizations**: Charts, graphs, and dashboards with user interaction
+- **Real-time Components**: Live updates, notifications, status indicators, chat interfaces
+- **Complex Forms**: Multi-step wizards, dynamic validation, conditional fields, auto-complete
+- **Interactive Tables**: Sortable, filterable, editable data grids with pagination
+- **Dynamic UI Elements**: Components requiring complex state management, animations, or user interactions
+- **File Upload Interfaces**: Drag-and-drop uploads with progress indicators
+
+#### When NOT to Use Vue.js
+- Static content pages and informational displays
+- Simple forms with basic validation
+- Basic lists, cards, and static displays
+- Navigation menus and breadcrumbs
+- Static modals, alerts, and dialogs
+- Simple buttons and links
+
+## Vue.js Technical Standards
+
+### Component Architecture
+- **Always use Composition API with `<script setup>`**
+- Define clear TypeScript interfaces for props and emits
+- Keep components focused on single responsibilities
+- Implement proper loading and error states
+- Use descriptive variable names with auxiliary verbs (`isLoading`, `hasError`)
+
+### State Management
+- **Use Pinia** for complex state management across components
+- Keep state minimal and focused
+- Implement proper error handling in store actions
+- Use computed properties for derived state
+
+### TypeScript Integration
+- **Use TypeScript for all Vue components**
+- Define clear interfaces for props, emits, and data structures
+- Use proper type annotations for API responses
+- Leverage Vue's built-in TypeScript support
+
+### UI Framework Integration
+- **Use Vuetify components** unless specialized libraries are needed
+- **Use SweetAlert2** for alerts and confirmations instead of Vuetify dialogs
+- Implement responsive design with mobile-first approach
+- Follow atomic design principles (atoms → molecules → organisms)
+
+### Performance Optimization
+- Use `shallowRef` and `shallowReactive` for large datasets
+- Implement virtual scrolling for large lists
+- Use `defineAsyncComponent` for code splitting
+- Wrap async components in `<Suspense>` with fallback UI
+- Debounce user input for search and filtering
+
+### Testing Standards
+- **Use Vitest** for all Vue component testing
+- Test component props, events, and user interactions
+- Mock API calls and external dependencies
+- Use `@vue/test-utils` for component mounting and interaction
+- Test both success and error scenarios
+
+### Integration with Django
+- Keep Vue components focused and minimal - handle only the interactive behavior
+- Integrate with Django APIs for all data operations to maintain security boundaries
+- Pass initial data from Django views to Vue components via JSON in template context
+- Use Django's CSRF protection with Vue components for form submissions
+
+### Security Considerations
+- Always include CSRF tokens in API requests
+- Validate and sanitize user input before sending to APIs
+- Use TypeScript for compile-time type safety
+- Implement proper error boundaries
+- Avoid storing sensitive data in client-side state
+
+### Code Quality Standards
+- **Always run `bun run lint`** before committing
+- **Always run `bun test`** to ensure tests pass
+- Use ESLint with Vue-specific rules
+- Use Prettier for consistent code formatting
+- Create focused, single-purpose components

@@ -1,61 +1,197 @@
 ---
-description: General Guidelines
-globs: *
-alwaysApply: false
+description: General Guidelines - sbomify Architecture & Standards
+globs: ["*"]
+alwaysApply: true
 ---
-You are an expert in Python, Django, scalable web application development, TypeScript, Node.js, Vite, Vue.js, Vue Router, Pinia, VueUse, and Vuetify with a deep understanding of best practices and performance optimization techniques in these technologies.
 
-# General Guidelines
-- sbomify is always spelt lower case.
+# sbomify Development Guidelines
 
-## Project Structure and Organization
-- When creating a file (for example, config files, etc), first ensure that similar files are not already present in the project in may be different directories.
-- Follow the established project structure and naming conventions.
-- Keep related files together and maintain a logical directory hierarchy.
+You are an expert full-stack developer specializing in Python, Django, scalable web applications, TypeScript, Node.js, Vite, Vue.js, and modern web development practices.
 
-## Package Management and Dependencies
-- For Python, we're using `poetry` for package management, so never try to run python directly or through a virtual environment.
-- For JavaScript/TypeScript, we are using `bun` as the package manager.
-- NEVER EVER TOUCH A LOCKFILE manually! Always use the corresponding package manager.
-- Always specify exact versions for dependencies to ensure reproducible builds.
-- Regularly update dependencies to maintain security and access new features.
+## Core Principles
 
-## Architecture and Design
-- While the front-end and back-end is currently intertwined, the long-term goal is to fully separate out the front-end from the back-end and have a clear and clean API that is consumed by the front-end.
-- Design APIs with versioning in mind from the start.
-- Follow RESTful principles for API design.
-- Implement proper error handling and status codes.
+### Project Identity
+- **sbomify** is always spelled lowercase
+- Maintain consistency across all documentation and code
 
-## Security
-- You are paranoid about security and rather be overly cautious than naive.
-- Never store sensitive information in code or configuration files.
-- Always validate and sanitize user input.
-- Implement proper authentication and authorization mechanisms.
-- Use environment variables for sensitive configuration.
+### Architecture Philosophy
+- **Django-First Approach**: Use Django templates (`.html.j2`) for all pages and UI components by default
+- **Selective Frontend**: Only use Vue/TypeScript for interactive elements requiring dynamic behavior (graphs, charts, complex forms, real-time updates)
+- **API Security Boundaries**: Always use API functions in templates (even for internal data) to maintain consistent security boundaries that can be repurposed later
+- **Server-Side First**: Prefer server-side rendering over client-side rendering for better SEO, performance, and maintainability
+- **Component Reusability**: Favor creating reusable components regardless of language or framework - build once, use everywhere
 
-## Code Quality
-- Write clean, maintainable, and well-documented code.
-- Follow PEP 8 for Python code and ESLint rules for TypeScript/JavaScript.
-- Write unit tests for all new functionality.
-- Maintain test coverage above 80%.
-- Use type hints in Python and TypeScript for better code reliability.
-- Never leave comment out code behind. If we need it, we will pull it from Git.
-- When you encounter a linting error, you **FIX IT**, not just annotate to skip it.
+## Project Structure & Organization
 
-## Performance
-- Optimize database queries and use proper indexing.
-- Implement caching where appropriate.
-- Minimize bundle size and optimize frontend assets.
-- Use lazy loading for components and routes.
+### File Organization
+- Follow established project structure and naming conventions
+- Keep related files together and maintain logical directory hierarchy
+- Before creating new files, check if similar files exist elsewhere in the project
+- Use consistent naming patterns across modules
 
-## Version Control
-- Write clear and descriptive commit messages.
-- Create feature branches for new development.
-- Keep commits atomic and focused.
-- Review code before merging to main branches.
+### Template Standards
+- Django templates must use `.html.j2` extension to indicate Jinja2/Django templating
+- Organize templates in app-specific directories
+- Use template inheritance and includes for reusability
 
-## Documentation
-- Keep documentation up to date with code changes.
-- Document API endpoints, parameters, and responses.
-- Include setup instructions and environment requirements.
-- Document known issues and limitations.
+### Component Reusability Standards
+- **Design for Reuse**: Always consider if a component could be useful elsewhere before building it
+- **Single Responsibility**: Keep components focused on one clear purpose to maximize reusability
+- **Parameterization**: Use props, parameters, or configuration to make components flexible
+- **Cross-Framework Thinking**: Consider how Django template components could be adapted as Vue components if needed
+- **Documentation**: Document component APIs, expected inputs, and usage examples
+- **Consistent Interfaces**: Use similar patterns for similar functionality across different technologies
+- **Avoid Hard-coding**: Use configuration, environment variables, or parameters instead of hard-coded values
+- **Modular Design**: Build components that can work independently or compose with others
+
+## Package Management
+
+### Python Dependencies
+- Use **Poetry** exclusively for Python package management
+- Never run Python directly or through virtual environments
+- **NEVER** manually edit lockfiles (`poetry.lock`, `pyproject.toml`)
+- Always use `poetry add`, `poetry remove`, `poetry update` commands
+
+### JavaScript Dependencies
+- Use **bun** as the JavaScript package manager and runtime
+- **NEVER** manually edit lockfiles (`bun.lock`, `package-lock.json`)
+- Always use `bun add`, `bun remove`, `bun update` commands
+
+### Version Management
+- Specify exact versions for dependencies to ensure reproducible builds
+- Regularly update dependencies for security and new features
+- Document breaking changes in dependency updates
+
+## API Design & Security
+
+### RESTful Design
+- Follow RESTful principles for all API endpoints
+- Design APIs with versioning in mind from the start
+- Use consistent HTTP status codes and error responses
+- Implement proper pagination for list endpoints
+
+### Security Standards
+- **Security-First Mindset**: Be paranoid about security rather than naive
+- Never store sensitive information in code or configuration files
+- Always validate and sanitize user input
+- Implement proper authentication and authorization mechanisms
+- Use environment variables for all sensitive configuration
+- All data access must go through API functions with proper auth/authorization
+
+### Error Handling
+- Implement comprehensive error handling at all levels
+- Use proper HTTP status codes
+- Provide meaningful error messages for debugging
+- Log errors appropriately for monitoring
+
+## Code Quality Standards
+
+### General Quality
+- Write clean, maintainable, and well-documented code
+- Follow language-specific style guides (PEP 8 for Python, ESLint for TypeScript)
+- Write comprehensive unit tests for all new functionality
+- Maintain test coverage above 80%
+- Use type hints in Python and TypeScript for better reliability
+
+### Code Hygiene
+- Never leave commented-out code behind (use Git history instead)
+- When encountering linting errors, **FIX THEM** - don't skip or annotate around them
+- Keep functions and classes focused on single responsibilities
+- Use descriptive variable and function names
+
+### Reusable Component Design
+- **Extract Common Patterns**: When you see similar code in multiple places, extract it into a reusable component
+- **Template Components**: Create reusable Django template includes for common UI patterns (cards, forms, buttons)
+- **Vue Component Library**: Build a library of reusable Vue components for interactive elements
+- **Python Utilities**: Create utility functions and classes that can be imported across different apps
+- **API Patterns**: Design API endpoints with consistent patterns that can be reused across different resources
+- **Configuration-Driven**: Use configuration files or database settings to control component behavior rather than hard-coding
+- **Composition Over Inheritance**: Favor composing smaller, focused components rather than building large monolithic ones
+
+## Performance Optimization
+
+### Database Performance
+- Optimize database queries and use proper indexing
+- Use Django ORM efficiently, avoid N+1 queries
+- Implement database-level constraints where appropriate
+
+### Frontend Performance
+- Minimize bundle size and optimize frontend assets
+- Use lazy loading for components and routes
+- Implement caching strategies where appropriate
+- Optimize images and static assets
+
+### Caching Strategy
+- Leverage Django's caching framework for frequently accessed data
+- Use Redis for session storage and task queues
+- Implement appropriate cache invalidation strategies
+
+## Testing Standards
+
+### Test Coverage
+- Write unit tests for all new functionality
+- Maintain minimum 80% test coverage
+- Write integration tests for critical user flows
+- Use appropriate test fixtures and factories
+
+### Test Organization
+- Organize tests in logical groups
+- Use descriptive test names that explain the scenario
+- Keep tests focused and independent
+- Mock external dependencies appropriately
+
+## Version Control Best Practices
+
+### Commit Standards
+- Write clear, descriptive commit messages
+- Keep commits atomic and focused on single changes
+- Use conventional commit format when possible
+- Reference issues/tickets in commit messages
+
+### Branch Management
+- Create feature branches for new development
+- Use descriptive branch names
+- Keep branches focused and short-lived
+- Review code before merging to main branches
+
+## Documentation Requirements
+
+### Code Documentation
+- Keep documentation up-to-date with code changes
+- Document all API endpoints, parameters, and responses
+- Include setup instructions and environment requirements
+- Document known issues and limitations
+
+### API Documentation
+- Use Django Ninja's automatic documentation features
+- Provide examples for complex endpoints
+- Document authentication requirements
+- Include rate limiting information
+
+## Development Workflow
+
+### Local Development
+- Use Docker Compose for consistent development environments
+- Follow the setup instructions in DEVELOPER.md
+- Use environment variables for configuration
+- Test changes locally before committing
+
+### Code Review Process
+- All changes must go through code review
+- Review for security, performance, and maintainability
+- Ensure tests pass and coverage is maintained
+- Check for proper documentation updates
+
+## Monitoring & Observability
+
+### Logging Standards
+- Use structured logging with appropriate log levels
+- Include relevant context in log messages
+- Avoid logging sensitive information
+- Use centralized logging for production
+
+### Error Tracking
+- Implement comprehensive error tracking
+- Monitor application performance metrics
+- Set up alerts for critical issues
+- Regular review of error patterns and trends

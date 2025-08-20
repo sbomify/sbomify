@@ -1,43 +1,73 @@
 ---
-description: Django
-globs: *.py *.html
+description: Django Framework Standards - Template-First Architecture
+globs: ["*.py", "*.html.j2", "*.html", "manage.py", "*/migrations/*.py"]
 alwaysApply: false
 ---
-# Django Guidelines
 
-- Write clear, technical responses with precise Django examples.
-- Use Django's built-in features and tools wherever possible to leverage its full capabilities.
-- Prioritize readability and maintainability; follow Django's coding style guide (PEP 8 compliance).
-- Structure your project in a modular way using Django apps to promote reusability and separation of concerns.
-- Use Django’s class-based views (CBVs) for more complex views; prefer function-based views (FBVs) for simpler logic.
-- Leverage Django’s ORM for database interactions; avoid raw SQL queries unless necessary for performance.
-- Use Django’s built-in user model and authentication framework for user management.
-- Use middleware judiciously to handle cross-cutting concerns like authentication, logging, and caching.
-- Assume all migrations have been run. Never edit an existing migration file.
-- Django templates should end with `.html.j2` rather than just `.html` to clarify they ar Jinja2/Django templates.
+# Django Development Guidelines
 
-## Django Error Handling and Validation
-- Implement error handling at the view level and use Django's built-in error handling mechanisms.
-- Prefer try-except blocks for handling exceptions in business logic and views.
-- Customize error pages (e.g., 404, 500) to improve user experience and provide helpful information.
-- Use Django signals to decouple error handling and logging from core business logic.
+## Architecture Principles
 
-## Djanog Dependencies
-- Django
-- Django Ninja (for API development)
-- Celery (for background tasks)
-- Redis (for caching and task queues)
-- PostgreSQL (preferred databases for production)
+### Template-First Philosophy
+- **Default to Django templates** (`.html.j2`) for all UI components and pages
+- Use server-side rendering for better SEO, performance, and maintainability
+- Only integrate Vue components for truly interactive elements (graphs, real-time updates, complex forms)
+- Maintain clear separation between presentation and business logic
 
-## Django and Vue Specific Guidelines
+### API Security Boundaries
+- **All data access must go through API functions** with proper authentication and authorization
+- Use API functions in templates even for internal data access to maintain security consistency
+- Implement consistent validation and sanitization patterns across all endpoints
+- Design APIs to be repurposable for future frontend separation
 
-- Prefer using Django Ninja based APIs for newer development.
-- Prefer creating VueJS components for new components instead of using Django templates.
-- Keep business logic in models and api endpoints to minimum; keep views light and focused on request handling.
-- Use Django's URL dispatcher (urls.py) to define clear and RESTful URL patterns.
-- Apply Django's security best practices (e.g., CSRF protection, SQL injection protection, XSS prevention).
-- Always use pytest for testing.
-- Use Django’s built-in tools for testing (pytest-django) to ensure code quality and reliability.
-- Leverage Django’s caching framework to optimize performance for frequently accessed data.
-- Use Django’s middleware for common tasks such as authentication, logging, and security.
-- Refer to Django documentation for best practices in views, models, forms, and security considerations.
+## Django Framework Standards
+
+### Project Structure
+- Structure projects using Django apps for modularity and reusability
+- Keep apps focused on single domains or functionalities
+- Use consistent naming conventions across apps
+- Organize templates in app-specific directories with clear hierarchies
+
+### Views & URL Patterns
+- **Prefer Class-Based Views (CBVs)** for complex logic with mixins
+- **Use Function-Based Views (FBVs)** for simple, straightforward logic
+- Keep views light - delegate business logic to models, services, or managers
+- Use appropriate mixins for common functionality (authentication, permissions)
+- Implement proper error handling with meaningful error pages
+- Use type hints for all view methods and functions
+
+### Template System
+- **Always use `.html.j2` extension** to clearly identify Jinja2/Django templates
+- Use template inheritance (`{% extends %}`) for consistent layouts
+- Create reusable template components with `{% include %}`
+- Use template blocks for customization points
+- Implement proper escaping for user-generated content
+- Keep template logic minimal - complex logic belongs in views or template tags
+
+### API Development with Django Ninja
+- **Use Django Ninja for all new API development**
+- Define clear schemas for request/response validation
+- Implement proper authentication and authorization
+- Use appropriate HTTP status codes and error responses
+- Add comprehensive API documentation with examples
+- Version APIs from the beginning (`/api/v1/`)
+
+### Security Best Practices
+- **Always validate and sanitize user input**
+- Use Django's built-in authentication and authorization
+- Implement CSRF protection on all forms
+- Use environment variables for sensitive configuration
+- Implement rate limiting and request throttling
+
+### Testing Standards
+- **Use pytest-django for all Django testing**
+- Test views, models, forms, and API endpoints comprehensively
+- Use Django's test client for integration testing
+- Mock external dependencies and services
+- Test both success and failure scenarios
+
+### Migration Management
+- **Never edit existing migration files**
+- Create descriptive migration names
+- Test migrations on production-like data
+- Keep migrations atomic and reversible where possible

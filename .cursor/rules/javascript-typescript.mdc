@@ -1,33 +1,181 @@
 ---
-description: Javascript and Typescript
-globs: *.js, *.ts
+description: TypeScript & JavaScript Standards - Interactive Elements Only
+globs: ["*.ts", "*.js", "*.json", "tsconfig*.json", "eslint.config.js"]
 alwaysApply: false
 ---
-# Javascript Runtime
 
-- Always use bun as the javascript runtime.
-- Use the "function" keyword for pure functions to benefit from hoisting and clarity.
-- Implement proper error boundaries or try-catch mechanisms to handle errors gracefully, especially in asynchronous operations.
+# TypeScript & JavaScript Development Guidelines
 
-# Javascript and TypeScript Code Style and Structure
-- Write concise, maintainable, and technically accurate TypeScript code with relevant examples.
-- Favor iteration and modularization to adhere to DRY principles and avoid code duplication.
-- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
-- Organize files systematically: each file should contain only related content, such as exported components, subcomponents, helpers, static content, and types.
+## Usage Philosophy
 
-# Naming Conventions
-- Use lowercase with dashes for directories (e.g., components/auth-wizard).
-- Favor named exports for functions.
+### When to Use TypeScript/JavaScript
+**IMPORTANT**: TypeScript and JavaScript should ONLY be used for interactive elements that require dynamic behavior. Default to Django templates for all other UI components.
 
-# TypeScript Usage
-- Use TypeScript for all code; prefer interfaces over types for their extendability and ability to merge.
-- Avoid enums; use maps instead for better type safety and flexibility.
-- Use functional components with TypeScript interfaces.
+#### Appropriate Use Cases
+- **Vue Component Development**: Building interactive Vue components for dynamic behavior
+- **API Integration**: Connecting Vue components to Django APIs with proper type safety
+- **Complex Client-Side Logic**: State management, real-time updates, data visualization
+- **Build Tools & Configuration**: Vite configuration, build scripts, and development tools
+- **Testing**: Unit tests for Vue components and TypeScript utilities
 
-# Test scripts
-- All functionality in TypeScript shall have good test coverage.
-- We are using Bun's test tool for all front-end tests.
+#### When NOT to Use TypeScript/JavaScript
+- Static page logic that can be handled server-side with Django
+- Simple form handling (use Django forms instead)
+- Basic UI interactions (use CSS and minimal inline scripts if needed)
+- Content rendering (use Django templates)
+- Navigation and routing (use Django URLs)
 
-# Validating
-- Always run `bun run lint` to lint TypeScript.
-- Run `bun test` to invoke all unit tests.
+## TypeScript Standards
+
+### Language Configuration
+- **Target ES2022** for modern JavaScript features
+- **Use strict mode** with all strict TypeScript options enabled
+- **Enable `noUncheckedIndexedAccess`** for safer array/object access
+- **Use `exactOptionalPropertyTypes`** for precise optional property handling
+
+### Type System Best Practices
+
+#### Interface Design
+```typescript
+export interface User {
+  readonly id: number
+  email: string
+  name: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ApiResponse<T> {
+  data: T
+  message?: string
+  errors?: Record<string, string[]>
+}
+```
+
+#### Type Safety Guidelines
+- **Use `interface` over `type`** for object shapes (better for extending)
+- **Use `type` for unions, intersections, and computed types**
+- **Avoid `any`** - use `unknown` for truly unknown data
+- **Use `readonly`** for immutable data structures
+- **Implement branded types** for domain-specific values (IDs, emails, etc.)
+
+### Code Style & Structure
+
+#### Modern JavaScript Features
+- **Use private fields** (`#field`) for encapsulation
+- **Use nullish coalescing** (`??`) and optional chaining (`?.`)
+- **Use template literals** for complex string construction
+- **Use `async/await`** for asynchronous operations
+- **Prefer `const` assertions** for literal types
+
+#### Function Design
+- **Use function declarations** for hoisting and clarity
+- **Use arrow functions** for callbacks and short utilities
+- **Always include return type annotations**
+- **Implement proper error handling** for all async operations
+
+### Error Handling
+
+#### Comprehensive Error Management
+```typescript
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly errors?: Record<string, string[]>
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+export type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E }
+```
+
+### Module Organization
+
+#### Import/Export Patterns
+- **Prefer named exports** for better tree-shaking
+- **Use barrel exports** for clean imports
+- **Use default exports sparingly** (only for single-purpose modules)
+
+### Performance Optimization
+
+#### Efficient Code Patterns
+- **Use Map/Set** for better performance with large datasets
+- **Use WeakMap** for memory-efficient caching
+- **Implement debouncing** for expensive operations
+- **Use throttling** for frequent operations
+
+### Testing Standards
+
+#### Unit Testing with Vitest
+- **Test all business logic** with comprehensive unit tests
+- **Mock external dependencies** appropriately
+- **Test both success and error scenarios**
+- **Use descriptive test names** that explain the scenario
+- **Maintain high test coverage** (minimum 80%)
+
+### Build Tools & Configuration
+
+#### Package Management
+- **Use bun** as the JavaScript runtime and package manager
+- **Never edit lockfiles manually** - always use bun commands
+- **Organize dependencies** appropriately (dependencies vs devDependencies)
+
+### Code Quality Standards
+
+#### Development Workflow
+1. **Always run `bun run lint`** to lint and fix TypeScript/JavaScript
+2. **Always run `bun test`** to execute all unit tests
+3. **Always run `bun run type-check`** to verify TypeScript types
+4. **Use meaningful variable names** with auxiliary verbs (`isLoading`, `hasError`)
+5. **Keep functions focused** on single responsibilities
+6. **Write comprehensive tests** for all business logic
+7. **Use TypeScript strict mode** for maximum type safety
+
+#### Pre-commit Checklist
+- [ ] All TypeScript files have proper type annotations
+- [ ] No `any` types used (use `unknown` instead)
+- [ ] All functions have return type annotations
+- [ ] Error handling implemented for all async operations
+- [ ] Unit tests written for new functionality
+- [ ] Linting passes without errors
+- [ ] Type checking passes without errors
+
+### Integration with Django
+
+#### CSRF Protection
+```typescript
+export function getCsrfToken(): string {
+  const token = document.querySelector<HTMLInputElement>('[name=csrfmiddlewaretoken]')?.value
+  if (!token) {
+    throw new Error('CSRF token not found')
+  }
+  return token
+}
+
+export function createAuthenticatedHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-CSRFToken': getCsrfToken()
+  }
+}
+```
+
+#### API Integration Best Practices
+- **Always include CSRF tokens** in requests to Django
+- **Use TypeScript interfaces** that match Django serializers
+- **Implement proper error handling** for Django validation errors
+- **Keep client-side logic minimal** - delegate to Django APIs
+- **Use Django's authentication system** consistently
+
+### Security Considerations
+- **Validate and sanitize** all user input before sending to APIs
+- **Use TypeScript** for compile-time type safety
+- **Implement proper error boundaries** to prevent information leakage
+- **Avoid storing sensitive data** in client-side state
+- **Use secure HTTP headers** and HTTPS in production
