@@ -302,28 +302,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All images have been attested with GitHub build provenance for supply chain security." >> $GITHUB_STEP_SUMMARY
 
-  deploy-staging:
-    name: Deploy to Staging
-    needs: [code-quality, tests, frontend-tests, docker-build]
-    runs-on: ubuntu-latest
-    if: ${{ success() && github.ref == 'refs/heads/master' && github.event_name == 'push' }}
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-
-      - uses: superfly/flyctl-actions/setup-flyctl@63da3ecc5e2793b98a3f2519b3d75d4f4c11cec2 # master
-
-      - name: Create fly.toml for staging
-        run: |
-          cat <<EOF > fly.toml
-          ${{ secrets.FLY_CONFIG_STAGE }}
-          EOF
-
-      - name: Deploy to staging
-        run: |
-          flyctl deploy --image ${{ needs.docker-build.outputs.docker-hub-image }}:latest
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_TOKEN }}
-
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
