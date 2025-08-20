@@ -258,18 +258,18 @@ testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
 name = "boto3"
-version = "1.40.12"
+version = "1.40.14"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "boto3-1.40.12-py3-none-any.whl", hash = "sha256:3c3d6731390b5b11f5e489d5d9daa57f0c3e171efb63ac8f47203df9c71812b3"},
-    {file = "boto3-1.40.12.tar.gz", hash = "sha256:c6b32aee193fbd2eb84696d2b5b2410dcda9fb4a385e1926cff908377d222247"},
+    {file = "boto3-1.40.14-py3-none-any.whl", hash = "sha256:ab5798a03582d09c0de132d080c9aee53d5647b6461261a5b7621170ec80d92b"},
+    {file = "boto3-1.40.14.tar.gz", hash = "sha256:d1d9998fc2b9619fc796c859d263ac81793d783e79331be62931b353dd1b68b9"},
 ]
 
 [package.dependencies]
-botocore = ">=1.40.12,<1.41.0"
+botocore = ">=1.40.14,<1.41.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.13.0,<0.14.0"
 
@@ -278,14 +278,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.40.12"
+version = "1.40.14"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "botocore-1.40.12-py3-none-any.whl", hash = "sha256:84e96004a8b426c5508f6b5600312d6271364269466a3a957dc377ad8effc438"},
-    {file = "botocore-1.40.12.tar.gz", hash = "sha256:c6560578e799b47b762b7e555bd9c5dd5c29c5d23bd778a8a72e98c979b3c727"},
+    {file = "botocore-1.40.14-py3-none-any.whl", hash = "sha256:06c852be83543c8d45e18a530abcad31659db8b16bcb66fd371c930d38017e7c"},
+    {file = "botocore-1.40.14.tar.gz", hash = "sha256:1810494c8c4190f20f9e17f2da4f7ee91eda863f429c6d690ea17ec41a8f83c4"},
 ]
 
 [package.dependencies]
@@ -2925,14 +2925,14 @@ cli = ["click (>=5.0)"]
 
 [[package]]
 name = "python-keycloak"
-version = "5.8.0"
+version = "5.8.1"
 description = "python-keycloak is a Python package providing access to the Keycloak API."
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "python_keycloak-5.8.0-py3-none-any.whl", hash = "sha256:97114e5548cd06d571236292ab6b23c0182b9f4adb851e1f683aed99adf4e75a"},
-    {file = "python_keycloak-5.8.0.tar.gz", hash = "sha256:b791647bbb91e3e8c9323dd41913c85a02690dedab90f391f4db1d5b46537f31"},
+    {file = "python_keycloak-5.8.1-py3-none-any.whl", hash = "sha256:f80accf3e63b6c907f0f873ffac7a07705bd89d935520ba235259ba81b9ed864"},
+    {file = "python_keycloak-5.8.1.tar.gz", hash = "sha256:b99a1efc7eb8715c3a7d915005728f8ba2ee03c81cdf12210c65ce794cd148ad"},
 ]
 
 [package.dependencies]
@@ -4183,4 +4183,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "e9455c07f639569e51b425f8095c00b0150a26204986dddbbda787acba4552cc"
+content-hash = "a33c6a014768414af81fe981da3bff3ff5370d416d6ca382a1690a6480268303"
