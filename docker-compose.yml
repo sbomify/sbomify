@@ -30,7 +30,7 @@ services:
     restart: ${POSTGRES_RESTART_POLICY:-always}
     environment:
       # We can't use anchors here, since anchors are resolved *after* these values are set.
-      # You can however override all of them using a `.env` file.
+      # You can however override all of them using environment variables.
       POSTGRES_USER: ${DATABASE_USER:-sbomify}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
       POSTGRES_DB: ${DATABASE_NAME:-sbomify}
