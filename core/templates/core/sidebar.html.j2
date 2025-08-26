@@ -12,7 +12,7 @@
             <ul class="sidebar-nav">
                 {% if not request.session.current_team.has_completed_wizard %}
                     <li class="sidebar-item">
-                        <a class="sidebar-link" href="{% url 'teams:onboarding_wizard' %}">
+                        <a class="sidebar-link" href="{% url 'teams:getting_started_wizard' %}">
                             <i class="align-middle fas fa-play-circle"></i>
                             <span class="align-middle pt-1">Get Started</span>
                             <span class="badge bg-primary-subtle text-primary ms-auto">New</span>

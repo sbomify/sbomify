@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
@@ -23,17 +23,21 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_GET
 
+# Import API functions for wizard
+from core.apis import create_component, create_product, create_project
 from core.errors import error_response
+from core.schemas import ComponentCreateSchema, ProductCreateSchema, ProjectCreateSchema
 from core.utils import number_to_random_token, token_to_number
 from sboms.models import Component, Product, Project
 
 from .decorators import validate_role_in_current_team
 from .forms import (
     InviteUserForm,
-    OnboardingComponentForm,
-    OnboardingProductForm,
-    OnboardingProjectForm,
     TeamForm,
+    WizardComponentForm,
+    WizardPlanSelectionForm,
+    WizardProductForm,
+    WizardProjectForm,
 )
 from .models import Invitation, Member, Team
 from .schemas import BrandingInfo
@@ -423,166 +427,295 @@ def delete_team(request: HttpRequest, team_key: str):
 
 
 @login_required
-def onboarding_wizard(request: HttpRequest) -> HttpResponse:
-    """Handle the onboarding wizard for creating a product, project, and component."""
-
-    # Get the current step from session or query params, defaulting to 'product'
-    current_step = request.GET.get("step") or request.session.get("wizard_step", "product")
+def getting_started_wizard(request: HttpRequest) -> HttpResponse:
+    """Modern getting started wizard using Django templates and API functions."""
+    # Get the current step from session or query params, defaulting to 'plan'
+    current_step = request.GET.get("step") or request.session.get("wizard_step", "plan")
 
     # Validate step
-    if current_step not in ["product", "project", "component", "complete"]:
-        current_step = "product"
+    if current_step not in ["plan", "product", "project", "component", "complete"]:
+        current_step = "plan"
 
     # Initialize context with common data
     context = {
         "current_step": current_step,
         "progress": {
-            "product": 0,
-            "project": 33,
-            "component": 66,
+            "plan": 0,
+            "product": 20,
+            "project": 45,
+            "component": 70,
             "complete": 100,
         }[current_step],
+        "steps": [
+            {"name": "plan", "label": "Choose Plan", "icon": "fas fa-star"},
+            {"name": "product", "label": "Product", "icon": "fas fa-box"},
+            {"name": "project", "label": "Project", "icon": "fas fa-folder-open"},
+            {"name": "component", "label": "Component", "icon": "fas fa-cube"},
+            {"name": "complete", "label": "Complete", "icon": "fas fa-check-circle"},
+        ],
     }
 
     if request.method == "POST":
-        if current_step == "product":
-            form = OnboardingProductForm(request.POST)
+        # Handle form submission by calling API functions directly
+        if current_step == "plan":
+            form = WizardPlanSelectionForm(request.POST)
             if form.is_valid():
-                try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
+                plan = form.cleaned_data["plan"]
 
-                    # Create the product
-                    product = Product.objects.create(name=form.cleaned_data["name"], team=team)
-                    # Store product ID in session
-                    request.session["wizard_product_id"] = product.id
-                    # Move to next step
-                    request.session["wizard_step"] = "project"
-                    request.session.modified = True  # Explicitly mark session as modified
-                    messages.success(request, f"Product '{product.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A product with the name '{form.cleaned_data['name']}' already exists in your team."
+                # Check if enterprise plan selected - redirect to contact form
+                if plan == "enterprise":
+                    # Store that they selected enterprise in session for later reference
+                    request.session["selected_enterprise_plan"] = True
+                    messages.info(
+                        request,
+                        (
+                            "Thank you for your interest in our Enterprise plan! "
+                            "Please fill out the contact form and we'll get in touch with you soon."
+                        ),
                     )
-        elif current_step == "project":
-            form = OnboardingProjectForm(request.POST)
+                    return redirect("public_enterprise_contact")
+
+                # Update team's billing plan for community/business plans
+                current_team = request.session.get("current_team", {})
+                if current_team:
+                    try:
+                        team = Team.objects.get(key=current_team["key"])
+                        team.billing_plan = plan
+                        team.save()
+
+                        # Update session data
+                        current_team["billing_plan"] = plan
+                        request.session["current_team"] = current_team
+
+                        # Proceed to next step
+                        request.session["wizard_step"] = "product"
+                        messages.success(request, f"Selected {plan.title()} plan successfully!")
+                        return redirect("teams:getting_started_wizard")
+                    except Exception:
+                        messages.error(request, "Failed to update billing plan. Please try again.")
+                        form.add_error(None, "Failed to update billing plan.")
+
+            context["form"] = form
+        elif current_step == "product":
+            # Ensure user has selected a plan first
+            current_team = request.session.get("current_team", {})
+            if not current_team.get("billing_plan"):
+                messages.error(request, "Please select a billing plan first.")
+                request.session["wizard_step"] = "plan"
+                return redirect("teams:getting_started_wizard")
+
+            form = WizardProductForm(request.POST)
             if form.is_valid():
                 try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
+                    # Create payload for API
+                    payload = ProductCreateSchema(
+                        name=form.cleaned_data["name"], description=form.cleaned_data.get("description", "")
+                    )
 
-                    # Get the product from the previous step
+                    # Call API function
+                    status_code, response_data = create_product(request, payload)
+
+                    if status_code == 201:
+                        # Store product ID in session
+                        request.session["wizard_product_id"] = response_data["id"]
+                        request.session["wizard_step"] = "project"
+                        request.session.modified = True
+                        messages.success(request, f"Product '{form.cleaned_data['name']}' created successfully.")
+                        return redirect("teams:getting_started_wizard")
+                    else:
+                        messages.error(request, response_data.get("detail", "Failed to create product"))
+
+                except Exception as e:
+                    logger.error(f"Error creating product in wizard: {e}")
+                    messages.error(request, "An error occurred while creating the product")
+
+        elif current_step == "project":
+            # Ensure user has selected a plan first
+            current_team = request.session.get("current_team", {})
+            if not current_team.get("billing_plan"):
+                messages.error(request, "Please select a billing plan first.")
+                request.session["wizard_step"] = "plan"
+                return redirect("teams:getting_started_wizard")
+
+            form = WizardProjectForm(request.POST)
+            if form.is_valid():
+                try:
+                    # Check if we have a product from previous step
                     product_id = request.session.get("wizard_product_id")
                     if not product_id:
                         messages.error(request, "The product from the previous step no longer exists.")
                         request.session["wizard_step"] = "product"
-                        return redirect("teams:onboarding_wizard")
+                        return redirect("teams:getting_started_wizard")
 
-                    product = Product.objects.get(id=product_id)
+                    # Create payload for API
+                    payload = ProjectCreateSchema(name=form.cleaned_data["name"], metadata={})
 
-                    # Create the project
-                    project = Project.objects.create(name=form.cleaned_data["name"], team=team)
+                    # Call API function
+                    status_code, response_data = create_project(request, payload)
 
-                    # Store project ID in session
-                    request.session["wizard_project_id"] = project.id
-                    # Move to next step
-                    request.session["wizard_step"] = "component"
-                    request.session.modified = True  # Explicitly mark session as modified
-                    messages.success(request, f"Project '{project.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A project with the name '{form.cleaned_data['name']}' already exists in your team."
-                    )
-                except Product.DoesNotExist:
-                    messages.error(request, "The product from the previous step no longer exists.")
-                    request.session["wizard_step"] = "product"
-                    return redirect("teams:onboarding_wizard")
+                    if status_code == 201:
+                        # Store project ID and link to product
+                        request.session["wizard_project_id"] = response_data["id"]
+                        request.session["wizard_step"] = "component"
+                        request.session.modified = True
+
+                        # Link project to product using the relationship
+                        try:
+                            product = Product.objects.get(id=product_id)
+                            project = Project.objects.get(id=response_data["id"])
+                            product.projects.add(project)
+                        except (Product.DoesNotExist, Project.DoesNotExist) as e:
+                            logger.error(f"Error linking project to product: {e}")
+
+                        messages.success(request, f"Project '{form.cleaned_data['name']}' created successfully.")
+                        return redirect("teams:getting_started_wizard")
+                    else:
+                        messages.error(request, response_data.get("detail", "Failed to create project"))
+
+                except Exception as e:
+                    logger.error(f"Error creating project in wizard: {e}")
+                    messages.error(request, "An error occurred while creating the project")
+
         elif current_step == "component":
-            form = OnboardingComponentForm(request.POST)
+            # Ensure user has selected a plan first
+            current_team = request.session.get("current_team", {})
+            if not current_team.get("billing_plan"):
+                messages.error(request, "Please select a billing plan first.")
+                request.session["wizard_step"] = "plan"
+                return redirect("teams:getting_started_wizard")
+
+            form = WizardComponentForm(request.POST)
             if form.is_valid():
                 try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
-
-                    # Get the product and project from previous steps
+                    # Check if we have product and project from previous steps
                     product_id = request.session.get("wizard_product_id")
                     project_id = request.session.get("wizard_project_id")
                     if not product_id or not project_id:
                         messages.error(request, "The product or project from previous steps no longer exists.")
                         request.session["wizard_step"] = "product"
-                        return redirect("teams:onboarding_wizard")
+                        return redirect("teams:getting_started_wizard")
 
-                    product = Product.objects.get(id=product_id)
-                    project = Project.objects.get(id=project_id)
+                    # Import utility function
+                    from sboms.utils import create_default_component_metadata
+
+                    # Get current team for metadata
+                    team_key = request.session["current_team"]["key"]
+                    team = Team.objects.get(key=team_key)
 
                     # Build component metadata using utility function
-                    from sboms.utils import create_default_component_metadata, populate_component_metadata_native_fields
-
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None
                     )
 
-                    # Create the component
-                    component = Component.objects.create(
+                    # Create payload for API
+                    payload = ComponentCreateSchema(
                         name=form.cleaned_data["name"],
-                        team=team,
+                        component_type="sbom",  # Default type for wizard (valid values: 'sbom' or 'document')
                         metadata=component_metadata,
                     )
 
-                    # Populate native fields with default metadata
-                    populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+                    # Call API function
+                    status_code, response_data = create_component(request, payload)
 
-                    # Link the project to the product
-                    product.projects.add(project)
+                    if status_code == 201:
+                        # Store component ID and link to project
+                        request.session["wizard_component_id"] = response_data["id"]
 
-                    # Link the component to the project
-                    project.components.add(component)
+                        # Link component to project using the relationship
+                        try:
+                            project = Project.objects.get(id=project_id)
+                            component = Component.objects.get(id=response_data["id"])
+                            project.components.add(component)
 
-                    # Mark wizard as completed
-                    team.has_completed_wizard = True
-                    team.save()
+                            # Populate native fields with default metadata
+                            from sboms.utils import populate_component_metadata_native_fields
 
-                    # Update session to reflect completed wizard
-                    request.session["current_team"]["has_completed_wizard"] = True
-                    request.session.modified = True
+                            populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
 
-                    # Clean up session
-                    request.session["wizard_step"] = "complete"
-                    request.session["wizard_component_id"] = component.id
+                        except (Project.DoesNotExist, Component.DoesNotExist) as e:
+                            logger.error(f"Error linking component to project: {e}")
 
-                    messages.success(request, f"Component '{component.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A component with the name '{form.cleaned_data['name']}' already exists in your team."
-                    )
-                except (Product.DoesNotExist, Project.DoesNotExist):
-                    messages.error(request, "The product or project from previous steps no longer exists.")
-                    request.session["wizard_step"] = "product"
-                    return redirect("teams:onboarding_wizard")
+                        # Mark wizard as completed
+                        team.has_completed_wizard = True
+                        team.save()
+
+                        # Update session to reflect completed wizard
+                        request.session["current_team"]["has_completed_wizard"] = True
+                        request.session["wizard_step"] = "complete"
+                        request.session.modified = True
+
+                        messages.success(request, f"Component '{form.cleaned_data['name']}' created successfully.")
+                        return redirect("teams:getting_started_wizard")
+                    else:
+                        messages.error(request, response_data.get("detail", "Failed to create component"))
+
+                except Exception as e:
+                    logger.error(f"Error creating component in wizard: {e}")
+                    messages.error(request, "An error occurred while creating the component")
+
     else:
         # GET request - show the appropriate form
-        if current_step == "product":
-            form = OnboardingProductForm()
+        if current_step == "plan":
+            form = WizardPlanSelectionForm()
+        elif current_step == "product":
+            form = WizardProductForm()
         elif current_step == "project":
-            form = OnboardingProjectForm()
+            form = WizardProjectForm()
         elif current_step == "component":
-            form = OnboardingComponentForm()
+            form = WizardComponentForm()
         elif current_step == "complete":
             # Show completion page
             context["component_id"] = request.session.get("wizard_component_id")
             # Clean up session
             for key in ["wizard_step", "wizard_product_id", "wizard_project_id", "wizard_component_id"]:
                 request.session.pop(key, None)
-            return render(request, "core/components/onboarding_wizard.html.j2", context)
+            return render(request, "teams/getting_started_wizard.html.j2", context)
 
     context["form"] = form
-    return render(request, "core/components/onboarding_wizard.html.j2", context)
+    return render(request, "teams/getting_started_wizard.html.j2", context)
+
+
+@login_required
+def skip_getting_started_wizard(request: HttpRequest) -> HttpResponse:
+    """Skip the getting started wizard and mark it as completed."""
+    if request.method == "POST":
+        # Get current team from session
+        current_team = request.session.get("current_team", {})
+        if not current_team:
+            messages.add_message(request, messages.ERROR, "No team selected")
+            return redirect("core:dashboard")
+
+        try:
+            team = Team.objects.get(key=current_team.get("key"))
+
+            # Mark wizard as completed
+            team.has_completed_wizard = True
+            team.save()
+
+            # Update session
+            current_team["has_completed_wizard"] = True
+            request.session["current_team"] = current_team
+
+            # Clean up wizard session data
+            for key in ["wizard_step", "wizard_product_id", "wizard_project_id", "wizard_component_id"]:
+                request.session.pop(key, None)
+
+            messages.add_message(
+                request,
+                messages.INFO,
+                (
+                    "Getting started wizard skipped. You can always create products, "
+                    "projects, and components from the dashboard."
+                ),
+            )
+
+        except Team.DoesNotExist:
+            messages.add_message(request, messages.ERROR, "Team not found")
+
+        return redirect("core:dashboard")
+
+    # GET request should redirect to wizard
+    return redirect("teams:getting_started_wizard")
 
 
 @login_required

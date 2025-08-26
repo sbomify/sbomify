@@ -41,6 +41,10 @@ logger = logging.getLogger(__name__)
 
 def home(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
+        # Check if user needs to complete the getting started wizard
+        current_team = request.session.get("current_team", {})
+        if current_team and not current_team.get("has_completed_wizard", False):
+            return redirect("teams:getting_started_wizard")
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
 
@@ -52,7 +56,15 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
-    context = {"current_team": request.session.get("current_team", {})}
+    # Check if user needs to complete the getting started wizard
+    current_team = request.session.get("current_team", {})
+
+    if current_team and not current_team.get("has_completed_wizard", False):
+        # Redirect to wizard for first-time users (unless they're already there)
+        if not request.path.startswith("/workspace/getting-started"):
+            return redirect("teams:getting_started_wizard")
+
+    context = {"current_team": current_team}
     return render(request, "core/dashboard.html.j2", context)
 
 

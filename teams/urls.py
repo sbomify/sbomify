@@ -24,7 +24,8 @@ urlpatterns: list[URLPattern] = [
     ),
     path("<team_key>/dt-servers/add/", views.add_dt_server, name="add_dt_server"),
     path("<team_key>/dt-servers/<str:server_id>/delete/", views.delete_dt_server, name="delete_dt_server"),
-    path("onboarding/", views.onboarding_wizard, name="onboarding_wizard"),
+    path("getting-started/", views.getting_started_wizard, name="getting_started_wizard"),
+    path("getting-started/skip/", views.skip_getting_started_wizard, name="skip_getting_started_wizard"),
     # Backward compatibility redirects - must come before general patterns
     path("settings/", views.settings_redirect, name="settings_redirect"),
     path("<team_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),

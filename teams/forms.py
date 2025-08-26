@@ -23,8 +23,30 @@ class InviteUserForm(forms.Form):
     )
 
 
-class OnboardingProductForm(forms.Form):
-    """Form for creating a product during onboarding."""
+# Getting Started Wizard Forms
+class WizardPlanSelectionForm(forms.Form):
+    """Form for selecting a billing plan in the getting started wizard."""
+
+    PLAN_CHOICES = [
+        ("community", "Community - Free forever"),
+        ("business", "Business - $199/month"),
+        ("enterprise", "Enterprise - Contact us"),
+    ]
+
+    plan = forms.ChoiceField(
+        label="Choose Your Plan",
+        choices=PLAN_CHOICES,
+        initial="community",
+        required=True,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+        help_text=(
+            "Start with Community and upgrade anytime. You can always change your plan later in your team settings."
+        ),
+    )
+
+
+class WizardProductForm(forms.Form):
+    """Form for creating a product in the getting started wizard."""
 
     name = forms.CharField(
         label="Product Name",
@@ -33,7 +55,7 @@ class OnboardingProductForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "class": "form-control form-control-lg",
-                "placeholder": "Enter product name",
+                "placeholder": "Enter your product name",
                 "autofocus": True,
             }
         ),
@@ -43,9 +65,23 @@ class OnboardingProductForm(forms.Form):
         ),
     )
 
+    description = forms.CharField(
+        label="Description",
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Briefly describe your product (optional)",
+                "rows": 3,
+            }
+        ),
+        help_text="A brief description of what your product does or provides.",
+    )
 
-class OnboardingProjectForm(forms.Form):
-    """Form for creating a project during onboarding."""
+
+class WizardProjectForm(forms.Form):
+    """Form for creating a project in the getting started wizard."""
 
     name = forms.CharField(
         label="Project Name",
@@ -54,7 +90,7 @@ class OnboardingProjectForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "class": "form-control form-control-lg",
-                "placeholder": "Enter project name",
+                "placeholder": "Enter your project name",
                 "autofocus": True,
             }
         ),
@@ -65,8 +101,8 @@ class OnboardingProjectForm(forms.Form):
     )
 
 
-class OnboardingComponentForm(forms.Form):
-    """Form for creating a component during onboarding."""
+class WizardComponentForm(forms.Form):
+    """Form for creating a component in the getting started wizard."""
 
     name = forms.CharField(
         label="Component Name",
@@ -75,7 +111,7 @@ class OnboardingComponentForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "class": "form-control form-control-lg",
-                "placeholder": "Enter component name",
+                "placeholder": "Enter your component name",
                 "autofocus": True,
             }
         ),

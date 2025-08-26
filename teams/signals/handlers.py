@@ -49,3 +49,8 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
             Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         # Set up billing plan for the team
         setup_team_billing_plan(team, user=user, send_welcome_email=True)
+
+        # Refresh session data with the new team
+        user_teams = get_user_teams(user)
+        request.session["user_teams"] = user_teams
+        request.session["current_team"] = {"key": team.key, **user_teams[team.key]}

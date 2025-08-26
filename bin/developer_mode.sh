@@ -3,6 +3,10 @@ set -euo pipefail
 
 DOCKER_ARGS=(-f docker-compose.yml -f docker-compose.dev.yml)
 
+restart() {
+    docker-compose "${DOCKER_ARGS[@]}" restart sbomify-backend sbomify-frontend
+}
+
 start() {
     docker-compose "${DOCKER_ARGS[@]}" up "$@"
 }
@@ -23,6 +27,10 @@ clean() {
 
 case "${1:-}" in
     start)
+        shift
+        start "$@"
+        ;;
+    restart)
         shift
         start "$@"
         ;;
