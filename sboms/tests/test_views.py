@@ -131,10 +131,10 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:products_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the Django template components
     content = response.content.decode()
-    assert 'class="vc-products-list"' in content
-    assert 'class="vc-add-product-form"' in content
+    assert 'Products' in content
+    assert 'addProductModal' in content
 
 
 # Removed: test_create_product - POST functionality moved to API tests
@@ -160,10 +160,10 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:projects_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the Django template components
     content = response.content.decode()
-    assert 'class="vc-projects-list"' in content
-    assert 'class="vc-add-project-form"' in content
+    assert 'Projects' in content
+    assert 'addProjectModal' in content
 
 
 # Removed: test_create_project - POST functionality moved to API tests
@@ -189,10 +189,10 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     response = client.get(reverse("core:components_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the Django template components
     content = response.content.decode()
-    assert 'class="vc-components-list"' in content
-    assert 'class="vc-add-component-form"' in content
+    assert 'Components' in content
+    assert 'addComponentModal' in content
 
 
 # Removed: test_create_component - POST functionality moved to API tests
@@ -234,10 +234,10 @@ def test_details_page_only_accessible_when_logged_in(
     for uri in uris:
         response: HttpResponse = client.get(uri, follow=True)
         assert response.status_code == 200
-        # For the SBOM redirect case, check that we end up at the component detailed page
+        # For all detail pages, check that we get the page successfully
+        # SBOMs have their own detail pages (not redirects)
         if "sbom" in uri:
-            assert "component" in response.request["PATH_INFO"]
-            assert "detailed" in response.request["PATH_INFO"]
+            assert "sbom" in response.request["PATH_INFO"]
         else:
             assert quote(response.request["PATH_INFO"]) == uri
 

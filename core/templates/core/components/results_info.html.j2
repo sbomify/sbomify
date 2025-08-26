@@ -1,0 +1,47 @@
+{% comment %}
+Reusable results info component
+
+Usage:
+{% include "core/components/results_info.html.j2" with pagination_meta=pagination_meta item_name="workspace" %}
+
+Parameters:
+- pagination_meta: Pagination metadata object
+- search_query: Current search query (optional)
+- item_name: Name of the items being displayed (default: "item")
+- item_name_plural: Plural form of item name (optional, auto-generated if not provided)
+- show_search_info: Whether to show search query in results (default: true)
+- container_class: Additional CSS classes for container (optional)
+
+This component provides consistent results information across paginated lists.
+{% endcomment %}
+{% if pagination_meta %}
+    <div class="results-info d-flex justify-content-between align-items-center mb-3 {{ container_class|default:'' }}">
+        <div class="text-muted small results-text">
+            {% if show_search_info|default:true and search_query %}
+                Search results for "<strong>{{ search_query }}</strong>" -
+            {% endif %}
+            {% with item_plural=item_name_plural|default:item_name|default:"item"|add:"s" %}
+                Showing {{ pagination_meta.start_index|default:1 }}-{{ pagination_meta.end_index|default:pagination_meta.total }}
+                of {{ pagination_meta.total }}
+                {% if pagination_meta.total == 1 %}
+                    {{ item_name|default:"item" }}
+                {% else %}
+                    {{ item_plural }}
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+{% endif %}
+<style>
+.results-info .results-text {
+    line-height: 1.4;
+}
+
+@media (max-width: 576px) {
+    .results-info {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+    }
+}
+</style>

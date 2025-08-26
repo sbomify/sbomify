@@ -47,9 +47,7 @@ current_team: Current team session data
     </div>
     <div class="row">
         <div class="col-12">
-            <div class="vc-product-releases"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include "core/components/releases_table.html.j2" with releases=releases product_id=product.id has_crud_permissions=has_crud_permissions table_title="Releases" show_actions=True %}
         </div>
     </div>
     {% if has_crud_permissions %}
@@ -87,6 +85,14 @@ current_team: Current team session data
                                           name="description"
                                           rows="3"
                                           placeholder="Describe what's included in this release..."></textarea>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="releaseIsPrerelease"
+                                       name="is_prerelease">
+                                <label class="form-check-label" for="releaseIsPrerelease">Mark as pre-release</label>
+                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
                             </div>
                         </form>
                     </div>
@@ -249,44 +255,73 @@ current_team: Current team session data
     </style>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'core/js/main.ts' %}
+    <!-- No Vue components needed anymore -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             {% if has_crud_permissions %}
-                // Handle create release form submission
+                // Handle create/edit release form submission
                 const createReleaseBtn = document.getElementById('createReleaseBtn');
                 const createReleaseForm = document.getElementById('createReleaseForm');
-                const modal = new bootstrap.Modal(document.getElementById('createReleaseModal'));
+                const modal = document.getElementById('createReleaseModal');
 
                 if (createReleaseBtn && createReleaseForm) {
                     createReleaseBtn.addEventListener('click', async function() {
                         const formData = new FormData(createReleaseForm);
+                        const editingReleaseId = modal?.dataset.editingReleaseId;
+
                         const data = {
                             name: formData.get('name'),
                             description: formData.get('description') || '',
+                            is_prerelease: formData.get('is_prerelease') === 'on',
                             product_id: '{{ product.id }}'
                         };
 
                         try {
-                            const response = await fetch('/api/v1/releases', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                                },
-                                body: JSON.stringify(data)
-                            });
+                            let response;
+                            if (editingReleaseId) {
+                                // Update existing release
+                                response = await fetch(`/api/v1/releases/${editingReleaseId}`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                                    },
+                                    body: JSON.stringify(data)
+                                });
+                            } else {
+                                // Create new release
+                                response = await fetch('/api/v1/releases', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                                    },
+                                    body: JSON.stringify(data)
+                                });
+                            }
 
                             if (response.ok) {
-                                modal.hide();
-                                location.reload(); // Refresh to show new release
+                                const bootstrapModal = bootstrap.Modal.getInstance(modal);
+                                bootstrapModal?.hide();
+                                location.reload(); // Refresh to show changes
                             } else {
                                 const error = await response.json();
-                                alert('Error creating release: ' + (error.detail || 'Unknown error'));
+                                alert(`Error ${editingReleaseId ? 'updating' : 'creating'} release: ` + (error.detail || 'Unknown error'));
                             }
                         } catch (error) {
-                            alert('Error creating release: ' + error.message);
+                            alert(`Error ${editingReleaseId ? 'updating' : 'creating'} release: ` + error.message);
                         }
+                    });
+                }
+
+                // Reset modal when hidden
+                if (modal) {
+                    modal.addEventListener('hidden.bs.modal', function() {
+                        const form = modal.querySelector('form');
+                        const title = modal.querySelector('.modal-title');
+                        if (form) form.reset();
+                        if (title) title.textContent = 'Create New Release';
+                        delete modal.dataset.editingReleaseId;
                     });
                 }
             {% endif %}

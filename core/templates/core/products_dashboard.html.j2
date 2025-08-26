@@ -14,15 +14,16 @@
             </div>
         </div>
     </div>
-    <div class="row align-items-center">
+    <div class="row">
         <div class="col-12">
-            <div class="vc-products-list"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            <!-- Products Table using Django Template Component -->
+            {% include "core/components/products_table.html.j2" with products=products has_crud_permissions=has_crud_permissions show_add_button=True table_title="Products" pagination_meta=pagination_meta current_page=current_page page_size=page_size page_size_options=page_size_options %}
         </div>
     </div>
-    {% if has_crud_permissions %}<div class="vc-add-product-form"></div>{% endif %}
+    <!-- Add Product Modal - Django Template -->
+    {% include "core/components/add_item_modal.html.j2" with modal_id="addProductModal" item_type="Product" api_endpoint="/api/v1/products" form_fields=product_form_fields has_crud_permissions=has_crud_permissions %}
 {% endblock %}
 {% block scripts %}
+    <!-- Load main scripts for Django template functionality -->
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

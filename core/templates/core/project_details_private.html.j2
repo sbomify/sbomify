@@ -9,163 +9,76 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
 {% load django_vite %}
 {% block title %}sbomify Project: {{ project.name }}{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main mb-3">
-            <div class="title-section">
-                <h1 class="item-title">
-                    {% if has_crud_permissions %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="project"
-                              data-item-id="{{ project.id }}"
-                              data-item-value="{{ project.name }}"></span>
-                    {% else %}
-                        {{ project.name }}
-                    {% endif %}
-                </h1>
-                {% if has_crud_permissions %}
-                    <div class="vc-public-status-toggle"
-                         data-item-type="project"
-                         data-item-id="{{ project.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:project_details_public' project.id %}"
-                         data-inline="true"></div>
-                {% endif %}
+    <div class="detail-page-header mb-4">
+        <!-- Breadcrumb Navigation -->
+        <div class="detail-breadcrumb-nav mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb detail-breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'core:projects_dashboard' %}">Projects</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ project.name }}</li>
+                </ol>
+            </nav>
+        </div>
+        <!-- Main Header Content -->
+        <div class="detail-header-main">
+            <div class="detail-header-left">
+                <div class="detail-title-group">
+                    <h1 class="detail-item-title">
+                        {% if has_crud_permissions %}
+                            {% include "core/components/editable_field.html.j2" with item_type="project" item_id=project.id field_name="name" current_value=project.name placeholder="Project name" inline=True %}
+                        {% else %}
+                            {{ project.name }}
+                        {% endif %}
+                    </h1>
+                    <div class="detail-meta-row">
+                        <span class="detail-meta-badge">
+                            <i class="fas fa-project-diagram me-2"></i>Project
+                        </span>
+                        <span class="detail-meta-id-container">
+                            {% include "core/components/copyable_value.html.j2" with value=project.id display_text=project.id title="Project ID: "|add:project.id|add:" (click to copy)" css_class="detail-meta-id-chip" %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% if has_crud_permissions %}
+                <div class="detail-header-right">
+                    {% include "core/components/public_status_toggle.html.j2" with item_type="project" item_id=project.id is_public=project.is_public public_url="/public/project/"|add:project.id|add:"/" inline=True %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Project Stats -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card border-light shadow-brand">
+                <div class="card-body text-center p-4">
+                    <div class="stat-icon mb-3">
+                        <i class="fas fa-cube fa-2x text-primary"></i>
+                    </div>
+                    <h3 class="stat-number mb-2">{{ components_count }}</h3>
+                    <p class="stat-label text-muted mb-0">Components in Project</p>
+                </div>
             </div>
         </div>
-        <div class="header-meta">
-            <span class="meta-item">
-                <i class="fas fa-project-diagram me-2 text-primary"></i>
-                <span class="meta-label">Project</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ project.id }}"
-                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
-            </span>
-        </div>
     </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-main {
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.5rem;
-        }
-
-        .title-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .item-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-        }
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 1rem;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .meta-label {
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .meta-id {
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.8rem;
-            background: #f1f5f9;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .meta-id:hover {
-            background: #e2e8f0;
-            border-color: #cbd5e1;
-        }
-
-        .meta-divider {
-            color: #cbd5e1;
-            font-weight: bold;
-        }
-
-        @media (max-width: 768px) {
-            .title-section {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .item-title {
-                font-size: 1.5rem;
-            }
-
-            .header-meta {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-        }
-
-
-    </style>
-    <div class="row">
-        <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="project"
-                 data-item-id="{{ project.id }}"></div>
-        </div>
-    </div>
+    <!-- Component Assignment Section - Reuse existing assignment_manager.html.j2 -->
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-item-assignment-manager"
-                 data-parent-type="project"
-                 data-parent-id="{{ project.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include "core/components/assignment_manager.html.j2" with parent_type="project" parent_id=project.id child_type="component" assigned_items=components available_items=available_components has_crud_permissions=has_crud_permissions assigned_title="Project Components" available_title="Available Components" empty_message="No components assigned" empty_description="Assign components to this project to organize your SBOMs and documents" create_url="core:components_dashboard" create_button_text="Create New Component" %}
         </div>
     </div>
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-export-data-card" data-project-id="{{ project.id }}"></div>
-        </div>
-    </div>
+    <!-- Danger Zone - Use Django template component -->
     {% if has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-project-danger-zone"
-                     data-project-id="{{ project.id }}"
-                     data-project-name="{{ project.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include "core/components/danger_zone.html.j2" with item_type="project" item_id=project.id item_name=project.name delete_endpoint="/api/v1/projects/"|add:project.id redirect_url="/projects/" title="Danger Zone" %}
             </div>
         </div>
     {% endif %}
 {% endblock %}
 {% block scripts %}
+    <!-- Load main scripts for Django template functionality -->
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

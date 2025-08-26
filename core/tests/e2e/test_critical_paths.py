@@ -162,8 +162,8 @@ class TestCriticalPaths:
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content
-        assert 'id="access-token"' in content  # Verify the token field exists
-        assert 'class="vc-copy-token"' in content  # Verify the copy button exists
+        assert 'id="accessToken"' in content  # Verify the token field exists
+        assert 'copyTokenBtn' in content  # Verify the copy button exists
 
         # Verify token appears in list
         response = client.get(reverse("core:settings"))
@@ -203,7 +203,7 @@ class TestCriticalPaths:
 
         # Test core pages
         response = client.get(reverse("core:settings"))
-        assert "sbomify Settings" in response.content.decode()
+        assert "User Settings - sbomify" in response.content.decode()
 
         # Test sboms pages
         response = client.get(reverse("core:components_dashboard"))
@@ -214,7 +214,7 @@ class TestCriticalPaths:
 
         # Test teams pages
         response = client.get(reverse("teams:team_details", kwargs={"team_key": team.key}), follow=True)
-        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()
+        assert f"Workspace Members - {team.name} - sbomify" in response.content.decode()
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
-        assert f"sbomify Workspace Settings: {team.name}" in response.content.decode()
+        response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}), follow=True)
+        assert f"Workspace Members - {team.name} - sbomify" in response.content.decode()

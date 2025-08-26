@@ -1,0 +1,64 @@
+{% comment %}
+Reusable search form component
+
+Usage:
+{% include "core/components/search_form.html.j2" with search_query=search_query placeholder="Search items..." %}
+
+Parameters:
+- search_query: Current search query value
+- placeholder: Placeholder text for search input (default: "Search...")
+- search_name: Name attribute for search input (default: "search")
+- preserve_params: List of GET parameters to preserve (optional)
+- form_class: Additional CSS classes for the form (optional)
+- show_clear: Whether to show clear button when there's a query (default: true)
+
+This component provides a consistent search interface across the application.
+{% endcomment %}
+<form method="get"
+      class="search-form d-flex align-items-center gap-3 {{ form_class|default:'' }}">
+    <!-- Preserve specified parameters -->
+    {% comment %}Preserve page_size if not default{% endcomment %}
+    {% if page_size and page_size != 15 %}<input type="hidden" name="page_size" value="{{ page_size }}">{% endif %}
+    <div class="input-group search-input-group" style="max-width: 300px;">
+        <input type="text"
+               name="{{ search_name|default:'search' }}"
+               class="form-control"
+               placeholder="{{ placeholder|default:'Search...' }}"
+               value="{{ search_query|default:'' }}"
+               aria-label="{{ placeholder|default:'Search' }}">
+        <button class="btn btn-outline-secondary"
+                type="submit"
+                aria-label="Submit search">
+            <i class="fas fa-search" aria-hidden="true"></i>
+        </button>
+    </div>
+    {% if show_clear|default:true and search_query %}
+        <a href="?"
+           class="btn btn-outline-secondary btn-sm clear-search-btn"
+           aria-label="Clear search">
+            <i class="fas fa-times me-1" aria-hidden="true"></i>Clear
+        </a>
+    {% endif %}
+</form>
+<style>
+.search-form .search-input-group {
+    min-width: 250px;
+}
+
+.search-form .clear-search-btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+    .search-form {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.75rem !important;
+    }
+
+    .search-form .search-input-group {
+        max-width: none;
+        min-width: auto;
+    }
+}
+</style>

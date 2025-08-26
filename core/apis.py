@@ -667,6 +667,10 @@ def list_product_identifiers(request: HttpRequest, product_id: str, page: int = 
     "/products/{product_id}/identifiers/{identifier_id}",
     response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
+@router.patch(
+    "/products/{product_id}/identifiers/{identifier_id}",
+    response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
 def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
 ):
@@ -924,6 +928,10 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
 
 
 @router.put(
+    "/products/{product_id}/links/{link_id}",
+    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+@router.patch(
     "/products/{product_id}/links/{link_id}",
     response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )

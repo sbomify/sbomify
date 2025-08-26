@@ -1,0 +1,819 @@
+<!-- Modern Branding Section Template - Feature Complete -->
+<div class="row">
+    <div class="col-12">
+        <div class="card modern-card shadow-sm">
+            <div class="card-header modern-header">
+                <h5 class="card-title mb-0 d-flex align-items-center">
+                    <i class="fas fa-palette me-3 text-primary"></i>
+                    Workspace Branding
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="branding-subtitle">
+                    <p class="subtitle">Customize your workspace's visual identity for public security artifacts and shared content.</p>
+                </div>
+                <form method="post"
+                      action="{% url 'teams:update_branding' team_key=team.key %}"
+                      enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <!-- Brand Colors Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-palette text-primary"></i>
+                                Brand Colors
+                            </h3>
+                            <p class="section-description">Define your primary brand colors for consistent visual identity.</p>
+                        </div>
+                        <div class="section-content">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="color-field">
+                                        <label for="brand_color" class="field-label">Primary Brand Color</label>
+                                        <div class="color-input-group">
+                                            <input type="color"
+                                                   class="color-picker-modern"
+                                                   id="brand_color"
+                                                   name="brand_color"
+                                                   value="{{ team.branding_info.brand_color|default:'#3b7ddd' }}">
+                                            <div class="color-info">
+                                                <span class="color-hex">{{ team.branding_info.brand_color|default:'#3b7ddd' }}</span>
+                                                <small class="color-hint">Click to choose color</small>
+                                            </div>
+                                        </div>
+                                        <small class="field-hint">Used for primary branding elements and headers</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="color-field">
+                                        <label for="accent_color" class="field-label">Accent Color</label>
+                                        <div class="color-input-group">
+                                            <input type="color"
+                                                   class="color-picker-modern"
+                                                   id="accent_color"
+                                                   name="accent_color"
+                                                   value="{{ team.branding_info.accent_color|default:'#6c757d' }}">
+                                            <div class="color-info">
+                                                <span class="color-hex">{{ team.branding_info.accent_color|default:'#6c757d' }}</span>
+                                                <small class="color-hint">Click to choose color</small>
+                                            </div>
+                                        </div>
+                                        <small class="field-hint">Used for buttons, links, and highlights</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Visual Assets Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-image text-success"></i>
+                                Visual Assets
+                            </h3>
+                            <p class="section-description">Upload your brand assets to personalize the appearance of public content.</p>
+                        </div>
+                        <div class="section-content">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="upload-field">
+                                        <label class="field-label">Brand Icon</label>
+                                        <div class="upload-container">
+                                            <div class="drop-zone modern-upload" data-field="icon">
+                                                {% if team.branding_info.icon_url %}
+                                                    <div class="file-preview">
+                                                        <img src="{{ team.branding_info.icon_url }}"
+                                                             alt="Brand icon"
+                                                             class="preview-image"
+                                                             width="64"
+                                                             height="64">
+                                                        <div class="file-overlay">
+                                                            <button type="submit"
+                                                                    name="action"
+                                                                    value="remove_icon"
+                                                                    class="btn btn-danger btn-sm">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="upload-placeholder">
+                                                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                                        <div class="upload-text">
+                                                            <span class="upload-title">Upload Icon</span>
+                                                            <span class="upload-subtitle">Drag and drop or click</span>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                                <input type="file" class="upload-input" name="icon" accept="image/*">
+                                            </div>
+                                        </div>
+                                        <small class="field-hint">Recommended: 512x512px PNG or SVG. Used in headers and navigation.</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="upload-field">
+                                        <label class="field-label">Brand Logo</label>
+                                        <div class="upload-container">
+                                            <div class="drop-zone modern-upload" data-field="logo">
+                                                {% if team.branding_info.logo_url %}
+                                                    <div class="file-preview">
+                                                        <img src="{{ team.branding_info.logo_url }}"
+                                                             alt="Brand logo"
+                                                             class="preview-image"
+                                                             width="200"
+                                                             height="100">
+                                                        <div class="file-overlay">
+                                                            <button type="submit"
+                                                                    name="action"
+                                                                    value="remove_logo"
+                                                                    class="btn btn-danger btn-sm">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="upload-placeholder">
+                                                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                                        <div class="upload-text">
+                                                            <span class="upload-title">Upload Logo</span>
+                                                            <span class="upload-subtitle">Drag and drop or click</span>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                                <input type="file" class="upload-input" name="logo" accept="image/*">
+                                            </div>
+                                        </div>
+                                        <small class="field-hint">Recommended: 1200x300px PNG or SVG. Used for larger brand displays.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Display Preferences Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-cog text-info"></i>
+                                Display Preferences
+                            </h3>
+                            <p class="section-description">Configure how your brand assets are displayed across the platform.</p>
+                        </div>
+                        <div class="section-content">
+                            <div class="preference-row">
+                                <div class="preference-content">
+                                    <label for="prefer_logo_over_icon" class="preference-label">Primary Brand Asset</label>
+                                    <p class="preference-description">
+                                        When you upload both an icon and logo, choose which one takes priority in public pages.
+                                        <br>
+                                        <strong>Icon:</strong> Better for compact spaces (headers, favicons)
+                                        <br>
+                                        <strong>Logo:</strong> Better for prominent branding areas
+                                    </p>
+                                </div>
+                                <div class="preference-control">
+                                    <div class="form-check form-switch modern-switch-large">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="prefer_logo_over_icon"
+                                               name="prefer_logo_over_icon"
+                                               {% if team.branding_info.prefer_logo_over_icon %}checked{% endif %}>
+                                        <label class="form-check-label" for="prefer_logo_over_icon"></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Team Information Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-info-circle text-warning"></i>
+                                Team Information
+                            </h3>
+                            <p class="section-description">Basic information about your team or organization.</p>
+                        </div>
+                        <div class="section-content">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label for="display_name" class="field-label">Display Name</label>
+                                    <input type="text"
+                                           class="form-control modern-input"
+                                           id="display_name"
+                                           name="display_name"
+                                           value="{{ team.branding_info.display_name|default:team.name }}"
+                                           placeholder="Enter team display name">
+                                    <small class="field-hint">Name shown in reports and public content</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="website_url" class="field-label">Website URL</label>
+                                    <input type="url"
+                                           class="form-control modern-input"
+                                           id="website_url"
+                                           name="website_url"
+                                           value="{{ team.branding_info.website_url|default:'' }}"
+                                           placeholder="https://example.com">
+                                    <small class="field-hint">Your organization's website</small>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <label for="description" class="field-label">Team Description</label>
+                                <textarea class="form-control modern-input"
+                                          id="description"
+                                          name="description"
+                                          rows="4"
+                                          placeholder="Enter a brief description of your team or organization">{{ team.branding_info.description|default:'' }}</textarea>
+                                <small class="field-hint">Brief description for reports and team information</small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Save Actions -->
+                    <div class="save-actions">
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-cancel modern-btn"
+                                onclick="resetBrandingForm()">
+                            <i class="fas fa-undo me-2"></i>
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-save modern-btn">
+                            <i class="fas fa-save me-2"></i>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// Modern Branding Interactions
+document.addEventListener('DOMContentLoaded', function() {
+    // Color picker synchronization
+    const brandColorPicker = document.getElementById('brand_color');
+    const accentColorPicker = document.getElementById('accent_color');
+
+    function updateColorDisplay(picker) {
+        const colorHex = picker.parentElement.querySelector('.color-hex');
+        if (colorHex) {
+            colorHex.textContent = picker.value;
+        }
+    }
+
+    if (brandColorPicker) {
+        brandColorPicker.addEventListener('input', function() {
+            updateColorDisplay(this);
+        });
+    }
+
+    if (accentColorPicker) {
+        accentColorPicker.addEventListener('input', function() {
+            updateColorDisplay(this);
+        });
+    }
+
+    // File upload drag and drop
+    document.querySelectorAll('.drop-zone').forEach(dropZone => {
+        const input = dropZone.querySelector('.upload-input');
+        const field = dropZone.dataset.field;
+
+        dropZone.addEventListener('click', () => input.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                input.files = files;
+                handleFilePreview(files[0], dropZone);
+            }
+        });
+
+        input.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFilePreview(e.target.files[0], dropZone);
+            }
+        });
+    });
+});
+
+function handleFilePreview(file, dropZone) {
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Create preview
+            const preview = document.createElement('div');
+            preview.className = 'file-preview';
+            preview.innerHTML = `
+                <img src="${e.target.result}" alt="Preview" class="preview-image">
+                <div class="file-overlay">
+                    <span class="file-name">${file.name}</span>
+                </div>
+            `;
+
+            // Replace placeholder with preview
+            const placeholder = dropZone.querySelector('.upload-placeholder');
+            if (placeholder) {
+                placeholder.style.display = 'none';
+            }
+
+            // Remove existing preview
+            const existingPreview = dropZone.querySelector('.file-preview');
+            if (existingPreview) {
+                existingPreview.remove();
+            }
+
+            dropZone.appendChild(preview);
+            dropZone.classList.add('has-file');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function resetBrandingForm() {
+    if (confirm('Are you sure you want to reset all changes?')) {
+        location.reload();
+    }
+}
+</script>
+<style>
+/* Modern Branding Section Styling */
+.branding-subtitle {
+    padding: 1.5rem 2rem 0;
+    border-bottom: 1px solid var(--bs-gray-100);
+}
+
+.subtitle {
+    color: var(--bs-gray-600);
+    font-size: 1rem;
+    line-height: 1.5;
+    margin: 0;
+    padding-bottom: 1.5rem;
+}
+
+/* Section Cards */
+.section-card {
+    background: var(--bs-gray-50);
+    border: 1px solid var(--bs-gray-200);
+    border-radius: 0.75rem;
+    margin: 2rem;
+    margin-bottom: 0;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.section-card:hover {
+    border-color: var(--bs-gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.section-card:last-of-type {
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    padding: 1.5rem 1.5rem 1rem;
+    background: linear-gradient(135deg, var(--bs-white), var(--bs-light));
+    border-bottom: 1px solid var(--bs-gray-200);
+}
+
+.section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--bs-gray-800);
+    margin: 0 0 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.section-description {
+    color: var(--bs-gray-600);
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.section-content {
+    padding: 1.5rem;
+    background: var(--bs-white);
+}
+
+/* Form Fields */
+.field-label {
+    display: block;
+    font-weight: 600;
+    color: var(--bs-gray-700);
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
+}
+
+.field-hint {
+    color: var(--bs-gray-500);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    margin-top: 0.5rem;
+    display: block;
+}
+
+/* Color Fields */
+.color-field {
+    position: relative;
+}
+
+.color-input-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--bs-white);
+    border: 1px solid var(--bs-gray-300);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    transition: all 0.2s ease;
+}
+
+.color-input-group:focus-within {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.color-picker-modern {
+    width: 60px;
+    height: 60px;
+    border: 3px solid var(--bs-gray-200);
+    border-radius: 0.75rem;
+    cursor: pointer;
+    background: none;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.color-picker-modern:hover {
+    border-color: var(--bs-gray-400);
+    transform: scale(1.05);
+}
+
+.color-picker-modern::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.color-picker-modern::-webkit-color-swatch {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.color-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.color-hex {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-gray-700);
+    letter-spacing: 0.05em;
+}
+
+.color-hint {
+    color: var(--bs-gray-500);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+/* Upload Fields */
+.upload-field {
+    position: relative;
+}
+
+.upload-container {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.drop-zone {
+    border: 2px dashed var(--bs-gray-300);
+    border-radius: 0.5rem;
+    background: var(--bs-white);
+    padding: 2rem;
+    min-height: 160px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: var(--bs-primary);
+    background: var(--bs-primary-bg-subtle);
+    transform: scale(1.02);
+}
+
+.drop-zone.has-file {
+    border-color: var(--bs-success);
+    background: var(--bs-success-bg-subtle);
+}
+
+.upload-placeholder {
+    text-align: center;
+    color: var(--bs-gray-600);
+}
+
+.upload-icon {
+    font-size: 2.5rem;
+    color: var(--bs-primary);
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.upload-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.upload-title {
+    font-weight: 600;
+    color: var(--bs-gray-800);
+    font-size: 1rem;
+}
+
+.upload-subtitle {
+    color: var(--bs-gray-500);
+    font-size: 0.875rem;
+}
+
+.upload-input {
+    display: none;
+}
+
+/* File Preview */
+.file-preview {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-image {
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+    border-radius: 0.5rem;
+}
+
+.file-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 0.5rem;
+}
+
+.file-preview:hover .file-overlay {
+    opacity: 1;
+}
+
+.file-name {
+    color: var(--bs-white);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+/* Preferences */
+.preference-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    background: var(--bs-white);
+    border: 1px solid var(--bs-gray-200);
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.preference-row:hover {
+    border-color: var(--bs-gray-300);
+    background: var(--bs-light);
+}
+
+.preference-content {
+    flex: 1;
+}
+
+.preference-label {
+    display: block;
+    font-weight: 600;
+    color: var(--bs-gray-700);
+    margin: 0 0 0.25rem 0;
+    font-size: 0.875rem;
+}
+
+.preference-description {
+    color: var(--bs-gray-600);
+    font-size: 0.8rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.preference-control {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Modern Switch Large */
+.modern-switch-large .form-check-input {
+    width: 3rem !important;
+    height: 1.5rem !important;
+    background-color: var(--bs-gray-300);
+    border: 1px solid var(--bs-gray-400);
+    transition: all 0.2s ease;
+}
+
+.modern-switch-large .form-check-input:checked {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.modern-switch-large .form-check-input:focus {
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+    border-color: var(--bs-primary);
+}
+
+/* Modern Form Inputs */
+.modern-input {
+    border: 2px solid var(--bs-gray-200);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    background: var(--bs-white);
+}
+
+.modern-input:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.1);
+    transform: translateY(-1px);
+    background: var(--bs-white);
+}
+
+.modern-input::placeholder {
+    color: var(--bs-gray-400);
+    font-weight: 400;
+}
+
+/* Save Actions */
+.save-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 2rem;
+    margin-top: 0;
+    border-top: 1px solid var(--bs-gray-200);
+    gap: 1rem;
+    background: var(--bs-gray-50);
+}
+
+.btn-save {
+    min-width: 140px;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-save:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
+}
+
+.btn-cancel {
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .section-card {
+        margin: 1.5rem;
+        margin-bottom: 0;
+    }
+
+    .section-card:last-of-type {
+        margin-bottom: 1.5rem;
+    }
+
+    .section-header {
+        padding: 1rem 1rem 0.75rem;
+    }
+
+    .section-content {
+        padding: 1rem;
+    }
+
+    .save-actions {
+        padding: 1.5rem;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .btn-save,
+    .btn-cancel {
+        width: 100%;
+    }
+
+    .color-input-group {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .color-picker-modern {
+        width: 50px;
+        height: 50px;
+    }
+
+    .preference-row {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .preference-control {
+        justify-content: flex-start;
+    }
+
+    .drop-zone {
+        padding: 1.5rem;
+        min-height: 140px;
+    }
+
+    .upload-icon {
+        font-size: 2rem;
+    }
+
+    .branding-subtitle {
+        padding: 1.25rem 1.5rem 0;
+    }
+}
+
+@media (max-width: 576px) {
+    .section-card {
+        margin: 1rem;
+        margin-bottom: 0;
+        border-radius: 0.5rem;
+    }
+
+    .section-card:last-of-type {
+        margin-bottom: 1rem;
+    }
+
+    .section-content {
+        padding: 0.75rem;
+    }
+
+    .branding-subtitle {
+        padding: 1rem 1.25rem 0;
+    }
+}
+</style>

@@ -1,0 +1,487 @@
+{% comment %}
+Generic Django template for component items table - replaces Vue SbomsTable/DocumentsTable components
+Context variables:
+- items_data: List of item data objects (SBOMs or Documents)
+- component_type: 'sbom' or 'document'
+- component_id: Component ID (optional)
+- is_public_view: Boolean for public/private view
+- show_vulnerabilities: Boolean to show vulnerability column (SBOM only)
+- show_delete_button: Boolean to show delete actions
+- team_billing_plan: Team's billing plan
+- has_crud_permissions: Boolean for CRUD permissions
+- table_title: Title for the table (e.g., "SBOMs", "Documents")
+- pagination_meta: Pagination metadata object with page info (optional)
+{% endcomment %}
+{% load static %}
+<!-- Standard Card Container -->
+<div class="card shadow-sm border-0 standard-card">
+    <div class="card-header bg-white border-bottom">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h5 class="card-title mb-0 fw-semibold">{{ table_title|default:"Items" }}</h5>
+                {% if is_public_view %}
+                    <p class="card-subtitle text-muted mb-0 mt-1 small">
+                        {% if component_type == 'sbom' %}
+                            Software Bill of Materials for this component
+                        {% elif component_type == 'document' %}
+                            Documents for this component
+                        {% endif %}
+                    </p>
+                {% endif %}
+            </div>
+            {% if not is_public_view %}
+                <button class="btn btn-sm btn-outline-secondary border-0"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#{{ component_type }}-table-content"
+                        aria-expanded="true"
+                        title="Toggle table visibility">
+                    <i class="fas fa-chevron-up transition-transform"></i>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="collapse show" id="{{ component_type }}-table-content">
+        <div class="card-body p-0">
+            {% if not items_data %}
+                <!-- Empty state -->
+                <div class="text-center text-muted py-4">
+                    {% if component_type == 'sbom' %}
+                        <i class="fas fa-file-code fa-3x mb-3"></i>
+                        <p>No SBOMs found for this component.</p>
+                    {% elif component_type == 'document' %}
+                        <i class="fas fa-file-alt fa-3x mb-3"></i>
+                        <p>No documents found for this component.</p>
+                    {% else %}
+                        <i class="fas fa-file fa-3x mb-3"></i>
+                        <p>No items found for this component.</p>
+                    {% endif %}
+                </div>
+            {% else %}
+                <!-- Compact Items Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                {% if component_type == 'sbom' %}
+                                    <th>Format</th>
+                                    <th>Version</th>
+                                    <th>NTIA Compliant</th>
+                                    <th>Releases</th>
+                                    {% if show_vulnerabilities and not is_public_view %}<th>Vulnerabilities</th>{% endif %}
+                                {% elif component_type == 'document' %}
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Description</th>
+                                {% endif %}
+                                <th>Created</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item_data in items_data %}
+                                <tr>
+                                    <!-- Name -->
+                                    <td data-label="Name">
+                                        {% if component_type == 'sbom' %}
+                                            <a href="{% url 'sboms:sbom_details' item_data.sbom.id %}"
+                                               class="text-decoration-none fw-semibold">{{ item_data.sbom.name }}</a>
+                                        {% elif component_type == 'document' %}
+                                            <a href="{% if is_public_view %}{% url 'documents:document_details_public' item_data.document.id %}{% else %}{% url 'documents:document_details_private' item_data.document.id %}{% endif %}"
+                                               class="text-decoration-none fw-semibold">
+                                                {{ item_data.document.name }}
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                    {% if component_type == 'sbom' %}
+                                        <!-- Format -->
+                                        <td data-label="Format">
+                                            <span class="badge bg-success-subtle text-success">
+                                                {% if item_data.sbom.format == 'cyclonedx' %}
+                                                    CycloneDX
+                                                {% elif item_data.sbom.format == 'spdx' %}
+                                                    SPDX
+                                                {% else %}
+                                                    {{ item_data.sbom.format|upper }}
+                                                {% endif %}
+                                                {{ item_data.sbom.format_version }}
+                                            </span>
+                                        </td>
+                                        <!-- Version -->
+                                        <td data-label="Version">
+                                            <span title="{{ item_data.sbom.version }}">
+                                                {% if item_data.sbom.version|length > 15 %}
+                                                    {{ item_data.sbom.version|slice:":15" }}...
+                                                {% else %}
+                                                    {{ item_data.sbom.version }}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <!-- NTIA Compliance -->
+                                        <td data-label="NTIA Compliant">
+                                            {% include "sboms/components/ntia_compliance_badge.html.j2" with status=item_data.sbom.ntia_compliance_status compliance_details=item_data.sbom.ntia_compliance_details is_public_view=is_public_view team_billing_plan=team_billing_plan team_key=current_team.key sbom_id=item_data.sbom.id %}
+                                        </td>
+                                        <!-- Releases -->
+                                        <td data-label="Releases">
+                                            {% if item_data.releases %}
+                                                <div class="release-tags">
+                                                    {% for release in item_data.releases|slice:":2" %}
+                                                        <span class="badge bg-primary-subtle text-primary me-1"
+                                                              title="{{ release.product_name }} - {{ release.name }}">
+                                                            {% if release.is_latest %}<i class="fas fa-star me-1"></i>{% endif %}
+                                                            {{ release.name }}
+                                                        </span>
+                                                    {% endfor %}
+                                                    {% if item_data.releases|length > 2 %}
+                                                        <span class="badge bg-secondary-subtle text-secondary"
+                                                              title="{{ item_data.releases|length }} total releases">
+                                                            +{{ item_data.releases|length|add:"-2" }}
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <!-- Vulnerabilities -->
+                                        {% if show_vulnerabilities and not is_public_view %}
+                                            <td data-label="Vulnerabilities">
+                                                {% if item_data.has_vulnerabilities_report %}
+                                                    <a href="/sbom/{{ item_data.sbom.id }}/vulnerabilities"
+                                                       class="btn btn-outline-warning btn-sm"
+                                                       title="View Vulnerabilities">
+                                                        <i class="fas fa-shield-alt"></i>
+                                                    </a>
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                    {% elif component_type == 'document' %}
+                                        <!-- Document Type -->
+                                        <td data-label="Type">
+                                            {% if item_data.document.document_type %}
+                                                <span class="badge bg-info-subtle text-info">{{ item_data.document.get_document_type_display }}</span>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <!-- File Size -->
+                                        <td data-label="Size">
+                                            {% if item_data.document.file_size %}
+                                                {{ item_data.document.file_size|filesizeformat }}
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <!-- Description -->
+                                        <td data-label="Description">
+                                            {% if item_data.document.description %}
+                                                <span title="{{ item_data.document.description }}">
+                                                    {% if item_data.document.description|length > 30 %}
+                                                        {{ item_data.document.description|slice:":30" }}...
+                                                    {% else %}
+                                                        {{ item_data.document.description }}
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                    <!-- Created -->
+                                    <td data-label="Created">
+                                        {% if component_type == 'sbom' %}
+                                            {{ item_data.sbom.created_at|date:"M d, Y" }}
+                                        {% elif component_type == 'document' %}
+                                            {{ item_data.document.created_at|date:"M d, Y" }}
+                                        {% endif %}
+                                    </td>
+                                    <!-- Actions -->
+                                    <td data-label="Actions" class="text-end">
+                                        <div class="btn-group" role="group">
+                                            {% if component_type == 'sbom' %}
+                                                <a href="{% url 'sboms:sbom_details' item_data.sbom.id %}"
+                                                   title="View SBOM Details"
+                                                   class="btn btn-outline-secondary btn-sm">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'sboms:sbom_download' item_data.sbom.id %}"
+                                                   title="Download SBOM"
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                            {% elif component_type == 'document' %}
+                                                <a href="{% url 'documents:document_details_private' item_data.document.id %}"
+                                                   title="Edit Document"
+                                                   class="btn btn-outline-secondary btn-sm">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'documents:document_download' item_data.document.id %}"
+                                                   title="Download Document"
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                            {% endif %}
+                                            {% if show_delete_button and has_crud_permissions %}
+                                                <button type="button"
+                                                        class="btn btn-outline-danger btn-sm"
+                                                        title="Delete {{ component_type|title }}"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#delete{{ component_type|title }}Modal"
+                                                        data-item-id="{% if component_type == 'sbom' %}{{ item_data.sbom.id }}{% elif component_type == 'document' %}{{ item_data.document.id }}{% endif %}"
+                                                        data-item-name="{% if component_type == 'sbom' %}{{ item_data.sbom.name }}{% elif component_type == 'document' %}{{ item_data.document.name }}{% endif %}"
+                                                        data-delete-url="{% if component_type == 'sbom' %}/api/v1/sboms/{{ item_data.sbom.id }}/delete/{% elif component_type == 'document' %}/api/v1/documents/{{ item_data.document.id }}/delete/{% endif %}">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Pagination Controls -->
+                {% if pagination_meta and pagination_meta.total_pages > 1 %}
+                    <nav aria-label="{{ table_title }} pagination" class="mt-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <!-- Results Info -->
+                            <div class="text-muted">
+                                Showing {{ pagination_meta.start_index }}-{{ pagination_meta.end_index }} of {{ pagination_meta.total }} {{ table_title|lower }}
+                            </div>
+                            <!-- Pagination Links -->
+                            <ul class="pagination pagination-sm mb-0">
+                                <!-- Previous Page -->
+                                {% if pagination_meta.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page={{ pagination_meta.previous_page_number }}"
+                                           aria-label="Previous">
+                                            <span aria-hidden="true">«</span>
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">«</span>
+                                    </li>
+                                {% endif %}
+                                <!-- Page Numbers -->
+                                {% for page_num in pagination_meta.page_range %}
+                                    {% if page_num == pagination_meta.number %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ page_num }}</span>
+                                        </li>
+                                    {% elif page_num == '...' %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                <!-- Next Page -->
+                                {% if pagination_meta.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page={{ pagination_meta.next_page_number }}"
+                                           aria-label="Next">
+                                            <span aria-hidden="true">»</span>
+                                        </a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">»</span>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </nav>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- Include Reusable Delete Modal -->
+{% if show_delete_button and has_crud_permissions %}
+    {% include "core/components/delete_confirmation_modal.html.j2" with modal_id="delete"|add:component_type|title|add:"Modal" item_type=component_type|title csrf_token=csrf_token %}
+{% endif %}
+<style>
+/* Standard Card Styling */
+.standard-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
+    border: 1px solid #e2e8f0;
+}
+
+.standard-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.standard-card .card-header {
+    border-radius: 12px 12px 0 0;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.standard-card .card-title {
+    color: #1e293b;
+    font-size: 1.1rem;
+}
+
+.transition-transform {
+    transition: transform 0.2s ease;
+}
+
+.btn[aria-expanded="false"] .transition-transform {
+    transform: rotate(180deg);
+}
+
+/* Item Card Styling */
+.item-details .detail-row {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--bs-gray-700);
+    min-width: 60px;
+}
+
+.detail-value {
+    color: var(--bs-gray-800);
+    margin-left: 0.5rem;
+}
+
+.release-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.release-tags .badge {
+    font-size: 0.75rem;
+}
+
+/* Action Button Styling */
+.action-btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    height: 2.25rem;
+    border-width: 1.5px;
+    font-size: 0.875rem;
+}
+
+.action-btn i {
+    font-size: 0.875rem;
+}
+
+.action-btn.btn-outline-primary {
+    background-color: #fff;
+    border-color: #0d6efd;
+    color: #0d6efd;
+    box-shadow: 0 1px 2px rgba(13, 110, 253, 0.15);
+}
+
+.action-btn.btn-outline-primary:hover {
+    background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+    border-color: #0d6efd;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
+}
+
+.action-btn.btn-outline-danger {
+    background-color: #fff;
+    border-color: #dc3545;
+    color: #dc3545;
+    box-shadow: 0 1px 2px rgba(220, 53, 69, 0.15);
+}
+
+.action-btn.btn-outline-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    border-color: #dc3545;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+}
+
+.action-btn.btn-outline-warning {
+    background-color: #fff;
+    border-color: #ffc107;
+    color: #ffc107;
+    box-shadow: 0 1px 2px rgba(255, 193, 7, 0.15);
+}
+
+.action-btn.btn-outline-warning:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    border-color: #ffc107;
+    color: #000;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(255, 193, 7, 0.3);
+}
+
+.action-btn:disabled,
+.action-btn.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    transform: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    .detail-label {
+        min-width: unset;
+    }
+
+    .detail-value {
+        margin-left: 0;
+    }
+
+    .release-tags {
+        width: 100%;
+    }
+}
+</style>
+<script>
+// Items table functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Collapse toggle functionality for private views
+    const collapseButtons = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseButtons.forEach(button => {
+        const target = button.getAttribute('data-bs-target');
+        const collapseElement = document.querySelector(target);
+
+        if (collapseElement) {
+            collapseElement.addEventListener('shown.bs.collapse', function() {
+                const icon = button.querySelector('i');
+                if (icon) icon.className = 'fas fa-chevron-up transition-transform';
+            });
+
+            collapseElement.addEventListener('hidden.bs.collapse', function() {
+                const icon = button.querySelector('i');
+                if (icon) icon.className = 'fas fa-chevron-down transition-transform';
+            });
+        }
+    });
+
+
+});
+</script>

@@ -39,7 +39,7 @@ def test_access_token_creation(sample_user: AbstractBaseUser):  # noqa: F811
     response = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
     assert response.status_code == 200
     messages = list(get_messages(response.wsgi_request))
-    assert any(m.message == "New access token created" for m in messages)
+    assert any(m.message == "Personal access token created successfully!" for m in messages)
     access_tokens = AccessToken.objects.filter(user=sample_user).all()
     assert len(access_tokens) == 1
 

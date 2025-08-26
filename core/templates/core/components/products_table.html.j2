@@ -1,0 +1,191 @@
+{% comment %}
+Reusable Django template for items listing table - replaces Vue ItemsListTable components
+Context variables:
+- products: QuerySet or list of item objects (can be products, projects, etc.)
+- item_type: Type of items (default: "product", can be "project", etc.)
+- has_crud_permissions: Boolean for CRUD permissions
+- show_add_button: Boolean to show "Add Item" button
+- table_title: Title for the table
+- add_modal_target: Target modal ID for add button (default: "addProductModal")
+- pagination_meta: Pagination metadata object with page info (optional)
+- current_page: Current page number for pagination
+- page_size: Number of items per page
+{% endcomment %}
+{% load static %}
+<!-- Using standard card styling patterns manually for complex content -->
+<div class="mt-3 mb-4">
+    <div class="card border-light shadow-brand">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">{{ table_title|default:"Products" }}</h4>
+                {% if has_crud_permissions and show_add_button %}
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-primary px-4"
+                                data-bs-toggle="modal"
+                                data-bs-target="#{{ add_modal_target|default:'addProductModal' }}">
+                            Add {{ item_type|default:"product"|title }}
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0">
+            {% if not products %}
+                <!-- Empty State -->
+                <div class="dashboard-empty">
+                    <p class="mb-0">No {{ item_type|default:"product" }}s added</p>
+                </div>
+            {% else %}
+                <!-- Data Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                {% if item_type == "project" %}
+                                    <th>Components</th>
+                                {% else %}
+                                    <th>Projects</th>
+                                {% endif %}
+                                <th class="text-center">Public?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in products %}
+                                <tr>
+                                    <td data-label="Name">
+                                        <a href="/{{ item_type|default:'product' }}/{{ item.id }}/"
+                                           class="text-primary text-decoration-none">{{ item.name }}</a>
+                                    </td>
+                                    {% if item_type == "project" %}
+                                        <td data-label="Components">
+                                            {% if item.components.count == 0 %}
+                                                <span class="text-muted">No components</span>
+                                            {% else %}
+                                                {% for component in item.components.all %}
+                                                    <a href="/component/{{ component.id }}/"
+                                                       title="Details"
+                                                       class="text-decoration-none me-1 mb-1">
+                                                        <span class="badge bg-secondary-subtle text-secondary">
+                                                            {{ component.name }}
+                                                            {% if component.component_type %}
+                                                                <small class="ms-1 text-muted">
+                                                                    (
+                                                                    {% if component.component_type == 'sbom' %}
+                                                                        SBOM
+                                                                    {% elif component.component_type == 'document' %}
+                                                                        Document
+                                                                    {% else %}
+                                                                        {{ component.component_type|title }}
+                                                                    {% endif %}
+                                                                    )
+                                                                </small>
+                                                            {% endif %}
+                                                        </span>
+                                                    </a>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </td>
+                                    {% else %}
+                                        <td data-label="Projects">
+                                            {% if item.projects.count == 0 %}
+                                                <span class="text-muted">No projects</span>
+                                            {% else %}
+                                                {% for project in item.projects.all %}
+                                                    <a href="/project/{{ project.id }}/"
+                                                       title="Details"
+                                                       class="text-decoration-none me-1 mb-1">
+                                                        <span class="badge bg-secondary-subtle text-secondary">{{ project.name }}</span>
+                                                    </a>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                    <td class="text-center" data-label="Public?">
+                                        {% if item.is_public %}
+                                            <span class="badge bg-success-subtle text-success">Public</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+            <!-- Pagination Controls -->
+            {% if pagination_meta and pagination_meta.num_pages > 1 %}
+                <nav aria-label="{{ table_title }} pagination" class="mt-4 px-4 pb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <!-- Results Info -->
+                        <div class="text-muted">
+                            Showing {{ pagination_meta.start_index }}-{{ pagination_meta.end_index }} of {{ pagination_meta.paginator.count }} {{ item_type|default:"product" }}s
+                        </div>
+                        <!-- Pagination Links -->
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- Previous Page -->
+                            {% if pagination_meta.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.previous_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Previous">
+                                        <span aria-hidden="true">«</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">«</span>
+                                </li>
+                            {% endif %}
+                            <!-- Page Numbers -->
+                            {% for page_num in pagination_meta.paginator.page_range %}
+                                {% if page_num == pagination_meta.number %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page={{ page_num }}&page_size={{ page_size }}">{{ page_num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            <!-- Next Page -->
+                            {% if pagination_meta.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.next_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Next">
+                                        <span aria-hidden="true">»</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">»</span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <!-- Page Size Selector -->
+                    <div class="d-flex justify-content-center mt-3">
+                        <div class="btn-group btn-group-sm"
+                             role="group"
+                             aria-label="Items per page">
+                            <span class="btn btn-outline-secondary disabled">Items per page:</span>
+                            {% for size in page_size_options %}
+                                {% if size == page_size %}
+                                    <button type="button" class="btn btn-primary">{{ size }}</button>
+                                {% else %}
+                                    <a href="?page=1&page_size={{ size }}" class="btn btn-outline-secondary">{{ size }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>

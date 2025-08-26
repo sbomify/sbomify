@@ -1,0 +1,239 @@
+{% comment %}
+Standard reusable table component - consistent styling across all tables
+Context variables:
+- items: QuerySet or list of objects to display
+- table_config: Configuration object defining table structure
+- table_title: Title for the table
+- has_crud_permissions: Boolean for CRUD permissions
+- show_add_button: Boolean to show add button
+- add_button_text: Text for add button (optional)
+- add_modal_target: Target modal ID for add button (optional)
+- pagination_meta: Pagination metadata (optional)
+- current_page: Current page number (optional)
+- page_size: Items per page (optional)
+- page_size_options: Available page size options (optional)
+
+table_config structure:
+{
+  "columns": [
+    {
+      "key": "name",
+      "label": "Name",
+      "type": "link",
+      "url_template": "/item/{id}/",
+      "icon": "fas fa-box" (optional)
+    },
+    {
+      "key": "role",
+      "label": "Role",
+      "type": "badge",
+      "badge_class": "bg-info-subtle text-info"
+    },
+    {
+      "key": "is_public",
+      "label": "Public?",
+      "type": "status_badge",
+      "center": true
+    },
+    {
+      "key": "actions",
+      "label": "Actions",
+      "type": "actions",
+      "center": true,
+      "actions": [
+        {
+          "type": "link",
+          "url_template": "/action/{id}/",
+          "icon": "fas fa-edit",
+          "class": "btn-outline-primary",
+          "title": "Edit"
+        }
+      ]
+    }
+  ],
+  "empty_message": "No items found"
+}
+{% endcomment %}
+{% load static %}
+<!-- Standard Table Component -->
+<div class="mt-3 mb-4">
+    <div class="card border-light shadow-brand">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">{{ table_title }}</h4>
+                <div class="d-flex align-items-center gap-2">
+                    {% if items %}
+                        <span class="badge bg-primary-subtle text-primary">
+                            {{ items|length }} {{ table_title|lower|slice:":-1" }}{{ items|length|pluralize }}
+                        </span>
+                    {% endif %}
+                    {% if has_crud_permissions and show_add_button and add_modal_target %}
+                        <button class="btn btn-primary px-4"
+                                data-bs-toggle="modal"
+                                data-bs-target="#{{ add_modal_target }}">
+                            {{ add_button_text|default:"Add Item" }}
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0">
+            {% if not items %}
+                <!-- Empty State -->
+                <div class="dashboard-empty">
+                    <p class="mb-0">{{ table_config.empty_message|default:"No items found" }}</p>
+                </div>
+            {% else %}
+                <!-- Data Table -->
+                <div class="table-responsive">
+                    <table class="table dashboard-table mb-0">
+                        <thead>
+                            <tr>
+                                {% for column in table_config.columns %}
+                                    <th {% if column.center %}class="text-center"{% endif %}>{{ column.label }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                                <tr>
+                                    {% for column in table_config.columns %}
+                                        <td data-label="{{ column.label }}"
+                                            {% if column.center %}class="text-center"{% endif %}>
+                                            {% if column.type == 'link' %}
+                                                <a href="{{ column.url_template|replace:'{id}':item.id|replace:'{key}':item.team.key|replace:'{name}':item.team.name }}"
+                                                   class="text-primary text-decoration-none">
+                                                    {% if column.icon %}<i class="{{ column.icon }} me-2"></i>{% endif %}
+                                                    {% if column.key == 'name' %}
+                                                        {{ item.team.name }}
+                                                    {% else %}
+                                                        {{ item|lookup:column.key }}
+                                                    {% endif %}
+                                                </a>
+                                            {% elif column.type == 'badge' %}
+                                                <span class="badge {{ column.badge_class }}">
+                                                    {% if column.icon %}<i class="{{ column.icon }} me-1"></i>{% endif %}
+                                                    {{ item|lookup:column.key|title }}
+                                                </span>
+                                            {% elif column.type == 'status_badge' %}
+                                                {% with status_value=item|lookup:column.key %}
+                                                    {% if status_value %}
+                                                        <span class="badge bg-success-subtle text-success">
+                                                            <i class="fas fa-star me-1"></i>Default
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary-subtle text-secondary">No</span>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            {% elif column.type == 'text' %}
+                                                <span class="text-muted">
+                                                    {% if column.icon %}<i class="{{ column.icon }} me-1"></i>{% endif %}
+                                                    {{ item|lookup:column.key }}
+                                                    {% if column.additional_text %}<small class="ms-1">{{ item|lookup:column.additional_text }}</small>{% endif %}
+                                                </span>
+                                            {% elif column.type == 'actions' %}
+                                                <div class="btn-group" role="group">
+                                                    {% for action in column.actions %}
+                                                        {% if action.condition %}
+                                                            {% if action.condition == 'owner_or_admin' and membership.role != 'owner' and membership.role != 'admin' %}
+                                                                {% comment %}Skip this action{% endcomment %}
+                                                            {% elif action.condition == 'owner_only' and membership.role != 'owner' %}
+                                                                {% comment %}Skip this action{% endcomment %}
+                                                            {% elif action.condition == 'not_default' and membership.is_default_team %}
+                                                                {% comment %}Skip this action{% endcomment %}
+                                                            {% else %}
+                                                                {% include "core/components/standard_table_action.html.j2" with action=action item=item membership=membership %}
+                                                            {% endif %}
+                                                        {% else %}
+                                                            {% include "core/components/standard_table_action.html.j2" with action=action item=item membership=membership %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                {{ item|lookup:column.key }}
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+            <!-- Pagination Controls -->
+            {% if pagination_meta and pagination_meta.num_pages > 1 %}
+                <nav aria-label="{{ table_title }} pagination" class="mt-4 px-4 pb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <!-- Results Info -->
+                        <div class="text-muted">
+                            Showing {{ pagination_meta.start_index }}-{{ pagination_meta.end_index }} of {{ pagination_meta.paginator.count }} items
+                        </div>
+                        <!-- Pagination Links -->
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- Previous Page -->
+                            {% if pagination_meta.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.previous_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Previous">
+                                        <span aria-hidden="true">«</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">«</span>
+                                </li>
+                            {% endif %}
+                            <!-- Page Numbers -->
+                            {% for page_num in pagination_meta.paginator.page_range %}
+                                {% if page_num == pagination_meta.number %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page={{ page_num }}&page_size={{ page_size }}">{{ page_num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            <!-- Next Page -->
+                            {% if pagination_meta.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.next_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Next">
+                                        <span aria-hidden="true">»</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">»</span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <!-- Page Size Selector -->
+                    {% if page_size_options %}
+                        <div class="d-flex justify-content-center mt-3">
+                            <div class="btn-group btn-group-sm"
+                                 role="group"
+                                 aria-label="Items per page">
+                                <span class="btn btn-outline-secondary disabled">Items per page:</span>
+                                {% for size in page_size_options %}
+                                    {% if size == page_size %}
+                                        <button type="button" class="btn btn-primary">{{ size }}</button>
+                                    {% else %}
+                                        <a href="?page=1&page_size={{ size }}" class="btn btn-outline-secondary">{{ size }}</a>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>

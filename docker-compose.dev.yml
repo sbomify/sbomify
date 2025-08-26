@@ -22,6 +22,7 @@ x-dev-env: &dev-env
   DEBUG: ${DEBUG:-"True"}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-"True"}
   BUILD_ENV: ${BUILD_ENV:-development}
+  APP_BASE_URL: 127.0.0.1:80000
 
 services:
   keycloak:

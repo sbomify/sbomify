@@ -45,28 +45,14 @@ interface DeleteConfirmationOptions {
 }
 
 export async function confirmDelete({ itemName, itemType, customMessage }: DeleteConfirmationOptions): Promise<boolean> {
-  const { default: Swal } = await import('sweetalert2');
+  const { NotificationManager } = await import('./utils/django-components');
 
-  const result = await Swal.fire({
-    title: 'Delete Confirmation',
-    text: customMessage || `Are you sure you want to delete ${itemType} "${itemName}"? This action cannot be undone.`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Delete',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#dc3545', // Bootstrap danger color
-    cancelButtonColor: '#6c757d',  // Bootstrap secondary color
-    focusCancel: true, // Safer default
-    customClass: {
-      confirmButton: 'btn btn-danger',
-      cancelButton: 'btn btn-secondary',
-      actions: 'gap-2' // Add gap between buttons
-    },
-    buttonsStyling: false,
-    reverseButtons: true // Cancel on left, Delete on right
-  });
-
-  return result.isConfirmed;
+  return await NotificationManager.showConfirmation(
+    customMessage || `Are you sure you want to delete ${itemType} "${itemName}"? This action cannot be undone.`,
+    'Delete Confirmation',
+    'Delete',
+    'Cancel'
+  );
 }
 
 /**

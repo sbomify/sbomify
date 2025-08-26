@@ -1,0 +1,197 @@
+{% comment %}
+Generic Assignment Manager Component - Server-side rendered with JavaScript enhancement
+Context variables:
+- parent_type: Type of parent item (e.g., "product", "project", "release")
+- parent_id: ID of the parent item
+- child_type: Type of child items (e.g., "project", "component", "artifact")
+- assigned_items: QuerySet/List of assigned child objects
+- available_items: List of available child objects from API
+- has_crud_permissions: Boolean for CRUD permissions
+- assigned_title: Title for assigned section (e.g., "Assigned Projects")
+- available_title: Title for available section (e.g., "Available Projects")
+- empty_message: Message when no items assigned
+- no_available_message: Message when no items available
+- create_url: URL to create new child items (optional)
+- create_button_text: Text for create button (optional)
+{% endcomment %}
+{% load static %}
+<!-- Generic Assignment Manager -->
+<div class="row g-4">
+    <!-- Assigned Items -->
+    <div class="col-lg-6">
+        <div class="card shadow-brand">
+            <div class="card-header px-4 py-3">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <h4 class="card-title mb-0">{{ assigned_title }}</h4>
+                    <span class="badge bg-primary rounded-pill">{{ assigned_items|length }}</span>
+                </div>
+            </div>
+            <div class="card-body p-0"
+                 data-assignment-manager
+                 data-parent-type="{{ parent_type }}"
+                 data-parent-id="{{ parent_id }}"
+                 data-child-type="{{ child_type }}"
+                 data-has-crud-permissions="{{ has_crud_permissions|yesno:'true,false' }}">
+                {% if not assigned_items %}
+                    <!-- Empty State -->
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i>
+                        <h6 class="text-muted">
+                            {% if empty_message %}
+                                {{ empty_message }}
+                            {% else %}
+                                No {{ child_type }}s assigned
+                            {% endif %}
+                        </h6>
+                        <p class="text-muted mb-3">
+                            {% if empty_description %}
+                                {{ empty_description }}
+                            {% else %}
+                                Assign {{ child_type }}s to this {{ parent_type }} to organize your content
+                            {% endif %}
+                        </p>
+                        {% if has_crud_permissions and available_items %}
+                            <button class="btn btn-primary assign-item-btn" data-action="assign-multiple">
+                                <i class="fas fa-plus me-2"></i>Assign {{ child_type|title }}
+                            </button>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <!-- Search for assigned items -->
+                    <div class="border-bottom p-3">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="Search assigned {{ child_type }}s..."
+                                   id="assignedSearch">
+                        </div>
+                    </div>
+                    <!-- Assigned Items List -->
+                    <div class="assigned-items-container"
+                         style="max-height: 400px;
+                                overflow-y: auto">
+                        {% for item in assigned_items %}
+                            <div class="d-flex align-items-center justify-content-between p-3 border-bottom assigned-item"
+                                 data-item-name="{{ item.name|lower }}"
+                                 data-item-id="{{ item.id }}">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="fas fa-folder text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-medium">
+                                            <a href="{% if child_type == 'project' %}{% url 'core:project_details' item.id %}{% elif child_type == 'component' %}{% url 'core:component_details' item.id %}{% else %}#{% endif %}"
+                                               class="text-decoration-none">{{ item.name }}</a>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2 mt-1">
+                                            {% if item.is_public %}
+                                                <span class="badge bg-success-subtle text-success">Public</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                            {% endif %}
+                                            {% if child_type == 'project' %}
+                                                <small class="text-muted">{{ item.components.count|default:0 }} component{{ item.components.count|default:0|pluralize }}</small>
+                                            {% elif child_type == 'component' %}
+                                                <small class="text-muted">{{ item.component_type|default:"Unknown" }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if has_crud_permissions %}
+                                    <button class="btn btn-sm btn-outline-danger remove-item-btn"
+                                            data-item-id="{{ item.id }}"
+                                            data-item-name="{{ item.name }}"
+                                            title="Remove from {{ parent_type }}">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Available Items -->
+    {% if has_crud_permissions %}
+        <div class="col-lg-6">
+            <div class="card shadow-brand">
+                <div class="card-header px-4 py-3">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <h4 class="card-title mb-0">{{ available_title }}</h4>
+                        <span class="badge bg-secondary rounded-pill">{{ available_items|length }}</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if not available_items %}
+                        <!-- Empty State -->
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-plus fa-3x mb-3 opacity-25"></i>
+                            <h6 class="text-muted">{{ no_available_message|default:"No available "|add:child_type|add:"s" }}</h6>
+                            <p class="text-muted mb-3">All {{ child_type }}s in your team are already assigned to this {{ parent_type }}</p>
+                            {% if create_url %}
+                                <a href="{% url create_url %}" class="btn btn-outline-primary">
+                                    <i class="fas fa-plus me-2"></i>{{ create_button_text|default:"Create New "|add:child_type|title }}
+                                </a>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <!-- Search for available items -->
+                        <div class="border-bottom p-3">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text"
+                                       class="form-control"
+                                       placeholder="Search available {{ child_type }}s..."
+                                       id="availableSearch">
+                            </div>
+                        </div>
+                        <!-- Available Items List -->
+                        <div class="available-items-container"
+                             style="max-height: 400px;
+                                    overflow-y: auto">
+                            {% for item in available_items %}
+                                <div class="d-flex align-items-center justify-content-between p-3 border-bottom available-item"
+                                     data-item-name="{{ item.name|lower }}"
+                                     data-item-id="{{ item.id }}">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <i class="fas {% if child_type == 'project' %}fa-folder-open{% elif child_type == 'component' %}fa-cube{% else %}fa-file{% endif %} text-muted"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium">{{ item.name }}</div>
+                                            <div class="d-flex align-items-center gap-2 mt-1">
+                                                {% if item.is_public %}
+                                                    <span class="badge bg-success-subtle text-success">Public</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                                {% endif %}
+                                                {% if child_type == 'project' %}
+                                                    <small class="text-muted">{{ item.component_count|default:0 }} component{{ item.component_count|default:0|pluralize }}</small>
+                                                {% elif child_type == 'component' %}
+                                                    <small class="text-muted">{{ item.component_type|default:"Unknown" }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary assign-item-btn"
+                                            data-item-id="{{ item.id }}"
+                                            data-item-name="{{ item.name }}"
+                                            title="Assign to {{ parent_type }}">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+<!-- TypeScript functionality loaded via main.ts -->

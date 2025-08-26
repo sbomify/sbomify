@@ -1,0 +1,416 @@
+<!-- Workspace Integrations Section using Standard Card Pattern -->
+<!-- Vulnerability Scanning Settings Card -->
+<div class="mt-3 mb-4">
+    <div class="card border-light shadow-brand">
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-shield-alt me-3 text-primary"></i>
+                    Vulnerability Scanning
+                </h4>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge {% if vulnerability_settings.vulnerability_provider == 'osv' %}bg-primary-subtle text-primary{% elif vulnerability_settings.vulnerability_provider == 'dependency_track' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} px-3 py-2 fs-6">
+                        {% if vulnerability_settings.vulnerability_provider == 'osv' %}
+                            <i class="fab fa-google me-1"></i>OSV Scanner
+                        {% elif vulnerability_settings.vulnerability_provider == 'dependency_track' %}
+                            <i class="fas fa-shield-alt me-1"></i>Dependency Track
+                        {% else %}
+                            <i class="fas fa-question-circle me-1"></i>Not Configured
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <form method="post"
+                  action="{% url 'teams:update_vulnerability_settings' team_key=team.key %}">
+                {% csrf_token %}
+                <!-- Current Plan Info -->
+                <div class="alert alert-primary bg-primary-subtle border-primary text-primary-emphasis mb-4">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0 me-3">
+                            <i class="fas fa-info-circle fs-4"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="alert-heading mb-1 fw-bold">
+                                Current Plan:
+                                <span class="badge {% if team.billing_plan == 'enterprise' %}bg-purple text-white{% elif team.billing_plan == 'business' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %} ms-1">
+                                    {% if team.billing_plan == 'enterprise' %}
+                                        <i class="fas fa-building me-1"></i>Enterprise
+                                    {% elif team.billing_plan == 'business' %}
+                                        <i class="fas fa-rocket me-1"></i>Business
+                                    {% else %}
+                                        <i class="fas fa-heart me-1"></i>Community
+                                    {% endif %}
+                                </span>
+                            </h6>
+                            <p class="mb-0">
+                                {% if team.billing_plan == 'enterprise' %}
+                                    Full features with custom Dependency Track servers and unlimited scanning
+                                {% elif team.billing_plan == 'business' %}
+                                    Advanced features with Dependency Track access and priority scanning
+                                {% else %}
+                                    Free tier with OSV vulnerability scanning (daily scans)
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Provider Selection -->
+                <h5 class="mb-3">
+                    <i class="fas fa-cogs me-2 text-secondary"></i>
+                    Scanning Provider
+                </h5>
+                <div class="row g-3 mb-4">
+                    <!-- OSV Scanner Option -->
+                    <div class="col-md-6">
+                        <div class="card h-100 provider-card {% if vulnerability_settings.vulnerability_provider == 'osv' %}border-success bg-success-subtle{% else %}border-secondary{% endif %} cursor-pointer"
+                             data-provider="osv"
+                             role="button"
+                             tabindex="0"
+                             aria-label="Select OSV Scanner">
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="flex-shrink-0 me-3">
+                                        <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
+                                             style="width: 48px;
+                                                    height: 48px">
+                                            <i class="fab fa-google text-white"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 d-flex align-items-center">
+                                            OSV Scanner
+                                            <span class="badge bg-success ms-2">Available</span>
+                                        </h6>
+                                        <small class="text-muted">Google's Open Source Vulnerabilities</small>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        {% if vulnerability_settings.vulnerability_provider == 'osv' %}
+                                            <i class="fas fa-check-circle text-success fs-4 selection-indicator"></i>
+                                        {% else %}
+                                            <i class="far fa-circle text-muted fs-4 selection-indicator"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <p class="mb-0 small">
+                                    Free vulnerability scanning using Google's comprehensive open source vulnerabilities database with daily updates.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dependency Track Option -->
+                    <div class="col-md-6">
+                        <div class="card h-100 provider-card {% if vulnerability_settings.vulnerability_provider == 'dependency_track' %}border-success bg-success-subtle{% elif team.billing_plan == 'community' %}border-warning bg-warning-subtle disabled{% else %}border-secondary{% endif %} {% if team.billing_plan != 'community' %}cursor-pointer{% endif %}"
+                             {% if team.billing_plan != 'community' %}data-provider="dependency_track"{% endif %}
+                             {% if team.billing_plan != 'community' %}role="button"{% endif %}
+                             {% if team.billing_plan != 'community' %}tabindex="0"{% endif %}
+                             {% if team.billing_plan != 'community' %}aria-label="Select Dependency Track"{% endif %}>
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="flex-shrink-0 me-3">
+                                        <div class="rounded-circle bg-info d-flex align-items-center justify-content-center"
+                                             style="width: 48px;
+                                                    height: 48px">
+                                            <i class="fas fa-shield-alt text-white"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 d-flex align-items-center">
+                                            Dependency Track
+                                            {% if team.billing_plan == 'community' %}
+                                                <span class="badge bg-warning ms-2">Business+ Required</span>
+                                            {% else %}
+                                                <span class="badge bg-success ms-2">Available</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">Advanced vulnerability analysis</small>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        {% if vulnerability_settings.vulnerability_provider == 'dependency_track' %}
+                                            <i class="fas fa-check-circle text-success fs-4 selection-indicator"></i>
+                                        {% elif team.billing_plan == 'community' %}
+                                            <i class="fas fa-lock text-warning fs-4"></i>
+                                        {% else %}
+                                            <i class="far fa-circle text-muted fs-4 selection-indicator"></i>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <p class="mb-0 small">
+                                    {% if team.billing_plan == 'community' %}
+                                        Advanced vulnerability scanning with detailed risk analysis. Upgrade to unlock this feature.
+                                    {% else %}
+                                        Advanced vulnerability scanning and risk analysis with detailed metrics and reporting.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hidden input for form submission -->
+                <input type="hidden"
+                       name="vulnerability_provider"
+                       id="selectedProvider"
+                       value="{{ vulnerability_settings.vulnerability_provider }}">
+                <!-- Dependency Track Server Selection (Enterprise Only) -->
+                <div id="server-selection-section"
+                     {% if not team.billing_plan == 'enterprise' or vulnerability_settings.vulnerability_provider != 'dependency_track' %}style="display: none;"{% endif %}>
+                    <hr class="my-4">
+                    <h5 class="mb-3">
+                        <i class="fas fa-server me-2 text-secondary"></i>
+                        Dependency Track Server
+                    </h5>
+                    <div class="row g-3 mb-4">
+                        <!-- Shared Pool Option -->
+                        <div class="col-12">
+                            <div class="card server-card {% if not vulnerability_settings.custom_dt_server_id %}border-success bg-success-subtle{% else %}border-secondary{% endif %} cursor-pointer"
+                                 data-server=""
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="Select Shared Server Pool">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0 me-3">
+                                            <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
+                                                 style="width: 48px;
+                                                        height: 48px">
+                                                <i class="fas fa-cloud text-white"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">Shared Server Pool</h6>
+                                            <p class="mb-0 small text-muted">Use our managed Dependency Track infrastructure (recommended for most teams)</p>
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            {% if not vulnerability_settings.custom_dt_server_id %}
+                                                <i class="fas fa-check-circle text-success fs-4 selection-indicator"></i>
+                                            {% else %}
+                                                <i class="far fa-circle text-muted fs-4 selection-indicator"></i>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Custom Server Options (if any exist) -->
+                        {% for server in vulnerability_settings.available_dt_servers %}
+                            <div class="col-12">
+                                <div class="card server-card {% if vulnerability_settings.custom_dt_server_id == server.id %}border-success bg-success-subtle{% elif not server.is_active %}border-warning bg-warning-subtle disabled{% else %}border-secondary{% endif %} {% if server.is_active %}cursor-pointer{% endif %}"
+                                     {% if server.is_active %}data-server="{{ server.id }}"{% endif %}
+                                     {% if server.is_active %}role="button"{% endif %}
+                                     {% if server.is_active %}tabindex="0"{% endif %}
+                                     {% if server.is_active %}aria-label="Select {{ server.name }}"{% endif %}>
+                                    <div class="card-body p-3">
+                                        <div class="d-flex align-items-center">
+                                            <div class="flex-shrink-0 me-3">
+                                                <div class="rounded-circle bg-info d-flex align-items-center justify-content-center position-relative"
+                                                     style="width: 48px;
+                                                            height: 48px">
+                                                    <i class="fas fa-server text-white"></i>
+                                                    {% if server.health_status %}
+                                                        <span class="position-absolute top-0 start-100 translate-middle health-indicator health-{{ server.health_status }}">
+                                                            <span class="visually-hidden">{{ server.health_status }}</span>
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1 d-flex align-items-center">
+                                                    {{ server.name }}
+                                                    {% if not server.is_active %}<span class="badge bg-warning ms-2">Inactive</span>{% endif %}
+                                                </h6>
+                                                <p class="mb-0 small text-muted">
+                                                    Dedicated Dependency Track server
+                                                    {% if server.description %}- {{ server.description }}{% endif %}
+                                                </p>
+                                            </div>
+                                            <div class="flex-shrink-0">
+                                                {% if vulnerability_settings.custom_dt_server_id == server.id %}
+                                                    <i class="fas fa-check-circle text-success fs-4 selection-indicator"></i>
+                                                {% elif server.is_active %}
+                                                    <i class="far fa-circle text-muted fs-4 selection-indicator"></i>
+                                                {% else %}
+                                                    <i class="fas fa-exclamation-triangle text-warning fs-4"></i>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <!-- Hidden input for form submission -->
+                    <input type="hidden"
+                           name="custom_dt_server_id"
+                           id="selectedServer"
+                           value="{{ vulnerability_settings.custom_dt_server_id|default:'' }}">
+                    <!-- DT Server Management (Enterprise Only) -->
+                    {% if team.billing_plan == 'enterprise' and user_role in 'owner,admin' %}
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0 text-muted">
+                                    <i class="fas fa-cog me-1"></i>
+                                    Server Management
+                                </h6>
+                                <a href="{% url 'teams:add_dt_server' team.key %}"
+                                   class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-plus me-1"></i>
+                                    Add Server
+                                </a>
+                            </div>
+                            {% if vulnerability_settings.available_dt_servers %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>URL</th>
+                                                <th>Priority</th>
+                                                <th>Health</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for server in vulnerability_settings.available_dt_servers %}
+                                                <tr>
+                                                    <td>
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="fas fa-server me-2 text-muted"></i>
+                                                            {{ server.name }}
+                                                            {% if vulnerability_settings.custom_dt_server_id == server.id %}
+                                                                <span class="badge bg-success ms-2">Current</span>
+                                                            {% endif %}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <code class="small">{{ server.url }}</code>
+                                                    </td>
+                                                    <td>{{ server.priority }}</td>
+                                                    <td>
+                                                        {% if server.health_status == 'healthy' %}
+                                                            <span class="badge bg-success">{{ server.get_health_status_display }}</span>
+                                                        {% elif server.health_status == 'degraded' %}
+                                                            <span class="badge bg-warning">{{ server.get_health_status_display }}</span>
+                                                        {% elif server.health_status == 'unhealthy' %}
+                                                            <span class="badge bg-danger">{{ server.get_health_status_display }}</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">{{ server.get_health_status_display }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <button type="button"
+                                                                    class="btn btn-outline-danger btn-sm"
+                                                                    title="Delete Server"
+                                                                    data-bs-toggle="modal"
+                                                                    data-bs-target="#deleteDtServerModal"
+                                                                    data-item-id="{{ server.id }}"
+                                                                    data-item-name="{{ server.name }}"
+                                                                    data-delete-url="{% url 'teams:delete_dt_server' team.key server.id %}">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-muted small mb-0">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    No custom servers configured. Click "Add Server" to configure your own Dependency Track server.
+                                </p>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+                <!-- Save Button -->
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save me-2"></i>
+                        Save Integration Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Statistics Card (if available) -->
+{% if vulnerability_stats and vulnerability_stats.total_scans > 0 %}
+    <div class="mt-4 mb-4">
+        <div class="card border-light shadow-brand">
+            <div class="card-header px-4 py-3">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2 text-success"></i>
+                    Scanning Statistics
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-4 text-center">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 stats-card">
+                            <div class="fs-2 fw-bold text-primary mb-1">{{ vulnerability_stats.total_scans }}</div>
+                            <div class="text-muted">Total Scans</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 stats-card">
+                            <div class="fs-2 fw-bold text-warning mb-1">{{ vulnerability_stats.total_vulnerabilities }}</div>
+                            <div class="text-muted">Vulnerabilities Found</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3 stats-card">
+                            <div class="fs-2 fw-bold text-info mb-1">{{ vulnerability_stats.total_components }}</div>
+                            <div class="text-muted">Components Scanned</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<!-- Upgrade Prompt for Community Users -->
+{% if team.billing_plan == 'community' %}
+    <div class="mt-4">
+        <div class="card border-primary shadow-brand">
+            <div class="card-body p-4">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="flex-shrink-0 me-3">
+                                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
+                                     style="width: 50px;
+                                            height: 50px">
+                                    <i class="fas fa-rocket text-white"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">Unlock Advanced Vulnerability Scanning</h5>
+                                <p class="text-muted mb-0">Dependency Track with detailed metrics and comprehensive analysis</p>
+                            </div>
+                        </div>
+                        <p class="mb-0">
+                            Upgrade to Business or Enterprise to access Dependency Track with advanced vulnerability management,
+                            detailed metrics, and comprehensive security analysis.
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'billing:select_plan' team_key=team.key %}"
+                               class="btn btn-primary btn-lg">
+                                <i class="fas fa-arrow-up me-2"></i>
+                                Upgrade Plan
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<!-- Include Standard Delete Confirmation Modal for DT Servers -->
+{% if vulnerability_settings.can_use_custom_dt and vulnerability_settings.available_dt_servers %}
+    {% include "core/components/delete_confirmation_modal.html.j2" with modal_id="deleteDtServerModal" item_type="Dependency Track Server" warning_message="This action will permanently remove the server from sbomify. Any workspaces using this server will fall back to the shared server pool. No data will be deleted from your actual Dependency Track server." csrf_token=csrf_token %}
+{% endif %}

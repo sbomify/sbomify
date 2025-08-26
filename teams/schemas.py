@@ -1,6 +1,8 @@
 from django.conf import settings
 from pydantic import BaseModel, Field
 
+from core.schemas import PaginationMeta
+
 
 class TeamUpdateSchema(BaseModel):
     """Schema for updating workspace information.
@@ -50,6 +52,9 @@ class TeamListItemSchema(BaseModel):
     role: str
     member_count: int
     invitation_count: int
+    product_count: int
+    project_count: int
+    component_count: int
     is_default_team: bool
     membership_id: str
 
@@ -124,3 +129,61 @@ class BrandingInfo(BaseModel):
 class BrandingInfoWithUrls(BrandingInfo):
     icon_url: str = ""
     logo_url: str = ""
+
+
+class PaginatedTeamsResponse(BaseModel):
+    """Paginated response for teams/workspaces list."""
+
+    items: list[TeamListItemSchema]
+    pagination: PaginationMeta
+
+
+class DependencyTrackServerCreateSchema(BaseModel):
+    """Schema for creating a new DT server."""
+
+    class Config:
+        str_strip_whitespace = True
+
+    name: str = Field(..., max_length=255, min_length=1)
+    url: str = Field(..., max_length=500, min_length=1)
+    api_key: str = Field(..., max_length=255, min_length=1)
+    priority: int = Field(100, ge=1, le=1000)
+    max_concurrent_scans: int = Field(100, ge=1, le=1000)
+
+
+class DependencyTrackServerUpdateSchema(BaseModel):
+    """Schema for updating a DT server."""
+
+    class Config:
+        str_strip_whitespace = True
+
+    name: str | None = Field(None, max_length=255, min_length=1)
+    url: str | None = Field(None, max_length=500, min_length=1)
+    api_key: str | None = Field(None, max_length=255, min_length=1)
+    priority: int | None = Field(None, ge=1, le=1000)
+    max_concurrent_scans: int | None = Field(None, ge=1, le=1000)
+
+
+class DependencyTrackServerSchema(BaseModel):
+    """Schema for DT server response."""
+
+    id: str
+    name: str
+    url: str
+    is_active: bool
+    priority: int
+    max_concurrent_scans: int
+    current_scan_count: int
+    health_status: str
+    last_health_check: str | None = None
+    created_at: str
+    updated_at: str
+
+    # For security, we don't expose the API key
+    api_key_set: bool = Field(description="Whether an API key is configured")
+
+
+class DependencyTrackServerListSchema(BaseModel):
+    """Schema for listing DT servers."""
+
+    servers: list[DependencyTrackServerSchema]

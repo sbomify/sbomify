@@ -11,31 +11,125 @@
     {% breadcrumb document.component 'component' %}
 {% endblock %}
 {% block content %}
-    <div class="vc-public-page-layout"
-         data-title="{{ document.name }}"
-         data-title-icon="fas fa-file-alt"
-         data-page-type="document"
-         data-item-id="{{ document.id }}"
-         data-download-url="{% url 'documents:document_download' document.id %}"
-         data-download-title="Download Document"
-         data-download-button-text="Download Document"
-         data-download-description="Download this document"
-         data-download-icon="fas fa-download">
-        <template data-slot="subtitle">
-            <small class="component-link">
-                <i class="fas fa-cube me-1"></i>
-                <a href="{% url 'core:component_details_public' document.component.id %}"
-                   class="component-breadcrumb-link">{{ document.component.name }}</a>
-            </small>
-            <small class="document-type">
-                <i class="fas fa-tag me-1"></i>{{ document.document_type|default:"Document" }}
-            </small>
-            {% if document.version %}
-                <small class="document-version">
-                    <i class="fas fa-code-branch me-1"></i>{{ document.version }}
-                </small>
-            {% endif %}
-        </template>
+    <!-- Public Document Details -->
+    <div class="public-document-details">
+        <!-- Header -->
+        <div class="page-header mb-4">
+            <div class="header-main">
+                <div class="title-section">
+                    <h1 class="item-title">
+                        <i class="fas fa-file-alt me-3 text-primary"></i>
+                        {{ document.name }}
+                    </h1>
+                    <div class="meta-badges mt-2">
+                        <span class="meta-badge meta-badge--primary">
+                            <i class="fas fa-file-alt"></i>
+                            Document
+                        </span>
+                        <span class="meta-badge meta-badge--secondary">
+                            <i class="fas fa-tag"></i>
+                            {{ document.document_type|default:"Document" }}
+                        </span>
+                        {% if document.version %}
+                            <span class="meta-badge meta-badge--secondary">
+                                <i class="fas fa-code-branch"></i>
+                                {{ document.version }}
+                            </span>
+                        {% endif %}
+                        <span class="meta-badge meta-badge--secondary">
+                            <i class="fas fa-cube"></i>
+                            <a href="{% url 'core:component_details_public' document.component.id %}"
+                               class="component-breadcrumb-link">{{ document.component.name }}</a>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Document Content -->
+        <div class="document-content">
+            <div class="public-card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Document Information
+                    </h5>
+                    <p class="card-subtitle text-muted mb-0">Details about this document</p>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Name:</dt>
+                                <dd class="col-sm-8">
+                                    {{ document.name }}
+                                </dd>
+                                {% if document.version %}
+                                    <dt class="col-sm-4">Version:</dt>
+                                    <dd class="col-sm-8">
+                                        {{ document.version }}
+                                    </dd>
+                                {% endif %}
+                                {% if document.document_type %}
+                                    <dt class="col-sm-4">Type:</dt>
+                                    <dd class="col-sm-8">
+                                        <span class="badge bg-info-subtle text-info">{{ document.document_type }}</span>
+                                    </dd>
+                                {% endif %}
+                                <dt class="col-sm-4">Created:</dt>
+                                <dd class="col-sm-8">
+                                    {{ document.created_at|date:"F d, Y" }}
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                {% if document.file_size %}
+                                    <dt class="col-sm-4">File Size:</dt>
+                                    <dd class="col-sm-8">
+                                        {{ document.file_size|filesizeformat }}
+                                    </dd>
+                                {% endif %}
+                                {% if document.content_type %}
+                                    <dt class="col-sm-4">Content Type:</dt>
+                                    <dd class="col-sm-8">
+                                        {{ document.content_type }}
+                                    </dd>
+                                {% endif %}
+                                <dt class="col-sm-4">Source:</dt>
+                                <dd class="col-sm-8">
+                                    {{ document.source_display }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                    {% if document.description %}
+                        <div class="mt-3 pt-3 border-top">
+                            <h6>
+                                <i class="fas fa-align-left me-2"></i>Description
+                            </h6>
+                            <p class="text-muted mb-0">{{ document.description }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Download Section -->
+            <div class="public-card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="fas fa-download me-2"></i>
+                        Download Document
+                    </h5>
+                    <p class="card-subtitle text-muted mb-0">Download this document file</p>
+                </div>
+                <div class="card-body text-center">
+                    <a href="{% url 'documents:document_download' document.id %}"
+                       class="btn btn-primary btn-lg">
+                        <i class="fas fa-download me-2"></i>
+                        Download {{ document.name }}
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 {% block extra_css %}

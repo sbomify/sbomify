@@ -1,9 +1,11 @@
+import json
 import logging
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, JsonResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_http_methods
 
 from core.errors import error_response
 from core.object_store import S3Client
@@ -48,6 +50,43 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
         "documents/document_details_public.html.j2",
         {"document": document, "brand": branding_info, "APP_BASE_URL": settings.APP_BASE_URL},
     )
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_document_field(request: HttpRequest, document_id: str) -> JsonResponse:
+    """Update a single field of a document"""
+    try:
+        document: Document = Document.objects.get(pk=document_id)
+    except Document.DoesNotExist:
+        return JsonResponse({"error": "Document not found"}, status=404)
+
+    if not verify_item_access(request, document.component, ["owner", "admin"]):
+        return JsonResponse({"error": "Permission denied"}, status=403)
+
+    try:
+        data = json.loads(request.body)
+        field = data.get("field")
+        value = data.get("value", "").strip()
+
+        if field == "description":
+            document.description = value
+            document.save()
+            return JsonResponse(
+                {"success": True, "message": "Description updated successfully", "value": document.description}
+            )
+        elif field == "version":
+            document.version = value
+            document.save()
+            return JsonResponse({"success": True, "message": "Version updated successfully", "value": document.version})
+        else:
+            return JsonResponse({"error": "Invalid field"}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except Exception as e:
+        logger.error(f"Error updating document {document_id}: {e}")
+        return JsonResponse({"error": "Internal server error"}, status=500)
 
 
 def document_download(request: HttpRequest, document_id: str) -> HttpResponse:

@@ -1,0 +1,56 @@
+{% comment %}
+Reusable page size selector component
+
+Usage:
+{% include "core/components/page_size_selector.html.j2" with pagination_meta=pagination_meta page_size=page_size %}
+
+Parameters:
+- pagination_meta: Pagination metadata object
+- page_size: Current page size
+- page_size_options: List of available page size options (default: [10, 15, 25, 50, 100])
+- search_query: Search query to preserve (optional)
+- preserve_params: List of GET parameters to preserve (optional)
+- min_items_to_show: Minimum number of items required to show selector (default: 15)
+- label_text: Label text for the selector (default: "Show:")
+- unit_text: Unit text after the selector (default: "per page")
+
+This component provides consistent page size selection across paginated lists.
+{% endcomment %}
+{% if pagination_meta and pagination_meta.total > min_items_to_show|default:15 %}
+    <form method="get" class="page-size-form d-flex align-items-center gap-2">
+        <!-- Preserve search and other parameters -->
+        {% if search_query %}<input type="hidden" name="search" value="{{ search_query }}">{% endif %}
+        {% comment %}No additional parameters to preserve for now{% endcomment %}
+        <label for="page_size" class="form-label mb-0 text-muted small">{{ label_text|default:"Show:" }}</label>
+        <select name="page_size"
+                id="page_size"
+                class="form-select form-select-sm page-size-select"
+                onchange="this.form.submit()"
+                aria-label="Items per page">
+            {% for size in page_size_options|default:"10,15,25,50,100" %}
+                <option value="{{ size }}" {% if size == page_size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+        </select>
+        <span class="text-muted small">{{ unit_text|default:"per page" }}</span>
+    </form>
+{% endif %}
+<style>
+.page-size-form .page-size-select {
+    width: auto;
+    min-width: 70px;
+}
+
+.page-size-form .form-label {
+    white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+    .page-size-form {
+        font-size: 0.875rem;
+    }
+
+    .page-size-form .page-size-select {
+        min-width: 60px;
+    }
+}
+</style>

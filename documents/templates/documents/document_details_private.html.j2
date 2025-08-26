@@ -7,8 +7,24 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
+{% load breadcrumb_tags %}
 {% block title %}sbomify Document: {{ document.name }}{% endblock %}
-{% block content %}
+{% block breadcrumb %}
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb bg-light p-3 rounded">
+            <li class="breadcrumb-item">
+                <a href="{% url 'core:component_details' document.component.id %}"
+                   class="text-decoration-none">
+                    <i class="fas fa-cube me-1"></i>{{ document.component.name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <i class="fas fa-file-alt me-1"></i>{{ document.name }}
+            </li>
+        </ol>
+    </nav>
+{% endblock %}
+{% block dashboard_content %}
     <div class="page-header mb-4">
         <div class="header-main mb-3">
             <div class="title-section">
@@ -183,6 +199,23 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             transform: translateY(0);
         }
 
+                /* Simple edit button styling */
+        .btn-outline-secondary {
+            border-color: #e2e8f0;
+            color: #64748b;
+            transition: all 0.2s ease;
+            border-radius: 6px;
+        }
+
+        .btn-outline-secondary:hover {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border-color: #cbd5e1;
+            color: #475569;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+
         @media (max-width: 768px) {
             .title-section {
                 flex-direction: column;
@@ -197,6 +230,10 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             .header-meta {
                 flex-wrap: wrap;
                 gap: 0.75rem;
+            }
+
+            .editable-field:hover::after {
+                display: none;
             }
         }
     </style>
@@ -214,12 +251,23 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
                         <dd class="col-sm-8">
                             {{ document.name }}
                         </dd>
-                        {% if document.version %}
-                            <dt class="col-sm-4">Version:</dt>
-                            <dd class="col-sm-8">
-                                {{ document.version }}
-                            </dd>
-                        {% endif %}
+                        <dt class="col-sm-4">Version:</dt>
+                        <dd class="col-sm-8">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>
+                                    {% if document.version %}
+                                        {{ document.version }}
+                                    {% else %}
+                                        <span class="text-muted">No version set</span>
+                                    {% endif %}
+                                </span>
+                                <button class="btn btn-sm btn-outline-secondary ms-2"
+                                        title="Edit version"
+                                        onclick="editFieldModalOpen({ fieldName: 'version', fieldDisplayName: 'Version', currentValue: '{{ document.version|default:'' }}', placeholder: 'Enter version', type: 'input', updateUrl: '{% url 'documents:update_document_field' document.id %}' })">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                        </dd>
                         {% if document.document_type %}
                             <dt class="col-sm-4">Type:</dt>
                             <dd class="col-sm-8">
@@ -250,20 +298,31 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
                 </div>
             </div>
         </div>
-        {% if document.description %}
-            <div class="col-12 col-md-6">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-align-left me-2"></i>Description
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-0">{{ document.description }}</p>
+        <div class="col-12 col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-align-left me-2"></i>Description
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div class="flex-grow-1">
+                            {% if document.description %}
+                                <p class="mb-0">{{ document.description }}</p>
+                            {% else %}
+                                <p class="text-muted mb-0">No description set</p>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary ms-2"
+                                title="Edit description"
+                                onclick="editFieldModalOpen({ fieldName: 'description', fieldDisplayName: 'Description', currentValue: '{{ document.description|default:'' }}', placeholder: 'Enter description', type: 'textarea', updateUrl: '{% url 'documents:update_document_field' document.id %}' })">
+                            <i class="fas fa-edit"></i>
+                        </button>
                     </div>
                 </div>
             </div>
-        {% endif %}
+        </div>
     </div>
     <div class="row">
         <div class="col-12">
@@ -287,4 +346,6 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
     {% vite_asset 'documents/js/main.ts' %}
+    <!-- Include Reusable Edit Modal -->
+    {% include "core/components/edit_field_modal.html.j2" with modal_id="editFieldModal" csrf_token=csrf_token %}
 {% endblock %}

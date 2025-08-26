@@ -1,19 +1,17 @@
 import 'vite/modulepreload-polyfill';
 
+
+
 // Type declaration for bootstrap module (avoids needing @types/bootstrap in production)
 declare module 'bootstrap';
 
 // Bootstrap JS - make available globally for Vue components
 import * as bootstrap from 'bootstrap';
 
-// Extend the Window interface to include bootstrap
-declare global {
-  interface Window {
-    bootstrap: typeof bootstrap;
-  }
-}
+// Bootstrap is handled by django-components.ts global declaration
 
 window.bootstrap = bootstrap;
+
 
 // Chart.js - make available globally for admin dashboard
 import {
@@ -56,10 +54,9 @@ function initializeWorkspaceSelector() {
 
     if (workspaceButton && workspaceButton.tagName === 'BUTTON') {
       const workspaceKey = workspaceButton.getAttribute('data-workspace-key');
-      const workspaceName = workspaceButton.getAttribute('data-workspace-name');
 
       if (workspaceKey) {
-        console.log('Switching to workspace:', workspaceName, 'Key:', workspaceKey);
+
 
         // Validate workspaceKey to ensure it matches the expected pattern (e.g., ^[a-zA-Z0-9_-]+$)
         if (!/^[a-zA-Z0-9_-]+$/.test(workspaceKey)) {
@@ -74,7 +71,7 @@ function initializeWorkspaceSelector() {
         const currentPath = window.location.pathname;
         const targetUrl = `${switchUrl}?next=${encodeURIComponent(currentPath)}`;
 
-        console.log('Redirecting to:', targetUrl);
+
         window.location.href = targetUrl;
       }
     }
@@ -215,7 +212,7 @@ function initializeSidebar() {
   sidebarToggle.setAttribute('aria-label', 'Open navigation menu');
   sidebarToggle.setAttribute('aria-controls', 'sidebar');
 
-  console.log('Sidebar functionality initialized');
+
 }
 
 /**
@@ -258,7 +255,37 @@ function initializeSidebarKeyboardNavigation() {
     });
   });
 
-  console.log('Sidebar keyboard navigation initialized');
+
+}
+
+/**
+ * Initialize delete modal handlers for reusable delete confirmation modals
+ */
+function initializeDeleteModals() {
+  // Find all modals that have the pattern *Modal (like deleteTokenModal)
+  const deleteModals = document.querySelectorAll('[id$="Modal"]');
+
+  deleteModals.forEach(modal => {
+    modal.addEventListener('show.bs.modal', function(event) {
+      const button = event.relatedTarget as HTMLElement;
+      if (!button) return;
+
+      const itemName = button.getAttribute('data-item-name');
+      const deleteUrl = button.getAttribute('data-delete-url');
+
+      // Update modal content
+      const itemNameElement = document.getElementById(`${modal.id}ItemName`);
+      if (itemNameElement && itemName) {
+        itemNameElement.textContent = itemName;
+      }
+
+      // Update form action
+      const form = document.getElementById(`${modal.id}Form`) as HTMLFormElement;
+      if (form && deleteUrl) {
+        form.action = deleteUrl;
+      }
+    });
+  });
 }
 
 /**
@@ -278,6 +305,9 @@ document.addEventListener('DOMContentLoaded', function() {
     return new bootstrap.Tooltip(tooltipTriggerEl);
   });
 
+  // Initialize Bootstrap 5 toast notifications
+  NotificationManager.initialize();
+
   // Handle modal UX improvements
   document.querySelectorAll('.modal').forEach(modalElement => {
     const modal = modalElement as HTMLElement;
@@ -293,97 +323,35 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  console.log('Main.ts loaded successfully - all components initialized');
+  // Initialize delete modal handlers
+  initializeDeleteModals();
+
+
 });
 
-// Import Vue component mounting utility
-import mountVueComponent from './common_vue';
-import './alerts-global'; // Ensure alerts are available globally
+// Keep alerts available globally for Django templates
+import './alerts-global';
+
+// Import eventBus for TypeScript compilation (even though we don't mount Vue)
 import { eventBus, EVENTS } from './utils';
-import EditableSingleField from './components/EditableSingleField.vue';
-import CopyableValue from './components/CopyableValue.vue';
-import ConfirmAction from './components/ConfirmAction.vue';
-import DashboardStats from '../../sboms/js/components/DashboardStats.vue';
-import CopyToken from './components/CopyToken.vue';
-import SiteNotifications from './components/SiteNotifications.vue';
-import StandardCard from './components/StandardCard.vue';
-import StatCard from './components/StatCard.vue';
-import PlanCard from './components/PlanCard.vue';
-import AccessTokensList from './components/AccessTokensList.vue';
-import PublicStatusToggle from './components/PublicStatusToggle.vue';
-import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
-import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
-import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
-import DangerZone from './components/DangerZone.vue';
-import ProjectDangerZone from './components/ProjectDangerZone.vue';
-import ProductDangerZone from './components/ProductDangerZone.vue';
-import AddProductForm from './components/AddProductForm.vue';
-import AddProjectForm from './components/AddProjectForm.vue';
-import AddComponentForm from './components/AddComponentForm.vue';
-import ExportDataCard from './components/ExportDataCard.vue';
-import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
-import ItemsListTable from './components/ItemsListTable.vue';
-import ProductsList from './components/ProductsList.vue';
-import ProjectsList from './components/ProjectsList.vue';
-import ComponentsList from './components/ComponentsList.vue';
-import PublicCard from './components/PublicCard.vue';
-import PublicPageLayout from './components/PublicPageLayout.vue';
-import PublicProjectComponents from './components/PublicProjectComponents.vue';
-import PublicProductProjects from './components/PublicProductProjects.vue';
-import PublicDownloadCard from './components/PublicDownloadCard.vue';
-import ProductIdentifiers from './components/ProductIdentifiers.vue';
-import ProductLinks from './components/ProductLinks.vue';
-import ProductReleases from './components/ProductReleases.vue';
-import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
-import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
-import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
-import ReleasesList from './components/ReleasesList.vue';
-import ReleaseList from './components/ReleaseList.vue';
 
-// Initialize Vue components
-mountVueComponent('vc-editable-single-field', EditableSingleField);
-mountVueComponent('vc-copyable-value', CopyableValue);
-mountVueComponent('vc-confirm-action', ConfirmAction);
-mountVueComponent('vc-dashboard-stats', DashboardStats);
-mountVueComponent('vc-copy-token', CopyToken);
-mountVueComponent('vc-site-notifications', SiteNotifications);
-mountVueComponent('vc-standard-card', StandardCard);
-mountVueComponent('vc-stat-card', StatCard);
-mountVueComponent('vc-plan-card', PlanCard);
-mountVueComponent('vc-access-tokens-list', AccessTokensList);
-mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
-mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
-mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
-mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
-mountVueComponent('vc-danger-zone', DangerZone);
-mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
-mountVueComponent('vc-product-danger-zone', ProductDangerZone);
-mountVueComponent('vc-add-product-form', AddProductForm);
-mountVueComponent('vc-add-project-form', AddProjectForm);
-mountVueComponent('vc-add-component-form', AddComponentForm);
-mountVueComponent('vc-export-data-card', ExportDataCard);
-mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
-mountVueComponent('vc-items-list-table', ItemsListTable);
-mountVueComponent('vc-products-list', ProductsList);
-mountVueComponent('vc-projects-list', ProjectsList);
-mountVueComponent('vc-components-list', ComponentsList);
-mountVueComponent('vc-public-card', PublicCard);
-mountVueComponent('vc-public-page-layout', PublicPageLayout);
-mountVueComponent('vc-public-project-components', PublicProjectComponents);
-mountVueComponent('vc-public-product-projects', PublicProductProjects);
-mountVueComponent('vc-public-download-card', PublicDownloadCard);
-mountVueComponent('vc-product-identifiers', ProductIdentifiers);
-mountVueComponent('vc-product-links', ProductLinks);
-mountVueComponent('vc-product-releases', ProductReleases);
-mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
-mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
-mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
 
-mountVueComponent('vc-releases-list', ReleasesList);
-mountVueComponent('vc-release-list', ReleaseList);
+// Import Django template component functionality
+import './utils/django-components';
+import { NotificationManager } from './utils/django-components';
+import './components/releases-crud';
+import './components/danger-zone';
+import './components/product-links-crud';
+import './components/product-identifiers-crud';
+import './components/public-status-toggle';
+import './components/editable-field';
+import './components/assignment-manager';
 
-// Declare global variables
+import './components/UserSettingsPage';
+
+
+// Declare global variables for TypeScript
 declare global {
   interface Window {
     eventBus: typeof eventBus;
@@ -391,7 +359,7 @@ declare global {
   }
 }
 
-// Make eventBus available globally for inline scripts
+// Make eventBus available globally (for any remaining TypeScript compilation)
 window.eventBus = eventBus;
 window.EVENTS = EVENTS;
 

@@ -13,12 +13,18 @@ alwaysApply: false
 - Use server-side rendering for better SEO, performance, and maintainability
 - Only integrate Vue components for truly interactive elements (graphs, real-time updates, complex forms)
 - Maintain clear separation between presentation and business logic
+- Use Bootstrap 5 for styling
 
 ### API Security Boundaries
 - **All data access must go through API functions** with proper authentication and authorization
 - Use API functions in templates even for internal data access to maintain security consistency
 - Implement consistent validation and sanitization patterns across all endpoints
 - Design APIs to be repurposable for future frontend separation
+
+### Best Practices
+- Write all JavaScript as TypeScript
+- Don't use in-line styling for CSS, instead use reusable CSS styling
+- Minimize the amount of TypeScript in favor of Server Side Rendering (SSR)
 
 ## Django Framework Standards
 

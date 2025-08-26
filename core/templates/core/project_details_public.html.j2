@@ -3,8 +3,12 @@
 Template context:
 project: Project object
 brand: BrandingInfo object
+components: QuerySet of public components in the project
+components_count: Number of components in the project
+has_downloadable_content: Boolean for download availability
 {% endcomment %}
 {% load widget_tweaks %}
+{% load static %}
 {% load django_vite %}
 {% load breadcrumb_tags %}
 {% block title %}{{ project.name }}{% endblock %}
@@ -15,27 +19,256 @@ brand: BrandingInfo object
     {% breadcrumb project 'project' %}
 {% endblock %}
 {% block content %}
-    <div class="vc-public-page-layout"
-         data-title="{{ project.name }}"
-         data-title-icon="fas fa-project-diagram"
-         data-page-type="project"
-         data-item-id="{{ project.id }}"
-         {% if has_downloadable_content %} data-download-url="/api/v1/projects/{{ project.id }}/download" data-download-title="Download Project SBOM" data-download-button-text="Download SBOM" data-download-description="Download aggregated SBOM for this project" data-download-icon="fas fa-download" {% endif %}>
-        <template data-slot="subtitle">
-            <span class="meta-badge meta-badge--primary">
-                <i class="fas fa-project-diagram"></i>
-                Project
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">{{ project.name }}</h1>
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-project-diagram me-2 text-primary"></i>
+                <span class="meta-label">Project</span>
             </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-fingerprint"></i>
-                <span class="vc-copyable-value"
-                      data-value="{{ project.id }}"
-                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                {% include "core/components/copyable_value.html.j2" with value=project.id display_text=project.id title="Project ID: "|add:project.id|add:" (click to copy)" css_class="meta-id" %}
             </span>
-        </template>
+            {% if has_downloadable_content %}
+                <span class="meta-divider">•</span>
+                <span class="meta-item">
+                    <a href="/api/v1/projects/{{ project.id }}/download"
+                       class="btn btn-sm btn-success">
+                        <i class="fas fa-download me-1"></i>Download Project SBOM
+                    </a>
+                </span>
+            {% endif %}
+        </div>
     </div>
+    <!-- Project Components -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow-brand">
+                <div class="card-header px-4 py-3">
+                    <h4 class="card-title mb-0">Project Components</h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if not components %}
+                        <!-- Empty State -->
+                        <div class="dashboard-empty">
+                            <div class="empty-icon mb-3">
+                                <i class="fas fa-cube fa-3x text-muted"></i>
+                            </div>
+                            <h5 class="empty-title">No public components</h5>
+                            <p class="text-muted mb-0">No public components have been added to this project yet.</p>
+                        </div>
+                    {% else %}
+                        <!-- Components Grid -->
+                        <div class="p-4">
+                            <div class="row">
+                                {% for component in components %}
+                                    <div class="col-12 col-md-6 col-lg-4 mb-3">
+                                        <div class="component-item">
+                                            <div class="component-icon">
+                                                <i class="{% if component.component_type == 'sbom' %}fas fa-file-code{% elif component.component_type == 'document' %}fas fa-file-alt{% else %}fas fa-cube{% endif %} component-type-icon"></i>
+                                            </div>
+                                            <div class="component-info">
+                                                <h6 class="component-name">
+                                                    <a href="/public/component/{{ component.id }}/" class="component-link">{{ component.name }}</a>
+                                                </h6>
+                                                <small class="component-type text-muted">
+                                                    {% if component.component_type == 'sbom' %}
+                                                        SBOM
+                                                    {% elif component.component_type == 'document' %}
+                                                        Document
+                                                    {% else %}
+                                                        {{ component.component_type|title }}
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-id {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .meta-id:hover {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        .shadow-brand {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+        }
+
+        /* Component grid styling */
+        .dashboard-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6c757d;
+        }
+
+        .empty-icon {
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        .component-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            background-color: #ffffff;
+            height: 100%;
+        }
+
+        .component-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-color: #cbd5e1;
+        }
+
+        .component-icon {
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .component-type-icon {
+            font-size: 1.5rem;
+            color: #6b7280;
+            width: 2rem;
+            text-align: center;
+        }
+
+        .component-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .component-name {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .component-link {
+            color: #1e293b;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .component-link:hover {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+
+        .component-type {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+
+            .component-item {
+                margin-bottom: 0.75rem;
+            }
+        }
+    </style>
 {% endblock %}
 {% block scripts %}
+    <!-- Load main scripts for Django template functionality -->
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

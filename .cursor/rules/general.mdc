@@ -17,6 +17,7 @@ You are an expert full-stack developer specializing in Python, Django, scalable 
 ### Architecture Philosophy
 - **Django-First Approach**: Use Django templates (`.html.j2`) for all pages and UI components by default
 - **Selective Frontend**: Only use Vue/TypeScript for interactive elements requiring dynamic behavior (graphs, charts, complex forms, real-time updates)
+- **Responsiveness**: All pages shall be designed with responsiveness in mind, so make sure to set proper break points and ensure things work for both desktop, mobile and tablets
 - **API Security Boundaries**: Always use API functions in templates (even for internal data) to maintain consistent security boundaries that can be repurposed later
 - **Server-Side First**: Prefer server-side rendering over client-side rendering for better SEO, performance, and maintainability
 - **Component Reusability**: Favor creating reusable components regardless of language or framework - build once, use everywhere

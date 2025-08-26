@@ -116,21 +116,17 @@ current_team: Current team session data
     {% endif %}
     <div class="row">
         <div class="col-12">
-            <div class="vc-release-artifacts"
-                 data-release-id="{{ release.id }}"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
-                 data-is-latest-release="{% if release.is_latest %}true{% else %}false{% endif %}"></div>
+            {% if has_crud_permissions and not release.is_latest %}
+                {% include "core/components/release_artifacts_table.html.j2" with release=release product_id=product.id has_crud_permissions=has_crud_permissions is_latest_release=release.is_latest can_modify_artifacts=True table_title="Artifacts" %}
+            {% else %}
+                {% include "core/components/release_artifacts_table.html.j2" with release=release product_id=product.id has_crud_permissions=has_crud_permissions is_latest_release=release.is_latest can_modify_artifacts=False table_title="Artifacts" %}
+            {% endif %}
         </div>
     </div>
     {% if has_crud_permissions and not release.is_latest %}
-        <div class="row mt-4">
+        <div class="row">
             <div class="col-12">
-                <div class="vc-release-danger-zone"
-                     data-release-id="{{ release.id }}"
-                     data-product-id="{{ product.id }}"
-                     data-release-name="{{ release.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include "core/components/danger_zone.html.j2" with item_type="release" item_id=release.id item_name=release.name delete_endpoint="/api/v1/releases/{id}" redirect_url="/product/"|add:product.id|add:"/releases/" title="Danger Zone" description="Permanently remove this release and all associated artifacts" button_text="Delete Release" collapsible=True default_expanded=False %}
             </div>
         </div>
     {% endif %}
@@ -310,5 +306,5 @@ current_team: Current team session data
     </style>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'core/js/main.ts' %}
+    <!-- No Vue components needed anymore -->
 {% endblock %}

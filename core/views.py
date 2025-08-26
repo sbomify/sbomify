@@ -75,17 +75,14 @@ def user_settings(request: HttpRequest) -> HttpResponse:
             context["new_encoded_access_token"] = access_token_str
             messages.add_message(
                 request,
-                messages.INFO,
-                "New access token created",
+                messages.SUCCESS,
+                "Personal access token created successfully!",
             )
 
+    # Get access tokens for the current user
     access_tokens = AccessToken.objects.filter(user=request.user).only("id", "description", "created_at").all()
-    # Serialize access tokens for Vue component
-    access_tokens_data = [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
-        for token in access_tokens
-    ]
-    context["access_tokens"] = access_tokens_data
+    context["access_tokens"] = access_tokens
+
     return render(request, "core/settings.html.j2", context)
 
 
@@ -220,14 +217,70 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def products_dashboard(request: HttpRequest) -> HttpResponse:
+    """Products dashboard with server-side pagination and filtering."""
+    from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
     current_team = request.session.get("current_team")
     has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
+
+    if not current_team:
+        return error_response(request, HttpResponseForbidden("No current team selected"))
+
+    # Get pagination parameters from request
+    page = request.GET.get("page", 1)
+    page_size = int(request.GET.get("page_size", 15))
+
+    # Validate and constrain page_size
+    page_size = min(max(1, page_size), 100)  # Between 1 and 100
+
+    # Get products for the current team with prefetch for efficiency
+    products_queryset = (
+        Product.objects.filter(team_id=current_team["id"]).prefetch_related("projects").order_by("-created_at")
+    )
+
+    # Set up pagination
+    paginator = Paginator(products_queryset, page_size)
+
+    try:
+        products_page = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        # If page is out of range or invalid, show first page
+        products_page = paginator.page(1)
+
+    # Available page size options for the UI
+    page_size_options = [10, 15, 25, 50, 100]
+
+    # Form fields configuration for the add product modal
+    product_form_fields = [
+        {
+            "name": "name",
+            "label": "Name",
+            "type": "text",
+            "required": True,
+            "size": "large",
+            "placeholder": "Enter product name",
+        },
+        {
+            "name": "description",
+            "label": "Description (Optional)",
+            "type": "textarea",
+            "required": False,
+            "rows": 3,
+            "placeholder": "Describe your product...",
+        },
+    ]
 
     return render(
         request,
         "core/products_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
+            "products": products_page.object_list,
+            "pagination_meta": products_page,
+            "current_page": products_page.number,
+            "page_size": page_size,
+            "page_size_options": page_size_options,
+            "product_form_fields": product_form_fields,
         },
     )
 
@@ -245,11 +298,50 @@ def product_details_public(request: HttpRequest, product_id: str) -> HttpRespons
     # Check if there are any SBOMs available for download
     has_downloadable_content = SBOM.objects.filter(component__projects__products=product).exists()
 
+    # Get public projects in this product
+    public_projects = product.projects.filter(is_public=True).order_by("name")
+    projects_count = public_projects.count()
+
+    # Get product links and identifiers directly (access already verified above)
+    product_links_qs = product.links.all().order_by("-created_at")
+    product_identifiers_qs = product.identifiers.all().order_by("-created_at")
+
+    # Convert to list format expected by templates
+    product_links = [
+        {
+            "id": link.id,
+            "link_type": link.link_type,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "created_at": link.created_at.isoformat(),
+        }
+        for link in product_links_qs
+    ]
+
+    product_identifiers = [
+        {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+        for identifier in product_identifiers_qs
+    ]
+
     branding_info = BrandingInfo(**product.team.branding_info)
     return render(
         request,
         "core/product_details_public.html.j2",
-        {"product": product, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
+        {
+            "product": product,
+            "brand": branding_info,
+            "has_downloadable_content": has_downloadable_content,
+            "product_links": product_links,
+            "product_identifiers": product_identifiers,
+            "projects": public_projects,
+            "projects_count": projects_count,
+        },
     )
 
 
@@ -266,11 +358,59 @@ def product_details_private(request: HttpRequest, product_id: str) -> HttpRespon
 
     has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
 
+    # Get recent releases (limit to 5 for the dashboard view)
+    recent_releases = Release.objects.filter(product=product).order_by("-created_at")[:5]
+
+    # Get product links and identifiers directly (we've already verified access above)
+    # This avoids API function complexity while maintaining security
+    product_links_qs = product.links.all().order_by("-created_at")
+    product_identifiers_qs = product.identifiers.all().order_by("-created_at")
+
+    # Convert to list format expected by templates
+    product_links = [
+        {
+            "id": link.id,
+            "link_type": link.link_type,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "created_at": link.created_at.isoformat(),
+        }
+        for link in product_links_qs
+    ]
+
+    product_identifiers = [
+        {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+        for identifier in product_identifiers_qs
+    ]
+
+    # Get available projects for assignment (same team, not already assigned)
+    assigned_project_ids = [p.id for p in product.projects.all()]
+    available_projects_qs = Project.objects.filter(team=product.team).exclude(id__in=assigned_project_ids)
+    available_projects = [
+        {
+            "id": project.id,
+            "name": project.name,
+            "is_public": project.is_public,
+            "component_count": project.components.count(),
+        }
+        for project in available_projects_qs
+    ]
+
     return render(
         request,
         "core/product_details_private.html.j2",
         {
             "product": product,
+            "recent_releases": recent_releases,
+            "product_links": product_links,
+            "product_identifiers": product_identifiers,
+            "available_projects": available_projects,
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
@@ -455,14 +595,62 @@ def release_details_private(request: HttpRequest, product_id: str, release_id: s
 
 @login_required
 def projects_dashboard(request: HttpRequest) -> HttpResponse:
+    """Projects dashboard with server-side pagination and filtering."""
+    from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
     current_team = request.session.get("current_team")
     has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
+
+    if not current_team:
+        return error_response(request, HttpResponseForbidden("No current team selected"))
+
+    # Get pagination parameters from request
+    page = request.GET.get("page", 1)
+    page_size = int(request.GET.get("page_size", 15))
+
+    # Validate and constrain page_size
+    page_size = min(max(1, page_size), 100)  # Between 1 and 100
+
+    # Get projects for the current team with prefetch for efficiency
+    projects_queryset = (
+        Project.objects.filter(team_id=current_team["id"]).prefetch_related("components").order_by("-created_at")
+    )
+
+    # Set up pagination
+    paginator = Paginator(projects_queryset, page_size)
+
+    try:
+        projects_page = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        # If page is out of range or invalid, show first page
+        projects_page = paginator.page(1)
+
+    # Available page size options for the UI
+    page_size_options = [10, 15, 25, 50, 100]
+
+    # Form fields configuration for the add project modal
+    project_form_fields = [
+        {
+            "name": "name",
+            "label": "Name",
+            "type": "text",
+            "required": True,
+            "size": "large",
+            "placeholder": "Enter project name",
+        }
+    ]
 
     return render(
         request,
         "core/projects_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
+            "projects": projects_page.object_list,
+            "pagination_meta": projects_page,
+            "current_page": projects_page.number,
+            "page_size": page_size,
+            "page_size_options": page_size_options,
+            "project_form_fields": project_form_fields,
         },
     )
 
@@ -480,12 +668,22 @@ def project_details_public(request: HttpRequest, project_id: str) -> HttpRespons
     # Check if there are any SBOMs available for download
     has_downloadable_content = SBOM.objects.filter(component__projects=project).exists()
 
+    # Get public components in this project
+    public_components = project.components.filter(is_public=True).order_by("name")
+    components_count = public_components.count()
+
     branding_info = BrandingInfo(**project.team.branding_info)
 
     return render(
         request,
         "core/project_details_public.html.j2",
-        {"project": project, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
+        {
+            "project": project,
+            "brand": branding_info,
+            "has_downloadable_content": has_downloadable_content,
+            "components": public_components,
+            "components_count": components_count,
+        },
     )
 
 
@@ -502,11 +700,31 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
     has_crud_permissions = verify_item_access(request, project, ["owner", "admin"])
 
+    # Get components assigned to this project
+    components = project.components.all().order_by("name")
+    components_count = components.count()
+
+    # Get available components for assignment (same team, not already assigned)
+    assigned_component_ids = [c.id for c in components]
+    available_components_qs = Component.objects.filter(team=project.team).exclude(id__in=assigned_component_ids)
+    available_components = [
+        {
+            "id": comp.id,
+            "name": comp.name,
+            "is_public": comp.is_public,
+            "component_type": comp.component_type,
+        }
+        for comp in available_components_qs
+    ]
+
     return render(
         request,
         "core/project_details_private.html.j2",
         {
             "project": project,
+            "components": components,
+            "components_count": components_count,
+            "available_components": available_components,
             "has_crud_permissions": has_crud_permissions,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
@@ -1131,3 +1349,108 @@ Original message:
 def support_contact_success(request: HttpRequest) -> HttpResponse:
     """Display support contact success page."""
     return render(request, "core/support_contact_success.html.j2")
+
+
+@login_required
+def toggle_public_status(request: HttpRequest, item_type: str, item_id: str) -> HttpResponse:
+    """Toggle the public status of an item (product, component, project, etc.)."""
+    if request.method != "POST":
+        return error_response(request, HttpResponseNotAllowed(["POST"]))
+
+    # Use the same API function to maintain security boundaries
+    from .apis import patch_component, patch_product, patch_project
+
+    # Determine which API function to call based on item type
+    api_function_map = {
+        "product": patch_product,
+        "component": patch_component,
+        "project": patch_project,
+    }
+
+    api_function = api_function_map.get(item_type)
+    if not api_function:
+        return error_response(request, HttpResponseBadRequest("Invalid item type"))
+
+        # Get the new public status from the form
+    is_public = request.POST.get("is_public") == "true"
+
+    logger.info(f"Toggle request: {item_type} {item_id} -> is_public={is_public}")
+
+    try:
+        # Import the proper schema class
+        from .schemas import ComponentPatchSchema, ProductPatchSchema, ProjectPatchSchema
+
+        # Create proper payload using the schema
+        if item_type == "product":
+            payload = ProductPatchSchema(is_public=is_public)
+        elif item_type == "component":
+            payload = ComponentPatchSchema(is_public=is_public)
+        elif item_type == "project":
+            payload = ProjectPatchSchema(is_public=is_public)
+        else:
+            raise ValueError(f"Unknown item type: {item_type}")
+
+        logger.info(f"Created payload: {payload.model_dump()}")
+
+        # Call the API function directly
+        status_code, response = api_function(request, item_id, payload)
+
+        logger.info(f"API response: status={status_code}, response={response}")
+
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+        if status_code == 200:
+            status_text = "public" if is_public else "private"
+
+            if is_ajax:
+                return JsonResponse(
+                    {"success": True, "message": f"{item_type.title()} is now {status_text}", "is_public": is_public}
+                )
+            else:
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f"{item_type.title()} is now {status_text}",
+                )
+        else:
+            # Handle API error response properly
+            if isinstance(response, dict) and "detail" in response:
+                error_detail = response["detail"]
+            else:
+                error_detail = f"HTTP {status_code}: Unknown error"
+
+            logger.warning(f"API error for {item_type} {item_id}: {status_code} - {error_detail}")
+
+            if is_ajax:
+                return JsonResponse(
+                    {"success": False, "detail": error_detail}, status=400, content_type="application/json"
+                )
+            else:
+                messages.add_message(
+                    request,
+                    messages.ERROR,
+                    error_detail,  # Show the actual API error message
+                )
+
+    except Exception as e:
+        logger.error(f"Error toggling public status for {item_type} {item_id}: {e}")
+
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+        if is_ajax:
+            return JsonResponse({"success": False, "detail": f"Error updating {item_type} status"}, status=500)
+        else:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                f"Error updating {item_type} status",
+            )
+
+    # Only redirect for non-AJAX requests
+    referer = request.META.get("HTTP_REFERER")
+    if referer:
+        return redirect(referer)
+    else:
+        return redirect("core:dashboard")

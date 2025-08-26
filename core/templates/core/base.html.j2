@@ -1,6 +1,6 @@
 {% load static %}
-{% load django_vite %}
 {% load cache %}
+{% load django_vite %}
 {% load schema_tags %}
 <!DOCTYPE html>
 <html lang="en">
@@ -67,7 +67,6 @@
                 {% block title %}sbomify{% endblock %}
             </title>
         {% endblock %}
-        {% vite_hmr_client %}
     </head>
     <body>
         {% block main %}
@@ -81,53 +80,48 @@
                 <!-- Main content area -->
                 <div class="main">
                     <!-- Top navigation -->
-                    {% if request.session.current_team.key %}
-                        {% cache 300 'header' request.user.id request.session.current_team.key %}
-                        {% include "core/components/topnav.html.j2" %}
-                    {% endcache %}
-                {% else %}
                     {% include "core/components/topnav.html.j2" %}
-                {% endif %}
-                <!-- Main content -->
-                <main class="content">
-                    <div class="container-fluid p-0">
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                        {% block content %}{% endblock %}
-                    </div>
-                </main>
-                <!-- Footer -->
-                {% include "core/components/footer.html.j2" %}
-            </div>
-        </div>
-    {% else %}
-        <!-- Login layout -->
-        <div class="bg-light min-vh-100 d-flex align-items-center">
-            <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-md-6 col-lg-4">
-                        <div class="text-center mb-4">
-                            <img src="{% static 'img/logo.svg' %}"
-                                 alt="sbomify Logo"
-                                 class="img-fluid mb-3 login-logo"
-                                 width="200"
-                                 height="36">
+                    <!-- Main content -->
+                    <main class="content">
+                        <div class="container-fluid p-0">
+                            <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                            {% block content %}{% endblock %}
                         </div>
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                        <div class="card shadow">
-                            <div class="card-body p-4">
-                                {% block login_content %}{% endblock %}
+                    </main>
+                    <!-- Footer -->
+                    {% include "core/components/footer.html.j2" %}
+                </div>
+            </div>
+        {% else %}
+            <!-- Login layout -->
+            <div class="bg-light min-vh-100 d-flex align-items-center">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-md-6 col-lg-4">
+                            <div class="text-center mb-4">
+                                <img src="{% static 'img/logo.svg' %}"
+                                     alt="sbomify Logo"
+                                     class="img-fluid mb-3 login-logo"
+                                     width="200"
+                                     height="36">
+                            </div>
+                            <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                            <div class="card shadow">
+                                <div class="card-body p-4">
+                                    {% block login_content %}{% endblock %}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    {% endif %}
-{% endblock %}
-<!-- Scripts now managed via Vite bundles -->
-{% block scripts %}{% endblock %}
-{% vite_asset 'core/js/main.ts' %}
-<!-- Custom overrides loaded after Vite assets -->
-<link href="{% static 'css/workspace-override.css' %}" rel="stylesheet">
+        {% endif %}
+    {% endblock %}
+    <!-- Scripts -->
+    {% block scripts %}{% endblock %}
+    <!-- Load TypeScript utilities (Bootstrap, alerts, etc.) but no Vue -->
+    {% vite_asset 'core/js/main.ts' %}
+    <!-- Custom overrides -->
+    <link href="{% static 'css/workspace-override.css' %}" rel="stylesheet">
 </body>
 </html>

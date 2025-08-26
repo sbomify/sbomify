@@ -527,10 +527,11 @@ def test_only_owners_are_allowed_to_access_team_settings(
         sample_team_with_owner_member.user
     )
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.get(uri, follow=True)
 
     assert response.status_code == 200
-    assert response.request["PATH_INFO"] == uri
+    # Should redirect to the members page by default
+    assert "members" in response.request["PATH_INFO"]
 
 
 @pytest.mark.django_db

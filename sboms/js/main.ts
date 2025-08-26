@@ -1,24 +1,18 @@
 import 'vite/modulepreload-polyfill'
 
-import mountVueComponent from '../../core/js/common_vue'
-import EditableSingleField from '../../core/js/components/EditableSingleField.vue'
-import LicensesEditor from './components/LicensesEditor.vue'
-import CiCdInfo from './components/CiCdInfo.vue'
-import SbomUpload from './components/SbomUpload.vue'
-import DashboardStats from './components/DashboardStats.vue'
-import SbomsTable from './components/SbomsTable.vue'
-import SbomMetadataCard from './components/SbomMetadataCard.vue'
+// Note: Most components converted to Django templates
+// Still keeping some Vue components that require complex interactivity:
+// - LicensesEditor (complex form with dynamic fields)
+// - CiCdInfo (complex metadata editing)
+// - SbomUpload (file upload with progress)
+// - SbomMetadataCard (complex metadata display)
+// - SbomActionsCard (complex actions with confirmations)
 
-import SbomActionsCard from './components/SbomActionsCard.vue'
-import NTIAComplianceBadge from './components/NTIAComplianceBadge.vue'
-
-mountVueComponent('vc-editable-single-field', EditableSingleField)
-mountVueComponent('vc-licenses-editor', LicensesEditor)
-mountVueComponent('vc-ci-cd-info', CiCdInfo)
-mountVueComponent('vc-sbom-upload', SbomUpload)
-mountVueComponent('vc-dashboard-stats', DashboardStats)
-mountVueComponent('vc-sboms-table', SbomsTable)
-mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
-
-mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
-mountVueComponent('vc-ntia-compliance-badge', NTIAComplianceBadge)
+// Vue components are available but not automatically mounted
+// Import and mount them as needed in specific pages
+// mountVueComponent('vc-ci-cd-info', CiCdInfo)
+// mountVueComponent('vc-sbom-upload', SbomUpload)
+// mountVueComponent('vc-dashboard-stats', DashboardStats)
+// mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
+// mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
+// Note: SbomsTable and NTIA Compliance Badge converted to Django templates

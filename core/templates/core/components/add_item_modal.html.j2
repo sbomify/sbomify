@@ -1,0 +1,274 @@
+{% comment %}
+Reusable Add Item Modal Component
+Context variables:
+- modal_id: Unique ID for the modal (required)
+- item_type: Type of item (e.g., "Product", "Project", "Component")
+- api_endpoint: API endpoint for creating the item (e.g., "/api/v1/products")
+- form_fields: List of field configurations for the form
+- has_crud_permissions: Boolean for CRUD permissions
+- csrf_token: CSRF token for form submission
+{% endcomment %}
+{% if has_crud_permissions %}
+    <div class="modal fade"
+         id="{{ modal_id }}"
+         tabindex="-1"
+         aria-labelledby="{{ modal_id }}Label"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modern-modal">
+                <div class="modal-header modern-modal-header border-0">
+                    <h5 class="modal-title fw-bold" id="{{ modal_id }}Label">
+                        <i class="fas fa-plus text-primary me-2"></i>
+                        Add {{ item_type }}
+                    </h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body px-4 py-3">
+                    <form id="{{ modal_id }}Form" method="post" action="{{ api_endpoint }}">
+                        {% csrf_token %}
+                        {% for field in form_fields %}
+                            <div class="mb-{% if forloop.last %}4{% else %}3{% endif %}">
+                                <label for="{{ modal_id }}{{ field.name|title }}"
+                                       class="form-label fw-semibold text-secondary">
+                                    {{ field.label }}
+                                    {% if field.required %}<span class="text-danger">*</span>{% endif %}
+                                </label>
+                                {% if field.type == 'textarea' %}
+                                    <textarea class="form-control"
+                                              id="{{ modal_id }}{{ field.name|title }}"
+                                              name="{{ field.name }}"
+                                              rows="{{ field.rows|default:3 }}"
+                                              {% if field.required %}required{% endif %}
+                                              placeholder="{{ field.placeholder }}"></textarea>
+                                {% else %}
+                                    <input type="{{ field.type|default:'text' }}"
+                                           class="form-control{% if field.size == 'large' %} form-control-lg{% endif %}"
+                                           id="{{ modal_id }}{{ field.name|title }}"
+                                           name="{{ field.name }}"
+                                           {% if field.required %}required{% endif %}
+                                           placeholder="{{ field.placeholder }}"
+                                           autocomplete="off">
+                                {% endif %}
+                                <div class="invalid-feedback"
+                                     id="{{ modal_id }}{{ field.name|title }}Error"></div>
+                            </div>
+                        {% endfor %}
+                        <div id="{{ modal_id }}Error"
+                             class="alert alert-danger"
+                             style="display: none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
+                    <button type="button"
+                            class="btn btn-outline-secondary modern-btn-secondary"
+                            data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit"
+                            form="{{ modal_id }}Form"
+                            class="btn btn-primary px-4 modern-btn-primary"
+                            id="{{ modal_id }}Submit">
+                        <i class="fas fa-plus me-2"></i>Create {{ item_type }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+/* Modern Modal Styling - consistent with existing components */
+.modern-modal {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+.modern-modal-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 1.5rem 2rem 1rem 2rem;
+}
+
+.modern-modal-footer {
+    background: #f8fafc;
+    padding: 1rem 2rem 1.5rem 2rem;
+}
+
+.modern-btn-secondary {
+    background: #6c757d;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modern-btn-secondary:hover {
+    background: #5c636a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.modern-btn-primary {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, #0056b3 100%);
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modern-btn-primary:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+}
+
+.modal-title {
+    color: #1e293b;
+    font-size: 1.25rem;
+}
+
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Loading state styling */
+.loading .modern-btn-primary {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .modern-modal-header,
+    .modern-modal-footer {
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-body {
+        padding: 1rem 1.5rem !important;
+    }
+}
+    </style>
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalId = '{{ modal_id }}';
+    const form = document.getElementById(modalId + 'Form');
+    const modal = document.getElementById(modalId);
+    const submitBtn = document.getElementById(modalId + 'Submit');
+    const errorDiv = document.getElementById(modalId + 'Error');
+    const itemType = '{{ item_type|lower }}';
+
+    if (!form || !modal || !submitBtn) return;
+
+    // Get first required input for focus
+    const firstInput = modal.querySelector('input[required], textarea[required]');
+
+    // Focus on first input when modal is shown
+    modal.addEventListener('shown.bs.modal', function() {
+        if (firstInput) firstInput.focus();
+        // Reset form state
+        form.reset();
+        errorDiv.style.display = 'none';
+        // Clear all field errors
+        modal.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        submitBtn.innerHTML = '<i class="fas fa-plus me-2"></i>Create {{ item_type }}';
+        submitBtn.disabled = false;
+        modal.classList.remove('loading');
+    });
+
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = {};
+
+        // Convert form data to JSON
+        for (let [key, value] of formData.entries()) {
+            if (key !== 'csrfmiddlewaretoken') {
+                data[key] = typeof value === 'string' ? value.trim() : value;
+            }
+        }
+
+        // Basic validation for required fields
+        let hasErrors = false;
+        modal.querySelectorAll('input[required], textarea[required]').forEach(input => {
+            const errorDiv = document.getElementById(input.id + 'Error');
+            if (!data[input.name]) {
+                input.classList.add('is-invalid');
+                if (errorDiv) errorDiv.textContent = input.labels[0]?.textContent.replace('*', '').trim() + ' is required';
+                hasErrors = true;
+            } else {
+                input.classList.remove('is-invalid');
+            }
+        });
+
+        if (hasErrors) return;
+
+        // Clear previous errors
+        errorDiv.style.display = 'none';
+
+        // Set loading state
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating...';
+        submitBtn.disabled = true;
+        modal.classList.add('loading');
+
+        try {
+            const response = await fetch('{{ api_endpoint }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Success - show notification and reload page
+                if (window.showSuccess) {
+                    window.showSuccess('{{ item_type }} created successfully!');
+                }
+
+                // Close modal
+                const bootstrapModal = bootstrap.Modal.getInstance(modal);
+                if (bootstrapModal) {
+                    bootstrapModal.hide();
+                }
+
+                // Reload page to show new item
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+
+            } else {
+                // Handle API errors
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = result.detail || 'An error occurred while creating the ' + itemType;
+
+                if (window.showError) {
+                    window.showError(result.detail || 'An error occurred while creating the ' + itemType);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error creating ' + itemType + ':', error);
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'An error occurred while creating the ' + itemType;
+
+            if (window.showError) {
+                window.showError('An error occurred while creating the ' + itemType);
+            }
+        } finally {
+            // Reset button state
+            submitBtn.innerHTML = '<i class="fas fa-plus me-2"></i>Create {{ item_type }}';
+            submitBtn.disabled = false;
+            modal.classList.remove('loading');
+        }
+    });
+});
+    </script>
+{% endif %}

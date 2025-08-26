@@ -1,0 +1,245 @@
+{% comment %}
+Reusable Edit Field Modal Component
+Context variables:
+- modal_id: Unique ID for the modal (required)
+- csrf_token: CSRF token for form submission
+{% endcomment %}
+<div class="modal fade"
+     id="{{ modal_id }}"
+     tabindex="-1"
+     aria-labelledby="{{ modal_id }}Label"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content modern-modal">
+            <div class="modal-header modern-modal-header border-0">
+                <h5 class="modal-title fw-bold" id="{{ modal_id }}Label">
+                    <i class="fas fa-edit text-primary me-2"></i>
+                    Edit <span id="{{ modal_id }}FieldType">Field</span>
+                </h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4 py-3">
+                <form id="{{ modal_id }}Form">
+                    <div class="mb-3">
+                        <label for="{{ modal_id }}Input"
+                               class="form-label fw-semibold"
+                               id="{{ modal_id }}Label">Value</label>
+                        <input type="text"
+                               class="form-control"
+                               id="{{ modal_id }}Input"
+                               placeholder="Enter value">
+                        <textarea class="form-control d-none"
+                                  id="{{ modal_id }}Textarea"
+                                  rows="4"
+                                  placeholder="Enter description"></textarea>
+                        <div class="form-text text-muted mt-2">
+                            <span id="{{ modal_id }}KeyboardHint">Press Enter to save, Escape to cancel</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button"
+                        class="btn btn-primary px-4"
+                        id="{{ modal_id }}SaveButton">
+                    <i class="fas fa-save me-2"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+/* Modern Modal Styling */
+.modern-modal {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+.modern-modal-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 1.5rem 2rem 1rem 2rem;
+}
+
+.modern-modal-footer {
+    background: #f8fafc;
+    padding: 1rem 2rem 1.5rem 2rem;
+}
+
+.modal-title {
+    color: #1e293b;
+    font-size: 1.25rem;
+}
+
+.form-control:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .modern-modal-header,
+    .modern-modal-footer {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+
+    .modal-body {
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+</style>
+<script>
+// Initialize reusable edit modal functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const modalId = '{{ modal_id }}';
+    const modal = document.getElementById(modalId);
+
+    if (!modal) return;
+
+    let currentEditConfig = null;
+    let currentKeyDownHandler = null;
+
+    // Global function to open edit modal
+    window[modalId + 'Open'] = function(config) {
+        currentEditConfig = config;
+
+        // Update modal title and labels
+        document.getElementById(modalId + 'FieldType').textContent = config.fieldDisplayName;
+        document.getElementById(modalId + 'Label').textContent = config.fieldDisplayName;
+
+        // Show appropriate input type
+        const textInput = document.getElementById(modalId + 'Input');
+        const textArea = document.getElementById(modalId + 'Textarea');
+        const keyboardHint = document.getElementById(modalId + 'KeyboardHint');
+
+        if (config.type === 'textarea') {
+            textInput.classList.add('d-none');
+            textArea.classList.remove('d-none');
+            textArea.value = config.currentValue;
+            textArea.placeholder = config.placeholder;
+            keyboardHint.textContent = 'Press Ctrl+Enter to save, Escape to cancel';
+        } else {
+            textArea.classList.add('d-none');
+            textInput.classList.remove('d-none');
+            textInput.value = config.currentValue;
+            textInput.placeholder = config.placeholder;
+            keyboardHint.textContent = 'Press Enter to save, Escape to cancel';
+        }
+
+        // Keyboard event handler
+        currentKeyDownHandler = function(e) {
+            if (e.key === 'Enter') {
+                // For textarea, only save on Ctrl+Enter
+                if (config.type === 'textarea' && !e.ctrlKey) {
+                    return; // Allow normal Enter for new lines
+                }
+                e.preventDefault();
+                document.getElementById(modalId + 'SaveButton').click();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                bootstrap.Modal.getInstance(modal).hide();
+            }
+        };
+
+        // Show modal
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+    };
+
+    // Focus input after modal is shown
+    modal.addEventListener('shown.bs.modal', function() {
+        if (!currentEditConfig) return;
+
+        const textInput = document.getElementById(modalId + 'Input');
+        const textArea = document.getElementById(modalId + 'Textarea');
+        const activeInput = currentEditConfig.type === 'textarea' ? textArea : textInput;
+
+        activeInput.focus();
+        if (currentEditConfig.type !== 'textarea') {
+            textInput.select();
+        }
+
+        // Add keyboard listener to the active input
+        if (currentKeyDownHandler) {
+            activeInput.addEventListener('keydown', currentKeyDownHandler);
+        }
+    });
+
+    // Clean up event listeners when modal is hidden
+    modal.addEventListener('hidden.bs.modal', function() {
+        // Remove keyboard listeners
+        if (currentKeyDownHandler) {
+            const textInput = document.getElementById(modalId + 'Input');
+            const textArea = document.getElementById(modalId + 'Textarea');
+            textInput.removeEventListener('keydown', currentKeyDownHandler);
+            textArea.removeEventListener('keydown', currentKeyDownHandler);
+            currentKeyDownHandler = null;
+        }
+        currentEditConfig = null;
+    });
+
+    // Save functionality
+    document.getElementById(modalId + 'SaveButton').addEventListener('click', function() {
+        if (!currentEditConfig) return;
+
+        const textInput = document.getElementById(modalId + 'Input');
+        const textArea = document.getElementById(modalId + 'Textarea');
+        const isTextarea = currentEditConfig.type === 'textarea';
+        const newValue = isTextarea ? textArea.value.trim() : textInput.value.trim();
+
+        // Show loading state
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+
+        // Make API request
+        fetch(currentEditConfig.updateUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                field: currentEditConfig.fieldName,
+                value: newValue
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal
+                bootstrap.Modal.getInstance(modal).hide();
+
+                // Show success message
+                if (window.showAlert) {
+                    window.showAlert('success', data.message || 'Field updated successfully');
+                }
+
+                // Reload page to show updated content
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                throw new Error(data.error || 'Update failed');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating field:', error);
+            if (window.showAlert) {
+                window.showAlert('danger', 'Failed to update field. Please try again.');
+            }
+        })
+        .finally(() => {
+            // Reset button state
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-save me-2"></i>Save Changes';
+        });
+    });
+});
+</script>

@@ -3,6 +3,401 @@
  * Buttons, forms, cards, badges, tables, and other UI elements
  */
 
+/* ===== BOOTSTRAP 5 UTILITY CLASSES FOR DYNAMIC CONTENT ===== */
+/* These classes use Bootstrap 5's d-none utility class behavior */
+/* Note: Using regular display: none (not !important) so JavaScript can override */
+.loading-spinner,
+.form-error,
+.table-loading,
+.links-loading,
+.links-error,
+.links-table,
+.create-release-error,
+.create-release-spinner,
+.link-form-error {
+  display: none;
+}
+
+/* Show state utility - can be used with JavaScript to toggle visibility */
+.show-element {
+  display: block !important;
+}
+
+.show-flex {
+  display: flex !important;
+}
+
+.show-inline {
+  display: inline !important;
+}
+
+.show-inline-block {
+  display: inline-block !important;
+}
+
+/* ===== SBOMIFY BRANDED SHADOWS ===== */
+/* Using sbomify brand colors from tokens.css */
+.shadow-brand {
+  box-shadow: 0 0.125rem 0.5rem rgba(59, 125, 221, 0.08) !important;
+}
+
+.shadow-brand-sm {
+  box-shadow: 0 0.0625rem 0.25rem rgba(59, 125, 221, 0.06) !important;
+}
+
+.shadow-brand-lg {
+  box-shadow: 0 0.5rem 1.5rem rgba(59, 125, 221, 0.15) !important;
+}
+
+.shadow-brand-xl {
+  box-shadow: 0 0.75rem 2.5rem rgba(59, 125, 221, 0.2) !important;
+}
+
+/* Danger shadows */
+.shadow-danger {
+  box-shadow: 0 0.125rem 0.5rem rgba(220, 53, 69, 0.08) !important;
+}
+
+.shadow-danger-lg {
+  box-shadow: 0 0.5rem 1.5rem rgba(220, 53, 69, 0.15) !important;
+}
+
+/* Success shadows */
+.shadow-success {
+  box-shadow: 0 0.125rem 0.5rem rgba(28, 187, 140, 0.08) !important;
+}
+
+.shadow-success-lg {
+  box-shadow: 0 0.5rem 1.5rem rgba(28, 187, 140, 0.15) !important;
+}
+
+/* Warning shadows */
+.shadow-warning {
+  box-shadow: 0 0.125rem 0.5rem rgba(252, 185, 44, 0.08) !important;
+}
+
+.shadow-warning-lg {
+  box-shadow: 0 0.5rem 1.5rem rgba(252, 185, 44, 0.15) !important;
+}
+
+/* ===== GLOBAL SBOMIFY CARD SHADOWS ===== */
+/* Override Bootstrap's default shadows with sbomify branding */
+.card {
+  box-shadow: 0 0.125rem 0.5rem rgba(59, 125, 221, 0.08);
+  transition: all 0.15s ease-in-out;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1.5rem rgba(59, 125, 221, 0.15);
+}
+
+/* Specific card variants with branded shadows */
+.card.border-primary,
+.card.border-primary.border-2 {
+  box-shadow: 0 0.25rem 1rem rgba(59, 125, 221, 0.2);
+}
+
+.card.border-primary:hover,
+.card.border-primary.border-2:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.75rem 2.5rem rgba(59, 125, 221, 0.25);
+}
+
+.card.border-danger,
+.card.border-danger.border-2 {
+  box-shadow: 0 0.125rem 0.5rem rgba(220, 53, 69, 0.08);
+}
+
+.card.border-danger:hover,
+.card.border-danger.border-2:hover {
+  box-shadow: 0 0.5rem 2rem rgba(220, 53, 69, 0.25);
+  transform: translateY(-1px);
+}
+
+.card.border-success,
+.card.border-success.border-2 {
+  box-shadow: 0 0.125rem 0.5rem rgba(28, 187, 140, 0.08);
+}
+
+.card.border-success:hover,
+.card.border-success.border-2:hover {
+  box-shadow: 0 0.5rem 1.5rem rgba(28, 187, 140, 0.15);
+  transform: translateY(-2px);
+}
+
+.card.border-warning,
+.card.border-warning.border-2 {
+  box-shadow: 0 0.125rem 0.5rem rgba(252, 185, 44, 0.08);
+}
+
+.card.border-warning:hover,
+.card.border-warning.border-2:hover {
+  box-shadow: 0 0.5rem 1.5rem rgba(252, 185, 44, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Mobile optimization - reduce shadows for better performance */
+@media (max-width: 768px) {
+  .card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 1rem rgba(59, 125, 221, 0.12);
+  }
+
+  .card.border-primary:hover,
+  .card.border-primary.border-2:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1.5rem rgba(59, 125, 221, 0.2);
+  }
+}
+
+/* ===== GLOBAL MODAL SHADOWS ===== */
+.modal-content {
+  box-shadow: 0 1rem 3rem rgba(59, 125, 221, 0.2);
+  border: none;
+  border-radius: 0.75rem;
+}
+
+/* ===== MODERN MODAL STYLING ===== */
+.modern-modal {
+  border: none;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+.modern-modal-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 1.5rem 2rem 1rem 2rem;
+}
+
+.modern-modal-footer {
+  background: #f8fafc;
+  padding: 1rem 2rem 1.5rem 2rem;
+}
+
+.modern-btn-secondary {
+  background: #6c757d;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.modern-btn-secondary:hover {
+  background: #5c636a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.modern-btn-danger {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.modern-btn-danger:hover {
+  background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
+.modal-title {
+  color: #1e293b;
+  font-size: 1.25rem;
+}
+
+.modern-warning-alert {
+  background: linear-gradient(135deg, #fff3cd 0%, #fef3c7 100%);
+  border-radius: 12px;
+}
+
+/* Responsive modal adjustments */
+@media (max-width: 576px) {
+  .modern-modal-header,
+  .modern-modal-footer {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .modal-body {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+}
+
+/* ===== GLOBAL DROPDOWN SHADOWS ===== */
+.dropdown-menu {
+  box-shadow: 0 0.5rem 1.5rem rgba(59, 125, 221, 0.15);
+  border: 1px solid rgba(59, 125, 221, 0.1);
+}
+
+/* ===== GLOBAL TOOLTIP SHADOWS ===== */
+.tooltip .tooltip-inner {
+  box-shadow: 0 0.25rem 0.75rem rgba(59, 125, 221, 0.15);
+}
+
+/* ===== GLOBAL TABLE STYLING ===== */
+/* Consistent table styling across all components */
+
+/* Base table styling */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-accent-bg: transparent;
+  --bs-table-striped-color: var(--bs-body-color);
+  --bs-table-striped-bg: rgba(59, 125, 221, 0.02);
+  --bs-table-active-color: var(--bs-body-color);
+  --bs-table-active-bg: rgba(59, 125, 221, 0.05);
+  --bs-table-hover-color: var(--bs-body-color);
+  --bs-table-hover-bg: rgba(59, 125, 221, 0.04);
+  margin-bottom: 0;
+  border-collapse: collapse;
+}
+
+/* Table headers with sbomify branding */
+.table thead th {
+  background-color: rgba(59, 125, 221, 0.05);
+  border-bottom: 2px solid rgba(59, 125, 221, 0.1);
+  font-weight: 600;
+  color: var(--bs-gray-700);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  padding: 1rem 0.75rem;
+  vertical-align: middle;
+}
+
+/* Table body cells */
+.table tbody td {
+  padding: 1rem 0.75rem;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(59, 125, 221, 0.08);
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* Hover effects for table rows */
+.table-hover tbody tr:hover {
+  background-color: rgba(59, 125, 221, 0.04);
+}
+
+/* Table in cards - remove margins and add proper borders */
+.card .table {
+  margin-bottom: 0;
+}
+
+.card .table thead th:first-child {
+  border-top-left-radius: 0;
+}
+
+.card .table thead th:last-child {
+  border-top-right-radius: 0;
+}
+
+/* Responsive tables */
+.table-responsive {
+  border-radius: 0.375rem;
+}
+
+/* Action buttons in tables */
+.table .btn-group-sm > .btn,
+.table .btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  border-radius: 0.375rem;
+}
+
+/* Status badges in tables */
+.table .badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+}
+
+/* Empty state in tables */
+.table-empty-state {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--bs-gray-500);
+}
+
+.table-empty-state i {
+  font-size: 3rem;
+  opacity: 0.25;
+  margin-bottom: 1rem;
+}
+
+/* Mobile responsive table adjustments */
+@media (max-width: 768px) {
+  .table thead th,
+  .table tbody td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .table thead th {
+    font-size: 0.8125rem;
+  }
+
+  /* Hide less important columns on mobile */
+  .table .d-none.d-md-table-cell {
+    display: none !important;
+  }
+
+  .table .d-md-table-cell {
+    display: table-cell !important;
+  }
+}
+
+/* Table loading states */
+.table-loading {
+  position: relative;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.table-loading::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Table column width utilities */
+.table th.col-actions {
+  width: 120px;
+}
+
+.table th.col-actions-sm {
+  width: 80px;
+}
+
+.table th.col-date {
+  width: 140px;
+}
+
+.table th.col-status {
+  width: 100px;
+}
+
+/* Text alignment utilities for tables */
+.table th.text-end,
+.table td.text-end {
+  text-align: end;
+}
+
+.table th.text-center,
+.table td.text-center {
+  text-align: center;
+}
+
 /* ===== ENHANCED BUTTON SYSTEM ===== */
 .btn {
   display: inline-flex;
@@ -24,11 +419,23 @@
   overflow: hidden;
 }
 
-/* Enhanced touch interactions */
+/* Enhanced touch interactions with sbomify branding */
 @media (hover: hover) {
   .btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0.25rem 0.75rem rgba(59, 125, 221, 0.15);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 0.25rem 0.75rem rgba(59, 125, 221, 0.25);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    box-shadow: 0 0.25rem 0.75rem rgba(220, 53, 69, 0.25);
+  }
+
+  .btn-success:hover:not(:disabled) {
+    box-shadow: 0 0.25rem 0.75rem rgba(28, 187, 140, 0.25);
   }
 }
 
@@ -590,4 +997,221 @@
 .login-card {
   max-width: 600px;
   margin: var(--spacing-2xl) auto;
+}
+
+/* ===== STANDARD ACTION BUTTONS ===== */
+.table-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--gray-600);
+  transition: all 0.15s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.table-action-btn:hover:not(.disabled) {
+  background: var(--gray-100);
+  color: var(--gray-800);
+  transform: translateY(-1px);
+}
+
+.table-action-btn.action-primary {
+  color: var(--primary);
+}
+
+.table-action-btn.action-primary:hover:not(.disabled) {
+  background: rgba(13, 110, 253, 0.1);
+  color: var(--primary);
+}
+
+.table-action-btn.action-secondary {
+  color: var(--gray-600);
+}
+
+.table-action-btn.action-secondary:hover:not(.disabled) {
+  background: var(--gray-100);
+  color: var(--gray-800);
+}
+
+.table-action-btn.action-danger {
+  color: var(--danger);
+}
+
+.table-action-btn.action-danger:hover:not(.disabled) {
+  background: rgba(220, 53, 69, 0.1);
+  color: var(--danger);
+}
+
+.table-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.table-action-btn i {
+  font-size: 14px;
+}
+
+/* ===== STANDARD ICONS FOR ACTIONS ===== */
+/*
+CONSISTENT ICONOGRAPHY SYSTEM - Use these classes for ALL action buttons across the application
+Never use different icons for the same action type - maintain visual consistency
+
+Standard Action Icons:
+- .action-edit     → Edit/Pencil icon (fa-edit)
+- .action-delete   → Trash/Delete icon (fa-trash-alt)
+- .action-view     → Eye/View icon (fa-eye)
+- .action-download → Download icon (fa-download)
+- .action-star     → Star icon (fa-star) - for favorites/default
+- .action-invite   → User-plus icon (fa-user-plus) - for invitations
+- .action-settings → Cog icon (fa-cog) - for settings
+- .action-copy     → Copy icon (fa-copy) - for copy actions
+
+Usage: <button class="table-action-btn action-delete action-danger">Delete</button>
+*/
+.action-edit::before { content: "\f044"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-delete::before { content: "\f2ed"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-view::before { content: "\f06e"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-download::before { content: "\f019"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-star::before { content: "\f005"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-invite::before { content: "\f234"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-settings::before { content: "\f013"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+.action-copy::before { content: "\f0c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; }
+
+/* Hide icon elements when using standard action classes */
+.table-action-btn.action-edit i,
+.table-action-btn.action-delete i,
+.table-action-btn.action-view i,
+.table-action-btn.action-download i,
+.table-action-btn.action-star i,
+.table-action-btn.action-invite i,
+.table-action-btn.action-settings i,
+.table-action-btn.action-copy i {
+  display: none;
+}
+
+/* ===== WORKSPACE COMPONENTS ===== */
+.teams-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.team-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.team-card:hover {
+  border-color: var(--gray-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.team-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.team-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--gray-900);
+}
+
+.team-name a {
+  color: var(--primary);
+  transition: color 0.2s ease;
+}
+
+.team-name a:hover {
+  color: var(--primary-dark);
+}
+
+.team-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+.team-meta .meta-item {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.team-meta .meta-divider {
+  color: var(--gray-400);
+  font-weight: bold;
+}
+
+.team-actions {
+  display: flex;
+  align-items: center;
+}
+
+.team-actions .btn-group .btn {
+  border-radius: var(--radius-md);
+  margin-left: 0.25rem;
+}
+
+.team-actions .btn-group .btn:first-child {
+  margin-left: 0;
+}
+
+/* Responsive workspace cards */
+@media (max-width: 768px) {
+  .team-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .team-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .team-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .team-meta .meta-divider {
+    display: none;
+  }
+}
+
+/* ===== ACCESS TOKENS LIST RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .tokens-list .d-flex {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.75rem;
+  }
+
+  .tokens-list .d-flex > div:last-child {
+    align-self: flex-end;
+  }
 }

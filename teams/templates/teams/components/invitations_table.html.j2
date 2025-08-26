@@ -1,0 +1,58 @@
+{% if invitations %}
+    <div class="table-responsive">
+        <table class="table dashboard-table mb-0">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Invited</th>
+                    <th>Expires</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invitation in invitations %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="invitation-icon me-3">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                                <span class="fw-medium">{{ invitation.email }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge {% if invitation.role == 'admin' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ invitation.role|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-muted">{{ invitation.created_at|date:"M d, Y" }}</span>
+                        </td>
+                        <td>
+                            <span class="text-muted">{{ invitation.expires_at|date:"M d, Y" }}</span>
+                        </td>
+                        <td class="text-center">
+                            <button type="button"
+                                    class="btn btn-link text-danger invitation-cancel-btn"
+                                    data-invitation-id="{{ invitation.id }}"
+                                    data-invitation-email="{{ invitation.email }}"
+                                    data-cancel-url="{% url 'teams:delete_invitation' team_key=team.key invitation_id=invitation.id %}"
+                                    title="Cancel invitation">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="dashboard-empty">
+        <div class="empty-icon">
+            <i class="fas fa-envelope-open"></i>
+        </div>
+        <h6>No pending invitations</h6>
+        <p>Invite workspace members to collaborate on your projects</p>
+    </div>
+{% endif %}

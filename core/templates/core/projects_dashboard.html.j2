@@ -62,15 +62,16 @@
             }
         }
     </style>
-    <div class="row align-items-center">
+    <div class="row">
         <div class="col-12">
-            <div class="vc-projects-list"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            <!-- Projects Table using reusable products_table component -->
+            {% include "core/components/products_table.html.j2" with products=projects has_crud_permissions=has_crud_permissions show_add_button=True table_title="Projects" pagination_meta=pagination_meta current_page=current_page page_size=page_size page_size_options=page_size_options item_type="project" add_modal_target="addProjectModal" %}
         </div>
     </div>
-    {% if has_crud_permissions %}<div class="vc-add-project-form"></div>{% endif %}
+    <!-- Add Project Modal - Django Template -->
+    {% include "core/components/add_item_modal.html.j2" with modal_id="addProjectModal" item_type="Project" api_endpoint="/api/v1/projects" form_fields=project_form_fields has_crud_permissions=has_crud_permissions %}
 {% endblock %}
 {% block scripts %}
+    <!-- Load main scripts for Django template functionality -->
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

@@ -1,0 +1,124 @@
+/* Workspace Integrations Styles */
+
+/* Custom purple color for Enterprise badges */
+.bg-purple-subtle {
+    background-color: rgba(139, 92, 246, 0.1) !important;
+}
+
+.text-purple {
+    color: #8b5cf6 !important;
+}
+
+/* Interactive card styles */
+.cursor-pointer {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cursor-pointer:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.cursor-pointer:not(.border-success):not(.border-warning):hover {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 2px 8px rgba(var(--bs-primary-rgb), 0.15);
+}
+
+/* Provider and server selection cards */
+.provider-card,
+.server-card {
+    transition: all 0.3s ease;
+}
+
+.provider-card:hover:not(.disabled),
+.server-card:hover:not(.disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.provider-card.disabled,
+.server-card.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.provider-card.disabled:hover,
+.server-card.disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* Selection indicators */
+.selection-indicator {
+    transition: all 0.2s ease;
+}
+
+/* Health status indicators for servers */
+.health-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.health-healthy {
+    background-color: var(--bs-success);
+}
+
+.health-degraded {
+    background-color: var(--bs-warning);
+}
+
+.health-unhealthy {
+    background-color: var(--bs-danger);
+}
+
+.health-unknown {
+    background-color: var(--bs-secondary);
+}
+
+/* Statistics styling */
+.stats-card {
+    transition: transform 0.2s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .cursor-pointer:hover {
+        transform: none;
+    }
+
+    .provider-card:hover:not(.disabled),
+    .server-card:hover:not(.disabled) {
+        transform: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+}
+
+/* Focus states for accessibility */
+.cursor-pointer:focus {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+/* Animation for selection changes */
+@keyframes selectionPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.border-success.bg-success-subtle {
+    animation: selectionPulse 0.3s ease-out;
+}

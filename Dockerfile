@@ -128,7 +128,7 @@ COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 EXPOSE 8000
 # CMD for Development (using Django's runserver)
-CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--reload", "--reload-dir", "/code", "--log-level", "info"]
 
 ### Stage 7: Python Application for Production (python-app-prod)
 # This is the default final stage if no target is specified.
@@ -148,4 +148,4 @@ RUN poetry run python manage.py collectstatic --noinput
 
 EXPOSE 8000
 # CMD for Production
-CMD ["poetry", "run", "gunicorn", "--bind", ":8000", "--workers", "2", "sbomify.wsgi"]
+CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

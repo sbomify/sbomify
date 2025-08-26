@@ -3,23 +3,16 @@ from typing import Any
 
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialLogin
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.db import transaction
 from django.http import HttpRequest
-from django.template.loader import render_to_string
-from django.utils import timezone
 
-from billing.config import is_billing_enabled
-from billing.models import BillingPlan
-from billing.stripe_client import StripeClient
 from core.utils import number_to_random_token
 from teams.models import Member, Team
+from teams.utils import setup_team_billing_plan
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
-stripe_client = StripeClient()
 
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -121,79 +114,6 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                 team.save()
                 Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
-            # Set up billing plan - either trial subscription if billing enabled, or community plan if disabled
-            if is_billing_enabled():
-                # Set up business plan trial
-                try:
-                    business_plan = BillingPlan.objects.get(key="business")
-                    customer = stripe_client.create_customer(
-                        email=user.email, name=team.name, metadata={"team_key": team.key}
-                    )
-                    subscription = stripe_client.create_subscription(
-                        customer_id=customer.id,
-                        price_id=business_plan.stripe_price_monthly_id,
-                        trial_days=settings.TRIAL_PERIOD_DAYS,
-                        metadata={"team_key": team.key, "plan_key": "business"},
-                    )
-                    team.billing_plan = "business"
-                    team.billing_plan_limits = {
-                        "max_products": business_plan.max_products,
-                        "max_projects": business_plan.max_projects,
-                        "max_components": business_plan.max_components,
-                        "stripe_customer_id": customer.id,
-                        "stripe_subscription_id": subscription.id,
-                        "subscription_status": "trialing",
-                        "is_trial": True,
-                        "trial_end": subscription.trial_end,
-                        "last_updated": timezone.now().isoformat(),
-                    }
-                    team.save()
-                    logger.info(f"Created trial subscription for team {team.key} ({team.name})")
-                    context = {
-                        "user": user,
-                        "team": team,
-                        "base_url": settings.APP_BASE_URL,
-                        "TRIAL_PERIOD_DAYS": settings.TRIAL_PERIOD_DAYS,
-                        "trial_end_date": timezone.now() + timezone.timedelta(days=settings.TRIAL_PERIOD_DAYS),
-                        "plan_limits": {
-                            "max_products": business_plan.max_products,
-                            "max_projects": business_plan.max_projects,
-                            "max_components": business_plan.max_components,
-                        },
-                    }
-                    send_mail(
-                        subject="Welcome to sbomify - Your Business Plan Trial",
-                        message=render_to_string("teams/new_user_email.txt", context),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
-                        html_message=render_to_string("teams/new_user_email.html.j2", context),
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to create trial subscription for team {team.key}: {str(e)}")
-            else:
-                # Billing is disabled, set up community plan with unlimited limits
-                try:
-                    community_plan = BillingPlan.objects.get(key="community")
-                    team.billing_plan = "community"
-                    team.billing_plan_limits = {
-                        "max_products": community_plan.max_products,
-                        "max_projects": community_plan.max_projects,
-                        "max_components": community_plan.max_components,
-                        "subscription_status": "active",
-                        "last_updated": timezone.now().isoformat(),
-                    }
-                    team.save()
-                    logger.info(f"Set up community plan for team {team.key} ({team.name}) - billing disabled")
-                except BillingPlan.DoesNotExist:
-                    # Fallback to unlimited limits if community plan doesn't exist
-                    from billing.config import get_unlimited_plan_limits
-
-                    team.billing_plan = "community"
-                    team.billing_plan_limits = get_unlimited_plan_limits()
-                    team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
-                    team.save()
-                    logger.info(
-                        f"Set up unlimited plan for team {team.key} ({team.name}) - "
-                        f"billing disabled, no community plan found"
-                    )
+            # Set up billing plan for Keycloak/social auth users
+            setup_team_billing_plan(team, user=user, send_welcome_email=True)
         return user

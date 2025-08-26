@@ -1,0 +1,76 @@
+{% comment %}
+Reusable teams list component with search and pagination
+
+Usage:
+{% include "teams/components/teams_list.html.j2" with teams_data=teams_data pagination_meta=pagination_meta search_query=search_query %}
+
+Parameters:
+- teams_data: List of team data (from API/service)
+- pagination_meta: Pagination metadata object
+- search_query: Current search query
+- current_page: Current page number
+- page_size: Items per page
+- page_size_options: Available page size options
+- csrf_token: CSRF token for forms
+- show_add_button: Optional boolean to show/hide add workspace button (default: true)
+- container_class: Optional CSS class for the container (default: "")
+
+This component can be reused anywhere teams need to be displayed with full pagination and search.
+{% endcomment %}
+<div class="teams-list-component {{ container_class|default:"" }}">
+    {% if show_add_button|default:true %}
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="mb-1">
+                    <i class="fas fa-users me-2 text-primary"></i>
+                    Your Workspaces
+                </h3>
+                <p class="text-muted mb-0">Manage your collaborative workspaces</p>
+            </div>
+            <button class="btn btn-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#addWorkspaceModal">
+                <i class="fas fa-plus me-2"></i>
+                Add Workspace
+            </button>
+        </div>
+    {% endif %}
+    <!-- Search and Controls -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        {% include "core/components/search_form.html.j2" with search_query=search_query placeholder="Search workspaces..." page_size=page_size %}
+        {% include "core/components/page_size_selector.html.j2" with pagination_meta=pagination_meta page_size=page_size page_size_options=page_size_options search_query=search_query %}
+    </div>
+    <!-- Results Info -->
+    {% include "core/components/results_info.html.j2" with pagination_meta=pagination_meta search_query=search_query item_name="workspace" %}
+    <!-- Teams Content -->
+    {% if teams_data %}
+        {% include "teams/components/teams_table.html.j2" with teams_data=teams_data csrf_token=csrf_token %}
+        <!-- Pagination Controls -->
+        {% include "core/components/pagination_controls.html.j2" with pagination_meta=pagination_meta current_page=current_page page_size=page_size search_query=search_query aria_label="Workspaces pagination" size="sm" %}
+    {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <i class="fas fa-users fa-3x text-muted"></i>
+            </div>
+            {% if search_query %}
+                <h4 class="text-muted">No workspaces found</h4>
+                <p class="text-muted mb-4">No workspaces match your search for "{{ search_query }}".</p>
+                <a href="?" class="btn btn-outline-primary">
+                    <i class="fas fa-times me-2"></i>Clear search
+                </a>
+            {% else %}
+                <h4 class="text-muted">No Workspaces Yet</h4>
+                <p class="text-muted mb-4">Create your first workspace to get started with collaborative work.</p>
+                {% if show_add_button|default:true %}
+                    <button class="btn btn-primary"
+                            data-bs-toggle="modal"
+                            data-bs-target="#addWorkspaceModal">
+                        <i class="fas fa-plus me-2"></i>
+                        Create Your First Workspace
+                    </button>
+                {% endif %}
+            {% endif %}
+        </div>
+    {% endif %}
+</div>

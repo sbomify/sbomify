@@ -1,0 +1,128 @@
+<!-- Workspace Members Section using Standard Card Pattern -->
+<div class="mt-3 mb-4">
+    <div class="card border-light shadow-brand">
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-users me-3 text-primary"></i>
+                    Workspace Members
+                </h4>
+                {% if user_role == 'owner' or user_role == 'admin' %}
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button"
+                                class="btn btn-primary btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#inviteMemberModal">
+                            <i class="fas fa-plus me-2"></i>
+                            Invite Member
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body p-0">{% include "teams/components/members_table.html.j2" %}</div>
+    </div>
+</div>
+<!-- Pending Invitations Section using Standard Card Pattern -->
+{% if user_role == 'owner' or user_role == 'admin' %}
+    <div class="mt-3 mb-4">
+        <div class="card border-light shadow-brand">
+            <div class="card-header px-4 py-3">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-envelope me-3 text-info"></i>
+                    Pending Invitations
+                </h4>
+            </div>
+            <div class="card-body p-0">{% include "teams/components/invitations_table.html.j2" %}</div>
+        </div>
+    </div>
+{% endif %}
+<!-- Invite Member Modal -->
+{% if user_role == 'owner' or user_role == 'admin' %}
+    <div class="modal fade"
+         id="inviteMemberModal"
+         tabindex="-1"
+         aria-labelledby="inviteMemberModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-semibold d-flex align-items-center"
+                        id="inviteMemberModalLabel">
+                        <i class="fas fa-user-plus me-2 text-primary"></i>
+                        Invite Workspace Member
+                    </h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <form method="post"
+                      action="{% url 'teams:invite_user' team_key=team.key %}">
+                    <div class="modal-body">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-semibold">Email Address</label>
+                            <input type="email"
+                                   class="form-control"
+                                   id="email"
+                                   name="email"
+                                   required
+                                   placeholder="colleague@company.com"
+                                   autocomplete="email">
+                            <div class="form-text">We'll send an invitation to this email address</div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="role" class="form-label fw-semibold">Role</label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="">Choose a role...</option>
+                                {% if user_role == 'owner' %}<option value="admin">Admin</option>{% endif %}
+                                <option value="guest">Guest</option>
+                            </select>
+                        </div>
+                        <!-- Role Descriptions -->
+                        <div class="team-role-descriptions">
+                            <div class="row g-3">
+                                {% if user_role == 'owner' %}
+                                    <div class="col-md-6">
+                                        <div class="team-role-card">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="fas fa-user-shield text-success me-2"></i>
+                                                <span class="fw-semibold">Admin</span>
+                                            </div>
+                                            <ul class="team-role-features">
+                                                <li>Manage team settings</li>
+                                                <li>Invite/remove members</li>
+                                                <li>Full project access</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                <div class="col-md-6">
+                                    <div class="team-role-card">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="fas fa-user text-secondary me-2"></i>
+                                            <span class="fw-semibold">Guest</span>
+                                        </div>
+                                        <ul class="team-role-features">
+                                            <li>View projects</li>
+                                            <li>Contribute to SBOMs</li>
+                                            <li>Limited access</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Send Invitation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endif %}

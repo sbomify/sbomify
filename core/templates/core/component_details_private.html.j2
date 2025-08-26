@@ -151,15 +151,17 @@ APP_BASE_URL - Base URL for the application
              data-component-id="{{ component.id }}"
              {% if has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
-    <!-- Vulnerability Time Series Chart -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-vulnerability-timeseries"
-                 data-team-key="{{ request.session.current_team.key }}"
-                 data-component-id="{{ component.id }}"
-                 data-default-days="30"></div>
+    <!-- Vulnerability Time Series Chart (only for SBOM components) -->
+    {% if component.component_type == 'sbom' %}
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="vc-vulnerability-timeseries"
+                     data-team-key="{{ request.session.current_team.key }}"
+                     data-component-id="{{ component.id }}"
+                     data-default-days="30"></div>
+            </div>
         </div>
-    </div>
+    {% endif %}
     {% if has_crud_permissions %}
         <div class="row">
             <div class="col-12">
@@ -179,12 +181,7 @@ APP_BASE_URL - Base URL for the application
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ sboms_data|json_script:"sboms-data" }}
-                <div class="vc-sboms-table"
-                     data-sboms-data-element-id="sboms-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
-                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                {% include "core/components/items_table.html.j2" with items_data=sboms_data component_type="sbom" table_title="SBOMs" is_public_view=False show_vulnerabilities=True show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
             </div>
         </div>
     {% elif component.component_type == 'document' %}
@@ -197,11 +194,7 @@ APP_BASE_URL - Base URL for the application
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ documents_data|json_script:"documents-data" }}
-                <div class="vc-documents-table"
-                     data-documents-data-element-id="documents-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                {% include "core/components/items_table.html.j2" with items_data=documents_data component_type="document" table_title="Documents" is_public_view=False show_vulnerabilities=False show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
             </div>
         </div>
     {% endif %}
@@ -221,8 +214,8 @@ APP_BASE_URL - Base URL for the application
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'vulnerability_scanning/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
+        {% vite_asset 'vulnerability_scanning/js/main.ts' %}
         {% vite_asset 'sboms/js/main.ts' %}
     {% elif component.component_type == 'document' %}
         {% vite_asset 'documents/js/main.ts' %}

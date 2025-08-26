@@ -113,11 +113,14 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
     },
 )
 
-api.add_router("/sboms", "sboms.apis.router")
-api.add_router("/documents", "documents.apis.router")
-api.add_router("/workspaces", "teams.apis.router")
-api.add_router("/", "core.apis.router")
-api.add_router("/billing", "billing.apis.router")
-api.add_router("/notifications", "notifications.apis.router")
-api.add_router("/vulnerability-scanning", "vulnerability_scanning.apis.router")
-api.add_router("/licensing", "licensing.api.router")
+# Guard against multiple registrations during Django autoreload
+if not hasattr(api, "_routers_registered"):
+    api.add_router("/sboms", "sboms.apis.router")
+    api.add_router("/documents", "documents.apis.router")
+    api.add_router("/workspaces", "teams.apis.router")
+    api.add_router("/", "core.apis.router")
+    api.add_router("/billing", "billing.apis.router")
+    api.add_router("/notifications", "notifications.apis.router")
+    api.add_router("/vulnerability-scanning", "vulnerability_scanning.apis.router")
+    api.add_router("/licensing", "licensing.api.router")
+    api._routers_registered = True

@@ -10,249 +10,84 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
 {% load django_vite %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main mb-3">
-            <div class="title-section">
-                <h1 class="item-title">
-                    {% if has_crud_permissions %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="product"
-                              data-item-id="{{ product.id }}"
-                              data-item-value="{{ product.name }}"></span>
-                    {% else %}
-                        {{ product.name }}
-                    {% endif %}
-                </h1>
-                {% if has_crud_permissions %}
-                    <div class="vc-public-status-toggle"
-                         data-item-type="product"
-                         data-item-id="{{ product.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:product_details_public' product.id %}"
-                         data-inline="true"></div>
-                {% endif %}
+    {% csrf_token %}
+    <div class="detail-page-header mb-4">
+        <!-- Breadcrumb Navigation -->
+        <div class="detail-breadcrumb-nav mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb detail-breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'core:products_dashboard' %}">Products</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+                </ol>
+            </nav>
+        </div>
+        <!-- Main Header Content -->
+        <div class="detail-header-main">
+            <div class="detail-header-left">
+                <div class="detail-title-group">
+                    <h1 class="detail-item-title">
+                        {% if has_crud_permissions %}
+                            {% include "core/components/editable_field.html.j2" with item_type="product" item_id=product.id field_name="name" current_value=product.name css_class="product-name-field" %}
+                        {% else %}
+                            {{ product.name }}
+                        {% endif %}
+                    </h1>
+                    <div class="detail-meta-row">
+                        <span class="detail-meta-badge">
+                            <i class="fas fa-box me-2"></i>Product
+                        </span>
+                        <span class="detail-meta-id-container">
+                            {% include "core/components/copyable_value.html.j2" with value=product.id display_text=product.id title="Product ID: "|add:product.id|add:" (click to copy)" css_class="detail-meta-id-chip" %}
+                        </span>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="header-meta">
-            <span class="meta-item">
-                <i class="fas fa-box me-2 text-primary"></i>
-                <span class="meta-label">Product</span>
-            </span>
-            <span class="meta-divider">•</span>
-            <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ product.id }}"
-                      title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
-            </span>
+            {% if has_crud_permissions %}
+                <div class="detail-header-right">
+                    {% include "core/components/public_status_toggle.html.j2" with item_type="product" item_id=product.id is_public=product.is_public public_url="/public/product/"|add:product.id|add:"/" inline=True %}
+                </div>
+            {% endif %}
         </div>
     </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-main {
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.5rem;
-        }
-
-        .title-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .item-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-        }
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 1rem;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .meta-label {
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .meta-id {
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.8rem;
-            background: #f1f5f9;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .meta-id:hover {
-            background: #e2e8f0;
-            border-color: #cbd5e1;
-        }
-
-        .meta-divider {
-            color: #cbd5e1;
-            font-weight: bold;
-        }
-
-        @media (max-width: 768px) {
-            .title-section {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .item-title {
-                font-size: 1.5rem;
-            }
-
-            .header-meta {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-        }
-
-        /* Download Card Styling */
-        .standard-card {
-            margin-bottom: 1rem;
-        }
-
-        .download-card {
-            border: 1px solid #e5e7eb;
-            background: #ffffff;
-            border-radius: 0.5rem;
-            transition: all 0.2s ease;
-        }
-
-        .download-card:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        }
-
-        .download-card .card-header {
-            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-            border-bottom: 1px solid #e5e7eb;
-            padding: 1rem 1.25rem;
-            border-radius: 0.5rem 0.5rem 0 0;
-        }
-
-        .download-card .card-title {
-            color: #374151;
-            font-size: 1.1rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-        }
-
-        .download-card .card-title i {
-            color: #6366f1;
-        }
-
-        .download-card .card-body {
-            padding: 1.5rem 1.25rem;
-            background: #ffffff;
-        }
-
-        .download-btn {
-            padding: 0.75rem 1.5rem;
-            font-size: 0.9rem;
-            font-weight: 500;
-            border-radius: 8px;
-            border: none;
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-            color: white;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-        }
-
-        .download-btn:hover {
-            background: linear-gradient(135deg, #4f46e5, #4338ca);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-            color: white;
-            text-decoration: none;
-        }
-
-        .download-btn:active {
-            transform: translateY(0);
-        }
-    </style>
-    <div class="row">
+    <!-- Project Assignment Section -->
+    <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="product"
-                 data-item-id="{{ product.id }}"></div>
+            {% include "core/components/assignment_manager.html.j2" with parent_type="product" parent_id=product.id child_type="project" assigned_items=product.projects.all available_items=available_projects has_crud_permissions=has_crud_permissions assigned_title="Assigned Projects" available_title="Available Projects" empty_message="No projects assigned" empty_description="Assign projects to this product to organize your components and releases" create_url="core:projects_dashboard" create_button_text="Create New Project" %}
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-item-assignment-manager"
-                 data-parent-type="product"
-                 data-parent-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include "core/components/product_identifiers_manager.html.j2" with product_id=product.id product_identifiers=product_identifiers has_crud_permissions=has_crud_permissions team_billing_plan=team_billing_plan table_title="Product Identifiers" %}
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-product-identifiers"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
-                 data-billing-plan="{{ team_billing_plan }}"></div>
+            {% include "core/components/product_links_manager.html.j2" with product_id=product.id product_links=product_links has_crud_permissions=has_crud_permissions table_title="Product Links" is_public_page=False %}
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-product-links"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include "core/components/releases_table.html.j2" with releases=recent_releases product_id=product.id has_crud_permissions=has_crud_permissions table_title="Recent Releases" show_actions=True max_releases=5 view_all_url="/product/"|add:product.id|add:"/releases/" is_public_view=False %}
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-product-releases"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
-        </div>
-    </div>
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="standard-card">
-                <div class="card download-card shadow-sm">
+            <div class="standard-card mt-3">
+                <div class="card shadow-sm">
                     <div class="card-header">
-                        <h4 class="card-title mb-0">
-                            <i class="fas fa-download me-2"></i>Latest Release
-                        </h4>
+                        <div class="header-content">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-download me-2"></i>Latest Release
+                            </h4>
+                        </div>
                     </div>
                     <div class="card-body text-center">
                         <p class="text-muted mb-3">
                             Download SBOM from the latest release containing the most current artifacts for this product
                         </p>
-                        <a class="btn btn-primary download-btn"
+                        <a class="btn btn-primary"
                            href="/api/v1/products/{{ product.id }}/download">
                             <i class="fas fa-download me-2"></i>Download Latest Release
                         </a>
@@ -264,15 +99,9 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     {% if has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-product-danger-zone"
-                     data-product-id="{{ product.id }}"
-                     data-product-name="{{ product.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include "core/components/danger_zone.html.j2" with item_type="product" item_id=product.id item_name=product.name delete_endpoint="/api/v1/products/{id}" redirect_url="/dashboard/" title="Danger Zone" description="Permanently remove this product and all associated data" button_text="Delete Product" collapsible=True default_expanded=False %}
             </div>
         </div>
     {% endif %}
 {% endblock %}
-{% block scripts %}
-    {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
-{% endblock %}
+{% block scripts %}<!-- Reusable components handle their own JavaScript -->{% endblock %}

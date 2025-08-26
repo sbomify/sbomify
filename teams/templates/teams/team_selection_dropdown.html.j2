@@ -1,3 +1,4 @@
+{% load team_tags %}
 <div class="navbar-nav me-auto workspace-selector">
     <div class="nav-item dropdown">
         <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-none"
@@ -28,7 +29,8 @@
                 <li role="presentation">
                     <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
                 </li>
-                {% for t_key, t_info in request.session.user_teams.items %}
+                {% get_user_teams as fresh_teams %}
+                {% for t_key, t_info in fresh_teams.items %}
                     <li role="presentation">
                         <a class="dropdown-item {% if request.session.current_team.key and t_key == request.session.current_team.key %}active{% endif %}"
                            href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"

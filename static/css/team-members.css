@@ -1,0 +1,128 @@
+/* Team Members Page Styles */
+
+/* Member Avatar */
+.member-avatar {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--bs-primary) 0%, #0d6efd 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-white);
+    font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.invitation-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--bs-info) 0%, #0dcaf0 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-white);
+    font-size: 1rem;
+    box-shadow: 0 4px 12px rgba(var(--bs-info-rgb), 0.25);
+}
+
+/* Member Info */
+.member-name {
+    font-weight: 600;
+    color: var(--bs-gray-800);
+    font-size: 0.95rem;
+    line-height: 1.3;
+}
+
+.member-email {
+    color: var(--bs-gray-600);
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+/* Empty State */
+.team-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--bs-gray-600);
+}
+
+.team-empty-icon {
+    font-size: 3.5rem;
+    color: var(--bs-gray-400);
+    margin-bottom: 1.5rem;
+}
+
+.team-empty-state h6 {
+    font-weight: 600;
+    color: var(--bs-gray-700);
+    margin-bottom: 0.5rem;
+}
+
+.team-empty-state p {
+    color: var(--bs-gray-500);
+    margin: 0;
+}
+
+/* Role Cards */
+.team-role-card {
+    background: var(--bs-gray-50);
+    border: 2px solid var(--bs-gray-200);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+    height: 100%;
+}
+
+.team-role-card:hover {
+    background: var(--bs-gray-100);
+    border-color: var(--bs-gray-300);
+    transform: translateY(-2px);
+}
+
+.team-role-features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--bs-gray-600);
+}
+
+.team-role-features li {
+    padding: 0.25rem 0;
+    position: relative;
+    padding-left: 1rem;
+}
+
+.team-role-features li::before {
+    content: "•";
+    color: var(--bs-primary);
+    position: absolute;
+    left: 0;
+    font-weight: bold;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .member-avatar,
+    .invitation-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 0.875rem;
+    }
+
+    .member-name {
+        font-size: 0.9rem;
+    }
+
+    .member-email {
+        font-size: 0.8rem;
+    }
+
+    .team-role-descriptions .row {
+        flex-direction: column;
+    }
+}
+
+

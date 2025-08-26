@@ -1,0 +1,32 @@
+<!-- Workspace Settings Navigation Component -->
+<div class="settings-nav mb-4">
+    <nav class="nav nav-pills settings-tabs">
+        <a class="nav-link {% if active_tab == 'members' %}active{% endif %}"
+           href="{% url 'teams:team_members' team_key=team.key %}">
+            <i class="fas fa-users me-2"></i>
+            Members
+        </a>
+        <a class="nav-link {% if active_tab == 'branding' %}active{% endif %}"
+           href="{% url 'teams:team_branding' team_key=team.key %}">
+            <i class="fas fa-palette me-2"></i>
+            Branding
+        </a>
+        {% if user_role == 'owner' %}
+            <a class="nav-link {% if active_tab == 'integrations' %}active{% endif %}"
+               href="{% url 'teams:team_integrations' team_key=team.key %}">
+                <i class="fas fa-plug me-2"></i>
+                Integrations
+            </a>
+            <a class="nav-link {% if active_tab == 'billing' %}active{% endif %}"
+               href="{% url 'teams:team_billing' team_key=team.key %}">
+                <i class="fas fa-credit-card me-2"></i>
+                Billing
+            </a>
+            <a class="nav-link {% if active_tab == 'danger' %}active{% endif %}"
+               href="{% url 'teams:team_danger' team_key=team.key %}">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Danger Zone
+            </a>
+        {% endif %}
+    </nav>
+</div>

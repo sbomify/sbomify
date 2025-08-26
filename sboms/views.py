@@ -69,6 +69,7 @@ def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
         "sboms/sbom_details_private.html.j2",
         {
             "sbom": sbom,
+            "team": sbom.component.team,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
         },

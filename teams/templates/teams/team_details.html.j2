@@ -151,46 +151,17 @@
             }
         }
     </style>
+    <!-- Use the modern Django template components -->
     <div class="row">
-        <div class="col-12">
-            <!-- Team Members Component -->
-            {{ members_data|json_script:"team-members-data" }}
-            <div class="vc-team-members"
-                 data-team-key="{{ team.key }}"
-                 data-team-members-element-id="team-members-data"
-                 data-user-role="{{ request.session.current_team.role }}"
-                 data-csrf-token="{{ csrf_token }}"></div>
-        </div>
+        <div class="col-12">{% include "teams/components/members_section.html.j2" %}</div>
     </div>
-    {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
-        <div class="row mt-3">
-            <div class="col-12">
-                <!-- Team Invitations Component -->
-                {{ invitations_data|json_script:"team-invitations-data" }}
-                <div class="vc-team-invitations"
-                     data-team-key="{{ team.key }}"
-                     data-team-invitations-element-id="team-invitations-data"
-                     data-user-role="{{ request.session.current_team.role }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
-            </div>
-        </div>
-    {% endif %}
     {% if request.session.current_team.role == "owner" %}
-        <div class="row mt-3">
-            <div class="col-12">
-                <!-- Team Billing Component -->
-                <div class="vc-team-billing"
-                     data-team-key="{{ team.key }}"
-                     data-billing-plan="{{ team.billing_plan }}"
-                     data-billing-plan-limits="{{ team.billing_plan_limits|jsonify|escape }}"
-                     data-user-role="{{ request.session.current_team.role }}"></div>
-            </div>
+        <div class="row mt-4">
+            <div class="col-12">{% include "teams/components/billing_section.html.j2" %}</div>
         </div>
-    {% endif %}
-    {% if request.session.current_team.role == "owner" %}
-        <div class="row mt-3">
+        <div class="row mt-4">
             <div class="col-12">
-                <!-- Team Danger Zone Component -->
+                <!-- Team Danger Zone Component (keeping Vue for now as it has complex interactions) -->
                 <div class="vc-team-danger-zone"
                      data-team-key="{{ team.key }}"
                      data-team-name="{{ team.name }}"
