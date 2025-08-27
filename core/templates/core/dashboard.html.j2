@@ -1,44 +1,135 @@
 {% extends "./dashboard_base.html.j2" %}
 {% load django_vite %}
 {% block title %}sbomify Dashboard{% endblock %}
-{% block content %}
+{% block dashboard_content %}
     <h3 class="page-title">Dashboard</h3>
-    {# Dashboard stats with progressive enhancement #}
-    <div class="vc-dashboard-stats" data-team-key="{{ current_team.key }}">
-        <div class="loading-placeholder" data-state="loading">
+    {# Dashboard stats using server-side rendering #}
+    <div class="dashboard-stats-section">
+        {% if stats_error %}
+            <div class="alert alert-danger" role="alert">
+                <h4 class="alert-heading">Unable to load dashboard stats</h4>
+                <p>{{ stats_error }}</p>
+                <p>Please try refreshing the page. If the problem persists, contact support.</p>
+            </div>
+        {% elif dashboard_stats %}
             <div class="row">
-                {% for i in "1234"|make_list %}
-                    <div class="col-md-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="placeholder-glow">
-                                    <span class="placeholder col-6"></span>
-                                    <span class="placeholder col-8"></span>
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Total Products</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-display py-3">
+                                <div class="stat-value mb-2">
+                                    <span class="display-4 fw-bold text-dark">{{ dashboard_stats.total_products|floatformat:0 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Total Projects</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-display py-3">
+                                <div class="stat-value mb-2">
+                                    <span class="display-4 fw-bold text-dark">{{ dashboard_stats.total_projects|floatformat:0 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Total Components</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-display py-3">
+                                <div class="stat-value mb-2">
+                                    <span class="display-4 fw-bold text-dark">{{ dashboard_stats.total_components|floatformat:0 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {# Loading state #}
+            <div class="row">
+                {% for i in "123"|make_list %}
+                    <div class="col-md-4 mb-4">
+                        <div class="card border-light shadow-sm">
+                            <div class="card-header px-4 py-3 bg-light">
+                                <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Loading...</h4>
+                            </div>
+                            <div class="card-body text-center p-4">
+                                <div class="stat-loading py-4">
+                                    <div class="spinner-border text-muted" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 {% endfor %}
             </div>
-        </div>
-        <div class="error-state d-none" data-state="error">
-            <div class="alert alert-danger" role="alert">
-                <h4 class="alert-heading">Unable to load dashboard stats</h4>
-                <p>Please try refreshing the page. If the problem persists, contact support.</p>
-            </div>
-        </div>
+        {% endif %}
     </div>
-    {# Vulnerability Time Series Chart #}
+    {# Vulnerability Time Series Chart - Keep as Vue for now due to complexity #}
     <div class="row mt-4">
         <div class="col-12">
-            <div class="vc-vulnerability-timeseries"
-                 data-team-key="{{ current_team.key }}"
-                 data-default-days="30"
-                 data-show-product-filter="true"></div>
+            <div class="card border-light shadow-brand mt-3 mb-4">
+                <div class="card-header px-4 py-3">
+                    <h4 class="card-title mb-0">Vulnerability Trends</h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="vc-vulnerability-timeseries"
+                         data-team-key="{{ current_team.key }}"
+                         data-default-days="30"
+                         data-show-product-filter="true"></div>
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'core/js/main.ts' %}
+    {# Only include vulnerability scanning JS for the chart #}
     {% vite_asset 'vulnerability_scanning/js/main.ts' %}
 {% endblock %}
+<style>
+.stat-loading {
+    padding: 2rem 0;
+    text-align: center;
+}
+
+.stat-display {
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.stat-value {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+/* Responsive font sizes */
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .display-4 {
+        font-size: 1.75rem !important;
+    }
+}
+</style>

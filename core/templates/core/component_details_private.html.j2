@@ -138,13 +138,84 @@ APP_BASE_URL - Base URL for the application
                 gap: 0.75rem;
             }
         }
+
+        .stat-loading {
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .stat-display {
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .stat-value {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.25rem;
+        }
+
+        /* Responsive font sizes */
+        @media (max-width: 768px) {
+            .display-4 {
+                font-size: 2rem !important;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .display-4 {
+                font-size: 1.75rem !important;
+            }
+        }
     </style>
-    <div class="row">
-        <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="component"
-                 data-item-id="{{ component.id }}"></div>
-        </div>
+    {# Component stats using server-side rendering #}
+    <div class="component-stats-section">
+        {% if component_stats_error %}
+            <div class="alert alert-warning" role="alert">
+                <h6 class="alert-heading">Stats unavailable</h6>
+                <p class="mb-0">{{ component_stats_error }}</p>
+            </div>
+        {% elif component_stats %}
+            <div class="row">
+                {# For component page, we only show SBOMs count which equals total_components from the API #}
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Total SBOMs</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-display py-3">
+                                <div class="stat-value mb-2">
+                                    <span class="display-4 fw-bold text-dark">{{ component_stats.total_components|floatformat:0 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {# Loading state #}
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Loading...</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-loading py-4">
+                                <div class="spinner-border text-muted" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </div>
     {% if component.component_type == 'sbom' %}
         <div class="vc-component-meta-info"

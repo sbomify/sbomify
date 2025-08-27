@@ -39,6 +39,104 @@ from .models import Component, Product, Project, Release, ReleaseArtifact
 logger = logging.getLogger(__name__)
 
 
+def _get_dashboard_stats_for_user(user):
+    """Helper function to get dashboard stats for a user without API overhead."""
+    from teams.models import Team
+
+    from .schemas import DashboardSBOMUploadInfo, DashboardStatsResponse
+
+    if not user or not user.is_authenticated:
+        raise ValueError("User must be authenticated")
+
+    # Get user's teams
+    user_teams_qs = Team.objects.filter(member__user=user)
+
+    # Base querysets for the user's teams
+    products_qs = Product.objects.filter(team__in=user_teams_qs)
+    projects_qs = Project.objects.filter(team__in=user_teams_qs)
+    components_qs = Component.objects.filter(team__in=user_teams_qs)
+
+    # Import SBOM here to avoid circular import
+    from sboms.models import SBOM
+
+    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
+
+    # Get counts
+    total_products = products_qs.count()
+    total_projects = projects_qs.count()
+    total_components = components_qs.count()
+
+    # Get latest uploads
+    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
+
+    latest_uploads_data = [
+        DashboardSBOMUploadInfo(
+            component_name=sbom.component.name,
+            sbom_name=sbom.name,
+            sbom_version=sbom.version,
+            created_at=sbom.created_at,
+        )
+        for sbom in latest_sboms_qs
+    ]
+
+    return DashboardStatsResponse(
+        total_products=total_products,
+        total_projects=total_projects,
+        total_components=total_components,
+        latest_uploads=latest_uploads_data,
+    )
+
+
+def _get_dashboard_stats_for_component(user, component_id):
+    """Helper function to get dashboard stats for a specific component."""
+    from teams.models import Team
+
+    from .schemas import DashboardSBOMUploadInfo, DashboardStatsResponse
+
+    if not user or not user.is_authenticated:
+        raise ValueError("User must be authenticated")
+
+    # Get user's teams
+    user_teams_qs = Team.objects.filter(member__user=user)
+
+    # Filter components to just this one (and verify access)
+    components_qs = Component.objects.filter(team__in=user_teams_qs, id=component_id)
+
+    if not components_qs.exists():
+        raise ValueError("Component not found or access denied")
+
+    # Import SBOM here to avoid circular import
+    from sboms.models import SBOM
+
+    # For a component view, total_components represents the number of SBOMs in this component
+    latest_sboms_qs = SBOM.objects.filter(component_id=component_id).select_related("component")
+
+    # Get counts - for component view, we count SBOMs as "components"
+    total_products = 0  # Not relevant for component view
+    total_projects = 0  # Not relevant for component view
+    total_components = latest_sboms_qs.count()  # Number of SBOMs in this component
+
+    # Get latest uploads for this component
+    latest_sboms = latest_sboms_qs.order_by("-created_at")[:5]
+
+    latest_uploads_data = [
+        DashboardSBOMUploadInfo(
+            component_name=sbom.component.name,
+            sbom_name=sbom.name,
+            sbom_version=sbom.version,
+            created_at=sbom.created_at,
+        )
+        for sbom in latest_sboms
+    ]
+
+    return DashboardStatsResponse(
+        total_products=total_products,
+        total_projects=total_projects,
+        total_components=total_components,
+        latest_uploads=latest_uploads_data,
+    )
+
+
 def home(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         # Check if user needs to complete the getting started wizard
@@ -64,7 +162,21 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         if not request.path.startswith("/workspace/getting-started"):
             return redirect("teams:getting_started_wizard")
 
-    context = {"current_team": current_team}
+    # Fetch dashboard stats using a direct helper function
+    dashboard_stats = None
+    stats_error = None
+
+    try:
+        dashboard_stats = _get_dashboard_stats_for_user(request.user)
+    except Exception as e:
+        logger.error(f"Error loading dashboard stats: {e}")
+        stats_error = "Failed to load dashboard stats"
+
+    context = {
+        "current_team": current_team,
+        "dashboard_stats": dashboard_stats,
+        "stats_error": stats_error,
+    }
     return render(request, "core/dashboard.html.j2", context)
 
 
@@ -1051,6 +1163,23 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                 }
             )
         context["documents_data"] = documents_data
+
+    # Fetch dashboard stats for this component using helper function
+    component_stats = None
+    component_stats_error = None
+
+    try:
+        component_stats = _get_dashboard_stats_for_component(request.user, component_id)
+    except Exception as e:
+        logger.error(f"Error loading component stats: {e}")
+        component_stats_error = "Failed to load component stats"
+
+    context.update(
+        {
+            "component_stats": component_stats,
+            "component_stats_error": component_stats_error,
+        }
+    )
 
     return render(request, "core/component_details_private.html.j2", context)
 

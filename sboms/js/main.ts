@@ -12,7 +12,7 @@ import 'vite/modulepreload-polyfill'
 // Import and mount them as needed in specific pages
 // mountVueComponent('vc-ci-cd-info', CiCdInfo)
 // mountVueComponent('vc-sbom-upload', SbomUpload)
-// mountVueComponent('vc-dashboard-stats', DashboardStats)
+// Dashboard stats now use Django templates with server-side rendering
 // mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
 // mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
 // Note: SbomsTable and NTIA Compliance Badge converted to Django templates
