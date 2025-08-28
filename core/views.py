@@ -32,6 +32,7 @@ from sboms.models import SBOM  # SBOM still lives in sboms app
 from sboms.utils import get_product_sbom_package, get_project_sbom_package
 from teams.schemas import BrandingInfo
 
+from .apis import _ensure_latest_release_exists
 from .errors import error_response
 from .forms import CreateAccessTokenForm, SupportContactForm
 from .models import Component, Product, Project, Release, ReleaseArtifact
@@ -668,6 +669,36 @@ def release_details_public(request: HttpRequest, product_id: str, release_id: st
             )
 
     branding_info = BrandingInfo(**product.team.branding_info)
+
+    # Prepare table configuration for artifacts display
+    artifacts_table_config = {
+        "columns": [
+            {"key": "type", "label": "Type", "type": "artifact_type_icon", "center": True},
+            {
+                "key": "name",
+                "label": "Name",
+                "type": "artifact_name",
+            },
+            {
+                "key": "component",
+                "label": "Component",
+                "type": "artifact_component",
+            },
+            {
+                "key": "format",
+                "label": "Format/Type",
+                "type": "artifact_format",
+            },
+            {
+                "key": "version",
+                "label": "Version",
+                "type": "artifact_version",
+            },
+            {"key": "created_at", "label": "Created", "type": "artifact_date", "center": True},
+        ],
+        "empty_message": "No artifacts in this release yet.",
+    }
+
     return render(
         request,
         "core/release_details_public.html.j2",
@@ -677,6 +708,7 @@ def release_details_public(request: HttpRequest, product_id: str, release_id: st
             "brand": branding_info,
             "has_downloadable_content": has_downloadable_content,
             "artifacts_data": artifacts_data,
+            "artifacts_table_config": artifacts_table_config,
         },
     )
 
@@ -703,6 +735,42 @@ def release_details_private(request: HttpRequest, product_id: str, release_id: s
     # Check if there are any artifacts available for download
     has_downloadable_content = release.artifacts.filter(sbom__isnull=False).exists()
 
+    # Prepare table configurations for artifacts display
+    artifacts_table_config = {
+        "columns": [
+            {"key": "type", "label": "Type", "type": "artifact_type_icon", "center": True},
+            {
+                "key": "name",
+                "label": "Name",
+                "type": "artifact_name_link",
+            },
+            {
+                "key": "component",
+                "label": "Component",
+                "type": "artifact_component_link",
+            },
+            {
+                "key": "format",
+                "label": "Format/Type",
+                "type": "artifact_format",
+            },
+            {
+                "key": "version",
+                "label": "Version",
+                "type": "artifact_version",
+            },
+            {"key": "created_at", "label": "Created", "type": "artifact_date", "center": True},
+        ],
+        "empty_message": "No artifacts in this release yet.",
+    }
+
+    # Table config with actions for users who can modify artifacts
+    artifacts_table_config_with_actions = {
+        "columns": artifacts_table_config["columns"]
+        + [{"key": "actions", "label": "Actions", "type": "artifact_actions", "center": True}],
+        "empty_message": "No artifacts in this release yet.",
+    }
+
     return render(
         request,
         "core/release_details_private.html.j2",
@@ -713,6 +781,8 @@ def release_details_private(request: HttpRequest, product_id: str, release_id: s
             "has_downloadable_content": has_downloadable_content,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "current_team": request.session.get("current_team", {}),
+            "artifacts_table_config": artifacts_table_config,
+            "artifacts_table_config_with_actions": artifacts_table_config_with_actions,
         },
     )
 
@@ -876,11 +946,34 @@ def releases_dashboard(request: HttpRequest) -> HttpResponse:
     current_team = request.session.get("current_team")
     has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
 
+    # Get all releases and products for the current team
+    team_id = current_team.get("id") if current_team else None
+    releases = []
+    team_products = []
+
+    if team_id:
+        # Get team products for the create release dropdown
+        team_products = Product.objects.filter(team__id=team_id).order_by("name")
+
+        # Ensure latest releases exist for all team products
+        for product in team_products:
+            _ensure_latest_release_exists(product)
+
+        # Get all releases for the team's products, ordered by most recent
+        releases = (
+            Release.objects.filter(product__team_id=team_id)
+            .select_related("product")
+            .prefetch_related("artifacts")
+            .order_by("-created_at")
+        )
+
     return render(
         request,
         "core/releases_dashboard.html.j2",
         {
             "has_crud_permissions": has_crud_permissions,
+            "releases": releases,
+            "team_products": team_products,
             "APP_BASE_URL": settings.APP_BASE_URL,
         },
     )

@@ -1,0 +1,126 @@
+{% comment %}
+Public Release Artifacts Component - displays artifacts in a release for public users using standardized table
+Context variables:
+- release: Release object with prefetched artifacts
+- product_id: Product ID
+{% endcomment %}
+{% load static %}
+<!-- Prepare artifacts data for standardized table -->
+{% with artifacts_list=release.artifacts.all %}
+    <!-- Configure table structure -->
+    {% if artifacts_list.count <= 6 %}
+        <!-- Card layout for smaller number of artifacts -->
+        <div class="artifacts-section">
+            <div class="card shadow-sm border-0 standard-card">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title mb-0 fw-semibold">
+                                <i class="fas fa-puzzle-piece me-2 text-primary"></i>Artifacts in this Release
+                            </h5>
+                            <p class="card-subtitle text-muted mb-0 mt-1 small">Software components and documents included in this release</p>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary-subtle text-primary px-3 py-2">
+                                {{ artifacts_list.count }} Artifact{{ artifacts_list.count|pluralize }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if not artifacts_list %}
+                        <!-- Empty state -->
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-puzzle-piece fa-3x mb-3 opacity-25"></i>
+                            <h6 class="text-muted">No artifacts in this release</h6>
+                            <p class="text-muted mb-0">This release doesn't contain any artifacts yet.</p>
+                        </div>
+                    {% else %}
+                        <!-- Grid layout for small number of artifacts -->
+                        <div class="artifacts-grid p-4">
+                            {% for artifact in artifacts_list %}
+                                <div class="artifact-card">
+                                    <div class="artifact-header">
+                                        <div class="artifact-type-icon {% if artifact.sbom %}sbom-icon{% elif artifact.document %}document-icon{% else %}default-icon{% endif %}">
+                                            <i class="{% if artifact.sbom %}fas fa-file-code{% elif artifact.document %}fas fa-file-alt{% else %}fas fa-file{% endif %}"></i>
+                                        </div>
+                                        <div class="artifact-info">
+                                            <h6 class="artifact-name">
+                                                {% if artifact.sbom %}
+                                                    {{ artifact.sbom.name }}
+                                                {% elif artifact.document %}
+                                                    {{ artifact.document.name }}
+                                                {% endif %}
+                                            </h6>
+                                            <div class="artifact-meta">
+                                                <span class="artifact-type-badge {% if artifact.sbom %}sbom-badge{% elif artifact.document %}document-badge{% endif %}">
+                                                    {% if artifact.sbom %}
+                                                        SBOM
+                                                    {% elif artifact.document %}
+                                                        Document
+                                                    {% endif %}
+                                                </span>
+                                                <span class="text-muted mx-2">•</span>
+                                                <span class="component-name">
+                                                    {% if artifact.sbom %}
+                                                        {{ artifact.sbom.component.name }}
+                                                    {% elif artifact.document %}
+                                                        {{ artifact.document.component.name }}
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="artifact-details">
+                                        <div class="detail-row">
+                                            <span class="detail-label">Format:</span>
+                                            <span class="detail-value format-text">
+                                                {% if artifact.sbom %}
+                                                    {% if artifact.sbom.format == 'cyclonedx' %}
+                                                        CycloneDX
+                                                    {% else %}
+                                                        {{ artifact.sbom.format|upper }}
+                                                    {% endif %}
+                                                    {{ artifact.sbom.format_version }}
+                                                {% elif artifact.document %}
+                                                    {{ artifact.document.get_document_type_display }}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        {% if artifact.sbom and artifact.sbom.version or artifact.document and artifact.document.version %}
+                                            <div class="detail-row">
+                                                <span class="detail-label">Version:</span>
+                                                <span class="detail-value version-text">
+                                                    {% if artifact.sbom %}
+                                                        {{ artifact.sbom.version }}
+                                                    {% elif artifact.document %}
+                                                        {{ artifact.document.version }}
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                        {% endif %}
+                                        <div class="detail-row">
+                                            <span class="detail-label">Created:</span>
+                                            <span class="detail-value">
+                                                {% if artifact.sbom %}
+                                                    {{ artifact.sbom.created_at|date:"M d, Y" }}
+                                                {% elif artifact.document %}
+                                                    {{ artifact.document.created_at|date:"M d, Y" }}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <!-- Use standardized table for larger number of artifacts -->
+        {% with table_config=artifacts_table_config %}
+            {% include "core/components/standard_table.html.j2" with items=artifacts_list table_config=table_config table_title="Artifacts in this Release" has_crud_permissions=False show_add_button=False %}
+        {% endwith %}
+    {% endif %}
+{% endwith %}

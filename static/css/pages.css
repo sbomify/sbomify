@@ -75,6 +75,68 @@
   color: var(--text-title);
 }
 
+/* Header metadata display for releases, products, etc */
+.header-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+}
+
+.meta-label {
+    font-weight: var(--font-weight-semibold);
+}
+
+.meta-divider {
+    color: var(--gray-400);
+    font-weight: bold;
+}
+
+.meta-id {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    background: var(--gray-50);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.meta-id:hover {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+}
+
+/* Responsive design for header metadata */
+@media (max-width: 768px) {
+    .header-meta {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .item-title {
+        font-size: 1.5rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .header-meta {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+}
+
 .settings-nav {
   background: var(--white);
   border: 1px solid var(--border-color);

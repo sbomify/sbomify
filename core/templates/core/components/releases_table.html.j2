@@ -168,61 +168,6 @@ Context variables:
 </div>
 <!-- Create/Edit Release Modal -->
 {% if has_crud_permissions and not is_public_view %}
-    <div class="modal fade" id="createReleaseModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="releaseModalTitle">Create Release</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="createReleaseForm">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label for="releaseName" class="form-label">
-                                Release Name <span class="text-danger">*</span>
-                            </label>
-                            <input type="text"
-                                   class="form-control"
-                                   id="releaseName"
-                                   name="name"
-                                   required
-                                   placeholder="e.g., v1.0.0">
-                        </div>
-                        <div class="mb-3">
-                            <label for="releaseDescription" class="form-label">Description</label>
-                            <textarea class="form-control"
-                                      id="releaseDescription"
-                                      name="description"
-                                      rows="3"
-                                      placeholder="Describe what's included in this release..."></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       id="isPrerelease"
-                                       name="is_prerelease">
-                                <label class="form-check-label" for="isPrerelease">
-                                    Pre-release
-                                    <small class="text-muted d-block">Mark this as a pre-release version</small>
-                                </label>
-                            </div>
-                        </div>
-                        <div id="createReleaseError"
-                             class="alert alert-danger create-release-error"></div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="createReleaseBtn">
-                        <span id="createReleaseSpinner"
-                              class="spinner-border spinner-border-sm me-2 create-release-spinner"></span>
-                        <span id="createReleaseText">Create Release</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include "core/components/release_modal.html.j2" with modal_id="createReleaseModal" product_id=product_id %}
 {% endif %}
 <!-- TypeScript functionality loaded via main.ts -->

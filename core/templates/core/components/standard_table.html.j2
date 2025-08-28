@@ -151,6 +151,106 @@ table_config structure:
                                                         {% endif %}
                                                     {% endfor %}
                                                 </div>
+                                            {% elif column.type == 'artifact_type_icon' %}
+                                                <div class="artifact-type-icon-sm {% if item.sbom %}sbom-icon{% elif item.document %}document-icon{% else %}default-icon{% endif %}">
+                                                    <i class="{% if item.sbom %}fas fa-file-code{% elif item.document %}fas fa-file-alt{% else %}fas fa-file{% endif %} fa-sm"></i>
+                                                </div>
+                                            {% elif column.type == 'artifact_name' %}
+                                                <div class="artifact-name-cell">
+                                                    <div class="fw-medium artifact-name-link">
+                                                        {% if item.sbom %}
+                                                            {{ item.sbom.name }}
+                                                        {% elif item.document %}
+                                                            {{ item.document.name }}
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="artifact-type-badge {% if item.sbom %}sbom-badge{% elif item.document %}document-badge{% endif %}">
+                                                        {% if item.sbom %}
+                                                            SBOM
+                                                        {% elif item.document %}
+                                                            Document
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            {% elif column.type == 'artifact_name_link' %}
+                                                <div class="artifact-name-cell">
+                                                    {% if item.sbom %}
+                                                        <a href="{% url 'sboms:sbom_details' item.sbom.id %}"
+                                                           class="artifact-name-link fw-medium">{{ item.sbom.name }}</a>
+                                                        <span class="artifact-type-badge ms-2 badge bg-success-subtle text-success">SBOM</span>
+                                                    {% elif item.document %}
+                                                        <a href="{% url 'documents:document_details_private' item.document.id %}"
+                                                           class="artifact-name-link fw-medium">
+                                                            {{ item.document.name }}
+                                                        </a>
+                                                        <span class="artifact-type-badge ms-2 badge bg-warning-subtle text-warning">Document</span>
+                                                    {% endif %}
+                                                </div>
+                                            {% elif column.type == 'artifact_component' %}
+                                                <span class="component-link">
+                                                    {% if item.sbom %}
+                                                        {{ item.sbom.component.name }}
+                                                    {% elif item.document %}
+                                                        {{ item.document.component.name }}
+                                                    {% endif %}
+                                                </span>
+                                            {% elif column.type == 'artifact_component_link' %}
+                                                {% if item.sbom %}
+                                                    <a href="{% url 'core:component_details' item.sbom.component.id %}"
+                                                       class="component-link">{{ item.sbom.component.name }}</a>
+                                                {% elif item.document %}
+                                                    <a href="{% url 'core:component_details' item.document.component.id %}"
+                                                       class="component-link">{{ item.document.component.name }}</a>
+                                                {% endif %}
+                                            {% elif column.type == 'artifact_format' %}
+                                                <span class="format-text">
+                                                    {% if item.sbom %}
+                                                        {% if item.sbom.format == 'cyclonedx' %}
+                                                            CycloneDX
+                                                        {% else %}
+                                                            {{ item.sbom.format|upper }}
+                                                        {% endif %}
+                                                        {{ item.sbom.format_version }}
+                                                    {% elif item.document %}
+                                                        {{ item.document.get_document_type_display }}
+                                                    {% endif %}
+                                                </span>
+                                            {% elif column.type == 'artifact_version' %}
+                                                {% if item.sbom and item.sbom.version %}
+                                                    <span class="version-text version-display" title="{{ item.sbom.version }}">
+                                                        {% if item.sbom.version|length > 20 %}
+                                                            {{ item.sbom.version|slice:":20" }}...
+                                                        {% else %}
+                                                            {{ item.sbom.version }}
+                                                        {% endif %}
+                                                    </span>
+                                                {% elif item.document and item.document.version %}
+                                                    <span class="version-text version-display"
+                                                          title="{{ item.document.version }}">
+                                                        {% if item.document.version|length > 20 %}
+                                                            {{ item.document.version|slice:":20" }}...
+                                                        {% else %}
+                                                            {{ item.document.version }}
+                                                        {% endif %}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="text-muted">—</span>
+                                                {% endif %}
+                                            {% elif column.type == 'artifact_date' %}
+                                                <small class="text-muted">
+                                                    {% if item.sbom %}
+                                                        {{ item.sbom.created_at|date:"M d, Y" }}
+                                                    {% elif item.document %}
+                                                        {{ item.document.created_at|date:"M d, Y" }}
+                                                    {% endif %}
+                                                </small>
+                                            {% elif column.type == 'artifact_actions' %}
+                                                <button class="btn btn-sm btn-outline-danger action-btn remove-artifact-btn"
+                                                        title="Remove from release"
+                                                        data-artifact-id="{{ item.id }}"
+                                                        data-artifact-name="{% if item.sbom %}{{ item.sbom.name }}{% elif item.document %}{{ item.document.name }}{% endif %}">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
                                             {% else %}
                                                 {{ item|lookup:column.key }}
                                             {% endif %}

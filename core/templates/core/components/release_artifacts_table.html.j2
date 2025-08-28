@@ -61,355 +61,95 @@ Context variables:
                     {% endif %}
                 </div>
             {% else %}
-                <!-- Artifacts Table -->
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Name</th>
-                                <th>Component</th>
-                                <th>Format/Type</th>
-                                <th>Version</th>
-                                <th class="col-date">Created</th>
-                                {% if can_modify_artifacts %}<th class="col-actions-sm text-end">Actions</th>{% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for artifact in release.artifacts.all %}
-                                <tr class="artifact-row">
-                                    <!-- Type Icon -->
-                                    <td>
-                                        <div class="artifact-type-icon {% if artifact.sbom %}sbom-icon{% elif artifact.document %}document-icon{% else %}default-icon{% endif %}">
-                                            <i class="{% if artifact.sbom %}fas fa-file-code{% elif artifact.document %}fas fa-file-alt{% else %}fas fa-file{% endif %} fa-sm"></i>
-                                        </div>
-                                    </td>
-                                    <!-- Name -->
-                                    <td>
-                                        <div class="artifact-name-cell">
-                                            {% if artifact.sbom %}
-                                                <a href="{% url 'sboms:sbom_details' artifact.sbom.id %}"
-                                                   class="artifact-name-link fw-medium">{{ artifact.sbom.name }}</a>
-                                                <span class="artifact-type-badge ms-2 badge bg-success-subtle text-success">SBOM</span>
-                                            {% elif artifact.document %}
-                                                <a href="{% url 'documents:document_details_private' artifact.document.id %}"
-                                                   class="artifact-name-link fw-medium">
-                                                    {{ artifact.document.name }}
-                                                </a>
-                                                <span class="artifact-type-badge ms-2 badge bg-warning-subtle text-warning">Document</span>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <!-- Component -->
-                                    <td>
-                                        {% if artifact.sbom %}
-                                            <a href="{% url 'core:component_details' artifact.sbom.component.id %}"
-                                               class="component-link">{{ artifact.sbom.component.name }}</a>
-                                        {% elif artifact.document %}
-                                            <a href="{% url 'core:component_details' artifact.document.component.id %}"
-                                               class="component-link">{{ artifact.document.component.name }}</a>
-                                        {% endif %}
-                                    </td>
-                                    <!-- Format/Type -->
-                                    <td>
-                                        {% if artifact.sbom %}
-                                            <span class="format-text">
-                                                {% if artifact.sbom.format == 'cyclonedx' %}
-                                                    CycloneDX
-                                                {% else %}
-                                                    {{ artifact.sbom.format|upper }}
-                                                {% endif %}
-                                                {{ artifact.sbom.format_version }}
-                                            </span>
-                                        {% elif artifact.document %}
-                                            <span class="format-text">{{ artifact.document.get_document_type_display }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <!-- Version -->
-                                    <td>
-                                        {% if artifact.sbom and artifact.sbom.version %}
-                                            <span class="version-text version-display"
-                                                  title="{{ artifact.sbom.version }}">
-                                                {% if artifact.sbom.version|length > 20 %}
-                                                    {{ artifact.sbom.version|slice:":20" }}...
-                                                {% else %}
-                                                    {{ artifact.sbom.version }}
-                                                {% endif %}
-                                            </span>
-                                        {% elif artifact.document and artifact.document.version %}
-                                            <span class="version-text version-display"
-                                                  title="{{ artifact.document.version }}">
-                                                {% if artifact.document.version|length > 20 %}
-                                                    {{ artifact.document.version|slice:":20" }}...
-                                                {% else %}
-                                                    {{ artifact.document.version }}
-                                                {% endif %}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <!-- Created -->
-                                    <td>
-                                        {% if artifact.sbom %}
-                                            <small class="text-muted">{{ artifact.sbom.created_at|date:"M d, Y" }}</small>
-                                        {% elif artifact.document %}
-                                            <small class="text-muted">{{ artifact.document.created_at|date:"M d, Y" }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <!-- Actions -->
-                                    {% if can_modify_artifacts %}
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-danger action-btn remove-artifact-btn"
-                                                    title="Remove from release"
-                                                    data-artifact-id="{{ artifact.id }}"
-                                                    data-artifact-name="{% if artifact.sbom %}{{ artifact.sbom.name }}{% elif artifact.document %}{{ artifact.document.name }}{% endif %}">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </td>
-                                    {% endif %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <!-- Use standardized table -->
+                {% with artifacts_list=release.artifacts.all %}
+                    {% if can_modify_artifacts %}
+                        {% with table_config=artifacts_table_config_with_actions %}
+                            {% include "core/components/standard_table.html.j2" with items=artifacts_list table_config=table_config table_title="Artifacts" has_crud_permissions=has_crud_permissions show_add_button=can_modify_artifacts add_button_text="Add Artifact" add_modal_target="addArtifactModal" %}
+                        {% endwith %}
+                    {% else %}
+                        {% with table_config=artifacts_table_config %}
+                            {% include "core/components/standard_table.html.j2" with items=artifacts_list table_config=table_config table_title="Artifacts" has_crud_permissions=False show_add_button=False %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
             {% endif %}
         </div>
     </div>
 </div>
-<!-- Add Artifact Modal (placeholder for now) -->
+<!-- Add Artifact Modal -->
 {% if can_modify_artifacts %}
-    <div class="modal fade" id="addArtifactModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade"
+         id="addArtifactModal"
+         tabindex="-1"
+         aria-labelledby="addArtifactModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add Artifact to Release</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="addArtifactModalLabel">
+                        <i class="fas fa-plus me-2"></i>Add Artifact to Release
+                    </h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="text-center py-4">
-                        <i class="fas fa-cog fa-spin fa-2x text-muted mb-3"></i>
-                        <p class="text-muted">Loading available artifacts...</p>
+                    <!-- Search and Filter Controls -->
+                    <div class="mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="artifactSearch" class="form-label">Search Artifacts</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text"
+                                           class="form-control"
+                                           id="artifactSearch"
+                                           placeholder="Search by name, component, or format...">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="artifactTypeFilter" class="form-label">Type</label>
+                                <select class="form-select" id="artifactTypeFilter">
+                                    <option value="">All Types</option>
+                                    <option value="sbom">SBOMs Only</option>
+                                    <option value="document">Documents Only</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="artifactComponentFilter" class="form-label">Component</label>
+                                <select class="form-select" id="artifactComponentFilter">
+                                    <option value="">All Components</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Artifacts Table Container -->
+                    <div id="artifactsTableContainer">
+                        <!-- Content will be populated by TypeScript -->
+                        <div class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="ms-2">Loading available artifacts...</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" disabled>Add Artifacts</button>
+                    <button type="button"
+                            class="btn btn-primary"
+                            id="addSelectedArtifacts"
+                            disabled>Add Artifacts</button>
                 </div>
             </div>
         </div>
     </div>
 {% endif %}
-<style>
-/* Standard Card Styling - Following items_table.html.j2 pattern */
-.standard-card {
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: all 0.2s ease;
-    border: 1px solid #e2e8f0;
-}
-
-.standard-card:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-.standard-card .card-header {
-    border-radius: 12px 12px 0 0;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.standard-card .card-title {
-    color: #1e293b;
-    font-size: 1.1rem;
-}
-
-.transition-transform {
-    transition: transform 0.2s ease;
-}
-
-.btn[aria-expanded="false"] .transition-transform {
-    transform: rotate(180deg);
-}
-
-/* Artifact Row Styling */
-.artifact-row {
-    transition: background-color 0.15s ease;
-}
-
-.artifact-row:hover {
-    background-color: #f8fafc;
-}
-
-.artifact-type-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-}
-
-.artifact-type-icon.sbom-icon {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-}
-
-.artifact-type-icon.document-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-}
-
-.artifact-type-icon.default-icon {
-    background: linear-gradient(135deg, #6b7280, #4b5563);
-    color: white;
-}
-
-.artifact-name-cell {
-    min-width: 200px;
-}
-
-.artifact-name-link {
-    color: #1a202c;
-    text-decoration: none;
-}
-
-.artifact-name-link:hover {
-    color: #6366f1;
-    text-decoration: underline;
-}
-
-.artifact-type-badge {
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.component-link {
-    color: #3b82f6;
-    text-decoration: none;
-}
-
-.component-link:hover {
-    text-decoration: underline;
-}
-
-.format-text {
-    font-family: monospace;
-    font-size: 0.875rem;
-    background: #f1f5f9;
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-
-.version-text {
-    font-family: monospace;
-    font-size: 0.875rem;
-}
-
-.version-display {
-    display: inline-block;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: bottom;
-}
-
-/* Action Button Styling - Same as items_table.html.j2 */
-.action-btn {
-    border-radius: 0.5rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 2.5rem;
-    height: 2.25rem;
-    border-width: 1.5px;
-    font-size: 0.875rem;
-}
-
-.action-btn i {
-    font-size: 0.875rem;
-}
-
-.action-btn.btn-outline-danger {
-    background-color: #fff;
-    border-color: #dc3545;
-    color: #dc3545;
-    box-shadow: 0 1px 2px rgba(220, 53, 69, 0.15);
-}
-
-.action-btn.btn-outline-danger:hover:not(:disabled) {
-    background: linear-gradient(135deg, #dc3545, #c82333);
-    border-color: #dc3545;
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
-}
-
-.action-btn:disabled,
-.action-btn.disabled {
-    opacity: 0.6;
-    pointer-events: none;
-    transform: none;
-}
-</style>
-<script>
-// Release artifacts table functionality
-document.addEventListener('DOMContentLoaded', function() {
-    // Collapse toggle functionality
-    const collapseButtons = document.querySelectorAll('[data-bs-toggle="collapse"]');
-    collapseButtons.forEach(button => {
-        const target = button.getAttribute('data-bs-target');
-        const collapseElement = document.querySelector(target);
-
-        if (collapseElement) {
-            collapseElement.addEventListener('shown.bs.collapse', function() {
-                const icon = button.querySelector('i');
-                if (icon) icon.className = 'fas fa-chevron-up transition-transform';
-            });
-
-            collapseElement.addEventListener('hidden.bs.collapse', function() {
-                const icon = button.querySelector('i');
-                if (icon) icon.className = 'fas fa-chevron-down transition-transform';
-            });
-        }
-    });
-
-    // Remove artifact button handlers
-    document.querySelectorAll('.remove-artifact-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const artifactId = this.dataset.artifactId;
-            const artifactName = this.dataset.artifactName;
-
-            if (confirm(`Are you sure you want to remove "${artifactName}" from this release?`)) {
-                // Call remove API
-                fetch(`/api/v1/releases/{{ release.id }}/artifacts/${artifactId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => {
-                    if (response.ok) {
-                        // Show success message and reload
-                        alert(`Successfully removed ${artifactName} from the release`);
-                        window.location.reload();
-                    } else {
-                        return response.json().then(error => {
-                            throw new Error(error.detail || 'Failed to remove artifact');
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error removing artifact:', error);
-                    alert('Error removing artifact: ' + error.message);
-                });
-            }
-        });
-    });
-});
-</script>
+<!-- Add data attribute for TypeScript initialization -->
+<div data-release-id="{{ release.id }}" class="d-none"></div>
+{% load django_vite %}
+<!-- Release artifacts functionality handled by TypeScript modules in main.js -->

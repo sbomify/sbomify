@@ -1,0 +1,28 @@
+{% comment %}
+Reusable Download Card Component
+Context variables:
+- title: Card title (required)
+- description: Card description (required)
+- download_url: URL for download (required)
+- download_text: Text for download button (required)
+- download_icon: Icon class for download button (default: "fas fa-download")
+- variant: Card variant ("primary", "secondary", "success") (default: "primary")
+{% endcomment %}
+{% load static %}
+<div class="download-card-container mb-4">
+    <div class="card download-card shadow-sm border-0">
+        <div class="card-header">
+            <h4 class="card-title mb-0">
+                <i class="{{ download_icon|default:'fas fa-download' }} me-2"></i>{{ title }}
+            </h4>
+        </div>
+        <div class="card-body text-center">
+            <p class="text-muted mb-3">{{ description }}</p>
+            <a class="btn download-btn btn-{{ variant|default:'primary' }}"
+               href="{{ download_url }}"
+               {% if download_url|slice:":4" == "http" %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                <i class="{{ download_icon|default:'fas fa-download' }} me-2"></i>{{ download_text }}
+            </a>
+        </div>
+    </div>
+</div>

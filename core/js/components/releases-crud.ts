@@ -124,7 +124,18 @@ class ReleasesCrudManager {
 
     console.log('Edit data:', { releaseId, releaseName, releaseDescription, isPrerelease });
 
-    // Check if modal exists
+    // Use the new modal system if available
+    if (window.releaseCrudModal) {
+      window.releaseCrudModal.openEdit({
+        releaseId,
+        releaseName,
+        releaseDescription,
+        isPrerelease
+      });
+      return;
+    }
+
+    // Fallback to old modal system
     if (!this.modal) {
       console.error('Cannot edit: Modal not available');
       NotificationManager.showError('Edit functionality not available');

@@ -341,6 +341,8 @@ import { eventBus, EVENTS } from './utils';
 import './utils/django-components';
 import { NotificationManager } from './utils/django-components';
 import './components/releases-crud';
+import './components/release-crud-modal';
+import './components/release-artifacts-table';
 import './components/danger-zone';
 import './components/product-links-crud';
 import './components/product-identifiers-crud';

@@ -54,3 +54,29 @@ export interface AlertMessage {
   title: string | null;
   message: string | null;
 }
+
+// Global window declarations
+declare global {
+  interface Window {
+    bootstrap: {
+      Modal: {
+        new(element: Element): {
+          show(): void;
+          hide(): void;
+        };
+        getInstance(element: Element): {
+          hide(): void;
+        } | null;
+      };
+    };
+    releaseCrudModal?: {
+      openEdit(config: {
+        releaseId: string;
+        releaseName: string;
+        releaseDescription: string;
+        isPrerelease: boolean;
+      }): void;
+      openCreate(): void;
+    };
+  }
+}

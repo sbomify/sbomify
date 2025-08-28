@@ -32,7 +32,7 @@ case "${1:-}" in
         ;;
     restart)
         shift
-        start "$@"
+        restart "$@"
         ;;
     build)
         shift
@@ -43,7 +43,7 @@ case "${1:-}" in
         clean "$@"
         ;;
     *)
-        echo "Usage: $0 {start|build|clean} [args...]"
+        echo "Usage: $0 {start|restart|build|clean} [args...]"
         exit 1
         ;;
 esac

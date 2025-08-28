@@ -2305,7 +2305,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
     except IntegrityError:
         return 400, {
-            "detail": "A release with this name already exists for this product",
+            "detail": "This release already exists. Please choose a different name.",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:

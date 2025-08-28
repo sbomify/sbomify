@@ -52,57 +52,7 @@ current_team: Current team session data
     </div>
     {% if has_crud_permissions %}
         <!-- Create Release Modal -->
-        <div class="modal fade"
-             id="createReleaseModal"
-             tabindex="-1"
-             aria-labelledby="createReleaseModalLabel"
-             aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="createReleaseModalLabel">Create New Release</h5>
-                        <button type="button"
-                                class="btn-close"
-                                data-bs-dismiss="modal"
-                                aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="createReleaseForm">
-                            <div class="mb-3">
-                                <label for="releaseName" class="form-label">Release Name</label>
-                                <input type="text"
-                                       class="form-control"
-                                       id="releaseName"
-                                       name="name"
-                                       required
-                                       placeholder="e.g., v1.0.0, 2024.1, beta-3">
-                                <div class="form-text">Enter a unique name for this release</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="releaseDescription" class="form-label">Description (Optional)</label>
-                                <textarea class="form-control"
-                                          id="releaseDescription"
-                                          name="description"
-                                          rows="3"
-                                          placeholder="Describe what's included in this release..."></textarea>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       id="releaseIsPrerelease"
-                                       name="is_prerelease">
-                                <label class="form-check-label" for="releaseIsPrerelease">Mark as pre-release</label>
-                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="createReleaseBtn">Create Release</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% include "core/components/release_modal.html.j2" with modal_id="createReleaseModal" product_id=product.id %}
     {% endif %}
     <style>
         .page-header {
@@ -255,76 +205,5 @@ current_team: Current team session data
     </style>
 {% endblock %}
 {% block scripts %}
-    <!-- No Vue components needed anymore -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            {% if has_crud_permissions %}
-                // Handle create/edit release form submission
-                const createReleaseBtn = document.getElementById('createReleaseBtn');
-                const createReleaseForm = document.getElementById('createReleaseForm');
-                const modal = document.getElementById('createReleaseModal');
-
-                if (createReleaseBtn && createReleaseForm) {
-                    createReleaseBtn.addEventListener('click', async function() {
-                        const formData = new FormData(createReleaseForm);
-                        const editingReleaseId = modal?.dataset.editingReleaseId;
-
-                        const data = {
-                            name: formData.get('name'),
-                            description: formData.get('description') || '',
-                            is_prerelease: formData.get('is_prerelease') === 'on',
-                            product_id: '{{ product.id }}'
-                        };
-
-                        try {
-                            let response;
-                            if (editingReleaseId) {
-                                // Update existing release
-                                response = await fetch(`/api/v1/releases/${editingReleaseId}`, {
-                                    method: 'PATCH',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                                    },
-                                    body: JSON.stringify(data)
-                                });
-                            } else {
-                                // Create new release
-                                response = await fetch('/api/v1/releases', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
-                                    },
-                                    body: JSON.stringify(data)
-                                });
-                            }
-
-                            if (response.ok) {
-                                const bootstrapModal = bootstrap.Modal.getInstance(modal);
-                                bootstrapModal?.hide();
-                                location.reload(); // Refresh to show changes
-                            } else {
-                                const error = await response.json();
-                                alert(`Error ${editingReleaseId ? 'updating' : 'creating'} release: ` + (error.detail || 'Unknown error'));
-                            }
-                        } catch (error) {
-                            alert(`Error ${editingReleaseId ? 'updating' : 'creating'} release: ` + error.message);
-                        }
-                    });
-                }
-
-                // Reset modal when hidden
-                if (modal) {
-                    modal.addEventListener('hidden.bs.modal', function() {
-                        const form = modal.querySelector('form');
-                        const title = modal.querySelector('.modal-title');
-                        if (form) form.reset();
-                        if (title) title.textContent = 'Create New Release';
-                        delete modal.dataset.editingReleaseId;
-                    });
-                }
-            {% endif %}
-        });
-    </script>
+    <!-- Release functionality handled by TypeScript modules in main.js -->
 {% endblock %}
