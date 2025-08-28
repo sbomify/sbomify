@@ -1,0 +1,315 @@
+{% comment %}
+NTIA Compliance Details Component
+Context variables:
+- sbom: SBOM object with ntia_compliance_status and ntia_compliance_details
+{% endcomment %}
+<div class="ntia-compliance-details">
+    {% if sbom.ntia_compliance_status == 'compliant' %}
+        <!-- Compliant Status -->
+        <div class="alert alert-success d-flex align-items-start">
+            <i class="fas fa-check-circle me-3 mt-1 flex-shrink-0 fs-4"></i>
+            <div>
+                <h5 class="alert-heading mb-2">NTIA Compliant ✓</h5>
+                <p class="mb-0">
+                    This SBOM meets all NTIA minimum elements requirements and follows best practices for software supply chain transparency.
+                </p>
+            </div>
+        </div>
+        <!-- NTIA Elements Checklist -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-list-check me-2"></i>
+                    NTIA Minimum Elements Checklist
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled ntia-checklist">
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Supplier name</span>
+                            </li>
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Component name</span>
+                            </li>
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Version of the component</span>
+                            </li>
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Other unique identifiers</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled ntia-checklist">
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Dependency relationships</span>
+                            </li>
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Author of SBOM data</span>
+                            </li>
+                            <li class="d-flex align-items-center mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <span>Timestamp</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% elif sbom.ntia_compliance_status == 'non_compliant' %}
+        <!-- Non-Compliant Status -->
+        <div class="alert alert-warning d-flex align-items-start">
+            <i class="fas fa-exclamation-triangle me-3 mt-1 flex-shrink-0 fs-4"></i>
+            <div>
+                <h5 class="alert-heading mb-2">NTIA Compliance Issues Found</h5>
+                <p class="mb-0">
+                    This SBOM does not meet NTIA minimum elements requirements. Please review the issues below and consider using our GitHub Actions module, which will make a best effort to generate compliant SBOMs.
+                </p>
+            </div>
+        </div>
+        {% if sbom.ntia_compliance_details.errors %}
+            <!-- Compliance Issues -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list-ul me-2"></i>
+                        Compliance Issues ({{ sbom.ntia_compliance_details.errors|length }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="compliance-issues">
+                        {% for error in sbom.ntia_compliance_details.errors %}
+                            <div class="compliance-issue mb-3">
+                                <div class="issue-header"
+                                     data-bs-toggle="collapse"
+                                     data-bs-target="#issue-{{ forloop.counter }}"
+                                     aria-expanded="false">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="issue-summary d-flex align-items-center">
+                                            <i class="fas fa-exclamation-circle text-warning me-2"></i>
+                                            <span class="issue-field fw-semibold">{{ error.field }}</span>
+                                            <span class="issue-message ms-2">{{ error.message }}</span>
+                                        </div>
+                                        <i class="fas fa-chevron-down collapse-icon"></i>
+                                    </div>
+                                </div>
+                                <div class="collapse" id="issue-{{ forloop.counter }}">
+                                    <div class="issue-details mt-2 p-3 bg-light rounded">
+                                        <div class="suggestion-content">
+                                            <i class="fas fa-lightbulb text-info me-2"></i>
+                                            <strong>Suggestion:</strong> {{ error.suggestion }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        <!-- How to Fix -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-tools me-2"></i>
+                    How to Fix These Issues
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <ul class="list-unstyled fix-suggestions">
+                            <li class="d-flex align-items-start mb-3">
+                                <i class="fab fa-github text-primary me-2 mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>Use our GitHub Actions module</strong>
+                                    <br>
+                                    <span class="text-muted">Automated SBOM generation with best-effort NTIA compliance</span>
+                                </div>
+                            </li>
+                            <li class="d-flex align-items-start mb-3">
+                                <i class="fas fa-check-double text-success me-2 mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>Ensure all 7 NTIA elements are included</strong>
+                                    <br>
+                                    <span class="text-muted">Supplier name, component name, version, identifiers, dependencies, author, timestamp</span>
+                                </div>
+                            </li>
+                            <li class="d-flex align-items-start mb-3">
+                                <i class="fas fa-shield-check text-info me-2 mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>Validate before uploading</strong>
+                                    <br>
+                                    <span class="text-muted">Use SBOM validation tools to check compliance before submitting</span>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <a href="https://github.com/sbomify/github-action"
+                               target="_blank"
+                               rel="noopener"
+                               class="btn btn-primary btn-lg">
+                                <i class="fab fa-github me-2"></i>
+                                View GitHub Action
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% elif sbom.ntia_compliance_status == 'unknown' %}
+        <!-- Unknown/Checking Status -->
+        {% if team_billing_plan == 'business' or team_billing_plan == 'enterprise' %}
+            <div class="alert alert-info d-flex align-items-start">
+                <i class="fas fa-clock me-3 mt-1 flex-shrink-0 fs-4 fa-pulse"></i>
+                <div>
+                    <h5 class="alert-heading mb-2">NTIA Compliance Check in Progress</h5>
+                    <p class="mb-0">
+                        NTIA compliance analysis is being performed in the background. This usually takes a few minutes to complete. Please check back shortly.
+                    </p>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-secondary d-flex align-items-start">
+                <i class="fas fa-lock me-3 mt-1 flex-shrink-0 fs-4"></i>
+                <div>
+                    <h5 class="alert-heading mb-2">Upgrade Required</h5>
+                    <p class="mb-3">NTIA Minimum Elements compliance checking is available with Business and Enterprise plans.</p>
+                    <a href="{% url 'billing:select_plan' team_key=team.key %}"
+                       class="btn btn-primary">
+                        <i class="fas fa-arrow-up me-2"></i>Upgrade Plan
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- No Status Available -->
+        <div class="alert alert-light d-flex align-items-start">
+            <i class="fas fa-info-circle me-3 mt-1 flex-shrink-0 fs-4"></i>
+            <div>
+                <h5 class="alert-heading mb-2">NTIA Compliance Status Unknown</h5>
+                <p class="mb-0">
+                    NTIA compliance information is not available for this SBOM. This may be due to the SBOM format or processing limitations.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+    <!-- NTIA Background Information -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                About NTIA Minimum Elements
+            </h6>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                The National Telecommunications and Information Administration (NTIA) has defined minimum elements that should be present in software bills of materials (SBOMs) to ensure transparency and security in software supply chains.
+            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>The 7 Minimum Elements:</h6>
+                    <ol class="text-muted small">
+                        <li>Supplier name</li>
+                        <li>Component name</li>
+                        <li>Version of the component</li>
+                        <li>Other unique identifiers (PURL, CPE, etc.)</li>
+                        <li>Dependency relationships</li>
+                        <li>Author of SBOM data</li>
+                        <li>Timestamp</li>
+                    </ol>
+                </div>
+                <div class="col-md-6">
+                    <h6>Learn More:</h6>
+                    <ul class="list-unstyled">
+                        <li>
+                            <a href="https://www.ntia.doc.gov/files/ntia/publications/sbom_minimum_elements_report.pdf"
+                               target="_blank"
+                               rel="noopener"
+                               class="text-decoration-none">
+                                <i class="fas fa-external-link-alt me-1"></i>
+                                NTIA Minimum Elements Report
+                            </a>
+                        </li>
+                        <li class="mt-2">
+                            <a href="https://github.com/sbomify/github-action"
+                               target="_blank"
+                               rel="noopener"
+                               class="text-decoration-none">
+                                <i class="fab fa-github me-1"></i>
+                                sbomify GitHub Action
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+/* NTIA Compliance Details Styling */
+.ntia-compliance-details .alert {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ntia-checklist li {
+    padding: 0.25rem 0;
+}
+
+.compliance-issue {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.issue-header {
+    padding: 1rem;
+    cursor: pointer;
+    background: #f8f9fa;
+    transition: background-color 0.2s ease;
+}
+
+.issue-header:hover {
+    background: #e9ecef;
+}
+
+.issue-field {
+    color: #dc3545;
+}
+
+.collapse-icon {
+    transition: transform 0.2s ease;
+}
+
+.issue-header[aria-expanded="true"] .collapse-icon {
+    transform: rotate(180deg);
+}
+
+.fix-suggestions li {
+    padding: 0.5rem 0;
+}
+
+.card {
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 12px 12px 0 0 !important;
+}
+</style>

@@ -1,0 +1,92 @@
+<div class="table-responsive">
+    <table class="table dashboard-table mb-0">
+        <thead>
+            <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>Joined</th>
+                {% if user_role == 'owner' or user_role == 'admin' %}<th class="text-center">Actions</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for member in members %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="member-avatar me-3">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                                <div class="member-name">{{ member.user.first_name }} {{ member.user.last_name }}</div>
+                                <div class="member-email">{{ member.user.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge {% if member.role == 'owner' %}bg-primary{% elif member.role == 'admin' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ member.role|title }}
+                            </span>
+                            {% if member.is_default_team %}<span class="badge bg-light text-dark border">Default</span>{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="text-muted">{{ member.user.date_joined|date:"M d, Y" }}</span>
+                    </td>
+                    {% if user_role == 'owner' or user_role == 'admin' %}
+                        <td class="text-center">
+                            {% if member.role != 'owner' and member.user != request.user %}
+                                <div class="dropdown">
+                                    <button class="btn btn-link text-secondary"
+                                            type="button"
+                                            data-bs-toggle="dropdown"
+                                            aria-expanded="false">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        {% if user_role == 'owner' %}
+                                            <li>
+                                                <form method="post"
+                                                      action="{% url 'teams:update_member_role' team_key=team.key member_id=member.id %}"
+                                                      class="d-inline">
+                                                    {% csrf_token %}
+                                                    <input type="hidden"
+                                                           name="role"
+                                                           value="{% if member.role == 'admin' %}guest{% else %}admin{% endif %}">
+                                                    <button type="submit" class="dropdown-item">
+                                                        <i class="fas fa-{% if member.role == 'admin' %}user{% else %}user-shield{% endif %} me-2 text-primary"></i>
+                                                        Make
+                                                        {% if member.role == 'admin' %}
+                                                            Guest
+                                                        {% else %}
+                                                            Admin
+                                                        {% endif %}
+                                                    </button>
+                                                </form>
+                                            </li>
+                                            <li>
+                                                <hr class="dropdown-divider">
+                                            </li>
+                                        {% endif %}
+                                        <li>
+                                            <button type="button"
+                                                    class="dropdown-item text-danger member-remove-btn"
+                                                    data-member-id="{{ member.id }}"
+                                                    data-member-name="{{ member.user.first_name }} {{ member.user.last_name }}"
+                                                    data-remove-url="{% url 'teams:remove_member' team_key=team.key member_id=member.id %}">
+                                                <i class="fas fa-trash me-2"></i>
+                                                Remove Member
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

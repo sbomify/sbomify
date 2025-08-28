@@ -1,0 +1,81 @@
+{% comment %}
+Reusable Editable Field Component
+Context variables:
+- item_type: Type of item (e.g., "product", "component", "release")
+- item_id: ID of the item
+- field_name: Name of the field to edit (default: "name")
+- current_value: Current value of the field
+- placeholder: Placeholder text for empty fields
+- field_type: Type of field (text, date, etc.) - default: "text"
+- css_class: Optional CSS classes to apply
+- inline: Whether to display inline or block (default: false)
+{% endcomment %}
+{% load static %}
+<span class="editable-field {{ css_class }} {% if inline %}d-inline-flex{% else %}d-flex{% endif %} align-items-center position-relative px-2 py-1 rounded text-decoration-none user-select-none"
+      data-item-type="{{ item_type }}"
+      data-item-id="{{ item_id }}"
+      data-field-name="{{ field_name|default:'name' }}"
+      data-field-type="{{ field_type|default:'text' }}"
+      data-current-value="{{ current_value }}"
+      data-placeholder="{{ placeholder|default:'Click to edit...' }}"
+      title="Click to edit"
+      role="button"
+      tabindex="0">
+    {% if current_value %}
+        {{ current_value }}
+    {% else %}
+        <span class="text-muted fst-italic">{{ placeholder|default:'Click to edit...' }}</span>
+    {% endif %}
+    <i class="fas fa-edit ms-2 opacity-0 transition-opacity small"></i>
+</span>
+<!-- Edit Modal -->
+<div class="modal fade" id="editFieldModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Field</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editFieldForm">
+                    <div class="mb-3">
+                        <label for="fieldValue" class="form-label" id="fieldLabel">Value</label>
+                        <input type="text" class="form-control" id="fieldValue" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveFieldBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+/* Minimal custom CSS for editable field - using Bootstrap 5 variables */
+.editable-field {
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+}
+
+.editable-field:hover {
+    background-color: var(--bs-gray-100);
+    border: 1px solid var(--bs-gray-300);
+}
+
+.editable-field:hover .fas {
+    opacity: 1 !important;
+}
+
+.editable-field.editing {
+    background-color: var(--bs-warning-bg-subtle);
+    border: 1px solid var(--bs-warning-border-subtle);
+    color: var(--bs-warning-text-emphasis);
+}
+
+/* Transition utility class */
+.transition-opacity {
+    transition: opacity 0.15s ease-in-out;
+}
+</style>
+<!-- TypeScript functionality loaded via main.ts -->

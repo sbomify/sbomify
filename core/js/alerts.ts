@@ -1,4 +1,4 @@
-import Swal from 'sweetalert2';
+import { NotificationManager } from './utils/django-components';
 
 interface ToastOptions {
   title: string;
@@ -24,52 +24,33 @@ interface AlertOptions {
 
 // Toast notifications for non-blocking messages
 export function showToast({
-  title,
   message,
-  type,
-  timer = 3000,
-  position = 'top-end'
-}: ToastOptions) {
-  return Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    toast: true,
-    position,
-    showConfirmButton: false,
-    timer,
-    timerProgressBar: true,
-    customClass: {
-      popup: 'swal2-toast'
-    }
-  });
+  type
+}: Pick<ToastOptions, 'message' | 'type'>) {
+  // Use Bootstrap toast instead
+  switch(type) {
+    case 'success':
+      NotificationManager.showSuccess(message);
+      break;
+    case 'error':
+      NotificationManager.showError(message);
+      break;
+    case 'warning':
+      NotificationManager.showWarning(message);
+      break;
+    case 'info':
+      NotificationManager.showSuccess(message); // Use success for info messages
+      break;
+  }
 }
 
 // Modal alerts for important messages that require attention
 export function showAlert({
   title,
-  message,
-  type,
-  showCancelButton = false,
-  confirmButtonText = 'OK',
-  cancelButtonText = 'Cancel',
-  customClass = {
-    confirmButton: 'btn btn-primary',
-    cancelButton: 'btn btn-secondary',
-    actions: 'gap-2'
-  }
-}: AlertOptions) {
-  return Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    showCancelButton,
-    confirmButtonText,
-    cancelButtonText,
-    customClass,
-    buttonsStyling: false,
-    reverseButtons: true
-  });
+  message
+}: Pick<AlertOptions, 'title' | 'message'>) {
+  // Use Bootstrap modal instead
+  return NotificationManager.showConfirmation(message, title, 'OK', 'Cancel');
 }
 
 // Confirmation dialog for destructive actions
@@ -77,61 +58,30 @@ export async function showConfirmation({
   title = 'Are you sure?',
   message,
   confirmButtonText = 'Yes',
-  cancelButtonText = 'No',
-  type = 'warning'
-}: Partial<AlertOptions>) {
-  const result = await Swal.fire({
-    title,
-    text: message,
-    icon: type,
-    showCancelButton: true,
-    confirmButtonText,
-    cancelButtonText,
-    customClass: {
-      confirmButton: 'btn btn-danger',
-      cancelButton: 'btn btn-secondary',
-      actions: 'gap-2'
-    },
-    buttonsStyling: false,
-    reverseButtons: true,
-    focusCancel: true
-  });
-
-  return result.isConfirmed;
+  cancelButtonText = 'No'
+}: Partial<Pick<AlertOptions, 'title' | 'message' | 'confirmButtonText' | 'cancelButtonText'>>) {
+  if (!message) {
+    throw new Error('Message is required for confirmation dialog');
+  }
+  return await NotificationManager.showConfirmation(message, title, confirmButtonText, cancelButtonText);
 }
 
 // Success toast shorthand
 export function showSuccess(message: string) {
-  return showToast({
-    title: 'Success',
-    message,
-    type: 'success'
-  });
+  NotificationManager.showSuccess(message);
 }
 
 // Error toast shorthand
 export function showError(message: string) {
-  return showToast({
-    title: 'Error',
-    message,
-    type: 'error'
-  });
+  NotificationManager.showError(message);
 }
 
 // Warning toast shorthand
 export function showWarning(message: string) {
-  return showToast({
-    title: 'Warning',
-    message,
-    type: 'warning'
-  });
+  NotificationManager.showWarning(message);
 }
 
 // Info toast shorthand
 export function showInfo(message: string) {
-  return showToast({
-    title: 'Info',
-    message,
-    type: 'info'
-  });
+  NotificationManager.showSuccess(message); // Use success for info messages
 }

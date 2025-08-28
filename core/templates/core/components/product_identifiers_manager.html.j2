@@ -1,0 +1,297 @@
+{% comment %}
+Product Identifiers Management Component - Server-side rendered with JavaScript enhancement
+Context variables:
+- product_id: Product ID
+- product_identifiers: List of product identifier objects from API
+- has_crud_permissions: Boolean for CRUD permissions
+- team_billing_plan: Team's billing plan (for feature restrictions)
+- table_title: Title for the component (default: "Product Identifiers")
+{% endcomment %}
+{% load static %}
+<!-- Product Identifiers Card -->
+<div class="standard-card mt-3">
+    <div class="card shadow-sm">
+        <!-- Card Header -->
+        <div class="card-header">
+            <div class="header-content">
+                <h4 class="card-title mb-0">{{ table_title|default:"Product Identifiers" }}</h4>
+                {% if has_crud_permissions %}
+                    <div class="header-actions">
+                        {% if team_billing_plan != 'community' %}
+                            <button class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#addIdentifierModal">
+                                <i class="fas fa-plus me-1"></i>Add Identifier
+                            </button>
+                        {% else %}
+                            <div class="text-muted small">
+                                <i class="fas fa-lock me-1"></i>Business feature
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0"
+             data-product-identifiers
+             data-product-id="{{ product_id }}"
+             data-has-crud-permissions="{{ has_crud_permissions|yesno:'true,false' }}"
+             data-team-billing-plan="{{ team_billing_plan }}">
+            {% if not product_identifiers %}
+                <!-- Empty State -->
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-barcode fa-3x mb-3 opacity-25"></i>
+                    <h6 class="text-muted">No product identifiers added</h6>
+                    <p class="text-muted mb-3">
+                        {% if has_crud_permissions %}
+                            {% if team_billing_plan != 'community' %}
+                                Add identifiers like GTIN, SKU, MPN, etc. to help identify this product
+                            {% else %}
+                                Product identifiers are a business feature. Upgrade to a business or enterprise plan to add identifiers.
+                            {% endif %}
+                        {% else %}
+                            This product does not have any identifiers defined
+                        {% endif %}
+                    </p>
+                    {% if has_crud_permissions and team_billing_plan != 'community' %}
+                        <button class="btn btn-primary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#addIdentifierModal">
+                            <i class="fas fa-plus me-2"></i>Add Identifier
+                        </button>
+                    {% endif %}
+                </div>
+            {% else %}
+                <!-- Identifiers Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Value</th>
+                                <th class="text-center">Barcode</th>
+                                {% if has_crud_permissions and team_billing_plan != 'community' %}
+                                    <th class="col-actions text-end">Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for identifier in product_identifiers %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary">{{ identifier.identifier_type|upper }}</span>
+                                    </td>
+                                    <td>
+                                        <code class="text-dark">{{ identifier.value }}</code>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if identifier.identifier_type in 'gtin,gtin_13,ean,ean_13,upc,isbn' %}
+                                            <div class="barcode-container"
+                                                 data-identifier-value="{{ identifier.value }}"
+                                                 data-identifier-type="{{ identifier.identifier_type }}"
+                                                 style="min-height: 70px;
+                                                        display: flex;
+                                                        align-items: center;
+                                                        justify-content: center;
+                                                        padding: 4px">
+                                                <svg class="barcode-svg" style="max-width: 140px; height: auto;">
+                                                </svg>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted small">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    {% if has_crud_permissions and team_billing_plan != 'community' %}
+                                        <td class="text-end">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary btn-sm edit-identifier-btn"
+                                                        title="Edit"
+                                                        data-identifier-id="{{ identifier.id }}"
+                                                        data-identifier-type="{{ identifier.identifier_type }}"
+                                                        data-identifier-value="{{ identifier.value }}">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-sm delete-identifier-btn"
+                                                        title="Delete"
+                                                        data-identifier-id="{{ identifier.id }}"
+                                                        data-identifier-value="{{ identifier.value }}">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- Add/Edit Identifier Modal -->
+{% if has_crud_permissions and team_billing_plan != 'community' %}
+    <div class="modal fade" id="addIdentifierModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="identifierModalTitle">Add Identifier</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="identifierForm">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="identifierType" class="form-label">
+                                Identifier Type <span class="text-danger">*</span>
+                            </label>
+                            <select id="identifierType"
+                                    name="identifier_type"
+                                    class="form-select"
+                                    required>
+                                <option value="">Select type...</option>
+                                <option value="gtin_12">GTIN-12 (UPC-A)</option>
+                                <option value="gtin_13">GTIN-13 (EAN-13)</option>
+                                <option value="gtin_14">GTIN-14 / ITF-14</option>
+                                <option value="gtin_8">GTIN-8</option>
+                                <option value="sku">SKU</option>
+                                <option value="mpn">MPN</option>
+                                <option value="asin">ASIN</option>
+                                <option value="gs1_gpc_brick">GS1 GPC Brick code</option>
+                                <option value="cpe">CPE</option>
+                                <option value="purl">PURL</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="identifierValue" class="form-label">
+                                Value <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   id="identifierValue"
+                                   name="value"
+                                   class="form-control"
+                                   required
+                                   placeholder="Enter identifier value">
+                        </div>
+                        <div id="identifierFormError"
+                             class="alert alert-danger"
+                             style="display: none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveIdentifierBtn">
+                        <span id="saveIdentifierSpinner"
+                              class="spinner-border spinner-border-sm me-2"
+                              style="display: none"></span>
+                        <span id="saveIdentifierText">Add Identifier</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<style>
+/* Header styling for consistent layout */
+.card-header .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.card-header .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Barcode specific styling */
+.barcode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: center;
+}
+
+.barcode-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    min-height: 60px;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #ffffff;
+    overflow: hidden;
+    transition: all 0.15s ease-in-out;
+    gap: 0.25rem;
+    padding: 0.5rem;
+}
+
+.barcode-wrapper:hover {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.barcode-success {
+    background-color: #ffffff;
+    border-color: #28a745;
+    min-height: 80px;
+    padding: 0.25rem;
+}
+
+.barcode-loading {
+    background-color: #f8f9fa;
+    border-color: #6c757d;
+    color: #6c757d;
+}
+
+.barcode-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #dc3545;
+}
+
+.barcode-not-applicable {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+.barcode-state-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.barcode-state-content i {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.barcode-svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.identifier-value {
+    font-family: monospace;
+    font-size: 0.9rem;
+    background: #f1f5f9;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    color: #1e40af;
+    font-weight: 500;
+}
+</style>
+<!-- TypeScript functionality loaded via main.ts -->

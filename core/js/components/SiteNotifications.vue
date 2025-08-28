@@ -45,34 +45,8 @@ const processNotifications = (newNotifications: Notification[]) => {
       }
     }
 
-    // If there's an action URL, include it in the message
-    let message = notification.message
-    if (notification.action_url) {
-      // Show a more persistent alert with action button for actionable notifications
-      import('sweetalert2').then(({ default: Swal }) => {
-        Swal.fire({
-          title: notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
-          text: notification.message,
-          icon: notification.severity,
-          showCancelButton: true,
-          confirmButtonText: 'Take Action',
-          cancelButtonText: 'Dismiss',
-          customClass: {
-            confirmButton: 'btn btn-primary',
-            cancelButton: 'btn btn-secondary',
-            actions: 'gap-2'
-          },
-          buttonsStyling: false
-        }).then((result) => {
-          if (result.isConfirmed && notification.action_url) {
-            window.location.href = notification.action_url
-          }
-        })
-      })
-    } else {
-      // For non-actionable notifications, show a simple toast
-      showAlert(message)
-    }
+    // For non-actionable notifications, show a simple toast
+    showAlert(notification.message)
   })
 }
 

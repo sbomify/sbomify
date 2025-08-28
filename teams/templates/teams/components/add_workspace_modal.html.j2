@@ -1,0 +1,91 @@
+{% comment %}
+Reusable add workspace modal component
+
+Usage:
+{% include "teams/components/add_workspace_modal.html.j2" with form=add_team_form action_url=action_url %}
+
+Parameters:
+- form: Django form instance for team creation
+- action_url: URL to post the form to
+- modal_id: Optional modal ID (default: "addWorkspaceModal")
+
+This component can be reused anywhere a workspace creation modal is needed.
+{% endcomment %}
+{% load widget_tweaks %}
+<!-- Add Workspace Modal -->
+<div class="modal fade"
+     id="{{ modal_id|default:'addWorkspaceModal' }}"
+     data-bs-backdrop="static"
+     data-bs-keyboard="true"
+     tabindex="-1"
+     aria-labelledby="{{ modal_id|default:'addWorkspaceModal' }}Label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title"
+                    id="{{ modal_id|default:'addWorkspaceModal' }}Label">
+                    <i class="fas fa-plus me-2"></i>
+                    Add Workspace
+                </h4>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ action_url }}" method="post">
+                    {% csrf_token %}
+                    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                        {{ form.name|add_class:'form-control'|attr:"tabindex:1"|attr:"placeholder:Enter workspace name" }}
+                        {% for error in form.name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" tabindex="2">
+                            <i class="fas fa-plus me-2"></i>
+                            Add Workspace
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalId = '{{ modal_id|default:"addWorkspaceModal" }}';
+        const modal = document.getElementById(modalId);
+
+        {% if form.errors %}
+            var addWorkspaceModal = new bootstrap.Modal(modal);
+            addWorkspaceModal.show();
+            {% for field, errors in form.errors.items %}
+                {% for error in errors %}
+                    window.showError && window.showError('{{ error }}');
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+
+        // Handle modal shown event
+        modal.addEventListener('shown.bs.modal', function() {
+            // Focus the first input field
+            const firstInput = this.querySelector('input[type="text"]');
+            if (firstInput) {
+                firstInput.focus();
+                firstInput.select();
+            }
+        });
+
+        // Handle form submission on Enter
+        const form = modal.querySelector('form');
+        form.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.submit();
+            }
+        });
+    });
+</script>

@@ -34,27 +34,18 @@ const mockEventBus = {
   on: mock<(event: string, callback: () => void) => void>()
 }
 
-// Extend global Window interface for tests
-declare global {
-  interface Window {
-    eventBus?: {
-      on: (event: string, callback: () => void) => void
-    }
-    EVENTS?: {
-      REFRESH_PRODUCTS: string
-      REFRESH_PROJECTS: string
-      REFRESH_COMPONENTS: string
-    }
-  }
-}
+// Test types removed - using any for test mocks
 
 // Set up global window mock
 global.window = global.window || ({} as Window & typeof globalThis)
-global.window.eventBus = mockEventBus
-global.window.EVENTS = {
+;(global.window as unknown as {eventBus: unknown; EVENTS: unknown}).eventBus = mockEventBus
+;(global.window as unknown as {eventBus: unknown; EVENTS: unknown}).EVENTS = {
   REFRESH_PRODUCTS: 'refresh_products',
   REFRESH_PROJECTS: 'refresh_projects',
-  REFRESH_COMPONENTS: 'refresh_components'
+  REFRESH_COMPONENTS: 'refresh_components',
+  ITEM_CREATED: 'item_created',
+  ITEM_UPDATED: 'item_updated',
+  ITEM_DELETED: 'item_deleted'
 }
 
 describe('ItemsListTable Business Logic', () => {
@@ -321,7 +312,7 @@ describe('ItemsListTable Business Logic', () => {
     test('should handle missing event bus gracefully', () => {
       // Temporarily remove eventBus
       const originalEventBus = global.window.eventBus
-      delete (global.window as Window & typeof globalThis & { eventBus?: unknown }).eventBus
+      delete (global.window as unknown as {eventBus: unknown}).eventBus
 
       const setupEventListeners = () => {
         if (window.eventBus && window.EVENTS) {

@@ -1,0 +1,119 @@
+{% comment %}
+Reusable pagination controls component
+
+Usage:
+{% include "core/components/pagination_controls.html.j2" with pagination_meta=pagination_meta current_page=current_page %}
+
+Parameters:
+- pagination_meta: Pagination metadata object with total, page, page_size, total_pages, has_previous, has_next
+- current_page: Current page number
+- page_size: Items per page (optional, for preserving in URLs)
+- search_query: Search query to preserve in pagination links (optional)
+- preserve_params: List of GET parameters to preserve in pagination links (optional)
+- aria_label: Accessible label for pagination navigation (default: "Pagination navigation")
+- size: Pagination size - 'sm', 'lg', or default (optional)
+
+This component provides consistent pagination across all paginated lists in the application.
+{% endcomment %}
+{% if pagination_meta and pagination_meta.total_pages > 1 %}
+    <nav aria-label="{{ aria_label|default:'Pagination navigation' }}"
+         class="pagination-nav mt-4">
+        <div class="d-flex justify-content-center">
+            <ul class="pagination {% if size == 'sm' %}pagination-sm{% elif size == 'lg' %}pagination-lg{% endif %} mb-0">
+                <!-- Previous Page -->
+                {% if pagination_meta.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?page={{ pagination_meta.page|add:'-1' }}{% include 'core/components/_pagination_params.html.j2' %}"
+                           aria-label="Previous page">
+                            <span aria-hidden="true">«</span>
+                            <span class="visually-hidden">Previous</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link" aria-label="Previous page (unavailable)">
+                            <span aria-hidden="true">«</span>
+                            <span class="visually-hidden">Previous</span>
+                        </span>
+                    </li>
+                {% endif %}
+                <!-- Page Numbers -->
+                {% for page_num in pagination_meta.page_range|default:pagination_meta.total_pages|make_list %}
+                    {% if page_num == current_page %}
+                        <li class="page-item active" aria-current="page">
+                            <span class="page-link">
+                                {{ page_num }}
+                                <span class="visually-hidden">(current)</span>
+                            </span>
+                        </li>
+                    {% else %}
+                        <li class="page-item">
+                            <a class="page-link"
+                               href="?page={{ page_num }}{% include 'core/components/_pagination_params.html.j2' %}"
+                               aria-label="Go to page {{ page_num }}">{{ page_num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                <!-- Next Page -->
+                {% if pagination_meta.has_next %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?page={{ pagination_meta.page|add:'1' }}{% include 'core/components/_pagination_params.html.j2' %}"
+                           aria-label="Next page">
+                            <span class="visually-hidden">Next</span>
+                            <span aria-hidden="true">»</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link" aria-label="Next page (unavailable)">
+                            <span class="visually-hidden">Next</span>
+                            <span aria-hidden="true">»</span>
+                        </span>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+{% endif %}
+<style>
+.pagination-nav .pagination {
+    --bs-pagination-border-radius: 8px;
+}
+
+.pagination-nav .page-link {
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-link-color);
+    padding: 0.5rem 0.75rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.pagination-nav .page-link:hover {
+    background-color: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary-border-subtle);
+    color: var(--bs-primary);
+}
+
+.pagination-nav .page-item.active .page-link {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: var(--bs-white);
+}
+
+.pagination-nav .page-item.disabled .page-link {
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+}
+
+@media (max-width: 576px) {
+    .pagination-nav .pagination {
+        font-size: 0.875rem;
+    }
+
+    .pagination-nav .page-link {
+        padding: 0.375rem 0.5rem;
+    }
+}
+</style>

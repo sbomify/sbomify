@@ -124,4 +124,6 @@ urlpatterns = [
     # Support contact pages
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
+    # Public status toggle
+    path("toggle-public/<str:item_type>/<str:item_id>/", views.toggle_public_status, name="toggle_public_status"),
 ]

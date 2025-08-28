@@ -1,0 +1,84 @@
+<!-- Standard Card Component for Django Templates -->
+<!-- Usage: {% include "core/components/standard_card.html.j2" with title="Card Title" variant="settings" size="large" %} -->
+{% load static %}
+<!-- Bootstrap 5 Card with utility classes -->
+{% with variant=variant|default:"default" size=size|default:"medium" shadow=shadow|default:"sm" layout=layout|default:"vertical" %}
+    <div class="{% if size == 'small' %}mt-2{% elif size == 'large' %}mt-4{% else %}mt-3{% endif %} mb-4">
+        <div class="card border-{% if variant == 'dangerzone' %}danger border-2{% elif variant == 'plan' and emphasis %}primary border-2{% else %}light{% endif %} {% if shadow == 'none' %}shadow-none{% elif shadow == 'lg' %}shadow-brand-lg{% else %}shadow-brand{% endif %} {% if layout == 'horizontal' %}d-flex flex-row{% endif %} {% if variant == 'pricing' %}position-relative overflow-hidden{% endif %}">
+            <!-- Card Header -->
+            {% if title or header_actions %}
+                <div class="card-header px-4 py-3 {% if variant == 'dangerzone' %}bg-danger-subtle border-danger-subtle{% elif variant == 'plan' and emphasis %}bg-primary text-white border-primary{% elif variant == 'stats' %}bg-light{% endif %} {% if layout == 'horizontal' %}border-end border-bottom-0 d-flex align-items-center{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        {% if title %}
+                            <h4 class="card-title mb-0 {% if variant == 'dangerzone' %}text-danger fw-semibold{% elif variant == 'stats' %}text-muted small text-uppercase fw-semibold{% endif %}">
+                                {% if variant == 'dangerzone' %}<i class="fas fa-exclamation-triangle me-2"></i>{% endif %}
+                                {{ title }}
+                            </h4>
+                        {% endif %}
+                        {% if header_actions %}<div class="d-flex align-items-center gap-2">{{ header_actions|safe }}</div>{% endif %}
+                    </div>
+                </div>
+            {% endif %}
+            <!-- Card Body -->
+            <div class="card-body {% if center_content %}text-center{% endif %} {% if no_padding %}p-0{% else %}p-4{% endif %} {% if layout == 'horizontal' %}flex-grow-1 d-flex align-items-center{% endif %} {% if variant == 'plan' %}d-flex flex-column{% endif %}">
+                <!-- Info Notice -->
+                {% if info_notice %}
+                    <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <div>{{ info_notice|safe }}</div>
+                    </div>
+                {% endif %}
+                <!-- Main Content -->
+                {% if variant == 'pricing' %}
+                    <!-- Pricing card top accent -->
+                    <div class="position-absolute top-0 start-0 w-100 bg-gradient"
+                         style="height: 4px;
+                                background: linear-gradient(90deg, var(--bs-primary), var(--bs-info))"></div>
+                {% endif %}
+                {% if content %}
+                    {{ content|safe }}
+                {% else %}
+                    {% block card_content %}<!-- Default content or slot for child templates -->{% endblock %}
+                {% endif %}
+                <!-- Actions -->
+                {% if actions %}
+                    <div class="{% if variant == 'plan' %}mt-auto pt-3{% else %}mt-3 pt-3 border-top{% endif %}">{{ actions|safe }}</div>
+                {% endif %}
+            </div>
+            <!-- Card Footer -->
+            {% if footer %}
+                <div class="card-footer px-4 py-3 {% if variant == 'plan' and emphasis %}border-primary{% else %}bg-light{% endif %}">
+                    {{ footer|safe }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endwith %}
+<style>
+/* Component-specific responsive design */
+@media (max-width: 768px) {
+    .card-header .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+    }
+
+    .card-header .gap-2 {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    /* Reduce padding on mobile for better space utilization */
+    .card-header {
+        padding: 1rem !important;
+    }
+
+    .card-body {
+        padding: 1rem !important;
+    }
+
+    .card-footer {
+        padding: 1rem !important;
+    }
+}
+</style>

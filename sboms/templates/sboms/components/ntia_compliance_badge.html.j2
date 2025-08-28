@@ -1,0 +1,120 @@
+<!-- NTIA Compliance Badge Django Template -->
+{% load static %}
+<div class="ntia-compliance-badge">
+    <!-- Compliant Badge -->
+    {% if status == 'compliant' %}
+        <div class="badge bg-success-subtle text-success d-flex align-items-center gap-1 compliant-badge"
+             data-bs-toggle="tooltip"
+             data-bs-placement="top"
+             title="This SBOM meets all NTIA minimum elements requirements">
+            <i class="fas fa-award"></i>
+            <span>Compliant</span>
+        </div>
+        <!-- Non-Compliant Badge (only show on private view) -->
+    {% elif status == 'non_compliant' and not is_public_view %}
+        <a href="{% url 'sboms:sbom_details' sbom_id %}#ntia"
+           class="text-decoration-none">
+            <div class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
+                 data-bs-toggle="tooltip"
+                 data-bs-placement="top"
+                 title="This SBOM has {{ compliance_details.error_count|default:compliance_details.errors|length }} NTIA compliance issue{% if compliance_details.error_count != 1 or compliance_details.errors|length != 1 %}s{% endif %}. Click to view details."
+                 style="cursor: pointer">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Not Compliant</span>
+            </div>
+        </a>
+        <!-- Unknown Badge - check if NTIA compliance is available -->
+    {% elif status == 'unknown' and not is_public_view %}
+        {% if team_billing_plan == 'business' or team_billing_plan == 'enterprise' %}
+            <a href="{% url 'sboms:sbom_details' sbom_id %}#ntia"
+               class="text-decoration-none">
+                <div class="badge bg-info-subtle text-info ntia-checking d-flex align-items-center gap-1"
+                     data-bs-toggle="tooltip"
+                     data-bs-placement="top"
+                     title="NTIA compliance check is being performed in the background. Click to view details."
+                     style="cursor: pointer">
+                    <i class="fas fa-clock fa-pulse"></i>
+                    <span>Checking...</span>
+                </div>
+            </a>
+        {% else %}
+            <a href="{% url 'billing:select_plan' team_key=team_key %}"
+               class="text-decoration-none">
+                <div class="badge bg-secondary-subtle text-secondary d-flex align-items-center gap-1"
+                     data-bs-toggle="tooltip"
+                     data-bs-placement="top"
+                     title="NTIA Minimum Elements compliance is available with Business and Enterprise plans. Upgrade to unlock this feature."
+                     style="cursor: pointer">
+                    <i class="fas fa-lock"></i>
+                    <span>Upgrade Required</span>
+                </div>
+            </a>
+        {% endif %}
+    {% endif %}
+</div>
+<!-- Note: Modal removed - users click badge to go to SBOM details page for full compliance information -->
+<style>
+/* NTIA Compliance Badge Styling */
+.ntia-compliance-badge .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid;
+    transition: all 0.2s ease;
+}
+
+.ntia-compliance-badge .badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ntia-compliance-badge .badge.bg-success-subtle {
+    border-color: var(--bs-success-border-subtle);
+}
+
+.ntia-compliance-badge .badge.bg-warning-subtle {
+    border-color: var(--bs-warning-border-subtle);
+}
+
+.ntia-compliance-badge .badge.bg-secondary-subtle {
+    border-color: var(--bs-secondary-border-subtle);
+}
+
+.ntia-compliance-badge .badge.bg-info-subtle {
+    border-color: var(--bs-info-border-subtle);
+}
+
+.ntia-compliance-badge .badge i {
+    font-size: 0.875rem;
+}
+
+.ntia-compliance-badge .compliant-badge {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+    border-color: #198754 !important;
+    position: relative;
+    overflow: visible;
+}
+
+.ntia-compliance-badge .compliant-badge i {
+    color: #ffc107;
+    font-size: 1rem;
+    filter: drop-shadow(0 1px 2px rgba(255, 193, 7, 0.3));
+}
+
+.ntia-compliance-badge .compliant-badge:before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #198754, #20c997);
+    border-radius: 0.5rem;
+    z-index: -1;
+    opacity: 0.3;
+}
+
+/* Simple badge styling - no modal complexity needed */
+</style>
+<!-- Note: Tooltips are initialized globally by the main application -->

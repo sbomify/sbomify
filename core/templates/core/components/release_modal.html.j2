@@ -1,0 +1,198 @@
+{% comment %}
+Reusable Release Create/Edit Modal Component for Django Templates
+Context variables:
+- modal_id: Unique ID for the modal (required)
+- csrf_token: CSRF token for form submission
+- has_crud_permissions: Boolean for CRUD permissions
+- products: Optional QuerySet of products for multi-product selector (for all-releases page)
+- product_id: Single product ID (for product-specific pages)
+{% endcomment %}
+{% if has_crud_permissions %}
+    <div class="modal fade"
+         id="{{ modal_id }}"
+         tabindex="-1"
+         aria-labelledby="{{ modal_id }}Label"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modern-modal">
+                <div class="modal-header modern-modal-header border-0">
+                    <h5 class="modal-title fw-bold" id="{{ modal_id }}Label">
+                        <i class="fas fa-plus text-primary me-2" id="{{ modal_id }}Icon"></i>
+                        <span id="{{ modal_id }}Title">Create Release</span>
+                    </h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body px-4 py-3">
+                    <form id="{{ modal_id }}Form" method="post">
+                        {% csrf_token %}
+                        {% if products %}
+                            <!-- Product Selection (for all-releases page) -->
+                            <div class="mb-3">
+                                <label for="{{ modal_id }}ProductSelect"
+                                       class="form-label fw-semibold text-secondary">
+                                    Product <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select"
+                                        id="{{ modal_id }}ProductSelect"
+                                        name="product_id"
+                                        required>
+                                    <option value="">Select a product...</option>
+                                    {% for product in products %}<option value="{{ product.id }}">{{ product.name }}</option>{% endfor %}
+                                </select>
+                                <div class="invalid-feedback" id="{{ modal_id }}ProductSelectError"></div>
+                            </div>
+                        {% elif product_id %}
+                            <!-- Hidden product ID for single-product pages -->
+                            <input type="hidden" name="product_id" value="{{ product_id }}">
+                        {% endif %}
+                        <!-- Release Name -->
+                        <div class="mb-3">
+                            <label for="{{ modal_id }}Name"
+                                   class="form-label fw-semibold text-secondary">
+                                Release Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="{{ modal_id }}Name"
+                                   name="name"
+                                   required
+                                   autocomplete="off"
+                                   placeholder="e.g., v1.0.0, 2024.1, beta-3">
+                            <div class="form-text text-muted">Enter a unique name for this release</div>
+                            <div class="invalid-feedback" id="{{ modal_id }}NameError"></div>
+                        </div>
+                        <!-- Description -->
+                        <div class="mb-3">
+                            <label for="{{ modal_id }}Description"
+                                   class="form-label fw-semibold text-secondary">Description (Optional)</label>
+                            <textarea class="form-control"
+                                      id="{{ modal_id }}Description"
+                                      name="description"
+                                      rows="3"
+                                      placeholder="Describe what's included in this release..."></textarea>
+                            <div class="invalid-feedback" id="{{ modal_id }}DescriptionError"></div>
+                        </div>
+                        <!-- Pre-release Checkbox -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="{{ modal_id }}PreRelease"
+                                       name="is_prerelease">
+                                <label class="form-check-label" for="{{ modal_id }}PreRelease">
+                                    <strong>Mark as pre-release</strong>
+                                    <div class="form-text text-muted mt-1">Pre-releases are typically alpha, beta, or release candidate versions</div>
+                                </label>
+                            </div>
+                        </div>
+                        <!-- Error Display -->
+                        <div id="{{ modal_id }}Error"
+                             class="alert alert-danger"
+                             style="display: none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
+                    <button type="button"
+                            class="btn btn-outline-secondary modern-btn-secondary"
+                            data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit"
+                            form="{{ modal_id }}Form"
+                            class="btn btn-primary px-4 modern-btn-primary"
+                            id="{{ modal_id }}Submit">
+                        <span id="{{ modal_id }}Spinner"
+                              class="spinner-border spinner-border-sm me-2"
+                              style="display: none"></span>
+                        <i class="fas fa-plus me-2" id="{{ modal_id }}SubmitIcon"></i>
+                        <span id="{{ modal_id }}SubmitText">Create Release</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+/* Modern Modal Styling - consistent with existing components */
+.modern-modal {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+.modern-modal-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 1.5rem 2rem 1rem 2rem;
+}
+
+.modern-modal-footer {
+    background: #f8fafc;
+    padding: 1rem 2rem 1.5rem 2rem;
+}
+
+.modern-btn-secondary {
+    background: transparent;
+    border: 2px solid #6c757d;
+    color: #6c757d;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modern-btn-secondary:hover {
+    background: #6c757d;
+    color: white;
+    border-color: #6c757d;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.modern-btn-primary {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, #0056b3 100%);
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.modern-btn-primary:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+}
+
+.modal-title {
+    color: #1e293b;
+    font-size: 1.25rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Loading state styling */
+.loading .modern-btn-primary {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .modern-modal-header,
+    .modern-modal-footer {
+        padding: 1rem 1.5rem;
+    }
+
+    .modal-body {
+        padding: 1rem 1.5rem !important;
+    }
+}
+    </style>
+{% endif %}

@@ -1,0 +1,101 @@
+{% comment %}
+Reusable Copyable Value Component
+Context variables:
+- value: The value to copy
+- display_text: Optional text to display (defaults to value)
+- title: Optional title/tooltip text
+- css_class: Optional CSS classes to apply
+{% endcomment %}
+<span class="copyable-value {{ css_class }}"
+      data-value="{{ value }}"
+      title="{{ title|default:'Click to copy' }}"
+      role="button"
+      tabindex="0">{{ display_text|default:value }}</span>
+<style>
+.copyable-value {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
+}
+
+.copyable-value:hover {
+    opacity: 0.8;
+}
+
+.copyable-value:active {
+    transform: scale(0.98);
+}
+
+.copyable-value.copied {
+    color: #059669 !important;
+}
+
+.copyable-value.copied::after {
+    content: "Copied!";
+    position: absolute;
+    top: -2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #059669;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 1000;
+    animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(5px); }
+    20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+}
+</style>
+<script>
+// Copyable value functionality
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.copyable-value').forEach(element => {
+        element.addEventListener('click', async function() {
+            const value = this.dataset.value;
+
+            try {
+                await navigator.clipboard.writeText(value);
+
+                // Visual feedback
+                this.classList.add('copied');
+                setTimeout(() => {
+                    this.classList.remove('copied');
+                }, 2000);
+
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = value;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    this.classList.add('copied');
+                    setTimeout(() => {
+                        this.classList.remove('copied');
+                    }, 2000);
+                } catch (fallbackErr) {
+                    console.error('Failed to copy text: ', fallbackErr);
+                }
+                document.body.removeChild(textArea);
+            }
+        });
+
+        // Handle keyboard accessibility
+        element.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
+});
+</script>

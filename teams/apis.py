@@ -4,7 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
-from ninja import File, Router
+from ninja import File, Query, Router
 from ninja.files import UploadedFile
 from ninja.security import django_auth
 from pydantic import BaseModel
@@ -16,7 +16,18 @@ from core.utils import token_to_number
 from sbomify.logging import getLogger
 
 from .models import Member, Team
-from .schemas import BrandingInfo, BrandingInfoWithUrls, TeamPatchSchema, TeamResponseSchema, TeamUpdateSchema
+from .schemas import (
+    BrandingInfo,
+    BrandingInfoWithUrls,
+    DependencyTrackServerCreateSchema,
+    DependencyTrackServerListSchema,
+    DependencyTrackServerSchema,
+    PaginatedTeamsResponse,
+    TeamListItemSchema,
+    TeamPatchSchema,
+    TeamResponseSchema,
+    TeamUpdateSchema,
+)
 from .utils import get_user_teams
 
 logger = getLogger(__name__)
@@ -302,6 +313,73 @@ def list_teams(request: HttpRequest):
         return 403, {"detail": "Unable to retrieve teams"}
 
 
+@router.get("/dashboard", response={200: PaginatedTeamsResponse, 403: ErrorResponse})
+def get_teams_dashboard_data(
+    request: HttpRequest,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(15, ge=1, le=100, description="Items per page"),
+    search: str = Query("", description="Search teams by name"),
+):
+    """Get workspace dashboard data with membership information for the current user.
+
+    Note: Returns workspace membership data for dashboard with pagination and search. Teams are now called workspaces.
+    """
+    try:
+        from django.db.models import Count
+
+        # Base queryset with optimizations and annotations for statistics
+        memberships_queryset = (
+            Member.objects.filter(user=request.user)
+            .select_related("team")
+            .prefetch_related("team__member_set", "team__invitation_set")
+            .annotate(
+                product_count=Count("team__product", distinct=True),
+                project_count=Count("team__project", distinct=True),
+                component_count=Count("team__component", distinct=True),
+            )
+        )
+
+        # Apply search filter
+        if search.strip():
+            memberships_queryset = memberships_queryset.filter(team__name__icontains=search.strip())
+
+        # Order by default team first, then by team name
+        memberships_queryset = memberships_queryset.order_by("-is_default_team", "team__name")
+
+        # Paginate the results
+        from core.apis import _paginate_queryset
+
+        memberships, pagination_meta = _paginate_queryset(memberships_queryset, page, page_size)
+
+        teams_list = []
+        for membership in memberships:
+            # Use annotated statistics (no additional queries needed)
+            team = membership.team
+
+            teams_list.append(
+                TeamListItemSchema(
+                    key=team.key,
+                    name=team.name,
+                    role=membership.role,
+                    member_count=team.member_set.count(),
+                    invitation_count=team.invitation_set.count(),
+                    product_count=membership.product_count,
+                    project_count=membership.project_count,
+                    component_count=membership.component_count,
+                    is_default_team=membership.is_default_team,
+                    membership_id=str(membership.id),
+                )
+            )
+
+        return 200, PaginatedTeamsResponse(
+            items=teams_list,
+            pagination=pagination_meta,
+        )
+    except Exception as e:
+        logger.error(f"Error getting dashboard data for user {request.user.id}: {e}")
+        return 403, {"detail": "Unable to retrieve dashboard data"}
+
+
 @router.get(
     "/{team_key}", response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse}
 )
@@ -331,3 +409,181 @@ def get_team(request: HttpRequest, team_key: str):
         has_completed_wizard=team.has_completed_wizard,
         billing_plan=team.billing_plan,
     )
+
+
+# DT Server Management Endpoints
+
+
+@router.get(
+    "/{team_key}/dt-servers", response={200: DependencyTrackServerListSchema, 403: ErrorResponse, 404: ErrorResponse}
+)
+def list_team_dt_servers(request: HttpRequest, team_key: str):
+    """List custom DT servers for a workspace.
+
+    Only available for Enterprise workspaces.
+    """
+    from vulnerability_scanning.models import DependencyTrackServer
+
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Team not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is a member of this team
+    member = Member.objects.filter(user=request.user, team=team).first()
+    if not member:
+        return 403, {"detail": "Access denied"}
+
+    # Only Enterprise teams can manage custom DT servers
+    if team.billing_plan != "enterprise":
+        return 403, {"detail": "Custom DT servers are only available for Enterprise workspaces"}
+
+    # Get all DT servers (for now, we'll allow Enterprise users to see all servers)
+    # In the future, we might want to filter by team ownership
+    servers = DependencyTrackServer.objects.all().order_by("priority", "name")
+
+    server_data = []
+    for server in servers:
+        server_data.append(
+            DependencyTrackServerSchema(
+                id=str(server.id),
+                name=server.name,
+                url=server.url,
+                is_active=server.is_active,
+                priority=server.priority,
+                max_concurrent_scans=server.max_concurrent_scans,
+                current_scan_count=server.current_scan_count,
+                health_status=server.health_status,
+                last_health_check=server.last_health_check.isoformat() if server.last_health_check else None,
+                created_at=server.created_at.isoformat(),
+                updated_at=server.updated_at.isoformat(),
+                api_key_set=bool(server.api_key),
+            )
+        )
+
+    return 200, DependencyTrackServerListSchema(servers=server_data)
+
+
+@router.post(
+    "/{team_key}/dt-servers",
+    response={201: DependencyTrackServerSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def create_team_dt_server(request: HttpRequest, team_key: str, data: DependencyTrackServerCreateSchema):
+    """Create a new custom DT server for a workspace.
+
+    Only available for Enterprise workspaces.
+    """
+    from vulnerability_scanning.models import DependencyTrackServer
+
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Team not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is a member of this team with appropriate permissions
+    member = Member.objects.filter(user=request.user, team=team).first()
+    if not member:
+        return 403, {"detail": "Access denied"}
+
+    # Only owners and admins can create DT servers
+    if member.role not in ["owner", "admin"]:
+        return 403, {"detail": "Only workspace owners and admins can create DT servers"}
+
+    # Only Enterprise teams can manage custom DT servers
+    if team.billing_plan != "enterprise":
+        return 403, {"detail": "Custom DT servers are only available for Enterprise workspaces"}
+
+    # Validate URL uniqueness
+    if DependencyTrackServer.objects.filter(url=data.url.rstrip("/")).exists():
+        return 400, {"detail": "A server with this URL already exists"}
+
+    try:
+        # Create the server
+        server = DependencyTrackServer.objects.create(
+            name=data.name,
+            url=data.url.rstrip("/"),
+            api_key=data.api_key,
+            priority=data.priority,
+            max_concurrent_scans=data.max_concurrent_scans,
+            is_active=True,
+            health_status="unknown",
+        )
+
+        logger.info(f"DT server created by {request.user.email}: {server.name} ({server.id})")
+
+        return 201, DependencyTrackServerSchema(
+            id=str(server.id),
+            name=server.name,
+            url=server.url,
+            is_active=server.is_active,
+            priority=server.priority,
+            max_concurrent_scans=server.max_concurrent_scans,
+            current_scan_count=server.current_scan_count,
+            health_status=server.health_status,
+            last_health_check=server.last_health_check.isoformat() if server.last_health_check else None,
+            created_at=server.created_at.isoformat(),
+            updated_at=server.updated_at.isoformat(),
+            api_key_set=bool(server.api_key),
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating DT server: {e}")
+        return 400, {"detail": "Failed to create server"}
+
+
+@router.delete("/{team_key}/dt-servers/{server_id}", response={204: None, 403: ErrorResponse, 404: ErrorResponse})
+def delete_team_dt_server(request: HttpRequest, team_key: str, server_id: str):
+    """Delete a custom DT server.
+
+    Only available for Enterprise workspaces.
+    """
+    from vulnerability_scanning.models import DependencyTrackServer
+
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Team not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Team not found"}
+
+    # Check if user is a member of this team with appropriate permissions
+    member = Member.objects.filter(user=request.user, team=team).first()
+    if not member:
+        return 403, {"detail": "Access denied"}
+
+    # Only owners and admins can delete DT servers
+    if member.role not in ["owner", "admin"]:
+        return 403, {"detail": "Only workspace owners and admins can delete DT servers"}
+
+    # Only Enterprise teams can manage custom DT servers
+    if team.billing_plan != "enterprise":
+        return 403, {"detail": "Custom DT servers are only available for Enterprise workspaces"}
+
+    try:
+        server = DependencyTrackServer.objects.get(id=server_id)
+    except (DependencyTrackServer.DoesNotExist, ValueError):
+        return 404, {"detail": "Server not found"}
+
+    # Check if server is currently being used
+    from vulnerability_scanning.models import TeamVulnerabilitySettings
+
+    if TeamVulnerabilitySettings.objects.filter(custom_dt_server=server).exists():
+        return 400, {"detail": "Cannot delete server that is currently in use by workspaces"}
+
+    logger.info(f"DT server deleted by {request.user.email}: {server.name} ({server.id})")
+    server.delete()
+
+    return 204, None

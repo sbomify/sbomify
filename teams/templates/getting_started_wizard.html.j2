@@ -1,0 +1,354 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% block title %}Getting Started - sbomify{% endblock %}
+{% block content %}
+    <div class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-8 col-xl-6">
+                <!-- Progress Card using Bootstrap 5 and standard card patterns -->
+                <div class="mt-3 mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h4 class="card-title mb-0">Getting Started</h4>
+                                <a href="{% url 'core:dashboard' %}"
+                                   class="btn btn-link text-muted"
+                                   title="Skip wizard">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Progress Bar -->
+                            <div class="progress wizard-progress mb-4" style="height: 8px;">
+                                <div class="progress-bar bg-primary"
+                                     role="progressbar"
+                                     style="width: {{ progress }}%"
+                                     aria-valuenow="{{ progress }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100"></div>
+                            </div>
+                            <!-- Step Indicators -->
+                            <div class="d-flex justify-content-between wizard-steps">
+                                {% for step in steps %}
+                                    <div class="text-center step-indicator">
+                                        <div class="step-circle {% if current_step == step.name %}active{% elif progress > forloop.counter0|mul:33 %}completed{% endif %} mb-2">
+                                            <i class="{{ step.icon }}"></i>
+                                        </div>
+                                        <small class="step-label {% if current_step == step.name %}text-primary fw-bold{% elif progress > forloop.counter0|mul:33 %}text-success{% else %}text-muted{% endif %}">
+                                            {{ step.label }}
+                                        </small>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Main Content Card -->
+                <div class="mt-4 mb-4">
+                    <div class="card border-light shadow-brand-lg">
+                        <div class="card-body {% if current_step == 'complete' %}text-center{% endif %} p-4">
+                            {% if current_step != "complete" %}
+                                <!-- Form Step -->
+                                <div class="wizard-form-container">
+                                    <!-- Step Title -->
+                                    <div class="text-center mb-5">
+                                        <h2 class="h3 mb-3">
+                                            {% if current_step == "product" %}
+                                                <i class="fas fa-box text-primary me-2"></i>Create Your Product
+                                            {% elif current_step == "project" %}
+                                                <i class="fas fa-folder-open text-primary me-2"></i>Create Your Project
+                                            {% elif current_step == "component" %}
+                                                <i class="fas fa-cube text-primary me-2"></i>Create Your Component
+                                            {% endif %}
+                                        </h2>
+                                        <p class="text-muted fs-6">
+                                            {% if current_step == "product" %}
+                                                Start by defining your main product offering
+                                            {% elif current_step == "project" %}
+                                                Add a project to organize your components
+                                            {% elif current_step == "component" %}
+                                                Create your first component to track SBOMs
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    <!-- Form -->
+                                    <form method="post"
+                                          action="{% url 'teams:getting_started_wizard' %}"
+                                          class="wizard-form"
+                                          novalidate>
+                                        {% csrf_token %}
+                                        <!-- Form Fields -->
+                                        {% for field in form.visible_fields %}
+                                            <div class="mb-4">
+                                                <label class="form-label fw-semibold text-secondary"
+                                                       for="{{ field.id_for_label }}">
+                                                    {{ field.label }}
+                                                    {% if field.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                                </label>
+                                                {% if field.help_text %}
+                                                    <div class="help-text bg-light border-start border-primary border-4 p-3 mb-3">
+                                                        <div class="d-flex align-items-start">
+                                                            <i class="fas fa-info-circle text-primary me-2 mt-1 flex-shrink-0"></i>
+                                                            <small class="text-muted">{{ field.help_text }}</small>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                                {{ field|add_class:"form-control" }}
+                                                {% if field.errors %}
+                                                    <div class="invalid-feedback d-block">
+                                                        {% for error in field.errors %}{{ error }}{% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                        {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+                                        <!-- Form Actions -->
+                                        <div class="d-flex justify-content-between align-items-center mt-5 pt-4 border-top">
+                                            {% if current_step != "product" %}
+                                                <a href="?step={% if current_step == 'component' %}project{% else %}product{% endif %}"
+                                                   class="btn btn-outline-secondary btn-lg">
+                                                    <i class="fas fa-arrow-left me-2"></i>Previous
+                                                </a>
+                                            {% endif %}
+                                            <button type="submit" class="btn btn-primary btn-lg px-5 wizard-submit-btn">
+                                                {% if current_step == "component" %}
+                                                    <i class="fas fa-check me-2"></i>Complete Setup
+                                                {% else %}
+                                                    <i class="fas fa-arrow-right me-2"></i>Next Step
+                                                {% endif %}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            {% else %}
+                                <!-- Completion Step -->
+                                <div class="completion-container text-center">
+                                    <!-- Success Icon -->
+                                    <div class="mb-5">
+                                        <div class="success-icon bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center rounded-circle mb-4"
+                                             style="width: 80px;
+                                                    height: 80px">
+                                            <i class="fas fa-check-circle text-success" style="font-size: 2.5rem;"></i>
+                                        </div>
+                                        <h2 class="h3 text-success fw-bold">🎉 All Set!</h2>
+                                        <p class="text-muted fs-5">Your workspace is ready to go. Here's what to do next:</p>
+                                    </div>
+                                    <!-- Next Steps Cards -->
+                                    <div class="row g-4 mb-5">
+                                        <div class="col-md-6">
+                                            <div class="card border-0 bg-light h-100 hover-lift">
+                                                <div class="card-body p-4">
+                                                    <div class="text-primary mb-3">
+                                                        <i class="fas fa-file-alt" style="font-size: 2rem;"></i>
+                                                    </div>
+                                                    <h5 class="fw-bold mb-2">1. Complete Your Metadata</h5>
+                                                    <p class="text-muted small mb-0">
+                                                        Fill out essential information about your component, including licensing and supplier details.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card border-0 bg-light h-100 hover-lift">
+                                                <div class="card-body p-4">
+                                                    <div class="text-primary mb-3">
+                                                        <i class="fas fa-cloud-upload-alt" style="font-size: 2rem;"></i>
+                                                    </div>
+                                                    <h5 class="fw-bold mb-2">2. Upload Your First SBOM</h5>
+                                                    <p class="text-muted small mb-0">
+                                                        Ready to upload? Check out the CI/CD integration instructions to automate your process.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Action Button -->
+                                    <a href="{% url 'core:component_details' component_id=component_id %}"
+                                       class="btn btn-primary btn-lg px-5">
+                                        <i class="fas fa-cube me-2"></i>View Your Component
+                                        <i class="fas fa-arrow-right ms-2"></i>
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block styles %}
+    <style>
+/* Wizard-specific styling using Bootstrap 5 variables */
+.wizard-progress {
+    background-color: var(--bs-gray-200);
+    border-radius: 4px;
+}
+
+.wizard-steps .step-indicator {
+    flex: 1;
+    max-width: 120px;
+}
+
+.step-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--bs-gray-300);
+    color: var(--bs-gray-600);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin: 0 auto;
+    transition: all 0.3s ease;
+}
+
+.step-circle.active {
+    background-color: var(--bs-primary);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.step-circle.completed {
+    background-color: var(--bs-success);
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.wizard-form-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.help-text {
+    border-radius: 8px;
+    background: linear-gradient(45deg, #f8f9fa, #ffffff);
+}
+
+.wizard-submit-btn {
+    min-width: 160px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.wizard-submit-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.success-icon {
+    animation: successPulse 2s infinite;
+}
+
+@keyframes successPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Form styling enhancements */
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-control-lg {
+    border-radius: 8px;
+    font-size: 1.1rem;
+    padding: 0.75rem 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .wizard-steps .step-indicator {
+        max-width: 80px;
+    }
+
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .step-label {
+        font-size: 0.75rem;
+    }
+
+    .wizard-form-container {
+        padding: 0 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .wizard-submit-btn {
+        width: 100%;
+    }
+}
+    </style>
+{% endblock %}
+{% block scripts %}
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add form validation and UX enhancements
+    const form = document.querySelector('.wizard-form');
+    const submitBtn = document.querySelector('.wizard-submit-btn');
+
+    if (form && submitBtn) {
+        // Enhanced form submission
+        form.addEventListener('submit', function(e) {
+            // Add loading state
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+
+            // Re-enable after a delay if form doesn't redirect
+            setTimeout(() => {
+                if (submitBtn.disabled) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            }, 5000);
+        });
+
+        // Auto-focus first input
+        const firstInput = form.querySelector('input, textarea');
+        if (firstInput) {
+            firstInput.focus();
+        }
+    }
+
+    // Animate progress on page load
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar) {
+        const targetWidth = progressBar.style.width;
+        progressBar.style.width = '0%';
+        setTimeout(() => {
+            progressBar.style.transition = 'width 0.8s ease-in-out';
+            progressBar.style.width = targetWidth;
+        }, 100);
+    }
+});
+    </script>
+{% endblock %}

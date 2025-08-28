@@ -1,20 +1,18 @@
-import { showSuccess, showError, showWarning, showInfo, showToast } from './alerts';
+import { NotificationManager } from './utils/django-components';
 
-// Expose alert functions globally
+// Expose Bootstrap notification functions globally
 declare global {
   interface Window {
-    showSuccess: typeof showSuccess;
-    showError: typeof showError;
-    showWarning: typeof showWarning;
-    showInfo: typeof showInfo;
-    showToast: typeof showToast;
+    showSuccess: (message: string) => void;
+    showError: (message: string) => void;
+    showWarning: (message: string) => void;
+    showInfo: (message: string) => void;
   }
 }
 
-window.showSuccess = showSuccess;
-window.showError = showError;
-window.showWarning = showWarning;
-window.showInfo = showInfo;
-window.showToast = showToast;
+window.showSuccess = (message: string) => NotificationManager.showSuccess(message);
+window.showError = (message: string) => NotificationManager.showError(message);
+window.showWarning = (message: string) => NotificationManager.showWarning(message);
+window.showInfo = (message: string) => NotificationManager.showSuccess(message); // Use success for info messages
 
-export { showToast, showSuccess, showError, showWarning, showInfo };
+export { NotificationManager };

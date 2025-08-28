@@ -1,0 +1,45 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load django_vite %}
+{% load static %}
+{% block title %}Danger Zone - {{ team.name }} - sbomify{% endblock %}
+{% block content %}
+    <div class="detail-page-header mb-4">
+        <!-- Breadcrumb Navigation -->
+        <div class="detail-breadcrumb-nav mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb detail-breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'teams:teams_dashboard' %}">Workspaces</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'teams:team_members' team_key=team.key %}">{{ team.name }}</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Danger Zone</li>
+                </ol>
+            </nav>
+        </div>
+        <!-- Main Header Content -->
+        <div class="detail-header-main">
+            <div class="detail-header-left">
+                <div class="detail-title-group">
+                    <h1 class="detail-item-title">
+                        <i class="fas fa-exclamation-triangle me-3 text-danger"></i>
+                        Danger Zone
+                    </h1>
+                    <div class="detail-meta-row">
+                        <span class="detail-meta-badge">
+                            <i class="fas fa-building me-2"></i>{{ team.name }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Settings Navigation -->
+    {% include "teams/components/settings_navigation.html.j2" with active_tab="danger" %}
+    <!-- Danger Zone Content -->
+    <div class="settings-content">
+        {% include "core/components/danger_zone.html.j2" with item_type="workspace" item_id=team.key item_name=team.name delete_endpoint="teams:delete_team" redirect_url="teams:teams_dashboard" %}
+    </div>
+{% endblock %}

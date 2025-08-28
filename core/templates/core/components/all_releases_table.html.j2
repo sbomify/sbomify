@@ -1,0 +1,223 @@
+{% comment %}
+All Releases Table Component - Shows releases across all products for a team
+Context variables:
+- releases: QuerySet of Release objects (with prefetched product info)
+- has_crud_permissions: Boolean for CRUD permissions
+- team_products: QuerySet of Product objects for create release dropdown
+- table_title: Title for the table (default: "All Releases")
+{% endcomment %}
+{% load static %}
+<!-- All Releases Table using Standard Card -->
+<div class="standard-card mt-3"
+     data-component="all-releases-table"
+     data-releases-table
+     data-has-crud-permissions="{{ has_crud_permissions|yesno:'true,false' }}">
+    <div class="card shadow-brand border-0">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100 mb-2">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-tags me-2 text-primary"></i>{{ table_title|default:"All Releases" }}
+                </h4>
+                <div class="d-flex align-items-center gap-2">
+                    {% if has_crud_permissions %}
+                        {% if team_products %}
+                            <button class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#createReleaseModal">
+                                <i class="fas fa-plus me-1"></i>Create Release
+                            </button>
+                        {% endif %}
+                        <a href="{% url 'core:products_dashboard' %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-box me-1"></i>Manage Products
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="mb-0 text-muted small">
+                <i class="fas fa-info-circle me-1"></i>
+                Track software versions and artifacts across all your products
+            </p>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0">
+            {% if not releases %}
+                <!-- Enhanced Empty state -->
+                <div class="text-center p-5 empty-state-background">
+                    <div class="empty-state-icon mb-4">
+                        <div class="empty-state-icon-circle">
+                            <i class="fas fa-tags fa-2x"></i>
+                        </div>
+                    </div>
+                    <h5 class="text-dark mb-2">No releases yet</h5>
+                    <p class="text-muted mb-4 mx-auto empty-state-description">
+                        {% if team_products %}
+                            Create your first release to start tracking software versions and artifacts across your products.
+                        {% else %}
+                            Get started by creating a product, then add releases to track your software versions and artifacts.
+                        {% endif %}
+                    </p>
+                    <!-- Call to action steps -->
+                    <div class="row justify-content-center mb-4">
+                        <div class="col-md-8">
+                            {% if team_products %}
+                                <div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-3">
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-primary mb-2">1</div>
+                                        <small class="text-muted">Create Release</small>
+                                    </div>
+                                    <i class="fas fa-arrow-right text-muted d-none d-md-block"></i>
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-secondary mb-2">2</div>
+                                        <small class="text-muted">Upload Artifacts</small>
+                                    </div>
+                                    <i class="fas fa-arrow-right text-muted d-none d-md-block"></i>
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-success mb-2">3</div>
+                                        <small class="text-muted">Track & Share</small>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="d-flex flex-column flex-md-row align-items-center justify-content-center gap-3">
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-primary mb-2">1</div>
+                                        <small class="text-muted">Create a Product</small>
+                                    </div>
+                                    <i class="fas fa-arrow-right text-muted d-none d-md-block"></i>
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-secondary mb-2">2</div>
+                                        <small class="text-muted">Add Releases</small>
+                                    </div>
+                                    <i class="fas fa-arrow-right text-muted d-none d-md-block"></i>
+                                    <div class="text-center">
+                                        <div class="step-badge step-badge-success mb-2">3</div>
+                                        <small class="text-muted">Upload Artifacts</small>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if has_crud_permissions %}
+                        {% if team_products %}
+                            <button class="btn btn-primary btn-lg px-4 me-3"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#createReleaseModal">
+                                <i class="fas fa-plus me-2"></i>Create Your First Release
+                            </button>
+                        {% endif %}
+                        <a href="{% url 'core:products_dashboard' %}"
+                           class="btn btn-outline-primary btn-lg px-4">
+                            <i class="fas fa-box me-2"></i>Create Your First Product
+                        </a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <!-- Releases Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Release</th>
+                                <th>Status</th>
+                                <th>Artifacts</th>
+                                <th>Created</th>
+                                {% if has_crud_permissions %}<th class="text-end">Actions</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for release in releases %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div>
+                                                <strong>
+                                                    <a href="{% url 'core:product_details' release.product.id %}"
+                                                       class="text-decoration-none">{{ release.product.name }}</a>
+                                                </strong>
+                                                {% if release.product.description %}
+                                                    <div class="text-muted small">{{ release.product.description|truncatechars:40 }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div>
+                                                <strong>
+                                                    <a href="{% url 'core:release_details' release.product.id release.id %}"
+                                                       class="text-decoration-none">{{ release.name }}</a>
+                                                </strong>
+                                                {% if release.description %}<div class="text-muted small">{{ release.description|truncatechars:60 }}</div>{% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            {% if release.is_latest %}<span class="badge bg-success">Latest</span>{% endif %}
+                                            {% if release.is_prerelease %}<span class="badge bg-warning">Pre-release</span>{% endif %}
+                                            {% if release.product.is_public %}
+                                                <span class="badge bg-primary">Public</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Private</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% with artifacts_count=release.artifacts.count %}
+                                            {% if artifacts_count %}
+                                                <span class="text-muted">
+                                                    <i class="fas fa-puzzle-piece me-1"></i>{{ artifacts_count }} artifact{{ artifacts_count|pluralize }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">No artifacts</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    <td>
+                                        <span class="text-muted small">{{ release.created_at|date:"M j, Y" }}</span>
+                                    </td>
+                                    {% if has_crud_permissions %}
+                                        <td class="text-end">
+                                            <div class="d-flex gap-2 justify-content-end">
+                                                <a href="{% url 'core:release_details' release.product.id release.id %}"
+                                                   class="table-action-btn action-view action-primary"
+                                                   title="View Release"></a>
+                                                <a href="{% url 'core:product_details' release.product.id %}"
+                                                   class="table-action-btn action-product action-secondary"
+                                                   title="View Product"></a>
+                                                {% if release.artifacts.exists %}
+                                                    <a href="/api/v1/releases/{{ release.id }}/download"
+                                                       class="table-action-btn action-download action-primary"
+                                                       title="Download Release"></a>
+                                                {% endif %}
+                                                {% if not release.is_latest %}
+                                                    <button class="table-action-btn action-edit action-primary edit-release-btn"
+                                                            title="Edit Release"
+                                                            data-release-id="{{ release.id }}"
+                                                            data-release-name="{{ release.name }}"
+                                                            data-release-description="{{ release.description }}"
+                                                            data-release-prerelease="{{ release.is_prerelease|yesno:'true,false' }}">
+                                                    </button>
+                                                    <button class="table-action-btn action-delete action-danger delete-release-btn"
+                                                            title="Delete Release"
+                                                            data-release-id="{{ release.id }}"
+                                                            data-release-name="{{ release.name }}"></button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- Create Release Modal -->
+{% if has_crud_permissions and team_products %}
+    {% include "core/components/release_modal.html.j2" with modal_id="createReleaseModal" products=team_products %}
+{% endif %}

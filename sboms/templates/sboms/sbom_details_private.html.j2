@@ -7,8 +7,24 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
+{% load breadcrumb_tags %}
 {% block title %}SBOM: {{ sbom.name }}{% endblock %}
-{% block content %}
+{% block breadcrumb %}
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb bg-light p-3 rounded">
+            <li class="breadcrumb-item">
+                <a href="{% url 'core:component_details' sbom.component.id %}"
+                   class="text-decoration-none">
+                    <i class="fas fa-cube me-1"></i>{{ sbom.component.name }}
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <i class="fas fa-file-code me-1"></i>{{ sbom.name }}
+            </li>
+        </ol>
+    </nav>
+{% endblock %}
+{% block dashboard_content %}
     <div class="page-header mb-4">
         <div class="header-main mb-3">
             <div class="title-section">
@@ -46,8 +62,7 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             {% endif %}
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="false" team-billing-plan="{{ team_billing_plan }}">
-                </vc-ntia-compliance-badge>
+                {% include "sboms/components/ntia_compliance_badge.html.j2" with status=sbom.ntia_compliance_status compliance_details=sbom.ntia_compliance_details is_public_view=False team_billing_plan=team_billing_plan team_key=team.key sbom_id=sbom.id %}
             </span>
         </div>
     </div>
@@ -135,23 +150,197 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             }
         }
     </style>
+    <!-- Tabbed Content -->
     <div class="row">
-        <div class="col-12 col-lg-8">
-            <div class="vc-sbom-metadata-card"
-                 data-sbom-id="{{ sbom.id }}"
-                 data-sbom-name="{{ sbom.name }}"
-                 data-created-at="{{ sbom.created_at }}"
-                 data-source-display="{{ sbom.source_display }}"
-                 data-format="{{ sbom.format }}"
-                 data-format-version="{{ sbom.format_version|stringformat:'s' }}"
-                 data-version="{{ sbom.version|default:'' }}"></div>
-        </div>
-        <div class="col-12 col-lg-4">
-            <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
+        <div class="col-12">
+            <div class="card">
+                <!-- Tab Navigation -->
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="sbomTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active"
+                                    id="overview-tab"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#overview"
+                                    type="button"
+                                    role="tab"
+                                    aria-controls="overview"
+                                    aria-selected="true">
+                                <i class="fas fa-info-circle me-2"></i>Overview
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link"
+                                    id="ntia-tab"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#ntia"
+                                    type="button"
+                                    role="tab"
+                                    aria-controls="ntia"
+                                    aria-selected="false">
+                                <i class="fas fa-shield-check me-2"></i>NTIA Compliance
+                                {% if sbom.ntia_compliance_status == 'non_compliant' %}
+                                    <span class="badge bg-warning ms-1">{{ sbom.ntia_compliance_details.error_count|default:sbom.ntia_compliance_details.errors|length }}</span>
+                                {% elif sbom.ntia_compliance_status == 'compliant' %}
+                                    <span class="badge bg-success ms-1">✓</span>
+                                {% endif %}
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link"
+                                    id="vulnerabilities-tab"
+                                    data-bs-toggle="tab"
+                                    data-bs-target="#vulnerabilities"
+                                    type="button"
+                                    role="tab"
+                                    aria-controls="vulnerabilities"
+                                    aria-selected="false">
+                                <i class="fas fa-shield-alt me-2"></i>Vulnerabilities
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <!-- Tab Content -->
+                <div class="card-body">
+                    <div class="tab-content" id="sbomTabContent">
+                        <!-- Overview Tab -->
+                        <div class="tab-pane fade show active"
+                             id="overview"
+                             role="tabpanel"
+                             aria-labelledby="overview-tab">
+                            <div class="row">
+                                <div class="col-12 col-lg-8">
+                                    <div class="vc-sbom-metadata-card"
+                                         data-sbom-id="{{ sbom.id }}"
+                                         data-sbom-name="{{ sbom.name }}"
+                                         data-created-at="{{ sbom.created_at }}"
+                                         data-source-display="{{ sbom.source_display }}"
+                                         data-format="{{ sbom.format }}"
+                                         data-format-version="{{ sbom.format_version|stringformat:'s' }}"
+                                         data-version="{{ sbom.version|default:'' }}"></div>
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- NTIA Compliance Tab -->
+                        <div class="tab-pane fade"
+                             id="ntia"
+                             role="tabpanel"
+                             aria-labelledby="ntia-tab">
+                            {% include "sboms/components/ntia_compliance_details.html.j2" with sbom=sbom %}
+                        </div>
+                        <!-- Vulnerabilities Tab -->
+                        <div class="tab-pane fade"
+                             id="vulnerabilities"
+                             role="tabpanel"
+                             aria-labelledby="vulnerabilities-tab">
+                            <div class="vulnerability-content">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading vulnerabilities...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading vulnerability information...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
     {% vite_asset 'sboms/js/main.ts' %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle tab switching from URL hash
+        const handleTabFromHash = () => {
+            const hash = window.location.hash;
+            if (hash) {
+                const tabButton = document.querySelector(`button[data-bs-target="${hash}"]`);
+                if (tabButton) {
+                    const tab = new bootstrap.Tab(tabButton);
+                    tab.show();
+                }
+            }
+        };
+
+        // Handle initial hash
+        handleTabFromHash();
+
+        // Handle hash changes
+        window.addEventListener('hashchange', handleTabFromHash);
+
+        // Update URL hash when tab changes
+        const tabButtons = document.querySelectorAll('#sbomTabs button[data-bs-toggle="tab"]');
+        tabButtons.forEach(button => {
+            button.addEventListener('shown.bs.tab', function(event) {
+                const target = event.target.getAttribute('data-bs-target');
+                if (target && target !== '#overview') {
+                    window.history.replaceState(null, null, target);
+                } else {
+                    // Remove hash for overview tab
+                    window.history.replaceState(null, null, window.location.pathname + window.location.search);
+                }
+            });
+        });
+
+        // Load vulnerabilities when tab is clicked
+        const vulnerabilitiesTab = document.getElementById('vulnerabilities-tab');
+        let vulnerabilitiesLoaded = false;
+
+        vulnerabilitiesTab.addEventListener('click', function() {
+            if (!vulnerabilitiesLoaded) {
+                loadVulnerabilities();
+                vulnerabilitiesLoaded = true;
+            }
+        });
+
+        // Function to load vulnerabilities via AJAX
+        function loadVulnerabilities() {
+            const vulnerabilityContent = document.querySelector('#vulnerabilities .vulnerability-content');
+            const sbomId = '{{ sbom.id }}';
+
+            fetch(`/sbom/${sbomId}/vulnerabilities/`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load vulnerabilities');
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    // Extract the vulnerability content from the response
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const content = doc.querySelector('.vulnerability-scan-results') ||
+                                  doc.querySelector('.vulnerability-content') ||
+                                  doc.querySelector('main') ||
+                                  doc.body;
+
+                    if (content) {
+                        vulnerabilityContent.innerHTML = content.innerHTML;
+                    } else {
+                        vulnerabilityContent.innerHTML = `
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                No vulnerability information available for this SBOM.
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading vulnerabilities:', error);
+                    vulnerabilityContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Failed to load vulnerability information. Please try again later.
+                        </div>
+                    `;
+                });
+        }
+    });
+    </script>
 {% endblock %}

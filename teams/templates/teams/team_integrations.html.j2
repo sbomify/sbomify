@@ -1,0 +1,51 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load django_vite %}
+{% load static %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/workspace-integrations.css' %}">
+{% endblock %}
+{% block title %}Workspace Integrations - {{ team.name }} - sbomify{% endblock %}
+{% block content %}
+    <div class="detail-page-header mb-4">
+        <!-- Breadcrumb Navigation -->
+        <div class="detail-breadcrumb-nav mb-3">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb detail-breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'teams:teams_dashboard' %}">Workspaces</a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'teams:team_members' team_key=team.key %}">{{ team.name }}</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Integrations</li>
+                </ol>
+            </nav>
+        </div>
+        <!-- Main Header Content -->
+        <div class="detail-header-main">
+            <div class="detail-header-left">
+                <div class="detail-title-group">
+                    <h1 class="detail-item-title">
+                        <i class="fas fa-plug me-3 text-primary"></i>
+                        Workspace Integrations
+                    </h1>
+                    <div class="detail-meta-row">
+                        <span class="detail-meta-badge">
+                            <i class="fas fa-building me-2"></i>{{ team.name }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Settings Navigation -->
+    {% include "teams/components/settings_navigation.html.j2" with active_tab="integrations" %}
+    <!-- Integrations Content -->
+    <div class="settings-content" data-billing-plan="{{ team.billing_plan }}">
+        {% include "teams/components/integrations_section.html.j2" %}
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'teams/js/main.ts' %}
+{% endblock %}

@@ -1,0 +1,208 @@
+{% comment %}
+Product Links Management Component - Server-side rendered with JavaScript enhancement
+Context variables:
+- product_id: Product ID
+- product_links: List of product link objects from API
+- has_crud_permissions: Boolean for CRUD permissions
+- table_title: Title for the component (default: "Product Links")
+{% endcomment %}
+{% load static %}
+{% load utm_tags %}
+<!-- Product Links Card -->
+<div class="standard-card mt-3">
+    <div class="card shadow-sm">
+        <!-- Card Header -->
+        <div class="card-header">
+            <div class="header-content">
+                <h4 class="card-title mb-0">{{ table_title|default:"Product Links" }}</h4>
+                {% if has_crud_permissions %}
+                    <div class="header-actions">
+                        <button class="btn btn-sm btn-primary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#addLinkModal">
+                            <i class="fas fa-plus me-1"></i>Add Link
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0"
+             data-product-links
+             data-product-id="{{ product_id }}"
+             data-has-crud-permissions="{{ has_crud_permissions|yesno:'true,false' }}">
+            {% if not product_links %}
+                <!-- Empty State -->
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-link fa-3x mb-3 opacity-25"></i>
+                    <h6 class="text-muted">No product links added</h6>
+                    <p class="text-muted mb-3">
+                        Add links like website, support, documentation, etc. to provide additional information about this product
+                    </p>
+                    {% if has_crud_permissions %}
+                        <button class="btn btn-primary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#addLinkModal">
+                            <i class="fas fa-plus me-2"></i>Add Link
+                        </button>
+                    {% endif %}
+                </div>
+            {% else %}
+                <!-- Links Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Title</th>
+                                <th>URL</th>
+                                {% if has_crud_permissions %}<th class="col-actions text-end">Actions</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for link in product_links %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ link.link_type|title }}</span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ link.title }}</strong>
+                                        {% if link.description %}<div class="text-muted small">{{ link.description }}</div>{% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% if is_public_page %}{{ link.url|add_utm:'utm_source=sbomify&utm_medium=public_page&utm_campaign=product_links&utm_content='|add:link.link_type }}{% else %}{{ link.url }}{% endif %}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-primary text-decoration-none">
+                                            {% if link.url|length > 50 %}
+                                                {{ link.url|slice:":47" }}...
+                                            {% else %}
+                                                {{ link.url }}
+                                            {% endif %}
+                                            <i class="fas fa-external-link-alt ms-1 small"></i>
+                                        </a>
+                                    </td>
+                                    {% if has_crud_permissions %}
+                                        <td class="text-end">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary btn-sm edit-link-btn"
+                                                        title="Edit"
+                                                        data-link-id="{{ link.id }}"
+                                                        data-link-type="{{ link.link_type }}"
+                                                        data-link-title="{{ link.title }}"
+                                                        data-link-url="{{ link.url }}"
+                                                        data-link-description="{{ link.description }}">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger btn-sm delete-link-btn"
+                                                        title="Delete"
+                                                        data-link-id="{{ link.id }}"
+                                                        data-link-title="{{ link.title }}">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- Add/Edit Link Modal -->
+{% if has_crud_permissions %}
+    <div class="modal fade" id="addLinkModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="linkModalTitle">Add Link</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="linkForm">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="linkType" class="form-label">
+                                Link Type <span class="text-danger">*</span>
+                            </label>
+                            <select id="linkType" name="link_type" class="form-select" required>
+                                <option value="">Select type...</option>
+                                <option value="website">Website</option>
+                                <option value="support">Support</option>
+                                <option value="documentation">Documentation</option>
+                                <option value="repository">Repository</option>
+                                <option value="changelog">Changelog</option>
+                                <option value="release_notes">Release Notes</option>
+                                <option value="security">Security</option>
+                                <option value="issue_tracker">Issue Tracker</option>
+                                <option value="download">Download</option>
+                                <option value="chat">Chat/Community</option>
+                                <option value="social">Social Media</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="linkTitle" class="form-label">
+                                Title <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   id="linkTitle"
+                                   name="title"
+                                   class="form-control"
+                                   required
+                                   placeholder="Enter link title">
+                        </div>
+                        <div class="mb-3">
+                            <label for="linkUrl" class="form-label">
+                                URL <span class="text-danger">*</span>
+                            </label>
+                            <input type="url"
+                                   id="linkUrl"
+                                   name="url"
+                                   class="form-control"
+                                   required
+                                   placeholder="https://example.com">
+                        </div>
+                        <div class="mb-3">
+                            <label for="linkDescription" class="form-label">Description</label>
+                            <textarea id="linkDescription"
+                                      name="description"
+                                      class="form-control"
+                                      rows="3"
+                                      placeholder="Optional description of this link"></textarea>
+                        </div>
+                        <div id="linkFormError" class="alert alert-danger link-form-error"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveLinkBtn">
+                        <span id="saveLinkSpinner"
+                              class="spinner-border spinner-border-sm me-2"
+                              style="display: none"></span>
+                        <span id="saveLinkText">Add Link</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<style>
+/* Header styling for consistent layout */
+.card-header .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.card-header .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+</style>
+<!-- TypeScript functionality loaded via main.ts -->

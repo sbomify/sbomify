@@ -3,6 +3,9 @@
 Template context:
 product: Product object
 brand: BrandingInfo object
+product_links: List of product link objects
+product_identifiers: List of product identifier objects
+has_downloadable_content: Boolean for download availability
 {% endcomment %}
 {% load widget_tweaks %}
 {% load static %}
@@ -16,29 +19,263 @@ brand: BrandingInfo object
     {% breadcrumb product 'product' %}
 {% endblock %}
 {% block content %}
-    <!-- JSON data for Vue components -->
-    {{ product_projects_data|json_script:"product-projects-data" }}
-    <div class="vc-public-page-layout"
-         data-title="{{ product.name }}"
-         data-title-icon="fas fa-box"
-         data-page-type="product"
-         data-item-id="{{ product.id }}"
-         {% if has_downloadable_content %} data-download-url="/api/v1/products/{{ product.id }}/download" data-download-title="Download Latest Release" data-download-button-text="Download Latest Release" data-download-description="Download SBOM from the latest release containing the most current artifacts for this product" data-download-icon="fas fa-download" {% endif %}>
-        <template data-slot="subtitle">
-            <span class="meta-badge meta-badge--primary">
-                <i class="fas fa-box"></i>
-                Product
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">{{ product.name }}</h1>
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-box me-2 text-primary"></i>
+                <span class="meta-label">Product</span>
             </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-fingerprint"></i>
-                <span class="vc-copyable-value"
-                      data-value="{{ product.id }}"
-                      title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                {% include "core/components/copyable_value.html.j2" with value=product.id display_text=product.id title="Product ID: "|add:product.id|add:" (click to copy)" css_class="meta-id" %}
             </span>
-        </template>
+            {% if has_downloadable_content %}
+                <span class="meta-divider">•</span>
+                <span class="meta-item">
+                    <a href="/api/v1/products/{{ product.id }}/download"
+                       class="btn btn-sm btn-success">
+                        <i class="fas fa-download me-1"></i>Download Latest Release
+                    </a>
+                </span>
+            {% endif %}
+        </div>
     </div>
+    <!-- Product Information Sections -->
+    {% if product_identifiers %}
+        <div class="row mt-3">
+            <div class="col-12">
+                {% include "core/components/product_identifiers_manager.html.j2" with product_id=product.id product_identifiers=product_identifiers has_crud_permissions=False team_billing_plan="community" table_title="Product Identifiers" %}
+            </div>
+        </div>
+    {% endif %}
+    {% if product_links %}
+        <div class="row mt-3">
+            <div class="col-12">
+                {% include "core/components/product_links_manager.html.j2" with product_id=product.id product_links=product_links has_crud_permissions=False table_title="Product Links" is_public_page=True %}
+            </div>
+        </div>
+    {% endif %}
+    <!-- Product Projects -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card shadow-brand">
+                <div class="card-header px-4 py-3">
+                    <h4 class="card-title mb-0">Product Projects</h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if not projects %}
+                        <!-- Empty State -->
+                        <div class="dashboard-empty">
+                            <div class="empty-icon mb-3">
+                                <i class="fas fa-project-diagram fa-3x text-muted"></i>
+                            </div>
+                            <h5 class="empty-title">No public projects</h5>
+                            <p class="text-muted mb-0">No public projects have been added to this product yet.</p>
+                        </div>
+                    {% else %}
+                        <!-- Projects Grid -->
+                        <div class="p-4">
+                            <div class="row">
+                                {% for project in projects %}
+                                    <div class="col-12 col-md-6 col-lg-4 mb-3">
+                                        <div class="project-item">
+                                            <div class="project-icon">
+                                                <i class="fas fa-project-diagram project-type-icon"></i>
+                                            </div>
+                                            <div class="project-info">
+                                                <h6 class="project-name">
+                                                    <a href="/public/project/{{ project.id }}/" class="project-link">{{ project.name }}</a>
+                                                </h6>
+                                                <small class="project-type text-muted">
+                                                    Project
+                                                    {% if project.components.count > 0 %}
+                                                        • {{ project.components.count }} component{{ project.components.count|pluralize }}
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-id {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .meta-id:hover {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        /* Project grid styling */
+        .dashboard-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6c757d;
+        }
+
+        .empty-icon {
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+
+        .project-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            background-color: #ffffff;
+            height: 100%;
+        }
+
+        .project-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-color: #cbd5e1;
+        }
+
+        .project-icon {
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .project-type-icon {
+            font-size: 1.5rem;
+            color: #6b7280;
+            width: 2rem;
+            text-align: center;
+        }
+
+        .project-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .project-name {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .project-link {
+            color: #1e293b;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .project-link:hover {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+
+        .project-type {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+
+            .project-item {
+                margin-bottom: 0.75rem;
+            }
+        }
+    </style>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'sboms/js/main.ts' %}
 {% endblock %}

@@ -8,7 +8,7 @@ from billing.models import BillingPlan
 @pytest.mark.django_db
 class TestUIWorkflows:
     def test_dashboard_stats_load(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that dashboard stats load correctly with Vue component"""
+        """Test that dashboard renders with Django templates instead of Vue components"""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
 
@@ -23,12 +23,29 @@ class TestUIWorkflows:
         team.billing_plan = "stats_plan"
         team.save()
 
+        # Set current team in session (required for dashboard view)
+        session = client.session
+        session["current_team"] = {
+            "id": team.id,
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True
+        }
+        session.save()
+
         # Test initial page load
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
 
-        # Check Vue component mounting point exists
-        assert 'class="vc-dashboard-stats"' in content
+        # Verify the page loads successfully and uses Django templates
+        assert response.status_code == 200
+
+        # Check that we're using Django template dashboard stats instead of Vue
+        assert 'class="dashboard-stats-section"' in content
+        assert 'Dashboard' in content  # Page title should be present
+
+        # Check that vulnerability chart container is still present (kept as Vue)
+        assert 'vc-vulnerability-timeseries' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))
@@ -41,6 +58,39 @@ class TestUIWorkflows:
         assert "total_products" in data
         assert "latest_uploads" in data
         assert isinstance(data["latest_uploads"], list)
+
+    def test_component_dashboard_stats_load(self, client: Client, sample_user, sample_team_with_owner_member):
+        """Test that component details page renders with Django templates instead of Vue"""
+        from sboms.models import Component
+
+        client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        # Set current team in session
+        session = client.session
+        session["current_team"] = {
+            "id": team.id,
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True
+        }
+        session.save()
+
+        # Create a test component
+        component = Component.objects.create(
+            name="Test Component",
+            team=team,
+            component_type=Component.ComponentType.SBOM
+        )
+
+        # Test component details page load
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        # Verify the page loads successfully and uses Django templates
+        assert 'class="component-stats-section"' in content
+        assert component.name in content  # Component name should be present
 
     def test_api_first_architecture(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that the new API-first architecture works correctly"""

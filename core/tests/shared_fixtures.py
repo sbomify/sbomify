@@ -98,7 +98,16 @@ def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, A
         },
     )
 
-    team = Team.objects.create(name="Test Community Team", billing_plan=community_plan.key)
+    team = Team.objects.create(
+        name="Test Community Team",
+        billing_plan=community_plan.key,
+        billing_plan_limits={
+            "max_products": community_plan.max_products,
+            "max_projects": community_plan.max_projects,
+            "max_components": community_plan.max_components,
+            "subscription_status": "active",
+        },
+    )
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -170,7 +179,16 @@ def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, 
         },
     )
 
-    team = Team.objects.create(name="Test Enterprise Team", billing_plan=enterprise_plan.key)
+    team = Team.objects.create(
+        name="Test Enterprise Team",
+        billing_plan=enterprise_plan.key,
+        billing_plan_limits={
+            "max_products": enterprise_plan.max_products,
+            "max_projects": enterprise_plan.max_projects,
+            "max_components": enterprise_plan.max_components,
+            "subscription_status": "active",
+        },
+    )
     team.key = number_to_random_token(team.pk)
     team.save()
 

@@ -1,31 +1,272 @@
 ---
-description: Python programming
-globs: *.py
+description: Python Development Standards - Modern Python 3.10+
+globs: ["*.py", "pyproject.toml", "poetry.lock"]
 alwaysApply: false
 ---
-# Python Key Principles
 
-- Use modern python syntax and features. Python 3.10+ is preferred.
-- Use type hints and type checking.
-- Be sure to include return types when necessary.
-- Use modern type hints and use built-in types like list, dict over typing.List, typing.Dict.
-- Use f-strings for string interpolation.
-- Use modern python features like async/await for asynchronous programming.
-- Use modern python features like dataclasses, slots, and property decorators.
-- Use modern python features like contextlib.contextmanager and contextlib.closing.
-- Use modern python features like pathlib for file system operations.
-- Detailed documentation using docstrings and README files.
-- Please use pep257 convention.
-- Package management via Poetry and *never* edit a lockfile by hand - use the `poetry` command.
-- Use ruff for code style and formatting.
-- Update existing docstrings if need be.
-- Make sure you keep any comments that exist in a file.
-- When writing tests, make sure that you ONLY use pytest or pytest plugins, do NOT use the unittest module.
-- All tests should have typing annotations as well.
-- Make use of the fixtures pattern for tests.
-- Use the pytest-mock plugin for mocking.
-- All tests should be fully annotated and should contain docstrings.
-- Run tests and often to verify that you haven't broken anything.
-- Make sure to use `ruff` to lint your code base frequently.
-- ALWAYS run `ruff check` and `ruff format` after making any changes to Python files.
-- If `ruff` reports any issues, fix them with the `--fix` variable in ruff before manually trying to fix them. Do this before proceeding with other changes.
+# Python Development Guidelines
+
+## Language Standards
+
+### Python Version & Features
+- **Target Python 3.10+** for all new development
+- Use modern Python syntax and features exclusively
+- Leverage pattern matching (match/case) where appropriate
+- Use structural pattern matching for complex conditionals
+- Utilize union types with `|` syntax (e.g., `str | int` instead of `Union[str, int]`)
+
+### Type System
+- **Mandatory type hints** for all functions, methods, and class attributes
+- Always include return type annotations
+- Use built-in generic types: `list[str]`, `dict[str, int]` instead of `typing.List`, `typing.Dict`
+- Leverage `typing.Protocol` for structural typing
+- Use `typing.TypedDict` for dictionary schemas
+- Implement `typing.Generic` for reusable generic classes
+- Use `typing.Literal` for constrained string/numeric values
+
+```python
+# Good
+def process_data(items: list[dict[str, Any]]) -> dict[str, int]:
+    return {"count": len(items)}
+
+# Bad
+def process_data(items):
+    return {"count": len(items)}
+```
+
+## Code Style & Structure
+
+### String Handling
+- **Always use f-strings** for string interpolation and formatting
+- Use triple-quoted strings for multi-line strings and docstrings
+- Prefer raw strings (`r""`) for regex patterns
+
+### Modern Python Features
+- Use `dataclasses` with `slots=True` for data containers
+- Implement `@property` decorators for computed attributes
+- Use `contextlib.contextmanager` for custom context managers
+- Use `contextlib.closing` for resource management
+- Leverage `pathlib.Path` for all file system operations (never use `os.path`)
+- Use `enum.Enum` for constants and choices
+- Implement `functools.lru_cache` for expensive computations
+
+```python
+from dataclasses import dataclass
+from pathlib import Path
+from functools import lru_cache
+
+@dataclass(slots=True)
+class UserProfile:
+    name: str
+    email: str
+    age: int | None = None
+
+@lru_cache(maxsize=128)
+def expensive_computation(value: int) -> int:
+    return value ** 2
+```
+
+### Asynchronous Programming
+- Use `async`/`await` for all I/O-bound operations
+- Implement proper async context managers with `async with`
+- Use `asyncio.gather()` for concurrent operations
+- Leverage `asyncio.create_task()` for background tasks
+- Use `typing.Awaitable` and `typing.Coroutine` for type hints
+
+## Documentation Standards
+
+### Docstring Requirements
+- **All modules, classes, and functions must have docstrings**
+- Follow **PEP 257** docstring conventions strictly
+- Use **Google-style docstrings** for consistency
+- Include type information in docstrings even with type hints
+- Document all parameters, return values, and exceptions
+
+```python
+def calculate_metrics(data: list[dict[str, Any]], threshold: float = 0.5) -> dict[str, float]:
+    """Calculate performance metrics from input data.
+
+    Args:
+        data: List of dictionaries containing measurement data
+        threshold: Minimum threshold for filtering results (default: 0.5)
+
+    Returns:
+        Dictionary containing calculated metrics with keys:
+        - 'mean': Average value
+        - 'std': Standard deviation
+        - 'count': Number of valid measurements
+
+    Raises:
+        ValueError: If data is empty or contains invalid values
+        TypeError: If data format is incorrect
+    """
+```
+
+### Comment Standards
+- Preserve existing comments when modifying code
+- Write comments that explain **why**, not **what**
+- Use `# TODO:` comments for future improvements with ticket references
+- Use `# FIXME:` for known issues that need addressing
+- Use `# NOTE:` for important implementation details
+
+## Package Management
+
+### Poetry Standards
+- **Never edit lockfiles manually** - always use Poetry commands
+- Use `poetry add` for new dependencies
+- Use `poetry add --group dev` for development dependencies
+- Use `poetry update` to update dependencies
+- Use `poetry lock --no-update` to regenerate lock file without updates
+- Specify version constraints appropriately (`^1.0.0` for compatible versions)
+
+### Dependency Organization
+```toml
+[tool.poetry.dependencies]
+python = "^3.10"
+django = "^4.2.0"
+django-ninja = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0.0"
+pytest-django = "^4.5.0"
+pytest-mock = "^3.10.0"
+ruff = "^0.1.0"
+```
+
+## Code Quality & Linting
+
+### Ruff Configuration
+- **Always run `ruff check` before committing**
+- **Always run `ruff format` for code formatting**
+- Use `ruff check --fix` to auto-fix issues before manual fixes
+- Never ignore linting errors - fix them properly
+- Configure Ruff rules in `pyproject.toml`
+
+### Code Quality Checklist
+1. Run `ruff check --fix` to auto-fix issues
+2. Run `ruff format` to format code
+3. Run tests with `pytest`
+4. Check type hints with `mypy` (if configured)
+5. Verify test coverage meets 80% minimum
+
+## Testing Standards
+
+### Testing Framework
+- **Use pytest exclusively** - never use `unittest` module
+- Use pytest plugins: `pytest-django`, `pytest-mock`, `pytest-cov`
+- All test functions and classes must have type annotations
+- All test functions must have descriptive docstrings
+
+### Test Structure
+```python
+import pytest
+from unittest.mock import Mock
+from myapp.services import UserService
+
+class TestUserService:
+    """Test suite for UserService class."""
+
+    @pytest.fixture
+    def mock_database(self) -> Mock:
+        """Create a mock database connection."""
+        return Mock()
+
+    def test_create_user_success(self, mock_database: Mock) -> None:
+        """Test successful user creation with valid data."""
+        # Arrange
+        service = UserService(mock_database)
+        user_data = {"name": "John", "email": "john@example.com"}
+
+        # Act
+        result = service.create_user(user_data)
+
+        # Assert
+        assert result.name == "John"
+        mock_database.save.assert_called_once()
+```
+
+### Test Organization
+- Use `pytest.fixture` for test data and mocks
+- Use `pytest.mark.parametrize` for testing multiple scenarios
+- Use `pytest-mock` plugin for mocking (`mocker.patch()`)
+- Organize tests in classes by functionality
+- Use descriptive test names that explain the scenario
+- Follow AAA pattern: Arrange, Act, Assert
+
+### Coverage Requirements
+- Maintain **minimum 80% test coverage**
+- Use `pytest-cov` for coverage reporting
+- Focus on testing business logic and edge cases
+- Mock external dependencies appropriately
+- Test both success and failure scenarios
+
+## Error Handling
+
+### Exception Management
+- Use specific exception types, not generic `Exception`
+- Create custom exception classes for domain-specific errors
+- Always include meaningful error messages
+- Use exception chaining with `raise ... from ...` when appropriate
+- Log exceptions at appropriate levels
+
+```python
+class ValidationError(ValueError):
+    """Raised when data validation fails."""
+    pass
+
+def validate_user_data(data: dict[str, Any]) -> None:
+    """Validate user input data."""
+    try:
+        if not data.get("email"):
+            raise ValidationError("Email is required")
+    except KeyError as e:
+        raise ValidationError(f"Missing required field: {e}") from e
+```
+
+## Performance Best Practices
+
+### Optimization Guidelines
+- Use list/dict comprehensions for simple transformations
+- Use `itertools` for efficient iteration patterns
+- Implement `__slots__` in classes for memory optimization
+- Use `functools.lru_cache` for expensive, pure functions
+- Profile code with `cProfile` when performance is critical
+- Use `collections.defaultdict` and `collections.Counter` appropriately
+
+### Memory Management
+- Use generators for large datasets
+- Implement context managers for resource cleanup
+- Close file handles and database connections explicitly
+- Use `weakref` for circular reference prevention
+
+## Integration Standards
+
+### Django Integration
+- Follow Django conventions for models, views, and forms
+- Use Django's built-in validation and serialization
+- Implement proper Django signals for decoupled functionality
+- Use Django's transaction management appropriately
+
+### Database Best Practices
+- Use type-safe database queries with proper annotations
+- Implement database migrations properly
+- Use database constraints and indexes appropriately
+- Handle database exceptions gracefully
+
+## Development Workflow
+
+### Pre-commit Checklist
+1. Run `ruff check --fix .` to fix linting issues
+2. Run `ruff format .` to format code
+3. Run `pytest` to execute all tests
+4. Verify test coverage with `pytest --cov`
+5. Check type hints if using mypy
+6. Update documentation if needed
+
+### Code Review Standards
+- Ensure all functions have proper type hints
+- Verify docstrings follow PEP 257
+- Check for proper error handling
+- Validate test coverage for new code
+- Review for security vulnerabilities
+- Ensure proper resource management

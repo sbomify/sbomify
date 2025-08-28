@@ -64,24 +64,22 @@ urlpatterns: list[URLPattern] = [
         "product/<str:product_id>/sbom/download",
         RedirectView.as_view(pattern_name="core:sbom_download_product", permanent=True),
     ),
-    # SBOM-specific URLs - redirect old URLs to new component detailed structure
-    path("sbom/<str:sbom_id>", views.redirect_sbom_to_component_detailed, name="sbom_details_redirect"),  # legacy
+    # SBOM-specific URLs - use dedicated SBOM details views
+    path("sbom/<str:sbom_id>", views.sbom_details_private, name="sbom_details_redirect"),
     path(
         "public/sbom/<str:sbom_id>",
-        views.redirect_sbom_to_component_detailed_public,
+        views.sbom_details_public,
         name="sbom_details_public_redirect",
-    ),  # legacy
+    ),
     path(
         "sbom/download/<str:sbom_id>",
         views.sbom_download,
         name="sbom_download",
     ),
-    path("sbom/<str:sbom_id>/", views.redirect_sbom_to_component_detailed, name="sbom_details"),  # legacy
+    path("sbom/<str:sbom_id>/", views.sbom_details_private, name="sbom_details"),
+    path("public/sbom/<str:sbom_id>/", views.sbom_details_public, name="sbom_details_public"),
     path(
-        "public/sbom/<str:sbom_id>/", views.redirect_sbom_to_component_detailed_public, name="sbom_details_public"
-    ),  # legacy
-    path(
-        "sbom/<str:sbom_id>/vulnerabilities",
+        "sbom/<str:sbom_id>/vulnerabilities/",
         views.sbom_vulnerabilities,
         name="sbom_vulnerabilities",
     ),

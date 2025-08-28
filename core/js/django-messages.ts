@@ -1,7 +1,7 @@
-import { showSuccess, showError, showWarning, showInfo } from './alerts';
+import { NotificationManager } from './utils/django-components';
 
 /**
- * Process Django messages stored in the DOM and display them using SweetAlert2
+ * Process Django messages stored in the DOM and display them using Bootstrap 5 toasts
  */
 export function processDjangoMessages() {
   const messagesContainer = document.getElementById('django-messages');
@@ -13,15 +13,15 @@ export function processDjangoMessages() {
   messages.forEach(messageData => {
     const [tags, message] = messageData.split(':');
 
-    // Map Django message levels to SweetAlert2 types
+    // Map Django message levels to Bootstrap toast types
     if (tags.includes('success')) {
-      showSuccess(message);
+      NotificationManager.showSuccess(message);
     } else if (tags.includes('error')) {
-      showError(message);
+      NotificationManager.showError(message);
     } else if (tags.includes('warning')) {
-      showWarning(message);
+      NotificationManager.showWarning(message);
     } else if (tags.includes('info') || tags.includes('debug')) {
-      showInfo(message);
+      NotificationManager.showSuccess(message); // Use success for info messages
     }
   });
 }

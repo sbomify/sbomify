@@ -1,0 +1,98 @@
+{% comment %}
+Reusable Danger Zone Component
+Context variables:
+- item_type: Type of item (e.g., "release", "component", "product")
+- item_id: ID of the item to delete
+- item_name: Name of the item to delete
+- redirect_url: URL to redirect to after successful deletion
+- delete_endpoint: API endpoint for deletion (e.g., "/api/v1/releases/{id}")
+- title: Optional title override (default: "Danger Zone")
+- description: Optional description override
+- button_text: Optional button text override (default: "Delete {item_type}")
+- collapsible: Whether the danger zone should be collapsible (default: true)
+- default_expanded: Whether the danger zone should be expanded by default (default: false)
+{% endcomment %}
+{% load static %}
+<!-- Danger Zone Card -->
+{% with title=title|default:"Danger Zone" collapsible=collapsible|default:True default_expanded=default_expanded|default:False %}
+    <!-- Pass config to TypeScript -->
+    <div data-danger-zone-config='{"itemType":"{{ item_type }}","itemId":"{{ item_id }}","itemName":"{{ item_name }}","deleteEndpoint":"{{ delete_endpoint }}","redirectUrl":"{{ redirect_url }}"}'
+         style="display: none"></div>
+    <div class="card border-2 border-danger mt-4">
+        <div class="card-header bg-danger-subtle border-bottom-2 border-danger-subtle">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h5 class="card-title mb-0 fw-semibold text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>{{ title }}
+                    </h5>
+                    <p class="card-subtitle text-danger mb-0 mt-1 small opacity-75">Irreversible and destructive actions</p>
+                </div>
+                {% if collapsible %}
+                    <button class="btn btn-sm btn-outline-danger border-0"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#danger-zone-content"
+                            aria-expanded="{% if default_expanded %}true{% else %}false{% endif %}"
+                            title="Toggle danger zone visibility">
+                        <i class="fas {% if default_expanded %}fa-chevron-down{% else %}fa-chevron-up{% endif %} transition-transform"></i>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        <div class="collapse {% if default_expanded or not collapsible %}show{% endif %}"
+             id="danger-zone-content">
+            <div class="card-body p-0">
+                <!-- Delete Section -->
+                <div class="p-4 bg-danger-subtle bg-gradient">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <div class="bg-danger text-white rounded d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width: 2.5rem;
+                                    height: 2.5rem">
+                            <i class="fas fa-trash-alt"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="fw-semibold text-dark mb-1">
+                                {% if button_text %}
+                                    {{ button_text }}
+                                {% else %}
+                                    Delete {{ item_type|capfirst }}
+                                {% endif %}
+                            </h6>
+                            <p class="text-muted mb-0 small lh-sm">
+                                {% if description %}
+                                    {{ description }}
+                                {% else %}
+                                    Permanently remove this {{ item_type }} and all associated data
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <button class="btn btn-danger d-inline-flex align-items-center danger-delete-btn"
+                            data-item-id="{{ item_id }}"
+                            data-item-name="{{ item_name }}"
+                            data-item-type="{{ item_type }}"
+                            data-delete-url="{{ delete_endpoint }}">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        {% if button_text %}
+                            {{ button_text }}
+                        {% else %}
+                            Delete {{ item_type|capfirst }}
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endwith %}
+<!-- Uses the new Bootstrap 5 confirmation system via JavaScript -->
+<style>
+/* Component-specific transition effects */
+.transition-transform {
+    transition: transform 0.15s ease-in-out;
+}
+
+.btn[aria-expanded="false"] .transition-transform {
+    transform: rotate(180deg);
+}
+</style>
+<!-- TypeScript functionality loaded via main.ts -->

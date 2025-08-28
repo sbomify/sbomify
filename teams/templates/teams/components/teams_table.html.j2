@@ -1,0 +1,179 @@
+{% comment %}
+Reusable teams table component - Pure Django template implementation using standard card styling
+
+Usage:
+{% include "teams/components/teams_table.html.j2" with teams_data=teams_data csrf_token=csrf_token %}
+
+Parameters:
+- teams_data: List of team data (from API/service)
+- csrf_token: CSRF token for forms
+
+This component displays teams data using the standard card styling for consistency.
+{% endcomment %}
+<div class="teams-table-wrapper">
+    {% if teams_data %}
+        <div class="row">
+            {% for team in teams_data %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <!-- Using standard card styling pattern -->
+                    <div class="card border-light shadow-brand h-100">
+                        <div class="card-body p-4 d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="team-info flex-grow-1">
+                                    <h5 class="team-name mb-1">{{ team.name }}</h5>
+                                    <span class="badge badge-role bg-{{ team.role }}-subtle text-{{ team.role }} mb-2">
+                                        {% if team.role == "admin" %}
+                                            <i class="fas fa-shield-alt me-1"></i>
+                                        {% elif team.role == "member" %}
+                                            <i class="fas fa-user me-1"></i>
+                                        {% endif %}
+                                        {{ team.role|title }}
+                                    </span>
+                                </div>
+                                {% if team.is_default_team %}
+                                    <span class="badge bg-primary-subtle text-primary">
+                                        <i class="fas fa-star me-1"></i>Default
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="team-stats mb-3">
+                                <div class="row text-center">
+                                    <div class="col-6 col-md-3">
+                                        <div class="stat-item">
+                                            <div class="stat-number">{{ team.product_count }}</div>
+                                            <div class="stat-label">Product{{ team.product_count|pluralize }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <div class="stat-item">
+                                            <div class="stat-number">{{ team.project_count }}</div>
+                                            <div class="stat-label">Project{{ team.project_count|pluralize }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <div class="stat-item">
+                                            <div class="stat-number">{{ team.component_count }}</div>
+                                            <div class="stat-label">Component{{ team.component_count|pluralize }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <div class="stat-item">
+                                            <div class="stat-number">{{ team.member_count }}</div>
+                                            <div class="stat-label">Member{{ team.member_count|pluralize }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'teams:team_settings' team.key %}"
+                                       class="btn btn-outline-primary btn-sm flex-grow-1">
+                                        <i class="fas fa-cog me-1"></i>
+                                        Settings
+                                    </a>
+                                    {% if not team.is_default_team %}
+                                        <form method="post"
+                                              action="{% url 'teams:set_default_team' team.membership_id %}"
+                                              class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="btn btn-outline-secondary btn-sm"
+                                                    title="Set as default workspace">
+                                                <i class="fas fa-star"></i>
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <!-- Using standard card styling for empty state -->
+        <div class="card border-light shadow-brand">
+            <div class="card-body p-4 text-center">
+                <div class="py-5">
+                    <div class="mb-3">
+                        <i class="fas fa-users fa-3x text-muted"></i>
+                    </div>
+                    <h4 class="text-muted">No Workspaces Available</h4>
+                    <p class="text-muted">You don't have access to any workspaces yet.</p>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+<style>
+/* Custom styles for team cards - minimal overrides on standard card styling */
+.teams-table-wrapper .card {
+    transition: all 0.2s ease;
+}
+
+.teams-table-wrapper .card:hover {
+    transform: translateY(-2px);
+}
+
+.team-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.badge-role {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Role-specific badge colors */
+.bg-owner-subtle {
+    background-color: #fef3c7 !important;
+}
+
+.text-owner {
+    color: #d97706 !important;
+}
+
+.bg-admin-subtle {
+    background-color: #ddd6fe !important;
+}
+
+.text-admin {
+    color: #7c3aed !important;
+}
+
+.bg-member-subtle {
+    background-color: #e5e7eb !important;
+}
+
+.text-member {
+    color: #6b7280 !important;
+}
+
+/* Team statistics styling */
+.team-stats {
+    background: var(--bs-gray-50, #f8fafc);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.stat-item {
+    padding: 0.5rem;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--bs-primary);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--bs-gray-600);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    margin-top: 0.25rem;
+}
+</style>

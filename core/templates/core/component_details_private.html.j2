@@ -138,28 +138,101 @@ APP_BASE_URL - Base URL for the application
                 gap: 0.75rem;
             }
         }
+
+        .stat-loading {
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .stat-display {
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .stat-value {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.25rem;
+        }
+
+        /* Responsive font sizes */
+        @media (max-width: 768px) {
+            .display-4 {
+                font-size: 2rem !important;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .display-4 {
+                font-size: 1.75rem !important;
+            }
+        }
     </style>
-    <div class="row">
-        <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="component"
-                 data-item-id="{{ component.id }}"></div>
-        </div>
+    {# Component stats using server-side rendering #}
+    <div class="component-stats-section">
+        {% if component_stats_error %}
+            <div class="alert alert-warning" role="alert">
+                <h6 class="alert-heading">Stats unavailable</h6>
+                <p class="mb-0">{{ component_stats_error }}</p>
+            </div>
+        {% elif component_stats %}
+            <div class="row">
+                {# For component page, we only show SBOMs count which equals total_components from the API #}
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Total SBOMs</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-display py-3">
+                                <div class="stat-value mb-2">
+                                    <span class="display-4 fw-bold text-dark">{{ component_stats.total_components|floatformat:0 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            {# Loading state #}
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card border-light shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light">
+                            <h4 class="card-title mb-0 text-muted small text-uppercase fw-semibold">Loading...</h4>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="stat-loading py-4">
+                                <div class="spinner-border text-muted" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </div>
     {% if component.component_type == 'sbom' %}
         <div class="vc-component-meta-info"
              data-component-id="{{ component.id }}"
              {% if has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
-    <!-- Vulnerability Time Series Chart -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-vulnerability-timeseries"
-                 data-team-key="{{ request.session.current_team.key }}"
-                 data-component-id="{{ component.id }}"
-                 data-default-days="30"></div>
+    <!-- Vulnerability Time Series Chart (only for SBOM components) -->
+    {% if component.component_type == 'sbom' %}
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="vc-vulnerability-timeseries"
+                     data-team-key="{{ request.session.current_team.key }}"
+                     data-component-id="{{ component.id }}"
+                     data-default-days="30"></div>
+            </div>
         </div>
-    </div>
+    {% endif %}
     {% if has_crud_permissions %}
         <div class="row">
             <div class="col-12">
@@ -179,12 +252,7 @@ APP_BASE_URL - Base URL for the application
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ sboms_data|json_script:"sboms-data" }}
-                <div class="vc-sboms-table"
-                     data-sboms-data-element-id="sboms-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
-                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                {% include "core/components/items_table.html.j2" with items_data=sboms_data component_type="sbom" table_title="SBOMs" is_public_view=False show_vulnerabilities=True show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
             </div>
         </div>
     {% elif component.component_type == 'document' %}
@@ -197,11 +265,7 @@ APP_BASE_URL - Base URL for the application
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ documents_data|json_script:"documents-data" }}
-                <div class="vc-documents-table"
-                     data-documents-data-element-id="documents-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                {% include "core/components/items_table.html.j2" with items_data=documents_data component_type="document" table_title="Documents" is_public_view=False show_vulnerabilities=False show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
             </div>
         </div>
     {% endif %}
@@ -221,8 +285,8 @@ APP_BASE_URL - Base URL for the application
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
-    {% vite_asset 'vulnerability_scanning/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
+        {% vite_asset 'vulnerability_scanning/js/main.ts' %}
         {% vite_asset 'sboms/js/main.ts' %}
     {% elif component.component_type == 'document' %}
         {% vite_asset 'documents/js/main.ts' %}

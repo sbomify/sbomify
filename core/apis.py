@@ -667,6 +667,10 @@ def list_product_identifiers(request: HttpRequest, product_id: str, page: int = 
     "/products/{product_id}/identifiers/{identifier_id}",
     response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
+@router.patch(
+    "/products/{product_id}/identifiers/{identifier_id}",
+    response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
 def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
 ):
@@ -924,6 +928,10 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
 
 
 @router.put(
+    "/products/{product_id}/links/{link_id}",
+    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+@router.patch(
     "/products/{product_id}/links/{link_id}",
     response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
@@ -2297,7 +2305,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
     except IntegrityError:
         return 400, {
-            "detail": "A release with this name already exists for this product",
+            "detail": "This release already exists. Please choose a different name.",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:

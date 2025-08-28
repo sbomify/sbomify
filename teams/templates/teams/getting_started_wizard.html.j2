@@ -1,0 +1,306 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+{% block title %}Getting Started - sbomify{% endblock %}
+{% block content %}
+    <div class="container-fluid" data-current-step="{{ current_step }}">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1">
+                    <i class="fas fa-rocket me-2 text-primary"></i>Getting Started
+                </h1>
+                <p class="text-muted mb-0">Set up your workspace in just a few simple steps</p>
+            </div>
+            <form method="post"
+                  action="{% url 'teams:skip_getting_started_wizard' %}"
+                  class="d-inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-outline-secondary"
+                        title="Skip wizard and go to dashboard"
+                        data-wizard-skip>
+                    <i class="fas fa-times me-2"></i>Skip for now
+                </button>
+            </form>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10 col-xl-8">
+                <!-- Progress Card -->
+                <div class="mb-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header px-4 py-3 bg-light border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted fw-semibold">Step
+                                        {% if current_step == "plan" %}
+                                            1
+                                        {% elif current_step == "product" %}
+                                            2
+                                        {% elif current_step == "project" %}
+                                            3
+                                        {% elif current_step == "component" %}
+                                            4
+                                        {% endif %}
+                                    of 4</small>
+                                    <h5 class="mb-0 fw-bold">
+                                        {% if current_step == "plan" %}
+                                            Choose Your Plan
+                                        {% elif current_step == "product" %}
+                                            Create Your Product
+                                        {% elif current_step == "project" %}
+                                            Setup Your Project
+                                        {% elif current_step == "component" %}
+                                            Add Your Component
+                                        {% endif %}
+                                    </h5>
+                                </div>
+                                <div>
+                                    <span class="badge bg-primary px-2 py-1">{{ progress }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body px-4 py-3">
+                            <!-- Progress Bar -->
+                            <div class="mb-4">
+                                <div class="progress wizard-progress">
+                                    <div class="progress-bar bg-primary wizard-progress-bar"
+                                         role="progressbar"
+                                         data-progress="{{ progress }}"
+                                         aria-valuenow="{{ progress }}"
+                                         aria-valuemin="0"
+                                         aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            <!-- Step Indicators -->
+                            <div class="row g-1 text-center">
+                                {% for step in steps %}
+                                    {% if step.name != "complete" %}
+                                        <div class="col">
+                                            {% if current_step == step.name %}
+                                                <div class="step-circle bg-primary text-white">
+                                                    <i class="{{ step.icon }} fa-sm"></i>
+                                                </div>
+                                            {% elif step.name == "plan" and progress > 0 or step.name == "product" and progress > 20 or step.name == "project" and progress > 45 or step.name == "component" and progress > 70 %}
+                                                <div class="step-circle bg-success text-white">
+                                                    <i class="fas fa-check fa-sm"></i>
+                                                </div>
+                                            {% else %}
+                                                <div class="step-circle bg-light text-muted border">
+                                                    <i class="{{ step.icon }} fa-sm"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div class="mt-1">
+                                                <small class="{% if current_step == step.name %}text-primary fw-semibold{% elif step.name == "plan" and progress > 0 or step.name == "product" and progress > 20 or step.name == "project" and progress > 45 or step.name == "component" and progress > 70 %}text-success{% else %}text-muted{% endif %}">
+                                                    {{ step.label }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Form Card -->
+                {% if current_step != "complete" %}
+                    <div class="mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body px-4 py-4">
+                                <!-- Step Description -->
+                                <div class="text-center mb-4">
+                                    {% if current_step == "plan" %}
+                                        <div class="mb-4">
+                                            <div class="d-inline-flex align-items-center justify-content-center bg-primary-subtle text-primary rounded-circle mb-3 step-icon">
+                                                <i class="fas fa-star"></i>
+                                            </div>
+                                            <h4 class="fw-bold mb-2">Select Your Plan</h4>
+                                            <p class="text-muted mb-0">Choose the plan that fits your needs. You can upgrade anytime.</p>
+                                        </div>
+                                    {% elif current_step == "product" %}
+                                        <div class="mb-4">
+                                            <div class="d-inline-flex align-items-center justify-content-center bg-info-subtle text-info rounded-circle mb-3 step-icon">
+                                                <i class="fas fa-box"></i>
+                                            </div>
+                                            <h4 class="fw-bold mb-2">Create Your Product</h4>
+                                            <p class="text-muted mb-0">A product represents your main offering that you're building.</p>
+                                        </div>
+                                    {% elif current_step == "project" %}
+                                        <div class="mb-4">
+                                            <div class="d-inline-flex align-items-center justify-content-center bg-warning-subtle text-warning rounded-circle mb-3 step-icon">
+                                                <i class="fas fa-folder-open"></i>
+                                            </div>
+                                            <h4 class="fw-bold mb-2">Setup Your Project</h4>
+                                            <p class="text-muted mb-0">Projects organize components and track versions.</p>
+                                        </div>
+                                    {% elif current_step == "component" %}
+                                        <div class="mb-4">
+                                            <div class="d-inline-flex align-items-center justify-content-center bg-success-subtle text-success rounded-circle mb-3 step-icon">
+                                                <i class="fas fa-cube"></i>
+                                            </div>
+                                            <h4 class="fw-bold mb-2">Add Your Component</h4>
+                                            <p class="text-muted mb-0">Components are the building blocks of your software.</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <!-- Form -->
+                                <form method="post"
+                                      action="{% url 'teams:getting_started_wizard' %}"
+                                      class="wizard-form-modern"
+                                      novalidate>
+                                    {% csrf_token %}
+                                    <!-- Form Fields -->
+                                    {% for field in form.visible_fields %}
+                                        <div class="mb-3">
+                                            {% if field.field.widget.input_type == "radio" %}
+                                                <!-- Plan Selection Cards -->
+                                                <label class="form-label fw-semibold mb-3" for="{{ field.id_for_label }}">
+                                                    {{ field.label }}
+                                                    {% if field.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                                </label>
+                                                <div class="row g-3">
+                                                    {% for choice in field %}
+                                                        <div class="col-12">
+                                                            <div class="plan-card position-relative">
+                                                                {{ choice.tag }}
+                                                                <label class="plan-card-label" for="{{ choice.id_for_label }}">
+                                                                    <div class="d-flex align-items-center">
+                                                                        <div class="me-3">
+                                                                            {% if choice.choice_value == "community" %}
+                                                                                <div class="plan-icon bg-success-subtle text-success">
+                                                                                    <i class="fas fa-seedling"></i>
+                                                                                </div>
+                                                                            {% elif choice.choice_value == "business" %}
+                                                                                <div class="plan-icon bg-primary-subtle text-primary">
+                                                                                    <i class="fas fa-rocket"></i>
+                                                                                </div>
+                                                                            {% else %}
+                                                                                <div class="plan-icon bg-warning-subtle text-warning">
+                                                                                    <i class="fas fa-star"></i>
+                                                                                </div>
+                                                                            {% endif %}
+                                                                        </div>
+                                                                        <div class="flex-grow-1">
+                                                                            <div class="plan-title">{{ choice.choice_label }}</div>
+                                                                            {% if choice.choice_value == "community" %}
+                                                                                <div class="plan-description">Perfect for getting started • 1 product • 5 components</div>
+                                                                            {% elif choice.choice_value == "business" %}
+                                                                                <div class="plan-description">For growing teams • 5 products • 200 components • NTIA compliance</div>
+                                                                            {% else %}
+                                                                                <div class="plan-description">For large organizations • Unlimited resources • Premium support</div>
+                                                                            {% endif %}
+                                                                        </div>
+                                                                        <div class="plan-check">
+                                                                            <i class="fas fa-check"></i>
+                                                                        </div>
+                                                                    </div>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                <!-- Regular Input Fields -->
+                                                <label class="form-label fw-semibold" for="{{ field.id_for_label }}">
+                                                    {{ field.label }}
+                                                    {% if field.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                                </label>
+                                                {{ field|add_class:"form-control" }}
+                                            {% endif %}
+                                            {% if field.help_text %}
+                                                <div class="form-text text-muted mt-1">
+                                                    <i class="fas fa-info-circle me-1"></i>{{ field.help_text }}
+                                                </div>
+                                            {% endif %}
+                                            {% if field.errors %}
+                                                <div class="invalid-feedback d-block mt-1">
+                                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                                    {% for error in field.errors %}{{ error }}{% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+                                    <!-- Action Buttons -->
+                                    <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                                        {% if current_step != "plan" %}
+                                            <button type="button" class="btn btn-outline-secondary" data-wizard-previous>
+                                                <i class="fas fa-arrow-left me-2"></i>Previous
+                                            </button>
+                                        {% endif %}
+                                        <button type="submit" class="btn btn-primary">
+                                            {% if current_step == "component" %}
+                                                <i class="fas fa-check me-2"></i>Complete Setup
+                                            {% else %}
+                                                Continue <i class="fas fa-arrow-right ms-2"></i>
+                                            {% endif %}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <!-- Completion Card -->
+                    <div class="mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body px-4 py-5 text-center">
+                                <!-- Success Icon -->
+                                <div class="mb-4">
+                                    <div class="d-inline-flex align-items-center justify-content-center bg-success text-white rounded-circle mb-3 step-icon-large">
+                                        <i class="fas fa-check fs-2"></i>
+                                    </div>
+                                    <h3 class="fw-bold text-success mb-2">🎉 You're All Set!</h3>
+                                    <p class="text-muted mb-0">Your workspace is ready. Here's what you can do next:</p>
+                                </div>
+                                <!-- Next Steps Cards -->
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-6">
+                                        <div class="card border-0 bg-light">
+                                            <div class="card-body p-3">
+                                                <div class="text-primary mb-2">
+                                                    <i class="fas fa-file-alt fs-3"></i>
+                                                </div>
+                                                <h6 class="fw-bold mb-2">Complete Metadata</h6>
+                                                <p class="text-muted small mb-3">Fill out component details, licensing and supplier information.</p>
+                                                <a href="{% url 'core:component_details' component_id %}"
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    Complete <i class="fas fa-arrow-right ms-1"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-0 bg-light">
+                                            <div class="card-body p-3">
+                                                <div class="text-success mb-2">
+                                                    <i class="fas fa-upload fs-3"></i>
+                                                </div>
+                                                <h6 class="fw-bold mb-2">Upload SBOM</h6>
+                                                <p class="text-muted small mb-3">Import an existing SBOM file or generate one from source code.</p>
+                                                <a href="{% url 'core:component_details' component_id %}#sboms"
+                                                   class="btn btn-outline-success btn-sm">
+                                                    Upload <i class="fas fa-arrow-right ms-1"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Dashboard Button -->
+                                <div class="pt-2">
+                                    <a href="{% url 'core:dashboard' %}" class="btn btn-primary">
+                                        <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'teams/js/main.ts' %}
+{% endblock %}

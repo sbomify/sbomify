@@ -1,0 +1,154 @@
+{% comment %}
+Reusable Public Status Toggle Component
+Context variables:
+- item_type: Type of item (e.g., "product", "component", "release")
+- item_id: ID of the item
+- is_public: Current public status (boolean)
+- public_url: URL to the public view of the item
+- inline: Whether to display inline (default: false)
+{% endcomment %}
+{% load static %}
+<!-- Server-side form for public status toggle -->
+<div class="public-status-toggle {% if inline %}d-inline-block{% else %}d-block{% endif %}">
+    <form method="post"
+          action="{% url 'core:toggle_public_status' item_type item_id %}"
+          class="d-inline-flex align-items-center">
+        {% csrf_token %}
+        <div class="form-check form-switch modern-toggle">
+            <input class="form-check-input public-toggle-input"
+                   type="checkbox"
+                   role="switch"
+                   id="publicToggle_{{ item_type }}_{{ item_id }}"
+                   name="is_public"
+                   value="true"
+                   {% if is_public %}checked{% endif %}>
+            <label class="form-check-label d-flex align-items-center"
+                   for="publicToggle_{{ item_type }}_{{ item_id }}">
+                <span class="status-text ms-2">
+                    {% if is_public %}
+                        <i class="fas fa-globe text-success me-2"></i><span class="fw-medium">Public</span>
+                    {% else %}
+                        <i class="fas fa-lock text-secondary me-2"></i><span class="fw-medium">Private</span>
+                    {% endif %}
+                </span>
+            </label>
+        </div>
+    </form>
+    {% if is_public and public_url %}
+        <div class="public-url-info">
+            <div class="small text-muted">
+                <i class="fas fa-external-link-alt me-1"></i>
+                <a href="{{ public_url }}"
+                   target="_blank"
+                   class="text-decoration-none text-primary">View Public Page</a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+<style>
+/* Modern Bootstrap 5 Toggle Switch Styling */
+.modern-toggle {
+    padding-left: 0;
+    margin-bottom: 0;
+}
+
+.modern-toggle .form-check-input {
+    width: 3rem;
+    height: 1.5rem;
+    border-radius: 1rem;
+    background-color: #dee2e6;
+    border: 2px solid #dee2e6;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    margin: 0;
+    position: relative;
+}
+
+.modern-toggle .form-check-input:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.modern-toggle .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.modern-toggle .form-check-input:checked:focus {
+    border-color: #146c43;
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+}
+
+.modern-toggle .form-check-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.modern-toggle .form-check-input:disabled + .form-check-label {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Enhanced label styling */
+.modern-toggle .form-check-label {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.875rem;
+    margin-left: 0.75rem;
+}
+
+.status-text {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.status-text .fw-medium {
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+/* Public URL info styling */
+.public-url-info {
+    display: flex;
+    align-items: center;
+}
+
+.public-url-info a {
+    color: var(--bs-primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: color 0.15s ease-in-out;
+}
+
+.public-url-info a:hover {
+    color: var(--bs-primary-emphasis);
+    text-decoration: underline !important;
+}
+
+/* Success feedback animation */
+.success-feedback {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border: 1px solid #10b981;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+/* Public URL styling */
+.public-url-info {
+    margin-top: 0.5rem;
+    margin-left: 0 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .public-status-toggle {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+    }
+}
+</style>
+<!-- TypeScript functionality loaded via main.ts -->

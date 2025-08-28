@@ -1,0 +1,73 @@
+<!-- Token Display Component -->
+{% if access_token %}
+    <div class="token-display-section">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <label class="form-label fw-semibold mb-0 text-success">
+                <i class="fas fa-key me-2"></i>Your Personal Access Token
+            </label>
+            <button type="button"
+                    id="copyTokenBtn"
+                    class="btn btn-success btn-sm"
+                    title="Copy to clipboard">
+                <i class="fas fa-copy me-2"></i>Copy Token
+            </button>
+        </div>
+        <div class="token-display-container p-4 border border-success border-2 rounded-3 bg-light position-relative">
+            <div class="input-group">
+                <input type="text"
+                       id="accessToken"
+                       class="form-control font-monospace border-0 bg-transparent fw-bold text-success"
+                       value="{{ access_token }}"
+                       readonly>
+                <button class="btn btn-outline-success"
+                        type="button"
+                        id="copyTokenBtn2"
+                        title="Copy">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+        </div>
+        <div class="mt-3">
+            <div class="alert alert-warning mb-0 border-0">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Important:</strong> Save this token now! You won't be able to see it again. Store it securely as it provides full access to your sbomify account.
+            </div>
+        </div>
+    </div>
+    <style>
+.token-display-container {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e8f5e8 100%);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.1);
+}
+
+.token-display-container:hover {
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+#accessToken {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
+    color: #198754 !important;
+    user-select: all;
+}
+
+#accessToken:focus {
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+    border: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #157347 0%, #1ba085 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(25, 135, 84, 0.3);
+}
+    </style>
+{% endif %}

@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
-import type { CustomLicense } from '../type_defs'
+import type { CustomLicense } from '../../../core/js/type_defs'
 
 interface ValidationResponse {
   status: number

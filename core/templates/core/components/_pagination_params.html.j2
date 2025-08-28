@@ -1,0 +1,6 @@
+{% comment %}
+Helper template for preserving URL parameters in pagination links
+This is included by pagination_controls.html.j2 and should not be used directly.
+{% endcomment %}
+{% if page_size and page_size != 15 %}&page_size={{ page_size }}{% endif %}
+{% if search_query %}&search={{ search_query|urlencode }}{% endif %}

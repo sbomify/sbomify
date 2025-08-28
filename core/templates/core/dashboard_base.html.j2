@@ -1,8 +1,11 @@
 {% extends "./base.html.j2" %}
+{% load breadcrumb_tags %}
 {% block title %}sbomify{% endblock %}
 {% block content %}
     <!-- Site notifications -->
     {% include "core/components/site_notifications.html.j2" %}
+    <!-- Breadcrumb Navigation -->
+    {% block breadcrumb %}{% endblock %}
     <!-- Dashboard content -->
     {% block dashboard_content %}{% endblock %}
 {% endblock %}

@@ -165,7 +165,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       )
 
       // Verify all fields are preserved
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       const typedCallData = callData as ComponentMetaInfo
       expect(typedCallData.supplier.name).toBe('Important Supplier')
       expect(typedCallData.authors).toHaveLength(1)
@@ -330,7 +330,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
         supplierWithMultipleUrls
       )
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       const typedCallData = callData as ComponentMetaInfo
       expect(typedCallData.supplier.url).toHaveLength(3)
       expect(typedCallData.supplier.url).toContain('https://primary.com')
@@ -351,7 +351,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithEmptyUrls)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       const typedCallData = callData as ComponentMetaInfo
       expect(typedCallData.supplier.url).toEqual([])
       expect(typedCallData.supplier.name).toBe('No URL Supplier')
@@ -370,7 +370,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithNullUrl)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       const typedCallData = callData as ComponentMetaInfo
       expect(typedCallData.supplier.url).toBeNull()
       expect(typedCallData.supplier.name).toBe('Null URL Supplier')
@@ -392,7 +392,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, supplierWithContactsAndUrls)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       const typedCallData = callData as ComponentMetaInfo
       expect(typedCallData.supplier.contacts).toHaveLength(2)
       expect(typedCallData.supplier.contacts[0].name).toBe('John Contact')
@@ -414,7 +414,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithAuthors)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       expect(callData.authors).toHaveLength(3)
       expect(callData.authors[0].name).toBe('Alice Author')
       expect(callData.authors[1].email).toBe('bob@example.com')
@@ -433,7 +433,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithPartialAuthors)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       expect(callData.authors).toHaveLength(3)
       expect(callData.authors[0].email).toBe('')
       expect(callData.authors[0].phone).toBe('')
@@ -455,7 +455,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
 
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, metadataWithMixedAuthors)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
       expect(callData.authors).toHaveLength(3)
 
       // Verify complete author
@@ -553,7 +553,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       }
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updatePayload)
 
-      const [, callData] = mockAxios.put.mock.calls[0]
+      const [, callData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
 
       // Verify that read-only fields are NOT included in the PUT request
       expect(callData.id).toBeUndefined()
@@ -591,7 +591,7 @@ describe('ComponentMetaInfoEditor Business Logic', () => {
       }
       await mockAxios.put(`/api/v1/components/${mockComponentId}/metadata`, updateData)
 
-      const [, sentData] = mockAxios.put.mock.calls[0]
+      const [, sentData] = mockAxios.put.mock.calls[0] as [string, ComponentMetaInfo]
 
       // Verify read-only fields are excluded
       expect(sentData).not.toHaveProperty('id')

@@ -1,0 +1,58 @@
+{% comment %}
+Reusable Delete Confirmation Modal Component
+Context variables:
+- modal_id: Unique ID for the modal (required)
+- item_type: Type of item being deleted (e.g., "SBOM", "Document", "Component")
+- warning_message: Custom warning message (optional)
+- csrf_token: CSRF token for form submission
+{% endcomment %}
+<div class="modal fade"
+     id="{{ modal_id }}"
+     tabindex="-1"
+     aria-labelledby="{{ modal_id }}Label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modern-modal">
+            <div class="modal-header modern-modal-header border-0">
+                <h5 class="modal-title fw-bold" id="{{ modal_id }}Label">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Delete {{ item_type|default:"Item" }}
+                </h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4 py-3">
+                <div class="alert alert-warning border-0 mb-3 modern-warning-alert">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle text-warning me-2 fs-5"></i>
+                        <div>
+                            <strong>Warning:</strong>
+                            {% if warning_message %}
+                                {{ warning_message }}
+                            {% else %}
+                                This action cannot be undone and will permanently remove the {{ item_type|lower }} from the system.
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <p class="mb-0 text-center">
+                    Are you sure you want to delete the {{ item_type|lower }}
+                    <strong class="text-danger" id="{{ modal_id }}ItemName"></strong>?
+                </p>
+            </div>
+            <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
+                <button type="button"
+                        class="btn btn-secondary px-4 modern-btn-secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <form id="{{ modal_id }}Form" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger px-4 modern-btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete {{ item_type|default:"Item" }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
