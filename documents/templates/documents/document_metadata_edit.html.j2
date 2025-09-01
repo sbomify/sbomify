@@ -1,0 +1,219 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Document Metadata - {{ document.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/metadata-forms.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="h3 mb-1">Edit Document Metadata</h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item"><a href="{% url 'core:component_details' component.id %}">{{ component.name }}</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'documents:document_details' document.id %}">{{ document.name }}</a></li>
+                            <li class="breadcrumb-item active" aria-current="page">Edit Metadata</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div>
+                    <a href="{% url 'documents:document_details' document.id %}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Document
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Form -->
+    <form method="post" class="needs-validation" novalidate role="main" aria-label="Document metadata editing form">
+        {% csrf_token %}
+
+        <div class="row">
+            <!-- Main Form Column -->
+            <div class="col-lg-8">
+                <!-- Document Information -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-file-alt me-2"></i>Document Information
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Basic information about this document</p>
+
+                            <div class="row g-3">
+                                <!-- Document Name -->
+                                <div class="col-12">
+                                    <label for="{{ form.name.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ form.name.label }}
+                                        {% if form.name.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                    </label>
+                                    {{ form.name|add_class:"form-control" }}
+                                    {% if form.name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.name.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.name.help_text %}
+                                        <div class="form-text">{{ form.name.help_text }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Version -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.version.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ form.version.label }}
+                                    </label>
+                                    {{ form.version|add_class:"form-control" }}
+                                    {% if form.version.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.version.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.version.help_text %}
+                                        <div class="form-text">{{ form.version.help_text }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Document Type -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.document_type.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ form.document_type.label }}
+                                    </label>
+                                    {{ form.document_type|add_class:"form-select" }}
+                                    {% if form.document_type.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.document_type.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.document_type.help_text %}
+                                        <div class="form-text">{{ form.document_type.help_text }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Description -->
+                                <div class="col-12">
+                                    <label for="{{ form.description.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ form.description.label }}
+                                    </label>
+                                    {{ form.description|add_class:"form-control" }}
+                                    {% if form.description.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.description.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.description.help_text %}
+                                        <div class="form-text">{{ form.description.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Document Info -->
+            <div class="col-lg-4">
+                <!-- Current Document Info -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Current Document
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5 small">Document ID:</dt>
+                                <dd class="col-sm-7 small font-monospace">{{ document.id }}</dd>
+
+                                <dt class="col-sm-5 small">Created:</dt>
+                                <dd class="col-sm-7 small">{{ document.created_at|date:"M d, Y" }}</dd>
+
+                                <dt class="col-sm-5 small">Source:</dt>
+                                <dd class="col-sm-7 small">{{ document.source_display }}</dd>
+
+                                {% if document.content_type %}
+                                    <dt class="col-sm-5 small">Content Type:</dt>
+                                    <dd class="col-sm-7 small">{{ document.content_type }}</dd>
+                                {% endif %}
+
+                                {% if document.file_size %}
+                                    <dt class="col-sm-5 small">File Size:</dt>
+                                    <dd class="col-sm-7 small">{{ document.file_size|filesizeformat }}</dd>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Information -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-question-circle me-2"></i>Help
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="help-section mb-3">
+                                <h6 class="fw-semibold text-secondary mb-2">Document Types</h6>
+                                <p class="small text-muted mb-0">
+                                    Categorize your document to help with organization and compliance. Types are aligned with SPDX and CycloneDX standards.
+                                </p>
+                            </div>
+
+                            <div class="help-section mb-0">
+                                <h6 class="fw-semibold text-secondary mb-2">Version Format</h6>
+                                <p class="small text-muted mb-0">
+                                    Use semantic versioning (e.g., 1.0.0) or simple version numbers (e.g., v2.1). This helps track document changes over time.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{% url 'documents:document_details' document.id %}"
+                       class="btn btn-outline-secondary"
+                       aria-label="Cancel editing and return to document details"
+                       title="Discard changes and return to document details">
+                        <i class="fas fa-times me-2" aria-hidden="true"></i>Cancel Changes
+                    </a>
+                    <button type="submit"
+                            class="btn btn-primary"
+                            aria-label="Save document metadata changes"
+                            title="Save all metadata changes for this document">
+                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Metadata
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Add any document-specific JavaScript here if needed -->
+{% endblock %}

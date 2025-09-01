@@ -49,9 +49,26 @@ Context variables:
                     {% if component_type == 'sbom' %}
                         <i class="fas fa-file-code fa-3x mb-3"></i>
                         <p>No SBOMs found for this component.</p>
+                        {% if has_crud_permissions %}
+                            <button class="btn btn-primary mt-2" data-bs-toggle="collapse" data-bs-target="#sbomUploadContent" aria-expanded="false">
+                                <i class="fas fa-upload me-2"></i>
+                                Upload SBOM
+                            </button>
+                        {% endif %}
                     {% elif component_type == 'document' %}
-                        <i class="fas fa-file-alt fa-3x mb-3"></i>
-                        <p>No documents found for this component.</p>
+                        <i class="fas fa-file-alt fa-3x mb-3 text-muted"></i>
+                        <h5 class="text-muted mb-2">No documents yet</h5>
+                        <p class="text-muted mb-3">Upload your first document to get started</p>
+                        {% if has_crud_permissions %}
+                            <button class="btn btn-primary btn-sm"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#documentUploadContent"
+                                    aria-expanded="false"
+                                    aria-controls="documentUploadContent">
+                                <i class="fas fa-upload me-2"></i>
+                                Upload Document
+                            </button>
+                        {% endif %}
                     {% else %}
                         <i class="fas fa-file fa-3x mb-3"></i>
                         <p>No items found for this component.</p>

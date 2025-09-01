@@ -1,0 +1,226 @@
+{% comment %}
+Reusable Django template for components listing table - replaces Vue ComponentsList component
+Context variables:
+- components: QuerySet or list of component objects
+- has_crud_permissions: Boolean for CRUD permissions
+- show_add_button: Boolean to show "Add Component" button
+- table_title: Title for the table
+- add_modal_target: Target modal ID for add button (default: "addComponentModal")
+- pagination_meta: Pagination metadata object with page info (optional)
+- current_page: Current page number for pagination
+- page_size: Number of items per page
+{% endcomment %}
+{% load static %}
+<!-- Using standard card styling patterns manually for complex content -->
+<div class="mt-3 mb-4 components-table">
+    <div class="card border-light shadow-brand">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">{{ table_title|default:"Components" }}</h4>
+                {% if has_crud_permissions and show_add_button %}
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-primary px-4"
+                                data-bs-toggle="modal"
+                                data-bs-target="#{{ add_modal_target|default:'addComponentModal' }}">
+                            <i class="fas fa-plus me-2"></i>Add Component
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <!-- Card Body -->
+        <div class="card-body p-0">
+            {% if not components %}
+                <!-- Empty State -->
+                <div class="dashboard-empty">
+                    <div class="text-center py-5">
+                        <i class="fas fa-cube fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No components added</h5>
+                        <p class="text-muted mb-0">Create your first component to get started.</p>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Data Table -->
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Type</th>
+                                <th>Content</th>
+                                <th class="text-center">Public?</th>
+                                <th>Created</th>
+                                {% if has_crud_permissions %}
+                                    <th class="text-center">Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for component in components %}
+                                <tr>
+                                    <td data-label="Component">
+                                        <div class="d-flex align-items-center">
+                                            <div class="component-icon me-3">
+                                                {% if component.component_type == 'sbom' %}
+                                                    <i class="fas fa-file-code text-primary fa-lg"></i>
+                                                {% elif component.component_type == 'document' %}
+                                                    <i class="fas fa-file-alt text-info fa-lg"></i>
+                                                {% else %}
+                                                    <i class="fas fa-cube text-secondary fa-lg"></i>
+                                                {% endif %}
+                                            </div>
+                                            <div>
+                                                <a href="/component/{{ component.id }}/"
+                                                   class="text-primary text-decoration-none fw-medium">
+                                                    {{ component.name }}
+                                                </a>
+                                                <div class="small text-muted">{{ component.id }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td data-label="Type">
+                                        {% if component.component_type == 'sbom' %}
+                                            <span class="badge bg-primary-subtle text-primary">
+                                                <i class="fas fa-file-code me-1"></i>SBOM
+                                            </span>
+                                        {% elif component.component_type == 'document' %}
+                                            <span class="badge bg-info-subtle text-info">
+                                                <i class="fas fa-file-alt me-1"></i>Document
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary-subtle text-secondary">
+                                                <i class="fas fa-cube me-1"></i>Component
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td data-label="Content">
+                                        {% if component.component_type == 'sbom' %}
+                                            {% with sbom_count=component.sbom_count|default:0 %}
+                                                {% if sbom_count == 1 %}
+                                                    <span class="text-muted">1 SBOM</span>
+                                                {% else %}
+                                                    <span class="text-muted">{{ sbom_count }} SBOMs</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        {% elif component.component_type == 'document' %}
+                                            <span class="text-muted">Document</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center" data-label="Public?">
+                                        {% if component.is_public %}
+                                            <span class="badge bg-success-subtle text-success">
+                                                <i class="fas fa-globe me-1"></i>Public
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary-subtle text-secondary">
+                                                <i class="fas fa-lock me-1"></i>Private
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td data-label="Created">
+                                        <small class="text-muted">{{ component.created_at|date:"M d, Y" }}</small>
+                                    </td>
+                                    {% if has_crud_permissions %}
+                                        <td class="text-center" data-label="Actions">
+                                            <div class="btn-group" role="group">
+                                                <a href="/component/{{ component.id }}/"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-secondary toggle-public-btn"
+                                                        title="{% if component.is_public %}Make Private{% else %}Make Public{% endif %}"
+                                                        data-component-id="{{ component.id }}"
+                                                        data-is-public="{{ component.is_public|yesno:'true,false' }}"
+                                                        data-component-name="{{ component.name }}">
+                                                    {% if component.is_public %}
+                                                        <i class="fas fa-lock"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-globe"></i>
+                                                    {% endif %}
+                                                </button>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+            <!-- Pagination Controls -->
+            {% if pagination_meta and pagination_meta.num_pages > 1 %}
+                <nav aria-label="{{ table_title }} pagination" class="mt-4 px-4 pb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <!-- Results Info -->
+                        <div class="text-muted">
+                            Showing {{ pagination_meta.start_index }}-{{ pagination_meta.end_index }} of {{ pagination_meta.paginator.count }} components
+                        </div>
+                        <!-- Pagination Links -->
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- Previous Page -->
+                            {% if pagination_meta.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.previous_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Previous">
+                                        <span aria-hidden="true">«</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">«</span>
+                                </li>
+                            {% endif %}
+                            <!-- Page Numbers -->
+                            {% for page_num in pagination_meta.paginator.page_range %}
+                                {% if page_num == pagination_meta.number %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?page={{ page_num }}&page_size={{ page_size }}">{{ page_num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            <!-- Next Page -->
+                            {% if pagination_meta.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?page={{ pagination_meta.next_page_number }}&page_size={{ page_size }}"
+                                       aria-label="Next">
+                                        <span aria-hidden="true">»</span>
+                                    </a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">»</span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <!-- Page Size Selector -->
+                    <div class="d-flex justify-content-center mt-3">
+                        <div class="btn-group btn-group-sm"
+                             role="group"
+                             aria-label="Items per page">
+                            <span class="btn btn-outline-secondary disabled">Items per page:</span>
+                            {% for size in page_size_options %}
+                                {% if size == page_size %}
+                                    <button type="button" class="btn btn-primary">{{ size }}</button>
+                                {% else %}
+                                    <a href="?page=1&page_size={{ size }}" class="btn btn-outline-secondary">{{ size }}</a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>

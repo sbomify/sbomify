@@ -104,6 +104,11 @@ class WizardProjectForm(forms.Form):
 class WizardComponentForm(forms.Form):
     """Form for creating a component in the getting started wizard."""
 
+    COMPONENT_TYPE_CHOICES = [
+        ("sbom", "SBOM Component"),
+        ("document", "Document Component"),
+    ]
+
     name = forms.CharField(
         label="Component Name",
         max_length=255,
@@ -118,6 +123,18 @@ class WizardComponentForm(forms.Form):
         help_text=(
             "Components are the individual building blocks that make up your project. These can be libraries, "
             "microservices, firmware modules, or any other distinct piece of software."
+        ),
+    )
+
+    component_type = forms.ChoiceField(
+        label="Component Type",
+        choices=COMPONENT_TYPE_CHOICES,
+        initial="sbom",
+        required=True,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
+        help_text=(
+            "Choose the type of component you're creating. SBOM components track software dependencies, "
+            "while Document components manage specifications, manuals, and other documentation artifacts."
         ),
     )
 

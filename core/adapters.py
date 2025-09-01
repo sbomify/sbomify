@@ -104,16 +104,6 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def save_user(self, request, sociallogin, form=None):
         user = super().save_user(request, sociallogin, form)
-        # Only create a team if this is a new user and they have no teams
-        if not Team.objects.filter(members=user).exists():
-            first_name = user.first_name or user.username.split("@")[0]
-            team_name = f"{first_name}'s Workspace"
-            with transaction.atomic():
-                team = Team.objects.create(name=team_name)
-                team.key = number_to_random_token(team.pk)
-                team.save()
-                Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-
-            # Set up billing plan for Keycloak/social auth users
-            setup_team_billing_plan(team, user=user, send_welcome_email=True)
+        # Team creation is handled by the post_save signal in teams.signals
+        # No need to create team here to avoid race conditions
         return user

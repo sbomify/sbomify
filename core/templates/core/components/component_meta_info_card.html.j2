@@ -1,0 +1,470 @@
+{% comment %}
+Component Metadata Card - Django implementation of ComponentMetaInfo.vue
+Context:
+- component: Component object
+- has_crud_permissions: Boolean for edit permissions
+{% endcomment %}
+{% load static %}
+
+<div class="standard-card" data-variant="default" data-collapsible="true" data-default-expanded="true" data-storage-key="component-metadata">
+    <div class="card border-light shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                Component Metadata
+            </h5>
+
+            <!-- Collapse/Expand button -->
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#component-metadata-content" aria-expanded="true" aria-controls="component-metadata-content">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+        </div>
+
+        <div class="collapse show" id="component-metadata-content">
+            <!-- Info Notice -->
+            <div class="card-body bg-light border-bottom">
+                <div class="alert alert-info mb-0" role="alert">
+                    <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="color: #4f46e5;">Augmentation feature</a> to include this metadata in your SBOM
+                </div>
+            </div>
+
+            <div class="card-body">
+                <!-- Metadata Content (Server-Side Rendered) -->
+                <div id="metadata-content">
+                    <div class="row gy-4">
+                        <!-- Supplier Section -->
+                        <div class="col-12 col-lg-6">
+                            <div class="section-content">
+                                <div class="section-label">Supplier</div>
+                                <div id="supplier-content">
+                                    {% if component.supplier_name or component.supplier_url or component.supplier_address or component.supplier_contacts.exists %}
+                                        {% if component.supplier_name %}
+                                            <div class="mb-2">
+                                                <strong>{{ component.supplier_name }}</strong>
+                                            </div>
+                                        {% endif %}
+                                        {% if component.supplier_url %}
+                                            <div class="mb-2">
+                                                {% for url in component.supplier_url %}
+                                                    <a href="{{ url }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none me-2">
+                                                        <i class="fas fa-external-link-alt me-1"></i>{{ url }}
+                                                    </a>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        {% if component.supplier_address %}
+                                            <div class="mb-2 text-muted">
+                                                {{ component.supplier_address|linebreaksbr }}
+                                            </div>
+                                        {% endif %}
+                                        {% if component.supplier_contacts.exists %}
+                                            <div class="supplier-contacts">
+                                                {% for contact in component.supplier_contacts.all %}
+                                                    <div class="contact-badge">
+                                                        {{ contact.name }}
+                                                        {% if contact.email %}({{ contact.email }}){% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="not-set">No supplier information provided</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lifecycle Section -->
+                        <div class="col-12 col-lg-6">
+                            <div class="section-content">
+                                <div class="section-label">Lifecycle</div>
+                                <div id="lifecycle-content">
+                                    {% if component.lifecycle_phase %}
+                                        <span class="badge bg-primary">{{ component.get_lifecycle_phase_display }}</span>
+                                    {% else %}
+                                        <span class="not-set">No lifecycle phase specified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Licenses Section -->
+                        <div class="col-12 col-lg-6">
+                            <div class="section-content">
+                                <div class="section-label">Licenses</div>
+                                <div id="licenses-content">
+                                    {% if component.licenses.exists %}
+                                        <div class="license-tags">
+                                            {% for license in component.licenses.all %}
+                                                {% if license.license_type == 'custom' %}
+                                                    <span class="license-tag custom" title="Custom License: {{ license.license_name }}">
+                                                        {{ license.license_name }} <span class="custom-icon">⚙️</span>
+                                                    </span>
+                                                {% else %}
+                                                    <span class="license-tag">
+                                                        {{ license.license_id }}
+                                                    </span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="not-set">No licenses specified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Authors Section -->
+                        <div class="col-12 col-lg-6">
+                            <div class="section-content">
+                                <div class="section-label">Authors</div>
+                                <div id="authors-content">
+                                    {% if component.authors.exists %}
+                                        <div class="authors-list">
+                                            {% for author in component.authors.all %}
+                                                <div class="contact-badge">
+                                                    {{ author.name }}
+                                                    {% if author.email %}({{ author.email }}){% endif %}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="not-set">No authors specified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Footer (only if has_crud_permissions) -->
+            {% if has_crud_permissions %}
+            <div class="card-footer bg-light">
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#copyMetadataModal">
+                        <i class="fa-solid fa-copy me-2"></i>
+                        Copy Metadata
+                    </button>
+                    <a href="{% url 'core:component_metadata_edit' component.id %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fa-solid fa-edit me-2"></i>
+                        Edit Metadata
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Copy Metadata Modal -->
+{% if has_crud_permissions %}
+<div class="modal fade" id="copyMetadataModal" tabindex="-1" aria-labelledby="copyMetadataModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="copyMetadataModalLabel">Copy Metadata</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Select a component to copy metadata from:</p>
+                <div class="mb-3">
+                    <select class="form-select" id="sourceComponentSelect">
+                        <option value="">Loading components...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="copyMetadata()" id="copyMetadataBtn" disabled>
+                    Copy Metadata
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Django Forms Edit Metadata Modal -->
+<div class="modal fade" id="editMetadataModal" tabindex="-1" aria-labelledby="editMetadataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editMetadataModalLabel">Edit Component Metadata</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="metadataForm">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="metadata">
+
+                <div class="modal-body">
+                    <div class="alert alert-info mb-4" role="alert">
+                        <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="color: #4f46e5;">Augmentation feature</a> to include this metadata in your SBOM
+                    </div>
+
+                    <div class="container-fluid p-0">
+                        <div class="row g-4">
+                            <!-- Supplier Information Card -->
+                            <div class="col-12 col-lg-6">
+                                <div class="card border-light shadow-sm">
+                                    <div class="card-header bg-light">
+                                        <h6 class="card-title mb-0">
+                                            Supplier Information
+                                            <i class="fa-regular fa-circle-question help-icon ms-1" title="Organization that supplied or manufactured the component">
+                                            </i>
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Supplier Name -->
+                                        <div class="mb-3">
+                                            {{ metadata_formset.metadata_form.supplier_name.label_tag }}
+                                            {{ metadata_formset.metadata_form.supplier_name }}
+                                            {% if metadata_formset.metadata_form.supplier_name.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ metadata_formset.metadata_form.supplier_name.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Supplier URLs -->
+                                        <div class="mb-3">
+                                            {{ metadata_formset.metadata_form.supplier_url.label_tag }}
+                                            {{ metadata_formset.metadata_form.supplier_url }}
+                                            {% if metadata_formset.metadata_form.supplier_url.help_text %}
+                                                <div class="form-text">{{ metadata_formset.metadata_form.supplier_url.help_text }}</div>
+                                            {% endif %}
+                                            {% if metadata_formset.metadata_form.supplier_url.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ metadata_formset.metadata_form.supplier_url.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Supplier Address -->
+                                        <div class="mb-3">
+                                            {{ metadata_formset.metadata_form.supplier_address.label_tag }}
+                                            {{ metadata_formset.metadata_form.supplier_address }}
+                                            {% if metadata_formset.metadata_form.supplier_address.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ metadata_formset.metadata_form.supplier_address.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Supplier Contacts -->
+                                        <div class="mb-3">
+                                            <label class="form-label">Supplier Contacts</label>
+                                            {{ metadata_formset.supplier_contact_formset.management_form }}
+                                            <div id="supplier-contacts-formset">
+                                                {% for form in metadata_formset.supplier_contact_formset %}
+                                                    <div class="supplier-contact-form border rounded p-3 mb-2">
+                                                        {{ form.id }}
+                                                        {% if form.DELETE %}
+                                                            <div class="form-check">
+                                                                {{ form.DELETE }} <label for="{{ form.DELETE.id_for_label }}">Delete this contact</label>
+                                                            </div>
+                                                        {% endif %}
+                                                        <div class="row">
+                                                            <div class="col-md-4">
+                                                                {{ form.name.label_tag }}
+                                                                {{ form.name }}
+                                                                {% if form.name.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                {{ form.email.label_tag }}
+                                                                {{ form.email }}
+                                                                {% if form.email.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                {{ form.phone.label_tag }}
+                                                                {{ form.phone }}
+                                                                {% if form.phone.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Column -->
+                            <div class="col-12 col-lg-6">
+                                <div class="d-flex flex-column gap-3">
+                                    <!-- Lifecycle Phase Card -->
+                                    <div class="card border-light shadow-sm">
+                                        <div class="card-header bg-light">
+                                            <h6 class="card-title mb-0">
+                                                Lifecycle Phase
+                                                <i class="fa-regular fa-circle-question help-icon ms-1" title="Current phase in the component's lifecycle">
+                                                </i>
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                {{ metadata_formset.metadata_form.lifecycle_phase }}
+                                                {% if metadata_formset.metadata_form.lifecycle_phase.errors %}
+                                                    <div class="invalid-feedback d-block">
+                                                        {{ metadata_formset.metadata_form.lifecycle_phase.errors.0 }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Licenses Card -->
+                                    <div class="card border-light shadow-sm">
+                                        <div class="card-header bg-light">
+                                            <h6 class="card-title mb-0">
+                                                Licenses
+                                                <i class="fa-regular fa-circle-question help-icon ms-1" title="Software licenses that apply to this component">
+                                                </i>
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            {{ metadata_formset.license_formset.management_form }}
+                                            <div id="licenses-formset">
+                                                {% for form in metadata_formset.license_formset %}
+                                                    <div class="license-form border rounded p-3 mb-2">
+                                                        {{ form.id }}
+                                                        {% if form.DELETE %}
+                                                            <div class="form-check">
+                                                                {{ form.DELETE }} <label for="{{ form.DELETE.id_for_label }}">Delete this license</label>
+                                                            </div>
+                                                        {% endif %}
+
+                                                        <!-- License Type Selection -->
+                                                        <div class="mb-3">
+                                                            <label class="form-label">License Type</label>
+                                                            <div class="license-type-selection">
+                                                                {{ form.license_type }}
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- SPDX License Selection -->
+                                                        <div class="mb-3 spdx-license-section">
+                                                            {{ form.spdx_license.label_tag }}
+                                                            {{ form.spdx_license }}
+                                                        </div>
+
+                                                        <!-- License Expression -->
+                                                        <div class="mb-3 expression-section">
+                                                            {{ form.license_expression.label_tag }}
+                                                            {{ form.license_expression }}
+                                                            {% if form.license_expression.help_text %}
+                                                                <div class="form-text">{{ form.license_expression.help_text }}</div>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        <!-- Custom License Fields -->
+                                                        <div class="custom-license-section">
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    {{ form.name.label_tag }}
+                                                                    {{ form.name }}
+                                                                    {% if form.name.errors %}
+                                                                        <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+                                                                    {% endif %}
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    {{ form.url.label_tag }}
+                                                                    {{ form.url }}
+                                                                    {% if form.url.errors %}
+                                                                        <div class="invalid-feedback d-block">{{ form.url.errors.0 }}</div>
+                                                                    {% endif %}
+                                                                </div>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                {{ form.text.label_tag }}
+                                                                {{ form.text }}
+                                                                {% if form.text.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.text.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Authors Card -->
+                                    <div class="card border-light shadow-sm">
+                                        <div class="card-header bg-light">
+                                            <h6 class="card-title mb-0">
+                                                Authors
+                                                <i class="fa-regular fa-circle-question help-icon ms-1" title="People who contributed to this component">
+                                                </i>
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            {{ metadata_formset.author_formset.management_form }}
+                                            <div id="authors-formset">
+                                                {% for form in metadata_formset.author_formset %}
+                                                    <div class="author-form border rounded p-3 mb-2">
+                                                        {{ form.id }}
+                                                        {% if form.DELETE %}
+                                                            <div class="form-check">
+                                                                {{ form.DELETE }} <label for="{{ form.DELETE.id_for_label }}">Delete this author</label>
+                                                            </div>
+                                                        {% endif %}
+                                                        <div class="row">
+                                                            <div class="col-md-4">
+                                                                {{ form.name.label_tag }}
+                                                                {{ form.name }}
+                                                                {% if form.name.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                {{ form.email.label_tag }}
+                                                                {{ form.email }}
+                                                                {% if form.email.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div class="col-md-4">
+                                                                {{ form.phone.label_tag }}
+                                                                {{ form.phone }}
+                                                                {% if form.phone.errors %}
+                                                                    <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <div class="row g-3 w-100">
+                        <div class="col-12 col-lg-4">
+                            <button type="button" class="btn btn-outline-secondary btn-lg w-100" data-bs-dismiss="modal">
+                                <i class="fa-solid fa-times me-2"></i>
+                                Cancel Changes
+                            </button>
+                        </div>
+                        <div class="col-12 col-lg-8">
+                            <button type="submit" class="btn btn-success btn-lg w-100">
+                                <i class="fa-solid fa-save me-2"></i>Save Component Metadata
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}

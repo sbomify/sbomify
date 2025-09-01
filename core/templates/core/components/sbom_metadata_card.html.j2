@@ -1,0 +1,197 @@
+{% comment %}
+SBOM Metadata Card Component - Django Template
+Replaces the Vue SbomMetadataCard component
+
+Context variables:
+- sbom: SBOM object with metadata
+{% endcomment %}
+{% load static %}
+
+<!-- Using standard card styling patterns manually for SBOM metadata -->
+<div class="standard-card">
+    <div class="card shadow-brand border-0">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2 text-primary"></i>
+                    SBOM Metadata
+                </h4>
+                <!-- Collapsible toggle button -->
+                <button class="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#sbomMetadataContent"
+                        aria-expanded="true"
+                        aria-controls="sbomMetadataContent">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body p-4">
+            <div id="sbomMetadataContent" class="collapse show">
+                {% if sbom %}
+                    <div class="metadata-content">
+                        <!-- Uploaded On -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                                <strong>Uploaded On</strong>
+                            </div>
+                            <div class="metadata-value text-muted">
+                                {{ sbom.created_at|date:"M d, Y g:i A" }}
+                            </div>
+                        </div>
+
+                        <!-- Source -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-source-branch me-2 text-primary"></i>
+                                <strong>Source</strong>
+                            </div>
+                            <div class="metadata-value">
+                                <span class="badge bg-info-subtle text-info">
+                                    {{ sbom.source_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Format -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-file-code me-2 text-primary"></i>
+                                <strong>Format</strong>
+                            </div>
+                            <div class="metadata-value">
+                                <span class="badge bg-success-subtle text-success">
+                                    {% if sbom.format == 'spdx' %}
+                                        SPDX
+                                    {% elif sbom.format == 'cyclonedx' %}
+                                        CycloneDX
+                                    {% else %}
+                                        {{ sbom.format|upper }}
+                                    {% endif %}
+                                    {% if sbom.format_version %}
+                                        {{ sbom.format_version }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Version (if available) -->
+                        {% if sbom.version %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-tag me-2 text-primary"></i>
+                                    <strong>Version</strong>
+                                </div>
+                                <div class="metadata-value">
+                                    <span class="version-display text-muted" title="{{ sbom.version }}">
+                                        {{ sbom.version }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- SBOM ID -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-fingerprint me-2 text-primary"></i>
+                                <strong>SBOM ID</strong>
+                            </div>
+                            <div class="metadata-value">
+                                {% include "core/components/copyable_value.html.j2" with value=sbom.id css_class="font-monospace" %}
+                            </div>
+                        </div>
+
+                        <!-- SBOM Filename (if available) -->
+                        {% if sbom.sbom_filename %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-file me-2 text-primary"></i>
+                                    <strong>Filename</strong>
+                                </div>
+                                <div class="metadata-value text-muted">
+                                    {{ sbom.sbom_filename }}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- NTIA Compliance Status -->
+                        <div class="metadata-item mb-0">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-shield-alt me-2 text-primary"></i>
+                                <strong>NTIA Compliance</strong>
+                            </div>
+                            <div class="metadata-value">
+                                {% if sbom.ntia_compliance_status == 'compliant' %}
+                                    <span class="badge bg-success-subtle text-success">
+                                        <i class="fas fa-check-circle me-1"></i>Compliant
+                                    </span>
+                                {% elif sbom.ntia_compliance_status == 'non_compliant' %}
+                                    <span class="badge bg-danger-subtle text-danger">
+                                        <i class="fas fa-times-circle me-1"></i>Non-Compliant
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary">
+                                        <i class="fas fa-question-circle me-1"></i>Unknown
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-spinner fa-spin me-2"></i>
+                        Loading SBOM metadata...
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.metadata-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.metadata-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.metadata-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.metadata-value {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.version-display {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+@media (max-width: 768px) {
+    .metadata-item {
+        padding: 0.5rem 0;
+    }
+
+    .metadata-label,
+    .metadata-value {
+        font-size: 0.8rem;
+    }
+}
+</style>

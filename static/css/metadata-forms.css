@@ -1,0 +1,673 @@
+/*
+ * Component Metadata Forms Styling
+ * Handles styling for dynamic formsets, autocomplete, and form interactions
+ */
+
+/* License autocomplete dropdown styles */
+.spdx-license-dropdown,
+.license-expression-dropdown {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    background: white;
+    z-index: 1000;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.spdx-license-dropdown .dropdown-item,
+.license-expression-dropdown .dropdown-item {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f8f9fa;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.spdx-license-dropdown .dropdown-item:hover,
+.license-expression-dropdown .dropdown-item:hover {
+    background-color: #e9ecef !important;
+    transform: translateX(2px);
+    transition: all 0.2s ease;
+}
+
+.spdx-license-dropdown .dropdown-item.active,
+.license-expression-dropdown .dropdown-item.active {
+    background-color: #0d6efd !important;
+    color: white !important;
+    transform: translateX(4px);
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.3);
+}
+
+.spdx-license-dropdown .dropdown-item.active .badge,
+.license-expression-dropdown .dropdown-item.active .badge {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+.spdx-license-dropdown .dropdown-item:last-child,
+.license-expression-dropdown .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.cursor-pointer {
+    cursor: pointer !important;
+}
+
+/* Form section styling */
+.supplier-contact-form,
+.author-form,
+.license-form {
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.supplier-contact-form:hover,
+.author-form:hover,
+.license-form:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.075);
+    transform: translateY(-1px);
+}
+
+/* Remove button styling improvements */
+.remove-item-btn {
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.remove-item-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+/* Form being removed animation */
+.form-removing {
+    opacity: 0.5;
+    transform: scale(0.98);
+    transition: all 0.3s ease;
+}
+
+/* Add button improvements */
+.add-contact-btn,
+.add-author-btn,
+.add-license-btn {
+    transition: all 0.2s ease;
+}
+
+.add-contact-btn:hover,
+.add-author-btn:hover,
+.add-license-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+/* Custom license section */
+.custom-license-section {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.custom-license-section.show {
+    animation: expandSection 0.3s ease-out;
+}
+
+@keyframes expandSection {
+    from {
+        max-height: 0;
+        opacity: 0;
+    }
+    to {
+        max-height: 500px;
+        opacity: 1;
+    }
+}
+
+/* License type selection improvements */
+.license-type-selection .form-check {
+    transition: all 0.2s ease;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.license-type-selection .form-check:hover {
+    background-color: #f8f9fa;
+}
+
+.license-type-selection .form-check-input:checked + .form-check-label {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+/* Form validation styling */
+.form-control:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+/* Help text styling */
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.form-text i {
+    margin-right: 0.25rem;
+    color: #0d6efd;
+}
+
+/* Card header improvements for sections */
+.card-header {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.card-header .card-title {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+}
+
+.card-header .card-title i {
+    margin-right: 0.5rem;
+    color: #0d6efd;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .supplier-contact-form,
+    .author-form,
+    .license-form {
+        margin-bottom: 1rem;
+        padding: 1rem !important;
+    }
+
+    .remove-item-btn {
+        position: static;
+        margin-top: 1rem;
+        width: 100%;
+    }
+
+    .spdx-license-dropdown {
+        margin-top: 0.125rem;
+        box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+    }
+
+    .row.g-3 {
+        gap: 0.75rem !important;
+    }
+}
+
+/* Empty state styling */
+.empty-formset-message {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+    font-style: italic;
+    border: 2px dashed #dee2e6;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.empty-formset-message i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    color: #adb5bd;
+}
+
+/* Success/error message styling */
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1055;
+}
+
+/* Form loading states */
+.form-saving {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.form-saving::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2rem;
+    height: 2rem;
+    margin: -1rem 0 0 -1rem;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #0d6efd;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Improved spacing and typography */
+.form-label.fw-semibold.text-secondary {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.form-label .text-danger {
+    font-weight: 700;
+}
+
+/* Modal improvements for confirmations */
+.modal-content {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+.modal-header {
+    border-bottom: 1px solid #dee2e6;
+    padding: 1.5rem 1.5rem 1rem;
+}
+
+.modal-body {
+    padding: 1rem 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid #dee2e6;
+    padding: 1rem 1.5rem 1.5rem;
+}
+
+.modal-title {
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Badge improvements */
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Focus improvements for accessibility */
+.form-control:focus,
+.btn:focus,
+.form-check-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.btn-outline-danger:focus {
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+/* Animation for new forms */
+.form-added {
+    animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Supplier URL Management Styles */
+.supplier-urls-list {
+    min-height: 80px;
+}
+
+.supplier-url-item {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef !important;
+}
+
+.supplier-url-item:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    border-color: #c8d3db !important;
+}
+
+.supplier-url-item .remove-supplier-url-btn {
+    transition: all 0.2s ease;
+    opacity: 0.8;
+    min-width: 38px;
+    height: 38px;
+}
+
+.supplier-url-item .remove-supplier-url-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.supplier-url-item .supplier-url-input {
+    transition: all 0.2s ease;
+    border: 1px solid #ced4da;
+}
+
+.supplier-url-item .supplier-url-input:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.supplier-url-item .supplier-url-input.is-valid {
+    border-color: #198754;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.4.27 4.8-4.8-.4-.27L2.3 6.73z'/%3e%3cpath fill='%23198754' d='m.12 3.78.4.27L2.3 1.78l-.4-.27-.18.27z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: calc(1.5em + 0.75rem);
+}
+
+.supplier-url-item .supplier-url-input.is-invalid {
+    border-color: #dc3545;
+}
+
+.add-supplier-url-btn {
+    transition: all 0.2s ease;
+    border-radius: 0.375rem;
+}
+
+.add-supplier-url-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 0.5rem rgba(13, 110, 253, 0.15);
+}
+
+/* Empty state for supplier URLs */
+.supplier-url-empty-state {
+    border-style: dashed !important;
+    border-width: 2px !important;
+    border-color: #dee2e6 !important;
+    transition: all 0.2s ease;
+}
+
+.supplier-url-empty-state:hover {
+    border-color: #c8d3db !important;
+    background-color: #f8f9fa !important;
+}
+
+/* Consistent spacing and alignment */
+.supplier-url-item .form-label {
+    margin-bottom: 0.5rem;
+    color: #6c757d;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.supplier-url-item .d-flex {
+    align-items: flex-start;
+}
+
+/* Better visual hierarchy */
+.supplier-url-item .flex-shrink-0 {
+    padding-top: 0.25rem;
+}
+
+/* URL validation styling */
+.supplier-url-input:valid:not(:placeholder-shown) {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.4.27 4.8-4.8-.4-.27L2.3 6.73z'/%3e%3cpath fill='%23198754' d='m.12 3.78.4.27L2.3 1.78l-.4-.27-.18.27z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: calc(1.5em + 0.75rem);
+}
+
+/* Contact feedback improvements */
+.supplier-contact-form.form-added,
+.author-form.form-added,
+.license-form.form-added,
+.supplier-url-item.form-added {
+    animation: slideInUp 0.3s ease-out;
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Success feedback for form additions */
+.form-success-feedback {
+    animation: successPulse 0.6s ease-out;
+}
+
+@keyframes successPulse {
+    0% {
+        background-color: rgba(40, 167, 69, 0.1);
+        transform: scale(1);
+    }
+    50% {
+        background-color: rgba(40, 167, 69, 0.3);
+        transform: scale(1.02);
+    }
+    100% {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+/* Real-time validation feedback styles */
+.real-time-feedback {
+    animation: fadeIn 0.3s ease-in;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Enhanced validation states */
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: #198754;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.94-.94 1.76 1.76 3.76-3.76.94.94-4.7 4.7z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Focus states for better accessibility */
+.form-control:focus,
+.form-select:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.form-control.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+.form-control.is-valid:focus {
+    border-color: #198754;
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+}
+
+/* Loading states */
+.form-submitting {
+    opacity: 0.7;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.form-submitting::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 10;
+    border-radius: 0.375rem;
+}
+
+/* Save progress indicator */
+.save-progress {
+    position: sticky;
+    top: 20px;
+    z-index: 1050;
+    margin-bottom: 1rem;
+    border-left: 4px solid #0d6efd;
+    background: linear-gradient(135deg, #e7f3ff 0%, #f8f9fa 100%);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Spinner styling */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Button loading state */
+.btn:disabled {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+.btn .spinner-border {
+    animation: spinner-border 0.75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Form progress indicator */
+.form-progress-container {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    position: sticky;
+    top: 20px;
+    z-index: 100;
+}
+
+.form-progress-header {
+    margin-bottom: 0.75rem;
+}
+
+.form-progress-label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+.form-progress-percentage {
+    font-weight: 700;
+    color: #6c757d;
+    font-size: 0.95rem;
+}
+
+.progress {
+    height: 8px;
+    border-radius: 10px;
+    background-color: #e9ecef;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    transition: width 0.6s ease, background-color 0.3s ease;
+    border-radius: 10px;
+}
+
+.form-progress-details {
+    margin-top: 0.5rem;
+}
+
+.form-progress-details small {
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+/* Progress bar animations */
+@keyframes progress-stripes {
+    0% {
+        background-position: 1rem 0;
+    }
+    100% {
+        background-position: 0 0;
+    }
+}
+
+.progress-bar-striped {
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+}
+
+.progress-bar-animated {
+    animation: progress-stripes 1s linear infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .form-progress-container {
+        position: relative;
+        top: auto;
+    }
+
+    .form-progress-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}

@@ -64,7 +64,7 @@
                     </a>
                 </li>
                 {% if request.session.current_team and request.session.current_team.key %}
-                    <li class="sidebar-item {% if 'teams:team_settings' in current_view_name %}active{% endif %}">
+                    <li class="sidebar-item {% if current_view_name in 'teams:team_settings,teams:team_members,teams:team_branding,teams:team_integrations,teams:team_billing,teams:team_danger' %}active{% endif %}">
                         <a class="sidebar-link"
                            href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}">
                             <i class="align-middle fas fa-cog"></i> <span class="align-middle">Settings</span>

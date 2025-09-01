@@ -96,11 +96,11 @@ Context variables:
                 </div>
                 <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
                     <button type="button"
-                            class="btn btn-outline-secondary modern-btn-secondary"
+                            class="btn modern-btn-secondary"
                             data-bs-dismiss="modal">Cancel</button>
                     <button type="submit"
                             form="{{ modal_id }}Form"
-                            class="btn btn-primary px-4 modern-btn-primary"
+                            class="btn modern-btn-primary px-4"
                             id="{{ modal_id }}Submit">
                         <span id="{{ modal_id }}Spinner"
                               class="spinner-border spinner-border-sm me-2"
@@ -112,87 +112,5 @@ Context variables:
             </div>
         </div>
     </div>
-    <style>
-/* Modern Modal Styling - consistent with existing components */
-.modern-modal {
-    border: none;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-}
 
-.modern-modal-header {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    padding: 1.5rem 2rem 1rem 2rem;
-}
-
-.modern-modal-footer {
-    background: #f8fafc;
-    padding: 1rem 2rem 1.5rem 2rem;
-}
-
-.modern-btn-secondary {
-    background: transparent;
-    border: 2px solid #6c757d;
-    color: #6c757d;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-
-.modern-btn-secondary:hover {
-    background: #6c757d;
-    color: white;
-    border-color: #6c757d;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
-}
-
-.modern-btn-primary {
-    background: linear-gradient(135deg, var(--bs-primary) 0%, #0056b3 100%);
-    border: none;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-
-.modern-btn-primary:hover {
-    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
-}
-
-.modal-title {
-    color: #1e293b;
-    font-size: 1.25rem;
-}
-
-.form-control:focus,
-.form-select:focus {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-check-input:focus {
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-/* Loading state styling */
-.loading .modern-btn-primary {
-    opacity: 0.7;
-    cursor: not-allowed;
-}
-
-/* Responsive adjustments */
-@media (max-width: 576px) {
-    .modern-modal-header,
-    .modern-modal-footer {
-        padding: 1rem 1.5rem;
-    }
-
-    .modal-body {
-        padding: 1rem 1.5rem !important;
-    }
-}
-    </style>
 {% endif %}

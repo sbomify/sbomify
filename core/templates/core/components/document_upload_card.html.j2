@@ -1,0 +1,397 @@
+{% comment %}
+Document Upload Card Component - Django Template
+Replaces the Vue DocumentUpload component
+
+Context variables:
+- component: Component object
+- has_crud_permissions: Boolean for CRUD permissions
+{% endcomment %}
+{% load static %}
+
+<!-- Using standard card styling patterns manually for Document upload -->
+<div class="standard-card">
+    <div class="card shadow-brand border-0">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-cloud-upload-alt me-2 text-primary"></i>
+                    Upload Document File
+                </h4>
+                <!-- Collapsible toggle button -->
+                <button class="btn btn-outline-secondary btn-sm"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#documentUploadContent"
+                        aria-expanded="false"
+                        aria-controls="documentUploadContent">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body p-4">
+            <div id="documentUploadContent" class="collapse">
+                <!-- Info Notice (only shown when expanded) -->
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Upload specifications, manuals, reports, or any files related to your component.
+                </div>
+                {% if has_crud_permissions %}
+                    <!-- Document Version Input -->
+                    <div class="mb-3">
+                        <label for="document-version" class="form-label">Version <span class="text-danger">*</span></label>
+                        <input
+                            id="document-version"
+                            type="text"
+                            class="form-control"
+                            placeholder="e.g., 1.0, v2.1, latest"
+                            value="1.0"
+                            required
+                        >
+                        <div class="form-text">Specify the version of this document</div>
+                    </div>
+
+                    <!-- Document Type Input -->
+                    <div class="mb-3">
+                        <label for="document-type" class="form-label">Document Type</label>
+                        <select id="document-type" class="form-select">
+                            <option value="">Select document type (optional)</option>
+                            <option value="specification">Specification</option>
+                            <option value="manual">Manual</option>
+                            <option value="readme">README</option>
+                            <option value="documentation">Documentation</option>
+                            <option value="build-instructions">Build Instructions</option>
+                            <option value="configuration">Configuration</option>
+                            <option value="license">License</option>
+                            <option value="compliance">Compliance</option>
+                            <option value="evidence">Evidence</option>
+                            <option value="changelog">Changelog</option>
+                            <option value="release-notes">Release Notes</option>
+                            <option value="security-advisory">Security Advisory</option>
+                            <option value="vulnerability-report">Vulnerability Report</option>
+                            <option value="threat-model">Threat Model</option>
+                            <option value="risk-assessment">Risk Assessment</option>
+                            <option value="pentest-report">Penetration Test Report</option>
+                            <option value="static-analysis">Static Analysis Report</option>
+                            <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                            <option value="quality-metrics">Quality Metrics</option>
+                            <option value="maturity-report">Maturity Report</option>
+                            <option value="report">Report</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <div class="form-text">Categorize the document type for better organization</div>
+                    </div>
+
+                    <!-- Document Description Input -->
+                    <div class="mb-3">
+                        <label for="document-description" class="form-label">Description</label>
+                        <textarea
+                            id="document-description"
+                            class="form-control"
+                            rows="3"
+                            placeholder="Brief description of the document..."
+                        ></textarea>
+                        <div class="form-text">Optional description of the document content</div>
+                    </div>
+
+                    <!-- Upload Area -->
+                    <div class="upload-area"
+                         id="documentUploadArea"
+                         data-component-id="{{ component.id }}">
+                        <div class="upload-content" id="uploadContent">
+                            <div class="upload-icon mb-3">
+                                <i class="fas fa-file-upload fa-3x text-primary"></i>
+                            </div>
+                            <p class="upload-text mb-2">
+                                <strong>Drop your document file here</strong> or
+                                <label class="upload-link text-primary">
+                                    <input type="file"
+                                           id="documentFileInput"
+                                           accept=".pdf,.doc,.docx,.txt,.md,.html,.xml,.json,.csv,.xlsx,.pptx"
+                                           style="display: none;">
+                                    click to browse
+                                </label>
+                            </p>
+                            <p class="upload-hint text-muted small">
+                                Supports PDF, Word, text, markdown, and other common document formats (max 50MB)
+                            </p>
+                        </div>
+
+                        <!-- Upload Progress (hidden by default) -->
+                        <div class="upload-progress text-center" id="uploadProgress" style="display: none;">
+                            <div class="spinner-border text-primary mb-2" role="status">
+                                <span class="visually-hidden">Uploading...</span>
+                            </div>
+                            <p class="mb-0">Uploading document...</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-lock me-2"></i>
+                        You don't have permission to upload documents to this component.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-area {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: #f9fafb;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-area:hover,
+.upload-area.drag-over {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.upload-area.uploading {
+    border-color: #10b981;
+    background: #f0fdf4;
+    cursor: not-allowed;
+}
+
+.upload-content {
+    width: 100%;
+}
+
+.upload-icon {
+    opacity: 0.6;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    color: #374151;
+    margin: 0;
+}
+
+.upload-link {
+    cursor: pointer;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.upload-link:hover {
+    text-decoration: none;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.upload-progress {
+    color: #374151;
+}
+
+@media (max-width: 768px) {
+    .upload-area {
+        padding: 2rem 1rem;
+        min-height: 150px;
+    }
+
+    .upload-text {
+        font-size: 1rem;
+    }
+
+    .upload-icon i {
+        font-size: 2rem !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle collapse/expand chevron rotation
+    const collapseElement = document.getElementById('documentUploadContent');
+    const toggleButton = document.querySelector('[data-bs-target="#documentUploadContent"]');
+
+    if (collapseElement && toggleButton) {
+        collapseElement.addEventListener('shown.bs.collapse', function () {
+            toggleButton.querySelector('i').className = 'fas fa-chevron-up';
+            toggleButton.setAttribute('aria-expanded', 'true');
+        });
+
+        collapseElement.addEventListener('hidden.bs.collapse', function () {
+            toggleButton.querySelector('i').className = 'fas fa-chevron-down';
+            toggleButton.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    const uploadArea = document.getElementById('documentUploadArea');
+    const fileInput = document.getElementById('documentFileInput');
+    const uploadContent = document.getElementById('uploadContent');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const documentVersion = document.getElementById('document-version');
+    const documentType = document.getElementById('document-type');
+    const documentDescription = document.getElementById('document-description');
+
+    if (!uploadArea || !fileInput) return;
+
+    const componentId = uploadArea.dataset.componentId;
+    let isUploading = false;
+
+    // Drag and drop handlers
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!isUploading) {
+            uploadArea.classList.add('drag-over');
+        }
+    });
+
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+
+        if (!isUploading && e.dataTransfer.files.length > 0) {
+            uploadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // Click to upload
+    uploadArea.addEventListener('click', function() {
+        if (!isUploading) {
+            fileInput.click();
+        }
+    });
+
+    fileInput.addEventListener('change', function(e) {
+        if (!isUploading && e.target.files.length > 0) {
+            uploadFile(e.target.files[0]);
+        }
+    });
+
+    // File validation
+    function validateFile(file) {
+        // Check file size (max 50MB)
+        const maxSize = 50 * 1024 * 1024;
+        if (file.size > maxSize) {
+            return 'File size must be less than 50MB';
+        }
+
+        return null;
+    }
+
+    // Get CSRF token
+    function getCsrfToken() {
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+
+        if (cookieValue) return cookieValue;
+
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        return metaTag?.content || '';
+    }
+
+    // Upload file function
+    async function uploadFile(file) {
+        const validationError = validateFile(file);
+        if (validationError) {
+            if (window.showError) {
+                window.showError(validationError);
+            } else {
+                alert(validationError);
+            }
+            return;
+        }
+
+        if (!documentVersion.value.trim()) {
+            if (window.showError) {
+                window.showError('Please specify a document version');
+            } else {
+                alert('Please specify a document version');
+            }
+            return;
+        }
+
+        isUploading = true;
+        uploadArea.classList.add('uploading');
+        uploadContent.style.display = 'none';
+        uploadProgress.style.display = 'block';
+
+        try {
+            const formData = new FormData();
+            formData.append('document_file', file);
+            formData.append('component_id', componentId);
+            formData.append('version', documentVersion.value.trim());
+            if (documentType.value) {
+                formData.append('document_type', documentType.value);
+            }
+            if (documentDescription.value.trim()) {
+                formData.append('description', documentDescription.value.trim());
+            }
+
+            const response = await fetch(`/api/v1/documents/`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                if (window.showSuccess) {
+                    window.showSuccess('Document uploaded successfully!');
+                } else {
+                    alert('Document uploaded successfully!');
+                }
+
+                // Reset form
+                documentVersion.value = '1.0';
+                documentType.value = '';
+                documentDescription.value = '';
+                fileInput.value = '';
+
+                // Refresh the page after 2 seconds to show the new document
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                const errorMessage = data.detail || 'Upload failed';
+                if (window.showError) {
+                    window.showError(errorMessage);
+                } else {
+                    alert(errorMessage);
+                }
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            const errorMessage = 'Network error occurred. Please try again.';
+            if (window.showError) {
+                window.showError(errorMessage);
+            } else {
+                alert(errorMessage);
+            }
+        } finally {
+            isUploading = false;
+            uploadArea.classList.remove('uploading');
+            uploadContent.style.display = 'block';
+            uploadProgress.style.display = 'none';
+        }
+    }
+});
+</script>

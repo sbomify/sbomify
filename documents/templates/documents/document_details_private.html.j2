@@ -216,6 +216,45 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
         }
 
 
+        /* New Document Details Styling */
+        .document-badges {
+            margin-top: 0.75rem;
+        }
+
+        .metadata-item {
+            padding: 0.75rem 0;
+        }
+
+        .metadata-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .metadata-value {
+            font-size: 0.875rem;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .quick-stats .stat-item:last-child {
+            border-bottom: none !important;
+        }
+
+        .download-icon {
+            opacity: 0.8;
+        }
+
+        .card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;
+        }
+
         @media (max-width: 768px) {
             .title-section {
                 flex-direction: column;
@@ -232,112 +271,144 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
                 gap: 0.75rem;
             }
 
-            .editable-field:hover::after {
-                display: none;
+            .document-badges {
+                margin-top: 0.5rem;
+            }
+
+            .metadata-item {
+                padding: 0.5rem 0;
             }
         }
     </style>
+    <!-- Main Content Layout -->
     <div class="row">
-        <div class="col-12 col-md-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Document Information
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <dl class="row">
-                        <dt class="col-sm-4">Name:</dt>
-                        <dd class="col-sm-8">
-                            {{ document.name }}
-                        </dd>
-                        <dt class="col-sm-4">Version:</dt>
-                        <dd class="col-sm-8">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <span>
-                                    {% if document.version %}
-                                        {{ document.version }}
-                                    {% else %}
-                                        <span class="text-muted">No version set</span>
-                                    {% endif %}
+        <!-- Left Column - Document Overview -->
+        <div class="col-12 col-lg-8">
+            <!-- Document Info Card -->
+            <div class="card mb-4 border-0 shadow-sm">
+                <div class="card-body p-4">
+                                        <!-- Header Row -->
+                    <div class="mb-4">
+                        <h2 class="h4 mb-2 text-primary">{{ document.name }}</h2>
+                        <div class="document-badges">
+                            {% if document.version %}
+                                <span class="badge bg-secondary-subtle text-secondary me-2">
+                                    <i class="fas fa-tag me-1"></i>v{{ document.version }}
                                 </span>
-                                <button class="btn btn-sm btn-outline-secondary ms-2"
-                                        title="Edit version"
-                                        onclick="editFieldModalOpen({ fieldName: 'version', fieldDisplayName: 'Version', currentValue: '{{ document.version|default:'' }}', placeholder: 'Enter version', type: 'input', updateUrl: '{% url 'documents:update_document_field' document.id %}' })">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                            </div>
-                        </dd>
-                        {% if document.document_type %}
-                            <dt class="col-sm-4">Type:</dt>
-                            <dd class="col-sm-8">
-                                {{ document.document_type }}
-                            </dd>
-                        {% endif %}
-                        <dt class="col-sm-4">Uploaded:</dt>
-                        <dd class="col-sm-8">
-                            {{ document.created_at|date:"F d, Y g:i A" }}
-                        </dd>
-                        <dt class="col-sm-4">Source:</dt>
-                        <dd class="col-sm-8">
-                            {{ document.source_display }}
-                        </dd>
-                        {% if document.content_type %}
-                            <dt class="col-sm-4">Content Type:</dt>
-                            <dd class="col-sm-8">
-                                {{ document.content_type }}
-                            </dd>
-                        {% endif %}
-                        {% if document.file_size %}
-                            <dt class="col-sm-4">File Size:</dt>
-                            <dd class="col-sm-8">
-                                {{ document.file_size|filesizeformat }}
-                            </dd>
-                        {% endif %}
-                    </dl>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-md-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-align-left me-2"></i>Description
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-start justify-content-between">
-                        <div class="flex-grow-1">
-                            {% if document.description %}
-                                <p class="mb-0">{{ document.description }}</p>
-                            {% else %}
-                                <p class="text-muted mb-0">No description set</p>
                             {% endif %}
+                            {% if document.document_type %}
+                                <span class="badge bg-info-subtle text-info me-2">
+                                    <i class="fas fa-file-alt me-1"></i>{{ document.get_document_type_display }}
+                                </span>
+                            {% endif %}
+                            <span class="badge bg-success-subtle text-success">
+                                <i class="fas fa-check-circle me-1"></i>{{ document.source_display }}
+                            </span>
                         </div>
-                        <button class="btn btn-sm btn-outline-secondary ms-2"
-                                title="Edit description"
-                                onclick="editFieldModalOpen({ fieldName: 'description', fieldDisplayName: 'Description', currentValue: '{{ document.description|default:'' }}', placeholder: 'Enter description', type: 'textarea', updateUrl: '{% url 'documents:update_document_field' document.id %}' })">
-                            <i class="fas fa-edit"></i>
-                        </button>
+                    </div>
+
+                    <!-- Description -->
+                    {% if document.description %}
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-2">Description</h6>
+                            <p class="text-body">{{ document.description }}</p>
+                        </div>
+                    {% endif %}
+
+                    <!-- Metadata Grid -->
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="metadata-item">
+                                <div class="metadata-label">
+                                    <i class="fas fa-calendar text-muted me-2"></i>Uploaded On
+                                </div>
+                                <div class="metadata-value">{{ document.created_at|date:"F d, Y g:i A" }}</div>
+                            </div>
+                        </div>
+
+                        {% if document.content_type %}
+                            <div class="col-md-6">
+                                <div class="metadata-item">
+                                    <div class="metadata-label">
+                                        <i class="fas fa-file-code text-muted me-2"></i>Content Type
+                                    </div>
+                                    <div class="metadata-value">{{ document.content_type }}</div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if document.file_size %}
+                            <div class="col-md-6">
+                                <div class="metadata-item">
+                                    <div class="metadata-label">
+                                        <i class="fas fa-weight-hanging text-muted me-2"></i>File Size
+                                    </div>
+                                    <div class="metadata-value">{{ document.file_size|filesizeformat }}</div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <div class="col-md-6">
+                            <div class="metadata-item">
+                                <div class="metadata-label">
+                                    <i class="fas fa-fingerprint text-muted me-2"></i>Document ID
+                                </div>
+                                <div class="metadata-value">
+                                    {% include "core/components/copyable_value.html.j2" with value=document.id css_class="font-monospace small" %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="card download-card shadow-sm">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-download me-2"></i>Download Document
-                    </h4>
-                </div>
-                <div class="card-body text-center">
-                    <p class="text-muted mb-3">Download the document file</p>
-                    <a class="btn btn-primary download-btn"
-                       href="{% url 'documents:document_download' document.id %}">
+
+        <!-- Right Column - Download & Actions -->
+        <div class="col-12 col-lg-4">
+            <!-- Download Card -->
+            <div class="card mb-4 border-0 shadow-sm">
+                <div class="card-body p-4 text-center">
+                    <div class="download-icon mb-3">
+                        <i class="fas fa-download fa-2x text-primary"></i>
+                    </div>
+                    <h5 class="card-title mb-2">Download Document</h5>
+                    <p class="text-muted small mb-3">Get the original document file</p>
+                    <a href="{% url 'documents:document_download' document.id %}"
+                       class="btn btn-primary w-100">
                         <i class="fas fa-download me-2"></i>Download {{ document.name }}
                     </a>
+                </div>
+            </div>
+
+                        <!-- Quick Info Card -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h6 class="card-title mb-3">
+                        <i class="fas fa-info-circle me-2 text-primary"></i>Quick Info
+                    </h6>
+                    <div class="quick-stats">
+                        <div class="stat-item d-flex justify-content-between py-2 border-bottom">
+                            <span class="text-muted">Component</span>
+                            <a href="{% url 'core:component_details' document.component.id %}"
+                               class="text-decoration-none">{{ document.component.name }}</a>
+                        </div>
+                        <div class="stat-item d-flex justify-content-between py-2 border-bottom">
+                            <span class="text-muted">Type</span>
+                            <span>{{ document.get_document_type_display|default:"Document" }}</span>
+                        </div>
+                        <div class="stat-item d-flex justify-content-between py-2">
+                            <span class="text-muted">Version</span>
+                            <span>{{ document.version|default:"—" }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Single Edit Action -->
+                    <div class="mt-4 pt-3 border-top">
+                        <a href="{% url 'documents:document_metadata_edit' document.id %}"
+                           class="btn btn-outline-primary w-100">
+                            <i class="fas fa-edit me-2"></i>Edit Document
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -346,6 +417,4 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
 {% block scripts %}
     {% vite_asset 'core/js/main.ts' %}
     {% vite_asset 'documents/js/main.ts' %}
-    <!-- Include Reusable Edit Modal -->
-    {% include "core/components/edit_field_modal.html.j2" with modal_id="editFieldModal" csrf_token=csrf_token %}
 {% endblock %}

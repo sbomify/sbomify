@@ -1,0 +1,206 @@
+{% comment %}
+Document Metadata Card Component - Django Template
+Replaces inline document metadata display
+
+Context variables:
+- document: Document object with metadata
+{% endcomment %}
+{% load static %}
+
+<!-- Using standard card styling patterns manually for Document metadata -->
+<div class="standard-card">
+    <div class="card shadow-brand border-0">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2 text-primary"></i>
+                    Document Metadata
+                </h4>
+                <!-- Collapsible toggle button -->
+                <button class="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#documentMetadataContent"
+                        aria-expanded="true"
+                        aria-controls="documentMetadataContent">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body p-4">
+            <div id="documentMetadataContent" class="collapse show">
+                {% if document %}
+                    <div class="metadata-content">
+                        <!-- Document Name -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-file-alt me-2 text-primary"></i>
+                                <strong>Name</strong>
+                            </div>
+                            <div class="metadata-value">
+                                {{ document.name }}
+                            </div>
+                        </div>
+
+                        <!-- Version -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-tag me-2 text-primary"></i>
+                                <strong>Version</strong>
+                            </div>
+                            <div class="metadata-value">
+                                {% if document.version %}
+                                    <span class="version-display text-muted" title="{{ document.version }}">
+                                        {{ document.version }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">No version set</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Document Type -->
+                        {% if document.document_type %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-tags me-2 text-primary"></i>
+                                    <strong>Type</strong>
+                                </div>
+                                <div class="metadata-value">
+                                    <span class="badge bg-info-subtle text-info">
+                                        {{ document.get_document_type_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Description -->
+                        {% if document.description %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-align-left me-2 text-primary"></i>
+                                    <strong>Description</strong>
+                                </div>
+                                <div class="metadata-value">
+                                    {{ document.description }}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Uploaded On -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                                <strong>Uploaded On</strong>
+                            </div>
+                            <div class="metadata-value text-muted">
+                                {{ document.created_at|date:"M d, Y g:i A" }}
+                            </div>
+                        </div>
+
+                        <!-- Source -->
+                        <div class="metadata-item mb-3">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-source-branch me-2 text-primary"></i>
+                                <strong>Source</strong>
+                            </div>
+                            <div class="metadata-value">
+                                <span class="badge bg-success-subtle text-success">
+                                    {{ document.source_display }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Content Type -->
+                        {% if document.content_type %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-file-code me-2 text-primary"></i>
+                                    <strong>Content Type</strong>
+                                </div>
+                                <div class="metadata-value text-muted">
+                                    {{ document.content_type }}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- File Size -->
+                        {% if document.file_size %}
+                            <div class="metadata-item mb-3">
+                                <div class="metadata-label d-flex align-items-center mb-1">
+                                    <i class="fas fa-weight-hanging me-2 text-primary"></i>
+                                    <strong>File Size</strong>
+                                </div>
+                                <div class="metadata-value text-muted">
+                                    {{ document.file_size|filesizeformat }}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Document ID -->
+                        <div class="metadata-item mb-0">
+                            <div class="metadata-label d-flex align-items-center mb-1">
+                                <i class="fas fa-fingerprint me-2 text-primary"></i>
+                                <strong>Document ID</strong>
+                            </div>
+                            <div class="metadata-value">
+                                {% include "core/components/copyable_value.html.j2" with value=document.id css_class="font-monospace" %}
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-spinner fa-spin me-2"></i>
+                        Loading document metadata...
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.metadata-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.metadata-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.metadata-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.metadata-value {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.version-display {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+@media (max-width: 768px) {
+    .metadata-item {
+        padding: 0.5rem 0;
+    }
+
+    .metadata-label,
+    .metadata-value {
+        font-size: 0.8rem;
+    }
+}
+</style>

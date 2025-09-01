@@ -44,11 +44,11 @@ Context variables:
             </div>
             <div class="modal-footer modern-modal-footer border-0 px-4 py-3">
                 <button type="button"
-                        class="btn btn-secondary px-4 modern-btn-secondary"
+                        class="btn modern-btn-secondary px-4"
                         data-bs-dismiss="modal">Cancel</button>
                 <form id="{{ modal_id }}Form" method="post" style="display: inline;">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-danger px-4 modern-btn-danger">
+                    <button type="submit" class="btn modern-btn-danger px-4">
                         <i class="fas fa-trash me-2"></i>Delete {{ item_type|default:"Item" }}
                     </button>
                 </form>

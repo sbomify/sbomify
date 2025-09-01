@@ -610,7 +610,7 @@ def getting_started_wizard(request: HttpRequest) -> HttpResponse:
                     # Create payload for API
                     payload = ComponentCreateSchema(
                         name=form.cleaned_data["name"],
-                        component_type="sbom",  # Default type for wizard (valid values: 'sbom' or 'document')
+                        component_type=form.cleaned_data["component_type"],  # Use selected component type
                         metadata=component_metadata,
                     )
 

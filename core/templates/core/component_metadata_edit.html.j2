@@ -1,0 +1,450 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Metadata - {{ component.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/metadata-forms.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="h3 mb-1">Edit Component Metadata</h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0">
+                            <li class="breadcrumb-item"><a href="{% url 'core:components_dashboard' %}">Components</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'core:component_details' component.id %}">{{ component.name }}</a></li>
+                            <li class="breadcrumb-item active" aria-current="page">Edit Metadata</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div>
+                    <a href="{% url 'core:component_details' component.id %}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Component
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Form -->
+    <form method="post" class="needs-validation" novalidate role="main" aria-label="Component metadata editing form">
+        {% csrf_token %}
+
+        <!-- Management forms for formsets -->
+        {{ supplier_contact_formset.management_form }}
+        {{ author_formset.management_form }}
+        {{ license_formset.management_form }}
+
+        <div class="row">
+            <!-- Left Column -->
+            <div class="col-lg-8">
+                <!-- Supplier Information -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-building me-2"></i>Supplier Information
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Basic information about the component supplier</p>
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label for="{{ metadata_form.supplier_name.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ metadata_form.supplier_name.label }}
+                                    </label>
+                                    {{ metadata_form.supplier_name|add_class:"form-control" }}
+                                    {% if metadata_form.supplier_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ metadata_form.supplier_name.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold text-secondary">
+                                        Supplier URLs
+                                    </label>
+                                    <!-- Hidden field for form processing -->
+                                    {{ metadata_form.supplier_url }}
+
+                                    <!-- Dynamic URL management interface -->
+                                    <div id="supplier-urls-container" class="supplier-urls-list mb-3">
+                                        <!-- URLs will be populated by JavaScript -->
+                                    </div>
+
+                                    <div class="d-flex justify-content-start mb-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm add-supplier-url-btn"
+                                                aria-label="Add new supplier URL"
+                                                title="Add a website URL for the supplier">
+                                            <i class="fas fa-plus me-2" aria-hidden="true"></i>Add URL
+                                        </button>
+                                    </div>
+
+                                    {% if metadata_form.supplier_url.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ metadata_form.supplier_url.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Add website URLs for the supplier organization
+                                    </div>
+                                </div>
+
+                                <!-- Supplier Address -->
+                                <div class="col-12">
+                                    <label for="{{ metadata_form.supplier_address.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ metadata_form.supplier_address.label }}
+                                    </label>
+                                    {{ metadata_form.supplier_address|add_class:"form-control" }}
+                                    {% if metadata_form.supplier_address.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ metadata_form.supplier_address.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-12">
+                                    <label for="{{ metadata_form.lifecycle_phase.id_for_label }}"
+                                           class="form-label fw-semibold text-secondary">
+                                        {{ metadata_form.lifecycle_phase.label }}
+                                    </label>
+                                    {{ metadata_form.lifecycle_phase|add_class:"form-select" }}
+                                    {% if metadata_form.lifecycle_phase.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ metadata_form.lifecycle_phase.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Supplier Contacts -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-users me-2"></i>Supplier Contacts
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Add contact information for the supplier organization</p>
+
+                            <div id="supplier-contacts-formset">
+                                {% for form in supplier_contact_formset %}
+                                    <div class="supplier-contact-form border rounded-3 p-4 mb-3 bg-light position-relative">
+                                        {{ form.id }}
+
+                                        <div class="position-absolute top-0 end-0 m-3">
+                                            <button type="button"
+                                                    class="btn btn-outline-danger btn-sm remove-item-btn remove-contact-btn"
+                                                    title="Remove Contact">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% if form.DELETE %}
+                                                <div class="d-none">{{ form.DELETE }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.name.label }}
+                                                    {% if form.name.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                                </label>
+                                                {{ form.name|add_class:"form-control" }}
+                                                {% if form.name.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.email.label }}
+                                                </label>
+                                                {{ form.email|add_class:"form-control" }}
+                                                {% if form.email.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.phone.label }}
+                                                </label>
+                                                {{ form.phone|add_class:"form-control" }}
+                                                {% if form.phone.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="d-flex justify-content-start">
+                                <button type="button" class="btn btn-outline-primary btn-sm add-contact-btn"
+                                        aria-label="Add new supplier contact"
+                                        title="Add a new contact for the supplier">
+                                    <i class="fas fa-plus me-2" aria-hidden="true"></i>Add Contact
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Authors -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-user-edit me-2"></i>Authors
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Add information about component authors and maintainers</p>
+
+                            <div id="authors-formset">
+                                {% for form in author_formset %}
+                                    <div class="author-form border rounded-3 p-4 mb-3 bg-light position-relative">
+                                        {{ form.id }}
+
+                                        <div class="position-absolute top-0 end-0 m-3">
+                                            <button type="button"
+                                                    class="btn btn-outline-danger btn-sm remove-item-btn remove-author-btn"
+                                                    title="Remove Author">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% if form.DELETE %}
+                                                <div class="d-none">{{ form.DELETE }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.name.label }}
+                                                    {% if form.name.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                                </label>
+                                                {{ form.name|add_class:"form-control" }}
+                                                {% if form.name.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="{{ form.email.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.email.label }}
+                                                </label>
+                                                {{ form.email|add_class:"form-control" }}
+                                                {% if form.email.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="{{ form.phone.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                    {{ form.phone.label }}
+                                                </label>
+                                                {{ form.phone|add_class:"form-control" }}
+                                                {% if form.phone.errors %}
+                                                    <div class="invalid-feedback d-block">{{ form.phone.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="d-flex justify-content-start">
+                                <button type="button" class="btn btn-outline-primary btn-sm add-author-btn"
+                                        aria-label="Add new component author"
+                                        title="Add a new author for this component">
+                                    <i class="fas fa-plus me-2" aria-hidden="true"></i>Add Author
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-lg-4">
+
+                <!-- Licenses -->
+                <div class="mb-4">
+                    <div class="card border-light shadow-brand">
+                        <div class="card-header px-4 py-3">
+                            <h4 class="card-title mb-0">
+                                <i class="fas fa-balance-scale me-2"></i>Licenses
+                            </h4>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Specify the licensing information for this component</p>
+
+                            <div id="licenses-formset">
+                                {% for form in license_formset %}
+                                    <div class="license-form border rounded-3 p-4 mb-4 bg-light position-relative">
+                                        {{ form.id }}
+
+                                        <div class="position-absolute top-0 end-0 m-3">
+                                            <button type="button"
+                                                    class="btn btn-outline-danger btn-sm remove-item-btn remove-license-btn"
+                                                    title="Remove License">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% if form.DELETE %}
+                                                <div class="d-none">{{ form.DELETE }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- License Type Selection -->
+                                        <div class="mb-4">
+                                            <label class="form-label fw-semibold text-secondary mb-3">
+                                                <i class="fas fa-tags me-2"></i>License Type
+                                            </label>
+                                            <div class="license-type-selection">
+                                                {% for radio in form.license_type %}
+                                                    <div class="form-check mb-2">
+                                                        {{ radio.tag }}
+                                                        <label class="form-check-label fw-medium" for="{{ radio.id_for_label }}">
+                                                            {{ radio.choice_label }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+
+                                        <!-- License ID/Expression Field -->
+                                        <div class="mb-3">
+                                            <label for="{{ form.license_id.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                {{ form.license_id.label }}
+                                            </label>
+                                            <div class="help-text bg-light border-start border-primary border-4 p-3 mb-3">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-info-circle text-primary me-2 mt-1 flex-shrink-0"></i>
+                                                    <div>
+                                                        <small class="text-muted d-block">Enter SPDX license ID (e.g., MIT) or complex expression (e.g., MIT OR Apache-2.0)</small>
+                                                        <small class="text-muted"><strong>Tip:</strong> Start typing a license name for autocomplete suggestions</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {{ form.license_id|add_class:"form-control" }}
+                                            {% if form.license_id.errors %}
+                                                <div class="invalid-feedback d-block">{{ form.license_id.errors.0 }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- SPDX Quick Select with Autocomplete -->
+                                        <div class="mb-4">
+                                            <label for="{{ form.spdx_license_choice.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                {{ form.spdx_license_choice.label }}
+                                            </label>
+                                            <div class="position-relative">
+                                                {{ form.spdx_license_choice|add_class:"form-control spdx-license-autocomplete" }}
+                                                <div class="dropdown-menu w-100 spdx-license-dropdown" style="max-height: 300px; overflow-y: auto;">
+                                                    <!-- License options will be populated by JavaScript -->
+                                                </div>
+                                            </div>
+                                            <div class="form-text">
+                                                <i class="fas fa-search me-1"></i>
+                                                Search from 520+ SPDX and custom licenses. Type to filter results.
+                                            </div>
+                                        </div>
+
+                                        <!-- Custom License Fields -->
+                                        <div class="custom-license-section" style="display: none;">
+                                            <div class="border-top pt-3 mt-3">
+                                                <h6 class="fw-semibold text-secondary mb-3">
+                                                    <i class="fas fa-edit me-2"></i>Custom License Details
+                                                </h6>
+                                                <div class="row g-3">
+                                                    <div class="col-12">
+                                                        <label for="{{ form.license_name.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                            {{ form.license_name.label }}
+                                                        </label>
+                                                        {{ form.license_name|add_class:"form-control" }}
+                                                        {% if form.license_name.errors %}
+                                                            <div class="invalid-feedback d-block">{{ form.license_name.errors.0 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label for="{{ form.license_url.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                            {{ form.license_url.label }}
+                                                        </label>
+                                                        {{ form.license_url|add_class:"form-control" }}
+                                                        {% if form.license_url.errors %}
+                                                            <div class="invalid-feedback d-block">{{ form.license_url.errors.0 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label for="{{ form.license_text.id_for_label }}" class="form-label fw-semibold text-secondary">
+                                                            {{ form.license_text.label }}
+                                                        </label>
+                                                        {{ form.license_text|add_class:"form-control" }}
+                                                        {% if form.license_text.errors %}
+                                                            <div class="invalid-feedback d-block">{{ form.license_text.errors.0 }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="d-flex justify-content-start">
+                                <button type="button" class="btn btn-outline-primary btn-sm add-license-btn"
+                                        aria-label="Add new license information"
+                                        title="Add licensing information for this component">
+                                    <i class="fas fa-plus me-2" aria-hidden="true"></i>Add License
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{% url 'core:component_details' component.id %}"
+                       class="btn btn-outline-secondary"
+                       aria-label="Cancel editing and return to component details"
+                       title="Discard changes and return to component details">
+                        <i class="fas fa-times me-2" aria-hidden="true"></i>Cancel Changes
+                    </a>
+                    <button type="submit"
+                            class="btn btn-primary"
+                            aria-label="Save component metadata changes"
+                            title="Save all metadata changes for this component">
+                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Metadata
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- License data for TypeScript -->
+<script>
+// Pass license data to TypeScript module
+window.licenseData = {{ license_data_json|safe }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{% static 'js/dist/metadata-formsets.js' %}"></script>
+{% endblock %}

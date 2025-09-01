@@ -149,19 +149,19 @@ APP_BASE_URL - Base URL for the application
         {% if has_crud_permissions %}
             {% include "core/components/sbom_upload_card.html.j2" with component=component has_crud_permissions=has_crud_permissions %}
         {% endif %}
-        
+
         <!-- SBOMs Table -->
         {% include "core/components/items_table.html.j2" with items_data=sboms_data component_type="sbom" table_title="SBOMs" is_public_view=False show_vulnerabilities=True show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
-        
+
         <!-- Vulnerability Trends -->
         {% include "core/components/vulnerability_trends_card.html.j2" with component=component %}
-        
+
     {% elif component.component_type == 'document' %}
         <!-- Document Upload Section -->
         {% if has_crud_permissions %}
             {% include "core/components/document_upload_card.html.j2" with component=component has_crud_permissions=has_crud_permissions %}
         {% endif %}
-        
+
         <!-- Documents Table -->
         {% include "core/components/items_table.html.j2" with items_data=documents_data component_type="document" table_title="Documents" is_public_view=False show_vulnerabilities=False show_delete_button=has_crud_permissions team_billing_plan=team_billing_plan has_crud_permissions=has_crud_permissions %}
     {% endif %}

@@ -349,6 +349,9 @@ import './components/product-identifiers-crud';
 import './components/public-status-toggle';
 import './components/editable-field';
 import './components/assignment-manager';
+import './components-dashboard';
+import './vulnerability-trends';
+import './metadata-formsets';
 
 import './components/UserSettingsPage';
 

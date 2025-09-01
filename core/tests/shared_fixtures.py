@@ -237,7 +237,8 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
             "role": member.role,
             "name": team.name,
             "is_default_team": member.is_default_team,
-            "team_id": team.id,
+            "id": team.id,
+            "has_completed_wizard": team.has_completed_wizard,
         }
     }
     session["current_team"] = {
@@ -246,6 +247,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
         "name": team.name,
         "is_default_team": member.is_default_team,
         "id": team.id,
+        "has_completed_wizard": team.has_completed_wizard,
     }
     session.save()
 

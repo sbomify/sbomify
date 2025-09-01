@@ -1,0 +1,68 @@
+{% comment %}
+Reusable Django template for public project components - replaces Vue PublicProjectComponents component
+Context variables:
+- components: QuerySet or list of component objects
+- project: Project object (for styling context)
+- brand: BrandingInfo object for theming (optional)
+- title: Card title (default: "Project Components")
+- show_empty_state: Boolean to show empty state when no components (default: True)
+{% endcomment %}
+{% load static %}
+
+<div class="mt-3 mb-4">
+    {% include "core/components/standard_card.html.j2" with title=title|default:"Project Components" variant="default" size="large" shadow="md" info_notice="Components that are part of this project." content=card_content %}
+    {% block card_content %}
+        {% if components %}
+            <div class="components-grid mt-3">
+                <div class="row">
+                    {% for component in components %}
+                        <div class="col-12 col-md-6 col-lg-4 mb-3">
+                            <div class="component-item h-100">
+                                <div class="component-icon">
+                                    {% if component.component_type == 'sbom' %}
+                                        <i class="fas fa-file-code component-type-icon text-primary"></i>
+                                    {% elif component.component_type == 'document' %}
+                                        <i class="fas fa-file-alt component-type-icon text-info"></i>
+                                    {% else %}
+                                        <i class="fas fa-cube component-type-icon text-secondary"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="component-info">
+                                    <h6 class="component-name">
+                                        {% if component.is_public %}
+                                            <a href="/public/component/{{ component.id }}/"
+                                               class="component-link">{{ component.name }}</a>
+                                        {% else %}
+                                            <span class="component-private">{{ component.name }}</span>
+                                        {% endif %}
+                                    </h6>
+                                    <small class="component-type text-muted text-uppercase fw-medium">
+                                        {% if component.component_type == 'sbom' %}
+                                            SBOM
+                                        {% elif component.component_type == 'document' %}
+                                            Document
+                                        {% else %}
+                                            Component
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% elif show_empty_state|default:True %}
+            <div class="empty-state text-center py-5">
+                <div class="empty-icon mb-3">
+                    <i class="fas fa-cube fa-3x text-muted"></i>
+                </div>
+                <h6 class="empty-title text-muted">No components yet</h6>
+                <p class="empty-description text-muted mb-0 mx-auto" style="max-width: 300px;">
+                    No components have been added to this project yet.
+                </p>
+            </div>
+        {% endif %}
+    {% endblock %}
+</div>
+
+

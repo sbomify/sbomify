@@ -173,6 +173,24 @@ class ComponentSupplierContact(models.Model):
         return f"{self.name} ({self.component.name})"
 
 
+class ComponentSupplierUrl(models.Model):
+    """Supplier URL information for components."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").name + "_component_supplier_urls"
+        unique_together = ("component", "url")
+        ordering = ["order", "url"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    component = models.ForeignKey("Component", on_delete=models.CASCADE, related_name="supplier_urls")
+    url = models.URLField(max_length=500, help_text="The supplier URL")
+    order = models.PositiveIntegerField(default=0, help_text="Order of the URL in the list")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.url} ({self.component.name})"
+
+
 class ComponentAuthor(models.Model):
     """Author/contributor information for components."""
 

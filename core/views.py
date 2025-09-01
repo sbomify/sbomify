@@ -928,14 +928,74 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
 @login_required
 def components_dashboard(request: HttpRequest) -> HttpResponse:
+    """Components dashboard with server-side pagination and filtering."""
+    from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
     current_team = request.session.get("current_team")
     has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
+
+    if not current_team:
+        return error_response(request, HttpResponseForbidden("No current team selected"))
+
+    # Get pagination parameters from request
+    page = request.GET.get("page", 1)
+    page_size = int(request.GET.get("page_size", 15))
+
+    # Validate and constrain page_size
+    page_size = min(max(1, page_size), 100)  # Between 1 and 100
+
+    # Get components for the current team with SBOM count annotation
+    from django.db.models import Count
+    components_queryset = (
+        Component.objects.filter(team_id=current_team["id"])
+        .annotate(sbom_count=Count('sbom', distinct=True))
+        .order_by("-created_at")
+    )
+
+    # Set up pagination
+    paginator = Paginator(components_queryset, page_size)
+
+    try:
+        components_page = paginator.page(page)
+    except (EmptyPage, PageNotAnInteger):
+        # If page is out of range or invalid, show first page
+        components_page = paginator.page(1)
+
+    # Available page size options for the UI
+    page_size_options = [10, 15, 25, 50, 100]
+
+    # Form fields configuration for the add component modal
+    component_form_fields = [
+        {
+            "name": "name",
+            "label": "Component Name",
+            "type": "text",
+            "placeholder": "Enter component name",
+            "required": True,
+        },
+        {
+            "name": "component_type",
+            "label": "Component Type",
+            "type": "select",
+            "options": [
+                {"value": "sbom", "label": "SBOM"},
+                {"value": "document", "label": "Document"},
+            ],
+            "required": True,
+        },
+    ]
 
     return render(
         request,
         "core/components_dashboard.html.j2",
         {
+            "components": components_page,
             "has_crud_permissions": has_crud_permissions,
+            "pagination_meta": components_page,
+            "current_page": components_page.number,
+            "page_size": page_size,
+            "page_size_options": page_size_options,
+            "component_form_fields": component_form_fields,
             "APP_BASE_URL": settings.APP_BASE_URL,
         },
     )
@@ -1131,6 +1191,8 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
     has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
     is_owner = verify_item_access(request, component, ["owner"])
 
+
+
     context = {
         "component": component,
         "has_crud_permissions": has_crud_permissions,
@@ -1256,6 +1318,8 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
                 }
             )
         context["documents_data"] = documents_data
+        # Also pass the raw document objects for easier template access
+        context["documents"] = documents_queryset
 
     # Fetch dashboard stats for this component using helper function
     component_stats = None
@@ -1275,6 +1339,87 @@ def component_details_private(request: HttpRequest, component_id: str) -> HttpRe
     )
 
     return render(request, "core/component_details_private.html.j2", context)
+
+
+@login_required
+def component_metadata_edit(request: HttpRequest, component_id: str) -> HttpResponse:
+    """Dedicated page for editing component metadata with comprehensive forms."""
+    try:
+        component: Component = Component.objects.get(pk=component_id)
+    except Component.DoesNotExist:
+        return error_response(request, HttpResponseNotFound("Component not found"))
+
+    # Verify access to component
+    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+
+    has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
+
+    if not has_crud_permissions:
+        return error_response(request, HttpResponseForbidden("Only owners and admins can edit metadata"))
+
+        # Handle form submission
+    if request.method == "POST":
+        from core.forms import (ComponentMetadataForm, ComponentSupplierContactFormSet,
+                               ComponentAuthorFormSet, ComponentLicenseFormSet)
+
+        metadata_form = ComponentMetadataForm(data=request.POST, instance=component)
+        supplier_contact_formset = ComponentSupplierContactFormSet(
+            data=request.POST, instance=component, prefix='supplier_contacts'
+        )
+        author_formset = ComponentAuthorFormSet(
+            data=request.POST, instance=component, prefix='authors'
+        )
+        license_formset = ComponentLicenseFormSet(
+            data=request.POST, instance=component, prefix='licenses'
+        )
+
+        if (metadata_form.is_valid() and supplier_contact_formset.is_valid() and
+            author_formset.is_valid() and license_formset.is_valid()):
+
+            metadata_form.save()
+            supplier_contact_formset.save()
+            author_formset.save()
+            license_formset.save()
+
+            messages.success(request, "Component metadata updated successfully.")
+            return redirect('core:component_details', component_id=component_id)
+        else:
+            messages.error(request, "Please fix the errors below.")
+    else:
+        # Initialize forms for GET requests
+        from core.forms import (ComponentMetadataForm, ComponentSupplierContactFormSet,
+                               ComponentAuthorFormSet, ComponentLicenseFormSet)
+
+        metadata_form = ComponentMetadataForm(instance=component)
+        supplier_contact_formset = ComponentSupplierContactFormSet(
+            instance=component, prefix='supplier_contacts'
+        )
+        author_formset = ComponentAuthorFormSet(
+            instance=component, prefix='authors'
+        )
+        license_formset = ComponentLicenseFormSet(
+            instance=component, prefix='licenses'
+        )
+
+    # Import license data for autocomplete
+    import json
+    from licensing.loader import get_license_list
+    license_data_json = json.dumps(get_license_list())
+
+    context = {
+        "component": component,
+        "has_crud_permissions": has_crud_permissions,
+        "metadata_form": metadata_form,
+        "supplier_contact_formset": supplier_contact_formset,
+        "author_formset": author_formset,
+        "license_formset": license_formset,
+        "license_data_json": license_data_json,
+        "APP_BASE_URL": settings.APP_BASE_URL,
+        "current_team": request.session.get("current_team", {}),
+    }
+
+    return render(request, "core/component_metadata_edit.html.j2", context)
 
 
 @login_required
@@ -1445,7 +1590,11 @@ def component_detailed_private(request: HttpRequest, component_id: str) -> HttpR
         if not document:
             return error_response(request, HttpResponseNotFound("No document found for this component"))
 
+        # Also pass all documents for the component for stats
+        documents = Document.objects.filter(component_id=component_id).order_by("-created_at")
+
         context["document"] = document
+        context["documents"] = documents
         return render(request, "core/component_detailed_private.html.j2", context)
 
     return error_response(request, HttpResponseNotFound("Unknown component type"))

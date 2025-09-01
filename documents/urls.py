@@ -16,10 +16,10 @@ urlpatterns = [
         views.document_download,
         name="document_download",
     ),
-    # Document update endpoint
+    # Document metadata editing
     path(
-        "document/<str:document_id>/update-field/",
-        views.update_document_field,
-        name="update_document_field",
+        "document/<str:document_id>/edit-metadata/",
+        views.document_metadata_edit,
+        name="document_metadata_edit",
     ),
 ]

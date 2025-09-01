@@ -84,6 +84,11 @@ urlpatterns = [
         views.transfer_component_to_team,
         name="transfer_component",
     ),
+    path(
+        "component/<str:component_id>/metadata/edit/",
+        views.component_metadata_edit,
+        name="component_metadata_edit",
+    ),
     # Release URLs
     path(
         "product/<str:product_id>/releases/",

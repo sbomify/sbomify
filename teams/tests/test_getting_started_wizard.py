@@ -216,7 +216,8 @@ class TestGettingStartedWizard:
         assert session["wizard_project_id"] == str(project.id)
 
         response = client.post(reverse("teams:getting_started_wizard"), {
-            "name": "Test Component"
+            "name": "Test Component",
+            "component_type": "sbom"
         })
         assert response.status_code == 302
         assert response.url == reverse("teams:getting_started_wizard")
@@ -228,6 +229,7 @@ class TestGettingStartedWizard:
         component = Component.objects.filter(name="Test Component").first()
         assert component is not None
         assert component.team == team
+        assert component.component_type == "sbom"
         assert component in project.components.all()
 
         # Verify wizard completion
@@ -274,7 +276,7 @@ class TestGettingStartedWizard:
         content = response.content.decode()
         assert "All Set!" in content
         assert "Complete Metadata" in content
-        assert "Upload SBOM" in content
+        assert "Upload Content" in content
 
     def test_wizard_form_validation_errors(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that form validation errors are displayed correctly."""
@@ -344,7 +346,8 @@ class TestGettingStartedWizard:
 
         # Try to create component without previous steps
         response = client.post(reverse("teams:getting_started_wizard"), {
-            "name": "Test Component"
+            "name": "Test Component",
+            "component_type": "sbom"
         })
 
         # Should redirect back to plan step (first validation that kicks in)
@@ -402,7 +405,8 @@ class TestGettingStartedWizard:
 
         # Step 4: Component
         client.post(reverse("teams:getting_started_wizard"), {
-            "name": "Test Component"
+            "name": "Test Component",
+            "component_type": "sbom"
         })
 
         # Verify component metadata includes Keycloak data
@@ -411,6 +415,101 @@ class TestGettingStartedWizard:
         supplier_data = component.metadata.get("supplier", {})
         assert supplier_data.get("name") == "Acme Corp"
         assert "https://acme.example.com" in supplier_data.get("url", [])
+
+    def test_successful_wizard_flow_with_document_component(self, client: Client, sample_user, sample_team_with_owner_member, community_plan):
+        """Test the complete successful flow of the getting started wizard with document component."""
+        team = sample_team_with_owner_member.team
+
+        # Login and set session data
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False
+        }
+        session.save()
+
+        # Step 1: Select Plan
+        response = client.post(reverse("teams:getting_started_wizard"), {
+            "plan": "community"
+        })
+
+        assert response.status_code == 302
+        assert response.url == reverse("teams:getting_started_wizard")
+
+        # Verify team billing plan was set
+        team.refresh_from_db()
+        assert team.billing_plan == "community"
+
+        # Step 2: Create Product
+        response = client.post(reverse("teams:getting_started_wizard"), {
+            "name": "Test Product",
+            "description": "A test product description"
+        })
+
+        assert response.status_code == 302
+        assert response.url == reverse("teams:getting_started_wizard")
+
+        messages = list(get_messages(response.wsgi_request))
+        assert any("Product 'Test Product' created successfully" in str(m) for m in messages)
+
+        # Verify product was created
+        product = Product.objects.filter(name="Test Product").first()
+        assert product is not None
+        assert product.team == team
+        assert product.description == "A test product description"
+
+        # Step 3: Create Project
+        session = client.session
+        assert session["wizard_step"] == "project"
+        assert session["wizard_product_id"] == str(product.id)
+
+        response = client.post(reverse("teams:getting_started_wizard"), {
+            "name": "Test Project"
+        })
+        assert response.status_code == 302
+        assert response.url == reverse("teams:getting_started_wizard")
+
+        messages = list(get_messages(response.wsgi_request))
+        assert any("Project 'Test Project' created successfully" in str(m) for m in messages)
+
+        # Verify project was created and linked
+        project = Project.objects.filter(name="Test Project").first()
+        assert project is not None
+        assert project.team == team
+        assert project in product.projects.all()
+
+        # Step 4: Create Document Component
+        session = client.session
+        assert session["wizard_step"] == "component"
+        assert session["wizard_project_id"] == str(project.id)
+
+        response = client.post(reverse("teams:getting_started_wizard"), {
+            "name": "Test Document Component",
+            "component_type": "document"
+        })
+        assert response.status_code == 302
+        assert response.url == reverse("teams:getting_started_wizard")
+
+        messages = list(get_messages(response.wsgi_request))
+        assert any("Component 'Test Document Component' created successfully" in str(m) for m in messages)
+
+        # Verify document component was created and linked
+        component = Component.objects.filter(name="Test Document Component").first()
+        assert component is not None
+        assert component.team == team
+        assert component.component_type == "document"
+        assert component in project.components.all()
+
+        # Verify wizard completion
+        team.refresh_from_db()
+        assert team.has_completed_wizard is True
+
+        # Verify session is updated
+        session = client.session
+        assert session["wizard_step"] == "complete"
+        assert session["current_team"]["has_completed_wizard"] is True
 
     def test_wizard_progress_calculation(self, client: Client, sample_user, sample_team_with_owner_member):
         """Test that wizard progress is calculated correctly."""

@@ -1,0 +1,311 @@
+{% comment %}
+SBOM Upload Card Component - Django Template
+Replaces the Vue SbomUpload component
+
+Context variables:
+- component: Component object
+- has_crud_permissions: Boolean for CRUD permissions
+{% endcomment %}
+{% load static %}
+
+<!-- Using standard card styling patterns manually for SBOM upload -->
+<div class="standard-card">
+    <div class="card shadow-brand border-0">
+        <!-- Card Header -->
+        <div class="card-header px-4 py-3">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-cloud-upload-alt me-2 text-primary"></i>
+                    Upload SBOM File
+                </h4>
+                <!-- Collapsible toggle button -->
+                <button class="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#sbomUploadContent"
+                        aria-expanded="false"
+                        aria-controls="sbomUploadContent">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="card-body p-4">
+            <!-- Info Notice -->
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Recommended:</strong> Use the CI/CD Integration section below for automated SBOM uploads.
+                Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available.
+            </div>
+
+            <div id="sbomUploadContent" class="collapse">
+                {% if has_crud_permissions %}
+                    <!-- Upload Area -->
+                    <div class="upload-area"
+                         id="sbomUploadArea"
+                         data-component-id="{{ component.id }}">
+                        <div class="upload-content" id="uploadContent">
+                            <div class="upload-icon mb-3">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-primary"></i>
+                            </div>
+                            <p class="upload-text mb-2">
+                                <strong>Drop your SBOM file here</strong> or
+                                <label class="upload-link text-primary">
+                                    <input type="file"
+                                           id="sbomFileInput"
+                                           accept=".json,.spdx,.cdx"
+                                           style="display: none;">
+                                    click to browse
+                                </label>
+                            </p>
+                            <p class="upload-hint text-muted small">
+                                Supports CycloneDX (.json, .cdx) and SPDX (.json, .spdx) formats (max 10MB)
+                            </p>
+                        </div>
+
+                        <!-- Upload Progress (hidden by default) -->
+                        <div class="upload-progress text-center" id="uploadProgress" style="display: none;">
+                            <div class="spinner-border text-primary mb-2" role="status">
+                                <span class="visually-hidden">Uploading...</span>
+                            </div>
+                            <p class="mb-0">Uploading and processing SBOM...</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-lock me-2"></i>
+                        You don't have permission to upload SBOMs to this component.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-area {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: #f9fafb;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-area:hover,
+.upload-area.drag-over {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.upload-area.uploading {
+    border-color: #10b981;
+    background: #f0fdf4;
+    cursor: not-allowed;
+}
+
+.upload-content {
+    width: 100%;
+}
+
+.upload-icon {
+    opacity: 0.6;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    color: #374151;
+    margin: 0;
+}
+
+.upload-link {
+    cursor: pointer;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.upload-link:hover {
+    text-decoration: none;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+}
+
+.upload-progress {
+    color: #374151;
+}
+
+@media (max-width: 768px) {
+    .upload-area {
+        padding: 2rem 1rem;
+        min-height: 150px;
+    }
+
+    .upload-text {
+        font-size: 1rem;
+    }
+
+    .upload-icon i {
+        font-size: 2rem !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('sbomUploadArea');
+    const fileInput = document.getElementById('sbomFileInput');
+    const uploadContent = document.getElementById('uploadContent');
+    const uploadProgress = document.getElementById('uploadProgress');
+
+    if (!uploadArea || !fileInput) return;
+
+    const componentId = uploadArea.dataset.componentId;
+    let isUploading = false;
+
+    // Drag and drop handlers
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!isUploading) {
+            uploadArea.classList.add('drag-over');
+        }
+    });
+
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+
+        if (!isUploading && e.dataTransfer.files.length > 0) {
+            uploadFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // Click to upload
+    uploadArea.addEventListener('click', function() {
+        if (!isUploading) {
+            fileInput.click();
+        }
+    });
+
+    fileInput.addEventListener('change', function(e) {
+        if (!isUploading && e.target.files.length > 0) {
+            uploadFile(e.target.files[0]);
+        }
+    });
+
+    // File validation
+    function validateFile(file) {
+        // Check file size (max 10MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            return 'File size must be less than 10MB';
+        }
+
+        // Check file extension
+        const allowedExtensions = ['.json', '.spdx', '.cdx'];
+        const fileName = file.name.toLowerCase();
+        const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+        if (!hasValidExtension) {
+            return 'Please select a valid SBOM file (.json, .spdx, .cdx)';
+        }
+
+        return null;
+    }
+
+    // Get CSRF token
+    function getCsrfToken() {
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+
+        if (cookieValue) return cookieValue;
+
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        return metaTag?.content || '';
+    }
+
+    // Upload file function
+    async function uploadFile(file) {
+        const validationError = validateFile(file);
+        if (validationError) {
+            if (window.showError) {
+                window.showError(validationError);
+            } else {
+                alert(validationError);
+            }
+            return;
+        }
+
+        isUploading = true;
+        uploadArea.classList.add('uploading');
+        uploadContent.style.display = 'none';
+        uploadProgress.style.display = 'block';
+
+        try {
+            const formData = new FormData();
+            formData.append('sbom_file', file);
+            formData.append('component_id', componentId);
+
+            const response = await fetch(`/api/v1/sboms/upload-file/${componentId}`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCsrfToken()
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                if (window.showSuccess) {
+                    window.showSuccess('SBOM uploaded successfully!');
+                } else {
+                    alert('SBOM uploaded successfully!');
+                }
+
+                // Refresh the page after 2 seconds to show the new SBOM
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                const errorMessage = data.detail || 'Upload failed';
+                if (window.showError) {
+                    window.showError(errorMessage);
+                } else {
+                    alert(errorMessage);
+                }
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            const errorMessage = 'Network error occurred. Please try again.';
+            if (window.showError) {
+                window.showError(errorMessage);
+            } else {
+                alert(errorMessage);
+            }
+        } finally {
+            isUploading = false;
+            uploadArea.classList.remove('uploading');
+            uploadContent.style.display = 'block';
+            uploadProgress.style.display = 'none';
+            fileInput.value = ''; // Reset file input
+        }
+    }
+});
+</script>

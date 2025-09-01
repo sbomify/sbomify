@@ -2,9 +2,10 @@ import json
 import logging
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from core.errors import error_response
@@ -12,6 +13,7 @@ from core.object_store import S3Client
 from core.utils import verify_item_access
 from teams.schemas import BrandingInfo
 
+from .forms import DocumentMetadataForm
 from .models import Document
 
 logger = logging.getLogger(__name__)
@@ -52,41 +54,7 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
     )
 
 
-@login_required
-@require_http_methods(["POST"])
-def update_document_field(request: HttpRequest, document_id: str) -> JsonResponse:
-    """Update a single field of a document"""
-    try:
-        document: Document = Document.objects.get(pk=document_id)
-    except Document.DoesNotExist:
-        return JsonResponse({"error": "Document not found"}, status=404)
-
-    if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return JsonResponse({"error": "Permission denied"}, status=403)
-
-    try:
-        data = json.loads(request.body)
-        field = data.get("field")
-        value = data.get("value", "").strip()
-
-        if field == "description":
-            document.description = value
-            document.save()
-            return JsonResponse(
-                {"success": True, "message": "Description updated successfully", "value": document.description}
-            )
-        elif field == "version":
-            document.version = value
-            document.save()
-            return JsonResponse({"success": True, "message": "Version updated successfully", "value": document.version})
-        else:
-            return JsonResponse({"error": "Invalid field"}, status=400)
-
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON data"}, status=400)
-    except Exception as e:
-        logger.error(f"Error updating document {document_id}: {e}")
-        return JsonResponse({"error": "Internal server error"}, status=500)
+# Removed update_document_field view - using full metadata edit form instead
 
 
 def document_download(request: HttpRequest, document_id: str) -> HttpResponse:
@@ -118,3 +86,30 @@ def document_download(request: HttpRequest, document_id: str) -> HttpResponse:
             return error_response(request, HttpResponse("Error retrieving document", status=500))
     else:
         return error_response(request, HttpResponseForbidden("Access denied"))
+
+
+@login_required
+def document_metadata_edit(request: HttpRequest, document_id: str) -> HttpResponse:
+    """Edit document metadata."""
+    document = get_object_or_404(Document, pk=document_id)
+
+    # Check permissions
+    if not verify_item_access(request, document.component, ["owner", "admin"]):
+        return error_response(request, HttpResponseForbidden("Only owners and admins can edit document metadata"))
+
+    if request.method == "POST":
+        form = DocumentMetadataForm(request.POST, instance=document)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Document metadata updated successfully!")
+            return redirect("documents:document_details", document_id=document.id)
+    else:
+        form = DocumentMetadataForm(instance=document)
+
+    context = {
+        "document": document,
+        "form": form,
+        "component": document.component,
+    }
+
+    return render(request, "documents/document_metadata_edit.html.j2", context)

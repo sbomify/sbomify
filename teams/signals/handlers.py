@@ -33,13 +33,14 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
     user_teams = get_user_teams(user)
     request.session["user_teams"] = user_teams
 
+    # Set current team if not already set and user has teams
     if request.session.get("current_team", None) is None and user_teams:
         # Use the first team as the default
         first_team_key = next(iter(user_teams))
         first_team = {"key": first_team_key, **user_teams[first_team_key]}
         request.session["current_team"] = first_team
 
-    # Fallback: Ensure every user has a team (for native signups)
+    # Fallback: Ensure every user has a team (in case post_save signal didn't work)
     if not Team.objects.filter(members=user).exists():
         team_name = get_team_name_for_user(user)
         with transaction.atomic():
