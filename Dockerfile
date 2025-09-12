@@ -127,7 +127,7 @@ WORKDIR /code
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 EXPOSE 8000
-# CMD for Development (using Django's runserver)
+# CMD for Development (using uvicorn directly with reload for development)
 CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--reload", "--log-level", "info"]
@@ -148,8 +148,10 @@ COPY --from=js-build-prod /js-build/static/webfonts /code/static/webfonts
 RUN poetry run python manage.py collectstatic --noinput
 
 EXPOSE 8000
-# CMD for Production
-CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
-     "--host", "0.0.0.0", "--port", "8000", \
+# CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
+CMD ["poetry", "run", "gunicorn", "sbomify.asgi:application", \
+     "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
-     "--proxy-headers", "--forwarded-allow-ips", "*"]
+     "--worker-class", "uvicorn_worker.UvicornWorker", \
+     "--forwarded-allow-ips", "*", \
+     "--proxy-headers"]
