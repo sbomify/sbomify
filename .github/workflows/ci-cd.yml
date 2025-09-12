@@ -14,9 +14,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
-  packages: write
 
 jobs:
   code-quality:
@@ -212,6 +209,7 @@ jobs:
     env:
       IMAGE_NAME: sbomify
     permissions:
+      id-token: write
       contents: read
       packages: write
       attestations: write
