@@ -63,7 +63,7 @@ const processNotifications = (newNotifications: Notification[]) => {
             actions: 'gap-2'
           },
           buttonsStyling: false
-        }).then((result) => {
+        }).then((result: import('sweetalert2').SweetAlertResult) => {
           if (result.isConfirmed && notification.action_url) {
             window.location.href = notification.action_url
           }
