@@ -152,6 +152,4 @@ EXPOSE 8000
 CMD ["poetry", "run", "gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
-     "--worker-class", "uvicorn_worker.UvicornWorker", \
-     "--forwarded-allow-ips", "*", \
-     "--proxy-headers"]
+     "--worker-class", "uvicorn_worker.UvicornWorker"]
