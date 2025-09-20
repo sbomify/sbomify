@@ -79,7 +79,7 @@ class TestAPIDatabaseErrorHandling:
         request.user = sample_user
 
         # Mock the SBOM query to raise connection error
-        with patch('sboms.models.SBOM') as mock_sbom:
+        with patch('sbomify.apps.sboms.models.SBOM') as mock_sbom:
             mock_sbom.objects.filter.return_value.order_by.side_effect = OperationalError(
                 "connection terminated"
             )
@@ -99,7 +99,7 @@ class TestAPIDatabaseErrorHandling:
         request.user = sample_user
 
         # Mock the SBOM query to raise generic database error
-        with patch('sboms.models.SBOM') as mock_sbom:
+        with patch('sbomify.apps.sboms.models.SBOM') as mock_sbom:
             mock_sbom.objects.filter.return_value.order_by.side_effect = DatabaseError(
                 "permission denied"
             )
@@ -179,7 +179,7 @@ class TestAPIDatabaseErrorHandling:
                 assert status_code == 500
                 assert response["error_code"] == ErrorCode.INTERNAL_ERROR
 
-    @patch('core.apis.log')
+    @patch('sbomify.apps.core.apis.log')
     def test_connection_error_logging_in_api(self, mock_log, request_factory, sample_component):
         """Test that connection errors are logged appropriately in API."""
 
@@ -196,7 +196,7 @@ class TestAPIDatabaseErrorHandling:
             assert "Database connection error" in mock_log.warning.call_args[0][0]
             assert str(sample_component.id) in mock_log.warning.call_args[0][0]
 
-    @patch('core.apis.log')
+    @patch('sbomify.apps.core.apis.log')
     def test_generic_database_error_logging_in_api(self, mock_log, request_factory, sample_component):
         """Test that generic database errors are logged appropriately in API."""
 

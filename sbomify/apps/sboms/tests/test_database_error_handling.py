@@ -135,7 +135,7 @@ class TestDatabaseErrorHandling:
         assert "not found" in str(exc_info.value)
         assert non_existent_id in str(exc_info.value)
 
-    @patch('sboms.utils.log')
+    @patch('sbomify.apps.sboms.utils.log')
     def test_connection_error_logging(self, mock_log, sample_sbom):  # noqa: F811
         """Test that connection errors are logged appropriately."""
 
@@ -152,7 +152,7 @@ class TestDatabaseErrorHandling:
             assert "Database connection error" in mock_log.warning.call_args[0][0]
             assert str(sample_sbom.id) in mock_log.warning.call_args[0][0]
 
-    @patch('sboms.utils.log')
+    @patch('sbomify.apps.sboms.utils.log')
     def test_generic_database_error_logging(self, mock_log, sample_sbom):  # noqa: F811
         """Test that generic database errors are logged appropriately."""
 

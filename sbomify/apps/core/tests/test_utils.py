@@ -32,7 +32,7 @@ def test_schema_org_metadata_tag(mocker):
     """
     # Mock the Stripe prices service
     mocker.patch(
-        'billing.services.get_stripe_prices',
+        'sbomify.apps.billing.services.get_stripe_prices',
         return_value={
             'business': {'monthly': 199.0, 'annual': 1908.0},
             'starter': {'monthly': 49.0, 'annual': 499.0},

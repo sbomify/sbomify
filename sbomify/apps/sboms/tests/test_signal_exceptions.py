@@ -41,7 +41,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sboms.signals.logger') as mock_logger:
+        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             # Trigger signals for update (created=False)
             trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=False)
             trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=False)
@@ -57,7 +57,7 @@ class SignalExceptionHandlingTests(TestCase):
         mock_instance.id = "test-id"
         mock_instance.component = None
 
-        with patch('sboms.signals.logger') as mock_logger:
+        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             # Test NTIA compliance check
             trigger_ntia_compliance_check(sender=SBOM, instance=mock_instance, created=True)
 
@@ -74,7 +74,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sboms.signals.logger') as mock_logger:
+        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
 
             # Should log that NTIA is skipped for community users
@@ -99,7 +99,7 @@ class SignalExceptionHandlingTests(TestCase):
         )
 
         with patch('sbomify.tasks.check_sbom_ntia_compliance') as mock_task:
-            with patch('sboms.signals.logger') as mock_logger:
+            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
 
                 # Should trigger the task
@@ -121,7 +121,7 @@ class SignalExceptionHandlingTests(TestCase):
         )
 
         with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sboms.signals.logger') as mock_logger:
+            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
                 # Should trigger the task
@@ -151,7 +151,7 @@ class SignalExceptionHandlingTests(TestCase):
         )
 
         with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sboms.signals.logger') as mock_logger:
+            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
                 # Should trigger the task
@@ -176,7 +176,7 @@ class SignalExceptionHandlingTests(TestCase):
         )
 
         with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
-            with patch('sboms.signals.logger') as mock_logger:
+            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
                 # Should still trigger the task
@@ -212,7 +212,7 @@ class SignalIntegrationTests(TestCase):
     def test_signals_triggered_on_sbom_creation(self):
         """Test that both signals are triggered when an SBOM is created."""
         with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_vuln_task:
-            with patch('sboms.signals.logger') as mock_logger:
+            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 # Create SBOM - this should trigger both signals
                 sbom = SBOM.objects.create(
                     name="test-sbom",
@@ -240,7 +240,7 @@ class SignalIntegrationTests(TestCase):
         mock_instance.id = "test-id"
         mock_instance.component.team.side_effect = AttributeError("Simulated error")
 
-        with patch('sboms.signals.logger') as mock_logger:
+        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             # This should not raise an exception despite the AttributeError
             trigger_vulnerability_scan(sender=SBOM, instance=mock_instance, created=True)
 

@@ -153,8 +153,8 @@ class TestNTIAComplianceIntegration:
     def test_complete_compliant_workflow(self, client, component, compliant_cyclonedx_sbom):
         """Test complete workflow for compliant SBOM upload and processing."""
         # Mock S3 client comprehensively for all usage points
-        with patch('sboms.apis.S3Client') as mock_apis_s3_class, \
-             patch('core.object_store.S3Client') as mock_core_s3_class:
+        with patch('sbomify.apps.sboms.apis.S3Client') as mock_apis_s3_class, \
+             patch('sbomify.apps.core.object_store.S3Client') as mock_core_s3_class:
             # Configure mock for API usage (upload)
             mock_apis_instance = mock_apis_s3_class.return_value
             mock_apis_instance.upload_sbom.return_value = "test-sbom.json"
@@ -212,8 +212,8 @@ class TestNTIAComplianceIntegration:
     def test_complete_non_compliant_workflow(self, client, component, non_compliant_cyclonedx_sbom):
         """Test complete workflow for non-compliant SBOM upload and processing."""
         # Mock S3 client comprehensively for all usage points
-        with patch('sboms.apis.S3Client') as mock_apis_s3_class, \
-             patch('core.object_store.S3Client') as mock_core_s3_class:
+        with patch('sbomify.apps.sboms.apis.S3Client') as mock_apis_s3_class, \
+             patch('sbomify.apps.core.object_store.S3Client') as mock_core_s3_class:
             # Configure mock for API usage (upload)
             mock_apis_instance = mock_apis_s3_class.return_value
             mock_apis_instance.upload_sbom.return_value = "test-non-compliant-sbom.json"
@@ -258,8 +258,8 @@ class TestNTIAComplianceIntegration:
     def test_sbom_detail_page_compliance_display(self, client, component, compliant_cyclonedx_sbom):
         """Test that SBOM detail pages show NTIA compliance information."""
         # Mock S3 client comprehensively for all usage points
-        with patch('sboms.apis.S3Client') as mock_apis_s3_class, \
-             patch('core.object_store.S3Client') as mock_core_s3_class:
+        with patch('sbomify.apps.sboms.apis.S3Client') as mock_apis_s3_class, \
+             patch('sbomify.apps.core.object_store.S3Client') as mock_core_s3_class:
             # Configure mock for API usage (upload)
             mock_apis_instance = mock_apis_s3_class.return_value
             mock_apis_instance.upload_sbom.return_value = "test-sbom.json"
@@ -403,8 +403,8 @@ class TestNTIAComplianceIntegration:
 
     def test_api_response_includes_ntia_data(self, client, component, compliant_cyclonedx_sbom):
         """Test that API responses include NTIA compliance data."""
-        with patch('sboms.apis.S3Client') as mock_apis_s3_class, \
-             patch('core.object_store.S3Client') as mock_core_s3_class:
+        with patch('sbomify.apps.sboms.apis.S3Client') as mock_apis_s3_class, \
+             patch('sbomify.apps.core.object_store.S3Client') as mock_core_s3_class:
             # Configure mock for API usage (upload)
             mock_apis_instance = mock_apis_s3_class.return_value
             mock_apis_instance.upload_sbom.return_value = "test-sbom.json"
@@ -477,7 +477,7 @@ class TestNTIAComplianceIntegration:
             source="test"
         )
 
-        with patch('core.object_store.S3Client') as mock_s3_class:
+        with patch('sbomify.apps.core.object_store.S3Client') as mock_s3_class:
             mock_s3_instance = mock_s3_class.return_value
             mock_s3_instance.get_sbom_data.return_value = json.dumps(compliant_cyclonedx_sbom).encode('utf-8')
 

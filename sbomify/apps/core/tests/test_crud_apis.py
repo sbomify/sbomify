@@ -2269,7 +2269,7 @@ def test_product_identifier_billing_disabled(
 ):
     """Test that product identifiers work when billing is disabled."""
     # Mock billing as disabled
-    mocker.patch('core.apis.is_billing_enabled', return_value=False)
+    mocker.patch('sbomify.apps.core.apis.is_billing_enabled', return_value=False)
 
     # Set product team to community plan (should be ignored when billing is disabled)
     sample_product.team.billing_plan = "community"
