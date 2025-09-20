@@ -542,7 +542,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     project = Project.objects.get(id=project_id)
 
                     # Build component metadata using utility function
-                    from sbomify.apps.sboms.utils import create_default_component_metadata, populate_component_metadata_native_fields
+                    from sbomify.apps.sboms.utils import (
+                        create_default_component_metadata,
+                        populate_component_metadata_native_fields,
+                    )
 
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None

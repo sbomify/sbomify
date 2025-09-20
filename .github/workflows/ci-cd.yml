@@ -83,7 +83,6 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
       matrix:
         test-group:
           - name: "Core Tests"
