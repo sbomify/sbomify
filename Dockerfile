@@ -32,7 +32,7 @@ COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 
 # Copy existing static files
-COPY sbomify/static/ ./static/
+COPY sbomify/static/ ./sbomify/static/
 
 # Create additional directories for build scripts
 RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
@@ -144,10 +144,10 @@ WORKDIR /code
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Production-specific steps
-COPY --from=js-build-prod /js-build/static/dist /code/sbomify/static/dist
+COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
 # Copy other static files that may have been created during build
-COPY --from=js-build-prod /js-build/static/css /code/sbomify/static/css
-COPY --from=js-build-prod /js-build/static/webfonts /code/sbomify/static/webfonts
+COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
+COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
 RUN poetry run python manage.py collectstatic --noinput
 
 EXPOSE 8000
