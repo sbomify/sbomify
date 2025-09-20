@@ -1,0 +1,157 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% comment %}
+Template context:
+sbom: SBOM object with metadata and data
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+{% endcomment %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+{% block title %}SBOM: {{ sbom.name }}{% endblock %}
+{% block content %}
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="fas fa-file-code me-3 text-primary"></i>
+                    {{ sbom.name }}
+                </h1>
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-file-alt me-2 text-primary"></i>
+                <span class="meta-label">SBOM</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <span class="meta-label">Format:</span>
+                <span class="badge bg-success-subtle text-success ms-1">
+                    {% if sbom.format == 'cyclonedx' %}
+                        CycloneDX
+                    {% elif sbom.format == 'spdx' %}
+                        SPDX
+                    {% else %}
+                        {{ sbom.format|upper }}
+                    {% endif %}
+                    {{ sbom.format_version }}
+                </span>
+            </span>
+            {% if sbom.version %}
+                <span class="meta-divider">•</span>
+                <span class="meta-item">
+                    <span class="meta-label">Version:</span>
+                    <span class="ms-1 version-display" title="{{ sbom.version }}">{{ sbom.version }}</span>
+                </span>
+            {% endif %}
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <vc-ntia-compliance-badge status="{{ sbom.ntia_compliance_status }}" compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}' :is-public-view="false" team-billing-plan="{{ team_billing_plan }}">
+                </vc-ntia-compliance-badge>
+            </span>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        .version-display {
+            display: inline-block;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+    <div class="row">
+        <div class="col-12 col-lg-8">
+            <div class="vc-sbom-metadata-card"
+                 data-sbom-id="{{ sbom.id }}"
+                 data-sbom-name="{{ sbom.name }}"
+                 data-created-at="{{ sbom.created_at }}"
+                 data-source-display="{{ sbom.source_display }}"
+                 data-format="{{ sbom.format }}"
+                 data-format-version="{{ sbom.format_version|stringformat:'s' }}"
+                 data-version="{{ sbom.version|default:'' }}"></div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+{% endblock %}

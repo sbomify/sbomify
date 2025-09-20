@@ -1,0 +1,112 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load django_vite %}
+{% load widget_tweaks %}
+{% block title %}sbomify Team Dashboard{% endblock %}
+{% block dashboard_content %}
+    {% include "core/base_messages.html.j2" %}
+    <div class="page-header mb-4">
+        <div class="header-main">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="fas fa-users me-3 text-primary"></i>Workspaces
+                </h1>
+                <p class="item-subtitle">Manage your teams and collaborative workspaces</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary px-4"
+                        data-bs-toggle="modal"
+                        data-bs-target="#addWorkspaceModal">
+                    <i class="fas fa-plus me-2"></i>
+                    Add Workspace
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="v-application-wrapper">
+        <div class="row">
+            <div class="col-12">
+                {{ memberships|json_script:"teams-data" }}
+                <div class="vc-teams-list"
+                     data-teams-data-element-id="teams-data"
+                     data-csrf-token="{{ csrf_token }}"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Add Workspace Modal -->
+    <div class="modal fade"
+         id="addWorkspaceModal"
+         data-bs-backdrop="static"
+         data-bs-keyboard="true"
+         tabindex="-1"
+         aria-labelledby="addWorkspaceModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="addWorkspaceModalLabel">
+                        <i class="fas fa-plus me-2"></i>
+                        Add Workspace
+                    </h4>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form action="{% url 'teams:teams_dashboard' %}" method="post">
+                        {% csrf_token %}
+                        {% for hidden in add_team_form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <div class="mb-3">
+                            <label for="{{ add_team_form.name.id_for_label }}" class="form-label">{{ add_team_form.name.label }}</label>
+                            {{ add_team_form.name|add_class:'form-control'|attr:"tabindex:1"|attr:"placeholder:Enter workspace name" }}
+                            {% for error in add_team_form.name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" tabindex="2">
+                                <i class="fas fa-plus me-2"></i>
+                                Add Workspace
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/teams/js/main.ts' %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            {% if add_team_form.errors %}
+                var addWorkspaceModal = new bootstrap.Modal(document.getElementById('addWorkspaceModal'));
+                addWorkspaceModal.show();
+                {% for field, errors in add_team_form.errors.items %}
+                    {% for error in errors %}
+                        window.showError('{{ error }}');
+                    {% endfor %}
+                {% endfor %}
+            {% endif %}
+
+            // Handle modal shown event
+            const addWorkspaceModal = document.getElementById('addWorkspaceModal');
+            addWorkspaceModal.addEventListener('shown.bs.modal', function() {
+                // Focus the first input field
+                const firstInput = this.querySelector('input[type="text"]');
+                if (firstInput) {
+                    firstInput.focus();
+                    firstInput.select();
+                }
+            });
+
+            // Handle form submission on Enter
+            const form = addWorkspaceModal.querySelector('form');
+            form.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    form.submit();
+                }
+            });
+        });
+    </script>
+{% endblock %}

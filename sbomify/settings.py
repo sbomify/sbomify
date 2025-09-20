@@ -92,18 +92,18 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.openid_connect",
-    "core",
-    "teams",
-    "sboms",
-    "documents",
-    "access_tokens",
-    "billing",
-    "notifications",
-    "vulnerability_scanning",
+    "sbomify.apps.core",
+    "sbomify.apps.teams",
+    "sbomify.apps.sboms",
+    "sbomify.apps.documents",
+    "sbomify.apps.access_tokens",
+    "sbomify.apps.billing",
+    "sbomify.apps.notifications",
+    "sbomify.apps.vulnerability_scanning",
     "health_check",
     "health_check.db",
     "anymail",
-    "licensing",
+    "sbomify.apps.licensing",
 ]
 
 
@@ -134,7 +134,7 @@ ROOT_URLCONF = "sbomify.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "sbomify" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -142,7 +142,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "core.context_processors.version_context",
+                "sbomify.apps.core.context_processors.version_context",
             ],
         },
     },
@@ -167,7 +167,7 @@ MESSAGE_LEVEL = messages.constants.INFO  # Only show messages of INFO level and 
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [BASE_DIR / "sbomify" / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Enable WhiteNoise compression and proper headers for production
@@ -197,7 +197,7 @@ else:
     DJANGO_VITE = {
         "default": {
             "dev_mode": False,
-            "manifest_path": str(BASE_DIR / "static" / "dist" / "manifest.json"),
+            "manifest_path": str(BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"),
             "static_url_prefix": "dist/",
         }
     }
@@ -374,7 +374,7 @@ SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
 SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_STORE_TOKENS = True
-SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomSocialAccountAdapter"
 
 # Modern AllAuth configuration
 ACCOUNT_LOGIN_METHODS = {"email"}
@@ -503,8 +503,8 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
-    "billing.notifications.get_notifications",
-    # "core.notifications.get_notifications",  # For future system-wide notifications
+    "sbomify.apps.billing.notifications.get_notifications",
+    # "sbomify.apps.core.notifications.get_notifications",  # For future system-wide notifications
 ]
 
 # Optionally override refresh interval

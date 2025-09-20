@@ -1,0 +1,28 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load widget_tweaks %}
+{% load form_helpers %}
+{% load django_vite %}
+{% block title %}sbomify Products{% endblock %}
+{% block content %}
+    <div class="page-header mb-4">
+        <div class="header-main">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="align-middle me-3 text-primary fas fa-box"></i>Products
+                </h1>
+                <p class="item-subtitle">Manage and organize your software products</p>
+            </div>
+        </div>
+    </div>
+    <div class="row align-items-center">
+        <div class="col-12">
+            <div class="vc-products-list"
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        </div>
+    </div>
+    {% if has_crud_permissions %}<div class="vc-add-product-form"></div>{% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+{% endblock %}
