@@ -68,7 +68,7 @@ def mock_stripe_invoice():
 @pytest.fixture
 def mock_stripe_client():
     """Create a mock Stripe client for testing."""
-    with patch("billing.billing_processing.stripe_client") as mock_client:
+    with patch("sbomify.apps.billing.billing_processing.stripe_client") as mock_client:
         mock_client.get_subscription.return_value = MagicMock(
             id="sub_test123",
             status="active",
@@ -117,7 +117,7 @@ class TestBillingProcessing:
         self.invoice = mock_stripe_invoice
         self.stripe_client = mock_stripe_client
 
-    @patch("billing.billing_processing.email_notifications")
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_subscription_updated_trial(self, mock_email):
         """Test handling subscription update with trial status."""
         self.subscription.status = "trialing"
@@ -134,7 +134,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["trial_end"] == self.subscription.trial_end
         mock_email.notify_trial_ending.assert_called_once()
 
-    @patch("billing.billing_processing.email_notifications")
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_subscription_updated_trial_expired(self, mock_email):
         """Test handling subscription update with expired trial."""
         self.subscription.status = "trialing"
@@ -147,7 +147,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["is_trial"] is False
         mock_email.notify_trial_expired.assert_called_once()
 
-    @patch("billing.billing_processing.email_notifications")
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_checkout_completed_trial(self, mock_email):
         """Test handling checkout completion with trial period."""
         self.subscription.status = "trialing"
@@ -165,7 +165,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["trial_end"] == self.subscription.trial_end
         mock_email.notify_trial_ending.assert_called_once()
 
-    @patch("billing.billing_processing.email_notifications")
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_payment_succeeded(self, mock_email):
         """Test handling successful payment."""
         billing_processing.handle_payment_succeeded(self.invoice)
@@ -174,7 +174,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["subscription_status"] == "active"
         mock_email.notify_payment_succeeded.assert_called_once()
 
-    @patch("billing.billing_processing.email_notifications")
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_payment_failed(self, mock_email):
         """Test handling failed payment."""
         billing_processing.handle_payment_failed(self.invoice)

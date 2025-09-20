@@ -654,7 +654,7 @@ def test_delete_component_success(
     """Test successful component deletion."""
     # Mock S3 operations
     mocker.patch("boto3.resource")
-    mocker.patch("core.object_store.S3Client.delete_object")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
 
     client = Client()
     url = reverse("api-1:delete_component", kwargs={"component_id": sample_component.id})

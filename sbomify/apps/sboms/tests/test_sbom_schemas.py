@@ -79,8 +79,8 @@ def test_spdx_schema(sample_spdx_schema_dict):  # noqa: F811
 
 
 def test_get_cyclonedx_module():
-    assert get_cyclonedx_module(CycloneDXSupportedVersion.v1_5).__name__ == "sboms.sbom_format_schemas.cyclonedx_1_5"
-    assert get_cyclonedx_module(CycloneDXSupportedVersion.v1_6).__name__ == "sboms.sbom_format_schemas.cyclonedx_1_6"
+    assert get_cyclonedx_module(CycloneDXSupportedVersion.v1_5).__name__ == "sbomify.apps.sboms.sbom_format_schemas.cyclonedx_1_5"
+    assert get_cyclonedx_module(CycloneDXSupportedVersion.v1_6).__name__ == "sbomify.apps.sboms.sbom_format_schemas.cyclonedx_1_6"
 
 
 def test_custom_license():

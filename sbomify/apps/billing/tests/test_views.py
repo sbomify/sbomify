@@ -136,7 +136,7 @@ def test_stripe_webhook_invalid_signature(factory):
     )
     request.headers = {"Stripe-Signature": "invalid_sig"}
 
-    with patch("billing.billing_processing.verify_stripe_webhook", return_value=False):
+    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook", return_value=False):
         response = billing_processing.stripe_webhook(request)
         assert response.status_code == 403
 
@@ -168,9 +168,9 @@ def test_stripe_webhook_checkout_completed(factory, team_with_business_plan):
     mock_event.type = event_data["type"]
     mock_event.data.object = event_data["data"]["object"]
 
-    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_checkout_completed"):
+        with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -201,9 +201,9 @@ def test_stripe_webhook_subscription_updated(factory, team_with_business_plan):
     mock_event.type = event_data["type"]
     mock_event.data.object = event_data["data"]["object"]
 
-    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_subscription_updated"):
+        with patch("sbomify.apps.billing.billing_processing.handle_subscription_updated"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -233,9 +233,9 @@ def test_stripe_webhook_payment_failed(factory, team_with_business_plan):
     mock_event.type = event_data["type"]
     mock_event.data.object = event_data["data"]["object"]
 
-    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_payment_failed"):
+        with patch("sbomify.apps.billing.billing_processing.handle_payment_failed"):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 200
 
@@ -254,9 +254,9 @@ def test_stripe_webhook_error_handling(factory):
     mock_event.type = "checkout.session.completed"
     mock_event.data.object = {}
 
-    with patch("billing.billing_processing.verify_stripe_webhook") as mock_verify:
+    with patch("sbomify.apps.billing.billing_processing.verify_stripe_webhook") as mock_verify:
         mock_verify.return_value = mock_event
-        with patch("billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
+        with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
             response = billing_processing.stripe_webhook(request)
             assert response.status_code == 500
 

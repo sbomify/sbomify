@@ -111,7 +111,7 @@ def mock_s3_client(mocker):
     ).encode()
 
     # Mock the S3Client class to return our mock instance
-    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
     return mock_client
 
 
@@ -364,7 +364,7 @@ def test_project_sbom_file_generation_with_components(sample_project, tmp_path):
     ProjectComponent.objects.create(project=sample_project, component=component2)
 
     # Mock S3 client to return different mock SBOM data for each component
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
 
         def mock_get_sbom_data(filename):
@@ -490,7 +490,7 @@ def test_project_sbom_builder_serialization(sample_project, tmp_path):  # noqa: 
     ProjectComponent.objects.create(project=sample_project, component=component)
 
     # Mock S3 client
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -583,7 +583,7 @@ def test_mixed_cyclonedx_versions_serialization(sample_project, tmp_path):  # no
     ProjectComponent.objects.create(project=sample_project, component=component2)
 
     # Mock S3 client
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
 
         def mock_get_sbom_data(filename):
@@ -711,7 +711,7 @@ def test_product_sbom_file_generation(tmp_path):
     ProjectComponent.objects.create(project=project, component=component2)
 
     # Mock S3 client
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
 
         def mock_get_sbom_data(filename):
@@ -791,7 +791,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     ProjectComponent.objects.create(project=project, component=component)
 
     # Mock S3 client
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -933,7 +933,7 @@ def test_network_failure_during_s3_operations(sample_project, tmp_path):  # noqa
     ProjectComponent.objects.create(project=sample_project, component=component)
 
     # Mock S3 client to simulate network failure
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.side_effect = Exception("Network connection failed")
 
@@ -982,7 +982,7 @@ def test_malformed_sbom_file_handling(sample_project, tmp_path):  # noqa: F811
     ProjectComponent.objects.create(project=sample_project, component=component)
 
     # Mock S3 client to return malformed JSON
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = b"{ invalid json content"
 
@@ -1031,7 +1031,7 @@ def test_invalid_sbom_format_handling(sample_project, tmp_path):  # noqa: F811
     ProjectComponent.objects.create(project=sample_project, component=component)
 
     # Mock S3 client to return SBOM with invalid format
-    with patch("core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {

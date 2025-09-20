@@ -400,7 +400,7 @@ def test_sbom_download_project_public_success(client, sample_project, mocker):  
     sample_project.save()
 
     mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("core.views.get_project_sbom_package")
+    mock_get_package = mocker.patch("sbomify.apps.core.views.get_project_sbom_package")
     # Return a string path for the SBOM file
     mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
@@ -433,7 +433,7 @@ def test_sbom_download_project_private_authorized(
     session.save()
 
     mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("core.views.get_project_sbom_package")
+    mock_get_package = mocker.patch("sbomify.apps.core.views.get_project_sbom_package")
     # Return a string path for the SBOM file
     mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
@@ -442,7 +442,7 @@ def test_sbom_download_project_private_authorized(
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
     # Mock verify_item_access to return True for authorized access
-    mocker.patch("core.views.verify_item_access", return_value=True)
+    mocker.patch("sbomify.apps.core.views.verify_item_access", return_value=True)
 
     uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
     response = client.get(uri)
@@ -535,7 +535,7 @@ def test_sbom_download_product_public_success(client, sample_product, mocker):  
     sample_product.save()
 
     mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("core.views.get_product_sbom_package")
+    mock_get_package = mocker.patch("sbomify.apps.core.views.get_product_sbom_package")
     mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open similar to existing project tests
@@ -568,7 +568,7 @@ def test_sbom_download_product_private_authorized(
     session.save()
 
     mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("core.views.get_product_sbom_package")
+    mock_get_package = mocker.patch("sbomify.apps.core.views.get_product_sbom_package")
     mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
 
     # Mock open similar to existing project tests
@@ -576,7 +576,7 @@ def test_sbom_download_product_private_authorized(
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
     # Mock verify_item_access to return True for authorized access
-    mocker.patch("core.views.verify_item_access", return_value=True)
+    mocker.patch("sbomify.apps.core.views.verify_item_access", return_value=True)
 
     uri = reverse("core:sbom_download_product", kwargs={"product_id": sample_product.id})
     response = client.get(uri)

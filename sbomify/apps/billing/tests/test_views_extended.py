@@ -408,7 +408,7 @@ class TestWebhookViewIntegration:
         self.client = Client()
         self.factory = RequestFactory()
 
-    @patch("billing.views.stripe_client")
+    @patch("sbomify.apps.billing.views.stripe_client")
     def test_stripe_webhook_view_success(self, mock_stripe_client):
         """Test successful webhook processing through view."""
         mock_event = MagicMock()
@@ -416,7 +416,7 @@ class TestWebhookViewIntegration:
         mock_event.data.object = {"id": "cs_123", "payment_status": "paid"}
         mock_stripe_client.construct_webhook_event.return_value = mock_event
 
-        with patch("billing.billing_processing.handle_checkout_completed") as mock_handler:
+        with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed") as mock_handler:
             response = self.client.post(
                 reverse("billing:webhook"),
                 data=json.dumps({"type": "checkout.session.completed"}),
@@ -427,7 +427,7 @@ class TestWebhookViewIntegration:
             assert response.status_code == 200
             mock_handler.assert_called_once_with(mock_event.data.object)
 
-    @patch("billing.views.stripe_client")
+    @patch("sbomify.apps.billing.views.stripe_client")
     def test_stripe_webhook_view_missing_signature(self, mock_stripe_client):
         """Test webhook view with missing signature."""
         response = self.client.post(
@@ -438,7 +438,7 @@ class TestWebhookViewIntegration:
 
         assert response.status_code == 403
 
-    @patch("billing.views.stripe_client")
+    @patch("sbomify.apps.billing.views.stripe_client")
     def test_stripe_webhook_view_invalid_signature(self, mock_stripe_client):
         """Test webhook view with invalid signature."""
         mock_stripe_client.construct_webhook_event.side_effect = stripe.error.SignatureVerificationError(

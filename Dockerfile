@@ -32,7 +32,7 @@ COPY sbomify/apps/vulnerability_scanning/js/ ./vulnerability_scanning/js/
 COPY sbomify/static/ ./static/
 
 # Create additional directories for build scripts
-RUN mkdir -p static/css static/webfonts static/dist
+RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
 # Run the build for production - Vite now outputs to static/dist/
 RUN bun run copy-deps && bun x vite build

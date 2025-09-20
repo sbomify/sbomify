@@ -87,7 +87,7 @@ def test_sbom_upload_api_spdx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
@@ -123,7 +123,7 @@ def test_sbom_upload_api_cyclonedx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
 
     SBOM.objects.all().delete()
 
@@ -789,7 +789,7 @@ def test_sbom_upload_file_cyclonedx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.cdx.json"
@@ -822,7 +822,7 @@ def test_sbom_upload_file_spdx(
     mocker: MockerFixture,  # noqa: F811
 ):
     mocker.patch("boto3.resource")
-    patched_upload_data_as_file = mocker.patch("core.object_store.S3Client.upload_data_as_file")
+    patched_upload_data_as_file = mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
     test_file_path = pathlib.Path(__file__).parent.resolve() / "test_data/sbomify_trivy.spdx.json"
@@ -920,7 +920,7 @@ def test_delete_sbom_api(
 ):
     """Test SBOM deletion via API endpoint."""
     mocker.patch("boto3.resource")
-    mock_delete_object = mocker.patch("core.object_store.S3Client.delete_object")
+    mock_delete_object = mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object")
 
     client = Client()
 
@@ -1369,7 +1369,7 @@ def test_download_sbom_public_success(
     )
 
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "public sbom content"}'
 
     response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": public_sbom.id}))
@@ -1389,7 +1389,7 @@ def test_download_sbom_private_success(
 ):
     """Test successful private SBOM download with authentication."""
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "private sbom content"}'
 
     # Set up session with team access
@@ -1465,7 +1465,7 @@ def test_download_sbom_s3_file_not_found(
 ):
     """Test download when S3 file doesn't exist."""
     # Mock S3 client to return None (file not found)
-    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.return_value = None
 
     # Set up session with team access
@@ -1487,7 +1487,7 @@ def test_download_sbom_s3_error(
 ):
     """Test download handling when S3 raises an error."""
     # Mock S3 client to raise an exception
-    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.side_effect = Exception("S3 download failed")
 
     # Set up session with team access
@@ -1509,7 +1509,7 @@ def test_download_sbom_with_fallback_filename(
 ):
     """Test download with SBOM that has no name (fallback to sbom_id)."""
     # Mock S3 client
-    mock_get_sbom_data = mocker.patch("core.object_store.S3Client.get_sbom_data")
+    mock_get_sbom_data = mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data")
     mock_get_sbom_data.return_value = b'{"name": "test sbom content"}'
 
     # Create SBOM with empty name

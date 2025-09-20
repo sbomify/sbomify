@@ -783,7 +783,7 @@ def test_download_release_sbom_success(
     mock_file_path.write_text(json.dumps(mock_package, indent=2))
 
     # Mock the SBOM package generator to return the file path
-    mock_get_release_sbom_package = mocker.patch("core.apis.get_release_sbom_package")
+    mock_get_release_sbom_package = mocker.patch("sbomify.apps.core.apis.get_release_sbom_package")
     mock_get_release_sbom_package.return_value = mock_file_path
 
     # Ensure component is part of the product and same team

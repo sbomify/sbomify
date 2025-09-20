@@ -177,7 +177,7 @@ class Command(BaseCommand):
                 format_type = ""
 
                 # Patch verify_item_access for the duration of the API call
-                with patch("sboms.apis.verify_item_access", return_value=True):
+                with patch("sbomify.apps.sboms.apis.verify_item_access", return_value=True):
                     if "spdxVersion" in sbom_data_dict:
                         format_type = "spdx"
                         self.stdout.write(f"Processing {format_type.upper()} SBOM: {sbom_file}")

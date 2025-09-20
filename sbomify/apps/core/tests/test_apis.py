@@ -386,7 +386,7 @@ def test_download_private_product_sbom_success(
     mock_file_path.write_text(json.dumps(mock_package, indent=2))
 
     # Mock the SBOM package generator to return the file path
-    mock_get_product_sbom_package = mocker.patch("core.apis.get_product_sbom_package")
+    mock_get_product_sbom_package = mocker.patch("sbomify.apps.core.apis.get_product_sbom_package")
     mock_get_product_sbom_package.return_value = mock_file_path
 
     # Set up authentication and session
@@ -466,7 +466,7 @@ def test_download_product_sbom_schema_error(
     sample_product.save()
 
     # Mock the SBOM package generator to raise the schema error we had
-    mock_get_product_sbom_package = mocker.patch("core.apis.get_product_sbom_package")
+    mock_get_product_sbom_package = mocker.patch("sbomify.apps.core.apis.get_product_sbom_package")
     mock_get_product_sbom_package.side_effect = AttributeError("type object 'Type3' has no attribute 'releaseNotes'")
 
     # Set up authentication and session
@@ -535,7 +535,7 @@ def test_download_product_sbom_with_documents(
     mock_file_path.write_text(json.dumps(mock_package, indent=2))
 
     # Mock the SBOM package generator to return the file path
-    mock_get_product_sbom_package = mocker.patch("core.apis.get_product_sbom_package")
+    mock_get_product_sbom_package = mocker.patch("sbomify.apps.core.apis.get_product_sbom_package")
     mock_get_product_sbom_package.return_value = mock_file_path
 
     # Set up authentication and session

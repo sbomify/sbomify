@@ -59,7 +59,7 @@ class TestNotifications:
 
     def test_single_notification(self, notification_request, settings):
         """Test getting a single notification from a provider"""
-        settings.NOTIFICATION_PROVIDERS = ["notifications.tests.mock_notification_provider"]
+        settings.NOTIFICATION_PROVIDERS = ["sbomify.apps.notifications.tests.mock_notification_provider"]
         notifications = get_notifications(notification_request)
 
         assert len(notifications) == 1
@@ -70,7 +70,7 @@ class TestNotifications:
 
     def test_multiple_notifications(self, notification_request, settings):
         """Test getting multiple notifications from a provider"""
-        settings.NOTIFICATION_PROVIDERS = ["notifications.tests.mock_list_provider"]
+        settings.NOTIFICATION_PROVIDERS = ["sbomify.apps.notifications.tests.mock_list_provider"]
         notifications = get_notifications(notification_request)
 
         assert len(notifications) == 2
@@ -79,7 +79,7 @@ class TestNotifications:
 
     def test_provider_error(self, notification_request, settings):
         """Test handling provider errors gracefully"""
-        settings.NOTIFICATION_PROVIDERS = ["notifications.tests.mock_error_provider"]
+        settings.NOTIFICATION_PROVIDERS = ["sbomify.apps.notifications.tests.mock_error_provider"]
         notifications = get_notifications(notification_request)
 
         assert len(notifications) == 0
@@ -87,9 +87,9 @@ class TestNotifications:
     def test_multiple_providers(self, notification_request, settings):
         """Test getting notifications from multiple providers"""
         settings.NOTIFICATION_PROVIDERS = [
-            "notifications.tests.mock_notification_provider",
-            "notifications.tests.mock_list_provider",
-            "notifications.tests.mock_error_provider"
+            "sbomify.apps.notifications.tests.mock_notification_provider",
+            "sbomify.apps.notifications.tests.mock_list_provider",
+            "sbomify.apps.notifications.tests.mock_error_provider"
         ]
         notifications = get_notifications(notification_request)
 

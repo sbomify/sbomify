@@ -43,7 +43,7 @@ def test_notify_trial_ending(team):
     team, member = team
     days_remaining = 3
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_trial_ending(team, member, days_remaining)
         mock_send.assert_called_once_with(
             team,
@@ -59,7 +59,7 @@ def test_notify_payment_failed(team):
     team, member = team
     invoice_id = "inv_123"
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_payment_failed(team, member, invoice_id)
         mock_send.assert_called_once_with(
             team,
@@ -74,7 +74,7 @@ def test_notify_payment_failed_no_invoice(team):
     """Test payment failed notification without invoice ID."""
     team, member = team
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_payment_failed(team, member, None)
         mock_send.assert_called_once_with(
             team,
@@ -89,7 +89,7 @@ def test_notify_payment_past_due(team):
     """Test payment past due notification."""
     team, member = team
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_payment_past_due(team, member)
         mock_send.assert_called_once_with(
             team,
@@ -104,7 +104,7 @@ def test_notify_subscription_cancelled(team):
     """Test subscription cancelled notification."""
     team, member = team
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_subscription_cancelled(team, member)
         mock_send.assert_called_once_with(
             team,
@@ -119,7 +119,7 @@ def test_notify_payment_succeeded(team):
     """Test payment succeeded notification."""
     team, member = team
 
-    with patch("billing.email_notifications.send_billing_email") as mock_send:
+    with patch("sbomify.apps.billing.email_notifications.send_billing_email") as mock_send:
         email_notifications.notify_payment_succeeded(team, member)
         mock_send.assert_called_once_with(
             team,
@@ -137,9 +137,9 @@ def test_send_billing_email(team):
     template = "test_template"
     context = {"test_key": "test_value"}
 
-    with patch("billing.email_notifications.render_to_string") as mock_render:
+    with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
         mock_render.side_effect = ["html_content", "text_content"]
-        with patch("billing.email_notifications.send_mail") as mock_send:
+        with patch("sbomify.apps.billing.email_notifications.send_mail") as mock_send:
             email_notifications.send_billing_email(team, member, subject, template, context)
             mock_send.assert_called_once_with(
                 subject,
@@ -163,8 +163,8 @@ def test_send_billing_email_template_error(team):
     template = "non_existent_template"
     context = {"test_key": "test_value"}
 
-    with patch("billing.email_notifications.render_to_string", side_effect=Exception("Template error")):
-        with patch("billing.email_notifications.logger") as mock_logger:
+    with patch("sbomify.apps.billing.email_notifications.render_to_string", side_effect=Exception("Template error")):
+        with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
             email_notifications.send_billing_email(team, member, subject, template, context)
             mock_logger.error.assert_called_once()
 
@@ -176,10 +176,10 @@ def test_send_billing_email_send_error(team):
     template = "test_template"
     context = {"test_key": "test_value"}
 
-    with patch("billing.email_notifications.render_to_string") as mock_render:
+    with patch("sbomify.apps.billing.email_notifications.render_to_string") as mock_render:
         mock_render.side_effect = ["html_content", "text_content"]
-        with patch("billing.email_notifications.send_mail", side_effect=Exception("Send error")):
-            with patch("billing.email_notifications.logger") as mock_logger:
+        with patch("sbomify.apps.billing.email_notifications.send_mail", side_effect=Exception("Send error")):
+            with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
                 email_notifications.send_billing_email(team, member, subject, template, context)
                 mock_logger.error.assert_called_once()
 
@@ -194,7 +194,7 @@ def test_send_billing_email_invalid_team(team):
     # Set team to None to simulate invalid team
     team = None
 
-    with patch("billing.email_notifications.logger") as mock_logger:
+    with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
         email_notifications.send_billing_email(team, member, subject, template, context)
         mock_logger.error.assert_called_once()
 
@@ -209,6 +209,6 @@ def test_send_billing_email_invalid_member(team):
     # Set member to None to simulate invalid member
     member = None
 
-    with patch("billing.email_notifications.logger") as mock_logger:
+    with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
         email_notifications.send_billing_email(team, member, subject, template, context)
         mock_logger.error.assert_called_once()

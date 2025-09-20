@@ -101,7 +101,7 @@ def s3_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
     and returns the mock instance for test configuration.
     """
     mock_client = MockS3Client()
-    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
     yield mock_client
 
 
@@ -114,7 +114,7 @@ def s3_documents_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, No
     mock_client.uploaded_files["public_doc.pdf"] = b"public document content"
     mock_client.uploaded_files["private_doc.pdf"] = b"private document content"
 
-    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
     yield mock_client
 
 
@@ -136,7 +136,7 @@ def s3_sboms_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
     legacy_sbom["specVersion"] = "1.5"
     mock_client.uploaded_files["legacy_sbom.json"] = json.dumps(legacy_sbom).encode()
 
-    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
     yield mock_client
 
 
@@ -146,7 +146,7 @@ def s3_error_mock(mocker: MockerFixture) -> Generator[MockS3Client, None, None]:
     mock_client = MockS3Client()
     mock_client.configure_error(should_raise=True, message="S3 service unavailable")
 
-    mocker.patch("core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
     yield mock_client
 
 
@@ -165,7 +165,7 @@ def create_s3_method_mock(
     Returns:
         The mock object for further configuration
     """
-    mock_path = f"core.object_store.S3Client.{method_name}"
+    mock_path = f"sbomify.apps.core.object_store.S3Client.{method_name}"
 
     if side_effect:
         return mocker.patch(mock_path, side_effect=side_effect)
@@ -184,7 +184,7 @@ def create_documents_api_mock(mocker: MockerFixture, scenario: str = "success") 
     Returns:
         Mock S3Client instance configured for the scenario
     """
-    mock_s3_client = mocker.patch("documents.apis.S3Client")
+    mock_s3_client = mocker.patch("sbomify.apps.documents.apis.S3Client")
     mock_instance = MagicMock()
     mock_s3_client.return_value = mock_instance
 
@@ -214,7 +214,7 @@ def create_documents_views_mock(mocker: MockerFixture, scenario: str = "success"
     Returns:
         Mock S3Client instance configured for the scenario
     """
-    mock_s3_client = mocker.patch("documents.views.S3Client")
+    mock_s3_client = mocker.patch("sbomify.apps.documents.views.S3Client")
     mock_instance = MagicMock()
     mock_s3_client.return_value = mock_instance
 

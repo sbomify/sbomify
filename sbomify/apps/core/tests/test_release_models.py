@@ -487,7 +487,7 @@ def test_release_artifact_duplicate_format_validation(
 
 
 @pytest.mark.django_db
-@patch("core.models.Release.get_or_create_latest_release")
+@patch("sbomify.apps.core.models.Release.get_or_create_latest_release")
 def test_sbom_creation_updates_latest_release(
     mock_get_or_create_latest_release,
     sample_product: Product,  # noqa: F811
@@ -519,7 +519,7 @@ def test_sbom_creation_updates_latest_release(
 
 
 @pytest.mark.django_db
-@patch("core.models.Release.get_or_create_latest_release")
+@patch("sbomify.apps.core.models.Release.get_or_create_latest_release")
 def test_document_creation_updates_latest_release(
     mock_get_or_create_latest_release,
     sample_product: Product,  # noqa: F811
