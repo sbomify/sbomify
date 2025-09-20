@@ -20,13 +20,16 @@ COPY .prettierrc.js ./
 # Install dependencies
 RUN bun install --frozen-lockfile --production
 
+# Create directory structure for apps
+RUN mkdir -p sbomify/apps/{core,sboms,teams,billing,documents,vulnerability_scanning}/js
+
 # Copy source files
-COPY sbomify/apps/core/js/ ./core/js/
-COPY sbomify/apps/sboms/js/ ./sboms/js/
-COPY sbomify/apps/teams/js/ ./teams/js/
-COPY sbomify/apps/billing/js/ ./billing/js/
-COPY sbomify/apps/documents/js/ ./documents/js/
-COPY sbomify/apps/vulnerability_scanning/js/ ./vulnerability_scanning/js/
+COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
+COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
+COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
+COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
+COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 
 # Copy existing static files
 COPY sbomify/static/ ./static/
@@ -49,12 +52,12 @@ COPY tsconfig*.json ./
 COPY vite.config.ts ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
-COPY sbomify/apps/core/js/ ./core/js/
-COPY sbomify/apps/sboms/js/ ./sboms/js/
-COPY sbomify/apps/teams/js/ ./teams/js/
-COPY sbomify/apps/billing/js/ ./billing/js/
-COPY sbomify/apps/documents/js/ ./documents/js/
-COPY sbomify/apps/vulnerability_scanning/js/ ./vulnerability_scanning/js/
+COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
+COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
+COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
+COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
+COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
