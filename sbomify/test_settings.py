@@ -95,49 +95,49 @@ STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Create manifest in the static directory
 manifest = {
-    "core/js/main.ts": {
+    "sbomify/apps/core/js/main.ts": {
         "file": "assets/main.js",
-        "src": "core/js/main.ts",
+        "src": "sbomify/apps/core/js/main.ts",
         "isEntry": True,
         "css": ["assets/main.css"]
     },
-    "teams/js/main.ts": {
+    "sbomify/apps/teams/js/main.ts": {
         "file": "assets/teams.js",
-        "src": "teams/js/main.ts",
+        "src": "sbomify/apps/teams/js/main.ts",
         "isEntry": True,
         "css": ["assets/teams.css"]
     },
-    "billing/js/main.ts": {
+    "sbomify/apps/billing/js/main.ts": {
         "file": "assets/billing.js",
-        "src": "billing/js/main.ts",
+        "src": "sbomify/apps/billing/js/main.ts",
         "isEntry": True,
         "css": ["assets/billing.css"]
     },
-    "core/js/django-messages.ts": {
+    "sbomify/apps/core/js/django-messages.ts": {
         "file": "assets/django-messages.js",
-        "src": "core/js/django-messages.ts",
+        "src": "sbomify/apps/core/js/django-messages.ts",
         "isEntry": True
     },
-    "core/js/alerts-global.ts": {
+    "sbomify/apps/core/js/alerts-global.ts": {
         "file": "assets/alerts-global.js",
-        "src": "core/js/alerts-global.ts",
+        "src": "sbomify/apps/core/js/alerts-global.ts",
         "isEntry": True
     },
-    "sboms/js/main.ts": {
+    "sbomify/apps/sboms/js/main.ts": {
         "file": "assets/sboms.js",
-        "src": "sboms/js/main.ts",
+        "src": "sbomify/apps/sboms/js/main.ts",
         "isEntry": True,
         "css": ["assets/sboms.css"]
     },
-    "vulnerability_scanning/js/main.ts": {
+    "sbomify/apps/vulnerability_scanning/js/main.ts": {
         "file": "assets/vulnerability_scanning.js",
-        "src": "vulnerability_scanning/js/main.ts",
+        "src": "sbomify/apps/vulnerability_scanning/js/main.ts",
         "isEntry": True,
         "css": ["assets/vulnerability_scanning.css"]
     },
-    "documents/js/main.ts": {
+    "sbomify/apps/documents/js/main.ts": {
         "file": "assets/documents.js",
-        "src": "documents/js/main.ts",
+        "src": "sbomify/apps/documents/js/main.ts",
         "isEntry": True,
         "css": ["assets/documents.css"]
     }
