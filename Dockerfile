@@ -20,9 +20,6 @@ COPY .prettierrc.js ./
 # Install dependencies
 RUN bun install --frozen-lockfile --production
 
-# Create directory structure for apps
-RUN mkdir -p sbomify/apps/{core,sboms,teams,billing,documents,vulnerability_scanning}/js
-
 # Copy source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
