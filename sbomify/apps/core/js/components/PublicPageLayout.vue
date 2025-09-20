@@ -216,8 +216,8 @@ import PublicCard from './PublicCard.vue'
 import ProductIdentifiers from './ProductIdentifiers.vue'
 import ProductLinks from './ProductLinks.vue'
 import ProductReleases from './ProductReleases.vue'
-import DocumentsTable from '@/documents/js/components/DocumentsTable.vue'
-import SbomsTable from '@/sboms/js/components/SbomsTable.vue'
+import DocumentsTable from '@/sbomify/apps/documents/js/components/DocumentsTable.vue'
+import SbomsTable from '@/sbomify/apps/sboms/js/components/SbomsTable.vue'
 
 interface QuickAction {
   id: string

@@ -142,9 +142,9 @@
   import { isAxiosError } from 'axios';
   import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
   import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage } from '../type_defs';
-  import SupplierEditor from '../../../sboms/js/components/SupplierEditor.vue';
-  import LicensesEditor from '../../../sboms/js/components/LicensesEditor.vue';
-  import ContactsEditor from '../../../sboms/js/components/ContactsEditor.vue';
+  import SupplierEditor from '@/sbomify/apps/sboms/js/components/SupplierEditor.vue';
+import LicensesEditor from '@/sbomify/apps/sboms/js/components/LicensesEditor.vue';
+import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vue';
   import StandardCard from '../../../core/js/components/StandardCard.vue';
   import { showSuccess, showError } from '../../../core/js/alerts';
 

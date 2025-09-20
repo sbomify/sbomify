@@ -303,7 +303,7 @@ import { eventBus, EVENTS } from './utils';
 import EditableSingleField from './components/EditableSingleField.vue';
 import CopyableValue from './components/CopyableValue.vue';
 import ConfirmAction from './components/ConfirmAction.vue';
-import DashboardStats from '../../sboms/js/components/DashboardStats.vue';
+import DashboardStats from '@/sbomify/apps/sboms/js/components/DashboardStats.vue';
 import CopyToken from './components/CopyToken.vue';
 import SiteNotifications from './components/SiteNotifications.vue';
 import StandardCard from './components/StandardCard.vue';
