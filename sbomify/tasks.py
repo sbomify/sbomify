@@ -57,13 +57,13 @@ django.setup()
 
 from django.conf import settings  # noqa: E402
 
-from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
 from sbomify.apps.sboms.models import SBOM  # noqa: E402
 from sbomify.apps.sboms.ntia_validator import (  # noqa: E402
     NTIAComplianceStatus,
     validate_sbom_ntia_compliance,
 )
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data, serialize_validation_errors  # noqa: E402
+from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
 
 # Configure Dramatiq
 if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):

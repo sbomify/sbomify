@@ -9,8 +9,8 @@ from django.urls import reverse
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.logging import getLogger
 from sbomify.apps.teams.models import Team
+from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 

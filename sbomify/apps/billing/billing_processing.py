@@ -10,9 +10,9 @@ from django.conf import settings
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.logging import getLogger
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Member, Team
+from sbomify.logging import getLogger
 
 from . import email_notifications
 from .config import get_unlimited_plan_limits, is_billing_enabled

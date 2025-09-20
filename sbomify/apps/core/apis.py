@@ -14,7 +14,6 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.logging import getLogger
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
@@ -25,6 +24,7 @@ from sbomify.apps.sboms.utils import (
     get_release_sbom_package,
 )
 from sbomify.apps.teams.models import Team
+from sbomify.logging import getLogger
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
 from .schemas import (

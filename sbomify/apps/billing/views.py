@@ -15,9 +15,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.core.errors import error_response
-from sbomify.logging import getLogger
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
+from sbomify.logging import getLogger
 
 from . import billing_processing
 from .forms import EnterpriseContactForm, PublicEnterpriseContactForm

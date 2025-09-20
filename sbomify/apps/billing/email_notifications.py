@@ -5,8 +5,8 @@ Module for billing-related email notifications
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
-from sbomify.logging import getLogger
 from sbomify.apps.teams.models import Member, Team
+from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
