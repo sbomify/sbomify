@@ -52,8 +52,8 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
+    from sbomify.apps.sboms.models import Component, Product, Project
     from sbomify.apps.teams.models import Team
-    from sbomify.apps.sboms.models import Product, Project, Component
 
     team = Team.objects.get(member__user=request.user)
 
