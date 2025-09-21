@@ -5,7 +5,7 @@ ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.2-debian@sha256:ae21f34625f91285d9098ca52c130845542b2edace3063239c55a8a6d4c1a2df AS js-build-prod
+FROM oven/bun:1.2-debian@sha256:d49c02f02fb07b70de48f44e145afa20e14ce181c7504de099f74ed28c51425d AS js-build-prod
 
 WORKDIR /js-build
 
@@ -38,7 +38,7 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.2-debian@sha256:ae21f34625f91285d9098ca52c130845542b2edace3063239c55a8a6d4c1a2df AS frontend-dev-server
+FROM oven/bun:1.2-debian@sha256:d49c02f02fb07b70de48f44e145afa20e14ce181c7504de099f74ed28c51425d AS frontend-dev-server
 
 WORKDIR /app-frontend
 
