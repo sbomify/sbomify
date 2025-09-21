@@ -28,7 +28,7 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Check Vue component mounting point exists
-        assert 'class="vc-dashboard-stats"' in content
+        assert 'class="dashboard-stats"' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))
