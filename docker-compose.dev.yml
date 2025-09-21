@@ -84,7 +84,7 @@ services:
         <<: *dev-env
     # ports are inherited from docker-compose.yml
     volumes:
-      - .:/code # Mount local code for development
+      - ./sbomify:/code/sbomify # Mount local code for development
     environment:
       <<: *dev-env
 
@@ -94,7 +94,7 @@ services:
       args:
         <<: *dev-env
     volumes:
-      - .:/code # Mount local code for development
+      - ./sbomify:/code/sbomify # Mount local code for development
     environment:
       <<: *dev-env
 
@@ -104,7 +104,7 @@ services:
       args:
         <<: *dev-env
     volumes:
-      - .:/code # Mount local code for development
+      - ./sbomify:/code/sbomify # Mount local code for development
     environment:
       <<: *dev-env
 
@@ -116,7 +116,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-5170}:5170"
     volumes:
-      - .:/app-frontend # Mount to the WORKDIR of frontend-dev-server stage
+      - ./sbomify:/app-frontend/sbomify # Mount to the WORKDIR of frontend-dev-server stage
       - /app-frontend/node_modules # Prevent host node_modules from overwriting container's
     environment:
       NODE_ENV: ${NODE_ENV:-development}

@@ -21,18 +21,18 @@ COPY .prettierrc.js ./
 RUN bun install --frozen-lockfile --production
 
 # Copy source files
-COPY core/js/ ./core/js/
-COPY sboms/js/ ./sboms/js/
-COPY teams/js/ ./teams/js/
-COPY billing/js/ ./billing/js/
-COPY documents/js/ ./documents/js/
-COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
+COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
+COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
+COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
+COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
+COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 
 # Copy existing static files
-COPY static/ ./static/
+COPY sbomify/static/ ./sbomify/static/
 
 # Create additional directories for build scripts
-RUN mkdir -p static/css static/webfonts static/dist
+RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
 # Run the build for production - Vite now outputs to static/dist/
 RUN bun run copy-deps && bun x vite build
@@ -49,12 +49,12 @@ COPY tsconfig*.json ./
 COPY vite.config.ts ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
-COPY core/js/ ./core/js/
-COPY sboms/js/ ./sboms/js/
-COPY teams/js/ ./teams/js/
-COPY billing/js/ ./billing/js/
-COPY documents/js/ ./documents/js/
-COPY vulnerability_scanning/js/ ./vulnerability_scanning/js/
+COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
+COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
+COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
+COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
+COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
@@ -141,10 +141,10 @@ WORKDIR /code
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Production-specific steps
-COPY --from=js-build-prod /js-build/static/dist /code/static/dist
+COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dist
 # Copy other static files that may have been created during build
-COPY --from=js-build-prod /js-build/static/css /code/static/css
-COPY --from=js-build-prod /js-build/static/webfonts /code/static/webfonts
+COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
+COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
 RUN poetry run python manage.py collectstatic --noinput
 
 EXPOSE 8000

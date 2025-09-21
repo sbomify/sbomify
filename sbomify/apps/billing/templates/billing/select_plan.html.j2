@@ -1,0 +1,7 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load django_vite %}
+{% block title %}sbomify Select Plan{% endblock %}
+{% block content %}<div class="vc-plan-selection"></div>{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/billing/js/main.ts' %}
+{% endblock %}

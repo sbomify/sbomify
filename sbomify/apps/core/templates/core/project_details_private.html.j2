@@ -1,0 +1,171 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% comment %}
+Template context:
+project: Project object
+APP_BASE_URL: Base URL for the application (for AJAX requests)
+has_crud_permissions: Boolean indicating if user has CRUD permissions
+{% endcomment %}
+{% load widget_tweaks %}
+{% load django_vite %}
+{% block title %}sbomify Project: {{ project.name }}{% endblock %}
+{% block content %}
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    {% if has_crud_permissions %}
+                        <span class="vc-editable-single-field"
+                              data-item-type="project"
+                              data-item-id="{{ project.id }}"
+                              data-item-value="{{ project.name }}"></span>
+                    {% else %}
+                        {{ project.name }}
+                    {% endif %}
+                </h1>
+                {% if has_crud_permissions %}
+                    <div class="vc-public-status-toggle"
+                         data-item-type="project"
+                         data-item-id="{{ project.id }}"
+                         data-public-url="{{ APP_BASE_URL }}{% url 'core:project_details_public' project.id %}"
+                         data-inline="true"></div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-project-diagram me-2 text-primary"></i>
+                <span class="meta-label">Project</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <span class="vc-copyable-value meta-id"
+                      data-value="{{ project.id }}"
+                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+            </span>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-main {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .meta-id {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .meta-id:hover {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .title-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .item-title {
+                font-size: 1.5rem;
+            }
+
+            .header-meta {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+        }
+
+
+    </style>
+    <div class="row">
+        <div class="col-12">
+            <div class="vc-dashboard-stats"
+                 data-item-type="project"
+                 data-item-id="{{ project.id }}"></div>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="vc-item-assignment-manager"
+                 data-parent-type="project"
+                 data-parent-id="{{ project.id }}"
+                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        </div>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="vc-export-data-card" data-project-id="{{ project.id }}"></div>
+        </div>
+    </div>
+    {% if has_crud_permissions %}
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="vc-project-danger-zone"
+                     data-project-id="{{ project.id }}"
+                     data-project-name="{{ project.name }}"
+                     data-csrf-token="{{ csrf_token }}"></div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+{% endblock %}

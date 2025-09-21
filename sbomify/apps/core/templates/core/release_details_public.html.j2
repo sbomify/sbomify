@@ -1,0 +1,153 @@
+{% extends "core/public_base.html.j2" %}
+{% comment %}
+Template context:
+product: Product object
+release: Release object with prefetched artifacts
+brand: BrandingInfo object for team branding
+has_downloadable_content: Boolean indicating if release has downloadable SBOMs
+{% endcomment %}
+{% load static %}
+{% load django_vite %}
+{% block title %}{{ product.name }} - {{ release.name }}{% endblock %}
+{% block content %}
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="page-header mb-4">
+                    <div class="header-main mb-3">
+                        <div class="title-section">
+                            <div class="breadcrumb-nav">
+                                <nav aria-label="breadcrumb">
+                                    <ol class="breadcrumb">
+                                        <li class="breadcrumb-item">
+                                            <a href="{% url 'core:product_details_public' product.id %}">{{ product.name }}</a>
+                                        </li>
+                                        <li class="breadcrumb-item">
+                                            <a href="{% url 'core:product_releases_public' product.id %}">Releases</a>
+                                        </li>
+                                        <li class="breadcrumb-item active" aria-current="page">{{ release.name }}</li>
+                                    </ol>
+                                </nav>
+                            </div>
+                            <h1 class="item-title">
+                                {{ release.name }}
+                                {% if release.is_latest %}<span class="badge bg-success ms-3">Latest</span>{% endif %}
+                            </h1>
+                            {% if release.description %}<p class="item-subtitle">{{ release.description }}</p>{% endif %}
+                        </div>
+                    </div>
+                    <div class="header-meta">
+                        <span class="meta-item">
+                            <i class="fas fa-calendar me-2 text-primary"></i>
+                            <span class="meta-label">Released {{ release.created_at|date:"M d, Y" }}</span>
+                        </span>
+                        <span class="meta-divider">•</span>
+                        <span class="meta-item">
+                            <i class="fas fa-puzzle-piece me-2 text-primary"></i>
+                            <span class="meta-label">{{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}</span>
+                        </span>
+                    </div>
+                </div>
+                <!-- Download Section using Vue Component -->
+                {% if has_downloadable_content %}
+                    <div class="vc-public-download-card"
+                         data-title="Download Release"
+                         data-description="Download consolidated SBOM containing all artifacts in this release"
+                         data-download-url="/api/v1/releases/{{ release.id }}/download"
+                         data-download-text="Download Release SBOM"
+                         data-download-icon="fas fa-download"></div>
+                {% endif %}
+                <!-- Artifacts Section using Vue Component -->
+                <div class="vc-public-release-artifacts"
+                     data-release-id="{{ release.id }}"
+                     data-product-id="{{ product.id }}"
+                     data-artifacts-data="{{ release.artifacts.all|length }}"></div>
+                <!-- Hidden JSON data for Vue components -->
+                {{ artifacts_data|json_script:"artifacts-data" }}
+            </div>
+        </div>
+    </div>
+    <style>
+        .page-header {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .breadcrumb {
+            background: none;
+            padding: 0;
+            margin: 0 0 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+
+        .breadcrumb-item a:hover {
+            text-decoration: underline;
+        }
+
+        .item-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+        }
+
+        .item-subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+            margin: 0.5rem 0 0 0;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .meta-label {
+            font-weight: 600;
+        }
+
+        .meta-divider {
+            color: #cbd5e1;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .item-title {
+                font-size: 1.5rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .header-meta {
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: flex-start;
+            }
+        }
+    </style>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+{% endblock %}

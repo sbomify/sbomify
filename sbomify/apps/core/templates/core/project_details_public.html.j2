@@ -1,0 +1,41 @@
+{% extends "core/public_base.html.j2" %}
+{% comment %}
+Template context:
+project: Project object
+brand: BrandingInfo object
+{% endcomment %}
+{% load widget_tweaks %}
+{% load django_vite %}
+{% load breadcrumb_tags %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block meta_description %}
+    {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb project 'project' %}
+{% endblock %}
+{% block content %}
+    <div class="vc-public-page-layout"
+         data-title="{{ project.name }}"
+         data-title-icon="fas fa-project-diagram"
+         data-page-type="project"
+         data-item-id="{{ project.id }}"
+         {% if has_downloadable_content %} data-download-url="/api/v1/projects/{{ project.id }}/download" data-download-title="Download Project SBOM" data-download-button-text="Download SBOM" data-download-description="Download aggregated SBOM for this project" data-download-icon="fas fa-download" {% endif %}>
+        <template data-slot="subtitle">
+            <span class="meta-badge meta-badge--primary">
+                <i class="fas fa-project-diagram"></i>
+                Project
+            </span>
+            <span class="meta-badge meta-badge--secondary">
+                <i class="fas fa-fingerprint"></i>
+                <span class="vc-copyable-value"
+                      data-value="{{ project.id }}"
+                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+            </span>
+        </template>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+{% endblock %}

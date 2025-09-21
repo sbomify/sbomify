@@ -83,25 +83,25 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         test-group:
           - name: "Core Tests"
-            path: "core/tests/"
+            path: "sbomify/apps/core/tests/"
           - name: "SBOM Tests"
-            path: "sboms/tests/"
+            path: "sbomify/apps/sboms/tests/"
           - name: "Team Tests"
-            path: "teams/tests.py"
+            path: "sbomify/apps/teams/tests.py"
           - name: "Billing Tests"
-            path: "billing/tests/"
+            path: "sbomify/apps/billing/tests/"
           - name: "Document Tests"
-            path: "documents/tests/"
+            path: "sbomify/apps/documents/tests/"
           - name: "Licensing Tests"
-            path: "licensing/tests/"
+            path: "sbomify/apps/licensing/tests/"
           - name: "Access Token Tests"
-            path: "access_tokens/tests.py"
+            path: "sbomify/apps/access_tokens/tests.py"
           - name: "Notification Tests"
-            path: "notifications/tests.py"
+            path: "sbomify/apps/notifications/tests.py"
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -138,9 +138,9 @@ jobs:
         run: |
           cp .env.example .env
           # Create static assets structure
-          mkdir -p static/assets
+          mkdir -p sbomify/static/assets
           for file in main.js main.css teams.js teams.css billing.js billing.css sboms.js sboms.css django-messages.js alerts-global.js; do
-            echo "// Test asset" > static/assets/$file
+            echo "// Test asset" > sbomify/static/assets/$file
           done
           poetry run python manage.py collectstatic --noinput
 

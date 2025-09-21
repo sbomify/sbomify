@@ -57,13 +57,13 @@ django.setup()
 
 from django.conf import settings  # noqa: E402
 
-from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
-from sboms.models import SBOM  # noqa: E402
-from sboms.ntia_validator import (  # noqa: E402
+from sbomify.apps.sboms.models import SBOM  # noqa: E402
+from sbomify.apps.sboms.ntia_validator import (  # noqa: E402
     NTIAComplianceStatus,
     validate_sbom_ntia_compliance,
 )
-from sboms.utils import SBOMDataError, get_sbom_data, serialize_validation_errors  # noqa: E402
+from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data, serialize_validation_errors  # noqa: E402
+from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
 
 # Configure Dramatiq
 if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):
@@ -75,7 +75,7 @@ if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TE
 logger = logging.getLogger(__name__)
 
 # Import vulnerability scanning tasks to register them with the broker (AFTER broker config)
-import vulnerability_scanning.tasks  # noqa: F401, E402
+import sbomify.apps.vulnerability_scanning.tasks  # noqa: F401, E402
 
 
 def log_retry_attempt(retry_state):
@@ -124,7 +124,7 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
         )
 
         # 3. Process SBOM using unified processor
-        from sboms.utils import process_sbom_data
+        from sbomify.apps.sboms.utils import process_sbom_data
 
         results = process_sbom_data(sbom_instance, sbom_data)
 
@@ -135,7 +135,7 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
 
         # 4. Queue vulnerability scanning task
         try:
-            from vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
+            from sbomify.apps.vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
 
             scan_task = scan_sbom_for_vulnerabilities_unified.send(sbom_id)
             logger.info(f"[TASK_process_sbom] Queued vulnerability scan task {scan_task.message_id} for SBOM {sbom_id}")
@@ -179,7 +179,7 @@ def process_sbom_and_create_components_task(sbom_id: str) -> Dict[str, Any]:
 
 # Simple compatibility proxy - just forward to the real actor
 def _get_scan_actor():
-    from vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
+    from sbomify.apps.vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
 
     return scan_sbom_for_vulnerabilities_unified
 

@@ -18,8 +18,8 @@ Including another URLconf
 from django.conf import settings
 from django.urls import include, path
 
-from billing.views import public_enterprise_contact
-from core.admin import admin_site
+from sbomify.apps.billing.views import public_enterprise_contact
+from sbomify.apps.core.admin import admin_site
 
 from .apis import api
 
@@ -27,11 +27,11 @@ urlpatterns = [
     path("admin/", admin_site.urls),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
-    path("", include("core.urls")),
-    path("workspace/", include("teams.urls")),
-    path("", include("sboms.urls")),
-    path("", include("documents.urls")),
-    path("billing/", include("billing.urls")),
+    path("", include("sbomify.apps.core.urls")),
+    path("workspace/", include("sbomify.apps.teams.urls")),
+    path("", include("sbomify.apps.sboms.urls")),
+    path("", include("sbomify.apps.documents.urls")),
+    path("billing/", include("sbomify.apps.billing.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]

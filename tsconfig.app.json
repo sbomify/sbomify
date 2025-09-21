@@ -27,6 +27,6 @@
     "resolveJsonModule": true,
     "types": ["vite/client", "node", "bun-types"]
   },
-  "exclude": ["node_modules", "dist", "build", "docker", "__pycache__", "static", "staticfiles", "sbomify"],
-  "include": ["**/js/*.ts", "**/js/*.js", "**/js/*.vue", "**/js/**/*.vue"]
+  "exclude": ["node_modules", "dist", "build", "docker", "__pycache__", "static", "staticfiles"],
+  "include": ["sbomify/apps/**/js/*.ts", "sbomify/apps/**/js/*.js", "sbomify/apps/**/js/*.vue", "sbomify/apps/**/js/**/*.vue"]
 }
