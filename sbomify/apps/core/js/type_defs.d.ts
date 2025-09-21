@@ -42,12 +42,6 @@ export interface DashboardSBOMUploadInfo {
   created_at: string;
 }
 
-export interface DashboardStats {
-  total_products: number;
-  total_projects: number;
-  total_components: number;
-  latest_uploads: DashboardSBOMUploadInfo[];
-}
 
 export interface AlertMessage {
   alertType: string | null;
