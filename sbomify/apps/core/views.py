@@ -53,15 +53,14 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     from sbomify.apps.sboms.models import Component, Product, Project
-    from sbomify.apps.teams.models import Team
 
-    team = Team.objects.get(member__user=request.user)
+    current_team = request.session.get("current_team")
 
     context = {
-        "current_team": team,
-        "total_products": Product.objects.filter(team=team).count(),
-        "total_projects": Project.objects.filter(team=team).count(),
-        "total_components": Component.objects.filter(team=team).count(),
+        "current_team": current_team,
+        "total_products": Product.objects.filter(team_id=current_team["id"]).count(),
+        "total_projects": Project.objects.filter(team_id=current_team["id"]).count(),
+        "total_components": Component.objects.filter(team_id=current_team["id"]).count(),
     }
 
     return render(request, "core/dashboard.html.j2", context)
