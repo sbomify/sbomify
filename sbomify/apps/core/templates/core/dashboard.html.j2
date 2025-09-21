@@ -1,77 +1,71 @@
 {% extends "./dashboard_base.html.j2" %}
 {% load django_vite %}
+{% load django_htmx %}
+
 {% block title %}sbomify Dashboard{% endblock %}
+
 {% block dashboard_content %}
-<div class="htmx-dashboard">
+<div class="dashboard">
     <h3 class="page-title">Dashboard</h3>
     {# Dashboard stats with server-side rendering #}
-    <div class="htmx-dashboard-stats">
-        {% if stats_error %}
-            <div class="error-state" data-state="error">
-                <div class="alert alert-danger" role="alert">
-                    <h4 class="alert-heading">Unable to load dashboard stats</h4>
-                    <p>{{ stats_error }}</p>
+    <div class="dashboard-stats">
+        <div class="container-fluid p-0">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="standard-card mt-3">
+                        <div class="card stats-card shadow-sm">
+                            <div class="card-header">
+                                <div class="header-content">
+                                    <h4 class="card-title mb-0">Total Products</h4>
+                                </div>
+                            </div>
+                            <div class="card-body text-center">
+                                <div class="stat-content">
+                                    <div class="stat-display">
+                                        <div class="stat-value">
+                                            <span class="display-4 stat-number text-dark-emphasis">{{ dashboard_stats.total_products }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        {% else %}
-            <div class="container-fluid p-0">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Products</h4>
-                                    </div>
+                
+                <div class="col-md-4">
+                    <div class="standard-card mt-3">
+                        <div class="card stats-card shadow-sm">
+                            <div class="card-header">
+                                <div class="header-content">
+                                    <h4 class="card-title mb-0">Total Projects</h4>
                                 </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_products }}</span>
-                                            </div>
+                            </div>
+                            <div class="card-body text-center">
+                                <div class="stat-content">
+                                    <div class="stat-display">
+                                        <div class="stat-value">
+                                            <span class="display-4 stat-number text-dark-emphasis">{{ dashboard_stats.total_projects }}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Projects</h4>
-                                    </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_projects }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="standard-card mt-3">
+                        <div class="card stats-card shadow-sm">
+                            <div class="card-header">
+                                <div class="header-content">
+                                    <h4 class="card-title mb-0">Total Components</h4>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Components</h4>
-                                    </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_components }}</span>
-                                            </div>
+                            <div class="card-body text-center">
+                                <div class="stat-content">
+                                    <div class="stat-display">
+                                        <div class="stat-value">
+                                            <span class="display-4 stat-number text-dark-emphasis">{{ dashboard_stats.total_components }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -80,8 +74,9 @@
                     </div>
                 </div>
             </div>
-        {% endif %}
+        </div>
     </div>
+    
     {# Vulnerability Time Series Chart #}
     <div class="row mt-4">
         <div class="col-12">
@@ -95,15 +90,8 @@
 {% endblock %}
 
 {% block scripts %}
-    <!-- Include HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.8"></script>
-    <!-- Include HTMX CSP extension for Django CSRF -->
-    <script src="https://unpkg.com/htmx.org@1.9.8/dist/ext/csrf.js"></script>
-    <script>
-        // Configure HTMX to work with Django CSRF
-        document.body.setAttribute('hx-ext', 'csrf');
-    </script>
+    {% htmx_script %}
     
-    <!-- Vue.js script only for Vulnerability Chart -->
+    {# Vue.js script only for Vulnerability Chart #}
     {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
 {% endblock %}

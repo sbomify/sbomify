@@ -67,7 +67,7 @@
             </title>
         {% endblock %}
     </head>
-    <body>
+    <body hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
         {% block main %}
             {% if request.user.is_authenticated %}
                 <!-- AdminKit-style Layout -->
@@ -121,4 +121,4 @@
 <!-- Scripts for HTMX pages -->
 {% block scripts %}{% endblock %}
 </body>
-</html> 
+</html>
