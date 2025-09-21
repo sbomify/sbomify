@@ -35,9 +35,7 @@ def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
                     )
                     return
             except BillingPlan.DoesNotExist:
-                logger.warning(
-                    f"Billing plan '{team.billing_plan}' not found for team {team.key}, skipping NTIA compliance check"  # lgtm [py/clear-text-logging-sensitive-data]
-                )
+                logger.warning(f"Billing plan not found for team {team.key}, skipping NTIA compliance check")
                 return
 
             # Proceed with NTIA compliance check for business/enterprise plans
@@ -78,7 +76,7 @@ def trigger_vulnerability_scan(sender, instance, created, **kwargs):
                     plan = BillingPlan.objects.get(key=team.billing_plan)
                     plan_info = f"'{plan.key}' plan"
                 except BillingPlan.DoesNotExist:
-                    plan_info = f"unknown plan '{team.billing_plan}'"  # lgtm [py/clear-text-logging-sensitive-data]
+                    plan_info = "unknown plan"
 
             logger.info(f"Triggering vulnerability scan for SBOM {instance.id} - team {team.key} with {plan_info}")
 
