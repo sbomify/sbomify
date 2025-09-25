@@ -136,7 +136,7 @@ class TestStripeClient:
         mock_create.assert_called_once_with(
             email="test@example.com",
             name="Test User",
-            metadata={"team_key": "team_123"}
+            metadata={"team_key": "team_123"},
         )
 
     @patch("stripe.Customer.create")
@@ -259,6 +259,56 @@ class TestStripeClient:
             assert result == mock_subscription_with_meta
             mock_modify.assert_called_once()
 
+    @patch("stripe.Subscription.create")
+    def test_create_subscription_with_tax_collection(self, mock_create):
+        """Test subscription creation with tax collection enabled."""
+        mock_customer = MagicMock()
+        mock_customer.metadata = {"team_key": "team_123"}
+
+        mock_subscription = MagicMock()
+        mock_subscription.metadata = {"team_key": "team_123"}
+
+        with patch.object(self.client, 'get_customer', return_value=mock_customer):
+            mock_create.return_value = mock_subscription
+
+            result = self.client.create_subscription(
+                customer_id="cus_123",
+                price_id="price_123",
+                trial_days=14,
+                collect_tax=True
+            )
+
+            assert result == mock_subscription
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args[1]
+            assert call_args["trial_period_days"] == 14
+            assert call_args["automatic_tax"] == {"enabled": True}
+
+    @patch("stripe.Subscription.create")
+    def test_create_subscription_without_tax_collection(self, mock_create):
+        """Test subscription creation without tax collection (default for trials)."""
+        mock_customer = MagicMock()
+        mock_customer.metadata = {"team_key": "team_123"}
+
+        mock_subscription = MagicMock()
+        mock_subscription.metadata = {"team_key": "team_123"}
+
+        with patch.object(self.client, 'get_customer', return_value=mock_customer):
+            mock_create.return_value = mock_subscription
+
+            result = self.client.create_subscription(
+                customer_id="cus_123",
+                price_id="price_123",
+                trial_days=14,
+                collect_tax=False  # Explicit for trials
+            )
+
+            assert result == mock_subscription
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args[1]
+            assert call_args["trial_period_days"] == 14
+            assert "automatic_tax" not in call_args
+
     @patch("stripe.Subscription.modify")
     def test_update_subscription_success(self, mock_modify):
         """Test successful subscription update."""
@@ -314,8 +364,8 @@ class TestStripeClient:
 
     # Checkout session tests
     @patch("stripe.checkout.Session.create")
-    def test_create_checkout_session_success(self, mock_create):
-        """Test successful checkout session creation."""
+    def test_create_checkout_session_success_with_tax(self, mock_create):
+        """Test successful checkout session creation with tax collection (default)."""
         mock_session = MagicMock()
         mock_session.url = "https://checkout.stripe.com/test"
         mock_create.return_value = mock_session
@@ -325,6 +375,33 @@ class TestStripeClient:
             price_id="price_123",
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel"
+        )
+
+        assert result == mock_session
+        mock_create.assert_called_once_with(
+            customer="cus_123",
+            payment_method_types=["card"],
+            line_items=[{"price": "price_123", "quantity": 1}],
+            mode="subscription",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+            metadata={},
+            automatic_tax={"enabled": True}
+        )
+
+    @patch("stripe.checkout.Session.create")
+    def test_create_checkout_session_without_tax(self, mock_create):
+        """Test checkout session creation without tax collection."""
+        mock_session = MagicMock()
+        mock_session.url = "https://checkout.stripe.com/test"
+        mock_create.return_value = mock_session
+
+        result = self.client.create_checkout_session(
+            customer_id="cus_123",
+            price_id="price_123",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+            collect_tax=False
         )
 
         assert result == mock_session
@@ -354,6 +431,41 @@ class TestStripeClient:
 
         call_args = mock_create.call_args[1]
         assert call_args["metadata"] == {"team_key": "team_123"}
+
+    # Billing portal tests
+    @patch("stripe.billing_portal.Session.create")
+    def test_create_billing_portal_session_success(self, mock_create):
+        """Test successful billing portal session creation."""
+        mock_session = MagicMock()
+        mock_session.url = "https://billing.stripe.com/test"
+        mock_create.return_value = mock_session
+
+        result = self.client.create_billing_portal_session(
+            customer_id="cus_123",
+            return_url="https://example.com/dashboard"
+        )
+
+        assert result == mock_session
+        mock_create.assert_called_once_with(
+            customer="cus_123",
+            return_url="https://example.com/dashboard"
+        )
+
+    @patch("stripe.billing_portal.Session.create")
+    def test_create_billing_portal_session_with_error(self, mock_create):
+        """Test billing portal session creation with Stripe error."""
+        mock_create.side_effect = stripe.error.InvalidRequestError(
+            message="Customer not found",
+            param="customer"
+        )
+
+        with pytest.raises(StripeError) as exc_info:
+            self.client.create_billing_portal_session(
+                customer_id="invalid_customer",
+                return_url="https://example.com/dashboard"
+            )
+
+        assert "Invalid request" in str(exc_info.value)
 
     @patch("stripe.checkout.Session.retrieve")
     def test_get_checkout_session_success(self, mock_retrieve):
