@@ -60,7 +60,11 @@ class StripeClient:
     @_handle_stripe_error
     def create_customer(self, email, name, metadata=None):
         """Create a new customer in Stripe."""
-        return self.stripe.Customer.create(email=email, name=name, metadata=metadata or {})
+        return self.stripe.Customer.create(
+            email=email,
+            name=name,
+            metadata=metadata or {},
+        )
 
     @_handle_stripe_error
     def update_customer(self, customer_id, **kwargs):
@@ -68,8 +72,8 @@ class StripeClient:
         return self.stripe.Customer.modify(customer_id, **kwargs)
 
     @_handle_stripe_error
-    def create_subscription(self, customer_id, price_id, trial_days=None, metadata=None):
-        """Create a new subscription."""
+    def create_subscription(self, customer_id, price_id, trial_days=None, metadata=None, collect_tax=False):
+        """Create a new subscription with optional tax collection."""
         # Ensure we have the customer metadata
         customer = self.get_customer(customer_id)
 
@@ -87,10 +91,18 @@ class StripeClient:
         if "team_key" not in metadata:
             metadata["team_key"] = customer.metadata["team_key"]
 
-        subscription_data = {"customer": customer_id, "items": [{"price": price_id}], "metadata": metadata}
+        subscription_data = {
+            "customer": customer_id,
+            "items": [{"price": price_id}],
+            "metadata": metadata,
+        }
 
         if trial_days:
             subscription_data["trial_period_days"] = trial_days
+
+        # Only enable tax collection when specifically requested (e.g., when converting from trial)
+        if collect_tax:
+            subscription_data["automatic_tax"] = {"enabled": True}
 
         subscription = self.stripe.Subscription.create(**subscription_data)
 
@@ -116,27 +128,43 @@ class StripeClient:
         return self.stripe.Subscription.retrieve(subscription_id, expand=["latest_invoice.payment_intent"])
 
     @_handle_stripe_error
-    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None):
-        """Create a checkout session."""
-        return self.stripe.checkout.Session.create(
-            customer=customer_id,
-            payment_method_types=["card"],
-            line_items=[
+    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None, collect_tax=True):
+        """Create a checkout session with tax collection for paid conversions."""
+        session_data = {
+            "customer": customer_id,
+            "payment_method_types": ["card"],
+            "line_items": [
                 {
                     "price": price_id,
                     "quantity": 1,
                 }
             ],
-            mode="subscription",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata or {},
-        )
+            "mode": "subscription",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "metadata": metadata or {},
+        }
+
+        # Enable tax collection for paid subscriptions (trial → paid conversions)
+        if collect_tax:
+            session_data["automatic_tax"] = {"enabled": True}
+
+        return self.stripe.checkout.Session.create(**session_data)
 
     @_handle_stripe_error
     def get_checkout_session(self, session_id):
         """Retrieve a checkout session."""
         return self.stripe.checkout.Session.retrieve(session_id)
+
+    @_handle_stripe_error
+    def create_billing_portal_session(self, customer_id, return_url):
+        """Create a billing portal session for customer management."""
+        return self.stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+            # Use default configuration from Stripe Dashboard
+            # This allows you to configure features/tax collection in Stripe UI
+        )
 
     @_handle_stripe_error
     def construct_webhook_event(self, payload, sig_header, webhook_secret=None):

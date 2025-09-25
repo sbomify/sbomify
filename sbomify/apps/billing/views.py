@@ -247,6 +247,32 @@ You can reply to this email and we'll receive your message at hello@sbomify.com
 
 
 @login_required
+def billing_portal(request: HttpRequest, team_key: str):
+    """Redirect to Stripe Customer Portal for all billing management."""
+    team = get_object_or_404(Team, key=team_key)
+    if not team.members.filter(member__user=request.user, member__role="owner").exists():
+        messages.error(request, "Only team owners can manage billing")
+        return redirect("core:dashboard")
+
+    # Get the Stripe customer ID
+    customer_id = team.billing_plan_limits.get("stripe_customer_id")
+    if not customer_id:
+        messages.error(request, "No billing account found. Please contact support.")
+        return redirect("core:dashboard")
+
+    try:
+        # Create billing portal session
+        portal_session = stripe_client.create_billing_portal_session(
+            customer_id=customer_id, return_url=request.build_absolute_uri(reverse("core:dashboard"))
+        )
+        return redirect(portal_session.url)
+    except Exception as e:
+        logger.error(f"Failed to create billing portal session for team {team_key}: {str(e)}")
+        messages.error(request, "Unable to access billing portal. Please try again later.")
+        return redirect("core:dashboard")
+
+
+@login_required
 def select_plan(request: HttpRequest, team_key: str):
     "Display plan selection page"
     team = get_object_or_404(Team, key=team_key)
