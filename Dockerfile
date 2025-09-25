@@ -93,6 +93,11 @@ FROM python-common-code AS python-dependencies
 ARG BUILD_ENV
 ENV BUILD_ENV=${BUILD_ENV}
 
+# Configure Poetry to use system Python and not create virtual environments
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
 # Install Python dependencies based on BUILD_ENV
 # This will also install the project package itself.
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
@@ -126,6 +131,20 @@ WORKDIR /code
 # Copy the osv-scanner binary from the go-builder stage
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
+# Create directories with proper permissions for non-root user
+# Code should be read-only, only /tmp needs write access for temporary files
+RUN mkdir -p /tmp && \
+    chown nobody:nogroup /tmp && \
+    chmod 1777 /tmp
+
+# Configure Poetry to not create virtual environments (dependencies already installed)
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Switch to non-root user
+USER nobody
+
 EXPOSE 8000
 # CMD for Development (using uvicorn directly with reload for development)
 CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
@@ -145,7 +164,21 @@ COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dis
 # Copy other static files that may have been created during build
 COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
 COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
-RUN poetry run python manage.py collectstatic --noinput
+
+# Create directories and run collectstatic as root, then fix permissions
+# Code should be read-only, only /tmp needs write access for temporary files
+RUN mkdir -p /tmp /code/staticfiles && \
+    poetry run python manage.py collectstatic --noinput && \
+    chown nobody:nogroup /tmp && \
+    chmod 1777 /tmp
+
+# Configure Poetry to not create virtual environments (dependencies already installed)
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Switch to non-root user
+USER nobody
 
 EXPOSE 8000
 # CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
