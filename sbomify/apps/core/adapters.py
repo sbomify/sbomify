@@ -73,10 +73,20 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.first_name = data.get("given_name") or data.get("first_name", "")
             user.last_name = data.get("family_name") or data.get("last_name", "")
 
+            # Ensure email is properly extracted from OIDC data
+            if not user.email and data.get("email"):
+                user.email = data["email"]
+                logger.debug(f"Set email from OIDC data: {user.email}")
+
             # Use preferred_username if available
             if "preferred_username" in data:
                 user.username = data["preferred_username"]
                 return user  # Skip email-based username generation
+
+        # Fallback: ensure email is set from data if not already set
+        if not user.email and data.get("email"):
+            user.email = data["email"]
+            logger.debug(f"Set email from data fallback: {user.email}")
 
         if user.email:
             # Create username from email (e.g., "kashif@compulife.com.pk" -> "kashif.compulife.com.pk")
@@ -125,6 +135,11 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             if is_billing_enabled():
                 # Set up business plan trial
                 try:
+                    # Validate that user has an email address
+                    if not user.email:
+                        logger.error(f"User {user.username} has no email address, cannot create Stripe customer")
+                        raise ValueError("User must have an email address to create billing subscription")
+
                     business_plan = BillingPlan.objects.get(key="business")
                     customer = stripe_client.create_customer(
                         email=user.email, name=team.name, metadata={"team_key": team.key}
