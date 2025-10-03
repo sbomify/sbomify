@@ -10,16 +10,17 @@ It then attempts to fix their email addresses and create the missing trial subsc
 """
 
 import logging
-from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 from django.utils import timezone
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
-from sbomify.apps.teams.models import Team, Member
+from sbomify.apps.teams.models import Team
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -57,15 +58,14 @@ class Command(BaseCommand):
         user_id = options["user_id"]
 
         if not is_billing_enabled():
-            self.stdout.write(
-                self.style.WARNING("Billing is not enabled. No subscriptions will be created.")
-            )
+            self.stdout.write(self.style.WARNING("Billing is not enabled. No subscriptions will be created."))
             return
 
         if not fix_emails and not create_subscriptions:
             self.stdout.write(
                 self.style.WARNING(
-                    "Please specify --fix-emails and/or --create-subscriptions. Use --dry-run to see what would be done."
+                    "Please specify --fix-emails and/or --create-subscriptions. "
+                    "Use --dry-run to see what would be done."
                 )
             )
             return
@@ -82,9 +82,7 @@ class Command(BaseCommand):
             ).distinct()
 
         if not users.exists():
-            self.stdout.write(
-                self.style.SUCCESS("No users found with missing email addresses and teams.")
-            )
+            self.stdout.write(self.style.SUCCESS("No users found with missing email addresses and teams."))
             return
 
         self.stdout.write(f"Found {users.count()} users with missing email addresses")
@@ -101,27 +99,19 @@ class Command(BaseCommand):
             if fix_emails:
                 if self.fix_user_email(user, dry_run):
                     fixed_emails += 1
-                    self.stdout.write(
-                        self.style.SUCCESS(f"  ✓ Fixed email address: {user.email}")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"  ✓ Fixed email address: {user.email}"))
                 else:
-                    self.stdout.write(
-                        self.style.WARNING(f"  ✗ Could not fix email address for {user.username}")
-                    )
+                    self.stdout.write(self.style.WARNING(f"  ✗ Could not fix email address for {user.username}"))
                     continue
 
             # Create trial subscription if user now has email
             if create_subscriptions and user.email:
                 if self.create_trial_subscription(user, stripe_client, dry_run):
                     created_subscriptions += 1
-                    self.stdout.write(
-                        self.style.SUCCESS(f"  ✓ Created trial subscription for {user.username}")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"  ✓ Created trial subscription for {user.username}"))
                 else:
                     errors += 1
-                    self.stdout.write(
-                        self.style.ERROR(f"  ✗ Failed to create trial subscription for {user.username}")
-                    )
+                    self.stdout.write(self.style.ERROR(f"  ✗ Failed to create trial subscription for {user.username}"))
 
         # Summary
         self.stdout.write("\n" + "=" * 50)
@@ -139,11 +129,11 @@ class Command(BaseCommand):
 
         # Look for social accounts with email information
         social_accounts = SocialAccount.objects.filter(user=user)
-        
+
         for social_account in social_accounts:
             extra_data = social_account.extra_data or {}
             email = extra_data.get("email")
-            
+
             if email and email.strip():
                 if not dry_run:
                     user.email = email.strip()
@@ -153,9 +143,9 @@ class Command(BaseCommand):
 
         # If no social account email found, try to get it from the social account data
         for social_account in social_accounts:
-            if hasattr(social_account, 'extra_data') and social_account.extra_data:
+            if hasattr(social_account, "extra_data") and social_account.extra_data:
                 # Try different possible email fields
-                for email_field in ['email', 'emailAddress', 'mail']:
+                for email_field in ["email", "emailAddress", "mail"]:
                     email = social_account.extra_data.get(email_field)
                     if email and email.strip():
                         if not dry_run:
@@ -173,18 +163,14 @@ class Command(BaseCommand):
             team = Team.objects.filter(members=user, members__is_default_team=True).first()
             if not team:
                 team = Team.objects.filter(members=user).first()
-            
+
             if not team:
-                self.stdout.write(
-                    self.style.WARNING(f"  No team found for user {user.username}")
-                )
+                self.stdout.write(self.style.WARNING(f"  No team found for user {user.username}"))
                 return False
 
             # Check if team already has a subscription
             if team.billing_plan_limits and team.billing_plan_limits.get("stripe_subscription_id"):
-                self.stdout.write(
-                    self.style.WARNING(f"  Team {team.name} already has a subscription")
-                )
+                self.stdout.write(self.style.WARNING(f"  Team {team.name} already has a subscription"))
                 return True
 
             if dry_run:
@@ -193,21 +179,19 @@ class Command(BaseCommand):
 
             # Create the trial subscription
             business_plan = BillingPlan.objects.get(key="business")
-            
+
             with transaction.atomic():
                 customer = stripe_client.create_customer(
-                    email=user.email, 
-                    name=team.name, 
-                    metadata={"team_key": team.key}
+                    email=user.email, name=team.name, metadata={"team_key": team.key}
                 )
-                
+
                 subscription = stripe_client.create_subscription(
                     customer_id=customer.id,
                     price_id=business_plan.stripe_price_monthly_id,
                     trial_days=settings.TRIAL_PERIOD_DAYS,
                     metadata={"team_key": team.key, "plan_key": "business"},
                 )
-                
+
                 team.billing_plan = "business"
                 team.billing_plan_limits = {
                     "max_products": business_plan.max_products,
@@ -221,7 +205,7 @@ class Command(BaseCommand):
                     "last_updated": timezone.now().isoformat(),
                 }
                 team.save()
-                
+
                 logger.info(f"Created trial subscription for team {team.key} ({team.name})")
                 return True
 

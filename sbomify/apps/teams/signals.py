@@ -34,7 +34,7 @@ def ensure_user_has_team(user):
             if not user.email:
                 log.error(f"User {user.username} has no email address, cannot create Stripe customer")
                 raise ValueError("User must have an email address to create billing subscription")
-            
+
             business_plan = BillingPlan.objects.get(key="business")
             customer = stripe_client.create_customer(email=user.email, name=team.name, metadata={"team_key": team.key})
             subscription = stripe_client.create_subscription(
