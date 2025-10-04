@@ -78,7 +78,7 @@ class Command(BaseCommand):
             # Find users with missing email addresses who have teams
             users = User.objects.filter(
                 email__in=["", None],  # Empty or null email
-                teams__isnull=False,  # Have teams
+                team__isnull=False,  # Have teams
             ).distinct()
 
         if not users.exists():
