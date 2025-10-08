@@ -25,7 +25,7 @@ from sbomify.apps.teams.utils import get_user_teams
 
 from ..models import Member, Team
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 stripe_client = StripeClient()
 
 
@@ -58,7 +58,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
         try:
             # Validate that user has an email address
             if not user.email:
-                log.error(f"User {user.username} has no email address, cannot create Stripe customer")
+                logger.error(f"User {user.username} has no email address, cannot create Stripe customer")
                 raise ValueError("User must have an email address to create billing subscription")
 
             business_plan = BillingPlan.objects.get(key="business")
@@ -82,7 +82,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
                 "last_updated": timezone.now().isoformat(),
             }
             team.save()
-            log.info(f"Created trial subscription for team {team.key} ({team.name}) [fallback]")
+            logger.info(f"Created trial subscription for team {team.key} ({team.name}) [fallback]")
             context = {
                 "user": user,
                 "team": team,
@@ -103,4 +103,20 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
                 html_message=render_to_string("teams/new_user_email.html.j2", context),
             )
         except Exception as e:
-            log.error(f"Failed to create trial subscription for team {team.key} [fallback]: {str(e)}")
+            logger.error(f"Failed to create trial subscription for team {team.key} [fallback]: {str(e)}")
+            # Fallback: Set up community plan so user can still use the system
+            try:
+                logger.info(f"Falling back to community plan for team {team.key}")
+                community_plan = BillingPlan.objects.get(key="community")
+                team.billing_plan = "community"
+                team.billing_plan_limits = {
+                    "max_products": community_plan.max_products,
+                    "max_projects": community_plan.max_projects,
+                    "max_components": community_plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+                team.save()
+                logger.info(f"Set up community plan fallback for team {team.key} ({team.name})")
+            except BillingPlan.DoesNotExist:
+                logger.error(f"Could not set up fallback plan for team {team.key} - no community plan exists")

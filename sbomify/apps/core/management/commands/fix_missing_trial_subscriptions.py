@@ -14,13 +14,15 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
+from django.core.validators import EmailValidator
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -75,19 +77,15 @@ class Command(BaseCommand):
             if not users.exists():
                 raise CommandError(f"User with ID {user_id} not found")
         else:
-            # Find teams without billing subscriptions
-            teams_without_billing = []
-            for team in Team.objects.all():
-                if not team.billing_plan_limits or not team.billing_plan_limits.get("stripe_subscription_id"):
-                    teams_without_billing.append(team)
+            # Find teams without billing subscriptions using efficient query
+            teams_without_billing = Team.objects.filter(
+                Q(billing_plan_limits__isnull=True) | ~Q(billing_plan_limits__has_key="stripe_subscription_id")
+            )
 
             # Get unique users who own these teams
-            user_ids = set()
-            for team in teams_without_billing:
-                owners = team.members.filter(member__role="owner")
-                for owner in owners:
-                    user_ids.add(owner.id)
+            owner_members = Member.objects.filter(team__in=teams_without_billing, role="owner").select_related("user")
 
+            user_ids = set(member.user.id for member in owner_members)
             users = User.objects.filter(id__in=user_ids)
 
         if not users.exists():
@@ -156,33 +154,36 @@ class Command(BaseCommand):
     def fix_user_email(self, user, dry_run=False):
         """Attempt to fix a user's email address from their social accounts."""
         from allauth.socialaccount.models import SocialAccount
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        validator = EmailValidator()
 
         # Look for social accounts with email information
         social_accounts = SocialAccount.objects.filter(user=user)
 
+        # Try different possible email fields
+        email_fields = ["email", "emailAddress", "mail"]
+
         for social_account in social_accounts:
             extra_data = social_account.extra_data or {}
-            email = extra_data.get("email")
 
-            if email and email.strip():
-                if not dry_run:
-                    user.email = email.strip()
-                    user.save()
-                    logger.info(f"Fixed email for user {user.username}: {email}")
-                return True
+            for email_field in email_fields:
+                email = extra_data.get(email_field)
 
-        # If no social account email found, try to get it from the social account data
-        for social_account in social_accounts:
-            if hasattr(social_account, "extra_data") and social_account.extra_data:
-                # Try different possible email fields
-                for email_field in ["email", "emailAddress", "mail"]:
-                    email = social_account.extra_data.get(email_field)
-                    if email and email.strip():
+                if email and email.strip():
+                    email = email.strip()
+
+                    # Validate email format
+                    try:
+                        validator(email)
                         if not dry_run:
-                            user.email = email.strip()
-                            user.save()
+                            user.email = email
+                            user.save(update_fields=["email"])
                             logger.info(f"Fixed email for user {user.username} from {email_field}: {email}")
                         return True
+                    except DjangoValidationError:
+                        logger.warning(f"Invalid email format from {email_field} for user {user.username}: {email}")
+                        continue
 
         return False
 
