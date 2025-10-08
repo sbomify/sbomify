@@ -75,17 +75,26 @@ class Command(BaseCommand):
             if not users.exists():
                 raise CommandError(f"User with ID {user_id} not found")
         else:
-            # Find users with missing email addresses who have teams
-            users = User.objects.filter(
-                email__in=["", None],  # Empty or null email
-                team__isnull=False,  # Have teams
-            ).distinct()
+            # Find teams without billing subscriptions
+            teams_without_billing = []
+            for team in Team.objects.all():
+                if not team.billing_plan_limits or not team.billing_plan_limits.get("stripe_subscription_id"):
+                    teams_without_billing.append(team)
+
+            # Get unique users who own these teams
+            user_ids = set()
+            for team in teams_without_billing:
+                owners = team.members.filter(member__role="owner")
+                for owner in owners:
+                    user_ids.add(owner.id)
+
+            users = User.objects.filter(id__in=user_ids)
 
         if not users.exists():
-            self.stdout.write(self.style.SUCCESS("No users found with missing email addresses and teams."))
+            self.stdout.write(self.style.SUCCESS("No users found with teams missing billing subscriptions."))
             return
 
-        self.stdout.write(f"Found {users.count()} users with missing email addresses")
+        self.stdout.write(f"Found {users.count()} users with teams missing billing subscriptions")
 
         stripe_client = StripeClient()
         fixed_emails = 0
@@ -94,18 +103,39 @@ class Command(BaseCommand):
 
         for user in users:
             self.stdout.write(f"\nProcessing user: {user.username} (ID: {user.id})")
+            self.stdout.write(f"  Current email: {user.email or '(empty)'}")
 
-            # Try to fix email address
-            if fix_emails:
+            # Show user's teams
+            user_teams = Team.objects.filter(members=user)
+            for team in user_teams:
+                has_billing = team.billing_plan_limits and team.billing_plan_limits.get("stripe_subscription_id")
+                status = "✓ Has billing" if has_billing else "✗ Missing billing"
+                self.stdout.write(f"  Team: {team.name} ({team.key}) - {status}")
+
+            # Try to fix email address if needed
+            if fix_emails and not user.email:
                 if self.fix_user_email(user, dry_run):
                     fixed_emails += 1
                     self.stdout.write(self.style.SUCCESS(f"  ✓ Fixed email address: {user.email}"))
-                else:
-                    self.stdout.write(self.style.WARNING(f"  ✗ Could not fix email address for {user.username}"))
+                elif not user.email:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"  ✗ Could not fix email address for {user.username} - skipping subscription creation"
+                        )
+                    )
+                    errors += 1
                     continue
 
-            # Create trial subscription if user now has email
-            if create_subscriptions and user.email:
+            # Check if user has email
+            if not user.email:
+                self.stdout.write(
+                    self.style.WARNING(f"  ✗ User {user.username} has no email - cannot create subscription")
+                )
+                errors += 1
+                continue
+
+            # Create trial subscription
+            if create_subscriptions:
                 if self.create_trial_subscription(user, stripe_client, dry_run):
                     created_subscriptions += 1
                     self.stdout.write(self.style.SUCCESS(f"  ✓ Created trial subscription for {user.username}"))

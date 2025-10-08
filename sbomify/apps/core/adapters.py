@@ -73,20 +73,10 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.first_name = data.get("given_name") or data.get("first_name", "")
             user.last_name = data.get("family_name") or data.get("last_name", "")
 
-            # Ensure email is properly extracted from OIDC data
-            if not user.email and data.get("email"):
-                user.email = data["email"]
-                logger.debug(f"Set email from OIDC data: {user.email}")
-
             # Use preferred_username if available
             if "preferred_username" in data:
                 user.username = data["preferred_username"]
                 return user  # Skip email-based username generation
-
-        # Fallback: ensure email is set from data if not already set
-        if not user.email and data.get("email"):
-            user.email = data["email"]
-            logger.debug(f"Set email from data fallback: {user.email}")
 
         if user.email:
             # Create username from email (e.g., "kashif@compulife.com.pk" -> "kashif.compulife.com.pk")
@@ -121,6 +111,15 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def save_user(self, request, sociallogin, form=None):
         user = super().save_user(request, sociallogin, form)
+
+        # Ensure email is set from sociallogin if not already present
+        if not user.email and sociallogin.account.extra_data:
+            email = sociallogin.account.extra_data.get("email")
+            if email:
+                user.email = email
+                user.save(update_fields=["email"])
+                logger.info(f"Set email from social account for user {user.username}: {email}")
+
         # Only create a team if this is a new user and they have no teams
         if not Team.objects.filter(members=user).exists():
             first_name = user.first_name or user.username.split("@")[0]
