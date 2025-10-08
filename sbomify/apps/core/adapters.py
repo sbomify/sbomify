@@ -73,20 +73,10 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.first_name = data.get("given_name") or data.get("first_name", "")
             user.last_name = data.get("family_name") or data.get("last_name", "")
 
-            # Ensure email is properly extracted from OIDC data
-            if not user.email and data.get("email"):
-                user.email = data["email"]
-                logger.debug(f"Set email from OIDC data: {user.email}")
-
             # Use preferred_username if available
             if "preferred_username" in data:
                 user.username = data["preferred_username"]
                 return user  # Skip email-based username generation
-
-        # Fallback: ensure email is set from data if not already set
-        if not user.email and data.get("email"):
-            user.email = data["email"]
-            logger.debug(f"Set email from data fallback: {user.email}")
 
         if user.email:
             # Create username from email (e.g., "kashif@compulife.com.pk" -> "kashif.compulife.com.pk")
@@ -121,6 +111,26 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def save_user(self, request, sociallogin, form=None):
         user = super().save_user(request, sociallogin, form)
+
+        # Ensure email is set from sociallogin if not already present
+        # This is done before team creation to ensure email is available for billing
+        if not user.email and sociallogin.account.extra_data:
+            email = sociallogin.account.extra_data.get("email")
+            if email:
+                # Validate and sanitize email
+                from django.core.exceptions import ValidationError as DjangoValidationError
+                from django.core.validators import EmailValidator
+
+                email = email.strip()
+                validator = EmailValidator()
+                try:
+                    validator(email)
+                    user.email = email
+                    user.save(update_fields=["email"])
+                    logger.info(f"Set email from social account for user {user.username}: {email}")
+                except DjangoValidationError:
+                    logger.warning(f"Invalid email from social account for user {user.username}: {email}")
+
         # Only create a team if this is a new user and they have no teams
         if not Team.objects.filter(members=user).exists():
             first_name = user.first_name or user.username.split("@")[0]
@@ -185,6 +195,22 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                     )
                 except Exception as e:
                     logger.error(f"Failed to create trial subscription for team {team.key}: {str(e)}")
+                    # Fallback: Set up community plan so user can still use the system
+                    try:
+                        logger.info(f"Falling back to community plan for team {team.key}")
+                        community_plan = BillingPlan.objects.get(key="community")
+                        team.billing_plan = "community"
+                        team.billing_plan_limits = {
+                            "max_products": community_plan.max_products,
+                            "max_projects": community_plan.max_projects,
+                            "max_components": community_plan.max_components,
+                            "subscription_status": "active",
+                            "last_updated": timezone.now().isoformat(),
+                        }
+                        team.save()
+                        logger.info(f"Set up community plan fallback for team {team.key} ({team.name})")
+                    except BillingPlan.DoesNotExist:
+                        logger.error(f"Could not set up fallback plan for team {team.key} - no community plan exists")
             else:
                 # Billing is disabled, set up community plan with unlimited limits
                 try:
