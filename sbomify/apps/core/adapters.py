@@ -111,15 +111,15 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def save_user(self, request, sociallogin, form=None):
         user = super().save_user(request, sociallogin, form)
-        
+
         # Ensure email is set from sociallogin if not already present
         # This is done before team creation to ensure email is available for billing
         if not user.email and sociallogin.account.extra_data:
             email = sociallogin.account.extra_data.get("email")
             if email:
                 # Validate and sanitize email
-                from django.core.validators import EmailValidator
                 from django.core.exceptions import ValidationError as DjangoValidationError
+                from django.core.validators import EmailValidator
 
                 email = email.strip()
                 validator = EmailValidator()
