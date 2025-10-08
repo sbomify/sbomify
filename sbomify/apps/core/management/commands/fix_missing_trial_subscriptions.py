@@ -190,10 +190,14 @@ class Command(BaseCommand):
     def create_trial_subscription(self, user, stripe_client, dry_run=False):
         """Create a trial subscription for a user."""
         try:
-            # Get the user's default team
-            team = Team.objects.filter(members=user, members__is_default_team=True).first()
-            if not team:
-                team = Team.objects.filter(members=user).first()
+            # Get the user's default team through the Member model
+            default_member = Member.objects.filter(user=user, is_default_team=True).first()
+            if default_member:
+                team = default_member.team
+            else:
+                # No default team, just get the first team
+                first_member = Member.objects.filter(user=user).first()
+                team = first_member.team if first_member else None
 
             if not team:
                 self.stdout.write(self.style.WARNING(f"  No team found for user {user.username}"))
