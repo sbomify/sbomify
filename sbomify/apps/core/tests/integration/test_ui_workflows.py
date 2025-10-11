@@ -130,8 +130,8 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Verify the Vue component mount point exists for the add form
-        assert 'class="vc-add-component-form"' in content
-        assert 'class="vc-components-list"' in content
+        assert 'class="add-component-form"' in content
+        assert 'class="components-list"' in content
 
         # Test API-based component creation (what the Vue component does)
         import json

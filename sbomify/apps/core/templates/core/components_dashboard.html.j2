@@ -1,152 +1,275 @@
-{% extends "core/dashboard_base.html.j2" %}
-{% load widget_tweaks %}
-{% load form_helpers %}
-{% load django_vite %}
+{% extends "./dashboard_base.html.j2" %}
+{% load static %}
+{% load django_htmx %}
 {% block title %}sbomify Components{% endblock %}
-{% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main">
-            <div class="title-section">
-                <h1 class="item-title">
-                    <i class="fas fa-cube me-3 text-primary"></i>Components
-                </h1>
-                <p class="item-subtitle">Manage individual software components and their SBOMs</p>
+{% block dashboard_content %}
+    <div class="dashboard">
+        <div class="page-header mb-4">
+            <div class="header-main">
+                <div class="title-section">
+                    <h1 class="item-title">
+                        <i class="fas fa-cube me-3 text-primary"></i>Components
+                    </h1>
+                    <p class="item-subtitle">Manage individual software components and their SBOMs</p>
+                </div>
             </div>
         </div>
-    </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-        }
-
-        .header-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .title-section {
-            flex: 1;
-        }
-
-        .item-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-            display: flex;
-            align-items: center;
-        }
-
-        .item-subtitle {
-            color: #64748b;
-            font-size: 1.1rem;
-            margin: 0.5rem 0 0 0;
-        }
-
-        @media (max-width: 768px) {
+        <style>
             .page-header {
-                padding: 1.5rem 1rem;
-                margin-bottom: 1.5rem;
+                background: linear-gradient(135deg, #ffffff, #f8fafc);
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 2rem;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                margin-bottom: 2rem;
             }
-
-            .item-title {
-                font-size: 1.75rem;
-            }
-
-            .item-title .fas {
-                font-size: 1.5rem;
-                margin-right: 0.75rem !important;
-            }
-
-            .item-subtitle {
-                font-size: 1rem;
-                margin-top: 0.75rem;
-            }
-
             .header-main {
-                flex-direction: column;
-                gap: 1.5rem;
-                align-items: stretch;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
             }
-        }
-
-        @media (max-width: 576px) {
-            .page-header {
-                padding: 1rem 0.75rem;
-                margin-bottom: 1rem;
-                border-radius: 8px;
+            .title-section {
+                flex: 1;
             }
-
             .item-title {
-                font-size: 1.5rem;
+                font-size: 2.5rem;
+                font-weight: 700;
+                color: #1a202c;
+                margin: 0;
+                line-height: 1.2;
+                display: flex;
+                align-items: center;
             }
-
-            .item-title .fas {
-                font-size: 1.25rem;
-                margin-right: 0.5rem !important;
-            }
-
             .item-subtitle {
-                font-size: 0.9rem;
-                margin-top: 0.5rem;
+                color: #64748b;
+                font-size: 1.1rem;
+                margin: 0.5rem 0 0 0;
             }
-        }
-    </style>
-    <div class="row align-items-center">
-        <div class="col-12">
-            <div class="vc-components-list"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
-        </div>
-    </div>
-    {% if has_crud_permissions %}
-        <div class="vc-add-component-form"></div>
-        {# Delete Confirmation Modal #}
-        <div class="modal fade"
-             id="deleteConfirmModal"
-             tabindex="-1"
-             aria-labelledby="deleteConfirmModalLabel"
-             aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0">
-                    <div class="modal-header border-bottom-0 pb-0">
-                        <h4 class="modal-title text-secondary" id="deleteConfirmModalLabel">Confirm Delete</h4>
-                        <button type="button"
-                                class="btn-close"
-                                data-bs-dismiss="modal"
-                                aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body pt-3">
-                        <div class="alert alert-danger bg-danger-subtle border-0">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-                                <div>
-                                    <p class="mb-1">
-                                        Are you sure you want to delete <strong class="component-name"></strong>?
-                                    </p>
-                                    <p class="text-danger small mb-0">This action cannot be undone.</p>
-                                </div>
+            .card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .header-content {
+                flex: 1;
+            }
+            .dashboard-empty {
+                text-align: center;
+                padding: 3rem 1rem;
+                color: #6c757d;
+            }
+            .dashboard-table {
+                margin-bottom: 0;
+            }
+            .dashboard-table th {
+                border-top: none;
+                font-weight: 600;
+                color: #495057;
+                background-color: #f8f9fa;
+            }
+            .dashboard-table td {
+                vertical-align: middle;
+            }
+            .badge {
+                font-size: 0.75rem;
+                font-weight: 500;
+            }
+            .table-responsive {
+                border-radius: 0.375rem;
+            }
+            @media (max-width: 768px) {
+                .page-header {
+                    padding: 1.5rem 1rem;
+                    margin-bottom: 1.5rem;
+                }
+                .item-title {
+                    font-size: 1.75rem;
+                }
+                .item-title .fas {
+                    font-size: 1.5rem;
+                    margin-right: 0.75rem !important;
+                }
+                .item-subtitle {
+                    font-size: 1rem;
+                    margin-top: 0.75rem;
+                }
+                .header-main {
+                    flex-direction: column;
+                    gap: 1.5rem;
+                    align-items: stretch;
+                }
+                .card-header {
+                    flex-direction: column;
+                    gap: 1rem;
+                    align-items: stretch;
+                }
+                .dashboard-table th:nth-child(2),
+                .dashboard-table td:nth-child(2) {
+                    min-width: 120px;
+                }
+            }
+            @media (max-width: 576px) {
+                .page-header {
+                    padding: 1rem 0.75rem;
+                    margin-bottom: 1rem;
+                    border-radius: 8px;
+                }
+                .item-title {
+                    font-size: 1.5rem;
+                }
+                .item-title .fas {
+                    font-size: 1.25rem;
+                    margin-right: 0.5rem !important;
+                }
+                .item-subtitle {
+                    font-size: 0.9rem;
+                    margin-top: 0.5rem;
+                }
+            }
+        </style>
+        {# Components List Card #}
+        <div class="row">
+            <div class="col-12">
+                <div class="standard-card mt-3">
+                    <div class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="header-content">
+                                <h4 class="card-title mb-0">Components</h4>
                             </div>
+                            {% if has_crud_permissions %}
+                                <button class="btn btn-primary px-4"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#addComponentModal">Add Component</button>
+                            {% endif %}
                         </div>
-                        <div class="d-flex justify-content-end gap-2 mt-4">
-                            <button type="button"
-                                    class="btn btn-lg btn-outline-secondary"
-                                    data-bs-dismiss="modal">Cancel</button>
-                            <a href="#" class="btn btn-lg btn-danger px-4 delete-confirm-btn">Delete Component</a>
+                        <div class="card-body">
+                            {% if components %}
+                                <div class="table-responsive">
+                                    <table class="table dashboard-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Type</th>
+                                                <th>Content</th>
+                                                <th class="text-center">Public?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for component in components %}
+                                                <tr>
+                                                    <td data-label="Name">
+                                                        <a href="/component/{{ component.id }}/"
+                                                           class="text-primary text-decoration-none">
+                                                            {{ component.name }}
+                                                        </a>
+                                                    </td>
+                                                    <td data-label="Type">
+                                                        <span class="badge bg-info-subtle text-info">
+                                                            {% if component.component_type == "sbom" %}
+                                                                SBOM
+                                                            {% elif component.component_type == "document" %}
+                                                                Document
+                                                            {% else %}
+                                                                Unknown
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td data-label="Content">
+                                                        {% if component.component_type == "sbom" %}
+                                                            {% if component.sbom_count == 1 %}
+                                                                1 SBOM
+                                                            {% else %}
+                                                                {{ component.sbom_count }} SBOMs
+                                                            {% endif %}
+                                                        {% elif component.component_type == "document" %}
+                                                            <span class="text-muted">Document</span>
+                                                        {% else %}
+                                                            <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="text-center" data-label="Public?">
+                                                        {% if component.is_public %}
+                                                            <span class="badge bg-success-subtle text-success">Public</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="dashboard-empty">
+                                    <p class="mb-0">No components added</p>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    {% endif %}
+        {% if has_crud_permissions %}
+            {# Add Component Modal #}
+            <div id="addComponentModal"
+                 class="modal fade"
+                 data-bs-backdrop="static"
+                 tabindex="-1"
+                 aria-labelledby="addComponentModalLabel"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0">
+                        <div class="modal-header border-bottom-0 pb-0">
+                            <h4 id="addComponentModalLabel" class="modal-title text-secondary">Add Component</h4>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pt-3">
+                            <form id="addComponentForm"
+                                  method="post"
+                                  action="{% url 'core:components_dashboard' %}">
+                                {% csrf_token %}
+                                <div class="mb-4">
+                                    <label class="form-label text-secondary fw-medium" for="componentName">
+                                        Name
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input id="componentName"
+                                           name="name"
+                                           type="text"
+                                           class="form-control form-control-lg"
+                                           required />
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label text-secondary fw-medium" for="componentType">
+                                        Type
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="componentType"
+                                            name="component_type"
+                                            class="form-select form-select-lg"
+                                            required>
+                                        <option value="sbom">SBOM</option>
+                                        <option value="document">Document</option>
+                                    </select>
+                                    <div class="form-text">Choose the type of component you're creating</div>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary px-4">Create Component</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+    {% htmx_script %}
 {% endblock %}

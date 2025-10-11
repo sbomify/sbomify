@@ -57,7 +57,7 @@ urlpatterns = [
         views.project_details_public,
         name="project_details_public",
     ),
-    path("components/", views.components_dashboard, name="components_dashboard"),
+    path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path(
         "component/<str:component_id>/",
         views.component_details_private,

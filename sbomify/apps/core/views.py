@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import (
     HttpRequest,
@@ -23,6 +24,7 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -524,19 +526,77 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
     )
 
 
-@login_required
-def components_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
+class ComponentsDashboardView(LoginRequiredMixin, View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        from sbomify.apps.sboms.models import SBOM
 
-    return render(
-        request,
-        "core/components_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-        },
-    )
+        current_team = request.session.get("current_team")
+        has_crud_permissions = current_team.get("role") in ("owner", "admin")
+
+        components = []
+        components_queryset = Component.objects.filter(team_id=current_team.get("id")).prefetch_related("sbom_set")
+
+        for component in components_queryset:
+            sbom_count = SBOM.objects.filter(component=component).count()
+            components.append(
+                {
+                    "id": str(component.id),
+                    "name": component.name,
+                    "component_type": component.component_type,
+                    "is_public": component.is_public,
+                    "sbom_count": sbom_count,
+                }
+            )
+
+        return render(
+            request,
+            "core/components_dashboard.html.j2",
+            {
+                "current_team": current_team,
+                "has_crud_permissions": has_crud_permissions,
+                "components": components,
+            },
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        from sbomify.apps.core.apis import _check_billing_limits
+        from sbomify.apps.teams.models import Team
+
+        current_team = request.session.get("current_team")
+        team_id = current_team.get("id")
+
+        has_crud_permissions = current_team.get("role") in ("owner", "admin")
+        if not has_crud_permissions:
+            messages.error(request, "You don't have permission to create components")
+            return redirect("core:components_dashboard")
+
+        name = request.POST.get("name", "").strip()
+        if not name:
+            messages.error(request, "Component name is required")
+            return redirect("core:components_dashboard")
+
+        component_type = request.POST.get("component_type", "sbom")
+
+        can_create, error_message, _ = _check_billing_limits(str(team_id), "component")
+        if not can_create:
+            messages.error(request, error_message)
+            return redirect("core:components_dashboard")
+
+        try:
+            team = Team.objects.get(id=team_id)
+            Component.objects.create(
+                name=name,
+                component_type=component_type,
+                team=team,
+                metadata={},
+            )
+            messages.success(request, f'Component "{name}" created successfully!')
+            return redirect("core:components_dashboard")
+        except Exception as e:
+            logger.error(f"Error creating component: {e}")
+            messages.error(request, "An error occurred while creating the component")
+
+        return redirect("core:components_dashboard")
 
 
 @login_required

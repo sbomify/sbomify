@@ -1,0 +1,17 @@
+{% if messages %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            {% for message in messages %}
+                const messageType = '{{ message.level_tag }}';
+                const messageText = '{{ message|escapejs }}';
+                const type = messageType.split('-')[1];
+
+                window.showToast({
+                    title: type.charAt(0).toUpperCase() + type.slice(1),
+                    message: messageText,
+                    type: type
+                });
+            {% endfor %}
+        });
+    </script>
+{% endif %}

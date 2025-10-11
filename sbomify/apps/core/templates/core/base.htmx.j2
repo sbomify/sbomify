@@ -1,6 +1,7 @@
 {% load static %}
 {% load cache %}
 {% load schema_tags %}
+{% load django_vite %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -85,7 +86,7 @@
                 <!-- Main content -->
                 <main class="content">
                     <div class="container-fluid p-0">
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                        <div class="messages-container">{% include "core/components/messages.htmx.j2" %}</div>
                         {% block content %}{% endblock %}
                     </div>
                 </main>
@@ -106,7 +107,7 @@
                                  width="200"
                                  height="36">
                         </div>
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                        <div class="messages-container">{% include "core/components/messages.htmx.j2" %}</div>
                         <div class="card shadow">
                             <div class="card-body p-4">
                                 {% block login_content %}{% endblock %}
@@ -119,6 +120,7 @@
     {% endif %}
 {% endblock %}
 <!-- Scripts for HTMX pages -->
+{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
 {% block scripts %}{% endblock %}
 </body>
 </html>
