@@ -528,25 +528,16 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
 
 class ComponentsDashboardView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.core.apis import list_components
 
         current_team = request.session.get("current_team")
         has_crud_permissions = current_team.get("role") in ("owner", "admin")
 
-        components = []
-        components_queryset = Component.objects.filter(team_id=current_team.get("id")).prefetch_related("sbom_set")
+        status_code, response_data = list_components(request, page=1, page_size=-1)
 
-        for component in components_queryset:
-            sbom_count = SBOM.objects.filter(component=component).count()
-            components.append(
-                {
-                    "id": str(component.id),
-                    "name": component.name,
-                    "component_type": component.component_type,
-                    "is_public": component.is_public,
-                    "sbom_count": sbom_count,
-                }
-            )
+        components = []
+        if status_code == 200:
+            components = response_data.items
 
         return render(
             request,
@@ -559,42 +550,25 @@ class ComponentsDashboardView(LoginRequiredMixin, View):
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.core.apis import _check_billing_limits
-        from sbomify.apps.teams.models import Team
-
-        current_team = request.session.get("current_team")
-        team_id = current_team.get("id")
-
-        has_crud_permissions = current_team.get("role") in ("owner", "admin")
-        if not has_crud_permissions:
-            messages.error(request, "You don't have permission to create components")
-            return redirect("core:components_dashboard")
+        from sbomify.apps.core.apis import create_component
+        from sbomify.apps.core.schemas import ComponentCreateSchema
 
         name = request.POST.get("name", "").strip()
-        if not name:
-            messages.error(request, "Component name is required")
-            return redirect("core:components_dashboard")
-
         component_type = request.POST.get("component_type", "sbom")
 
-        can_create, error_message, _ = _check_billing_limits(str(team_id), "component")
-        if not can_create:
-            messages.error(request, error_message)
-            return redirect("core:components_dashboard")
+        payload = ComponentCreateSchema(
+            name=name,
+            component_type=component_type,
+            metadata={},
+        )
 
-        try:
-            team = Team.objects.get(id=team_id)
-            Component.objects.create(
-                name=name,
-                component_type=component_type,
-                team=team,
-                metadata={},
-            )
+        status_code, response_data = create_component(request, payload)
+
+        if status_code == 201:
             messages.success(request, f'Component "{name}" created successfully!')
-            return redirect("core:components_dashboard")
-        except Exception as e:
-            logger.error(f"Error creating component: {e}")
-            messages.error(request, "An error occurred while creating the component")
+        else:
+            error_detail = response_data.get("detail", "An error occurred while creating the component")
+            messages.error(request, error_detail)
 
         return redirect("core:components_dashboard")
 

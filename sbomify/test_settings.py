@@ -140,6 +140,11 @@ manifest = {
         "src": "sbomify/apps/documents/js/main.ts",
         "isEntry": True,
         "css": ["assets/documents.css"]
+    },
+    "sbomify/apps/core/js/htmx-bundle.ts": {
+        "file": "assets/htmx-bundle.js",
+        "src": "sbomify/apps/core/js/htmx-bundle.ts",
+        "isEntry": True,
     }
 }
 

@@ -4,7 +4,24 @@
             {% for message in messages %}
                 const messageType = '{{ message.level_tag }}';
                 const messageText = '{{ message|escapejs }}';
-                const type = messageType.split('-')[1];
+
+                let type;
+                switch(messageType) {
+                    case 'alert-danger':
+                        type = 'error';
+                        break;
+                    case 'alert-success':
+                        type = 'success';
+                        break;
+                    case 'alert-warning':
+                        type = 'warning';
+                        break;
+                    case 'alert-info':
+                        type = 'info';
+                        break;
+                    default:
+                        type = 'info';
+                }
 
                 window.showToast({
                     title: type.charAt(0).toUpperCase() + type.slice(1),
