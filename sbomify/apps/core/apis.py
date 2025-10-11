@@ -1,6 +1,5 @@
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 from django.conf import settings
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
