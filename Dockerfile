@@ -130,7 +130,7 @@ EXPOSE 8000
 # CMD for Development (using uvicorn directly with reload for development)
 CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
      "--host", "0.0.0.0", "--port", "8000", \
-     "--reload", "--log-level", "info"]
+     "--reload", "--reload-include", "*.j2", "--log-level", "info"]
 ### Stage 7: Python Application for Production (python-app-prod)
 # This is the default final stage if no target is specified.
 FROM python-dependencies AS python-app-prod
