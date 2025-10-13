@@ -116,22 +116,28 @@ class StripeClient:
         return self.stripe.Subscription.retrieve(subscription_id, expand=["latest_invoice.payment_intent"])
 
     @_handle_stripe_error
-    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None):
-        """Create a checkout session."""
-        return self.stripe.checkout.Session.create(
-            customer=customer_id,
-            payment_method_types=["card"],
-            line_items=[
+    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None, promo_code=None):
+        """Create a checkout session with optional promo code support."""
+        session_data = {
+            "customer": customer_id,
+            "payment_method_types": ["card"],
+            "line_items": [
                 {
                     "price": price_id,
                     "quantity": 1,
                 }
             ],
-            mode="subscription",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata or {},
-        )
+            "mode": "subscription",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "metadata": metadata or {},
+        }
+
+        # Add promo code if provided
+        if promo_code:
+            session_data["discounts"] = [{"coupon": promo_code}]
+
+        return self.stripe.checkout.Session.create(**session_data)
 
     @_handle_stripe_error
     def get_checkout_session(self, session_id):

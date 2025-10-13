@@ -4,7 +4,6 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-import stripe
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
@@ -215,11 +214,7 @@ def test_change_plan_to_business_monthly(
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({
-            "team_key": team_with_business_plan.key,
-            "plan": "business",
-            "billing_period": "monthly"
-        }),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
         content_type="application/json",
     )
 
@@ -239,17 +234,98 @@ def test_change_plan_to_business_annual(
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({
-            "team_key": team_with_business_plan.key,
-            "plan": "business",
-            "billing_period": "annual"
-        }),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "annual"}),
         content_type="application/json",
     )
 
     assert response.status_code == 200
     data = json.loads(response.content)
     assert "redirect_url" in data
+
+
+@pytest.mark.django_db
+@patch("stripe.checkout.Session.create")
+@patch("stripe.Customer.retrieve")
+def test_change_plan_to_business_with_promo_code(
+    mock_customer_retrieve,
+    mock_session_create,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+):
+    """Test changing to business plan with promo code."""
+    # Mock Stripe customer
+    mock_customer = MagicMock()
+    mock_customer.id = f"c_{team_with_business_plan.key}"
+    mock_customer_retrieve.return_value = mock_customer
+
+    # Mock Stripe checkout session
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test"
+    mock_session_create.return_value = mock_session
+
+    client.force_login(sample_user)
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps(
+            {
+                "team_key": team_with_business_plan.key,
+                "plan": "business",
+                "billing_period": "monthly",
+                "promo_code": "SAVE20",
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    assert "redirect_url" in data
+
+    # Verify that the checkout session was created with the promo code
+    mock_session_create.assert_called_once()
+    call_args = mock_session_create.call_args[1]
+    assert call_args["discounts"] == [{"coupon": "SAVE20"}]
+
+
+@pytest.mark.django_db
+@patch("stripe.checkout.Session.create")
+@patch("stripe.Customer.retrieve")
+def test_change_plan_to_business_without_promo_code(
+    mock_customer_retrieve,
+    mock_session_create,
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+):
+    """Test changing to business plan without promo code."""
+    # Mock Stripe customer
+    mock_customer = MagicMock()
+    mock_customer.id = f"c_{team_with_business_plan.key}"
+    mock_customer_retrieve.return_value = mock_customer
+
+    # Mock Stripe checkout session
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test"
+    mock_session_create.return_value = mock_session
+
+    client.force_login(sample_user)
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    assert "redirect_url" in data
+
+    # Verify that the checkout session was created without discounts
+    mock_session_create.assert_called_once()
+    call_args = mock_session_create.call_args[1]
+    assert "discounts" not in call_args
 
 
 @pytest.mark.django_db
@@ -280,11 +356,11 @@ def test_change_plan_to_community_with_active_subscription(
 @pytest.mark.django_db
 def test_changing_to_community_makes_sboms_public(
     client: Client,
-    sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
-    sample_component: Component,
-    sample_sbom: SBOM,
-    community_plan: BillingPlan,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811
 ):
     """Test that changing to community plan makes all team's SBOMs public."""
     # Create 3 private components with their SBOMs
@@ -294,18 +370,12 @@ def test_changing_to_community_makes_sboms_public(
     ]
 
     for component in components:
-        SBOM.objects.create(
-            name=f"SBOM for {component.name}", version="1.0.0", component=component
-        )
+        SBOM.objects.create(name=f"SBOM for {component.name}", version="1.0.0", component=component)
 
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({
-            "team_key": team_with_business_plan.key,
-            "plan": community_plan.key,
-            "billing_period": None
-        }),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
         content_type="application/json",
     )
 
@@ -318,11 +388,11 @@ def test_changing_to_community_makes_sboms_public(
 @pytest.mark.django_db
 def test_changing_to_business_keeps_sboms_private(
     client: Client,
-    sample_user: AbstractBaseUser,
-    sample_component: Component,
-    sample_sbom: SBOM,
-    business_plan: BillingPlan,
-    enterprise_plan: BillingPlan,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_sbom: SBOM,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+    enterprise_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing from enterprise to business plan maintains SBOM privacy."""
     team = sample_component.team
@@ -331,25 +401,16 @@ def test_changing_to_business_keeps_sboms_private(
 
     # Create private components with SBOMs under enterprise plan
     components = [
-        Component.objects.create(name=f"Enterprise Component {i}", team=team, is_public=False)
-        for i in range(3)
+        Component.objects.create(name=f"Enterprise Component {i}", team=team, is_public=False) for i in range(3)
     ]
 
     for component in components:
-        SBOM.objects.create(
-            name=f"SBOM for {component.name}",
-            version="1.0.0",
-            component=component
-        )
+        SBOM.objects.create(name=f"SBOM for {component.name}", version="1.0.0", component=component)
 
     client.force_login(sample_user)
     response = client.post(
         reverse("api-1:change_plan"),
-        json.dumps({
-            "team_key": team.key,
-            "plan": business_plan.key,
-            "billing_period": "monthly"
-        }),
+        json.dumps({"team_key": team.key, "plan": business_plan.key, "billing_period": "monthly"}),
         content_type="application/json",
     )
 
