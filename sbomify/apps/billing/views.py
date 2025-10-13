@@ -258,6 +258,7 @@ def select_plan(request: HttpRequest, team_key: str):
     if request.method == "POST":
         plan_key = request.POST.get("plan")
         billing_period = request.POST.get("billing_period")
+        promo_code = request.POST.get("promo_code")
 
         plan = BillingPlan.objects.get(key=plan_key)
 
@@ -291,7 +292,7 @@ def select_plan(request: HttpRequest, team_key: str):
 
         elif plan.key == "business":
             # Store the selection in session for use in billing_redirect
-            request.session["selected_plan"] = {
+            selected_plan_data = {
                 "key": plan.key,
                 "billing_period": billing_period,
                 "limits": {
@@ -300,6 +301,12 @@ def select_plan(request: HttpRequest, team_key: str):
                     "max_components": plan.max_components,
                 },
             }
+
+            # Add promo code if provided
+            if promo_code:
+                selected_plan_data["promo_code"] = promo_code
+
+            request.session["selected_plan"] = selected_plan_data
             return redirect("billing:billing_redirect", team_key=team_key)
 
     plans = BillingPlan.objects.all()
@@ -366,14 +373,23 @@ def billing_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
         )
 
     # Create a checkout session for initial subscription
-    session = stripe.checkout.Session.create(
-        customer=customer.id,
-        success_url=request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=request.build_absolute_uri(reverse("core:dashboard")),
-        mode="subscription",
-        line_items=[{"price": selected_price_id, "quantity": 1}],
-        metadata={"team_key": team_key},
-    )
+    session_data = {
+        "customer": customer.id,
+        "success_url": (
+            request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
+        ),
+        "cancel_url": request.build_absolute_uri(reverse("core:dashboard")),
+        "mode": "subscription",
+        "line_items": [{"price": selected_price_id, "quantity": 1}],
+        "metadata": {"team_key": team_key},
+    }
+
+    # Add promo code if provided in session
+    promo_code = selected_plan.get("promo_code")
+    if promo_code:
+        session_data["discounts"] = [{"coupon": promo_code}]
+
+    session = stripe.checkout.Session.create(**session_data)
 
     # Clear the session data
     del request.session["selected_plan"]
@@ -486,12 +502,16 @@ def redirect_to_stripe_checkout(request, plan_key):
         success_url = request.build_absolute_uri(reverse("billing:checkout_success"))
         cancel_url = request.build_absolute_uri(reverse("billing:checkout_cancel"))
 
+        # Get promo code from query parameters
+        promo_code = request.GET.get("promo_code")
+
         session = stripe_client.create_checkout_session(
             customer_id=customer_id,
             price_id=plan.stripe_price_id,
             success_url=success_url,
             cancel_url=cancel_url,
             metadata={"team_key": team.key, "plan_key": plan.key},
+            promo_code=promo_code,
         )
 
         return HttpResponseRedirect(session.url)

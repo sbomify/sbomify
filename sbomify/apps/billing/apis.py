@@ -148,14 +148,20 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                 request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
             )
 
-            session = stripe.checkout.Session.create(
-                customer=customer.id,
-                success_url=success_url,
-                cancel_url=request.build_absolute_uri("/"),
-                mode="subscription",
-                line_items=[{"price": price_id, "quantity": 1}],
-                metadata={"team_key": team_key},
-            )
+            session_data = {
+                "customer": customer.id,
+                "success_url": success_url,
+                "cancel_url": request.build_absolute_uri("/"),
+                "mode": "subscription",
+                "line_items": [{"price": price_id, "quantity": 1}],
+                "metadata": {"team_key": team_key},
+            }
+
+            # Add promo code if provided
+            if data.promo_code:
+                session_data["discounts"] = [{"coupon": data.promo_code}]
+
+            session = stripe.checkout.Session.create(**session_data)
 
             return 200, ChangePlanResponse(redirect_url=session.url)
 
