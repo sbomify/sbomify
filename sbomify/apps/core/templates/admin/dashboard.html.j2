@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
+{% load django_vite %}
 {% block extrastyle %}
     {{ block.super }}
     <style>
@@ -193,4 +194,8 @@
             });
         </script>
     {% endif %}
+{% endblock %}
+{% block extrahead %}
+    {{ block.super }}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
 {% endblock %}
