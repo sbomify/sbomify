@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     "sbomify.apps.billing",
     "sbomify.apps.notifications",
     "sbomify.apps.vulnerability_scanning",
+    "sbomify.apps.onboarding",
     "health_check",
     "health_check.db",
     "anymail",

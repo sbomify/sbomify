@@ -1,0 +1,177 @@
+{% extends "onboarding/emails/base.html.j2" %}
+{% block title %}
+    {% if has_created_component %}
+        Time to Upload Your First SBOM! - sbomify
+    {% else %}
+        Ready to Create Your First SBOM Component? - sbomify
+    {% endif %}
+{% endblock %}
+{% block content %}
+    {% if has_created_component %}
+        <h1>Time to upload your first SBOM, {{ user.first_name|default:user.username }}!</h1>
+        <p>
+            Great job creating your first component! Now let's get to the exciting part - uploading your first SBOM to see what's inside your software and find any security issues.
+        </p>
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: 60%;"></div>
+        </div>
+        <p style="font-size: 14px; color: #64748b; text-align: center;">Your onboarding progress: 60% complete</p>
+        <div class="highlight-box">
+            <h3>What is an SBOM?</h3>
+            <p>
+                A Software Bill of Materials (SBOM) is like an ingredient list for your software.
+                It shows all the parts, libraries, and pieces that make up your app, helping you find security problems.
+            </p>
+        </div>
+        <h2>Why SBOMs Matter</h2>
+        <ul class="feature-list">
+            <li>Find security problems in your code automatically</li>
+            <li>Meet government and industry requirements</li>
+            <li>See what's inside your software</li>
+            <li>Get alerts about new security issues</li>
+            <li>Keep track of all your software parts</li>
+        </ul>
+        <div class="highlight-box">
+            <h3>Don't Have an SBOM Yet?</h3>
+            <p>No worries! We've made it incredibly easy to generate SBOMs automatically with our GitHub Action.</p>
+            <div style="background: #f8fafc;
+                        padding: 16px;
+                        border-radius: 8px;
+                        margin: 16px 0">
+                <h4 style="margin-top: 0; color: #1e293b;">sbomify GitHub Action (Recommended)</h4>
+                <p style="margin-bottom: 8px;">
+                    Our official GitHub Action automatically generates and uploads SBOMs to sbomify with every push or release:
+                </p>
+                <ul class="feature-list" style="margin-bottom: 8px;">
+                    <li>Zero-configuration SBOM generation for most languages</li>
+                    <li>Automatic upload to your sbomify workspace</li>
+                    <li>Integrates seamlessly with your existing CI/CD pipeline</li>
+                </ul>
+                <p style="margin-bottom: 0; font-size: 14px; color: #475569;">
+                    We provide step-by-step setup instructions on the components page to get you started quickly.
+                </p>
+            </div>
+            <p style="font-size: 14px; color: #64748b; font-style: italic;">
+                <strong>Note:</strong> Already have SBOMs from other tools? You can upload them directly -
+                we support SPDX and CycloneDX formats from any source.
+            </p>
+        </div>
+        <h2>What Happens After Upload?</h2>
+        <p>Once you upload your SBOM, sbomify will automatically:</p>
+        <ul class="feature-list">
+            <li>Check that your SBOM file is valid</li>
+            <li>Read all the parts and pieces in your software</li>
+            <li>Look for known security problems</li>
+            <li>Create reports about what we found</li>
+        </ul>
+        <p style="text-align: center; margin: 32px 0;">
+            <a href="{{ app_base_url }}/components/" class="button">Upload Your First SBOM</a>
+        </p>
+        {% if user_role == "owner" %}
+            <div class="user-info">
+                <strong>Workspace Owner Tip:</strong> Set up automatic SBOM creation in your
+                build process. This keeps your SBOMs current with every new version.
+            </div>
+        {% endif %}
+        <p>You're almost there! Upload your first SBOM to see what's in your software and find any security issues.</p>
+    {% else %}
+        <h1>Ready to upload your first SBOM, {{ user.first_name|default:user.username }}?</h1>
+        <p>
+            It's been a few days since you joined sbomify, and we wanted to check in!
+            Let's get your first SBOM uploaded so you can start finding security issues in your software.
+        </p>
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: 25%;"></div>
+        </div>
+        <p style="font-size: 14px; color: #64748b; text-align: center;">Your onboarding progress: 25% complete</p>
+        <div class="highlight-box">
+            <h3>What is an SBOM?</h3>
+            <p>
+                A Software Bill of Materials (SBOM) is like an ingredient list for your software.
+                It shows all the parts, libraries, and pieces that make up your app, helping you find security problems.
+            </p>
+        </div>
+        <h2>Why SBOMs Matter</h2>
+        <ul class="feature-list">
+            <li>Find security problems in your code automatically</li>
+            <li>Meet government and industry requirements</li>
+            <li>See what's inside your software</li>
+            <li>Get alerts about new security issues</li>
+            <li>Keep track of all your software parts</li>
+        </ul>
+        <div class="highlight-box">
+            <h3>Quick Setup Required</h3>
+            <p>To upload an SBOM, you'll need to create an SBOM component first. This just takes a minute:</p>
+            <p>
+                <strong>Step 1:</strong> Pick a name for your software (like "my-web-app")
+            </p>
+            <p>
+                <strong>Step 2:</strong> Write a short description
+            </p>
+            <p>
+                <strong>Step 3:</strong> Upload your SBOM!
+            </p>
+        </div>
+        <div class="highlight-box">
+            <h3>Don't Have an SBOM Yet?</h3>
+            <p>No worries! We've made it incredibly easy to generate SBOMs automatically with our GitHub Action.</p>
+            <div style="background: #f8fafc;
+                        padding: 16px;
+                        border-radius: 8px;
+                        margin: 16px 0">
+                <h4 style="margin-top: 0; color: #1e293b;">sbomify GitHub Action (Recommended)</h4>
+                <p style="margin-bottom: 8px;">
+                    Our official GitHub Action automatically generates and uploads SBOMs to sbomify with every push or release:
+                </p>
+                <ul class="feature-list" style="margin-bottom: 8px;">
+                    <li>Zero-configuration SBOM generation for most languages</li>
+                    <li>Automatic upload to your sbomify workspace</li>
+                    <li>Integrates seamlessly with your existing CI/CD pipeline</li>
+                </ul>
+                <p style="margin-bottom: 0; font-size: 14px; color: #475569;">
+                    We provide step-by-step setup instructions on the components page to get you started quickly.
+                </p>
+            </div>
+            <p style="font-size: 14px; color: #64748b; font-style: italic;">
+                <strong>Note:</strong> Already have SBOMs from other tools? You can upload them directly -
+                we support SPDX and CycloneDX formats from any source.
+            </p>
+        </div>
+        <h2>What Happens After Upload?</h2>
+        <p>Once you upload your SBOM, sbomify will automatically:</p>
+        <ul class="feature-list">
+            <li>Check that your SBOM file is valid</li>
+            <li>Read all the parts and pieces in your software</li>
+            <li>Look for known security problems</li>
+            <li>Create reports about what we found</li>
+        </ul>
+        <p style="text-align: center; margin: 32px 0;">
+            <a href="{{ app_base_url }}/components/" class="button">Get Started with Your First SBOM</a>
+        </p>
+        {% if user_role == "owner" %}
+            <div class="user-info">
+                <strong>Workspace Owner Tip:</strong> Set up automatic SBOM creation in your
+                build process. This keeps your SBOMs current with every new version.
+            </div>
+        {% endif %}
+        <p>
+            We believe in your success and want to help you get the most out of sbomify.
+            Uploading your first SBOM is a big step toward making your software more secure!
+        </p>
+    {% endif %}
+    <h2>Need Help?</h2>
+    <p>If you're not sure where to start or have questions, we're here to help:</p>
+    <p style="text-align: center;">
+        <a href="{{ app_base_url }}/support/contact/"
+           class="button button-secondary">Contact Support</a>
+    </p>
+    <p>
+        {% if has_created_component %}
+            Keep up the great work!
+        {% else %}
+            We believe in your success and want to see you make the most of sbomify!
+        {% endif %}
+        <br>
+        <strong>The sbomify Team</strong>
+    </p>
+{% endblock %}
