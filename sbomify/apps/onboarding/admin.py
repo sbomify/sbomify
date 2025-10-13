@@ -100,14 +100,14 @@ class OnboardingEmailAdmin(admin.ModelAdmin):
     list_display = [
         "user_email",
         "email_type",
-        "success",
+        "status",
         "subject",
         "sent_at",
     ]
 
     list_filter = [
         "email_type",
-        "success",
+        "status",
         "sent_at",
     ]
 
@@ -122,7 +122,7 @@ class OnboardingEmailAdmin(admin.ModelAdmin):
         "email_type",
         "subject",
         "sent_at",
-        "success",
+        "status",
         "error_message",
     ]
 
