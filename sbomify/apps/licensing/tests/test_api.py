@@ -1,13 +1,8 @@
 """Unit tests for the license API endpoints."""
 
 import pytest
-from django.test import Client
-from ninja.testing import TestClient
 
 from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers
-from ..api import router
-
-client = TestClient(router)
 
 
 @pytest.mark.django_db
