@@ -35,9 +35,10 @@ def sample_team_with_owner_member(
     try:
         membership = Member.objects.get(user=sample_user, team=sample_team)
         membership.role = "owner"
+        membership.is_default_team = True
         membership.save()
     except Member.DoesNotExist:
-        membership = Member(user=sample_user, team=sample_team, role="owner")
+        membership = Member(user=sample_user, team=sample_team, role="owner", is_default_team=True)
         membership.save()
 
     yield membership
