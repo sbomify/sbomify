@@ -40,4 +40,12 @@ if settings.DEBUG:
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
     urlpatterns += staticfiles_urlpatterns()
-    urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+
+    # Only add debug toolbar URLs if debug_toolbar is available
+    try:
+        import debug_toolbar  # noqa: F401
+
+        urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+    except ImportError:
+        # Debug toolbar not available (e.g., in production with DEBUG=True)
+        pass
