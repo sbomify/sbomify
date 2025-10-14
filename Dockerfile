@@ -132,10 +132,14 @@ WORKDIR /code
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Create directories with proper permissions for non-root user
-# Code should be read-only, only /tmp needs write access for temporary files
-RUN mkdir -p /tmp && \
-    chown nobody:nogroup /tmp && \
-    chmod 1777 /tmp
+# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+RUN mkdir -p /var/lib/dramatiq-prometheus && \
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+    chmod 755 /var/lib/dramatiq-prometheus && \
+    chmod 755 /tmp
+
+# Set environment variable to direct Prometheus metrics to our dedicated directory
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
 
 # Configure Poetry to not create virtual environments (dependencies already installed)
 ENV POETRY_VENV_IN_PROJECT=false
@@ -166,11 +170,15 @@ COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
 COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
 
 # Create directories and run collectstatic as root, then fix permissions
-# Code should be read-only, only /tmp needs write access for temporary files
-RUN mkdir -p /tmp /code/staticfiles && \
+# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles && \
     poetry run python manage.py collectstatic --noinput && \
-    chown nobody:nogroup /tmp && \
-    chmod 1777 /tmp
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+    chmod 755 /var/lib/dramatiq-prometheus && \
+    chmod 755 /tmp
+
+# Set environment variable to direct Prometheus metrics to our dedicated directory
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
 
 # Configure Poetry to not create virtual environments (dependencies already installed)
 ENV POETRY_VENV_IN_PROJECT=false
