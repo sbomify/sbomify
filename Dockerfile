@@ -5,7 +5,7 @@ ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.2-debian@sha256:2505ef864643617d187a48ffdc069c35823a9fd16599259e49f7a2d685851f99 AS js-build-prod
+FROM oven/bun:1.3-debian@sha256:386b9fd0974a0ad7d33a45c1f2e2ee7159da3807023868d0feb8b427af76b34e AS js-build-prod
 
 WORKDIR /js-build
 
@@ -38,7 +38,7 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.2-debian@sha256:2505ef864643617d187a48ffdc069c35823a9fd16599259e49f7a2d685851f99 AS frontend-dev-server
+FROM oven/bun:1.3-debian@sha256:386b9fd0974a0ad7d33a45c1f2e2ee7159da3807023868d0feb8b427af76b34e AS frontend-dev-server
 
 WORKDIR /app-frontend
 
@@ -109,7 +109,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
-FROM golang:1.25-alpine@sha256:6104e2bbe9f6a07a009159692fe0df1a97b77f5b7409ad804b17d6916c635ae5 AS go-builder
+FROM golang:1.25-alpine@sha256:ecb803821dbac0983b03a516adb8407b7dbadfb8771434dc5162a7c471dd27a2 AS go-builder
 ARG OSV_SCANNER_VERSION
 ARG CYCLONEDX_GOMOD_VERSION
 
