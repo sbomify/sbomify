@@ -1,24 +1,25 @@
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
-from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.core.utils import verify_item_access
 
 
-class ComponentDetailedPublicView(View):
+class ComponentDetailedPrivateView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
         try:
-            component = Component.objects.get(pk=component_id)
+            component: Component = Component.objects.get(pk=component_id)
         except Component.DoesNotExist:
             return error_response(request, HttpResponseNotFound("Component not found"))
 
-        if not component.is_public:
-            return error_response(request, HttpResponseNotFound("Component not found"))
+        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
+            return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-        branding_info = BrandingInfo(**component.team.branding_info)
+        has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
 
         if component.component_type == Component.ComponentType.SBOM:
             from sbomify.apps.sboms.models import SBOM
@@ -39,11 +40,12 @@ class ComponentDetailedPublicView(View):
 
         return render(
             request,
-            "core/component_detailed_public.html.j2",
+            "core/component_detailed_private.html.j2",
             {
                 "component": component,
-                "data": data,
-                "brand": branding_info,
+                "has_crud_permissions": has_crud_permissions,
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "current_team": request.session.get("current_team", {}),
+                "data": data,
             },
         )

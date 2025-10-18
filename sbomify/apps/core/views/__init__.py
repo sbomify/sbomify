@@ -29,7 +29,6 @@ from django.views import View
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
-from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 from sbomify.apps.teams.schemas import BrandingInfo
@@ -588,6 +587,7 @@ def releases_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
+from .component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
 from .component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
@@ -675,51 +675,6 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
 
         return response
-
-
-# ComponentDetailedPublicView moved to component_detailed_public.py
-
-
-@login_required
-def component_detailed_private(request: HttpRequest, component_id: str) -> HttpResponse:
-    """Private detailed view for components - shows SBOM or document details"""
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    # Verify access
-    if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
-
-    context = {
-        "component": component,
-        "has_crud_permissions": has_crud_permissions,
-        "APP_BASE_URL": settings.APP_BASE_URL,
-        "current_team": request.session.get("current_team", {}),
-    }
-
-    if component.component_type == Component.ComponentType.SBOM:
-        # For SBOM components, find the primary/latest SBOM and show detailed view
-        sbom = SBOM.objects.filter(component_id=component_id).order_by("-created_at").first()
-        if not sbom:
-            return error_response(request, HttpResponseNotFound("No SBOM found for this component"))
-
-        context["sbom"] = sbom
-        return render(request, "core/component_detailed_private.html.j2", context)
-
-    elif component.component_type == Component.ComponentType.DOCUMENT:
-        # For document components, show document details
-        document = Document.objects.filter(component_id=component_id).order_by("-created_at").first()
-        if not document:
-            return error_response(request, HttpResponseNotFound("No document found for this component"))
-
-        context["document"] = document
-        return render(request, "core/component_detailed_private.html.j2", context)
-
-    return error_response(request, HttpResponseNotFound("Unknown component type"))
 
 
 @login_required

@@ -66,7 +66,7 @@ urlpatterns = [
     path("releases/", views.releases_dashboard, name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
-        views.component_detailed_private,
+        views.ComponentDetailedPrivateView.as_view(),
         name="component_detailed",
     ),
     path(
