@@ -1,11 +1,4 @@
-{% extends "core/public_base.html.j2" %}
-{% comment %}
-Template context:
-component - Component object
-sboms - List of SBOM objects without data and packages fields
-brand - BrandingInfo object
-{% endcomment %}
-{% load widget_tweaks %}
+{% extends "core/public_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
 {% load breadcrumb_tags %}
@@ -17,35 +10,40 @@ brand - BrandingInfo object
     {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
-    <!-- JSON data for Vue components -->
-    {% if component.component_type == 'sbom' and sboms_data %}{{ sboms_data|json_script:"sboms-data" }}{% endif %}
-    {% if component.component_type == 'document' and documents_data %}
-        {{ documents_data|json_script:"documents-data" }}
-    {% endif %}
-    <div class="vc-public-page-layout"
-         data-title="{{ component.name }}"
-         data-title-icon="fas fa-cube"
-         data-page-type="component"
-         data-item-id="{{ component.id }}"
-         data-component-type="{{ component.component_type }}"
-         data-component-display-type="{{ component.get_component_type_display }}">
-        <template data-slot="subtitle">
-            <span class="meta-badge meta-badge--primary">
-                <i class="fas fa-cube"></i>
-                Component
-            </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-tag"></i>
-                {{ component.get_component_type_display }}
-            </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-fingerprint"></i>
-                <span class="vc-copyable-value"
-                      data-value="{{ component.id }}"
-                      title="Component ID: {{ component.id }} (click to copy)">{{ component.id }}</span>
-            </span>
-        </template>
-        <!-- Content is now handled by PublicPageLayout Vue component -->
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-background"></div>
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">
+                            <i class="fas fa-cube title-icon"></i>
+                            {{ component.name }}
+                        </h1>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="component-content">
+                            {% if component.component_type == 'sbom' and sboms_data %}
+                                {{ sboms_data|json_script:"sboms-data" }}
+                                <div class="vc-sboms-table"
+                                     data-sboms-data-element-id="sboms-data"
+                                     data-component-id="{{ component.id }}"
+                                     data-has-crud-permissions="false"
+                                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                            {% elif component.component_type == 'document' and documents_data %}
+                                {{ documents_data|json_script:"documents-data" }}
+                                <div class="vc-documents-table"
+                                     data-documents-data-element-id="documents-data"
+                                     data-component-id="{{ component.id }}"
+                                     data-has-crud-permissions="false"></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 {% block scripts %}

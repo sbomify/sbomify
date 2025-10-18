@@ -57,26 +57,26 @@ urlpatterns = [
         views.project_details_public,
         name="project_details_public",
     ),
-    path("components/", views.components_dashboard, name="components_dashboard"),
+    path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path(
         "component/<str:component_id>/",
-        views.component_details_private,
+        views.ComponentDetailsPrivateView.as_view(),
         name="component_details",
     ),
     path("releases/", views.releases_dashboard, name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
-        views.component_detailed_private,
+        views.ComponentDetailedPrivateView.as_view(),
         name="component_detailed",
     ),
     path(
         "public/component/<str:component_id>/",
-        views.component_details_public,
+        views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",
     ),
     path(
         "public/component/<str:component_id>/detailed/",
-        views.component_detailed_public,
+        views.ComponentDetailedPublicView.as_view(),
         name="component_detailed_public",
     ),
     path(

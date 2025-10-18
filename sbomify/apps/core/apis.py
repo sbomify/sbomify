@@ -209,12 +209,25 @@ def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
     Args:
         queryset: Django queryset to paginate
         page: Page number (1-based)
-        page_size: Number of items per page
+        page_size: Number of items per page. Use -1 to get all items without pagination.
 
     Returns:
         tuple: (paginated_items, pagination_meta)
     """
     from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
+    # Special case: page_size = -1 means return all items
+    if page_size == -1:
+        total_count = queryset.count()
+        pagination_meta = PaginationMeta(
+            total=total_count,
+            page=1,
+            page_size=total_count,
+            total_pages=1,
+            has_previous=False,
+            has_next=False,
+        )
+        return list(queryset), pagination_meta
 
     # Validate and set defaults
     page = max(1, page)  # Ensure page is at least 1

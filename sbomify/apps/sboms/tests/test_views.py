@@ -191,8 +191,8 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
 
     # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert 'class="vc-components-list"' in content
-    assert 'class="vc-add-component-form"' in content
+    assert 'class="components-list' in content
+    assert 'id="addComponentForm"' in content
 
 
 # Removed: test_create_component - POST functionality moved to API tests

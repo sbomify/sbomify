@@ -1,123 +1,96 @@
-{% extends "core/public_base.html.j2" %}
-{% comment %}
-Template context:
-component: Component object
-sbom: SBOM object (if component_type is SBOM)
-document: Document object (if component_type is DOCUMENT)
-brand: BrandingInfo object
-{% endcomment %}
-{% load widget_tweaks %}
+{% extends "core/public_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
 {% load breadcrumb_tags %}
-{% block title %}
-    {% if component.component_type == 'sbom' %}
-        {{ sbom.name }}
-    {% elif component.component_type == 'document' %}
-        {{ document.name }}
-    {% else %}
-        {{ component.name }}
-    {% endif %}
-{% endblock %}
+{% block title %}{{ data.name }}{% endblock %}
 {% block meta_description %}
     {% if component.component_type == 'sbom' %}
-        {{ sbom.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
+        {{ data.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
     {% elif component.component_type == 'document' %}
-        {{ document.name }} - Document file. Download and view this document.
-    {% else %}
-        {{ component.name }} - Component details.
+        {{ data.name }} - Document file. Download and view this document.
     {% endif %}
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
 {% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/component-detailed-public.css' %}">
+{% endblock %}
 {% block content %}
-    <div class="vc-public-page-layout"
-         data-title="{% if component.component_type == 'sbom' %}{{ sbom.name }}{% elif component.component_type == 'document' %}{{ document.name }}{% else %}{{ component.name }}{% endif %}"
-         data-title-icon="{% if component.component_type == 'sbom' %}fas fa-file-code{% elif component.component_type == 'document' %}fas fa-file-alt{% else %}fas fa-cube{% endif %}"
-         data-page-type="component-detailed"
-         data-item-id="{{ component.id }}"
-         data-component-type="{{ component.component_type }}"
-         data-component-display-type="{{ component.get_component_type_display }}"
-         {% if component.component_type == 'sbom' %} data-download-url="/api/v1/sboms/{{ sbom.id }}/download" data-download-title="Download SBOM" data-download-button-text="Download SBOM" data-download-description="Download this SBOM file" data-download-icon="fas fa-download" {% elif component.component_type == 'document' %} data-download-url="{% url 'documents:document_download' document.id %}" data-download-title="Download Document" data-download-button-text="Download Document" data-download-description="Download this document file" data-download-icon="fas fa-download" {% endif %}>
-        <template data-slot="subtitle">
-            <small class="component-link">
-                <i class="fas fa-cube me-1"></i>
-                <a href="{% url 'core:component_details_public' component.id %}"
-                   class="component-breadcrumb-link">{{ component.name }}</a>
-            </small>
-            {% if component.component_type == 'sbom' %}
-                <small class="sbom-format">
-                    <i class="fas fa-tag me-1"></i>
-                    {% if sbom.format == 'cyclonedx' %}
-                        CycloneDX
-                    {% elif sbom.format == 'spdx' %}
-                        SPDX
-                    {% else %}
-                        {{ sbom.format|upper }}
-                    {% endif %}
-                    {{ sbom.format_version }}
-                </small>
-                {% if sbom.version %}
-                    <small class="sbom-version">
-                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ sbom.version }}">{{ sbom.version }}</span>
-                    </small>
-                {% endif %}
-            {% elif component.component_type == 'document' %}
-                <small class="document-type">
-                    <i class="fas fa-tag me-1"></i>{{ document.document_type|default:"Document" }}
-                </small>
-                {% if document.version %}
-                    <small class="document-version">
-                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ document.version }}">{{ document.version }}</span>
-                    </small>
-                {% endif %}
-            {% endif %}
-        </template>
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">
+                            <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} title-icon"></i>
+                            {{ data.name }}
+                        </h1>
+                        <div class="page-subtitle">
+                            <small class="component-link">
+                                <i class="fas fa-cube me-1"></i>
+                                <a href="{% url 'core:component_details_public' component.id %}"
+                                   class="component-breadcrumb-link">{{ component.name }}</a>
+                            </small>
+                            {% if component.component_type == 'sbom' %}
+                                <small class="sbom-format">
+                                    <i class="fas fa-tag me-1"></i>
+                                    {% if data.format == 'cyclonedx' %}
+                                        CycloneDX
+                                    {% elif data.format == 'spdx' %}
+                                        SPDX
+                                    {% else %}
+                                        {{ data.format|upper }}
+                                    {% endif %}
+                                    {{ data.format_version }}
+                                </small>
+                                {% if data.version %}
+                                    <small class="sbom-version">
+                                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                    </small>
+                                {% endif %}
+                            {% elif component.component_type == 'document' %}
+                                <small class="document-type">
+                                    <i class="fas fa-tag me-1"></i>{{ data.document_type|default:"Document" }}
+                                </small>
+                                {% if data.version %}
+                                    <small class="document-version">
+                                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                    </small>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="component-detailed-content">
+                            <div class="component-download-section">
+                                <div class="standard-card mt-3">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <div class="header-content">
+                                                <h4 class="card-title mb-0">Download {{ component.get_component_type_display }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="text-center">
+                                                <p class="text-muted mb-3">Download this {{ component.get_component_type_display }} file</p>
+                                                <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' data.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' data.id %} {% endif %}"
+                                                   class="btn btn-primary download-btn">
+                                                    <i class="fas fa-download me-2"></i>
+                                                    Download {{ component.get_component_type_display }}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-{% endblock %}
-{% block extra_css %}
-    <style>
-.component-breadcrumb-link {
-    color: var(--accent-color);
-    text-decoration: none;
-    transition: color 0.2s ease;
-}
-
-.component-breadcrumb-link:hover {
-    color: var(--accent-color-dark);
-    text-decoration: underline;
-}
-
-.component-link,
-.sbom-format,
-.sbom-version,
-.document-type,
-.document-version {
-    margin-right: 1rem;
-}
-
-.component-link:last-child,
-.sbom-version:last-child,
-.document-version:last-child {
-    margin-right: 0;
-}
-
-.version-display {
-    display: inline-block;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: bottom;
-}
-    </style>
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-    {% if component.component_type == 'sbom' %}
-        {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
-    {% elif component.component_type == 'document' %}
-        {% vite_asset 'sbomify/apps/documents/js/main.ts' %}
-    {% endif %}
 {% endblock %}

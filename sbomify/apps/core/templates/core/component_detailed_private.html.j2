@@ -1,36 +1,18 @@
 {% extends "core/dashboard_base.html.j2" %}
-{% comment %}
-Template context:
-component: Component object
-sbom: SBOM object (if component_type is SBOM)
-document: Document object (if component_type is DOCUMENT)
-APP_BASE_URL: Base URL for the application (for AJAX requests)
-has_crud_permissions: Boolean indicating if user has CRUD permissions
-{% endcomment %}
-{% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
-{% block title %}
-    {% if component.component_type == 'sbom' %}
-        SBOM: {{ sbom.name }}
-    {% elif component.component_type == 'document' %}
-        Document: {{ document.name }}
-    {% else %}
-        Component Details: {{ component.name }}
-    {% endif %}
+{% block title %}{{ component.get_component_type_display }}: {{ data.name }}{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/component-detailed-private.css' %}">
 {% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main mb-3">
             <div class="title-section">
                 <h1 class="item-title">
-                    {% if component.component_type == 'sbom' %}
-                        <i class="fas fa-file-code me-3 text-primary"></i>
-                        {{ sbom.name }}
-                    {% elif component.component_type == 'document' %}
-                        <i class="fas fa-file-alt me-3 text-primary"></i>
-                        {{ document.name }}
-                    {% endif %}
+                    <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} me-3 text-primary"></i>
+                    {{ data.name }}
                 </h1>
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
@@ -52,178 +34,76 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                 <span class="meta-item">
                     <span class="meta-label">Format:</span>
                     <span class="badge bg-success-subtle text-success ms-1">
-                        {% if sbom.format == 'cyclonedx' %}
+                        {% if data.format == 'cyclonedx' %}
                             CycloneDX
-                        {% elif sbom.format == 'spdx' %}
+                        {% elif data.format == 'spdx' %}
                             SPDX
                         {% else %}
-                            {{ sbom.format|upper }}
+                            {{ data.format|upper }}
                         {% endif %}
-                        {{ sbom.format_version }}
+                        {{ data.format_version }}
                     </span>
                 </span>
-                {% if sbom.version %}
+                {% if data.version %}
                     <span class="meta-divider">•</span>
                     <span class="meta-item">
                         <span class="meta-label">Version:</span>
-                        <span class="ms-1 version-display" title="{{ sbom.version }}">{{ sbom.version }}</span>
+                        <span class="ms-1 version-display" title="{{ data.version }}">{{ data.version }}</span>
                     </span>
                 {% endif %}
             {% elif component.component_type == 'document' %}
                 <span class="meta-item">
                     <span class="meta-label">Type:</span>
-                    <span class="badge bg-info-subtle text-info ms-1">{{ document.document_type|default:"Document" }}</span>
+                    <span class="badge bg-info-subtle text-info ms-1">{{ data.document_type|default:"Document" }}</span>
                 </span>
-                {% if document.version %}
+                {% if data.version %}
                     <span class="meta-divider">•</span>
                     <span class="meta-item">
                         <span class="meta-label">Version:</span>
-                        <span class="ms-1 version-display" title="{{ document.version }}">{{ document.version }}</span>
+                        <span class="ms-1 version-display" title="{{ data.version }}">{{ data.version }}</span>
                     </span>
                 {% endif %}
             {% endif %}
         </div>
     </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-main {
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.5rem;
-        }
-
-        .title-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .item-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-            display: flex;
-            align-items: center;
-        }
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .meta-label {
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .meta-divider {
-            color: #cbd5e1;
-            font-weight: bold;
-        }
-
-        .breadcrumb {
-            background: none;
-            padding: 0;
-            margin: 0;
-            font-size: 0.875rem;
-        }
-
-        .breadcrumb-item a {
-            color: #6366f1;
-            text-decoration: none;
-        }
-
-        .breadcrumb-item a:hover {
-            text-decoration: underline;
-        }
-
-        .version-display {
-            display: inline-block;
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            vertical-align: bottom;
-        }
-
-        @media (max-width: 768px) {
-            .title-section {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .item-title {
-                font-size: 1.5rem;
-            }
-
-            .header-meta {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-        }
-    </style>
     {% if component.component_type == 'sbom' %}
-        <!-- SBOM Detailed View -->
         <div class="row">
             <div class="col-12 col-lg-5">
                 <div class="vc-sbom-metadata-card"
-                     data-sbom-id="{{ sbom.id }}"
-                     data-sbom-name="{{ sbom.name }}"
-                     data-created-at="{{ sbom.created_at.isoformat }}"
-                     data-source-display="{{ sbom.source_display }}"
-                     data-format="{{ sbom.format }}"
-                     data-format-version="{{ sbom.format_version|stringformat:'s' }}"
-                     data-version="{{ sbom.version|default:'' }}"></div>
+                     data-sbom-id="{{ data.id }}"
+                     data-sbom-name="{{ data.name }}"
+                     data-created-at="{{ data.created_at.isoformat }}"
+                     data-source-display="{{ data.source_display }}"
+                     data-format="{{ data.format }}"
+                     data-format-version="{{ data.format_version|stringformat:'s' }}"
+                     data-version="{{ data.version|default:'' }}"></div>
             </div>
             <div class="col-12 col-lg-7">
-                <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
+                <div class="vc-sbom-actions-card" data-sbom-id="{{ data.id }}"></div>
             </div>
         </div>
     {% elif component.component_type == 'document' %}
-        <!-- Document Detailed View -->
         <div class="row">
             <div class="col-12 col-lg-8">
                 <div class="row">
                     <div class="col-12 col-md-6">
                         <div class="vc-document-metadata-card"
-                             data-document-id="{{ document.id }}"
-                             data-document-name="{{ document.name }}"
-                             data-created-at="{{ document.created_at }}"
-                             data-document-type="{{ document.document_type|default:'' }}"
-                             data-content-type="{{ document.content_type|default:'' }}"
-                             data-file-size="{{ document.file_size|default:'' }}"
-                             data-version="{{ document.version|default:'' }}"></div>
+                             data-document-id="{{ data.id }}"
+                             data-document-name="{{ data.name }}"
+                             data-created-at="{{ data.created_at }}"
+                             data-document-type="{{ data.document_type|default:'' }}"
+                             data-content-type="{{ data.content_type|default:'' }}"
+                             data-file-size="{{ data.file_size|default:'' }}"
+                             data-version="{{ data.version|default:'' }}"></div>
                     </div>
                     <div class="col-12 col-md-6">
                         <div class="vc-document-description-card"
-                             data-description="{{ document.description|default:'' }}"></div>
+                             data-description="{{ data.description|default:'' }}"></div>
                     </div>
                 </div>
             </div>
             <div class="col-12 col-lg-4">
-                <div class="vc-document-actions-card" data-document-id="{{ document.id }}"></div>
+                <div class="vc-document-actions-card" data-document-id="{{ data.id }}"></div>
             </div>
         </div>
     {% endif %}
