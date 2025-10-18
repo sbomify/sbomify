@@ -36,7 +36,7 @@ from sbomify.apps.teams.schemas import BrandingInfo
 
 from ..errors import error_response
 from ..forms import CreateAccessTokenForm, SupportContactForm
-from ..models import Component, Product, Project, Release, ReleaseArtifact
+from ..models import Component, Product, Project, Release
 
 logger = logging.getLogger(__name__)
 
@@ -588,145 +588,8 @@ def releases_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-def component_details_public(request: HttpRequest, component_id: str) -> HttpResponse:
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    if not component.is_public:
-        return error_response(request, HttpResponseForbidden("Component is not public"))
-
-    context = {
-        "component": component,
-        "brand": BrandingInfo(**component.team.branding_info),
-        "APP_BASE_URL": settings.APP_BASE_URL,
-        "team_billing_plan": getattr(component.team, "billing_plan", "community"),
-    }
-
-    # Add component-specific data based on type
-    if component.component_type == Component.ComponentType.SBOM:
-        # Handle SBOM components with optimized queries
-        sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at").all()
-
-        # Batch fetch all ReleaseArtifacts for all SBOMs to avoid N+1 queries
-        sbom_ids = [sbom.id for sbom in sboms_queryset]
-        release_artifacts_map = {}
-        if sbom_ids:
-            release_artifacts = ReleaseArtifact.objects.filter(
-                sbom_id__in=sbom_ids, release__product__is_public=True
-            ).select_related("release", "release__product")
-            # Group by SBOM ID for easy lookup
-            for artifact in release_artifacts:
-                if artifact.sbom_id not in release_artifacts_map:
-                    release_artifacts_map[artifact.sbom_id] = []
-                release_artifacts_map[artifact.sbom_id].append(artifact)
-
-        def check_vulnerability_report(sbom_id: str) -> bool:
-            """Check if vulnerability report exists for an SBOM."""
-            try:
-                # Check the VulnerabilityScanResult model for any scan results
-                from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
-
-                result = VulnerabilityScanResult.objects.filter(sbom_id=sbom_id).first()
-
-                return result is not None
-            except Exception as e:
-                logger.warning(f"Error checking vulnerability report for SBOM {sbom_id}: {e}")
-                return False
-
-        sboms_with_vuln_status = []
-        for sbom_item in sboms_queryset:
-            has_vuln_report = check_vulnerability_report(sbom_item.id)
-
-            # Get releases that contain this SBOM using pre-fetched data (only public releases)
-            releases = []
-            artifacts_for_sbom = release_artifacts_map.get(sbom_item.id, [])
-            for artifact in artifacts_for_sbom:
-                releases.append(
-                    {
-                        "id": str(artifact.release.id),
-                        "name": artifact.release.name,
-                        "product_name": artifact.release.product.name,
-                        "is_latest": artifact.release.is_latest,
-                        "is_prerelease": artifact.release.is_prerelease,
-                        "is_public": artifact.release.product.is_public,
-                    }
-                )
-
-            sboms_with_vuln_status.append(
-                {
-                    "sbom": {
-                        "id": str(sbom_item.id),
-                        "name": sbom_item.name,
-                        "format": sbom_item.format,
-                        "format_version": sbom_item.format_version,
-                        "version": sbom_item.version,
-                        "created_at": sbom_item.created_at.isoformat(),
-                        "ntia_compliance_status": sbom_item.ntia_compliance_status,
-                        "ntia_compliance_details": sbom_item.ntia_compliance_details,
-                    },
-                    "has_vulnerabilities_report": has_vuln_report,
-                    "releases": releases,
-                }
-            )
-
-        context["sboms_data"] = sboms_with_vuln_status
-
-    elif component.component_type == Component.ComponentType.DOCUMENT:
-        # Handle Document components with optimized queries
-        documents_queryset = Document.objects.filter(component_id=component_id).order_by("-created_at").all()
-
-        # Batch fetch all ReleaseArtifacts for all Documents to avoid N+1 queries
-        document_ids = [doc.id for doc in documents_queryset]
-        release_artifacts_map = {}
-        if document_ids:
-            release_artifacts = ReleaseArtifact.objects.filter(
-                document_id__in=document_ids, release__product__is_public=True
-            ).select_related("release", "release__product")
-            # Group by Document ID for easy lookup
-            for artifact in release_artifacts:
-                if artifact.document_id not in release_artifacts_map:
-                    release_artifacts_map[artifact.document_id] = []
-                release_artifacts_map[artifact.document_id].append(artifact)
-
-        documents_data = []
-        for document_item in documents_queryset:
-            # Get releases that contain this document using pre-fetched data (only public releases)
-            releases = []
-            artifacts_for_document = release_artifacts_map.get(document_item.id, [])
-            for artifact in artifacts_for_document:
-                releases.append(
-                    {
-                        "id": str(artifact.release.id),
-                        "name": artifact.release.name,
-                        "product_name": artifact.release.product.name,
-                        "is_latest": artifact.release.is_latest,
-                        "is_prerelease": artifact.release.is_prerelease,
-                        "is_public": artifact.release.product.is_public,
-                    }
-                )
-
-            documents_data.append(
-                {
-                    "document": {
-                        "id": str(document_item.id),
-                        "name": document_item.name,
-                        "document_type": document_item.document_type,
-                        "content_type": document_item.content_type,
-                        "file_size": document_item.file_size,
-                        "version": document_item.version,
-                        "created_at": document_item.created_at.isoformat(),
-                    },
-                    "releases": releases,
-                }
-            )
-        context["documents_data"] = documents_data
-
-    return render(request, "core/component_details_public.html.j2", context)
-
-# ComponentDetailsPrivateView moved to component_details_private.py  # noqa: F402
 from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
+from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
 
 
 @login_required

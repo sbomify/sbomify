@@ -1,0 +1,179 @@
+{% load static %}
+{% load django_vite %}
+{% load cache %}
+{% load schema_tags %}
+{% load breadcrumb_tags %}
+{% load brand_tags %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {% block head %}
+            <meta charset="utf-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport"
+                  content="width=device-width, initial-scale=1, shrink-to-fit=no">
+            <!-- SEO Meta Tags -->
+            <meta name="description"
+                  content="{% block meta_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+            <meta name="keywords"
+                  content="{% block meta_keywords %}SBOM, Software Bill of Materials, security, compliance, vulnerability management{% endblock %}">
+            <meta name="author"
+                  content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}">
+            <!-- Favicon -->
+            <link rel="apple-touch-icon"
+                  sizes="180x180"
+                  href="{% static 'img/favicons/apple-touch-icon.png' %}">
+            <link rel="icon"
+                  type="image/png"
+                  sizes="32x32"
+                  href="{% static 'img/favicons/favicon-32x32.png' %}">
+            <link rel="icon"
+                  type="image/png"
+                  sizes="16x16"
+                  href="{% static 'img/favicons/favicon-16x16.png' %}">
+            <link rel="icon"
+                  type="image/svg+xml"
+                  href="{% static 'img/favicons/favicon.svg' %}">
+            <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+            <!-- Schema.org metadata -->
+            {% schema_org_metadata %}
+            <!-- Open Graph / Facebook -->
+            <meta property="og:type" content="website">
+            <meta property="og:url" content="{{ request.build_absolute_uri }}">
+            <meta property="og:title"
+                  content="{% block og_title %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+            <meta property="og:description"
+                  content="{% block og_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+            <meta property="og:image"
+                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <!-- Twitter -->
+            <meta property="twitter:card" content="summary_large_image">
+            <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+            <meta property="twitter:title"
+                  content="{% block twitter_title %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+            <meta property="twitter:description"
+                  content="{% block twitter_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+            <meta property="twitter:image"
+                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <!-- Fonts -->
+            <link rel="preconnect" href="https://fonts.gstatic.com">
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+                  rel="stylesheet">
+            <!-- CSS -->
+            <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+            <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
+            <link href="{% static 'css/tokens.css' %}" rel="stylesheet">
+            <link href="{% static 'css/base.css' %}" rel="stylesheet">
+            <link href="{% static 'css/layout.css' %}" rel="stylesheet">
+            <link href="{% static 'css/components.css' %}" rel="stylesheet">
+            <link href="{% static 'css/pages.css' %}" rel="stylesheet">
+            <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
+            <link href="{% static 'css/public-base.css' %}" rel="stylesheet">
+            <!-- Custom CSS Variables for Branding -->
+            <style>
+            :root {
+                --brand-color: {{ brand.brand_color|default:'#4f46e5' }};
+                --accent-color: {{ brand.accent_color|default:'#7c8b9d' }};
+                --brand-color-rgb: {{ brand.brand_color|default:'#4f46e5'|hex_to_rgb }};
+                --accent-color-rgb: {{ brand.accent_color|default:'#7c8b9d'|hex_to_rgb }};
+                --brand-color-light: {{ brand.brand_color|default:'#4f46e5'|lighten:0.1 }};
+                --brand-color-dark: {{ brand.brand_color|default:'#4f46e5'|darken:0.1 }};
+                --accent-color-light: {{ brand.accent_color|default:'#7c8b9d'|lighten:0.1 }};
+                --accent-color-dark: {{ brand.accent_color|default:'#7c8b9d'|darken:0.1 }};
+                --text-primary: #1a202c;
+                --text-secondary: #64748b;
+                --text-muted: #94a3b8;
+                --bg-primary: #ffffff;
+                --bg-secondary: #f8fafc;
+                --bg-tertiary: #f1f5f9;
+                --border-color: #e2e8f0;
+                --border-color-light: #f1f5f9;
+                --shadow-color: rgba(0, 0, 0, 0.1);
+                --shadow-color-light: rgba(0, 0, 0, 0.05);
+                --radius-sm: 0.375rem;
+                --radius-md: 0.5rem;
+                --radius-lg: 0.75rem;
+                --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+
+            /* Dark mode support based on brand colors */
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --text-primary: #f8fafc;
+                    --text-secondary: #cbd5e1;
+                    --text-muted: #94a3b8;
+                    --bg-primary: #0f172a;
+                    --bg-secondary: #1e293b;
+                    --bg-tertiary: #334155;
+                    --border-color: #334155;
+                    --border-color-light: #475569;
+                    --shadow-color: rgba(0, 0, 0, 0.3);
+                    --shadow-color-light: rgba(0, 0, 0, 0.15);
+                }
+            }
+            </style>
+            {% block extra_css %}{% endblock %}
+            <title>
+                {% block title %}{% endblock %}
+                -
+                {% if brand.name %}
+                    {{ brand.name }}
+                {% else %}
+                    sbomify
+                {% endif %}
+            </title>
+        {% endblock %}
+        {% vite_hmr_client %}
+    </head>
+    <body class="public-page" data-theme="public">
+        <!-- Public Page Layout -->
+        <div class="public-page-layout">
+            <!-- Brand Header -->
+            <header class="public-header">
+                <div class="public-header-container">
+                    <div class="brand-section">
+                        {% if brand.brand_image %}
+                            <img src="{{ brand.brand_image }}"
+                                 alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                 class="brand-logo"
+                                 width="32"
+                                 height="32">
+                        {% else %}
+                            <img src="{% static 'img/sbomify.svg' %}"
+                                 alt="sbomify Logo"
+                                 class="brand-logo"
+                                 width="32"
+                                 height="32">
+                        {% endif %}
+                        {% if brand.name %}<span class="brand-name">{{ brand.name }}</span>{% endif %}
+                    </div>
+                    <!-- Optional: Add navigation or status indicators -->
+                    {% block header_content %}{% endblock %}
+                </div>
+            </header>
+            <!-- Main Content -->
+            <main class="public-main">
+                <div class="public-content-container">
+                    <!-- Breadcrumb Navigation -->
+                    {% block breadcrumb %}{% endblock %}
+                    <!-- Page Content -->
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+            <!-- Footer -->
+            <footer class="public-footer">
+                <div class="public-footer-container">
+                    <div class="footer-content">
+                        <div class="footer-branding">
+                            {% if brand.name %}<span class="footer-brand-name">{{ brand.name }}</span>{% endif %}
+                            <span class="footer-powered-by">Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                        </div>
+                        {% block footer_content %}{% endblock %}
+                    </div>
+                </div>
+            </footer>
+        </div>
+        {% block scripts %}{% endblock %}
+        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+    </body>
+</html>
