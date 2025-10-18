@@ -50,22 +50,6 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-def dashboard(request: HttpRequest) -> HttpResponse:
-    from sbomify.apps.sboms.models import Component, Product, Project
-
-    current_team = request.session.get("current_team", {})
-
-    context = {
-        "current_team": current_team,
-        "total_products": Product.objects.filter(team_id=current_team.get("id")).count(),
-        "total_projects": Project.objects.filter(team_id=current_team.get("id")).count(),
-        "total_components": Component.objects.filter(team_id=current_team.get("id")).count(),
-    }
-
-    return render(request, "core/dashboard.html.j2", context)
-
-
-@login_required
 def user_settings(request: HttpRequest) -> HttpResponse:
     create_access_token_form = CreateAccessTokenForm()
     context = dict(create_access_token_form=create_access_token_form)
@@ -545,6 +529,7 @@ from .component_detailed_private import ComponentDetailedPrivateView  # noqa: F4
 from .component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from .dashboard import DashboardView  # noqa: F401, E402
 
 
 @login_required

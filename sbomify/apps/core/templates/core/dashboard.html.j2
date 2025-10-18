@@ -1,27 +1,32 @@
 {% extends "./dashboard_base.html.j2" %}
+{% load static %}
 {% load django_vite %}
 {% load django_htmx %}
 {% block title %}sbomify Dashboard{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/dashboard.css' %}">
+{% endblock %}
 {% block dashboard_content %}
     <div class="dashboard">
         <h3 class="page-title">Dashboard</h3>
-        {# Dashboard stats with server-side rendering #}
         <div class="dashboard-stats">
             <div class="container-fluid p-0">
                 <div class="row">
+                    {% for key, value in data.items %}
                     <div class="col-md-4">
                         <div class="standard-card mt-3">
                             <div class="card stats-card shadow-sm">
                                 <div class="card-header">
                                     <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Products</h4>
+                                        <h4 class="card-title mb-0">Total {{ key|title }}</h4>
                                     </div>
                                 </div>
                                 <div class="card-body text-center">
                                     <div class="stat-content">
                                         <div class="stat-display">
                                             <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_products }}</span>
+                                                <span class="display-4 stat-number text-dark-emphasis">{{ value }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -29,50 +34,10 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Projects</h4>
-                                    </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_projects }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total Components</h4>
-                                    </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ total_components }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-        {# Vulnerability Time Series Chart #}
         <div class="row mt-4">
             <div class="col-12">
                 <div class="vc-vulnerability-timeseries"
@@ -85,6 +50,5 @@
 {% endblock %}
 {% block scripts %}
     {% htmx_script %}
-    {# Vue.js script only for Vulnerability Chart #}
     {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
 {% endblock %}

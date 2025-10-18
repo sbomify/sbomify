@@ -13,9 +13,11 @@
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
 {% endblock %}
-{% block extra_styles %}
+{% block extra_css %}
     <link rel="stylesheet"
           href="{% static 'css/component-detailed-public.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-page-layout.css' %}">
 {% endblock %}
 {% block content %}
     <div class="public-page-layout">

@@ -1,0 +1,115 @@
+.sbom-item {
+  cursor: pointer;
+}
+
+.stat-content {
+  padding: 0.5rem 0;
+}
+
+.stat-loading {
+  padding: 2rem 0;
+}
+
+.stat-error {
+  padding: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.stat-display {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.stat-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.stat-number {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #6c757d;
+  margin-left: 0.25rem;
+}
+
+.stat-subtitle {
+  font-size: 0.875rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.stat-trend {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trend-value {
+  font-weight: 600;
+}
+
+/* Professional color classes */
+.text-primary-subtle {
+  color: #4a90e2 !important;
+}
+
+.text-success-subtle {
+  color: #5cb85c !important;
+}
+
+.text-warning-subtle {
+  color: #f0ad4e !important;
+}
+
+.text-danger-subtle {
+  color: #d9534f !important;
+}
+
+.text-muted-emphasis {
+  color: #6c757d !important;
+}
+
+.text-slate {
+  color: #64748b !important;
+}
+
+.text-dark-emphasis {
+  color: #2c3e50 !important;
+}
+
+/* Responsive font sizes */
+@media (max-width: 768px) {
+  .stat-number {
+    font-size: 2rem !important;
+  }
+
+  .stat-unit {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .stat-number {
+    font-size: 1.75rem !important;
+  }
+
+  .stat-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .stat-trend {
+    font-size: 0.8rem;
+  }
+}
