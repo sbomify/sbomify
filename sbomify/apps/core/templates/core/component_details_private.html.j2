@@ -11,7 +11,8 @@ APP_BASE_URL - Base URL for the application
 {% load django_vite %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block extra_styles %}
-    <link rel="stylesheet" href="{% static 'css/component-details-private.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/component-details-private.css' %}">
 {% endblock %}
 {% block content %}
     <div class="page-header mb-4">
