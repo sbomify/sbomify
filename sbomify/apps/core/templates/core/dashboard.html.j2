@@ -1,44 +1,53 @@
-{% extends "./dashboard_base.html.j2" %}
+{% extends "./dashboard_base.htmx.j2" %}
+{% load static %}
 {% load django_vite %}
+{% load django_htmx %}
 {% block title %}sbomify Dashboard{% endblock %}
-{% block content %}
-    <h3 class="page-title">Dashboard</h3>
-    {# Dashboard stats with progressive enhancement #}
-    <div class="vc-dashboard-stats" data-team-key="{{ current_team.key }}">
-        <div class="loading-placeholder" data-state="loading">
-            <div class="row">
-                {% for i in "1234"|make_list %}
-                    <div class="col-md-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="placeholder-glow">
-                                    <span class="placeholder col-6"></span>
-                                    <span class="placeholder col-8"></span>
+{% block extra_styles %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+{% block dashboard_content %}
+    <div class="dashboard">
+        <h3 class="page-title">Dashboard</h3>
+        <div class="dashboard-stats">
+            <div class="container-fluid p-0">
+                <div class="row">
+                    {% for key, value in data.items %}
+                        <div class="col-md-4">
+                            <div class="standard-card mt-3">
+                                <div class="card stats-card shadow-sm">
+                                    <div class="card-header">
+                                        <div class="header-content">
+                                            <h4 class="card-title mb-0">Total {{ key|title }}</h4>
+                                        </div>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <div class="stat-content">
+                                            <div class="stat-display">
+                                                <div class="stat-value">
+                                                    <span class="display-4 stat-number text-dark-emphasis">{{ value }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             </div>
         </div>
-        <div class="error-state d-none" data-state="error">
-            <div class="alert alert-danger" role="alert">
-                <h4 class="alert-heading">Unable to load dashboard stats</h4>
-                <p>Please try refreshing the page. If the problem persists, contact support.</p>
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="vc-vulnerability-timeseries"
+                     data-team-key="{{ current_team.key }}"
+                     data-default-days="30"
+                     data-show-product-filter="true"></div>
             </div>
-        </div>
-    </div>
-    {# Vulnerability Time Series Chart #}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="vc-vulnerability-timeseries"
-                 data-team-key="{{ current_team.key }}"
-                 data-default-days="30"
-                 data-show-product-filter="true"></div>
         </div>
     </div>
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% htmx_script %}
     {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
 {% endblock %}

@@ -28,7 +28,7 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Check Vue component mounting point exists
-        assert 'class="vc-dashboard-stats"' in content
+        assert 'class="dashboard-stats"' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))
@@ -130,8 +130,8 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Verify the Vue component mount point exists for the add form
-        assert 'class="vc-add-component-form"' in content
-        assert 'class="vc-components-list"' in content
+        assert 'class="components-list' in content
+        assert 'id="addComponentForm"' in content
 
         # Test API-based component creation (what the Vue component does)
         import json

@@ -1,0 +1,231 @@
+.public-page {
+    font-family: var(--font-family-primary);
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+}
+
+.public-page-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.public-header {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+    padding: 2rem 0;
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border-color);
+    border-top: 3px solid var(--brand-color);
+}
+
+.public-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, transparent 0%, rgba(var(--brand-color-rgb), 0.03) 100%);
+    pointer-events: none;
+}
+
+.public-header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.brand-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    text-align: center;
+}
+
+.brand-logo {
+    height: 3rem;
+    max-width: 12rem;
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.brand-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--brand-color);
+    text-shadow: none;
+}
+
+.public-main {
+    flex: 1;
+    position: relative;
+    background: var(--bg-secondary);
+}
+
+.public-content-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+.public-footer {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+    padding: 2rem 0;
+    margin-top: 4rem;
+}
+
+.public-footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+.footer-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.footer-branding {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+.footer-brand-name {
+    font-weight: 600;
+    color: var(--brand-color);
+}
+
+.footer-powered-by a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.footer-powered-by a:hover {
+    color: var(--accent-color-dark);
+}
+
+@media (max-width: 768px) {
+    .public-header {
+        padding: 1.5rem 0;
+    }
+
+    .public-header-container,
+    .public-content-container,
+    .public-footer-container {
+        padding: 0 1rem;
+    }
+
+    .brand-section {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .brand-logo {
+        height: 2.5rem;
+        max-width: 10rem;
+    }
+
+    .brand-name {
+        font-size: 1.25rem;
+    }
+
+    .footer-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .public-header {
+        padding: 1rem 0;
+    }
+
+    .public-header-container,
+    .public-content-container,
+    .public-footer-container {
+        padding: 0 0.75rem;
+    }
+
+    .brand-section {
+        gap: 0.5rem;
+    }
+
+    .brand-logo {
+        height: 2rem;
+        max-width: 8rem;
+    }
+
+    .brand-name {
+        font-size: 1.125rem;
+    }
+
+    .public-content-container {
+        padding: 1.5rem 0.75rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+*:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+@media (prefers-contrast: high) {
+    :root {
+        --border-color: #000000;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+    }
+}
+
+.meta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.meta-badge--primary {
+    background: rgba(var(--brand-color-rgb), 0.1);
+    color: var(--brand-color);
+    border-color: rgba(var(--brand-color-rgb), 0.2);
+}
+
+.meta-badge--secondary {
+    background: rgba(var(--accent-color-rgb), 0.1);
+    color: var(--accent-color);
+    border-color: rgba(var(--accent-color-rgb), 0.2);
+}
+
+.meta-badge i {
+    font-size: 0.75rem;
+}

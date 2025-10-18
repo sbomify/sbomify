@@ -1,0 +1,33 @@
+.component-breadcrumb-link {
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.component-breadcrumb-link:hover {
+    color: var(--accent-color-dark);
+    text-decoration: underline;
+}
+
+.component-link,
+.sbom-format,
+.sbom-version,
+.document-type,
+.document-version {
+    margin-right: 1rem;
+}
+
+.component-link:last-child,
+.sbom-version:last-child,
+.document-version:last-child {
+    margin-right: 0;
+}
+
+.version-display {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}

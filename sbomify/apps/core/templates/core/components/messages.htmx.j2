@@ -1,0 +1,34 @@
+{% if messages %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            {% for message in messages %}
+                const messageType = '{{ message.level_tag }}';
+                const messageText = '{{ message|escapejs }}';
+
+                let type;
+                switch(messageType) {
+                    case 'alert-danger':
+                        type = 'error';
+                        break;
+                    case 'alert-success':
+                        type = 'success';
+                        break;
+                    case 'alert-warning':
+                        type = 'warning';
+                        break;
+                    case 'alert-info':
+                        type = 'info';
+                        break;
+                    default:
+                        type = 'info';
+                }
+
+                window.showToast({
+                    title: type.charAt(0).toUpperCase() + type.slice(1),
+                    message: messageText,
+                    type: type
+                });
+            {% endfor %}
+        });
+    </script>
+{% endif %}

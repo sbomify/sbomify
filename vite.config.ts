@@ -86,6 +86,7 @@ export default defineConfig({
         vulnerability_scanning: resolve('./sbomify/apps/vulnerability_scanning/js/main.ts'),
         alerts: resolve('./sbomify/apps/core/js/alerts-global.ts'),
         djangoMessages: resolve('./sbomify/apps/core/js/django-messages.ts'),
+        htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),
       },
     }
   },
