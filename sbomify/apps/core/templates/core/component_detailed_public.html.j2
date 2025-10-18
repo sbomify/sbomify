@@ -77,7 +77,7 @@
                                         <div class="card-body">
                                             <div class="text-center">
                                                 <p class="text-muted mb-3">Download this {{ component.get_component_type_display }} file</p>
-                                                <a {% if component.component_type == 'sbom' %} href="{% url 'sboms:sbom_download' data.id %}" {% elif component.component_type == 'document' %} href="{% url 'documents:document_download' data.id %}" {% endif %}
+                                                <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' data.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' data.id %} {% endif %}"
                                                    class="btn btn-primary download-btn">
                                                     <i class="fas fa-download me-2"></i>
                                                     Download {{ component.get_component_type_display }}
