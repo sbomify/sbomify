@@ -13,6 +13,7 @@ from django.utils.html import format_html
 
 from sbomify.apps.documents.admin import DocumentAdmin
 from sbomify.apps.documents.models import Document
+from sbomify.apps.sboms.admin import SBOMAdmin
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
 from sbomify.apps.teams.models import Invitation, Member, Team
@@ -242,6 +243,117 @@ class CustomUserAdmin(UserAdmin):
         return format_html("<br>".join(accounts))
 
 
+class ProjectAdmin(admin.ModelAdmin):
+    """Admin configuration for Project model."""
+
+    list_display = (
+        "id",
+        "name",
+        "workspace",
+        "is_public",
+        "created_at",
+    )
+
+    list_filter = (
+        "is_public",
+        "team",
+        "created_at",
+    )
+
+    search_fields = (
+        "id",
+        "name",
+        "team__name",
+    )
+
+    readonly_fields = (
+        "id",
+        "created_at",
+    )
+
+    def workspace(self, obj):
+        """Display the workspace (team) name for the Project."""
+        return obj.team.name if obj.team else "No Team"
+
+    workspace.short_description = "Workspace"
+    workspace.admin_order_field = "team__name"
+
+
+class ProductAdmin(admin.ModelAdmin):
+    """Admin configuration for Product model."""
+
+    list_display = (
+        "id",
+        "name",
+        "workspace",
+        "is_public",
+        "created_at",
+    )
+
+    list_filter = (
+        "is_public",
+        "team",
+        "created_at",
+    )
+
+    search_fields = (
+        "id",
+        "name",
+        "description",
+        "team__name",
+    )
+
+    readonly_fields = (
+        "id",
+        "created_at",
+    )
+
+    def workspace(self, obj):
+        """Display the workspace (team) name for the Product."""
+        return obj.team.name if obj.team else "No Team"
+
+    workspace.short_description = "Workspace"
+    workspace.admin_order_field = "team__name"
+
+
+class ComponentAdmin(admin.ModelAdmin):
+    """Admin configuration for Component model."""
+
+    list_display = (
+        "id",
+        "name",
+        "component_type",
+        "workspace",
+        "is_public",
+        "created_at",
+    )
+
+    list_filter = (
+        "component_type",
+        "is_public",
+        "team",
+        "created_at",
+    )
+
+    search_fields = (
+        "id",
+        "name",
+        "team__name",
+    )
+
+    readonly_fields = (
+        "id",
+        "created_at",
+    )
+
+    def workspace(self, obj):
+        """Display the workspace (team) name for the Component."""
+        return obj.team.name if obj.team else "No Team"
+
+    workspace.short_description = "Workspace"
+    workspace.admin_order_field = "team__name"
+
+
 # Create custom admin site
 admin_site = DashboardView(name="admin")
 
@@ -250,10 +362,10 @@ admin_site.register(User, CustomUserAdmin)
 admin_site.register(Team, TeamAdmin)
 admin_site.register(Member, MemberAdmin)
 admin_site.register(Invitation, InvitationAdmin)
-admin_site.register(Product)
-admin_site.register(Project)
-admin_site.register(Component)
-admin_site.register(SBOM)
+admin_site.register(Product, ProductAdmin)
+admin_site.register(Project, ProjectAdmin)
+admin_site.register(Component, ComponentAdmin)
+admin_site.register(SBOM, SBOMAdmin)
 admin_site.register(Document, DocumentAdmin)
 
 # Register vulnerability scanning models

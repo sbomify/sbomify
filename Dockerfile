@@ -5,7 +5,7 @@ ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.2-debian@sha256:ae21f34625f91285d9098ca52c130845542b2edace3063239c55a8a6d4c1a2df AS js-build-prod
+FROM oven/bun:1.2-debian@sha256:2505ef864643617d187a48ffdc069c35823a9fd16599259e49f7a2d685851f99 AS js-build-prod
 
 WORKDIR /js-build
 
@@ -38,7 +38,7 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.2-debian@sha256:ae21f34625f91285d9098ca52c130845542b2edace3063239c55a8a6d4c1a2df AS frontend-dev-server
+FROM oven/bun:1.2-debian@sha256:2505ef864643617d187a48ffdc069c35823a9fd16599259e49f7a2d685851f99 AS frontend-dev-server
 
 WORKDIR /app-frontend
 
@@ -93,6 +93,11 @@ FROM python-common-code AS python-dependencies
 ARG BUILD_ENV
 ENV BUILD_ENV=${BUILD_ENV}
 
+# Configure Poetry to use system Python and not create virtual environments
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
 # Install Python dependencies based on BUILD_ENV
 # This will also install the project package itself.
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
@@ -104,7 +109,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
-FROM golang:1.25-alpine@sha256:b6ed3fd0452c0e9bcdef5597f29cc1418f61672e9d3a2f55bf02e7222c014abd AS go-builder
+FROM golang:1.25-alpine@sha256:6104e2bbe9f6a07a009159692fe0df1a97b77f5b7409ad804b17d6916c635ae5 AS go-builder
 ARG OSV_SCANNER_VERSION
 ARG CYCLONEDX_GOMOD_VERSION
 
@@ -126,6 +131,24 @@ WORKDIR /code
 # Copy the osv-scanner binary from the go-builder stage
 COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
+# Create directories with proper permissions for non-root user
+# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+RUN mkdir -p /var/lib/dramatiq-prometheus && \
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+    chmod 755 /var/lib/dramatiq-prometheus && \
+    chmod 755 /tmp
+
+# Set environment variable to direct Prometheus metrics to our dedicated directory
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
+
+# Configure Poetry to not create virtual environments (dependencies already installed)
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Switch to non-root user
+USER nobody
+
 EXPOSE 8000
 # CMD for Development (using uvicorn directly with reload for development)
 CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
@@ -145,7 +168,25 @@ COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dis
 # Copy other static files that may have been created during build
 COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
 COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
-RUN poetry run python manage.py collectstatic --noinput
+
+# Create directories and run collectstatic as root, then fix permissions
+# Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles && \
+    poetry run python manage.py collectstatic --noinput && \
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+    chmod 755 /var/lib/dramatiq-prometheus && \
+    chmod 755 /tmp
+
+# Set environment variable to direct Prometheus metrics to our dedicated directory
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
+
+# Configure Poetry to not create virtual environments (dependencies already installed)
+ENV POETRY_VENV_IN_PROJECT=false
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Switch to non-root user
+USER nobody
 
 EXPOSE 8000
 # CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs

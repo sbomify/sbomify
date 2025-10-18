@@ -1,0 +1,106 @@
+{% extends "onboarding/emails/base.html.j2" %}
+{% block title %}Welcome to sbomify - Let's Get Started!{% endblock %}
+{% block content %}
+    <h1>Welcome to sbomify, {{ user.first_name|default:user.username }}!</h1>
+    <p>
+        We're excited to have you join sbomify! You just took an important step
+        to make your software more secure and easier to understand.
+    </p>
+    {% if user_role == "owner" %}
+        <div class="user-info">
+            <strong>Workspace Owner Access:</strong> As a workspace owner, you have full control over your workspace.
+            You can invite team members, manage software parts, and set up security rules.
+        </div>
+    {% elif user_role == "admin" %}
+        <div class="user-info">
+            <strong>Admin Access:</strong> You can manage software parts,
+            upload SBOMs, and help set up your workspace's security.
+        </div>
+    {% endif %}
+    <h2>What's Next?</h2>
+    <p>Here's how to meet compliance requirements in under an hour:</p>
+    <div class="highlight-box">
+        <h3>Get Compliant Fast (Under 1 Hour)</h3>
+        <p>sbomify is the quickest way to meet government and industry compliance requirements. Here's your fast track:</p>
+        <ul class="feature-list">
+            <li>
+                <strong>5 minutes:</strong> Set up your workspace and invite your team
+            </li>
+            <li>
+                <strong>10 minutes:</strong> Create your first product (like "My Web App")
+            </li>
+            <li>
+                <strong>15 minutes:</strong> Add a project and create components for your software
+            </li>
+            <li>
+                <strong>20 minutes:</strong> Use our <a href="https://github.com/sbomify/github-action" target="_blank">GitHub Action</a> to quickly create SBOMs from your existing code
+            </li>
+            <li>
+                <strong>10 minutes:</strong> Review your compliance dashboard
+            </li>
+        </ul>
+        <p>
+            <strong>Total time: Under 1 hour to full compliance!</strong>
+        </p>
+    </div>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ app_base_url }}/dashboard" class="button">Get Started Now</a>
+    </p>
+    <h2>How sbomify Works</h2>
+    <p>sbomify organizes your software in a simple way that matches how you build things:</p>
+    <div class="highlight-box">
+        <h3>Products → Projects → Components</h3>
+        <p>
+            <strong>Products</strong> are your main software (like "Online Store" or "Banking App")
+        </p>
+        <p>
+            <strong>Projects</strong> are the different parts of your product (like "Website", "Mobile App", "Payment System")
+        </p>
+        <p>
+            <strong>Components</strong> are the specific pieces you want to track - like code libraries or apps that make up your projects
+        </p>
+    </div>
+    <h2>What sbomify Can Do</h2>
+    <p>
+        <strong>SBOM Management:</strong> Upload and check Software Bills of Materials to see what's in your software.
+    </p>
+    <p>
+        <strong>Release Management:</strong> Create releases that group specific versions of your software pieces together.
+    </p>
+    <p>
+        <strong>Security Scanning:</strong> Automatically find security problems in all your software.
+    </p>
+    <p>
+        <strong>Team Collaboration:</strong> Work with your team to keep all your software secure.
+    </p>
+    {% if workspace_name %}
+        <p>
+            You're currently part of the <strong>{{ workspace_name }}</strong> workspace.
+            {% if user_role == "owner" %}You can invite team members and change workspace settings from your dashboard.{% endif %}
+        </p>
+    {% endif %}
+    <div class="highlight-box">
+        <h3>Pro Tip</h3>
+        <p>
+            Start by creating a product for one of your main software programs.
+            Then add a project for a specific app within that product, and finally
+            create components for the important software pieces you want to track. This
+            step-by-step approach makes it easy to organize all your software.
+        </p>
+    </div>
+    <h2>Need Help?</h2>
+    <p>If you have any questions or need help getting started, our support team is here to help.</p>
+    <p style="text-align: center;">
+        <a href="{{ app_base_url }}/support/contact/"
+           class="button button-secondary">Contact Support</a>
+    </p>
+    <p>
+        We're here to help you succeed! If you have any questions or need help getting started,
+        don't hesitate to ask our support team.
+    </p>
+    <p>
+        Welcome aboard!
+        <br>
+        <strong>The sbomify Team</strong>
+    </p>
+{% endblock %}

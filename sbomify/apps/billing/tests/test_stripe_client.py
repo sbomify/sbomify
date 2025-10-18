@@ -1,6 +1,7 @@
 """Comprehensive tests for StripeClient class."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 import stripe
 from django.conf import settings
@@ -46,9 +47,7 @@ class TestStripeClient:
     def test_get_customer_card_error(self, mock_retrieve):
         """Test customer retrieval with card error."""
         mock_retrieve.side_effect = stripe.error.CardError(
-            message="Your card was declined",
-            param="card",
-            code="card_declined"
+            message="Your card was declined", param="card", code="card_declined"
         )
 
         with pytest.raises(StripeError) as exc_info:
@@ -69,10 +68,7 @@ class TestStripeClient:
     @patch("stripe.Customer.retrieve")
     def test_get_customer_invalid_request_error(self, mock_retrieve):
         """Test customer retrieval with invalid request error."""
-        mock_retrieve.side_effect = stripe.error.InvalidRequestError(
-            message="No such customer",
-            param="id"
-        )
+        mock_retrieve.side_effect = stripe.error.InvalidRequestError(message="No such customer", param="id")
 
         with pytest.raises(StripeError) as exc_info:
             self.client.get_customer("cus_123")
@@ -127,16 +123,12 @@ class TestStripeClient:
         mock_create.return_value = mock_customer
 
         result = self.client.create_customer(
-            email="test@example.com",
-            name="Test User",
-            metadata={"team_key": "team_123"}
+            email="test@example.com", name="Test User", metadata={"team_key": "team_123"}
         )
 
         assert result == mock_customer
         mock_create.assert_called_once_with(
-            email="test@example.com",
-            name="Test User",
-            metadata={"team_key": "team_123"}
+            email="test@example.com", name="Test User", metadata={"team_key": "team_123"}
         )
 
     @patch("stripe.Customer.create")
@@ -145,16 +137,9 @@ class TestStripeClient:
         mock_customer = MagicMock()
         mock_create.return_value = mock_customer
 
-        result = self.client.create_customer(
-            email="test@example.com",
-            name="Test User"
-        )
+        self.client.create_customer(email="test@example.com", name="Test User")
 
-        mock_create.assert_called_once_with(
-            email="test@example.com",
-            name="Test User",
-            metadata={}
-        )
+        mock_create.assert_called_once_with(email="test@example.com", name="Test User", metadata={})
 
     @patch("stripe.Customer.modify")
     def test_update_customer_success(self, mock_modify):
@@ -162,18 +147,10 @@ class TestStripeClient:
         mock_customer = MagicMock()
         mock_modify.return_value = mock_customer
 
-        result = self.client.update_customer(
-            "cus_123",
-            email="new@example.com",
-            name="New Name"
-        )
+        result = self.client.update_customer("cus_123", email="new@example.com", name="New Name")
 
         assert result == mock_customer
-        mock_modify.assert_called_once_with(
-            "cus_123",
-            email="new@example.com",
-            name="New Name"
-        )
+        mock_modify.assert_called_once_with("cus_123", email="new@example.com", name="New Name")
 
     # Subscription operations tests
     @patch("stripe.Subscription.create")
@@ -186,13 +163,10 @@ class TestStripeClient:
         mock_subscription.id = "sub_123"
         mock_subscription.metadata = {"team_key": "team_123"}
 
-        with patch.object(self.client, 'get_customer', return_value=mock_customer):
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
             mock_create.return_value = mock_subscription
 
-            result = self.client.create_subscription(
-                customer_id="cus_123",
-                price_id="price_123"
-            )
+            result = self.client.create_subscription(customer_id="cus_123", price_id="price_123")
 
             assert result == mock_subscription
             mock_create.assert_called_once()
@@ -206,14 +180,10 @@ class TestStripeClient:
         mock_subscription = MagicMock()
         mock_subscription.metadata = {"team_key": "team_123"}
 
-        with patch.object(self.client, 'get_customer', return_value=mock_customer):
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
             mock_create.return_value = mock_subscription
 
-            result = self.client.create_subscription(
-                customer_id="cus_123",
-                price_id="price_123",
-                trial_days=14
-            )
+            self.client.create_subscription(customer_id="cus_123", price_id="price_123", trial_days=14)
 
             mock_create.assert_called_once()
             call_args = mock_create.call_args[1]
@@ -224,12 +194,9 @@ class TestStripeClient:
         mock_customer = MagicMock()
         mock_customer.metadata = {}
 
-        with patch.object(self.client, 'get_customer', return_value=mock_customer):
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
             with pytest.raises(StripeError) as exc_info:
-                self.client.create_subscription(
-                    customer_id="cus_123",
-                    price_id="price_123"
-                )
+                self.client.create_subscription(customer_id="cus_123", price_id="price_123")
 
             assert "Customer must have team_key in metadata" in str(exc_info.value)
 
@@ -250,11 +217,8 @@ class TestStripeClient:
         mock_subscription_with_meta.metadata = {"team_key": "team_123"}
         mock_modify.return_value = mock_subscription_with_meta
 
-        with patch.object(self.client, 'get_customer', return_value=mock_customer):
-            result = self.client.create_subscription(
-                customer_id="cus_123",
-                price_id="price_123"
-            )
+        with patch.object(self.client, "get_customer", return_value=mock_customer):
+            result = self.client.create_subscription(customer_id="cus_123", price_id="price_123")
 
             assert result == mock_subscription_with_meta
             mock_modify.assert_called_once()
@@ -265,16 +229,10 @@ class TestStripeClient:
         mock_subscription = MagicMock()
         mock_modify.return_value = mock_subscription
 
-        result = self.client.update_subscription(
-            "sub_123",
-            metadata={"updated": "true"}
-        )
+        result = self.client.update_subscription("sub_123", metadata={"updated": "true"})
 
         assert result == mock_subscription
-        mock_modify.assert_called_once_with(
-            "sub_123",
-            metadata={"updated": "true"}
-        )
+        mock_modify.assert_called_once_with("sub_123", metadata={"updated": "true"})
 
     @patch("stripe.Subscription.delete")
     def test_cancel_subscription_success(self, mock_delete):
@@ -307,10 +265,7 @@ class TestStripeClient:
         result = self.client.get_subscription("sub_123")
 
         assert result == mock_subscription
-        mock_retrieve.assert_called_once_with(
-            "sub_123",
-            expand=["latest_invoice.payment_intent"]
-        )
+        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent"])
 
     # Checkout session tests
     @patch("stripe.checkout.Session.create")
@@ -324,7 +279,7 @@ class TestStripeClient:
             customer_id="cus_123",
             price_id="price_123",
             success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel"
+            cancel_url="https://example.com/cancel",
         )
 
         assert result == mock_session
@@ -335,7 +290,7 @@ class TestStripeClient:
             mode="subscription",
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel",
-            metadata={}
+            metadata={},
         )
 
     @patch("stripe.checkout.Session.create")
@@ -344,16 +299,70 @@ class TestStripeClient:
         mock_session = MagicMock()
         mock_create.return_value = mock_session
 
+        self.client.create_checkout_session(
+            customer_id="cus_123",
+            price_id="price_123",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+            metadata={"team_key": "team_123"},
+        )
+
+        call_args = mock_create.call_args[1]
+        assert call_args["metadata"] == {"team_key": "team_123"}
+
+    @patch("stripe.checkout.Session.create")
+    def test_create_checkout_session_with_promo_code(self, mock_create):
+        """Test checkout session creation with promo code."""
+        mock_session = MagicMock()
+        mock_session.url = "https://checkout.stripe.com/test"
+        mock_create.return_value = mock_session
+
         result = self.client.create_checkout_session(
             customer_id="cus_123",
             price_id="price_123",
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel",
-            metadata={"team_key": "team_123"}
+            promo_code="SAVE20",
+        )
+
+        assert result == mock_session
+        call_args = mock_create.call_args[1]
+        assert call_args["discounts"] == [{"coupon": "SAVE20"}]
+
+    @patch("stripe.checkout.Session.create")
+    def test_create_checkout_session_with_promo_code_and_metadata(self, mock_create):
+        """Test checkout session creation with both promo code and metadata."""
+        mock_session = MagicMock()
+        mock_create.return_value = mock_session
+
+        self.client.create_checkout_session(
+            customer_id="cus_123",
+            price_id="price_123",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+            metadata={"team_key": "team_123"},
+            promo_code="SAVE20",
         )
 
         call_args = mock_create.call_args[1]
         assert call_args["metadata"] == {"team_key": "team_123"}
+        assert call_args["discounts"] == [{"coupon": "SAVE20"}]
+
+    @patch("stripe.checkout.Session.create")
+    def test_create_checkout_session_without_promo_code(self, mock_create):
+        """Test checkout session creation without promo code (existing behavior)."""
+        mock_session = MagicMock()
+        mock_create.return_value = mock_session
+
+        self.client.create_checkout_session(
+            customer_id="cus_123",
+            price_id="price_123",
+            success_url="https://example.com/success",
+            cancel_url="https://example.com/cancel",
+        )
+
+        call_args = mock_create.call_args[1]
+        assert "discounts" not in call_args
 
     @patch("stripe.checkout.Session.retrieve")
     def test_get_checkout_session_success(self, mock_retrieve):
@@ -377,11 +386,7 @@ class TestStripeClient:
         result = self.client.construct_webhook_event(payload, sig_header)
 
         assert result == "test_event"
-        mock_construct.assert_called_once_with(
-            payload,
-            sig_header,
-            settings.STRIPE_WEBHOOK_SECRET
-        )
+        mock_construct.assert_called_once_with(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
 
     @patch("stripe.Webhook.construct_event")
     def test_construct_webhook_event_with_custom_secret(self, mock_construct):
@@ -394,11 +399,7 @@ class TestStripeClient:
         result = self.client.construct_webhook_event(payload, sig_header, custom_secret)
 
         assert result == "test_event"
-        mock_construct.assert_called_once_with(
-            payload,
-            sig_header,
-            custom_secret
-        )
+        mock_construct.assert_called_once_with(payload, sig_header, custom_secret)
 
 
 class TestStripeError:
