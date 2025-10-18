@@ -4,8 +4,7 @@
 {% load django_htmx %}
 {% block title %}sbomify Dashboard{% endblock %}
 {% block extra_styles %}
-    <link rel="stylesheet"
-          href="{% static 'css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 {% endblock %}
 {% block dashboard_content %}
     <div class="dashboard">
@@ -14,26 +13,26 @@
             <div class="container-fluid p-0">
                 <div class="row">
                     {% for key, value in data.items %}
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Total {{ key|title }}</h4>
+                        <div class="col-md-4">
+                            <div class="standard-card mt-3">
+                                <div class="card stats-card shadow-sm">
+                                    <div class="card-header">
+                                        <div class="header-content">
+                                            <h4 class="card-title mb-0">Total {{ key|title }}</h4>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ value }}</span>
+                                    <div class="card-body text-center">
+                                        <div class="stat-content">
+                                            <div class="stat-display">
+                                                <div class="stat-value">
+                                                    <span class="display-4 stat-number text-dark-emphasis">{{ value }}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
                     {% endfor %}
                 </div>
             </div>
