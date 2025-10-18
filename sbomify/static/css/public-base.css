@@ -254,10 +254,6 @@
     margin-top: 0;
 }
 
-.content-background {
-    display: none;
-}
-
 .content-container {
     position: relative;
     max-width: 1200px;

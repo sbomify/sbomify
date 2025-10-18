@@ -76,7 +76,7 @@ urlpatterns = [
     ),
     path(
         "public/component/<str:component_id>/detailed/",
-        views.component_detailed_public,
+        views.ComponentDetailedPublicView.as_view(),
         name="component_detailed_public",
     ),
     path(

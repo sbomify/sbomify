@@ -588,6 +588,7 @@ def releases_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
+from .component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
 
@@ -676,52 +677,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         return response
 
 
-def component_detailed_public(request: HttpRequest, component_id: str) -> HttpResponse:
-    """Public detailed view for components - shows SBOM or document details"""
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    # Verify access
-    if not component.is_public:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    branding_info = BrandingInfo(**component.team.branding_info)
-
-    if component.component_type == Component.ComponentType.SBOM:
-        # For SBOM components, find the primary/latest SBOM and show detailed view
-        sbom = SBOM.objects.filter(component_id=component_id).order_by("-created_at").first()
-        if not sbom:
-            return error_response(request, HttpResponseNotFound("No SBOM found for this component"))
-
-        return render(
-            request,
-            "core/component_detailed_public.html.j2",
-            {
-                "component": component,
-                "sbom": sbom,
-                "brand": branding_info,
-            },
-        )
-
-    elif component.component_type == Component.ComponentType.DOCUMENT:
-        # For document components, show document details
-        document = Document.objects.filter(component_id=component_id).order_by("-created_at").first()
-        if not document:
-            return error_response(request, HttpResponseNotFound("No document found for this component"))
-
-        return render(
-            request,
-            "core/component_detailed_public.html.j2",
-            {
-                "component": component,
-                "document": document,
-                "brand": branding_info,
-            },
-        )
-
-    return error_response(request, HttpResponseNotFound("Unknown component type"))
+# ComponentDetailedPublicView moved to component_detailed_public.py
 
 
 @login_required
