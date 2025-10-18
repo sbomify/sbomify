@@ -1,5 +1,3 @@
-/* Components Dashboard Styles */
-
 .page-header {
     background: linear-gradient(135deg, #ffffff, #f8fafc);
     border: 1px solid #e2e8f0;
@@ -8,17 +6,14 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     margin-bottom: 2rem;
 }
-
 .header-main {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
 }
-
 .title-section {
     flex: 1;
 }
-
 .item-title {
     font-size: 2.5rem;
     font-weight: 700;
@@ -28,112 +23,48 @@
     display: flex;
     align-items: center;
 }
-
 .item-subtitle {
     color: #64748b;
     font-size: 1.1rem;
     margin: 0.5rem 0 0 0;
 }
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.header-content {
-    flex: 1;
-}
-
-.dashboard-empty {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: #6c757d;
-}
-
-.dashboard-table {
-    margin-bottom: 0;
-}
-
-.dashboard-table th {
-    border-top: none;
-    font-weight: 600;
-    color: #495057;
-    background-color: #f8f9fa;
-}
-
-.dashboard-table td {
-    vertical-align: middle;
-}
-
-.badge {
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.table-responsive {
-    border-radius: 0.375rem;
-}
-
-/* Tablet Styles */
 @media (max-width: 768px) {
     .page-header {
         padding: 1.5rem 1rem;
         margin-bottom: 1.5rem;
     }
-
     .item-title {
         font-size: 1.75rem;
     }
-
     .item-title .fas {
         font-size: 1.5rem;
         margin-right: 0.75rem !important;
     }
-
     .item-subtitle {
         font-size: 1rem;
         margin-top: 0.75rem;
     }
-
     .header-main {
         flex-direction: column;
         gap: 1.5rem;
         align-items: stretch;
     }
-
-    .card-header {
-        flex-direction: column;
-        gap: 1rem;
-        align-items: stretch;
-    }
-
-    .dashboard-table th:nth-child(2),
-    .dashboard-table td:nth-child(2) {
-        min-width: 120px;
-    }
 }
-
-/* Mobile Styles */
 @media (max-width: 576px) {
     .page-header {
         padding: 1rem 0.75rem;
         margin-bottom: 1rem;
         border-radius: 8px;
     }
-
     .item-title {
         font-size: 1.5rem;
     }
-
     .item-title .fas {
         font-size: 1.25rem;
         margin-right: 0.5rem !important;
     }
-
     .item-subtitle {
         font-size: 0.9rem;
         margin-top: 0.5rem;
     }
 }
-

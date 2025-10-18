@@ -17,7 +17,6 @@
                 </div>
             </div>
         </div>
-        {# Components List Card #}
         <div class="row">
             <div class="col-12">
                 <div class="components-list standard-card mt-3">
@@ -25,12 +24,12 @@
                         <div class="card-header">
                             <div class="header-content">
                                 <h4 class="card-title mb-0">Components</h4>
+                                {% if has_crud_permissions %}
+                                    <button class="btn btn-primary px-4"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#addComponentModal">Add Component</button>
+                                {% endif %}
                             </div>
-                            {% if has_crud_permissions %}
-                                <button class="btn btn-primary px-4"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#addComponentModal">Add Component</button>
-                            {% endif %}
                         </div>
                         <div class="card-body">
                             {% if components %}
@@ -48,7 +47,7 @@
                                             {% for component in components %}
                                                 <tr>
                                                     <td data-label="Name">
-                                                        <a href="/component/{{ component.id }}/"
+                                                        <a href="{% url 'core:component_details' component.id %}"
                                                            class="text-primary text-decoration-none">
                                                             {{ component.name }}
                                                         </a>
@@ -100,7 +99,6 @@
             </div>
         </div>
         {% if has_crud_permissions %}
-            {# Add Component Modal #}
             <div id="addComponentModal"
                  class="modal fade"
                  data-bs-backdrop="static"
