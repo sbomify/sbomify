@@ -212,36 +212,12 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 from .product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
 from .product_details_public import ProductDetailsPublicView  # noqa: F401, E402
+from .product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
 
 # ============================================================================
 # Release Views
 # ============================================================================
-
-
-def product_releases_public(request: HttpRequest, product_id: str) -> HttpResponse:
-    """Public view showing all releases for a product."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to product
-    if not product.is_public:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    releases = Release.objects.filter(product=product).order_by("-created_at")
-    branding_info = BrandingInfo(**product.team.branding_info)
-
-    return render(
-        request,
-        "core/product_releases_public.html.j2",
-        {
-            "product": product,
-            "releases": releases,
-            "brand": branding_info,
-        },
-    )
 
 
 @login_required

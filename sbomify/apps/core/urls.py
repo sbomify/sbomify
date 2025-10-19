@@ -92,7 +92,7 @@ urlpatterns = [
     ),
     path(
         "public/product/<str:product_id>/releases/",
-        views.product_releases_public,
+        views.ProductReleasesPublicView.as_view(),
         name="product_releases_public",
     ),
     path(
