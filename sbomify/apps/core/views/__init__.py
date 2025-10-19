@@ -27,6 +27,18 @@ from django.urls import reverse
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
+from sbomify.apps.core.views.component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 from sbomify.apps.teams.schemas import BrandingInfo
@@ -210,12 +222,6 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # Product/Project/Component Views - Moved from sboms app
 # ============================================================================
 
-from .product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
-from .product_details_public import ProductDetailsPublicView  # noqa: F401, E402
-from .product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
-from .product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
-from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
-
 # ============================================================================
 # Release Views
 # ============================================================================
@@ -396,31 +402,6 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
             "current_team": request.session.get("current_team", {}),
         },
     )
-
-
-from .components_dashboard import ComponentsDashboardView  # noqa: F401, E402
-
-
-@login_required
-def releases_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-    return render(
-        request,
-        "core/releases_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-        },
-    )
-
-
-from .component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
-from .component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
-from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
-from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
-from .dashboard import DashboardView  # noqa: F401, E402
 
 
 @login_required

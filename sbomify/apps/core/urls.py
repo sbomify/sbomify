@@ -63,7 +63,7 @@ urlpatterns = [
         views.ComponentDetailsPrivateView.as_view(),
         name="component_details",
     ),
-    path("releases/", views.releases_dashboard, name="releases_dashboard"),
+    path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
         views.ComponentDetailedPrivateView.as_view(),
