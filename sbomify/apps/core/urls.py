@@ -38,7 +38,7 @@ urlpatterns = [
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path(
         "product/<str:product_id>/",
-        views.product_details_private,
+        views.ProductDetailsPrivateView.as_view(),
         name="product_details",
     ),
     path(

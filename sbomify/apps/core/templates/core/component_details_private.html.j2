@@ -55,13 +55,6 @@ APP_BASE_URL - Base URL for the application
             </span>
         </div>
     </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="component"
-                 data-item-id="{{ component.id }}"></div>
-        </div>
-    </div>
     {% if component.component_type == 'sbom' %}
         <div class="vc-component-meta-info"
              data-component-id="{{ component.id }}"

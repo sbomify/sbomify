@@ -210,6 +210,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # Product/Project/Component Views - Moved from sboms app
 # ============================================================================
 
+from .product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
 from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
 
 
@@ -231,32 +232,6 @@ def product_details_public(request: HttpRequest, product_id: str) -> HttpRespons
         request,
         "core/product_details_public.html.j2",
         {"product": product, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
-    )
-
-
-@login_required
-def product_details_private(request: HttpRequest, product_id: str) -> HttpResponse:
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to project
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-
-    return render(
-        request,
-        "core/product_details_private.html.j2",
-        {
-            "product": product,
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-            "team_billing_plan": getattr(product.team, "billing_plan", "community"),
-        },
     )
 
 
