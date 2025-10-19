@@ -211,29 +211,8 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # ============================================================================
 
 from .product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
+from .product_details_public import ProductDetailsPublicView  # noqa: F401, E402
 from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
-
-
-def product_details_public(request: HttpRequest, product_id: str) -> HttpResponse:
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to project
-    if not product.is_public:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Check if there are any SBOMs available for download
-    has_downloadable_content = SBOM.objects.filter(component__projects__products=product).exists()
-
-    branding_info = BrandingInfo(**product.team.branding_info)
-    return render(
-        request,
-        "core/product_details_public.html.j2",
-        {"product": product, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
-    )
-
 
 # ============================================================================
 # Release Views
