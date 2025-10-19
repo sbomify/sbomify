@@ -35,7 +35,7 @@ urlpatterns = [
         RedirectView.as_view(pattern_name="core:component_details_public", permanent=True),
     ),
     # Main URLs
-    path("products/", views.products_dashboard, name="products_dashboard"),
+    path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path(
         "product/<str:product_id>/",
         views.product_details_private,

@@ -210,19 +210,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # Product/Project/Component Views - Moved from sboms app
 # ============================================================================
 
-
-@login_required
-def products_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-    return render(
-        request,
-        "core/products_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-        },
-    )
+from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
 
 
 def product_details_public(request: HttpRequest, product_id: str) -> HttpResponse:
