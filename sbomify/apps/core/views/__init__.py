@@ -212,40 +212,13 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 from .product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
 from .product_details_public import ProductDetailsPublicView  # noqa: F401, E402
+from .product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
 from .product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from .products_dashboard import ProductsDashboardView  # noqa: F401, E402
 
 # ============================================================================
 # Release Views
 # ============================================================================
-
-
-@login_required
-def product_releases_private(request: HttpRequest, product_id: str) -> HttpResponse:
-    """Private view showing all releases for a product."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to product
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-    releases = Release.objects.filter(product=product).order_by("-created_at")
-
-    return render(
-        request,
-        "core/product_releases_private.html.j2",
-        {
-            "product": product,
-            "releases": releases,
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-        },
-    )
 
 
 def release_details_public(request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:

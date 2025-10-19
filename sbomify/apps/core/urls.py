@@ -87,7 +87,7 @@ urlpatterns = [
     # Release URLs
     path(
         "product/<str:product_id>/releases/",
-        views.product_releases_private,
+        views.ProductReleasesPrivateView.as_view(),
         name="product_releases",
     ),
     path(
