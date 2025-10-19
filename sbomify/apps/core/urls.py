@@ -102,7 +102,7 @@ urlpatterns = [
     ),
     path(
         "public/product/<str:product_id>/release/<str:release_id>/",
-        views.release_details_public,
+        views.ReleaseDetailsPublicView.as_view(),
         name="release_details_public",
     ),
     # Download URLs
