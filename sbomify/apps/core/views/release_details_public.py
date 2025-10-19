@@ -11,11 +11,6 @@ class ReleaseDetailsPublicView(View):
     def get(self, request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
         from sbomify.apps.core.apis import get_release
 
-        try:
-            release = Release.objects.get(pk=release_id)
-        except Release.DoesNotExist:
-            return error_response(request, HttpResponseNotFound("Release not found"))
-
         status_code, release_data = get_release(request, release_id)
         if status_code != 200:
             return error_response(request, HttpResponseNotFound("Release not found"))
