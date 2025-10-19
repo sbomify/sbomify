@@ -97,7 +97,7 @@ urlpatterns = [
     ),
     path(
         "product/<str:product_id>/release/<str:release_id>/",
-        views.release_details_private,
+        views.ReleaseDetailsPrivateView.as_view(),
         name="release_details",
     ),
     path(
