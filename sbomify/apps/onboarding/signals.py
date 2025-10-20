@@ -12,7 +12,6 @@ from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from .models import OnboardingStatus
-from .tasks import queue_welcome_email
 
 User = get_user_model()
 logger = getLogger(__name__)
@@ -34,7 +33,9 @@ def create_onboarding_status(sender, instance: User, created: bool, **kwargs) ->
             OnboardingStatus.objects.create(user=instance)
             logger.info(f"Created onboarding status for user {instance.email}")
 
-            # Queue welcome email task
+            # Queue welcome email task (lazy import to avoid circular dependency)
+            from .tasks import queue_welcome_email
+
             task_id = queue_welcome_email(instance)
             logger.info(f"Queued welcome email task {task_id} for user {instance.email}")
 
