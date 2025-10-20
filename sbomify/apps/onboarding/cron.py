@@ -10,6 +10,8 @@ from dramatiq_crontab import cron
 
 from .tasks import process_all_onboarding_reminders_task
 
+# Onboarding cron module loaded
+
 
 # Schedule onboarding reminder processing to run daily at 9:00 AM UTC
 # This will process first component/SBOM reminders that adapt based on user progress
