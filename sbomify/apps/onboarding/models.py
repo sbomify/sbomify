@@ -1,17 +1,21 @@
-from django.contrib.auth import get_user_model
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.db import models
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from sbomify.apps.core.models import User
 
 
 class OnboardingStatus(models.Model):
     """Track user onboarding progress and milestones."""
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="onboarding_status")
+    user = models.OneToOneField("core.User", on_delete=models.CASCADE, related_name="onboarding_status")
 
     # Progress tracking
     has_created_component = models.BooleanField(
@@ -173,7 +177,7 @@ class OnboardingEmail(models.Model):
         FAILED = "failed", "Failed"
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="onboarding_emails")
+    user = models.ForeignKey("core.User", on_delete=models.CASCADE, related_name="onboarding_emails")
     email_type = models.CharField(max_length=50, choices=EmailType.choices)
     status = models.CharField(max_length=20, choices=EmailStatus.choices, default=EmailStatus.PENDING)
     sent_at = models.DateTimeField(null=True, blank=True)
