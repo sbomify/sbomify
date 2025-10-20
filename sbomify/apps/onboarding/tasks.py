@@ -14,8 +14,6 @@ from .services import OnboardingEmailService
 User = get_user_model()
 logger = getLogger(__name__)
 
-# Onboarding tasks module loaded
-
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
 @retry(
