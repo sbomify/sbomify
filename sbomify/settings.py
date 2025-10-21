@@ -263,11 +263,13 @@ else:
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")  # Base URL without db
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
+REDIS_BASE_URL = f"redis://{REDIS_HOST}"
 
-# Construct specific URLs for cache and worker, both pointing to database 0
-REDIS_CACHE_URL = f"{REDIS_URL}/0"
-REDIS_WORKER_URL = f"{REDIS_URL}/0"  # Also points to /0
+# Construct specific URLs for different Redis databases
+REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)
+REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
+REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
 
 # Cache Configuration
 if DEBUG:
