@@ -2,18 +2,16 @@
 Signal handlers for tracking onboarding progress.
 """
 
-from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from sbomify.apps.core.models import Component
+from sbomify.apps.core.models import Component, User
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from .models import OnboardingStatus
 
-User = get_user_model()
 logger = getLogger(__name__)
 
 
