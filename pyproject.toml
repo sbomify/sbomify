@@ -18,8 +18,8 @@ pyjwt = "^2.10.1"
 pydantic = "^2.11.9"
 django-anymail = {extras = ["sendgrid"], version = "^13.1"}
 whitenoise = "^6.11.0"
-sentry-sdk = "^2.38.0"
-django-ninja = "^1.4.3"
+sentry-sdk = "^2.42.1"
+django-ninja = "^1.4.5"
 ruid = "^0.1.2"
 boto3 = "^1.40.36"
 dj-database-url = "^3.0.1"
@@ -27,7 +27,7 @@ django-vite = "^3.1.0"
 django-health-check = "^3.20.0"
 django-htmx = "^1.25.0"
 email-validator = "^2.3.0"
-stripe = "^12.5.1"
+stripe = "^13.0.1"
 python-keycloak = "^5.8.1"
 django-allauth = "^65.11.2"
 dramatiq = {extras = ["redis", "watch"], version = "^1.17.1"}
@@ -37,17 +37,17 @@ tenacity = "^9.1.2"
 license-expression = "^30.4.4"
 pyyaml = "^6.0.2"
 dramatiq-crontab = "^1.0.12"
-uvicorn = {extras = ["standard"], version = "^0.36.0"}
+uvicorn = {extras = ["standard"], version = "^0.38.0"}
 uvicorn-worker = "^0.4.0"
 gunicorn = "^23.0.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.37.0"
-ruff = "^0.13.1"
+ruff = "^0.14.1"
 bandit = "^1.8.6"
 django-debug-toolbar = "^6.0.0"
 pre-commit = "^4.3.0"
-datamodel-code-generator = {extras = ["http"], version = "^0.33.0"}
+datamodel-code-generator = {extras = ["http"], version = "^0.35.0"}
 pytest-json-report = "^1.5.0"
 pytest-playwright = "^0.7.1"
 djlint = "^1.36.4"
