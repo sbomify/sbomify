@@ -39,7 +39,7 @@
     "vue": "^3.5.22",
     "vue-chartjs": "^5.3.2",
     "vue-tsc": "^3.1.1",
-    "vuetify": "^3.10.5"
+    "vuetify": "^3.10.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",
