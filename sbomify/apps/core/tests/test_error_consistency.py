@@ -25,21 +25,9 @@ class TestErrorResponseConsistency:
     def test_authentication_error_consistency(self, sample_team, sample_user):  # noqa: F811
         """Test that authentication errors are consistent across endpoints."""
         # Create private items
-        private_product = Product.objects.create(
-            name="Private Product",
-            team=sample_team,
-            is_public=False
-        )
-        private_project = Project.objects.create(
-            name="Private Project",
-            team=sample_team,
-            is_public=False
-        )
-        private_component = Component.objects.create(
-            name="Private Component",
-            team=sample_team,
-            is_public=False
-        )
+        private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
+        private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
+        private_component = Component.objects.create(name="Private Component", team=sample_team, is_public=False)
         private_component.projects.add(private_project)
 
         client = Client()
@@ -69,29 +57,13 @@ class TestErrorResponseConsistency:
         """Test that forbidden errors are consistent across endpoints."""
         # Create a different team
         other_team = Team.objects.create(name="Other Team")
-        other_user = User.objects.create_user(
-            username="otheruser",
-            email="other@example.com",
-            password="password123"
-        )
+        other_user = User.objects.create_user(username="otheruser", email="other@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 
         # Create items owned by different team
-        other_product = Product.objects.create(
-            name="Other Product",
-            team=other_team,
-            is_public=False
-        )
-        other_project = Project.objects.create(
-            name="Other Project",
-            team=other_team,
-            is_public=False
-        )
-        other_component = Component.objects.create(
-            name="Other Component",
-            team=other_team,
-            is_public=False
-        )
+        other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
+        other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
+        other_component = Component.objects.create(name="Other Component", team=other_team, is_public=False)
         other_component.projects.add(other_project)
 
         client = Client()
@@ -137,7 +109,12 @@ class TestErrorResponseConsistency:
             # All not found errors should include error_code
             assert "error_code" in data, f"Missing error_code in {endpoint}"
             # Note: some endpoints might use specific error codes like PRODUCT_NOT_FOUND
-            assert data["error_code"] in [expected_error_code.value, ErrorCode.PRODUCT_NOT_FOUND.value, ErrorCode.PROJECT_NOT_FOUND.value, ErrorCode.COMPONENT_NOT_FOUND.value]
+            assert data["error_code"] in [
+                expected_error_code.value,
+                ErrorCode.PRODUCT_NOT_FOUND.value,
+                ErrorCode.PROJECT_NOT_FOUND.value,
+                ErrorCode.COMPONENT_NOT_FOUND.value,
+            ]
 
     def test_duplicate_name_error_consistency(self, sample_team, sample_user, sample_access_token):  # noqa: F811
         """Test that duplicate name errors are consistent across endpoints."""
@@ -152,7 +129,7 @@ class TestErrorResponseConsistency:
 
         # This would be better tested in integration tests with proper authentication
         # For now, we'll just verify the error code constant exists
-        assert hasattr(ErrorCode, 'DUPLICATE_NAME')
+        assert hasattr(ErrorCode, "DUPLICATE_NAME")
 
     def test_internal_error_consistency(self, sample_team, sample_user):  # noqa: F811
         """Test that internal errors are consistent across endpoints."""
@@ -173,14 +150,22 @@ class TestErrorResponseConsistency:
             assert "error_code" in data
             assert "detail" in data
 
-    def test_no_current_team_error_consistency(self, sample_user):  # noqa: F811
+    def test_no_current_team_error_consistency(self, sample_user, ensure_billing_plans):  # noqa: F811
         """Test that no current team errors are consistent across endpoints."""
+        from sbomify.apps.teams.models import Member, Team
+
         client = Client()
         client.force_login(sample_user)
 
+        # Delete any teams that were created for the user during login
+        teams_to_delete = Team.objects.filter(members=sample_user)
+        Member.objects.filter(user=sample_user).delete()
+        teams_to_delete.delete()
+
         # Clear any team session data
         session = client.session
-        session.pop('team_id', None)
+        session.pop("current_team", None)
+        session.pop("user_teams", None)
         session.save()
 
         # Test endpoints that require team context
@@ -191,11 +176,7 @@ class TestErrorResponseConsistency:
         ]
 
         for endpoint in endpoints:
-            response = client.post(
-                endpoint,
-                data={"name": "Test Item"},
-                content_type="application/json"
-            )
+            response = client.post(endpoint, data={"name": "Test Item"}, content_type="application/json")
             assert response.status_code == 403
             data = response.json()
 
@@ -212,29 +193,26 @@ class TestErrorMessageStandardization:
     def test_authentication_message_standardization(self, sample_team):  # noqa: F811
         """Test that authentication error messages are standardized."""
         # Create private items
-        private_product = Product.objects.create(
-            name="Private Product",
-            team=sample_team,
-            is_public=False
-        )
-        private_project = Project.objects.create(
-            name="Private Project",
-            team=sample_team,
-            is_public=False
-        )
-        private_component = Component.objects.create(
-            name="Private Component",
-            team=sample_team,
-            is_public=False
-        )
+        private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
+        private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
+        private_component = Component.objects.create(name="Private Component", team=sample_team, is_public=False)
 
         client = Client()
 
         # Test that all similar endpoints use the same authentication message
         endpoints_and_expected_messages = [
-            (reverse("api-1:get_product", kwargs={"product_id": private_product.id}), "Authentication required for private items"),
-            (reverse("api-1:get_project", kwargs={"project_id": private_project.id}), "Authentication required for private items"),
-            (reverse("api-1:get_component", kwargs={"component_id": private_component.id}), "Authentication required for private items"),
+            (
+                reverse("api-1:get_product", kwargs={"product_id": private_product.id}),
+                "Authentication required for private items",
+            ),
+            (
+                reverse("api-1:get_project", kwargs={"project_id": private_project.id}),
+                "Authentication required for private items",
+            ),
+            (
+                reverse("api-1:get_component", kwargs={"component_id": private_component.id}),
+                "Authentication required for private items",
+            ),
         ]
 
         for endpoint, expected_message in endpoints_and_expected_messages:
@@ -247,29 +225,13 @@ class TestErrorMessageStandardization:
         """Test that forbidden error messages are standardized."""
         # Create a different team
         other_team = Team.objects.create(name="Other Team")
-        other_user = User.objects.create_user(
-            username="otheruser2",
-            email="other2@example.com",
-            password="password123"
-        )
+        other_user = User.objects.create_user(username="otheruser2", email="other2@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 
         # Create items owned by different team
-        other_product = Product.objects.create(
-            name="Other Product",
-            team=other_team,
-            is_public=False
-        )
-        other_project = Project.objects.create(
-            name="Other Project",
-            team=other_team,
-            is_public=False
-        )
-        other_component = Component.objects.create(
-            name="Other Component",
-            team=other_team,
-            is_public=False
-        )
+        other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
+        other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
+        other_component = Component.objects.create(name="Other Component", team=other_team, is_public=False)
 
         client = Client()
         client.force_login(sample_user)

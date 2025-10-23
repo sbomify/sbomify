@@ -16,15 +16,15 @@ from django.urls import reverse
 from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_api_client
 from sbomify.apps.core.utils import number_to_random_token
 
-from .fixtures import (  # noqa: F401
+from sbomify.apps.teams.fixtures import (  # noqa: F401
     guest_user,
     sample_team,
     sample_team_with_guest_member,
     sample_team_with_owner_member,
     sample_user,
 )
-from .models import Invitation, Member, Team
-from .schemas import BrandingInfo
+from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.schemas import BrandingInfo
 
 
 @pytest.mark.django_db

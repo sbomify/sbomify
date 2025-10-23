@@ -394,6 +394,7 @@ ACCOUNT_SIGNUP_FIELDS = ["email*"]
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")

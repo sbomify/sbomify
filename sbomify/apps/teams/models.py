@@ -8,11 +8,44 @@ from django.utils import timezone
 
 
 def get_team_name_for_user(user) -> str:
-    """Get the team name for a user based on available information"""
+    """
+    Get the team name for a user based on available information.
+
+    Prioritizes first_name, then extracts a clean name from username
+    (handling email-based usernames like "user@example.com" or "user.example.com").
+
+    Args:
+        user: The user to generate a team name for
+
+    Returns:
+        A human-friendly team name string
+    """
     if user.first_name:
         return f"{user.first_name}'s Workspace"
+
     if hasattr(user, "username") and user.username:
-        return f"{user.username}'s Workspace"
+        # Extract clean name from email-based usernames
+        # Examples:
+        #   "john@example.com" -> "john"
+        #   "john.example.com" -> "john"
+        #   "john.example.com_1" -> "john"
+        #   "alice" -> "alice"
+        username = user.username
+
+        # First, remove any numbered suffix (e.g., "_1", "_2")
+        if "_" in username:
+            username = username.split("_")[0]
+
+        # Then extract the part before @ or . (whichever comes first)
+        if "@" in username:
+            name = username.split("@")[0]
+        elif "." in username:
+            name = username.split(".")[0]
+        else:
+            name = username
+
+        return f"{name}'s Workspace"
+
     return "My Workspace"
 
 

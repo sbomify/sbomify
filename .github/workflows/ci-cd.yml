@@ -91,7 +91,7 @@ jobs:
           - name: "SBOM Tests"
             path: "sbomify/apps/sboms/tests/"
           - name: "Team Tests"
-            path: "sbomify/apps/teams/tests.py"
+            path: "sbomify/apps/teams/tests/"
           - name: "Billing Tests"
             path: "sbomify/apps/billing/tests/"
           - name: "Document Tests"
