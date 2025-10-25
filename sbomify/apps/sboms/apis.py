@@ -79,7 +79,7 @@ def sbom_upload_cyclonedx(
         sbom_dict = obj_extract(
             obj_in=payload,
             fields=[
-                ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                ExtractSpec("metadata.component.name", required=False, rename_to="name"),
                 ExtractSpec("metadata.component.version", required=False, rename_to="version"),
                 ExtractSpec("specVersion", required=True, rename_to="format_version"),
             ],
@@ -89,6 +89,7 @@ def sbom_upload_cyclonedx(
         if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
             sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
 
+        sbom_dict["name"] = sbom_dict.get("name", component.name)
         sbom_dict["format"] = "cyclonedx"
         sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
@@ -515,7 +516,7 @@ def sbom_upload_file(
                 sbom_dict = obj_extract(
                     obj_in=payload,
                     fields=[
-                        ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                        ExtractSpec("metadata.component.name", required=False, rename_to="name"),
                         ExtractSpec("metadata.component.version", required=False, rename_to="version"),
                         ExtractSpec("specVersion", required=True, rename_to="format_version"),
                     ],
@@ -525,6 +526,7 @@ def sbom_upload_file(
                 if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
                     sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
 
+                sbom_dict["name"] = sbom_dict.get("name", component.name)
                 sbom_dict["format"] = "cyclonedx"
                 sbom_dict["sbom_filename"] = filename
                 sbom_dict["component"] = component
