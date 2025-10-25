@@ -21,6 +21,6 @@ class ReleasesDashboardView(LoginRequiredMixin, View):
             "core/releases_dashboard.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
-                "releases": releases.items,
+                "releases": releases.get("items", []),
             },
         )

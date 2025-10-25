@@ -199,6 +199,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
         base_response["sbom_count"] = item.sbom_set.count()
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
+        base_response["component_type_display"] = item.get_component_type_display()
 
     return base_response
 
