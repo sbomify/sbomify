@@ -1,28 +1,147 @@
-{% extends "core/dashboard_base.html.j2" %}
-{% load widget_tweaks %}
-{% load form_helpers %}
-{% load django_vite %}
+{% extends "./dashboard_base.htmx.j2" %}
+{% load static %}
+{% load django_htmx %}
 {% block title %}sbomify Products{% endblock %}
-{% block content %}
-    <div class="page-header mb-4">
-        <div class="header-main">
-            <div class="title-section">
-                <h1 class="item-title">
-                    <i class="align-middle me-3 text-primary fas fa-box"></i>Products
-                </h1>
-                <p class="item-subtitle">Manage and organize your software products</p>
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/items-list-table.css' %}">
+{% endblock %}
+{% block dashboard_content %}
+    <div class="dashboard">
+        <div class="page-header mb-4">
+            <div class="header-main">
+                <div class="title-section">
+                    <h1 class="item-title">
+                        <i class="fas fa-box me-3 text-primary"></i>Products
+                    </h1>
+                    <p class="item-subtitle">Manage and organize your software products</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row align-items-center">
-        <div class="col-12">
-            <div class="vc-products-list"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        <div class="row">
+            <div class="col-12">
+                <div class="products-list standard-card mt-3">
+                    <div class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="header-content">
+                                <h4 class="card-title mb-0">Products</h4>
+                                {% if has_crud_permissions %}
+                                    <button class="btn btn-primary px-4"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#addProductModal">Add Product</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% if products %}
+                                <div class="table-responsive">
+                                    <table class="table dashboard-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Projects</th>
+                                                <th class="text-center">Public?</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for product in products %}
+                                                <tr>
+                                                    <td data-label="Name">
+                                                        <a href="{% url 'core:product_details' product.id %}"
+                                                           class="text-primary text-decoration-none">
+                                                            {{ product.name }}
+                                                        </a>
+                                                    </td>
+                                                    <td data-label="Projects">
+                                                        {% if product.projects %}
+                                                            {% for project in product.projects %}
+                                                                <a href="{% url 'core:project_details' project.id %}"
+                                                                   title="Details"
+                                                                   class="icon-link me-1 mb-1"
+                                                                   style="text-decoration: none">
+                                                                    <span class="badge bg-secondary-subtle text-secondary">{{ project.name }}</span>
+                                                                </a>
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            <span class="text-muted">No projects</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="text-center" data-label="Public?">
+                                                        {% if product.is_public %}
+                                                            <span class="badge bg-success-subtle text-success">Public</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="dashboard-empty">
+                                    <p class="mb-0">No products added</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+        {% if has_crud_permissions %}
+            <div id="addProductModal"
+                 class="modal fade"
+                 data-bs-backdrop="static"
+                 tabindex="-1"
+                 aria-labelledby="addProductModalLabel"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0">
+                        <div class="modal-header border-bottom-0 pb-0">
+                            <h4 id="addProductModalLabel" class="modal-title text-secondary">Add Product</h4>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pt-3">
+                            <form id="addProductForm"
+                                  method="post"
+                                  action="{% url 'core:products_dashboard' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-medium" for="productName">
+                                        Name
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input id="productName"
+                                           name="name"
+                                           type="text"
+                                           class="form-control form-control-lg"
+                                           required />
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label text-secondary fw-medium" for="productDescription">Description (Optional)</label>
+                                    <textarea id="productDescription"
+                                              name="description"
+                                              class="form-control"
+                                              rows="3"
+                                              placeholder="Describe your product..."></textarea>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary px-4">Create Product</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </div>
-    {% if has_crud_permissions %}<div class="vc-add-product-form"></div>{% endif %}
 {% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+    {% htmx_script %}
 {% endblock %}

@@ -315,12 +315,10 @@ import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue'
 import DangerZone from './components/DangerZone.vue';
 import ProjectDangerZone from './components/ProjectDangerZone.vue';
 import ProductDangerZone from './components/ProductDangerZone.vue';
-import AddProductForm from './components/AddProductForm.vue';
 import AddProjectForm from './components/AddProjectForm.vue';
 import ExportDataCard from './components/ExportDataCard.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 import ItemsListTable from './components/ItemsListTable.vue';
-import ProductsList from './components/ProductsList.vue';
 import ProjectsList from './components/ProjectsList.vue';
 import PublicCard from './components/PublicCard.vue';
 import PublicPageLayout from './components/PublicPageLayout.vue';
@@ -334,7 +332,6 @@ import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
 import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
 import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
-import ReleasesList from './components/ReleasesList.vue';
 import ReleaseList from './components/ReleaseList.vue';
 
 // Initialize Vue components
@@ -353,12 +350,10 @@ mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
 mountVueComponent('vc-danger-zone', DangerZone);
 mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
 mountVueComponent('vc-product-danger-zone', ProductDangerZone);
-mountVueComponent('vc-add-product-form', AddProductForm);
 mountVueComponent('vc-add-project-form', AddProjectForm);
 mountVueComponent('vc-export-data-card', ExportDataCard);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 mountVueComponent('vc-items-list-table', ItemsListTable);
-mountVueComponent('vc-products-list', ProductsList);
 mountVueComponent('vc-projects-list', ProjectsList);
 mountVueComponent('vc-public-card', PublicCard);
 mountVueComponent('vc-public-page-layout', PublicPageLayout);
@@ -372,7 +367,6 @@ mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
 mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
 mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
 
-mountVueComponent('vc-releases-list', ReleasesList);
 mountVueComponent('vc-release-list', ReleaseList);
 
 // Declare global variables

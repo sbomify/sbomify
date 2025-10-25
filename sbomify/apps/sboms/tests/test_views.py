@@ -133,8 +133,8 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
 
     # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert 'class="vc-products-list"' in content
-    assert 'class="vc-add-product-form"' in content
+    assert 'class="products-list' in content
+    assert 'id="addProductModal"' in content
 
 
 # Removed: test_create_product - POST functionality moved to API tests

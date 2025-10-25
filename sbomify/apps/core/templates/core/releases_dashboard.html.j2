@@ -1,13 +1,12 @@
-{% extends "core/dashboard_base.html.j2" %}
-{% comment %}
-Template context:
-has_crud_permissions: Boolean indicating if user has CRUD permissions
-APP_BASE_URL: Base URL for the application (for AJAX requests)
-{% endcomment %}
-{% load widget_tweaks %}
+{% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
 {% block title %}sbomify Releases{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet" href="{% static 'css/releases-dashboard.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/releases-list.css' %}">
+{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main">
@@ -19,58 +18,118 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             </div>
         </div>
     </div>
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            margin-bottom: 2rem;
-        }
-
-        .header-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .title-section {
-            flex: 1;
-        }
-
-        .item-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-            display: flex;
-            align-items: center;
-        }
-
-        .item-subtitle {
-            color: #64748b;
-            font-size: 1.1rem;
-            margin: 0.5rem 0 0 0;
-        }
-
-        @media (max-width: 768px) {
-            .item-title {
-                font-size: 2rem;
-            }
-
-            .header-main {
-                flex-direction: column;
-                gap: 1.5rem;
-                align-items: stretch;
-            }
-        }
-    </style>
     <div class="row">
         <div class="col-12">
-            <div class="vc-releases-list"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            <div class="standard-card mt-3">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <div class="header-content">
+                            <h4 class="card-title mb-0">All Releases</h4>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if releases %}
+                            <div class="table-responsive">
+                                <table class="table dashboard-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Release Name</th>
+                                            <th>Product</th>
+                                            <th>Artifacts</th>
+                                            <th>Created</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for release in releases %}
+                                            <tr>
+                                                <td>
+                                                    <div class="release-info">
+                                                        <a href="{% url 'core:release_details' release.product.id release.id %}"
+                                                           class="release-name">{{ release.name }}</a>
+                                                        <div class="release-badges">
+                                                            {% if release.is_latest %}<span class="badge bg-success-subtle text-success">Latest</span>{% endif %}
+                                                            {% if release.is_prerelease %}<span class="badge bg-warning-subtle text-warning">Pre-release</span>{% endif %}
+                                                        </div>
+                                                        {% if release.description %}<div class="release-description">{{ release.description }}</div>{% endif %}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {% if release.product %}
+                                                        <a href="{% url 'core:product_details' release.product.id %}"
+                                                           class="product-link"
+                                                           title="View {{ release.product.name }}">
+                                                            <i class="fas fa-box me-1"></i>
+                                                            {{ release.product.name }}
+                                                        </a>
+                                                    {% else %}
+                                                        <span class="text-muted">
+                                                            <i class="fas fa-box me-1"></i>
+                                                            Product not found
+                                                        </span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <div class="artifacts-info">
+                                                        <span class="artifact-count">
+                                                            <i class="fas fa-puzzle-piece me-1"></i>
+                                                            {{ release.artifacts_count|default:0 }}
+                                                        </span>
+                                                        {% if release.has_sboms %}
+                                                            <div class="download-action">
+                                                                <a href="{% url 'api-1:download_release' release.id %}"
+                                                                   class="btn btn-sm btn-outline-primary"
+                                                                   title="Download release SBOM">
+                                                                    <i class="fas fa-download"></i>
+                                                                </a>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="date-info" title="{{ release.created_at|date:'F d, Y H:i' }}">
+                                                        {{ release.created_at|date:"M d, Y" }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-center">
+                                                    {% if release.is_public %}
+                                                        <span class="badge bg-success-subtle text-success">Public</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary-subtle text-secondary">Private</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-center">
+                                                    <div class="action-buttons">
+                                                        <a href="{% url 'core:release_details' release.product.id release.id %}"
+                                                           class="btn btn-sm btn-outline-primary"
+                                                           title="View release details">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                        <a href="{% url 'core:product_releases' release.product.id %}"
+                                                           class="btn btn-sm btn-outline-secondary"
+                                                           title="View all releases for this product">
+                                                            <i class="fas fa-list"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="dashboard-empty">
+                                <div class="empty-icon">
+                                    <i class="fas fa-tag"></i>
+                                </div>
+                                <h5>No releases found</h5>
+                                <p class="mb-0 text-muted">Create your first product release to get started</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 {% endblock %}

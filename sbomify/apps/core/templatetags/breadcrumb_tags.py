@@ -1,6 +1,8 @@
 from django import template
 from django.urls import reverse
 
+from sbomify.apps.core.models import Product, Project
+
 register = template.Library()
 
 
@@ -44,7 +46,11 @@ def breadcrumb(context, item, item_type, detailed=False):
 
     if item_type == "project":
         # For projects, show parent products (if any are public)
-        public_products = item.products.filter(is_public=True)
+        if isinstance(item, dict):
+            public_products = Product.objects.filter(project__id=item.get("id"), is_public=True)
+        else:
+            public_products = item.products.filter(is_public=True)
+
         if public_products.exists():
             # Try to detect which product the user came from
             product = detect_parent_from_referrer(public_products, "product")
@@ -63,7 +69,11 @@ def breadcrumb(context, item, item_type, detailed=False):
 
     elif item_type == "component":
         # For components, show a simple hierarchy: Product > Project > Component
-        public_projects = item.projects.filter(is_public=True)
+        if isinstance(item, dict):
+            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
+        else:
+            public_projects = item.projects.filter(is_public=True)
+
         if public_projects.exists():
             # Try to detect which project the user came from, otherwise use first
             project = detect_parent_from_referrer(public_projects, "project")
@@ -105,7 +115,11 @@ def get_breadcrumb_data(item, item_type):
     crumbs = []
 
     if item_type == "project":
-        public_products = item.products.filter(is_public=True)
+        if isinstance(item, dict):
+            public_products = Product.objects.filter(project__id=item.get("id"), is_public=True)
+        else:
+            public_products = item.products.filter(is_public=True)
+
         if public_products.exists():
             product = public_products.first()
             crumbs.append(
@@ -117,7 +131,11 @@ def get_breadcrumb_data(item, item_type):
             )
 
     elif item_type == "component":
-        public_projects = item.projects.filter(is_public=True)
+        if isinstance(item, dict):
+            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
+        else:
+            public_projects = item.projects.filter(is_public=True)
+
         if public_projects.exists():
             project = public_projects.first()
 

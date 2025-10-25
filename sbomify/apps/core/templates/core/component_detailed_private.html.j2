@@ -1,7 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
-{% block title %}{{ component.get_component_type_display }}: {{ data.name }}{% endblock %}
+{% block title %}{{ component.component_type_display }}: {{ data.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/component-detailed-private.css' %}">

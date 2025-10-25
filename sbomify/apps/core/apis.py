@@ -137,7 +137,7 @@ def _ensure_latest_release_exists(product: "Product") -> None:
         log.warning(f"Failed to ensure latest release for product {product.id}: {e}")
 
 
-def _build_item_response(item, item_type: str):
+def _build_item_response(request: HttpRequest, item, item_type: str):
     """Build a standardized response for items."""
     base_response = {
         "id": item.id,
@@ -145,6 +145,7 @@ def _build_item_response(item, item_type: str):
         "team_id": str(item.team_id),
         "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
+        "has_crud_permissions": verify_item_access(request, item, ["owner", "admin"]),
     }
 
     if item_type == "product":
@@ -198,6 +199,7 @@ def _build_item_response(item, item_type: str):
         base_response["sbom_count"] = item.sbom_set.count()
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
+        base_response["component_type_display"] = item.get_component_type_display()
 
     return base_response
 
@@ -338,7 +340,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
                 team_id=team_id,
             )
 
-        return 201, _build_item_response(product, "product")
+        return 201, _build_item_response(request, product, "product")
 
     except IntegrityError:
         return 400, {
@@ -384,7 +386,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
             _ensure_latest_release_exists(product)
 
         # Build response items
-        items = [_build_item_response(product, "product") for product in paginated_products]
+        items = [_build_item_response(request, product, "product") for product in paginated_products]
 
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -410,7 +412,7 @@ def get_product(request: HttpRequest, product_id: str):
 
     # If product is public, allow unauthenticated access
     if product.is_public:
-        return 200, _build_item_response(product, "product")
+        return 200, _build_item_response(request, product, "product")
 
     # For private products, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -419,7 +421,7 @@ def get_product(request: HttpRequest, product_id: str):
     if not verify_item_access(request, product, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(product, "product")
+    return 200, _build_item_response(request, product, "product")
 
 
 @router.put(
@@ -443,7 +445,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.is_public = payload.is_public
             product.save()
 
-        return 200, _build_item_response(product, "product")
+        return 200, _build_item_response(request, product, "product")
 
     except IntegrityError:
         return 400, {
@@ -536,7 +538,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 setattr(product, field, value)
             product.save()
 
-        return 200, _build_item_response(product, "product")
+        return 200, _build_item_response(request, product, "product")
 
     except IntegrityError:
         return 400, {
@@ -1104,7 +1106,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
                 metadata=payload.metadata,
             )
 
-        return 201, _build_item_response(project, "project")
+        return 201, _build_item_response(request, project, "project")
 
     except IntegrityError:
         return 400, {
@@ -1143,7 +1145,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
         paginated_projects, pagination_meta = _paginate_queryset(projects_queryset, page, page_size)
 
         # Build response items
-        items = [_build_item_response(project, "project") for project in paginated_projects]
+        items = [_build_item_response(request, project, "project") for project in paginated_projects]
 
         return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -1167,7 +1169,7 @@ def get_project(request: HttpRequest, project_id: str):
 
     # If project is public, allow unauthenticated access
     if project.is_public:
-        return 200, _build_item_response(project, "project")
+        return 200, _build_item_response(request, project, "project")
 
     # For private projects, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -1176,7 +1178,7 @@ def get_project(request: HttpRequest, project_id: str):
     if not verify_item_access(request, project, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(project, "project")
+    return 200, _build_item_response(request, project, "project")
 
 
 @router.put(
@@ -1201,7 +1203,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
             project.metadata = payload.metadata
             project.save()
 
-        return 200, _build_item_response(project, "project")
+        return 200, _build_item_response(request, project, "project")
 
     except IntegrityError:
         return 400, {
@@ -1307,7 +1309,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                 setattr(project, field, value)
             project.save()
 
-        return 200, _build_item_response(project, "project")
+        return 200, _build_item_response(request, project, "project")
 
     except IntegrityError:
         return 400, {
@@ -1377,7 +1379,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 metadata=payload.metadata,
             )
 
-        return 201, _build_item_response(component, "component")
+        return 201, _build_item_response(request, component, "component")
 
     except IntegrityError:
         return 400, {
@@ -1416,7 +1418,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
         paginated_components, pagination_meta = _paginate_queryset(components_queryset, page, page_size)
 
         # Build response items
-        items = [_build_item_response(component, "component") for component in paginated_components]
+        items = [_build_item_response(request, component, "component") for component in paginated_components]
 
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -1440,7 +1442,7 @@ def get_component(request: HttpRequest, component_id: str):
 
     # If component is public, allow unauthenticated access
     if component.is_public:
-        return 200, _build_item_response(component, "component")
+        return 200, _build_item_response(request, component, "component")
 
     # For private components, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -1449,7 +1451,7 @@ def get_component(request: HttpRequest, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(component, "component")
+    return 200, _build_item_response(request, component, "component")
 
 
 @router.put(
@@ -1475,7 +1477,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             component.metadata = payload.metadata
             component.save()
 
-        return 200, _build_item_response(component, "component")
+        return 200, _build_item_response(request, component, "component")
 
     except IntegrityError:
         return 400, {
@@ -1540,7 +1542,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 setattr(component, field, value)
             component.save()
 
-        return 200, _build_item_response(component, "component")
+        return 200, _build_item_response(request, component, "component")
 
     except IntegrityError:
         return 400, {
@@ -2197,13 +2199,14 @@ def list_all_releases(
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-def _build_release_response(release: Release, include_artifacts: bool = False) -> dict:
+def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict:
     """Build a standardized response for releases."""
     # Count artifacts for this release
     artifact_count = release.artifacts.count()
 
     # Check if release has SBOMs for download capability
     has_sboms = release.artifacts.filter(sbom__isnull=False).exists()
+    has_crud_permissions = verify_item_access(request, release.product, ["owner", "admin"])
 
     response = {
         "id": str(release.id),
@@ -2221,6 +2224,7 @@ def _build_release_response(release: Release, include_artifacts: bool = False) -
             "id": str(release.product.id),
             "name": release.product.name,
         },
+        "has_crud_permissions": has_crud_permissions,
         # Keep backward compatibility fields
         "artifact_count": artifact_count,
     }
@@ -2306,7 +2310,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
                 is_prerelease=payload.is_prerelease,
             )
 
-        return 201, _build_release_response(release, include_artifacts=True)
+        return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
         return 400, {
@@ -2339,7 +2343,7 @@ def get_release(request: HttpRequest, release_id: str):
         if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_release_response(release, include_artifacts=True)
+    return 200, _build_release_response(request, release, include_artifacts=True)
 
 
 @router.put(
@@ -2385,7 +2389,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
                 release.created_at = payload.created_at
             release.save()
 
-        return 200, _build_release_response(release, include_artifacts=True)
+        return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
         return 400, {
@@ -2447,7 +2451,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             if changed:
                 release.save()
 
-        return 200, _build_release_response(release, include_artifacts=True)
+        return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError:
         return 400, {

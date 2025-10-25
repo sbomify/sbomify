@@ -38,6 +38,8 @@ def get_user_teams(user) -> dict:
             "role": membership.role,
             "is_default_team": membership.is_default_team,
             "has_completed_wizard": membership.team.has_completed_wizard,
+            "billing_plan": membership.team.billing_plan,
+            "branding_info": membership.team.branding_info,
         }
 
     return dict(teams)

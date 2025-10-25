@@ -35,15 +35,15 @@ urlpatterns = [
         RedirectView.as_view(pattern_name="core:component_details_public", permanent=True),
     ),
     # Main URLs
-    path("products/", views.products_dashboard, name="products_dashboard"),
+    path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path(
         "product/<str:product_id>/",
-        views.product_details_private,
+        views.ProductDetailsPrivateView.as_view(),
         name="product_details",
     ),
     path(
         "public/product/<str:product_id>/",
-        views.product_details_public,
+        views.ProductDetailsPublicView.as_view(),
         name="product_details_public",
     ),
     path("projects/", views.projects_dashboard, name="projects_dashboard"),
@@ -63,7 +63,7 @@ urlpatterns = [
         views.ComponentDetailsPrivateView.as_view(),
         name="component_details",
     ),
-    path("releases/", views.releases_dashboard, name="releases_dashboard"),
+    path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
         views.ComponentDetailedPrivateView.as_view(),
@@ -87,22 +87,22 @@ urlpatterns = [
     # Release URLs
     path(
         "product/<str:product_id>/releases/",
-        views.product_releases_private,
+        views.ProductReleasesPrivateView.as_view(),
         name="product_releases",
     ),
     path(
         "public/product/<str:product_id>/releases/",
-        views.product_releases_public,
+        views.ProductReleasesPublicView.as_view(),
         name="product_releases_public",
     ),
     path(
         "product/<str:product_id>/release/<str:release_id>/",
-        views.release_details_private,
+        views.ReleaseDetailsPrivateView.as_view(),
         name="release_details",
     ),
     path(
         "public/product/<str:product_id>/release/<str:release_id>/",
-        views.release_details_public,
+        views.ReleaseDetailsPublicView.as_view(),
         name="release_details_public",
     ),
     # Download URLs

@@ -73,16 +73,16 @@
                                     <div class="card shadow-sm">
                                         <div class="card-header">
                                             <div class="header-content">
-                                                <h4 class="card-title mb-0">Download {{ component.get_component_type_display }}</h4>
+                                                <h4 class="card-title mb-0">Download {{ component.component_type_display }}</h4>
                                             </div>
                                         </div>
                                         <div class="card-body">
                                             <div class="text-center">
-                                                <p class="text-muted mb-3">Download this {{ component.get_component_type_display }} file</p>
+                                                <p class="text-muted mb-3">Download this {{ component.component_type_display }} file</p>
                                                 <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' data.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' data.id %} {% endif %}"
                                                    class="btn btn-primary download-btn">
                                                     <i class="fas fa-download me-2"></i>
-                                                    Download {{ component.get_component_type_display }}
+                                                    Download {{ component.component_type_display }}
                                                 </a>
                                             </div>
                                         </div>

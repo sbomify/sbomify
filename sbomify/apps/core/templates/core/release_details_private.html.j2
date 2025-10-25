@@ -1,17 +1,11 @@
-{% extends "core/dashboard_base.html.j2" %}
-{% comment %}
-Template context:
-product: Product object
-release: Release object with prefetched artifacts
-has_crud_permissions: Boolean indicating if user has CRUD permissions
-has_downloadable_content: Boolean indicating if release has downloadable SBOMs
-APP_BASE_URL: Base URL for the application (for AJAX requests)
-current_team: Current team session data
-{% endcomment %}
-{% load widget_tweaks %}
+{% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
-{% block title %}sbomify Product: {{ product.name }} - {{ release.name }}{% endblock %}
+{% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/release-details-private.css' %}">
+{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main mb-3">
@@ -20,17 +14,17 @@ current_team: Current team session data
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb">
                             <li class="breadcrumb-item">
-                                <a href="{% url 'core:product_details' product.id %}">{{ product.name }}</a>
+                                <a href="{% url 'core:product_details' release.product.id %}">{{ release.product.name }}</a>
                             </li>
                             <li class="breadcrumb-item">
-                                <a href="{% url 'core:product_releases' product.id %}">Releases</a>
+                                <a href="{% url 'core:product_releases' release.product.id %}">Releases</a>
                             </li>
                             <li class="breadcrumb-item active" aria-current="page">{{ release.name }}</li>
                         </ol>
                     </nav>
                 </div>
                 <h1 class="item-title">
-                    {% if has_crud_permissions and not release.is_latest %}
+                    {% if release.has_crud_permissions and not release.is_latest %}
                         <span class="vc-editable-single-field"
                               data-item-type="release"
                               data-item-id="{{ release.id }}"
@@ -42,7 +36,7 @@ current_team: Current team session data
                 </h1>
                 {% if release.description %}
                     <p class="item-subtitle">
-                        {% if has_crud_permissions and not release.is_latest %}
+                        {% if release.has_crud_permissions and not release.is_latest %}
                             <span class="vc-editable-single-field"
                                   data-item-type="release"
                                   data-item-id="{{ release.id }}"
@@ -52,7 +46,7 @@ current_team: Current team session data
                             {{ release.description }}
                         {% endif %}
                     </p>
-                {% elif has_crud_permissions and not release.is_latest %}
+                {% elif release.has_crud_permissions and not release.is_latest %}
                     <p class="item-subtitle">
                         <span class="vc-editable-single-field text-muted"
                               data-item-type="release"
@@ -67,7 +61,7 @@ current_team: Current team session data
         <div class="header-meta">
             <span class="meta-item">
                 <i class="fas fa-calendar me-2 text-primary"></i>
-                {% if has_crud_permissions and not release.is_latest %}
+                {% if release.has_crud_permissions and not release.is_latest %}
                     <span class="vc-editable-single-field meta-label"
                           data-item-type="release"
                           data-item-id="{{ release.id }}"
@@ -92,7 +86,7 @@ current_team: Current team session data
             </span>
         </div>
     </div>
-    {% if has_downloadable_content %}
+    {% if release.has_sboms %}
         <div class="row mb-4">
             <div class="col-12">
                 <div class="standard-card">
@@ -105,7 +99,7 @@ current_team: Current team session data
                         <div class="card-body text-center">
                             <p class="text-muted mb-3">Download consolidated SBOM containing all artifacts in this release</p>
                             <a class="btn btn-primary download-btn"
-                               href="/api/v1/releases/{{ release.id }}/download">
+                               href="{% url 'api-1:download_release' release.id %}">
                                 <i class="fas fa-download me-2"></i>Download Release SBOM
                             </a>
                         </div>
@@ -118,196 +112,22 @@ current_team: Current team session data
         <div class="col-12">
             <div class="vc-release-artifacts"
                  data-release-id="{{ release.id }}"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
+                 data-product-id="{{ release.product.id }}"
+                 data-has-crud-permissions="{% if release.has_crud_permissions %}true{% else %}false{% endif %}"
                  data-is-latest-release="{% if release.is_latest %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
-    {% if has_crud_permissions and not release.is_latest %}
+    {% if release.has_crud_permissions and not release.is_latest %}
         <div class="row mt-4">
             <div class="col-12">
                 <div class="vc-release-danger-zone"
                      data-release-id="{{ release.id }}"
-                     data-product-id="{{ product.id }}"
+                     data-product-id="{{ release.product.id }}"
                      data-release-name="{{ release.name }}"
                      data-csrf-token="{{ csrf_token }}"></div>
             </div>
         </div>
     {% endif %}
-    <style>
-        .page-header {
-            background: linear-gradient(135deg, #ffffff, #f8fafc);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-main {
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.5rem;
-        }
-
-        .title-section {
-            flex: 1;
-        }
-
-        .breadcrumb {
-            background: none;
-            padding: 0;
-            margin: 0 0 1rem 0;
-            font-size: 0.9rem;
-        }
-
-        .breadcrumb-item a {
-            color: #6366f1;
-            text-decoration: none;
-        }
-
-        .breadcrumb-item a:hover {
-            text-decoration: underline;
-        }
-
-        .item-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin: 0;
-            line-height: 1.2;
-            display: flex;
-            align-items: center;
-        }
-
-        .item-subtitle {
-            color: #64748b;
-            font-size: 1.1rem;
-            margin: 0.5rem 0 0 0;
-        }
-
-
-
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-top: 1rem;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-
-        .meta-label {
-            font-weight: 600;
-        }
-
-        .meta-divider {
-            color: #cbd5e1;
-            font-weight: bold;
-        }
-
-        .meta-id {
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.8rem;
-            background: #f1f5f9;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            border: 1px solid #e2e8f0;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .meta-id:hover {
-            background: #e2e8f0;
-            border-color: #cbd5e1;
-        }
-
-        .standard-card {
-            margin-bottom: 1rem;
-        }
-
-        .download-card {
-            border: 1px solid #e5e7eb;
-            background: #ffffff;
-            border-radius: 0.5rem;
-            transition: all 0.2s ease;
-        }
-
-        .download-card:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        }
-
-        .download-card .card-header {
-            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-            border-bottom: 1px solid #e5e7eb;
-            padding: 1rem 1.25rem;
-            border-radius: 0.5rem 0.5rem 0 0;
-        }
-
-        .download-card .card-title {
-            color: #374151;
-            font-size: 1.1rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-        }
-
-        .download-card .card-title i {
-            color: #6366f1;
-        }
-
-        .download-card .card-body {
-            padding: 1.5rem 1.25rem;
-            background: #ffffff;
-        }
-
-        .download-btn {
-            padding: 0.75rem 1.5rem;
-            font-size: 0.9rem;
-            font-weight: 500;
-            border-radius: 8px;
-            border: none;
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-            color: white;
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-        }
-
-        .download-btn:hover {
-            background: linear-gradient(135deg, #4f46e5, #4338ca);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-            color: white;
-            text-decoration: none;
-        }
-
-        .download-btn:active {
-            transform: translateY(0);
-        }
-
-        @media (max-width: 768px) {
-
-            .item-title {
-                font-size: 1.5rem;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .header-meta {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-        }
-    </style>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

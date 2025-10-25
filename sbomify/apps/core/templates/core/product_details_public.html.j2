@@ -1,14 +1,12 @@
 {% extends "core/public_base.html.j2" %}
-{% comment %}
-Template context:
-product: Product object
-brand: BrandingInfo object
-{% endcomment %}
-{% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
 {% load breadcrumb_tags %}
 {% block title %}{{ product.name }}{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-page-layout.css' %}">
+{% endblock %}
 {% block meta_description %}
     {{ product.name }} - Software Bill of Materials (SBOM) for this product. View projects, components, and download SBOMs.
 {% endblock %}
@@ -16,26 +14,59 @@ brand: BrandingInfo object
     {% breadcrumb product 'product' %}
 {% endblock %}
 {% block content %}
-    <!-- JSON data for Vue components -->
-    {{ product_projects_data|json_script:"product-projects-data" }}
-    <div class="vc-public-page-layout"
-         data-title="{{ product.name }}"
-         data-title-icon="fas fa-box"
-         data-page-type="product"
-         data-item-id="{{ product.id }}"
-         {% if has_downloadable_content %} data-download-url="/api/v1/products/{{ product.id }}/download" data-download-title="Download Latest Release" data-download-button-text="Download Latest Release" data-download-description="Download SBOM from the latest release containing the most current artifacts for this product" data-download-icon="fas fa-download" {% endif %}>
-        <template data-slot="subtitle">
-            <span class="meta-badge meta-badge--primary">
-                <i class="fas fa-box"></i>
-                Product
-            </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-fingerprint"></i>
-                <span class="vc-copyable-value"
-                      data-value="{{ product.id }}"
-                      title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
-            </span>
-        </template>
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">
+                            <i class="fas fa-box title-icon"></i>
+                            {{ product.name }}
+                        </h1>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="product-content">
+                            <div class="product-identifiers-section">
+                                <div class="vc-product-identifiers"
+                                     data-product-id="{{ product.id }}"
+                                     data-has-crud-permissions="false"
+                                     data-billing-plan="business"></div>
+                            </div>
+                            <div class="product-links-section">
+                                <div class="vc-product-links"
+                                     data-product-id="{{ product.id }}"
+                                     data-has-crud-permissions="false"></div>
+                            </div>
+                            <div class="product-projects-section">
+                                <div class="vc-public-product-projects"
+                                     data-product-id="{{ product.id }}"
+                                     data-brand-color="{{ brand.primary_color|default:'#4f46e5' }}"
+                                     data-accent-color="{{ brand.secondary_color|default:'#7c8b9d' }}"></div>
+                            </div>
+                            <div class="product-releases-section">
+                                <div class="vc-product-releases"
+                                     data-product-id="{{ product.id }}"
+                                     data-has-crud-permissions="false"
+                                     data-public-view="true"
+                                     data-view-all-url="{% url 'core:product_releases_public' product.id %}"></div>
+                            </div>
+                            {% if has_downloadable_content %}
+                                <div class="download-section">
+                                    <div class="vc-public-download-card"
+                                         data-title="Download Latest Release"
+                                         data-description="Download SBOM from the latest release containing the most current artifacts for this product"
+                                         data-download-url="{% url 'core:sbom_download_product' product.id %}"
+                                         data-download-text="Download Latest Release"
+                                         data-download-icon="fas fa-download"></div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 {% block scripts %}
