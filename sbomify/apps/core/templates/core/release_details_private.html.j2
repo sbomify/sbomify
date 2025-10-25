@@ -1,7 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
-{% block title %}sbomify Product: {{ product.name }} - {{ release.name }}{% endblock %}
+{% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/release-details-private.css' %}">
@@ -14,17 +14,17 @@
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb">
                             <li class="breadcrumb-item">
-                                <a href="{% url 'core:product_details' product.id %}">{{ product.name }}</a>
+                                <a href="{% url 'core:product_details' release.product.id %}">{{ release.product.name }}</a>
                             </li>
                             <li class="breadcrumb-item">
-                                <a href="{% url 'core:product_releases' product.id %}">Releases</a>
+                                <a href="{% url 'core:product_releases' release.product.id %}">Releases</a>
                             </li>
                             <li class="breadcrumb-item active" aria-current="page">{{ release.name }}</li>
                         </ol>
                     </nav>
                 </div>
                 <h1 class="item-title">
-                    {% if has_crud_permissions and not release.is_latest %}
+                    {% if release.has_crud_permissions and not release.is_latest %}
                         <span class="vc-editable-single-field"
                               data-item-type="release"
                               data-item-id="{{ release.id }}"
@@ -36,7 +36,7 @@
                 </h1>
                 {% if release.description %}
                     <p class="item-subtitle">
-                        {% if has_crud_permissions and not release.is_latest %}
+                        {% if release.has_crud_permissions and not release.is_latest %}
                             <span class="vc-editable-single-field"
                                   data-item-type="release"
                                   data-item-id="{{ release.id }}"
@@ -46,7 +46,7 @@
                             {{ release.description }}
                         {% endif %}
                     </p>
-                {% elif has_crud_permissions and not release.is_latest %}
+                {% elif release.has_crud_permissions and not release.is_latest %}
                     <p class="item-subtitle">
                         <span class="vc-editable-single-field text-muted"
                               data-item-type="release"
@@ -61,7 +61,7 @@
         <div class="header-meta">
             <span class="meta-item">
                 <i class="fas fa-calendar me-2 text-primary"></i>
-                {% if has_crud_permissions and not release.is_latest %}
+                {% if release.has_crud_permissions and not release.is_latest %}
                     <span class="vc-editable-single-field meta-label"
                           data-item-type="release"
                           data-item-id="{{ release.id }}"
@@ -86,7 +86,7 @@
             </span>
         </div>
     </div>
-    {% if has_downloadable_content %}
+    {% if release.has_sboms %}
         <div class="row mb-4">
             <div class="col-12">
                 <div class="standard-card">
@@ -112,17 +112,17 @@
         <div class="col-12">
             <div class="vc-release-artifacts"
                  data-release-id="{{ release.id }}"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
+                 data-product-id="{{ release.product.id }}"
+                 data-has-crud-permissions="{% if release.has_crud_permissions %}true{% else %}false{% endif %}"
                  data-is-latest-release="{% if release.is_latest %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
-    {% if has_crud_permissions and not release.is_latest %}
+    {% if release.has_crud_permissions and not release.is_latest %}
         <div class="row mt-4">
             <div class="col-12">
                 <div class="vc-release-danger-zone"
                      data-release-id="{{ release.id }}"
-                     data-product-id="{{ product.id }}"
+                     data-product-id="{{ release.product.id }}"
                      data-release-name="{{ release.name }}"
                      data-csrf-token="{{ csrf_token }}"></div>
             </div>

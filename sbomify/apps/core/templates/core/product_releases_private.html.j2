@@ -23,7 +23,7 @@
                 <h1 class="item-title">Releases</h1>
                 <p class="item-subtitle">Manage releases for {{ product.name }}</p>
             </div>
-            {% if has_crud_permissions %}
+            {% if product.has_crud_permissions %}
                 <div class="header-actions">
                     <button class="btn btn-primary"
                             data-bs-toggle="modal"
@@ -44,10 +44,10 @@
         <div class="col-12">
             <div class="vc-product-releases"
                  data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
-    {% if has_crud_permissions %}
+    {% if product.has_crud_permissions %}
         <div class="modal fade"
              id="createReleaseModal"
              tabindex="-1"

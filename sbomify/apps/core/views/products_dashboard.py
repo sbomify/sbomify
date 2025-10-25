@@ -4,19 +4,21 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.apis import create_product, list_products
+from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.schemas import ProductCreateSchema
+
 
 class ProductsDashboardView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.core.apis import list_products
+        status_code, products = list_products(request, page=1, page_size=-1)
+        if status_code != 200:
+            return error_response(
+                request, HttpResponse(status=status_code, content=products.get("detail", "Unknown error"))
+            )
 
         current_team = request.session.get("current_team")
-        has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-        status_code, response_data = list_products(request, page=1, page_size=-1)
-
-        products = []
-        if status_code == 200:
-            products = response_data.items
+        has_crud_permissions = current_team.get("role") in ["owner", "admin"]
 
         return render(
             request,
@@ -24,14 +26,11 @@ class ProductsDashboardView(LoginRequiredMixin, View):
             {
                 "current_team": current_team,
                 "has_crud_permissions": has_crud_permissions,
-                "products": products,
+                "products": products.items,
             },
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.core.apis import create_product
-        from sbomify.apps.core.schemas import ProductCreateSchema
-
         name = request.POST.get("name", "").strip()
         description = request.POST.get("description", "").strip()
 
@@ -41,7 +40,6 @@ class ProductsDashboardView(LoginRequiredMixin, View):
         )
 
         status_code, response_data = create_product(request, payload)
-
         if status_code == 201:
             messages.success(request, f'Product "{name}" created successfully!')
         else:

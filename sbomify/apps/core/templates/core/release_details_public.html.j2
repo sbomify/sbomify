@@ -1,7 +1,7 @@
 {% extends "core/public_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
-{% block title %}{{ product.name }} - {{ release.name }}{% endblock %}
+{% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/release-details-public.css' %}">
 {% endblock %}
@@ -16,10 +16,10 @@
                                 <nav aria-label="breadcrumb">
                                     <ol class="breadcrumb">
                                         <li class="breadcrumb-item">
-                                            <a href="{% url 'core:product_details_public' product.id %}">{{ product.name }}</a>
+                                            <a href="{% url 'core:product_details_public' release.product.id %}">{{ release.product.name }}</a>
                                         </li>
                                         <li class="breadcrumb-item">
-                                            <a href="{% url 'core:product_releases_public' product.id %}">Releases</a>
+                                            <a href="{% url 'core:product_releases_public' release.product.id %}">Releases</a>
                                         </li>
                                         <li class="breadcrumb-item active" aria-current="page">{{ release.name }}</li>
                                     </ol>
@@ -44,7 +44,7 @@
                         </span>
                     </div>
                 </div>
-                {% if has_downloadable_content %}
+                {% if release.has_sboms %}
                     <div class="vc-public-download-card"
                          data-title="Download Release"
                          data-description="Download consolidated SBOM containing all artifacts in this release"
@@ -52,10 +52,10 @@
                          data-download-text="Download Release SBOM"
                          data-download-icon="fas fa-download"></div>
                 {% endif %}
-                {{ artifacts_data|json_script:"artifacts-data" }}
+                {{ release.artifacts|json_script:"artifacts-data" }}
                 <div class="vc-public-release-artifacts"
                      data-release-id="{{ release.id }}"
-                     data-product-id="{{ product.id }}"
+                     data-product-id="{{ release.product.id }}"
                      data-artifacts-data-element-id="artifacts-data"></div>
             </div>
         </div>

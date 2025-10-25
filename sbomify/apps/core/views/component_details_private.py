@@ -1,45 +1,51 @@
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.utils import verify_item_access
 
 
 class ComponentDetailsPrivateView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        from sbomify.apps.core.apis import list_component_documents, list_component_sboms
+        status_code, component = get_component(request, component_id)
+        if status_code != 200:
+            return error_response(
+                request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
+            )
 
-        try:
-            component: Component = Component.objects.get(pk=component_id)
-        except Component.DoesNotExist:
-            return error_response(request, HttpResponseNotFound("Component not found"))
-
-        # Verify access to project
-        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-            return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-        has_crud_permissions = verify_item_access(request, component, ["owner", "admin"])
-        is_owner = verify_item_access(request, component, ["owner"])
+        current_team = request.session.get("current_team", {})
+        is_owner = current_team.get("role") == "owner"
+        billing_plan = current_team.get("billing_plan")
 
         context = {
-            "component": component,
-            "has_crud_permissions": has_crud_permissions,
-            "is_owner": is_owner,
             "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-            "team_billing_plan": getattr(component.team, "billing_plan", "community"),
+            "component": component,
+            "current_team": current_team,
+            "is_owner": is_owner,
+            "team_billing_plan": billing_plan,
         }
 
-        if component.component_type == Component.ComponentType.SBOM:
+        if component.get("component_type") == Component.ComponentType.SBOM:
             status_code, sboms_response = list_component_sboms(request, component_id, page=1, page_size=-1)
-            context["sboms_data"] = sboms_response.get("items", []) if status_code == 200 else []
+            if status_code != 200:
+                return error_response(
+                    request, HttpResponse(status=status_code, content=sboms_response.get("detail", "Unknown error"))
+                )
+            context["sboms_data"] = sboms_response.get("items", [])
 
-        elif component.component_type == Component.ComponentType.DOCUMENT:
+        elif component.get("component_type") == Component.ComponentType.DOCUMENT:
             status_code, documents_response = list_component_documents(request, component_id, page=1, page_size=-1)
-            context["documents_data"] = documents_response.get("items", []) if status_code == 200 else []
+            if status_code != 200:
+                return error_response(
+                    request, HttpResponse(status=status_code, content=documents_response.get("detail", "Unknown error"))
+                )
+            context["documents_data"] = documents_response.get("items", [])
+
+        else:
+            return error_response(request, HttpResponseNotFound("Unknown component type"))
 
         return render(request, "core/component_details_private.html.j2", context)

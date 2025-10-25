@@ -1,45 +1,43 @@
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.apis import create_release, get_product, list_all_releases
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Product, Release
-from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.core.schemas import ReleaseCreateSchema
 
 
 class ProductReleasesPrivateView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        try:
-            product: Product = Product.objects.get(pk=product_id)
-        except Product.DoesNotExist:
-            return error_response(request, HttpResponseNotFound("Product not found"))
+        status_code, product = get_product(request, product_id)
+        if status_code != 200:
+            return error_response(
+                request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
+            )
 
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-            return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
+        status_code, releases = list_all_releases(request, product_id=product_id, page=1, page_size=-1)
+        if status_code != 200:
+            return error_response(
+                request, HttpResponse(status=status_code, content=releases.get("detail", "Unknown error"))
+            )
 
-        has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-        releases = Release.objects.filter(product=product).order_by("-created_at")
+        current_team = request.session.get("current_team", {})
 
         return render(
             request,
             "core/product_releases_private.html.j2",
             {
-                "product": product,
-                "releases": releases,
-                "has_crud_permissions": has_crud_permissions,
                 "APP_BASE_URL": settings.APP_BASE_URL,
-                "current_team": request.session.get("current_team", {}),
+                "current_team": current_team,
+                "product": product,
+                "releases": releases.items,
             },
         )
 
     def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
-        from django.contrib import messages
-
-        from sbomify.apps.core.apis import create_release
-        from sbomify.apps.core.schemas import ReleaseCreateSchema
-
         name = request.POST.get("name", "").strip()
         description = request.POST.get("description", "").strip()
 
@@ -51,7 +49,6 @@ class ProductReleasesPrivateView(LoginRequiredMixin, View):
         )
 
         status_code, response_data = create_release(request, payload)
-
         if status_code == 201:
             messages.success(request, f'Release "{name}" created successfully!')
         else:

@@ -13,7 +13,7 @@
         <div class="header-main mb-3">
             <div class="title-section">
                 <h1 class="item-title">
-                    {% if has_crud_permissions %}
+                    {% if product.has_crud_permissions %}
                         <span class="vc-editable-single-field"
                               data-item-type="product"
                               data-item-id="{{ product.id }}"
@@ -22,7 +22,7 @@
                         {{ product.name }}
                     {% endif %}
                 </h1>
-                {% if has_crud_permissions %}
+                {% if product.has_crud_permissions %}
                     <div class="vc-public-status-toggle"
                          data-item-type="product"
                          data-item-id="{{ product.id }}"
@@ -63,9 +63,9 @@
                                                 <div class="stat-value">
                                                     <span class="display-4 stat-number text-dark-emphasis">
                                                         {% if key == "projects" %}
-                                                            {{ dashboard_stats.total_projects|default:0 }}
+                                                            {{ dashboard_summary.total_projects|default:0 }}
                                                         {% elif key == "components" %}
-                                                            {{ dashboard_stats.total_components|default:0 }}
+                                                            {{ dashboard_summary.total_components|default:0 }}
                                                         {% endif %}
                                                     </span>
                                                 </div>
@@ -85,14 +85,14 @@
             <div class="vc-item-assignment-manager"
                  data-parent-type="product"
                  data-parent-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
             <div class="vc-product-identifiers"
                  data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
+                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"
                  data-billing-plan="{{ team_billing_plan }}"></div>
         </div>
     </div>
@@ -100,14 +100,14 @@
         <div class="col-12">
             <div class="vc-product-links"
                  data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
     <div class="row mt-3">
         <div class="col-12">
             <div class="vc-product-releases"
                  data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
         </div>
     </div>
     <div class="row mt-3">
@@ -132,7 +132,7 @@
             </div>
         </div>
     </div>
-    {% if has_crud_permissions %}
+    {% if product.has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
                 <div class="vc-product-danger-zone"
