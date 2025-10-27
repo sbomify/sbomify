@@ -55,23 +55,23 @@
 /* Enhanced dashboard cards for mobile */
 @media (max-width: 767.98px) {
   /* Single column layout for mobile dashboard stats */
-  .vc-dashboard-stats .row {
+  .dashboard-stats .row {
     margin-left: 0;
     margin-right: 0;
   }
 
-  .vc-dashboard-stats .row > [class*="col-"] {
+  .dashboard-stats .row > [class*="col-"] {
     padding-left: 0;
     padding-right: 0;
     margin-bottom: 1rem;
   }
 
-  .vc-dashboard-stats .row > [class*="col-"]:last-child {
+  .dashboard-stats .row > [class*="col-"]:last-child {
     margin-bottom: 0;
   }
 
   /* Better mobile card spacing */
-  .vc-dashboard-stats .card {
+  .dashboard-stats .card {
     border-radius: 1rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     margin-bottom: 0;

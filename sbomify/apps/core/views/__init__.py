@@ -27,13 +27,27 @@ from django.urls import reverse
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
+from sbomify.apps.core.views.component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 from sbomify.apps.teams.schemas import BrandingInfo
 
 from ..errors import error_response
 from ..forms import CreateAccessTokenForm, SupportContactForm
-from ..models import Component, Product, Project, Release
+from ..models import Component, Product, Project
 
 logger = logging.getLogger(__name__)
 
@@ -210,240 +224,9 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # Product/Project/Component Views - Moved from sboms app
 # ============================================================================
 
-
-@login_required
-def products_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-    return render(
-        request,
-        "core/products_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-        },
-    )
-
-
-def product_details_public(request: HttpRequest, product_id: str) -> HttpResponse:
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to project
-    if not product.is_public:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Check if there are any SBOMs available for download
-    has_downloadable_content = SBOM.objects.filter(component__projects__products=product).exists()
-
-    branding_info = BrandingInfo(**product.team.branding_info)
-    return render(
-        request,
-        "core/product_details_public.html.j2",
-        {"product": product, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
-    )
-
-
-@login_required
-def product_details_private(request: HttpRequest, product_id: str) -> HttpResponse:
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to project
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-
-    return render(
-        request,
-        "core/product_details_private.html.j2",
-        {
-            "product": product,
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-            "team_billing_plan": getattr(product.team, "billing_plan", "community"),
-        },
-    )
-
-
 # ============================================================================
 # Release Views
 # ============================================================================
-
-
-def product_releases_public(request: HttpRequest, product_id: str) -> HttpResponse:
-    """Public view showing all releases for a product."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to product
-    if not product.is_public:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    releases = Release.objects.filter(product=product).order_by("-created_at")
-    branding_info = BrandingInfo(**product.team.branding_info)
-
-    return render(
-        request,
-        "core/product_releases_public.html.j2",
-        {
-            "product": product,
-            "releases": releases,
-            "brand": branding_info,
-        },
-    )
-
-
-@login_required
-def product_releases_private(request: HttpRequest, product_id: str) -> HttpResponse:
-    """Private view showing all releases for a product."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-    except Product.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Product not found"))
-
-    # Verify access to product
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-    releases = Release.objects.filter(product=product).order_by("-created_at")
-
-    return render(
-        request,
-        "core/product_releases_private.html.j2",
-        {
-            "product": product,
-            "releases": releases,
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-        },
-    )
-
-
-def release_details_public(request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
-    """Public view showing details of a specific release."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-        release: Release = (
-            Release.objects.select_related("product")
-            .prefetch_related("artifacts__sbom__component", "artifacts__document__component")
-            .get(pk=release_id, product=product)
-        )
-    except (Product.DoesNotExist, Release.DoesNotExist):
-        return error_response(request, HttpResponseNotFound("Release not found"))
-
-    # Verify access to product
-    if not product.is_public:
-        return error_response(request, HttpResponseNotFound("Release not found"))
-
-    # Check if there are any artifacts available for download
-    has_downloadable_content = release.artifacts.filter(sbom__isnull=False).exists()
-
-    # Prepare artifacts data for Vue component
-    artifacts_data = []
-    for artifact in release.artifacts.all():
-        if artifact.sbom:
-            artifacts_data.append(
-                {
-                    "id": str(artifact.id),
-                    "sbom": {
-                        "id": str(artifact.sbom.id),
-                        "name": artifact.sbom.name,
-                        "format": artifact.sbom.format,
-                        "format_version": artifact.sbom.format_version,
-                        "version": artifact.sbom.version,
-                        "created_at": artifact.sbom.created_at.isoformat(),
-                        "component": {
-                            "id": str(artifact.sbom.component.id),
-                            "name": artifact.sbom.component.name,
-                        },
-                    },
-                    "document": None,
-                    "created_at": artifact.created_at.isoformat()
-                    if hasattr(artifact, "created_at")
-                    else artifact.sbom.created_at.isoformat(),
-                }
-            )
-        elif artifact.document:
-            artifacts_data.append(
-                {
-                    "id": str(artifact.id),
-                    "sbom": None,
-                    "document": {
-                        "id": str(artifact.document.id),
-                        "name": artifact.document.name,
-                        "document_type": artifact.document.document_type,
-                        "version": artifact.document.version,
-                        "created_at": artifact.document.created_at.isoformat(),
-                        "component": {
-                            "id": str(artifact.document.component.id),
-                            "name": artifact.document.component.name,
-                        },
-                    },
-                    "created_at": artifact.created_at.isoformat()
-                    if hasattr(artifact, "created_at")
-                    else artifact.document.created_at.isoformat(),
-                }
-            )
-
-    branding_info = BrandingInfo(**product.team.branding_info)
-    return render(
-        request,
-        "core/release_details_public.html.j2",
-        {
-            "product": product,
-            "release": release,
-            "brand": branding_info,
-            "has_downloadable_content": has_downloadable_content,
-            "artifacts_data": artifacts_data,
-        },
-    )
-
-
-@login_required
-def release_details_private(request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
-    """Private view showing details of a specific release."""
-    try:
-        product: Product = Product.objects.get(pk=product_id)
-        release: Release = (
-            Release.objects.select_related("product")
-            .prefetch_related("artifacts__sbom__component", "artifacts__document__component")
-            .get(pk=release_id, product=product)
-        )
-    except (Product.DoesNotExist, Release.DoesNotExist):
-        return error_response(request, HttpResponseNotFound("Release not found"))
-
-    # Verify access to product
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, product, ["owner", "admin"])
-
-    # Check if there are any artifacts available for download
-    has_downloadable_content = release.artifacts.filter(sbom__isnull=False).exists()
-
-    return render(
-        request,
-        "core/release_details_private.html.j2",
-        {
-            "product": product,
-            "release": release,
-            "has_crud_permissions": has_crud_permissions,
-            "has_downloadable_content": has_downloadable_content,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-        },
-    )
 
 
 @login_required
@@ -505,31 +288,6 @@ def project_details_private(request: HttpRequest, project_id: str) -> HttpRespon
             "current_team": request.session.get("current_team", {}),
         },
     )
-
-
-from .components_dashboard import ComponentsDashboardView  # noqa: F401, E402
-
-
-@login_required
-def releases_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-    return render(
-        request,
-        "core/releases_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-        },
-    )
-
-
-from .component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
-from .component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
-from .component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
-from .component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
-from .dashboard import DashboardView  # noqa: F401, E402
 
 
 @login_required

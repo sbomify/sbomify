@@ -1,11 +1,4 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% comment %}
-Template context:
-component - Component object
-sboms - List of SBOM objects without data and packages fields
-has_crud_permissions - Can modify public/private status?
-APP_BASE_URL - Base URL for the application
-{% endcomment %}
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
@@ -19,7 +12,7 @@ APP_BASE_URL - Base URL for the application
         <div class="header-main mb-3">
             <div class="title-section">
                 <h1 class="item-title">
-                    {% if has_crud_permissions %}
+                    {% if component.has_crud_permissions %}
                         <span class="vc-editable-single-field"
                               data-item-type="component"
                               data-item-id="{{ component.id }}"
@@ -28,7 +21,7 @@ APP_BASE_URL - Base URL for the application
                         {{ component.name }}
                     {% endif %}
                 </h1>
-                {% if has_crud_permissions %}
+                {% if component.has_crud_permissions %}
                     <div class="vc-public-status-toggle"
                          data-item-type="component"
                          data-item-id="{{ component.id }}"
@@ -45,7 +38,7 @@ APP_BASE_URL - Base URL for the application
             <span class="meta-divider">•</span>
             <span class="meta-item">
                 <i class="fas fa-tag me-2 text-info"></i>
-                <span class="meta-label">{{ component.get_component_type_display }}</span>
+                <span class="meta-label">{{ component.component_type_display }}</span>
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
@@ -55,17 +48,10 @@ APP_BASE_URL - Base URL for the application
             </span>
         </div>
     </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="vc-dashboard-stats"
-                 data-item-type="component"
-                 data-item-id="{{ component.id }}"></div>
-        </div>
-    </div>
     {% if component.component_type == 'sbom' %}
         <div class="vc-component-meta-info"
              data-component-id="{{ component.id }}"
-             {% if has_crud_permissions %}data-allow-edit{% endif %}></div>
+             {% if component.has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
     <!-- Vulnerability Time Series Chart -->
     <div class="row mt-3">
@@ -76,7 +62,7 @@ APP_BASE_URL - Base URL for the application
                  data-default-days="30"></div>
         </div>
     </div>
-    {% if has_crud_permissions %}
+    {% if component.has_crud_permissions %}
         <div class="row">
             <div class="col-12">
                 <div class="vc-ci-cd-info"
@@ -86,7 +72,7 @@ APP_BASE_URL - Base URL for the application
         </div>
     {% endif %}
     {% if component.component_type == 'sbom' %}
-        {% if has_crud_permissions %}
+        {% if component.has_crud_permissions %}
             <div class="row mt-3">
                 <div class="col-12">
                     <div class="vc-sbom-upload" data-component-id="{{ component.id }}"></div>
@@ -99,12 +85,12 @@ APP_BASE_URL - Base URL for the application
                 <div class="vc-sboms-table"
                      data-sboms-data-element-id="sboms-data"
                      data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"
+                     data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}"
                      data-team-billing-plan="{{ team_billing_plan }}"></div>
             </div>
         </div>
     {% elif component.component_type == 'document' %}
-        {% if has_crud_permissions %}
+        {% if component.has_crud_permissions %}
             <div class="row mt-3">
                 <div class="col-12">
                     <div class="vc-document-upload" data-component-id="{{ component.id }}"></div>
@@ -117,11 +103,12 @@ APP_BASE_URL - Base URL for the application
                 <div class="vc-documents-table"
                      data-documents-data-element-id="documents-data"
                      data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if has_crud_permissions %}true{% else %}false{% endif %}"></div>
+                     data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}">
+                </div>
             </div>
         </div>
     {% endif %}
-    {% if has_crud_permissions %}
+    {% if component.has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
                 {{ request.session.user_teams|json_script:"user-teams-data" }}

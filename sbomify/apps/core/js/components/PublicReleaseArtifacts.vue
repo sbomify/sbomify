@@ -139,35 +139,18 @@ import { ref, computed, onMounted } from 'vue'
 import StandardCard from './StandardCard.vue'
 import PaginationControls from './PaginationControls.vue'
 
-interface Component {
-  id: string
-  name: string
-}
-
-interface SBOM {
-  id: string
-  name: string
-  format: string
-  format_version: string
-  version: string
-  created_at: string
-  component: Component
-}
-
-interface Document {
-  id: string
-  name: string
-  document_type: string
-  version: string
-  created_at: string
-  component: Component
-}
-
 interface Artifact {
   id: string
-  sbom?: SBOM | null
-  document?: Document | null
+  artifact_type: 'sbom' | 'document'
+  artifact_name: string
+  component_id: string
+  component_name: string
   created_at: string
+  sbom_format?: string | null
+  sbom_format_version?: string | null
+  sbom_version?: string | null
+  document_type?: string | null
+  document_version?: string | null
 }
 
 interface Props {
@@ -210,9 +193,9 @@ const filteredArtifacts = computed(() => {
   if (filterType.value) {
     filtered = filtered.filter(artifact => {
       if (filterType.value === 'sbom') {
-        return artifact.sbom
+        return artifact.artifact_type === 'sbom'
       } else if (filterType.value === 'document') {
-        return artifact.document
+        return artifact.artifact_type === 'document'
       }
       return true
     })
@@ -233,65 +216,59 @@ const paginatedArtifacts = computed(() => {
 
 // Methods
 const getArtifactName = (artifact: Artifact): string => {
-  if (artifact.sbom) return artifact.sbom.name
-  if (artifact.document) return artifact.document.name
-  return 'Unknown'
+  return artifact.artifact_name || 'Unknown'
 }
 
 const getComponentName = (artifact: Artifact): string => {
-  if (artifact.sbom) return artifact.sbom.component.name
-  if (artifact.document) return artifact.document.component.name
-  return 'Unknown'
+  return artifact.component_name || 'Unknown'
 }
 
 const getArtifactFormat = (artifact: Artifact): string => {
-  if (artifact.sbom) {
-    const format = artifact.sbom.format.toLowerCase() === 'cyclonedx' ? 'CycloneDX' :
-                   artifact.sbom.format.toLowerCase() === 'spdx' ? 'SPDX' :
-                   artifact.sbom.format.charAt(0).toUpperCase() + artifact.sbom.format.slice(1).toLowerCase()
-    return `${format} ${artifact.sbom.format_version}`
+  if (artifact.artifact_type === 'sbom' && artifact.sbom_format) {
+    const format = artifact.sbom_format.toLowerCase() === 'cyclonedx' ? 'CycloneDX' :
+                   artifact.sbom_format.toLowerCase() === 'spdx' ? 'SPDX' :
+                   artifact.sbom_format.charAt(0).toUpperCase() + artifact.sbom_format.slice(1).toLowerCase()
+    return `${format} ${artifact.sbom_format_version || ''}`
   }
-  if (artifact.document) {
-    return artifact.document.document_type.charAt(0).toUpperCase() +
-           artifact.document.document_type.slice(1).toLowerCase()
+  if (artifact.artifact_type === 'document' && artifact.document_type) {
+    return artifact.document_type.charAt(0).toUpperCase() +
+           artifact.document_type.slice(1).toLowerCase()
   }
   return 'Unknown'
 }
 
 const getArtifactVersion = (artifact: Artifact): string => {
-  if (artifact.sbom) return artifact.sbom.version
-  if (artifact.document) return artifact.document.version
+  if (artifact.artifact_type === 'sbom') return artifact.sbom_version || ''
+  if (artifact.artifact_type === 'document') return artifact.document_version || ''
   return ''
 }
 
 const getArtifactCreatedAt = (artifact: Artifact): string => {
-  if (artifact.sbom) return artifact.sbom.created_at
-  if (artifact.document) return artifact.document.created_at
   return artifact.created_at
 }
 
 const getArtifactType = (artifact: Artifact): string => {
-  if (artifact.sbom) {
-    const format = artifact.sbom.format.toLowerCase() === 'cyclonedx' ? 'CycloneDX' :
-                   artifact.sbom.format.toLowerCase() === 'spdx' ? 'SPDX' :
-                   artifact.sbom.format.charAt(0).toUpperCase() + artifact.sbom.format.slice(1).toLowerCase()
+  if (artifact.artifact_type === 'sbom' && artifact.sbom_format) {
+    const format = artifact.sbom_format.toLowerCase() === 'cyclonedx' ? 'CycloneDX' :
+                   artifact.sbom_format.toLowerCase() === 'spdx' ? 'SPDX' :
+                   artifact.sbom_format.charAt(0).toUpperCase() + artifact.sbom_format.slice(1).toLowerCase()
     return `SBOM • ${format}`
   }
-  if (artifact.document) {
-    return `Document • ${artifact.document.document_type.charAt(0).toUpperCase() + artifact.document.document_type.slice(1).toLowerCase()}`
+  if (artifact.artifact_type === 'document' && artifact.document_type) {
+    return `Document • ${artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1).toLowerCase()}`
   }
   return 'Unknown'
 }
 
 const getArtifactIcon = (artifact: Artifact): string => {
-  if (artifact.sbom) return 'fas fa-file-code'
-  if (artifact.document) return 'fas fa-file-alt'
+  if (artifact.artifact_type === 'sbom') return 'fas fa-file-code'
+  if (artifact.artifact_type === 'document') return 'fas fa-file-alt'
   return 'fas fa-file'
 }
 
 const getArtifactIconClass = (artifact: Artifact): string => {
-  if (artifact.sbom) return 'sbom-icon'
-  if (artifact.document) return 'document-icon'
+  if (artifact.artifact_type === 'sbom') return 'sbom-icon'
+  if (artifact.artifact_type === 'document') return 'document-icon'
   return 'unknown-icon'
 }
 

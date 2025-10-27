@@ -4,7 +4,7 @@
 {% load breadcrumb_tags %}
 {% block title %}{{ component.name }}{% endblock %}
 {% block meta_description %}
-    {{ component.name }} - {{ component.get_component_type_display }} component. View SBOMs and documents associated with this component.
+    {{ component.name }} - {{ component.component_type_display }} component. View SBOMs and documents associated with this component.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
@@ -33,13 +33,13 @@
                                     <div class="card shadow-sm">
                                         <div class="card-header">
                                             <div class="header-content">
-                                                <h4 class="card-title mb-0">{{ component.get_component_type_display }}s</h4>
+                                                <h4 class="card-title mb-0">{{ component.component_type_display }}s</h4>
                                             </div>
                                         </div>
                                         <div class="card-body">
                                             <div class="augmentation-notice d-flex align-items-center mb-3">
                                                 <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} me-2"></i>
-                                                <span class="text-muted">{{ component.get_component_type_display }}s for this component</span>
+                                                <span class="text-muted">{{ component.component_type_display }}s for this component</span>
                                             </div>
                                             {% if component.component_type == 'sbom' and sboms_data %}
                                                 {{ sboms_data|json_script:"sboms-data" }}
