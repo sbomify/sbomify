@@ -82,8 +82,7 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
-    ports:
-      - "${SBOMIFY_PORT:-8000}:8000"
+    # ports are inherited from docker-compose.yml
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
