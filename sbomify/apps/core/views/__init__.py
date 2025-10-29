@@ -38,6 +38,7 @@ from sbomify.apps.core.views.product_details_public import ProductDetailsPublicV
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
@@ -249,31 +250,6 @@ def project_details_public(request: HttpRequest, project_id: str) -> HttpRespons
         request,
         "core/project_details_public.html.j2",
         {"project": project, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
-    )
-
-
-@login_required
-def project_details_private(request: HttpRequest, project_id: str) -> HttpResponse:
-    try:
-        project: Project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Project not found"))
-
-    # Verify access to project
-    if not verify_item_access(request, project, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    has_crud_permissions = verify_item_access(request, project, ["owner", "admin"])
-
-    return render(
-        request,
-        "core/project_details_private.html.j2",
-        {
-            "project": project,
-            "has_crud_permissions": has_crud_permissions,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "current_team": request.session.get("current_team", {}),
-        },
     )
 
 
