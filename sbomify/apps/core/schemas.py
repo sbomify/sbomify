@@ -252,6 +252,7 @@ class ComponentSummarySchema(BaseModel):
     name: str
     is_public: bool
     component_type: ComponentType
+    component_type_display: str
 
 
 class ComponentCreateSchema(BaseModel):

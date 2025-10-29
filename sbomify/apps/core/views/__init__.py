@@ -38,6 +38,7 @@ from sbomify.apps.core.views.product_details_public import ProductDetailsPublicV
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
@@ -227,20 +228,6 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # ============================================================================
 # Release Views
 # ============================================================================
-
-
-@login_required
-def projects_dashboard(request: HttpRequest) -> HttpResponse:
-    current_team = request.session.get("current_team")
-    has_crud_permissions = current_team and current_team.get("role") in ("owner", "admin")
-
-    return render(
-        request,
-        "core/projects_dashboard.html.j2",
-        {
-            "has_crud_permissions": has_crud_permissions,
-        },
-    )
 
 
 def project_details_public(request: HttpRequest, project_id: str) -> HttpResponse:
