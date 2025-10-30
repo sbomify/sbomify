@@ -162,8 +162,8 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
 
     # Check that the page contains the Vue component containers
     content = response.content.decode()
-    assert 'class="vc-projects-list"' in content
-    assert 'class="vc-add-project-form"' in content
+    assert 'class="projects-list' in content
+    assert 'id="addProjectForm"' in content
 
 
 # Removed: test_create_project - POST functionality moved to API tests

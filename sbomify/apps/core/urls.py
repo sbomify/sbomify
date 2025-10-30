@@ -46,15 +46,15 @@ urlpatterns = [
         views.ProductDetailsPublicView.as_view(),
         name="product_details_public",
     ),
-    path("projects/", views.projects_dashboard, name="projects_dashboard"),
+    path("projects/", views.ProjectsDashboardView.as_view(), name="projects_dashboard"),
     path(
         "project/<str:project_id>/",
-        views.project_details_private,
+        views.ProjectDetailsPrivateView.as_view(),
         name="project_details",
     ),
     path(
         "public/project/<str:project_id>/",
-        views.project_details_public,
+        views.ProjectDetailsPublicView.as_view(),
         name="project_details_public",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),

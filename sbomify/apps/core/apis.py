@@ -192,6 +192,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
                 "name": component.name,
                 "is_public": component.is_public,
                 "component_type": component.component_type,
+                "component_type_display": component.get_component_type_display(),
             }
             for component in item.components.all()
         ]
