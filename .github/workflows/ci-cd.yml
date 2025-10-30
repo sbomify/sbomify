@@ -44,7 +44,7 @@ jobs:
 
       - name: Install minimal Python dependencies
         run: |
-          uv sync --locked --frozen --only-dev
+          uv sync --locked --only-dev
 
       # Install bun directly instead of using a third-party action
       - name: Setup Bun
@@ -136,7 +136,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv sync --locked --frozen
+          uv sync --locked
 
       - name: Setup test environment
         run: |

@@ -101,11 +101,11 @@ ENV UV_LINK_MODE=copy
 # This will also install the project package itself.
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing production Python dependencies..."; \
-        uv sync --frozen --no-dev --no-install-project; \
+        uv sync --locked --no-dev --no-install-project; \
         uv pip install --system -e .; \
     else \
         echo "Installing development Python dependencies (includes dev, test)..."; \
-        uv sync --frozen; \
+        uv sync --locked; \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
