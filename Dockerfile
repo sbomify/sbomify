@@ -133,13 +133,16 @@ COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Create directories with proper permissions for non-root user
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
-RUN mkdir -p /var/lib/dramatiq-prometheus && \
-    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+RUN mkdir -p /var/lib/dramatiq-prometheus /tmp/.cache && \
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
     chmod 755 /var/lib/dramatiq-prometheus && \
-    chmod 755 /tmp
+    chmod 755 /tmp && \
+    chmod 755 /tmp/.cache
 
-# Set environment variable to direct Prometheus metrics to our dedicated directory
-ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
+# Set environment variables for Prometheus metrics and UV cache
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
+    UV_CACHE_DIR=/tmp/.cache/uv \
+    HOME=/tmp
 
 # Switch to non-root user
 USER nobody
@@ -166,14 +169,17 @@ COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static
 
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
-RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles && \
+RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
     uv run python manage.py collectstatic --noinput && \
-    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
+    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
     chmod 755 /var/lib/dramatiq-prometheus && \
-    chmod 755 /tmp
+    chmod 755 /tmp && \
+    chmod 755 /tmp/.cache
 
-# Set environment variable to direct Prometheus metrics to our dedicated directory
-ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
+# Set environment variables for Prometheus metrics and UV cache
+ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
+    UV_CACHE_DIR=/tmp/.cache/uv \
+    HOME=/tmp
 
 # Switch to non-root user
 USER nobody
