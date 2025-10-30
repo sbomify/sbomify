@@ -136,7 +136,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv sync --frozen
+          uv sync --locked --frozen
 
       - name: Setup test environment
         run: |
