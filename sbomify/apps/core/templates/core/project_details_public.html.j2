@@ -1,10 +1,5 @@
-{% extends "core/public_base.html.j2" %}
-{% comment %}
-Template context:
-project: Project object
-brand: BrandingInfo object
-{% endcomment %}
-{% load widget_tweaks %}
+{% extends "core/public_base.htmx.j2" %}
+{% load static %}
 {% load django_vite %}
 {% load breadcrumb_tags %}
 {% block title %}{{ project.name }}{% endblock %}
@@ -14,25 +9,109 @@ brand: BrandingInfo object
 {% block breadcrumb %}
     {% breadcrumb project 'project' %}
 {% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-page-layout.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-project-components.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-download-card.css' %}">
+{% endblock %}
 {% block content %}
-    <div class="vc-public-page-layout"
-         data-title="{{ project.name }}"
-         data-title-icon="fas fa-project-diagram"
-         data-page-type="project"
-         data-item-id="{{ project.id }}"
-         {% if has_downloadable_content %} data-download-url="/api/v1/projects/{{ project.id }}/download" data-download-title="Download Project SBOM" data-download-button-text="Download SBOM" data-download-description="Download aggregated SBOM for this project" data-download-icon="fas fa-download" {% endif %}>
-        <template data-slot="subtitle">
-            <span class="meta-badge meta-badge--primary">
-                <i class="fas fa-project-diagram"></i>
-                Project
-            </span>
-            <span class="meta-badge meta-badge--secondary">
-                <i class="fas fa-fingerprint"></i>
-                <span class="vc-copyable-value"
-                      data-value="{{ project.id }}"
-                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
-            </span>
-        </template>
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        <h1 class="page-title">
+                            <i class="fas fa-project-diagram title-icon"></i>
+                            {{ project.name }}
+                        </h1>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="project-content">
+                            <div class="public-card-wrapper public-card--default">
+                                <div class="standard-card mt-4">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <div class="header-content">
+                                                <h4 class="card-title mb-0">Project Components</h4>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            {% if project.components %}
+                                                <div class="components-list">
+                                                    <div class="row">
+                                                        {% for component in project.components %}
+                                                            <div class="col-12 col-md-6 col-lg-4">
+                                                                <div class="component-item">
+                                                                    <div class="component-icon">
+                                                                        <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% else %}fa-file-alt{% endif %} component-type-icon"></i>
+                                                                    </div>
+                                                                    <div class="component-info">
+                                                                        <h6 class="component-name">
+                                                                            {% if component.is_public %}
+                                                                                <a href="{% url 'core:component_details_public' component.id %}" class="component-link">
+                                                                                    {{ component.name }}
+                                                                                </a>
+                                                                            {% else %}
+                                                                                <span class="component-private">
+                                                                                    {{ component.name }}
+                                                                                </span>
+                                                                            {% endif %}
+                                                                        </h6>
+                                                                        <small class="component-type text-muted">
+                                                                            {{ component.component_type_display }}
+                                                                        </small>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <div class="empty-state">
+                                                    <div class="empty-icon">
+                                                        <i class="fas fa-cube"></i>
+                                                    </div>
+                                                    <h6 class="empty-title">No components yet</h6>
+                                                    <p class="empty-description text-muted">
+                                                        No components have been added to this project yet.
+                                                    </p>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% if has_downloadable_content %}
+                                <div class="download-section">
+                                    <div class="standard-card mt-3">
+                                        <div class="card shadow-sm">
+                                            <div class="card-header">
+                                                <div class="header-content">
+                                                    <h4 class="card-title mb-0">Download Project SBOM</h4>
+                                                </div>
+                                            </div>
+                                            <div class="card-body text-center">
+                                                <p class="text-muted mb-3">Download aggregated SBOM for this project</p>
+                                                <a class="btn btn-primary download-btn"
+                                                   href="{% url 'api-1:download_project_sbom' project.id %}">
+                                                    <i class="fas fa-download me-2"></i>Download SBOM
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 {% block scripts %}

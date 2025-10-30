@@ -39,13 +39,12 @@ from sbomify.apps.core.views.product_releases_private import ProductReleasesPriv
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView  # noqa: F401, E402
+from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
-from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
-from sbomify.apps.teams.schemas import BrandingInfo
 
 from ..errors import error_response
 from ..forms import CreateAccessTokenForm, SupportContactForm
@@ -229,28 +228,6 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 # ============================================================================
 # Release Views
 # ============================================================================
-
-
-def project_details_public(request: HttpRequest, project_id: str) -> HttpResponse:
-    try:
-        project: Project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Project not found"))
-
-    # Verify access to project
-    if not project.is_public:
-        return error_response(request, HttpResponseNotFound("Project not found"))
-
-    # Check if there are any SBOMs available for download
-    has_downloadable_content = SBOM.objects.filter(component__projects=project).exists()
-
-    branding_info = BrandingInfo(**project.team.branding_info)
-
-    return render(
-        request,
-        "core/project_details_public.html.j2",
-        {"project": project, "brand": branding_info, "has_downloadable_content": has_downloadable_content},
-    )
 
 
 @login_required

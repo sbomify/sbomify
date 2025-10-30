@@ -54,7 +54,7 @@ urlpatterns = [
     ),
     path(
         "public/project/<str:project_id>/",
-        views.project_details_public,
+        views.ProjectDetailsPublicView.as_view(),
         name="project_details_public",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
