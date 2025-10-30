@@ -1,9 +1,13 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load static %}
+{% load breadcrumb_tags %}
 {% load django_vite %}
+{% load static %}
 {% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/release-details-public.css' %}">
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb release 'release' %}
 {% endblock %}
 {% block content %}
     <div class="container-fluid">
@@ -12,19 +16,6 @@
                 <div class="page-header mb-4">
                     <div class="header-main mb-3">
                         <div class="title-section">
-                            <div class="breadcrumb-nav">
-                                <nav aria-label="breadcrumb">
-                                    <ol class="breadcrumb">
-                                        <li class="breadcrumb-item">
-                                            <a href="{% url 'core:product_details_public' release.product.id %}">{{ release.product.name }}</a>
-                                        </li>
-                                        <li class="breadcrumb-item">
-                                            <a href="{% url 'core:product_releases_public' release.product.id %}">Releases</a>
-                                        </li>
-                                        <li class="breadcrumb-item active" aria-current="page">{{ release.name }}</li>
-                                    </ol>
-                                </nav>
-                            </div>
                             <h1 class="item-title">
                                 {{ release.name }}
                                 {% if release.is_latest %}<span class="badge bg-success ms-3">Latest</span>{% endif %}

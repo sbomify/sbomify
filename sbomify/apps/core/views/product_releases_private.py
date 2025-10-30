@@ -33,7 +33,7 @@ class ProductReleasesPrivateView(LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "current_team": current_team,
                 "product": product,
-                "releases": releases.items,
+                "releases": releases.get("items"),
             },
         )
 

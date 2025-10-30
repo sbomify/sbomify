@@ -1,13 +1,10 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load static %}
-{% load django_vite %}
 {% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
 {% block title %}{{ project.name }}{% endblock %}
 {% block meta_description %}
     {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
-{% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb project 'project' %}
 {% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
@@ -16,6 +13,9 @@
           href="{% static 'css/components/public-project-components.css' %}">
     <link rel="stylesheet"
           href="{% static 'css/components/public-download-card.css' %}">
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb project 'project' %}
 {% endblock %}
 {% block content %}
     <div class="public-page-layout">

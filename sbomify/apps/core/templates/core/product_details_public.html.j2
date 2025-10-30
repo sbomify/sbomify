@@ -1,7 +1,7 @@
-{% extends "core/public_base.html.j2" %}
-{% load static %}
-{% load django_vite %}
+{% extends "core/public_base.htmx.j2" %}
 {% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
 {% block title %}{{ product.name }}{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
