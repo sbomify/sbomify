@@ -98,11 +98,9 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # Install Python dependencies based on BUILD_ENV
-# This will also install the project package itself.
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing production Python dependencies..."; \
-        uv sync --locked --no-dev --no-install-project; \
-        uv pip install --system -e .; \
+        uv sync --locked --no-dev; \
     else \
         echo "Installing development Python dependencies (includes dev, test)..."; \
         uv sync --locked; \
@@ -133,8 +131,9 @@ COPY --from=go-builder /go/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Create directories with proper permissions for non-root user
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+# Note: In development, .venv is writable by nobody to support editable installs and hot-reload
 RUN mkdir -p /var/lib/dramatiq-prometheus /tmp/.cache && \
-    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
+    chown -R nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache /code/.venv && \
     chmod 755 /var/lib/dramatiq-prometheus && \
     chmod 755 /tmp && \
     chmod 755 /tmp/.cache
@@ -169,9 +168,10 @@ COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static
 
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
+# Note: In production, .venv stays owned by root for better security (app can't modify its own dependencies)
 RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
     uv run python manage.py collectstatic --noinput && \
-    chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
+    chown -R nobody:nogroup /var/lib/dramatiq-prometheus /tmp /tmp/.cache && \
     chmod 755 /var/lib/dramatiq-prometheus && \
     chmod 755 /tmp && \
     chmod 755 /tmp/.cache
@@ -179,7 +179,8 @@ RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
 # Set environment variables for Prometheus metrics and UV cache
 ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     UV_CACHE_DIR=/tmp/.cache/uv \
-    HOME=/tmp
+    HOME=/tmp \
+    UV_NO_SYNC=1
 
 # Switch to non-root user
 USER nobody
