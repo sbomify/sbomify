@@ -34,3 +34,9 @@ pytest_plugins = [
    "sbomify.apps.teams.fixtures",
    "sbomify.apps.sboms.tests.fixtures",
 ]
+
+
+@pytest.fixture(scope="module")
+def anyio_backend():
+    """Configure anyio to use asyncio backend only for async tests."""
+    return "asyncio"
