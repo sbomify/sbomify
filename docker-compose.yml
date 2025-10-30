@@ -110,7 +110,7 @@ services:
     environment:
       <<: *common-env
       BILLING: ${BILLING:-'False'}
-    command: poetry run dramatiq sbomify.tasks
+    command: uv run dramatiq sbomify.tasks
     depends_on:
       sbomify-redis:
         condition: service_healthy

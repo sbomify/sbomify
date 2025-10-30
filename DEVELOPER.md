@@ -29,7 +29,7 @@ This command will handle starting all required services for development.
 ### Backend
 
 - **Language/Framework**: The backend is written in **Python** using the **Django** framework.
-- **Package Manager**: We use **poetry** to manage Python packages.
+- **Package Manager**: We use **uv** to manage Python packages.
 
 ### Dependencies
 
@@ -336,7 +336,7 @@ We use **Sentry** to catch and track bugs in both the backend and frontend. Ensu
 1. Run `docker-compose up` to start all necessary services.
 2. Configure your environment file as needed.
 3. Install dependencies for:
-   - Python: Use `poetry install`.
+   - Python: Use `uv sync`.
    - JavaScript: Install Bun and run `bun install`.
 4. Run the backend or frontend as needed, ensuring proper linting and tests are in place.
 
@@ -346,8 +346,8 @@ Follow these principles and standards to ensure smooth development and maintain 
 
 #### Python
 
-- Linting: `poetry run ruff check && poetry run ruff format`
-- Tests: `poetry run pytest`
+- Linting: `uv run ruff check && uv run ruff format`
+- Tests: `uv run pytest`
 
 #### TypeScript
 
