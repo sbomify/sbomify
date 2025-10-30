@@ -87,7 +87,6 @@ env = [
     "SENDGRID_API_KEY=invalid-key"
 ]
 
-
 addopts = "--nomigrations"
 # -- recommended but optional:
 python_files = ["tests.py", "test_*.py"]
