@@ -53,18 +53,15 @@
                                                                     <div class="component-info">
                                                                         <h6 class="component-name">
                                                                             {% if component.is_public %}
-                                                                                <a href="{% url 'core:component_details_public' component.id %}" class="component-link">
+                                                                                <a href="{% url 'core:component_details_public' component.id %}"
+                                                                                   class="component-link">
                                                                                     {{ component.name }}
                                                                                 </a>
                                                                             {% else %}
-                                                                                <span class="component-private">
-                                                                                    {{ component.name }}
-                                                                                </span>
+                                                                                <span class="component-private">{{ component.name }}</span>
                                                                             {% endif %}
                                                                         </h6>
-                                                                        <small class="component-type text-muted">
-                                                                            {{ component.component_type_display }}
-                                                                        </small>
+                                                                        <small class="component-type text-muted">{{ component.component_type_display }}</small>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -77,16 +74,13 @@
                                                         <i class="fas fa-cube"></i>
                                                     </div>
                                                     <h6 class="empty-title">No components yet</h6>
-                                                    <p class="empty-description text-muted">
-                                                        No components have been added to this project yet.
-                                                    </p>
+                                                    <p class="empty-description text-muted">No components have been added to this project yet.</p>
                                                 </div>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
                             {% if has_downloadable_content %}
                                 <div class="download-section">
                                     <div class="standard-card mt-3">
