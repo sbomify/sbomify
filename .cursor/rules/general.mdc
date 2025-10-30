@@ -14,7 +14,7 @@ You are an expert in Python, Django, scalable web application development, TypeS
 - Keep related files together and maintain a logical directory hierarchy.
 
 ## Package Management and Dependencies
-- For Python, we're using `poetry` for package management, so never try to run python directly or through a virtual environment.
+- For Python, we're using `uv` for package management. Use `uv run` to execute Python commands within the managed environment.
 - For JavaScript/TypeScript, we are using `bun` as the package manager.
 - NEVER EVER TOUCH A LOCKFILE manually! Always use the corresponding package manager.
 - Always specify exact versions for dependencies to ensure reproducible builds.

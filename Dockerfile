@@ -72,19 +72,19 @@ FROM python:${PYTHON_VERSION} AS python-common-code
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install system dependencies & Poetry
+# Install system dependencies & uv
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     redis-tools \
     postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install poetry
+    && pip install uv
 
 WORKDIR /code
 
 # Copy project configuration and all application code
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml uv.lock ./
 COPY . .
 
 ### Stage 4: Python Dependencies
@@ -93,19 +93,19 @@ FROM python-common-code AS python-dependencies
 ARG BUILD_ENV
 ENV BUILD_ENV=${BUILD_ENV}
 
-# Configure Poetry to use system Python and not create virtual environments
-ENV POETRY_VENV_IN_PROJECT=false
-ENV POETRY_NO_INTERACTION=1
-ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+# Configure uv environment
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 
 # Install Python dependencies based on BUILD_ENV
 # This will also install the project package itself.
 RUN if [ "${BUILD_ENV}" = "production" ]; then \
         echo "Installing production Python dependencies..."; \
-        poetry install --only main,prod --no-interaction; \
+        uv sync --locked --no-dev --no-install-project; \
+        uv pip install --system -e .; \
     else \
         echo "Installing development Python dependencies (includes dev, test)..."; \
-        poetry install --no-interaction; \
+        uv sync --locked; \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
@@ -141,17 +141,12 @@ RUN mkdir -p /var/lib/dramatiq-prometheus && \
 # Set environment variable to direct Prometheus metrics to our dedicated directory
 ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
 
-# Configure Poetry to not create virtual environments (dependencies already installed)
-ENV POETRY_VENV_IN_PROJECT=false
-ENV POETRY_NO_INTERACTION=1
-ENV POETRY_CACHE_DIR=/tmp/poetry_cache
-
 # Switch to non-root user
 USER nobody
 
 EXPOSE 8000
 # CMD for Development (using uvicorn directly with reload for development)
-CMD ["poetry", "run", "uvicorn", "sbomify.asgi:application", \
+CMD ["uv", "run", "uvicorn", "sbomify.asgi:application", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--reload", "--reload-include", "*.j2", "--log-level", "info"]
 ### Stage 7: Python Application for Production (python-app-prod)
@@ -172,7 +167,7 @@ COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes
 RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles && \
-    poetry run python manage.py collectstatic --noinput && \
+    uv run python manage.py collectstatic --noinput && \
     chown nobody:nogroup /var/lib/dramatiq-prometheus /tmp && \
     chmod 755 /var/lib/dramatiq-prometheus && \
     chmod 755 /tmp
@@ -180,17 +175,12 @@ RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles && \
 # Set environment variable to direct Prometheus metrics to our dedicated directory
 ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus
 
-# Configure Poetry to not create virtual environments (dependencies already installed)
-ENV POETRY_VENV_IN_PROJECT=false
-ENV POETRY_NO_INTERACTION=1
-ENV POETRY_CACHE_DIR=/tmp/poetry_cache
-
 # Switch to non-root user
 USER nobody
 
 EXPOSE 8000
 # CMD for Production - Using Gunicorn with Uvicorn worker as recommended by Django docs
-CMD ["poetry", "run", "gunicorn", "sbomify.asgi:application", \
+CMD ["uv", "run", "gunicorn", "sbomify.asgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "2", \
      "--worker-class", "uvicorn_worker.UvicornWorker"]

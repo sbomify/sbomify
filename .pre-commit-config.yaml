@@ -7,11 +7,6 @@ repos:
       - id: check-merge-conflict   # checks for files that contain merge conflict strings.
       - id: debug-statements  # checks for debugger imports and py37+ `breakpoint()` calls in python source.
 
-  - repo: https://github.com/python-poetry/poetry
-    rev: '2.1.1'  # add version here
-    hooks:
-      - id: poetry-check
-
   - repo: local
     hooks:
       - id: typescript-check
@@ -35,7 +30,7 @@ repos:
 
       - id: bandit
         name: bandit
-        entry: poetry run bandit -c pyproject.toml -r .
+        entry: uv run bandit -c pyproject.toml -r .
         language: system
         pass_filenames: false
 
@@ -48,28 +43,28 @@ repos:
 
       - id: ruff-format
         name: ruff-format
-        entry: poetry run ruff format .
+        entry: uv run ruff format .
         language: system
         pass_filenames: false
         files: \.py$
 
       - id: ruff
         name: ruff
-        entry: poetry run ruff check .
+        entry: uv run ruff check .
         language: system
         pass_filenames: false
         files: \.py$
 
       - id: djlint-check
         name: djlint format check
-        entry: poetry run djlint . --extension=html.j2 --check
+        entry: uv run djlint . --extension=html.j2 --check
         language: system
         pass_filenames: false
         files: \.html\.j2$
 
       - id: djlint-lint
         name: djlint
-        entry: poetry run djlint . --extension=html.j2 --lint
+        entry: uv run djlint . --extension=html.j2 --lint
         language: system
         pass_filenames: false
         files: \.html\.j2$
