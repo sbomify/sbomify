@@ -1,7 +1,7 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load static %}
-{% load django_vite %}
 {% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
 {% block title %}{{ data.name }}{% endblock %}
 {% block meta_description %}
     {% if component.component_type == 'sbom' %}
@@ -10,14 +10,14 @@
         {{ data.name }} - Document file. Download and view this document.
     {% endif %}
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb component 'component' %}
-{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
           href="{% static 'css/component-detailed-public.css' %}">
     <link rel="stylesheet"
           href="{% static 'css/components/public-page-layout.css' %}">
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
     <div class="public-page-layout">

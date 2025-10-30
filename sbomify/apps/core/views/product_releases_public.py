@@ -28,7 +28,7 @@ class ProductReleasesPublicView(View):
             "core/product_releases_public.html.j2",
             {
                 "product": product,
-                "releases": releases.items,
+                "releases": releases.get("items"),
                 "brand": brand,
             },
         )

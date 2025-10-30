@@ -1,17 +1,17 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load static %}
-{% load django_vite %}
 {% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
 {% block title %}{{ component.name }}{% endblock %}
 {% block meta_description %}
     {{ component.name }} - {{ component.component_type_display }} component. View SBOMs and documents associated with this component.
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb component 'component' %}
-{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
           href="{% static 'css/components/public-page-layout.css' %}">
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
     <div class="public-page-layout">
