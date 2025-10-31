@@ -18,7 +18,7 @@ To deploy sbomify in production:
 1. **Download the compose file**:
 
    ```bash
-   curl -O https://raw.githubusercontent.com/your-org/sbomify/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/docker-compose.yml
    ```
 
 2. **Create your environment override file** (`override.env`):
