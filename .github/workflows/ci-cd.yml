@@ -328,7 +328,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload backend SBOM
-        uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
+        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
@@ -348,7 +348,7 @@ jobs:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
       - name: Upload container SBOM
-        uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
+        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: iVajxXMIqqyi
@@ -368,7 +368,7 @@ jobs:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
       - name: Upload frontend SBOM
-        uses: sbomify/github-action@8ea6f28cd562edee2665001cd4f17aaf7a283722 # master
+        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
