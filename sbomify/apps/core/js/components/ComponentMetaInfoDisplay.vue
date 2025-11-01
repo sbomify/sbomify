@@ -14,6 +14,20 @@
       <div class="col-12 col-lg-6">
         <div class="section-content">
           <div class="section-label">Supplier</div>
+          <div v-if="metadata.contact_profile" class="profile-indicator mb-2">
+            <span class="badge bg-light text-dark">
+              {{ metadata.contact_profile.name }}
+            </span>
+            <span
+              v-if="metadata.contact_profile.is_default"
+              class="badge bg-info-subtle text-info ms-2"
+            >
+              Default
+            </span>
+          </div>
+          <div v-else class="section-subtext text-muted mb-2">
+            Custom contact information
+          </div>
           <span v-if="isEmpty(metadata.supplier)" class="not-set">Not set yet</span>
           <template v-else>
             <table v-if="hasSupplierInfo">
@@ -127,25 +141,29 @@
   import type { SupplierInfo, ComponentMetaInfo, AlertMessage, CustomLicense } from '../type_defs.d.ts';
   import StandardCard from '../../../core/js/components/StandardCard.vue';
 
-  interface Props {
-    componentId: string;
-    showEditButton?: boolean;
-  }
+interface Props {
+  componentId: string;
+  showEditButton?: boolean;
+  teamKey: string;
+}
 
   const props = defineProps<Props>();
-  const metadata = ref<ComponentMetaInfo>({
-    id: '',
-    name: '',
-    supplier: {
-      name: null,
-      url: null,
-      address: null,
-      contacts: []
-    } as SupplierInfo,
-    authors: [],
-    licenses: [] as (string | CustomLicense)[],
-    lifecycle_phase: null
-  });
+const metadata = ref<ComponentMetaInfo>({
+  id: '',
+  name: '',
+  supplier: {
+    name: null,
+    url: null,
+    address: null,
+    contacts: []
+  } as SupplierInfo,
+  authors: [],
+  licenses: [] as (string | CustomLicense)[],
+  lifecycle_phase: null,
+  contact_profile_id: null,
+  contact_profile: null,
+  uses_custom_contact: true
+});
 
   const alertMessage = ref<AlertMessage>({
     alertType: null,
@@ -252,6 +270,15 @@
 
 .section-content {
   padding: 0;
+}
+
+.profile-indicator .badge {
+  font-weight: 500;
+}
+
+.section-subtext {
+  font-size: 0.85rem;
+  color: #6c757d;
 }
 
 .hint-text {

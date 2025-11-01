@@ -15,8 +15,18 @@ from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
 from sbomify.logging import getLogger
 
-from .models import Member, Team
-from .schemas import BrandingInfo, BrandingInfoWithUrls, TeamPatchSchema, TeamResponseSchema, TeamUpdateSchema
+from .models import ContactProfile, Member, Team
+from .schemas import (
+    BrandingInfo,
+    BrandingInfoWithUrls,
+    ContactProfileContactSchema,
+    ContactProfileCreateSchema,
+    ContactProfileSchema,
+    ContactProfileUpdateSchema,
+    TeamPatchSchema,
+    TeamResponseSchema,
+    TeamUpdateSchema,
+)
 from .utils import get_user_teams
 
 logger = getLogger(__name__)
@@ -180,6 +190,202 @@ def upload_branding_file(
         "logo_url": updated_branding.brand_logo_url,
     }
     return 200, BrandingInfoWithUrls(**response_data)
+
+
+def _get_team_and_membership_role(request: HttpRequest, team_key: str):
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return None, None, (404, {"detail": "Team not found"})
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return None, None, (404, {"detail": "Team not found"})
+
+    membership = Member.objects.filter(user=request.user, team=team).first()
+    if not membership:
+        return None, None, (403, {"detail": "Forbidden"})
+
+    return team, membership.role, None
+
+
+def _user_can_manage_profiles(role: str) -> bool:
+    return role in {"owner", "admin"}
+
+
+def _clean_url_list(urls: list[str]) -> list[str]:
+    unique = []
+    for url in urls:
+        if url and url not in unique:
+            unique.append(url)
+    return unique
+
+
+def _upsert_profile_contacts(profile: ContactProfile, contacts: list[ContactProfileContactSchema] | None):
+    profile.contacts.all().delete()
+    if not contacts:
+        return
+
+    for order, contact in enumerate(contacts):
+        if not contact.name:
+            continue
+        profile.contacts.create(
+            name=contact.name,
+            email=contact.email,
+            phone=contact.phone,
+            order=order,
+        )
+
+
+def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
+    contacts = [
+        ContactProfileContactSchema(
+            name=contact.name,
+            email=contact.email,
+            phone=contact.phone,
+            order=contact.order,
+        )
+        for contact in profile.contacts.all()
+    ]
+
+    return ContactProfileSchema(
+        id=profile.id,
+        name=profile.name,
+        company=profile.company or None,
+        supplier_name=profile.supplier_name or None,
+        vendor=profile.vendor or None,
+        email=profile.email or None,
+        phone=profile.phone or None,
+        address=profile.address or None,
+        website_urls=_clean_url_list(profile.website_urls or []),
+        contacts=contacts,
+        is_default=profile.is_default,
+        created_at=profile.created_at.isoformat(),
+        updated_at=profile.updated_at.isoformat(),
+    )
+
+
+@router.get(
+    "/{team_key}/contact-profiles",
+    response={200: list[ContactProfileSchema], 403: ErrorResponse, 404: ErrorResponse},
+)
+def list_contact_profiles(request: HttpRequest, team_key: str):
+    """List contact profiles for a workspace."""
+    team, role, error = _get_team_and_membership_role(request, team_key)
+    if error:
+        return error
+
+    if not _user_can_manage_profiles(role):
+        return 403, {"detail": "Only owners and admins can view contact profiles"}
+
+    profiles = ContactProfile.objects.filter(team=team).prefetch_related("contacts").order_by("-is_default", "name")
+    return 200, [serialize_contact_profile(profile) for profile in profiles]
+
+
+@router.post(
+    "/{team_key}/contact-profiles",
+    response={201: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def create_contact_profile(request: HttpRequest, team_key: str, payload: ContactProfileCreateSchema):
+    """Create a new contact profile for the workspace."""
+    team, role, error = _get_team_and_membership_role(request, team_key)
+    if error:
+        return error
+
+    if not _user_can_manage_profiles(role):
+        return 403, {"detail": "Only owners and admins can manage contact profiles"}
+
+    try:
+        with transaction.atomic():
+            profile = ContactProfile.objects.create(
+                team=team,
+                name=payload.name,
+                company=payload.company or "",
+                supplier_name=payload.supplier_name or "",
+                vendor=payload.vendor or "",
+                email=payload.email or None,
+                phone=payload.phone or "",
+                address=payload.address or "",
+                website_urls=_clean_url_list(payload.website_urls),
+                is_default=payload.is_default,
+            )
+
+            _upsert_profile_contacts(profile, payload.contacts)
+            profile.refresh_from_db()
+
+        return 201, serialize_contact_profile(profile)
+    except IntegrityError:
+        return 400, {"detail": "A profile with this name already exists"}
+
+
+@router.patch(
+    "/{team_key}/contact-profiles/{profile_id}",
+    response={200: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str, payload: ContactProfileUpdateSchema):
+    """Update an existing contact profile."""
+    team, role, error = _get_team_and_membership_role(request, team_key)
+    if error:
+        return error
+
+    if not _user_can_manage_profiles(role):
+        return 403, {"detail": "Only owners and admins can manage contact profiles"}
+
+    try:
+        profile = ContactProfile.objects.get(team=team, pk=profile_id)
+    except ContactProfile.DoesNotExist:
+        return 404, {"detail": "Contact profile not found"}
+
+    update_fields = {}
+    for field in ["name", "company", "supplier_name", "vendor", "email", "phone", "address"]:
+        value = getattr(payload, field)
+        if value is not None:
+            update_fields[field] = value or ""
+
+    if payload.website_urls is not None:
+        update_fields["website_urls"] = _clean_url_list(payload.website_urls)
+
+    if payload.is_default is not None:
+        update_fields["is_default"] = payload.is_default
+
+    try:
+        with transaction.atomic():
+            if update_fields:
+                for field, value in update_fields.items():
+                    setattr(profile, field, value)
+                profile.save()
+
+            if payload.contacts is not None:
+                _upsert_profile_contacts(profile, payload.contacts)
+
+            profile.refresh_from_db()
+
+        return 200, serialize_contact_profile(profile)
+    except IntegrityError:
+        return 400, {"detail": "A profile with this name already exists"}
+
+
+@router.delete(
+    "/{team_key}/contact-profiles/{profile_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str):
+    """Delete a workspace contact profile."""
+    team, role, error = _get_team_and_membership_role(request, team_key)
+    if error:
+        return error
+
+    if not _user_can_manage_profiles(role):
+        return 403, {"detail": "Only owners and admins can manage contact profiles"}
+
+    try:
+        profile = ContactProfile.objects.get(team=team, pk=profile_id)
+    except ContactProfile.DoesNotExist:
+        return 404, {"detail": "Contact profile not found"}
+
+    profile.delete()
+    return 204, None
 
 
 @router.put(

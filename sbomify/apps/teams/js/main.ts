@@ -2,6 +2,7 @@ import 'vite/modulepreload-polyfill';
 import { createApp, type Component } from 'vue';
 
 // Vue components (using standard Bootstrap/HTML classes provided by our CSS system)
+import ContactProfiles from './components/ContactProfiles.vue';
 import TeamBilling from './components/TeamBilling.vue';
 import TeamBranding from './components/TeamBranding.vue';
 import TeamDangerZone from './components/TeamDangerZone.vue';
@@ -76,6 +77,7 @@ function mountVueComponent(selector: string, component: Component, props: Record
 
 // Mount components when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  mountVueComponent('vc-contact-profiles', ContactProfiles);
   mountVueComponent('vc-team-branding', TeamBranding);
   mountVueComponent('vc-team-billing', TeamBilling);
   mountVueComponent('vc-team-danger-zone', TeamDangerZone);

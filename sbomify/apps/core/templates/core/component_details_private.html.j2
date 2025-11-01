@@ -51,6 +51,7 @@
     {% if component.component_type == 'sbom' %}
         <div class="vc-component-meta-info"
              data-component-id="{{ component.id }}"
+             data-team-key="{{ request.session.current_team.key }}"
              {% if component.has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
     <!-- Vulnerability Time Series Chart -->

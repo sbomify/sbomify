@@ -8,6 +8,7 @@ from ninja import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sbomify.apps.core.utils import set_values_if_not_empty
+from sbomify.apps.teams.schemas import ContactProfileSchema
 
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
@@ -97,9 +98,9 @@ class ComponentAuthorSchema(BaseModel):
 
 class SupplierSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    name: str | None = None
-    url: list[str] | None = None
-    address: str | None = None
+    name: str | None = Field(default=None, serialization_exclude_when_none=True)
+    url: list[str] | None = Field(default=None, serialization_exclude_when_none=True)
+    address: str | None = Field(default=None, serialization_exclude_when_none=True)
     contacts: list[ComponentSupplierContactSchema] = Field(default_factory=list)
 
     @field_validator("url", mode="before")
@@ -145,7 +146,10 @@ class ComponentMetaData(BaseModel):
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: str | None = None
+    lifecycle_phase: str | None = Field(default=None, serialization_exclude_when_none=False)
+    contact_profile_id: str | None = Field(default=None, serialization_exclude_when_none=False)
+    contact_profile: ContactProfileSchema | None = Field(default=None, serialization_exclude_when_none=False)
+    uses_custom_contact: bool = True
 
     @field_validator("authors", mode="before")
     @classmethod
@@ -237,6 +241,7 @@ class ComponentMetaDataUpdate(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    contact_profile_id: str | None = None
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
@@ -266,6 +271,7 @@ class ComponentMetaDataPatch(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    contact_profile_id: str | None = None
     supplier: SupplierSchema | None = None
     authors: list[ComponentAuthorSchema] | None = None
     licenses: list[LicenseSchema | CustomLicenseSchema | str] | None = None

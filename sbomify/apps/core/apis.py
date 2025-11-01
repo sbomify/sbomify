@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -17,13 +17,15 @@ from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
+    SupplierSchema,
 )
 from sbomify.apps.sboms.utils import (
     get_product_sbom_package,
     get_project_sbom_package,
     get_release_sbom_package,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import ContactProfile, Team
+from sbomify.apps.teams.schemas import ContactProfileContactSchema, ContactProfileSchema
 from sbomify.logging import getLogger
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
@@ -77,6 +79,36 @@ from .schemas import (
 )
 
 log = getLogger(__name__)
+
+
+def _serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
+    contacts = [
+        ContactProfileContactSchema(
+            name=contact.name,
+            email=contact.email,
+            phone=contact.phone,
+            order=contact.order,
+        )
+        for contact in profile.contacts.all()
+    ]
+
+    urls = [url for url in (profile.website_urls or []) if url]
+
+    return ContactProfileSchema(
+        id=profile.id,
+        name=profile.name,
+        company=profile.company or None,
+        supplier_name=profile.supplier_name or None,
+        vendor=profile.vendor or None,
+        email=profile.email or None,
+        phone=profile.phone or None,
+        address=profile.address or None,
+        website_urls=urls,
+        contacts=contacts,
+        is_default=profile.is_default,
+        created_at=profile.created_at.isoformat(),
+        updated_at=profile.updated_at.isoformat(),
+    )
 
 
 # Creation schemas
@@ -358,6 +390,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 @router.get(
     "/products",
     response={200: PaginatedProductsResponse, 403: ErrorResponse},
+    exclude_none=True,
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1603,7 +1636,6 @@ def delete_component(request: HttpRequest, component_id: str):
         403: ErrorResponse,
         404: ErrorResponse,
     },
-    exclude_none=True,
     auth=None,
     tags=["Components"],
 )
@@ -1612,8 +1644,8 @@ def get_component_metadata(request, component_id: str):
     """Get metadata for a component."""
     try:
         component = (
-            Component.objects.select_related()
-            .prefetch_related("supplier_contacts", "authors", "licenses")
+            Component.objects.select_related("contact_profile")
+            .prefetch_related("supplier_contacts", "authors", "licenses", "contact_profile__contacts")
             .get(pk=component_id)
         )
     except Component.DoesNotExist:
@@ -1622,26 +1654,58 @@ def get_component_metadata(request, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
 
-    # Build supplier information from native fields
-    supplier = {}
-    if component.supplier_name:
-        supplier["name"] = component.supplier_name
-    if component.supplier_url:
-        supplier["url"] = component.supplier_url
-    if component.supplier_address:
-        supplier["address"] = component.supplier_address
+    # Build supplier information from contact profile or component fields
+    supplier = {"contacts": []}
+    contact_profile_data = None
 
-    # Always include contacts (even if empty list)
-    supplier["contacts"] = []
-    for contact in component.supplier_contacts.all():
-        contact_dict = {"name": contact.name}
-        if contact.email is not None:
-            contact_dict["email"] = contact.email
-        if contact.phone is not None:
-            contact_dict["phone"] = contact.phone
-        if contact.bom_ref is not None:
-            contact_dict["bom_ref"] = contact.bom_ref
-        supplier["contacts"].append(contact_dict)
+    if component.contact_profile:
+        profile = component.contact_profile
+        contact_profile_data = _serialize_contact_profile(profile)
+
+        if profile.supplier_name:
+            supplier["name"] = profile.supplier_name
+        elif profile.company:
+            supplier["name"] = profile.company
+
+        urls = [url for url in (profile.website_urls or []) if url]
+        if urls:
+            supplier["url"] = urls
+
+        if profile.address:
+            supplier["address"] = profile.address
+
+        supplier["contacts"] = []
+        for contact in profile.contacts.all():
+            contact_dict = {"name": contact.name}
+            if contact.email is not None:
+                contact_dict["email"] = contact.email
+            if contact.phone is not None:
+                contact_dict["phone"] = contact.phone
+            supplier["contacts"].append(contact_dict)
+
+        uses_custom_contact = False
+    else:
+        if component.supplier_name:
+            supplier["name"] = component.supplier_name
+        if component.supplier_url:
+            supplier["url"] = component.supplier_url
+        if component.supplier_address:
+            supplier["address"] = component.supplier_address
+
+        for contact in component.supplier_contacts.all():
+            contact_dict = {"name": contact.name}
+            if contact.email is not None:
+                contact_dict["email"] = contact.email
+            if contact.phone is not None:
+                contact_dict["phone"] = contact.phone
+            if contact.bom_ref is not None:
+                contact_dict["bom_ref"] = contact.bom_ref
+            supplier["contacts"].append(contact_dict)
+
+        uses_custom_contact = True
+
+    # Remove empty supplier fields while keeping contacts list intact
+    supplier = SupplierSchema.model_validate(supplier).model_dump(exclude_none=True)
 
     # Build authors information from native fields
     authors = []
@@ -1668,9 +1732,25 @@ def get_component_metadata(request, component_id: str):
         "authors": authors,
         "licenses": licenses,
         "lifecycle_phase": component.lifecycle_phase,
+        "contact_profile_id": component.contact_profile_id,
+        "contact_profile": contact_profile_data,
+        "uses_custom_contact": uses_custom_contact,
     }
 
-    return response_data
+    meta = ComponentMetaData.model_validate(response_data)
+    meta.supplier = SupplierSchema.model_validate(supplier)
+
+    payload = meta.model_dump(exclude_none=True)
+    payload["supplier"] = supplier
+
+    for key in ("lifecycle_phase", "contact_profile_id", "contact_profile"):
+        if key not in payload:
+            payload[key] = None
+
+    if "uses_custom_contact" not in payload:
+        payload["uses_custom_contact"] = uses_custom_contact
+
+    return JsonResponse(payload)
 
 
 @router.patch(
@@ -1697,6 +1777,17 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
     try:
         # Convert incoming metadata to dict, excluding unset fields
         meta_dict = metadata.model_dump(exclude_unset=True)
+
+        if "contact_profile_id" in meta_dict:
+            profile_id = meta_dict["contact_profile_id"]
+            if profile_id:
+                try:
+                    profile = ContactProfile.objects.get(pk=profile_id, team=component.team)
+                except ContactProfile.DoesNotExist:
+                    return 404, {"detail": "Contact profile not found"}
+                component.contact_profile = profile
+            else:
+                component.contact_profile = None
 
         # Update supplier information
         if "supplier" in meta_dict:
