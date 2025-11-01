@@ -14,7 +14,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers, sample_user
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import ContactProfile, Member
 
 from ..models import SBOM, Component, Product, Project
 from .fixtures import (  # noqa: F401
@@ -177,7 +177,11 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["supplier"] == {"contacts": []}
     assert response_json["authors"] == []
     assert response_json["licenses"] == []
-    assert len(response_json.keys()) == 5
+    assert response_json["lifecycle_phase"] is None
+    assert response_json["contact_profile_id"] is None
+    assert response_json["contact_profile"] is None
+    assert response_json["uses_custom_contact"] is True
+    assert len(response_json.keys()) == 9
 
     # Set component metadata
     component_metadata = {
@@ -224,8 +228,58 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_data["licenses"][1]["name"] == "custom"
     assert response_data["licenses"][1]["url"] == "https://custom.com/license"
     assert response_data["licenses"][1]["text"] == "Custom license text"
+    assert response_data["contact_profile_id"] is None
+    assert response_data["contact_profile"] is None
+    assert response_data["uses_custom_contact"] is True
 
 
+@pytest.mark.django_db
+def test_component_metadata_with_contact_profile(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    client = Client()
+
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Shared Profile",
+        company="Example Corp",
+        supplier_name="Example Supplier",
+        email="profile@example.com",
+        phone="+1 555 0100",
+        address="123 Example Street",
+        website_urls=["https://supplier.example.com"],
+        is_default=True,
+    )
+    profile.contacts.create(name="Profile Owner", email="owner@example.com", phone="555-1000")
+
+    patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        patch_url,
+        json.dumps({"contact_profile_id": profile.id}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 204
+
+    get_url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        get_url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["contact_profile_id"] == profile.id
+    assert response_data["contact_profile"]["name"] == "Shared Profile"
+    assert response_data["uses_custom_contact"] is False
+    assert response_data["supplier"]["name"] == "Example Supplier"
+    assert response_data["supplier"]["address"] == "123 Example Street"
+    assert response_data["supplier"]["url"] == ["https://supplier.example.com"]
+    assert response_data["supplier"]["contacts"][0]["name"] == "Profile Owner"
 @pytest.mark.django_db
 def test_component_copy_metadata_api(
     sample_component: Component,  # noqa: F811

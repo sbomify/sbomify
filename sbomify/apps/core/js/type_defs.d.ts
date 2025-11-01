@@ -12,6 +12,22 @@ export interface ContactInfo {
   phone: string | null;
 }
 
+export interface ContactProfile {
+  id: string;
+  name: string;
+  company: string | null;
+  supplier_name: string | null;
+  vendor: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  website_urls: string[];
+  contacts: ContactInfo[];
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface SupplierInfo {
   name: string | null;
   url: string[] | null;
@@ -26,6 +42,9 @@ export interface ComponentMetaInfo {
   authors: ContactInfo[];
   licenses: (string | CustomLicense)[];
   lifecycle_phase: LifecyclePhase | null;
+  contact_profile_id: string | null;
+  contact_profile?: ContactProfile | null;
+  uses_custom_contact?: boolean;
 }
 
 export interface UserItemsResponse {

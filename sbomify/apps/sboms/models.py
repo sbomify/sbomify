@@ -270,6 +270,14 @@ class Component(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    contact_profile = models.ForeignKey(
+        "teams.ContactProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="components",
+        help_text="Workspace contact profile linked to this component",
+    )
     name = models.CharField(max_length=255, blank=False)
     component_type = models.CharField(
         max_length=20,
