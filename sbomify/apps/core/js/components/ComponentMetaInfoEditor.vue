@@ -444,7 +444,7 @@ const contactProfiles = ref<ContactProfile[]>([]);
     }
 
     try {
-      const response = await $axios.get(`/api/v1/teams/${props.teamKey}/contact-profiles`);
+      const response = await $axios.get(`/api/v1/workspaces/${props.teamKey}/contact-profiles`);
       const data = (response.data ?? []) as ContactProfile[];
       contactProfiles.value = data.map((profile) => ({
         ...profile,

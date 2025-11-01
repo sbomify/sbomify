@@ -276,7 +276,7 @@ const transformProfile = (profile: ContactProfileForm) => {
 const loadProfiles = async () => {
   isLoading.value = true;
   try {
-    const response = await $axios.get(`/api/v1/teams/${props.teamKey}/contact-profiles`);
+    const response = await $axios.get(`/api/v1/workspaces/${props.teamKey}/contact-profiles`);
     const data = (response.data ?? []) as ContactProfile[];
     profiles.value = data.map((profile) => ({
       ...profile,
@@ -345,12 +345,12 @@ const submitForm = async () => {
     const payload = transformProfile(formState.value);
     if (editingProfileId.value) {
       await $axios.patch(
-        `/api/v1/teams/${props.teamKey}/contact-profiles/${editingProfileId.value}`,
+        `/api/v1/workspaces/${props.teamKey}/contact-profiles/${editingProfileId.value}`,
         payload,
       );
       showSuccess('Contact profile updated');
     } else {
-      await $axios.post(`/api/v1/teams/${props.teamKey}/contact-profiles`, payload);
+      await $axios.post(`/api/v1/workspaces/${props.teamKey}/contact-profiles`, payload);
       showSuccess('Contact profile created');
     }
 
@@ -370,7 +370,7 @@ const setDefault = async (profile: ContactProfile) => {
   }
 
   try {
-    await $axios.patch(`/api/v1/teams/${props.teamKey}/contact-profiles/${profile.id}`, {
+    await $axios.patch(`/api/v1/workspaces/${props.teamKey}/contact-profiles/${profile.id}`, {
       is_default: true,
     });
     showSuccess(`'${profile.name}' set as default profile`);
@@ -391,7 +391,7 @@ const deleteProfile = async (profile: ContactProfile) => {
   }
 
   try {
-    await $axios.delete(`/api/v1/teams/${props.teamKey}/contact-profiles/${profile.id}`);
+    await $axios.delete(`/api/v1/workspaces/${props.teamKey}/contact-profiles/${profile.id}`);
     showSuccess('Contact profile deleted');
     await loadProfiles();
   } catch (error) {
