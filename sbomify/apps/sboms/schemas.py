@@ -98,9 +98,9 @@ class ComponentAuthorSchema(BaseModel):
 
 class SupplierSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    name: str | None = None
-    url: list[str] | None = None
-    address: str | None = None
+    name: str | None = Field(default=None, serialization_exclude_when_none=True)
+    url: list[str] | None = Field(default=None, serialization_exclude_when_none=True)
+    address: str | None = Field(default=None, serialization_exclude_when_none=True)
     contacts: list[ComponentSupplierContactSchema] = Field(default_factory=list)
 
     @field_validator("url", mode="before")
@@ -146,9 +146,9 @@ class ComponentMetaData(BaseModel):
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
-    lifecycle_phase: str | None = None
-    contact_profile_id: str | None = None
-    contact_profile: ContactProfileSchema | None = None
+    lifecycle_phase: str | None = Field(default=None, serialization_exclude_when_none=False)
+    contact_profile_id: str | None = Field(default=None, serialization_exclude_when_none=False)
+    contact_profile: ContactProfileSchema | None = Field(default=None, serialization_exclude_when_none=False)
     uses_custom_contact: bool = True
 
     @field_validator("authors", mode="before")

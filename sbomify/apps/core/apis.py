@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -17,6 +17,7 @@ from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
+    SupplierSchema,
 )
 from sbomify.apps.sboms.utils import (
     get_product_sbom_package,
@@ -389,6 +390,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 @router.get(
     "/products",
     response={200: PaginatedProductsResponse, 403: ErrorResponse},
+    exclude_none=True,
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1634,7 +1636,6 @@ def delete_component(request: HttpRequest, component_id: str):
         403: ErrorResponse,
         404: ErrorResponse,
     },
-    exclude_none=True,
     auth=None,
     tags=["Components"],
 )
@@ -1703,6 +1704,9 @@ def get_component_metadata(request, component_id: str):
 
         uses_custom_contact = True
 
+    # Remove empty supplier fields while keeping contacts list intact
+    supplier = SupplierSchema.model_validate(supplier).model_dump(exclude_none=True)
+
     # Build authors information from native fields
     authors = []
     for author in component.authors.all():
@@ -1733,7 +1737,20 @@ def get_component_metadata(request, component_id: str):
         "uses_custom_contact": uses_custom_contact,
     }
 
-    return response_data
+    meta = ComponentMetaData.model_validate(response_data)
+    meta.supplier = SupplierSchema.model_validate(supplier)
+
+    payload = meta.model_dump(exclude_none=True)
+    payload["supplier"] = supplier
+
+    for key in ("lifecycle_phase", "contact_profile_id", "contact_profile"):
+        if key not in payload:
+            payload[key] = None
+
+    if "uses_custom_contact" not in payload:
+        payload["uses_custom_contact"] = uses_custom_contact
+
+    return JsonResponse(payload)
 
 
 @router.patch(

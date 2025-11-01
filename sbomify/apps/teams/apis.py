@@ -279,11 +279,7 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     if not _user_can_manage_profiles(role):
         return 403, {"detail": "Only owners and admins can view contact profiles"}
 
-    profiles = (
-        ContactProfile.objects.filter(team=team)
-        .prefetch_related("contacts")
-        .order_by("-is_default", "name")
-    )
+    profiles = ContactProfile.objects.filter(team=team).prefetch_related("contacts").order_by("-is_default", "name")
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
@@ -327,9 +323,7 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
     "/{team_key}/contact-profiles/{profile_id}",
     response={200: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_contact_profile(
-    request: HttpRequest, team_key: str, profile_id: str, payload: ContactProfileUpdateSchema
-):
+def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str, payload: ContactProfileUpdateSchema):
     """Update an existing contact profile."""
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:

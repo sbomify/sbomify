@@ -124,7 +124,7 @@
         <div class="col-12 col-lg-6">
           <div class="mb-3">
             <label class="form-label">Websites</label>
-            <div v-for="(url, index) in formState.websiteUrls" :key="`url-${index}`" class="input-group mb-2">
+            <div v-for="(_, index) in formState.websiteUrls" :key="`url-${index}`" class="input-group mb-2">
               <input v-model="formState.websiteUrls[index]" type="url" class="form-control" placeholder="https://example.com">
               <button type="button" class="btn btn-outline-danger" @click="removeWebsiteUrl(index)">
                 <i class="fa-solid fa-times"></i>

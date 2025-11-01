@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
+
 class ErrorCode(str, Enum):
     """Structured error codes for API responses"""
 

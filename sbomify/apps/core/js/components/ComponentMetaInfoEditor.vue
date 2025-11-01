@@ -33,7 +33,7 @@
                   >
                     <option value="">Use custom contact info</option>
                     <option
-                      v-if="selectedProfile && !contactProfiles.some(profile => profile.id === selectedProfile.id)"
+                      v-if="selectedProfile && !contactProfiles.some(profile => profile.id === selectedProfile?.id)"
                       :value="selectedProfile.id"
                     >
                       {{ selectedProfile.name }} (unavailable)
@@ -80,9 +80,9 @@
                     <div v-if="selectedProfile.website_urls?.length" class="mb-2">
                       <strong>Websites:</strong>
                       <ul class="mb-0 ps-3">
-                        <li v-for="url in selectedProfile.website_urls" :key="url">
-                          <a :href="url" target="_blank" rel="noopener noreferrer">
-                            {{ url }}
+                        <li v-for="link in selectedProfile.website_urls" :key="link">
+                          <a :href="link" target="_blank" rel="noopener noreferrer">
+                            {{ link }}
                           </a>
                         </li>
                       </ul>
