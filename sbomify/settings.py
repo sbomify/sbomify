@@ -197,8 +197,8 @@ if USE_VITE_DEV_SERVER:
     DJANGO_VITE = {
         "default": {
             "dev_mode": True,
-            "dev_server_host": "127.0.0.1",
-            "dev_server_port": 5170,
+            "dev_server_host": os.environ.get("VITE_DEV_SERVER_HOST", "127.0.0.1"),
+            "dev_server_port": int(os.environ.get("VITE_DEV_SERVER_PORT", "5170")),
             "static_url_prefix": "/dist/",
         }
     }
