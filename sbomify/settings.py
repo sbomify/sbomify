@@ -134,6 +134,18 @@ if DEBUG:
         # Debug toolbar not available (e.g., in production with DEBUG=True)
         pass
 
+    # Add CORS headers in development mode - allow all origins
+    try:
+        import corsheaders  # noqa: F401
+
+        INSTALLED_APPS.append("corsheaders")
+        MIDDLEWARE.insert(
+            MIDDLEWARE.index("django.middleware.common.CommonMiddleware"),
+            "corsheaders.middleware.CorsMiddleware",
+        )
+    except ImportError:
+        pass
+
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
@@ -504,6 +516,10 @@ if DEBUG:
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+
+    # CORS settings - allow all origins in development mode
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
 
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY

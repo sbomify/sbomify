@@ -54,6 +54,7 @@ dev = [
     "pytest-json-report>=1.5.0,<2",
     "pytest-playwright>=0.7.1,<0.8",
     "djlint>=1.36.4,<2",
+    "django-cors-headers>=4.9.0",
 ]
 test = [
     "pytest>=8.4.2,<9",
