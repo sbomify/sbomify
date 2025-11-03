@@ -390,7 +390,6 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
 @router.get(
     "/products",
     response={200: PaginatedProductsResponse, 403: ErrorResponse},
-    exclude_none=True,
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1737,8 +1736,8 @@ def get_component_metadata(request, component_id: str):
         "uses_custom_contact": uses_custom_contact,
     }
 
-    meta = ComponentMetaData.model_validate(response_data)
-    return meta
+    comp_meta = ComponentMetaData.model_validate(response_data)
+    return comp_meta
 
 
 @router.patch(

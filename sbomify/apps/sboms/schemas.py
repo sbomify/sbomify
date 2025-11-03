@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from types import ModuleType
+from typing import Any
 
 from ninja import Schema
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from sbomify.apps.core.utils import set_values_if_not_empty
 from sbomify.apps.teams.schemas import ContactProfileSchema
@@ -85,6 +86,17 @@ class ComponentSupplierContactSchema(BaseModel):
     phone: str | None = None
     bom_ref: str | None = None
 
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"name": self.name}
+        if self.email is not None:
+            data["email"] = self.email
+        if self.phone is not None:
+            data["phone"] = self.phone
+        if self.bom_ref is not None:
+            data["bom_ref"] = self.bom_ref
+        return data
+
 
 class ComponentAuthorSchema(BaseModel):
     """Schema for component author information."""
@@ -94,6 +106,17 @@ class ComponentAuthorSchema(BaseModel):
     email: str | None = None
     phone: str | None = None
     bom_ref: str | None = None
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"name": self.name}
+        if self.email is not None:
+            data["email"] = self.email
+        if self.phone is not None:
+            data["phone"] = self.phone
+        if self.bom_ref is not None:
+            data["bom_ref"] = self.bom_ref
+        return data
 
 
 class SupplierSchema(BaseModel):
@@ -118,6 +141,21 @@ class SupplierSchema(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        if self.name is not None:
+            data["name"] = self.name
+        if self.url:
+            data["url"] = self.url
+        if self.address is not None:
+            data["address"] = self.address
+        if self.contacts:
+            data["contacts"] = [contact.model_dump() for contact in self.contacts]
+        else:
+            data["contacts"] = []
+        return data
 
     @field_validator("contacts", mode="before")
     @classmethod
