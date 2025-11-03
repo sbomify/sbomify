@@ -194,10 +194,11 @@ USE_VITE_DEV_SERVER = os.environ.get("USE_VITE_DEV_SERVER", "False").lower() == 
 
 if USE_VITE_DEV_SERVER:
     # Development mode - Vite dev server serves at /dist/
+    # Note: Use localhost/127.0.0.1 for browser access, not Docker internal hostnames
     DJANGO_VITE = {
         "default": {
             "dev_mode": True,
-            "dev_server_host": os.environ.get("VITE_DEV_SERVER_HOST", "127.0.0.1"),
+            "dev_server_host": "127.0.0.1",  # Browser-accessible hostname
             "dev_server_port": int(os.environ.get("VITE_DEV_SERVER_PORT", "5170")),
             "static_url_prefix": "/dist/",
         }
