@@ -2035,98 +2035,92 @@ def get_dashboard_summary(
 ):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     # For specific public items, allow unauthenticated access
+    product = None
+    project = None
+    component = None
+
     if product_id:
         try:
             product = Product.objects.get(pk=product_id)
-            if product.is_public:
-                # Allow unauthenticated access for public product stats
-                pass
-            else:
-                # Private product requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not product.is_public and (not request.user or not request.user.is_authenticated):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Product.DoesNotExist:
             return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
     elif project_id:
         try:
             project = Project.objects.get(pk=project_id)
-            if project.is_public:
-                # Allow unauthenticated access for public project stats
-                pass
-            else:
-                # Private project requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not project.is_public and (not request.user or not request.user.is_authenticated):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Project.DoesNotExist:
             return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if component.is_public:
-                # Allow unauthenticated access for public component stats
-                pass
-            else:
-                # Private component requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not component.is_public and (not request.user or not request.user.is_authenticated):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Component.DoesNotExist:
             return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
     else:
-        # General dashboard access requires authentication
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required.", "error_code": ErrorCode.UNAUTHORIZED}
 
-    # For authenticated users, use their teams; for public access, filter differently
-    if request.user and request.user.is_authenticated:
+    # Import SBOM here to avoid circular import
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.utils import calculate_ntia_compliance_summary
+
+    if product_id:
+        products_qs = Product.objects.filter(id=product_id)
+        projects_qs = Project.objects.filter(products__id=product_id).distinct()
+        components_qs = Component.objects.filter(projects__products__id=product_id).distinct()
+        sboms_qs = SBOM.objects.filter(component__projects__products__id=product_id).distinct()
+        summary_scope = ("product", product.id, product.name)
+    elif project_id:
+        products_qs = Product.objects.filter(projects__id=project_id).distinct()
+        projects_qs = Project.objects.filter(id=project_id)
+        components_qs = Component.objects.filter(projects__id=project_id).distinct()
+        sboms_qs = SBOM.objects.filter(component__projects__id=project_id).distinct()
+        summary_scope = ("project", project.id, project.name)
+    elif component_id:
+        products_qs = Product.objects.filter(projects__components__id=component_id).distinct()
+        projects_qs = Project.objects.filter(components__id=component_id).distinct()
+        components_qs = Component.objects.filter(id=component_id)
+        sboms_qs = SBOM.objects.filter(component_id=component_id)
+        summary_scope = ("component", component.id, component.name)
+    else:
         user_teams_qs = Team.objects.filter(member__user=request.user)
-        # Base querysets for the user's teams
         products_qs = Product.objects.filter(team__in=user_teams_qs)
         projects_qs = Project.objects.filter(team__in=user_teams_qs)
         components_qs = Component.objects.filter(team__in=user_teams_qs)
-    else:
-        # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
-        products_qs = Product.objects.none()
-        projects_qs = Project.objects.none()
-        components_qs = Component.objects.none()
+        sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs)
+        current_team = request.session.get("current_team", {}) if hasattr(request, "session") else {}
+        summary_scope = ("team", current_team.get("key"), current_team.get("name"))
 
-    # Import SBOM here to avoid circular import
-    from sbomify.apps.sboms.models import SBOM
+    sboms_summary_queryset = sboms_qs.only(
+        "ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at"
+    ).order_by()
+    ntia_summary = calculate_ntia_compliance_summary(sboms_summary_queryset)
+    ntia_summary.update(
+        {
+            "scope": summary_scope[0],
+            "scope_id": summary_scope[1],
+            "scope_name": summary_scope[2],
+        }
+    )
 
-    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
-
-    # Apply context-specific filtering
-    if product_id:
-        # When viewing a product, show projects and components within that product
-        products_qs = products_qs.filter(id=product_id)
-        projects_qs = projects_qs.filter(products__id=product_id)
-        components_qs = components_qs.filter(projects__products__id=product_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
-    elif project_id:
-        # When viewing a project, show components within that project
-        projects_qs = projects_qs.filter(id=project_id)
-        components_qs = components_qs.filter(projects__id=project_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
-    elif component_id:
-        # When viewing a component, filter SBOMs for that component only
-        components_qs = components_qs.filter(id=component_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
-
-    # Get counts
     total_products = products_qs.count()
     total_projects = projects_qs.count()
     total_components = components_qs.count()
 
-    # Get latest uploads
-    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
+    latest_sboms_qs = sboms_qs.select_related("component").order_by("-created_at")[:5]
 
     latest_uploads_data = [
         DashboardSBOMUploadInfo(
@@ -2143,6 +2137,7 @@ def get_dashboard_summary(
         total_projects=total_projects,
         total_components=total_components,
         latest_uploads=latest_uploads_data,
+        ntia_compliance_summary=ntia_summary,
     )
 
 

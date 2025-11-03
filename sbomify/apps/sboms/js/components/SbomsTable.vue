@@ -121,6 +121,80 @@ import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmat
 import PaginationControls from '../../../core/js/components/PaginationControls.vue'
 import SbomsDataTable from './SbomsDataTable.vue'
 
+type NtiaStatus = 'compliant' | 'partial' | 'non_compliant' | 'unknown'
+
+interface NtiaComplianceError {
+  field: string
+  message: string
+  suggestion?: string
+}
+
+interface NtiaComplianceCheck {
+  element?: string
+  title: string
+  status?: string
+  message: string
+  suggestion?: string | null
+  affected?: string[]
+}
+
+interface NtiaComplianceSection {
+  name?: string
+  title: string
+  summary: string
+  status?: string
+  metrics?: {
+    total?: number
+    pass?: number
+    warning?: number
+    fail?: number
+    unknown?: number
+  }
+  checks?: NtiaComplianceCheck[]
+}
+
+interface NtiaComplianceSummary {
+  errors?: number
+  warnings?: number
+  status?: string
+  score?: number | null
+  checks?: {
+    total?: number
+    pass?: number
+    warning?: number
+    fail?: number
+    unknown?: number
+  }
+  sections?: Record<
+    string,
+    {
+      status?: string
+      metrics?: {
+        total?: number
+        pass?: number
+        warning?: number
+        fail?: number
+        unknown?: number
+      }
+      title?: string
+      summary?: string
+    }
+  >
+}
+
+interface NtiaComplianceDetails {
+  is_compliant?: boolean
+  status?: string
+  error_count?: number
+  warning_count?: number
+  errors?: NtiaComplianceError[]
+  warnings?: NtiaComplianceCheck[]
+  sections?: NtiaComplianceSection[]
+  summary?: NtiaComplianceSummary
+  checked_at?: string | null
+  format?: string
+}
+
 interface Sbom {
   id: string
   name: string
@@ -128,16 +202,8 @@ interface Sbom {
   format_version: string
   version: string
   created_at: string
-  ntia_compliance_status?: string
-  ntia_compliance_details?: {
-    errors?: Array<{
-      field: string
-      message: string
-      suggestion: string
-    }>
-    checked_at?: string
-    error_count?: number
-  }
+  ntia_compliance_status?: NtiaStatus
+  ntia_compliance_details?: NtiaComplianceDetails | null
 }
 
 interface Release {

@@ -42,6 +42,17 @@
             </span>
         </div>
     </div>
+    {% if dashboard_summary.ntia_compliance_summary %}
+        {{ dashboard_summary.ntia_compliance_summary|json_script:"product-ntia-summary" }}
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="vc-ntia-compliance-progress"
+                     data-summary-element-id="product-ntia-summary"
+                     data-scope="product"
+                     data-scope-name="{{ product.name }}"></div>
+            </div>
+        </div>
+    {% endif %}
     <div class="row">
         <div class="col-12">
             <div class="container-fluid p-0">

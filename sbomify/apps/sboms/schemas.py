@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from types import ModuleType
-from typing import Any
+from typing import Any, Dict
 
 from ninja import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
@@ -37,6 +37,7 @@ class DashboardStatsResponse(Schema):
     total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
+    ntia_compliance_summary: Dict[str, Any] | None = None
 
 
 # Import core schemas to avoid duplication

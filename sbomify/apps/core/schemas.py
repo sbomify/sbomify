@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -327,6 +327,7 @@ class DashboardStatsResponse(BaseModel):
     total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
+    ntia_compliance_summary: Dict[str, Any] | None = None
 
 
 class UserItemsResponse(BaseModel):

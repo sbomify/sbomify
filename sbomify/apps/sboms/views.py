@@ -22,6 +22,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.sboms.utils import build_ntia_template_context
 
 # from .decorators import validate_role_in_current_team
 from .models import SBOM
@@ -71,6 +72,7 @@ def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
             "sbom": sbom,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
+            "ntia_template": build_ntia_template_context(sbom.ntia_compliance_details),
         },
     )
 

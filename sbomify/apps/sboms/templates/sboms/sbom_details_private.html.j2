@@ -150,8 +150,352 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             <div class="vc-sbom-actions-card" data-sbom-id="{{ sbom.id }}"></div>
         </div>
     </div>
+    <div class="row mt-4">
+        <div class="col-12">
+            {% if ntia_template.has_data %}
+                <div class="ntia-summary-card">
+                    <div class="ntia-summary-card__header">
+                        <div>
+                            <h2 class="ntia-summary-card__title">
+                                <i class="fas fa-clipboard-check me-2 text-primary"></i>
+                                NTIA Compliance Overview
+                            </h2>
+                            <p class="text-muted mb-0">Snapshot generated from the latest automated assessment.</p>
+                        </div>
+                        <span class="badge ntia-status-badge ntia-status-{{ ntia_template.status }}">{{ ntia_template.status_label }}</span>
+                    </div>
+                    <div class="ntia-summary-card__stats">
+                        <div class="ntia-stat">
+                            <div class="ntia-stat__label">Compliance Score</div>
+                            <div class="ntia-stat__value">
+                                {% if ntia_template.score is not None %}
+                                    {{ ntia_template.score|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="ntia-stat">
+                            <div class="ntia-stat__label">Errors</div>
+                            <div class="ntia-stat__value text-danger">{{ ntia_template.summary.errors|default:0 }}</div>
+                        </div>
+                        <div class="ntia-stat">
+                            <div class="ntia-stat__label">Warnings</div>
+                            <div class="ntia-stat__value text-warning">{{ ntia_template.summary.warnings|default:0 }}</div>
+                        </div>
+                        <div class="ntia-stat">
+                            <div class="ntia-stat__label">Last Checked</div>
+                            <div class="ntia-stat__value text-muted">
+                                {% if ntia_template.checked_at %}
+                                    {{ ntia_template.checked_at|date:"M j, Y \a\t H:i" }}
+                                {% else %}
+                                    Not available
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% if ntia_template.issues.failures or ntia_template.issues.warnings %}
+                        <div class="ntia-issues">
+                            {% if ntia_template.issues.failures %}
+                                <h3 class="ntia-issues__title text-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Critical Issues
+                                </h3>
+                                <ul class="ntia-issue-list">
+                                    {% for issue in ntia_template.issues.failures %}
+                                        <li class="ntia-issue ntia-issue--danger">
+                                            <div class="ntia-issue__title">{{ issue.title }}</div>
+                                            <p class="ntia-issue__message">{{ issue.message }}</p>
+                                            {% if issue.suggestion %}
+                                                <p class="ntia-issue__suggestion">
+                                                    <strong>Suggested fix:</strong> {{ issue.suggestion }}
+                                                </p>
+                                            {% endif %}
+                                            {% if issue.affected %}
+                                                <p class="ntia-issue__affected text-muted">Affected: {{ issue.affected|join:", " }}</p>
+                                            {% endif %}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                            {% if ntia_template.issues.warnings %}
+                                <h3 class="ntia-issues__title text-warning mt-4">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Advisory Items
+                                </h3>
+                                <ul class="ntia-issue-list">
+                                    {% for issue in ntia_template.issues.warnings %}
+                                        <li class="ntia-issue ntia-issue--warning">
+                                            <div class="ntia-issue__title">{{ issue.title }}</div>
+                                            <p class="ntia-issue__message">{{ issue.message }}</p>
+                                            {% if issue.suggestion %}
+                                                <p class="ntia-issue__suggestion">
+                                                    <strong>Suggested improvement:</strong> {{ issue.suggestion }}
+                                                </p>
+                                            {% endif %}
+                                            {% if issue.affected %}
+                                                <p class="ntia-issue__affected text-muted">Affected: {{ issue.affected|join:", " }}</p>
+                                            {% endif %}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    <details class="ntia-sections"
+                             {% if ntia_template.status != 'compliant' %}open{% endif %}>
+                        <summary class="ntia-sections__summary">View detailed section results</summary>
+                        <div class="ntia-sections__body">
+                            {% for section in ntia_template.sections %}
+                                <section class="ntia-section">
+                                    <header class="ntia-section__header">
+                                        <h4 class="ntia-section__title">{{ section.title }}</h4>
+                                        <span class="badge ntia-status-badge ntia-status-{{ section.status }}">{{ section.status_label }}</span>
+                                    </header>
+                                    {% if section.summary %}<p class="ntia-section__summary text-muted">{{ section.summary }}</p>{% endif %}
+                                    <ul class="ntia-section__checks">
+                                        {% for check in section.checks %}
+                                            <li class="ntia-check ntia-status-{{ check.status }}">
+                                                <div class="ntia-check__header">
+                                                    <span class="ntia-check__title">{{ check.title }}</span>
+                                                    <span class="badge ntia-status-badge ntia-status-{{ check.status }}">{{ check.status_label }}</span>
+                                                </div>
+                                                <p class="ntia-check__message">{{ check.message }}</p>
+                                                {% if check.suggestion %}
+                                                    <p class="ntia-check__suggestion">
+                                                        <strong>Recommendation:</strong> {{ check.suggestion }}
+                                                    </p>
+                                                {% endif %}
+                                                {% if check.affected %}
+                                                    <p class="ntia-check__affected text-muted">Affected components: {{ check.affected|join:", " }}</p>
+                                                {% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </section>
+                            {% endfor %}
+                        </div>
+                    </details>
+                </div>
+            {% else %}
+                <div class="ntia-summary-card ntia-summary-card--empty">
+                    <div class="ntia-summary-card__header">
+                        <div>
+                            <h2 class="ntia-summary-card__title">
+                                <i class="fas fa-clipboard-list me-2 text-secondary"></i>
+                                No NTIA Compliance Data Yet
+                            </h2>
+                            <p class="text-muted mb-0">Run the NTIA compliance check to generate actionable guidance.</p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="vc-ntia-compliance-assistant"
+                 data-status="{{ sbom.ntia_compliance_status }}"
+                 data-compliance-details='{{ sbom.ntia_compliance_details|default:"{}" }}'
+                 data-is-public-view="false"></div>
+        </div>
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
 {% endblock %}
+<style>
+.ntia-summary-card {
+    background: #fff;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    padding: 1.75rem;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.ntia-summary-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.ntia-summary-card__title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.ntia-summary-card__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+.ntia-stat {
+    background: #f8fafc;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.ntia-stat__label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.05em;
+}
+
+.ntia-stat__value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.ntia-status-badge {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ntia-status-compliant {
+    background-color: rgba(34, 197, 94, 0.1) !important;
+    color: #15803d !important;
+}
+
+.ntia-status-partial {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    color: #b45309 !important;
+}
+
+.ntia-status-non_compliant,
+.ntia-status-fail {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #b91c1c !important;
+}
+
+.ntia-status-unknown {
+    background-color: rgba(148, 163, 184, 0.15) !important;
+    color: #475569 !important;
+}
+
+.ntia-issues__title {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.ntia-issue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ntia-issue {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    padding: 1rem;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+
+.ntia-issue--danger {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(254, 226, 226, 0.45);
+}
+
+.ntia-issue--warning {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(254, 243, 199, 0.45);
+}
+
+.ntia-issue__title {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.ntia-issue__message {
+    margin-bottom: 0.35rem;
+    color: #334155;
+}
+
+.ntia-issue__suggestion {
+    margin-bottom: 0.25rem;
+    color: #1d4ed8;
+}
+
+.ntia-sections summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #2563eb;
+}
+
+.ntia-sections__body {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ntia-section {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    background: #f8fafc;
+}
+
+.ntia-section__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.ntia-section__checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ntia-check {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    padding: 0.85rem 1rem;
+    background: #fff;
+}
+
+.ntia-check__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+.ntia-check__title {
+    font-weight: 600;
+}
+
+.ntia-summary-card--empty {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.06));
+}
+
+@media (max-width: 768px) {
+    .ntia-summary-card__stats {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>

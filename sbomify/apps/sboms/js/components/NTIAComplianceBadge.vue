@@ -1,6 +1,5 @@
 <template>
   <div class="ntia-compliance-badge">
-    <!-- Compliant Badge -->
     <div
       v-if="status === 'compliant'"
       class="badge bg-success-subtle text-success d-flex align-items-center gap-1 compliant-badge"
@@ -12,95 +11,194 @@
       <span>Compliant</span>
     </div>
 
-    <!-- Non-Compliant Badge (only show on private view) -->
     <div
-      v-else-if="status === 'non_compliant' && !isPublicView"
-      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
+      v-else-if="status === 'partial'"
+      class="badge bg-info-subtle text-info d-flex align-items-center gap-1"
+      :class="{ 'interactive-badge': canShowDetails }"
       data-bs-toggle="tooltip"
       data-bs-placement="top"
       :title="getTooltipText()"
-      style="cursor: pointer;"
-      @click="showDetailsModal = true"
+      @click="handleBadgeClick"
+    >
+      <i class="fas fa-info-circle"></i>
+      <span>Partially Compliant</span>
+    </div>
+
+    <div
+      v-else-if="status === 'non_compliant'"
+      class="badge bg-warning-subtle text-warning d-flex align-items-center gap-1"
+      :class="{ 'interactive-badge': canShowDetails }"
+      data-bs-toggle="tooltip"
+      data-bs-placement="top"
+      :title="getTooltipText()"
+      @click="handleBadgeClick"
     >
       <i class="fas fa-exclamation-triangle"></i>
       <span>Not Compliant</span>
     </div>
 
-    <!-- Unknown Badge - check if NTIA compliance is available -->
     <div
-      v-else-if="status === 'unknown' && !isPublicView"
+      v-else-if="status === 'unknown'"
       class="badge d-flex align-items-center gap-1"
       :class="getUnknownBadgeClasses()"
       data-bs-toggle="tooltip"
       data-bs-placement="top"
       :title="getTooltipText()"
       :style="getUnknownBadgeStyle()"
-      @click="handleUnknownBadgeClick()"
+      @click="handleUnknownBadgeClick"
     >
       <i :class="getUnknownIconClass()"></i>
       <span>{{ getUnknownStatusText() }}</span>
     </div>
 
-    <!-- Details Modal for Non-Compliant Status -->
     <Teleport to="body">
       <div
         v-if="showDetailsModal"
         class="modal fade show"
         style="display: block; background-color: rgba(0,0,0,0.5);"
         tabindex="-1"
-        @click.self="showDetailsModal = false"
+        @click.self="closeModal"
       >
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="fas fa-shield-exclamation text-warning me-2"></i>
-                NTIA Compliance Issues
+              <h5 class="modal-title d-flex align-items-center gap-2">
+                <i
+                  class="fas"
+                  :class="status === 'non_compliant' ? 'fa-shield-exclamation text-warning' : 'fa-info-circle text-info'"
+                ></i>
+                <span>NTIA Compliance Overview</span>
               </h5>
-              <button
-                type="button"
-                class="btn-close"
-                @click="showDetailsModal = false"
-              ></button>
+              <button type="button" class="btn-close" @click="closeModal"></button>
             </div>
             <div class="modal-body">
-              <div class="alert alert-warning d-flex align-items-start">
-                <i class="fas fa-exclamation-triangle me-3 mt-1 flex-shrink-0"></i>
+              <div
+                class="alert d-flex align-items-start"
+                :class="status === 'non_compliant' ? 'alert-warning' : 'alert-info'"
+              >
+                <i
+                  class="me-3 mt-1 flex-shrink-0"
+                  :class="status === 'non_compliant' ? 'fas fa-exclamation-triangle' : 'fas fa-info-circle'"
+                ></i>
                 <div>
-                  <strong>This SBOM does not meet NTIA minimum elements requirements.</strong>
+                  <strong v-if="status === 'non_compliant'">
+                    This SBOM does not meet NTIA minimum elements requirements.
+                  </strong>
+                  <strong v-else>
+                    This SBOM is partially compliant with NTIA minimum elements.
+                  </strong>
                   <br>
-                  Please review the issues below and consider using our GitHub Actions module to generate compliant SBOMs.
+                  Review the sections below for actionable guidance to bring this SBOM into compliance.
+                </div>
+              </div>
+
+              <div v-if="summaryInfo" class="ntia-summary-card mb-4">
+                <div class="row g-3">
+                  <div class="col-12 col-md-3" v-if="summaryInfo.score !== null && summaryInfo.score !== undefined">
+                    <div class="ntia-summary-stat">
+                      <span class="label">Compliance Score</span>
+                      <span class="value">{{ formatScore(summaryInfo.score) }}%</span>
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-3" v-if="checksSummary.total">
+                    <div class="ntia-summary-stat">
+                      <span class="label">Total Checks</span>
+                      <span class="value">{{ checksSummary.total }}</span>
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-3">
+                    <div class="ntia-summary-stat text-warning">
+                      <span class="label">Failures</span>
+                      <span class="value">{{ checksSummary.fail }}</span>
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-3">
+                    <div class="ntia-summary-stat text-info">
+                      <span class="label">Advisories</span>
+                      <span class="value">{{ checksSummary.warning }}</span>
+                    </div>
+                  </div>
+                  <div class="col-12" v-if="formattedCheckedAt">
+                    <div class="ntia-summary-note">
+                      Last evaluated {{ formattedCheckedAt }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="sectionResults.length > 0" class="mb-4">
+                <div class="section-header mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <h6 class="section-title d-flex align-items-center gap-2 mb-0">
+                    <i class="fas fa-diagram-project"></i>
+                    Section Overview
+                  </h6>
+                  <small class="text-muted" v-if="checksSummary.total">
+                    {{ checksSummary.pass }} pass · {{ checksSummary.warning }} advisory · {{ checksSummary.fail }} fail
+                  </small>
+                </div>
+                <div class="row g-3">
+                  <div
+                    v-for="section in sectionResults"
+                    :key="section.name || section.title"
+                    class="col-12 col-md-6"
+                  >
+                    <div class="ntia-section-card" :class="sectionCardClass(section.status)">
+                      <div class="ntia-section-card__header">
+                        <div>
+                          <h6 class="mb-1 d-flex align-items-center gap-2">
+                            <i :class="sectionIcon(section.status)"></i>
+                            {{ section.title }}
+                          </h6>
+                          <p class="mb-0 text-muted">{{ section.summary }}</p>
+                        </div>
+                        <span class="badge" :class="sectionBadgeClass(section.status)">
+                          {{ formatStatus(section.status) }}
+                        </span>
+                      </div>
+                      <ul class="ntia-section-card__metrics list-unstyled mb-0">
+                        <li v-if="section.metrics?.fail">
+                          <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                          {{ pluralize(section.metrics.fail, 'failure') }}
+                        </li>
+                        <li v-if="section.metrics?.warning">
+                          <i class="fas fa-info-circle text-info me-2"></i>
+                          {{ pluralize(section.metrics.warning, 'advisory', 'advisories') }}
+                        </li>
+                        <li v-if="section.metrics?.pass">
+                          <i class="fas fa-check-circle text-success me-2"></i>
+                          {{ pluralize(section.metrics.pass, 'pass') }}
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div v-if="complianceErrors.length > 0" class="mb-4">
                 <div class="section-header mb-3">
-                  <h6 class="section-title">
-                    <i class="fas fa-exclamation-circle me-2"></i>
+                  <h6 class="section-title d-flex align-items-center gap-2">
+                    <i class="fas fa-exclamation-circle"></i>
                     Issues Found ({{ complianceErrors.length }})
                   </h6>
                 </div>
                 <div class="ntia-issues-list">
                   <div
                     v-for="(error, index) in complianceErrors"
-                    :key="index"
+                    :key="`error-${index}`"
                     class="ntia-issue-item mb-3"
                   >
-                    <div class="ntia-issue-header" @click="toggleIssue(index)">
-                      <div class="d-flex align-items-center">
-                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    <div class="ntia-issue-header" @click="toggleItem(`error-${index}`)">
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fas fa-exclamation-triangle text-warning"></i>
                         <span class="ntia-issue-field">{{ error.field }}:</span>
-                        <span class="ntia-issue-message ms-2">{{ error.message }}</span>
+                        <span class="ntia-issue-message">{{ error.message }}</span>
                         <i
                           class="fas fa-chevron-down ms-auto transition-transform"
-                          :class="{ 'rotate-180': expandedIssues.includes(index) }"
+                          :class="{ 'rotate-180': isExpanded(`error-${index}`) }"
                         ></i>
                       </div>
                     </div>
-                    <div
-                      v-if="expandedIssues.includes(index)"
-                      class="ntia-issue-body"
-                    >
+                    <div v-if="isExpanded(`error-${index}`)" class="ntia-issue-body">
                       <div class="ntia-suggestion">
                         <i class="fas fa-lightbulb text-info me-2"></i>
                         <strong>Suggestion:</strong> {{ error.suggestion }}
@@ -110,41 +208,77 @@
                 </div>
               </div>
 
-              <div class="alert alert-info">
-                <div class="section-header-info mb-3">
-                  <h6 class="section-title-info">
-                    <i class="fas fa-lightbulb me-2"></i>
-                    How to Fix This
+              <div v-if="complianceWarnings.length > 0" class="mb-4">
+                <div class="section-header mb-3">
+                  <h6 class="section-title text-info d-flex align-items-center gap-2">
+                    <i class="fas fa-info-circle"></i>
+                    Advisory Items ({{ complianceWarnings.length }})
                   </h6>
                 </div>
-                  <ul class="mb-0 fix-suggestions">
-                    <li class="mb-2">
-                      <strong>Use our <a href="https://github.com/sbomify/github-action" target="_blank" rel="noopener" class="text-decoration-none">GitHub Actions module</a></strong> for automated SBOM generation
-                    </li>
-                    <li class="mb-2">
-                      <strong>Ensure your SBOM includes all 7 NTIA minimum elements:</strong>
-                      <ul class="mt-2 ntia-elements-list">
-                        <li>Supplier name</li>
-                        <li>Component name</li>
-                        <li>Version of the component</li>
-                        <li>Other unique identifiers (PURL, CPE, etc.)</li>
-                        <li>Dependency relationships</li>
-                        <li>Author of SBOM data</li>
-                        <li>Timestamp</li>
-                      </ul>
-                    </li>
-                    <li>
-                      <strong>Validate your SBOM</strong> before uploading using SBOM validation tools
-                    </li>
-                                    </ul>
+                <div class="ntia-issues-list">
+                  <div
+                    v-for="(warning, index) in complianceWarnings"
+                    :key="`warning-${index}`"
+                    class="ntia-issue-item mb-3"
+                  >
+                    <div class="ntia-issue-header" @click="toggleItem(`warning-${index}`)">
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <i class="fas fa-info-circle text-info"></i>
+                        <span class="ntia-issue-field">{{ warning.title }}:</span>
+                        <span class="ntia-issue-message">{{ warning.message }}</span>
+                        <span class="badge" :class="checkStatusBadgeClass(warning.status)">
+                          {{ checkStatusLabel(warning.status) }}
+                        </span>
+                        <i
+                          class="fas fa-chevron-down ms-auto transition-transform"
+                          :class="{ 'rotate-180': isExpanded(`warning-${index}`) }"
+                        ></i>
+                      </div>
+                    </div>
+                    <div v-if="isExpanded(`warning-${index}`)" class="ntia-issue-body">
+                      <div class="ntia-suggestion" v-if="warning.suggestion">
+                        <i class="fas fa-lightbulb text-info me-2"></i>
+                        <strong>Suggestion:</strong> {{ warning.suggestion }}
+                      </div>
+                      <div v-if="warning.affected && warning.affected.length" class="ntia-suggestion mt-2">
+                        <strong>Affected:</strong> {{ warning.affected.join(', ') }}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              <div class="alert alert-info">
+                <div class="section-header-info mb-3">
+                  <h6 class="section-title-info d-flex align-items-center gap-2">
+                    <i class="fas fa-lightbulb"></i>
+                    How to Improve
+                  </h6>
+                </div>
+                <ul class="mb-0 fix-suggestions">
+                  <li class="mb-2">
+                    <strong>Use our <a href="https://github.com/sbomify/github-action" target="_blank" rel="noopener" class="text-decoration-none">GitHub Actions module</a></strong> for automated SBOM generation.
+                  </li>
+                  <li class="mb-2">
+                    <strong>Ensure your SBOM includes all 7 NTIA minimum elements:</strong>
+                    <ul class="mt-2 ntia-elements-list">
+                      <li>Supplier name</li>
+                      <li>Component name</li>
+                      <li>Version of the component</li>
+                      <li>Unique identifiers (PURL, CPE, etc.)</li>
+                      <li>Dependency relationships</li>
+                      <li>Author of SBOM data</li>
+                      <li>Timestamp</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Validate your SBOM</strong> before uploading using SBOM validation tools.
+                  </li>
+                </ul>
+              </div>
             </div>
             <div class="modal-footer">
-              <button
-                type="button"
-                class="btn btn-secondary"
-                @click="showDetailsModal = false"
-              >
+              <button type="button" class="btn btn-secondary" @click="closeModal">
                 Close
               </button>
               <a
@@ -170,78 +304,186 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 interface ComplianceError {
   field: string
   message: string
-  suggestion: string
+  suggestion?: string
+}
+
+interface NtiaCheck {
+  element?: string
+  title: string
+  status?: string | null
+  message: string
+  suggestion?: string | null
+  affected?: string[]
+}
+
+interface NtiaSectionMetrics {
+  total?: number
+  pass?: number
+  warning?: number
+  fail?: number
+  unknown?: number
+}
+
+interface NtiaSection {
+  name?: string
+  title: string
+  summary: string
+  status?: string | null
+  metrics?: NtiaSectionMetrics
+  checks?: NtiaCheck[]
+}
+
+interface NtiaSummary {
+  errors?: number
+  warnings?: number
+  status?: string
+  score?: number | null
+  checks?: NtiaSectionMetrics & { total?: number }
+  sections?: Record<string, { status?: string; metrics?: NtiaSectionMetrics; title?: string; summary?: string }>
+}
+
+interface ComplianceDetails {
+  is_compliant?: boolean
+  status?: string
+  error_count?: number
+  warning_count?: number
+  errors?: ComplianceError[]
+  warnings?: NtiaCheck[]
+  sections?: NtiaSection[]
+  summary?: NtiaSummary
+  checked_at?: string | null
+  format?: string
 }
 
 interface Props {
-  status: 'compliant' | 'non_compliant' | 'unknown'
-  complianceDetails?: {
-    errors?: ComplianceError[]
-    checked_at?: string
-    error_count?: number
-  }
+  status: 'compliant' | 'partial' | 'non_compliant' | 'unknown'
+  complianceDetails?: ComplianceDetails | string | null
   isPublicView?: boolean
   teamBillingPlan?: string
   teamKey?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  complianceDetails: () => ({}),
+  complianceDetails: null,
   isPublicView: false,
   teamBillingPlan: 'community',
   teamKey: ''
 })
 
 const showDetailsModal = ref(false)
-const expandedIssues = ref<number[]>([])
+const expandedItems = ref<string[]>([])
 
-const complianceErrors = computed((): ComplianceError[] => {
-  return props.complianceDetails?.errors || []
+const normalizedDetails = computed<ComplianceDetails>(() => {
+  const details = props.complianceDetails
+  if (!details) {
+    return {}
+  }
+
+  if (typeof details === 'string') {
+    try {
+      return JSON.parse(details) as ComplianceDetails
+    } catch (error) {
+      console.warn('[NTIAComplianceBadge] Failed to parse complianceDetails prop', error)
+      return {}
+    }
+  }
+
+  return details
 })
 
-const toggleIssue = (index: number): void => {
-  const currentIndex = expandedIssues.value.indexOf(index)
+const complianceErrors = computed<ComplianceError[]>(() => normalizedDetails.value.errors || [])
+const complianceWarnings = computed<NtiaCheck[]>(() => normalizedDetails.value.warnings || [])
+const sectionResults = computed<NtiaSection[]>(() => normalizedDetails.value.sections || [])
+const summaryInfo = computed<NtiaSummary | null>(() => normalizedDetails.value.summary || null)
+
+const checksSummary = computed(() => {
+  const summaryChecks = summaryInfo.value?.checks
+  if (summaryChecks) {
+    return {
+      total: summaryChecks.total ?? 0,
+      pass: summaryChecks.pass ?? 0,
+      warning: summaryChecks.warning ?? 0,
+      fail: summaryChecks.fail ?? 0,
+      unknown: summaryChecks.unknown ?? 0
+    }
+  }
+
+  return {
+    total: complianceErrors.value.length + complianceWarnings.value.length,
+    pass: 0,
+    warning: complianceWarnings.value.length,
+    fail: complianceErrors.value.length,
+    unknown: 0
+  }
+})
+
+const errorCount = computed(() => {
+  if (typeof normalizedDetails.value.error_count === 'number') {
+    return normalizedDetails.value.error_count
+  }
+  if (summaryInfo.value?.errors !== undefined) {
+    return summaryInfo.value.errors ?? 0
+  }
+  return complianceErrors.value.length
+})
+
+const warningCount = computed(() => {
+  if (typeof normalizedDetails.value.warning_count === 'number') {
+    return normalizedDetails.value.warning_count
+  }
+  if (summaryInfo.value?.warnings !== undefined) {
+    return summaryInfo.value.warnings ?? 0
+  }
+  return complianceWarnings.value.length
+})
+
+const checkedAt = computed(() => normalizedDetails.value.checked_at || null)
+
+const formattedCheckedAt = computed(() => {
+  if (!checkedAt.value) {
+    return null
+  }
+  const parsed = new Date(checkedAt.value)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+  return parsed.toLocaleString()
+})
+
+const canShowDetails = computed(() => !props.isPublicView && ['non_compliant', 'partial'].includes(props.status))
+
+const handleBadgeClick = (): void => {
+  if (canShowDetails.value) {
+    showDetailsModal.value = true
+  }
+}
+
+const toggleItem = (key: string): void => {
+  if (!key) {
+    return
+  }
+
+  const currentIndex = expandedItems.value.indexOf(key)
   if (currentIndex > -1) {
-    expandedIssues.value.splice(currentIndex, 1)
+    expandedItems.value.splice(currentIndex, 1)
   } else {
-    expandedIssues.value.push(index)
+    expandedItems.value.push(key)
   }
 }
 
-const isNtiaAvailable = (): boolean => {
-  return props.teamBillingPlan === 'business' || props.teamBillingPlan === 'enterprise'
-}
+const isExpanded = (key: string): boolean => expandedItems.value.includes(key)
 
-const getUnknownBadgeClasses = (): string => {
-  if (isNtiaAvailable()) {
-    return 'bg-info-subtle text-info ntia-checking'
-  } else {
-    return 'bg-secondary-subtle text-secondary'
-  }
-}
+const isNtiaAvailable = (): boolean =>
+  props.teamBillingPlan === 'business' || props.teamBillingPlan === 'enterprise'
 
-const getUnknownBadgeStyle = (): string => {
-  if (!isNtiaAvailable()) {
-    return 'cursor: pointer;'
-  }
-  return ''
-}
+const getUnknownBadgeClasses = (): string =>
+  isNtiaAvailable() ? 'bg-info-subtle text-info ntia-checking' : 'bg-secondary-subtle text-secondary'
 
-const getUnknownIconClass = (): string => {
-  if (isNtiaAvailable()) {
-    return 'fas fa-clock fa-pulse'
-  } else {
-    return 'fas fa-lock'
-  }
-}
+const getUnknownBadgeStyle = (): string => (isNtiaAvailable() ? '' : 'cursor: pointer;')
 
-const getUnknownStatusText = (): string => {
-  if (isNtiaAvailable()) {
-    return 'Checking...'
-  } else {
-    return 'Upgrade Required'
-  }
-}
+const getUnknownIconClass = (): string => (isNtiaAvailable() ? 'fas fa-clock fa-pulse' : 'fas fa-lock')
+
+const getUnknownStatusText = (): string => (isNtiaAvailable() ? 'Checking...' : 'Upgrade Required')
 
 const handleUnknownBadgeClick = (): void => {
   if (!isNtiaAvailable()) {
@@ -253,24 +495,129 @@ const handleUnknownBadgeClick = (): void => {
 const getTooltipText = (): string => {
   switch (props.status) {
     case 'compliant':
-      return 'This SBOM meets all NTIA minimum elements requirements'
-    case 'non_compliant':
-      const errorCount = props.complianceDetails?.error_count || complianceErrors.value.length
-      return `This SBOM has ${errorCount} NTIA compliance issue${errorCount !== 1 ? 's' : ''}. Click for details.`
+      return 'This SBOM meets all NTIA minimum elements requirements.'
+    case 'partial': {
+      const warnings = warningCount.value
+      if (warnings > 0) {
+        return `This SBOM has ${warnings} NTIA advisory item${warnings !== 1 ? 's' : ''}. Click for guidance.`
+      }
+      return 'This SBOM is partially compliant with NTIA minimum elements.'
+    }
+    case 'non_compliant': {
+      const errors = errorCount.value
+      return `This SBOM has ${errors} NTIA compliance issue${errors !== 1 ? 's' : ''}. Click for details.`
+    }
     case 'unknown':
       if (isNtiaAvailable()) {
         return 'NTIA compliance check is being performed in the background. This usually takes a few minutes to complete.'
-      } else {
-        return `NTIA Minimum Elements compliance is available with Business and Enterprise plans. Upgrade to unlock this feature.`
       }
+      return 'NTIA Minimum Elements compliance is available with Business and Enterprise plans. Upgrade to unlock this feature.'
     default:
-      return 'NTIA compliance status unknown'
+      return 'NTIA compliance status unknown.'
   }
 }
 
-// Initialize Bootstrap tooltips when component mounts
+const formatStatus = (status?: string | null): string => {
+  switch (status) {
+    case 'pass':
+      return 'Pass'
+    case 'warning':
+      return 'Advisory'
+    case 'fail':
+      return 'Failure'
+    default:
+      return 'Unknown'
+  }
+}
+
+const sectionIcon = (status?: string | null): string => {
+  switch (status) {
+    case 'fail':
+      return 'fas fa-circle-xmark text-warning'
+    case 'warning':
+      return 'fas fa-circle-exclamation text-info'
+    case 'pass':
+      return 'fas fa-circle-check text-success'
+    default:
+      return 'fas fa-circle text-secondary'
+  }
+}
+
+const sectionBadgeClass = (status?: string | null): string => {
+  switch (status) {
+    case 'fail':
+      return 'bg-warning-subtle text-warning'
+    case 'warning':
+      return 'bg-info-subtle text-info'
+    case 'pass':
+      return 'bg-success-subtle text-success'
+    default:
+      return 'bg-secondary-subtle text-secondary'
+  }
+}
+
+const sectionCardClass = (status?: string | null): string => {
+  switch (status) {
+    case 'fail':
+      return 'ntia-section-card--fail'
+    case 'warning':
+      return 'ntia-section-card--warning'
+    case 'pass':
+      return 'ntia-section-card--pass'
+    default:
+      return 'ntia-section-card--unknown'
+  }
+}
+
+const checkStatusLabel = (status?: string | null): string => {
+  switch (status) {
+    case 'fail':
+      return 'Failure'
+    case 'warning':
+      return 'Advisory'
+    case 'pass':
+      return 'Pass'
+    default:
+      return 'Unknown'
+  }
+}
+
+const checkStatusBadgeClass = (status?: string | null): string => {
+  switch (status) {
+    case 'fail':
+      return 'bg-warning-subtle text-warning border border-warning-subtle'
+    case 'warning':
+      return 'bg-info-subtle text-info border border-info-subtle'
+    case 'pass':
+      return 'bg-success-subtle text-success border border-success-subtle'
+    default:
+      return 'bg-secondary-subtle text-secondary border border-secondary-subtle'
+  }
+}
+
+const formatScore = (score?: number | null): string => {
+  if (score === null || score === undefined) {
+    return '0.0'
+  }
+  const rounded = Number(score)
+  if (Number.isNaN(rounded)) {
+    return '0.0'
+  }
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
+}
+
+const pluralize = (count: number | undefined, singular: string, plural?: string): string => {
+  const safeCount = Number(count) || 0
+  const label = safeCount === 1 ? singular : plural || `${singular}s`
+  return `${safeCount} ${label}`
+}
+
+const closeModal = (): void => {
+  showDetailsModal.value = false
+  expandedItems.value = []
+}
+
 onMounted(() => {
-  // Initialize tooltips (assuming Bootstrap 5 is available)
   const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
   if (typeof window !== 'undefined' && window.bootstrap?.Tooltip) {
     Array.from(tooltipTriggerList).forEach(tooltipTriggerEl => {
@@ -279,7 +626,6 @@ onMounted(() => {
   }
 })
 
-// Clean up tooltips when component unmounts
 onUnmounted(() => {
   const tooltips = document.querySelectorAll('.tooltip')
   tooltips.forEach(tooltip => tooltip.remove())
@@ -293,6 +639,16 @@ onUnmounted(() => {
   padding: 0.375rem 0.75rem;
   border-radius: 0.375rem;
   border: 1px solid;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.interactive-badge {
+  cursor: pointer;
+}
+
+.interactive-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .ntia-compliance-badge .badge.bg-success-subtle {
@@ -335,12 +691,127 @@ onUnmounted(() => {
   left: -2px;
   right: -2px;
   bottom: -2px;
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.2) 0%, rgba(25, 135, 84, 0.2) 100%);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(25, 135, 84, 0.15) 100%);
   border-radius: 0.5rem;
   z-index: -1;
 }
 
-/* NTIA Issues List Styling */
+.ntia-summary-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.05);
+}
+
+.ntia-summary-stat {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  padding: 1rem;
+  text-align: center;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.ntia-summary-stat .label {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ntia-summary-stat .value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ntia-summary-note {
+  font-size: 0.85rem;
+  color: #475569;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+}
+
+.ntia-section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  min-height: 100%;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ntia-section-card--fail {
+  border-left: 4px solid var(--bs-warning);
+}
+
+.ntia-section-card--warning {
+  border-left: 4px solid var(--bs-info);
+}
+
+.ntia-section-card--pass {
+  border-left: 4px solid var(--bs-success);
+}
+
+.ntia-section-card--unknown {
+  border-left: 4px solid var(--bs-secondary);
+}
+
+.ntia-section-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.ntia-section-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.ntia-section-card__header h6 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ntia-section-card__header p {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.ntia-section-card__metrics li {
+  font-size: 0.85rem;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.ntia-section-card__metrics li:last-child {
+  margin-bottom: 0;
+}
+
+.transition-transform {
+  transition: transform 0.2s ease;
+}
+
+.rotate-180 {
+  transform: rotate(180deg);
+}
+
 .ntia-issues-list {
   background-color: #f8f9fa;
   border-radius: 0.75rem;
@@ -349,31 +820,35 @@ onUnmounted(() => {
 }
 
 .ntia-issue-item {
-  background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #fdfdfd 100%);
   border: 1px solid #e9ecef;
   border-radius: 0.75rem;
   overflow: hidden;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(148, 163, 184, 0.2);
+}
+
+.ntia-issue-item + .ntia-issue-item {
+  margin-top: 0.75rem;
 }
 
 .ntia-issue-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-color: #ffc107;
+  box-shadow: 0 6px 14px rgba(148, 163, 184, 0.25);
+  border-color: #ffd24c;
 }
 
 .ntia-issue-header {
-  padding: 1.25rem;
+  padding: 1.1rem 1.25rem;
   cursor: pointer;
   user-select: none;
-  background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%);
-  border-bottom: 1px solid #ffeaa7;
-  transition: all 0.2s ease-in-out;
+  background: linear-gradient(135deg, #fff9db 0%, #fff4bf 100%);
+  border-bottom: 1px solid #ffe69c;
+  transition: background 0.2s ease-in-out;
 }
 
 .ntia-issue-header:hover {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  background: linear-gradient(135deg, #fff4bf 0%, #ffe69c 100%);
 }
 
 .ntia-issue-field {
@@ -384,149 +859,85 @@ onUnmounted(() => {
 }
 
 .ntia-issue-message {
-  color: #495057;
-  flex: 1;
+  color: #334155;
   font-size: 0.9rem;
   line-height: 1.4;
+  flex: 1;
+  min-width: 0;
 }
 
 .ntia-issue-body {
-  padding: 1.25rem;
-  background-color: #fff;
+  padding: 1.1rem 1.25rem;
+  background-color: #ffffff;
 }
 
 .ntia-suggestion {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
+  background: linear-gradient(135deg, #e8f4fd 0%, #f4f8ff 100%);
   padding: 1rem;
-  border-radius: 0.5rem;
-  border-left: 4px solid #2196f3;
+  border-radius: 0.65rem;
+  border-left: 4px solid #0d6efd;
   font-size: 0.9rem;
   line-height: 1.5;
-  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.1);
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.12);
 }
 
-/* Section headers */
 .section-header {
-  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   padding: 1rem 1.25rem;
   border-radius: 0.75rem;
-  border: 1px solid #e9ecef;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
 }
 
 .section-title {
   margin: 0;
   font-weight: 700;
-  color: #dc3545;
+  color: #b91c1c;
   font-size: 1rem;
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
 .section-title i {
-  color: #ffc107;
+  color: #f97316;
 }
 
 .section-header-info {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
+  background: linear-gradient(135deg, #e0f2fe 0%, #eff6ff 100%);
   padding: 1.25rem 1.5rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(13, 202, 240, 0.3);
-  box-shadow: 0 2px 4px rgba(13, 202, 240, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
 }
 
 .section-title-info {
   margin: 0;
   font-weight: 700;
-  color: #0c5460;
-  font-size: 1rem;
+  color: #0ea5e9;
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
-.section-title-info i {
-  color: #ffc107;
-}
-
-/* Alert styling improvements */
-.alert {
-  border: none !important;
-  border-radius: 0.75rem !important;
-  font-size: 0.95rem;
-}
-
-.alert-warning {
-  background: linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%) !important;
-  color: #856404 !important;
-  box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
-  padding: 1.5rem !important;
-  line-height: 1.6;
-}
-
-.alert-info {
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%) !important;
-  color: #0c5460 !important;
-  box-shadow: 0 2px 4px rgba(13, 202, 240, 0.2);
-  padding: 1.5rem !important;
-  line-height: 1.6;
-}
-
-/* Fix suggestions styling */
 .fix-suggestions {
-  margin-bottom: 0;
-  padding-left: 0;
   list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.fix-suggestions > li {
-  margin-bottom: 1.25rem;
-  font-size: 0.95rem;
-  line-height: 1.6;
-  position: relative;
-  padding-left: 2rem;
-}
-
-.fix-suggestions > li:last-child {
-  margin-bottom: 0;
-}
-
-.fix-suggestions > li:before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: #0d6efd;
-  font-weight: bold;
-  font-size: 1.2rem;
-  width: 1.5rem;
-  text-align: center;
-  line-height: 1.6;
-  height: 1.6rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fix-suggestions a {
-  color: #0d6efd;
-  font-weight: 600;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s ease;
-}
-
-.fix-suggestions a:hover {
-  border-bottom-color: #0d6efd;
+.fix-suggestions li {
+  color: #0f172a;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .ntia-elements-list {
-  margin-top: 0.75rem;
+  list-style: disc;
+  padding-left: 1.5rem;
   margin-bottom: 0;
-  background-color: rgba(255, 255, 255, 0.5);
-  padding: 1.25rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(13, 202, 240, 0.2);
-  list-style: none;
+  color: #0f172a;
+  font-size: 0.9rem;
 }
 
 .ntia-elements-list li {
@@ -555,16 +966,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-/* Transition animations */
-.transition-transform {
-  transition: transform 0.2s ease-in-out;
-}
-
-.rotate-180 {
-  transform: rotate(180deg);
-}
-
-/* Modal styling improvements */
 .modal {
   z-index: 1060;
 }
@@ -632,7 +1033,6 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
-/* Badge checking animation */
 .ntia-checking {
   opacity: 0.9;
   animation: subtle-pulse 2s infinite ease-in-out;
@@ -644,6 +1044,26 @@ onUnmounted(() => {
   }
   50% {
     opacity: 0.7;
+  }
+}
+
+@media (max-width: 768px) {
+  .ntia-compliance-badge .badge {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ntia-section-card {
+    padding: 1rem 1.25rem;
+  }
+
+  .ntia-section-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ntia-summary-card {
+    padding: 1.25rem;
   }
 }
 </style>

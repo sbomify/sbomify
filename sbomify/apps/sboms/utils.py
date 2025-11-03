@@ -4,10 +4,12 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+from collections import Counter
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 from uuid import uuid4
 
 from django.conf import settings
@@ -55,6 +57,203 @@ SIGNED_URL_MAX_AGE = 7 * 24 * 3600  # 7 days in seconds
 # =============================================================================
 # SHARED SBOM DATA PROCESSING UTILITIES
 # =============================================================================
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    """Parse an ISO formatted string or datetime into a timezone-aware datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            normalised = value.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalised)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except ValueError:
+            return None
+    return None
+
+
+def calculate_ntia_compliance_summary(sboms: Iterable[Any]) -> Dict[str, Any]:
+    """
+    Aggregate NTIA compliance status across a collection of SBOMs.
+
+    Args:
+        sboms: Iterable of SBOM model instances or dicts containing NTIA compliance data.
+
+    Returns:
+        Dictionary with totals, status counts, compliance score, and last checked timestamp.
+    """
+
+    STATUS_ORDER = ["compliant", "partial", "non_compliant", "unknown"]
+    counts: Counter[str] = Counter()
+    total_errors = 0
+    total_warnings = 0
+    latest_checked: Optional[datetime] = None
+
+    def extract_payload(sbom_obj: Any) -> tuple[str, Dict[str, Any], Optional[datetime]]:
+        if isinstance(sbom_obj, dict):
+            payload = sbom_obj.get("sbom") if "sbom" in sbom_obj else sbom_obj
+            details = payload.get("ntia_compliance_details") or {}
+            checked_at = payload.get("ntia_compliance_checked_at") or payload.get("checked_at")
+            return (
+                payload.get("ntia_compliance_status") or "unknown",
+                details,
+                _parse_datetime(checked_at),
+            )
+
+        status = getattr(sbom_obj, "ntia_compliance_status", None) or "unknown"
+        details = getattr(sbom_obj, "ntia_compliance_details", {}) or {}
+        checked_at = getattr(sbom_obj, "ntia_compliance_checked_at", None)
+        return status, details, _parse_datetime(checked_at)
+
+    total_items = 0
+    for sbom in sboms:
+        status, details, checked_at = extract_payload(sbom)
+        status = (status or "unknown").lower()
+        if status not in STATUS_ORDER:
+            status = "unknown"
+        counts[status] += 1
+        total_items += 1
+
+        summary_block = {}
+        if isinstance(details, dict):
+            summary_block = details.get("summary", {})
+            total_errors += summary_block.get("errors", len(details.get("errors", []) if details else []))
+            total_warnings += summary_block.get("warnings", len(details.get("warnings", []) if details else []))
+        else:
+            total_errors += 0
+            total_warnings += 0
+
+        if checked_at:
+            if latest_checked is None or checked_at > latest_checked:
+                latest_checked = checked_at
+
+    counts_dict = {status: counts.get(status, 0) for status in STATUS_ORDER}
+    total = sum(counts_dict.values())
+
+    if total > 0:
+        score_raw = (counts_dict["compliant"] + 0.5 * counts_dict["partial"]) / total * 100
+        score = round(score_raw, 1)
+    else:
+        score = 0.0
+
+    if total == 0:
+        overall_status = "unknown"
+    elif counts_dict["non_compliant"] > 0:
+        overall_status = "non_compliant"
+    elif counts_dict["partial"] > 0 or counts_dict["unknown"] > 0:
+        overall_status = "partial"
+    else:
+        overall_status = "compliant"
+
+    percentages = {status: round((counts_dict[status] / total) * 100, 1) if total else 0.0 for status in STATUS_ORDER}
+
+    return {
+        "total": total,
+        "status": overall_status,
+        "score": score,
+        "counts": counts_dict,
+        "percentages": percentages,
+        "errors": total_errors,
+        "warnings": total_warnings,
+        "last_checked_at": latest_checked.isoformat() if latest_checked else None,
+    }
+
+
+STATUS_LABELS: Dict[str, str] = {
+    "compliant": "Compliant",
+    "partial": "Partially Compliant",
+    "non_compliant": "Not Compliant",
+    "fail": "Not Compliant",
+    "warning": "Partially Compliant",
+    "unknown": "Unknown",
+}
+
+
+def build_ntia_template_context(details: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Build a template-ready structure for NTIA compliance details.
+
+    Args:
+        details: Raw JSON object stored in SBOM.ntia_compliance_details
+
+    Returns:
+        Dictionary containing summary, sections, and flattened issue lists for template rendering.
+    """
+    if not details:
+        return {
+            "has_data": False,
+            "status": "unknown",
+            "status_label": STATUS_LABELS["unknown"],
+            "score": None,
+            "checked_at": None,
+            "summary": {},
+            "sections": [],
+            "issues": {"failures": [], "warnings": []},
+        }
+
+    summary_block = details.get("summary", {})
+    score = summary_block.get("score")
+    checked_at_raw = details.get("checked_at") or summary_block.get("last_checked_at")
+    checked_at = _parse_datetime(checked_at_raw)
+    status = (details.get("status") or summary_block.get("status") or "unknown").lower()
+
+    sections_payload = []
+    issues_fail: list[Dict[str, Any]] = []
+    issues_warn: list[Dict[str, Any]] = []
+
+    for section in details.get("sections", []) or []:
+        section_status = (section.get("status") or "unknown").lower()
+        section_checks = []
+        for check in section.get("checks", []) or []:
+            check_status = (check.get("status") or "unknown").lower()
+            payload = {
+                "title": check.get("title") or check.get("element") or "Requirement",
+                "message": check.get("message"),
+                "suggestion": check.get("suggestion"),
+                "status": check_status,
+                "status_label": STATUS_LABELS.get(check_status, check_status.title()),
+                "affected": check.get("affected") or [],
+            }
+            section_checks.append(payload)
+            if check_status == "fail":
+                issues_fail.append(payload)
+            elif check_status == "warning":
+                issues_warn.append(payload)
+
+        sections_payload.append(
+            {
+                "name": section.get("name"),
+                "title": section.get("title") or "Section",
+                "summary": section.get("summary"),
+                "status": section_status,
+                "status_label": STATUS_LABELS.get(section_status, section_status.title()),
+                "metrics": section.get("metrics") or {},
+                "checks": section_checks,
+            }
+        )
+
+    return {
+        "has_data": True,
+        "status": status,
+        "status_label": STATUS_LABELS.get(status, status.title()),
+        "score": score,
+        "checked_at": checked_at,
+        "summary": {
+            "errors": summary_block.get("errors"),
+            "warnings": summary_block.get("warnings"),
+            "checks": summary_block.get("checks") or {},
+        },
+        "sections": sections_payload,
+        "issues": {
+            "failures": issues_fail,
+            "warnings": issues_warn,
+        },
+    }
 
 
 class SBOMDataError(Exception):
@@ -216,11 +415,16 @@ def serialize_validation_errors(errors: list) -> list:
     errors_list = []
     for err in errors or []:
         if hasattr(err, "model_dump"):
-            errors_list.append(err.model_dump())
-        elif hasattr(err, "dict"):
-            errors_list.append(err.dict())
-        else:
-            errors_list.append(err)
+            errors_list.append(err.model_dump(mode="json"))
+            continue
+        if hasattr(err, "dict"):
+            try:
+                errors_list.append(err.dict())
+            except TypeError:
+                # Fallback for objects with non-serializable values
+                errors_list.append(json.loads(json.dumps(err.dict(), default=str)))
+            continue
+        errors_list.append(err)
     return errors_list
 
 
