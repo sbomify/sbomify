@@ -134,19 +134,16 @@ if DEBUG:
         # Debug toolbar not available (e.g., in production with DEBUG=True)
         pass
 
-    # Add CORS middleware for Vite dev server in development mode
-    # Needed because Vite dev server (port 5170) and Django (port 8000) are different origins
+    # Add CORS headers in development mode - allow all origins
     try:
         import corsheaders  # noqa: F401
 
         INSTALLED_APPS.append("corsheaders")
-        # Insert CORS middleware before CommonMiddleware
         MIDDLEWARE.insert(
             MIDDLEWARE.index("django.middleware.common.CommonMiddleware"),
             "corsheaders.middleware.CorsMiddleware",
         )
     except ImportError:
-        # CORS headers not available
         pass
 
 INTERNAL_IPS = [
@@ -520,28 +517,9 @@ if DEBUG:
         "http://127.0.0.1:8000",
     ]
 
-    # CORS settings for Vite dev server in development mode
-    # Different ports (5170 vs 8000) means different origins, so CORS is required
-    if USE_VITE_DEV_SERVER:
-        from corsheaders.defaults import default_headers
-
-        VITE_DEV_SERVER_PORT = int(os.environ.get("VITE_DEV_SERVER_PORT", "5170"))
-
-        # Allow CORS from the Vite dev server
-        CORS_ALLOWED_ORIGINS = [
-            f"http://localhost:{VITE_DEV_SERVER_PORT}",
-            f"http://127.0.0.1:{VITE_DEV_SERVER_PORT}",
-        ]
-
-        # Allow credentials for authenticated requests
-        CORS_ALLOW_CREDENTIALS = True
-
-        # Allow all headers that might be needed
-        CORS_ALLOW_ALL_ORIGINS = False  # Use specific origins above
-        CORS_ALLOW_HEADERS = list(default_headers) + [
-            "x-csrftoken",
-            "x-requested-with",
-        ]
+    # CORS settings - allow all origins in development mode
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
 
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY
