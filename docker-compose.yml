@@ -68,7 +68,7 @@ services:
     restart: ${SBOMIFY_RESTART_POLICY:-always}
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-'False'}
+      BILLING: ${BILLING:-False}
       DATABASE_HOST: ${DATABASE_HOST:-localhost}
       KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
@@ -93,7 +93,7 @@ services:
     pull_policy: ${SBOMIFY_PULL_POLICY:-always}
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-'False'}
+      BILLING: ${BILLING:-False}
     command: /code/bin/release.sh
     depends_on:
       sbomify-db:
@@ -109,7 +109,7 @@ services:
     restart: ${SBOMIFY_RESTART_POLICY:-always}
     environment:
       <<: *common-env
-      BILLING: ${BILLING:-'False'}
+      BILLING: ${BILLING:-False}
     command: uv run dramatiq sbomify.tasks
     depends_on:
       sbomify-redis:
