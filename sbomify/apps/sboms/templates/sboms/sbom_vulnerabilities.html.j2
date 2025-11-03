@@ -530,14 +530,22 @@ details[open] .references-summary .fa-chevron-right {
                             <div class="alert alert-danger" role="alert">
                                 <h4 class="alert-heading">
                                     <i class="fas fa-exclamation-triangle me-2"></i>
-                                    Error!
+                                    Vulnerability Scan Failed
                                 </h4>
-                                <p>{{ error_message }}</p>
-                                {% if error_details %}
+                                <div class="error-message"
+                                     style="white-space: pre-wrap;
+                                            word-break: break-word">{{ error_message }}</div>
+                                {% if error_details and error_details != error_message %}
                                     <hr />
-                                    <p class="mb-0">
-                                        <strong>Details:</strong> {{ error_details }}
-                                    </p>
+                                    <div class="error-details">
+                                        <strong>Additional Details:</strong>
+                                        <pre class="mt-2 p-3 bg-light border rounded"
+                                             style="max-height: 300px;
+                                                    overflow-y: auto;
+                                                    font-size: 0.85rem;
+                                                    white-space: pre-wrap;
+                                                    word-break: break-word">{{ error_details }}</pre>
+                                    </div>
                                 {% endif %}
                             </div>
                         {% else %}
