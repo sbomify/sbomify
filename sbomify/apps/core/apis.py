@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -1705,7 +1705,7 @@ def get_component_metadata(request, component_id: str):
         uses_custom_contact = True
 
     # Remove empty supplier fields while keeping contacts list intact
-    supplier = SupplierSchema.model_validate(supplier).model_dump(exclude_none=True)
+    supplier_schema = SupplierSchema.model_validate(supplier)
 
     # Build authors information from native fields
     authors = []
@@ -1728,7 +1728,7 @@ def get_component_metadata(request, component_id: str):
     response_data = {
         "id": component.id,
         "name": component.name,
-        "supplier": supplier,
+        "supplier": supplier_schema,
         "authors": authors,
         "licenses": licenses,
         "lifecycle_phase": component.lifecycle_phase,
@@ -1738,19 +1738,7 @@ def get_component_metadata(request, component_id: str):
     }
 
     meta = ComponentMetaData.model_validate(response_data)
-    meta.supplier = SupplierSchema.model_validate(supplier)
-
-    payload = meta.model_dump(exclude_none=True)
-    payload["supplier"] = supplier
-
-    for key in ("lifecycle_phase", "contact_profile_id", "contact_profile"):
-        if key not in payload:
-            payload[key] = None
-
-    if "uses_custom_contact" not in payload:
-        payload["uses_custom_contact"] = uses_custom_contact
-
-    return JsonResponse(payload)
+    return meta
 
 
 @router.patch(

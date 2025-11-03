@@ -78,7 +78,7 @@
                       <div class="text-prewrap">{{ selectedProfile.address }}</div>
                     </div>
                     <div v-if="selectedProfile.website_urls?.length" class="mb-2">
-                      <strong>Websites:</strong>
+                      <strong>Website:</strong>
                       <ul class="mb-0 ps-3">
                         <li v-for="link in selectedProfile.website_urls" :key="link">
                           <a :href="link" target="_blank" rel="noopener noreferrer">
@@ -223,7 +223,7 @@
   import $axios from '../../../core/js/utils';
   import { isAxiosError } from 'axios';
   import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage, ContactProfile } from '../type_defs';
+  import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage, ContactProfile } from '../type_defs';
   import SupplierEditor from '@/sbomify/apps/sboms/js/components/SupplierEditor.vue';
 import LicensesEditor from '@/sbomify/apps/sboms/js/components/LicensesEditor.vue';
 import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vue';
