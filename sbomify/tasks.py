@@ -59,6 +59,7 @@ from django.conf import settings  # noqa: E402
 
 from sbomify.apps.sboms.models import SBOM  # noqa: E402
 from sbomify.apps.sboms.ntia_validator import (  # noqa: E402
+    NTIACheckStatus,
     NTIAComplianceStatus,
     validate_sbom_ntia_compliance,
 )
@@ -217,28 +218,174 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
 
         # 2) Validate using NTIA validator
         validation = validate_sbom_ntia_compliance(sbom_data, sbom_instance.format)
-        is_compliant = bool(getattr(validation, "is_compliant", False))
-        status_value = (
-            validation.status.value if isinstance(validation.status, NTIAComplianceStatus) else str(validation.status)
-        )
-        error_count = int(getattr(validation, "error_count", len(getattr(validation, "errors", []))))
+        raw_errors = getattr(validation, "errors", [])
+        raw_warnings = getattr(validation, "warnings", [])
+        sections = list(getattr(validation, "sections", []) or [])
+        error_count = int(getattr(validation, "error_count", len(raw_errors)))
+        warning_count = len(raw_warnings)
+
+        if error_count > 0:
+            status_value = NTIAComplianceStatus.NON_COMPLIANT.value
+            is_compliant = False
+        elif warning_count > 0:
+            status_value = NTIAComplianceStatus.PARTIAL.value
+            is_compliant = False
+        else:
+            status_value = NTIAComplianceStatus.COMPLIANT.value
+            is_compliant = True
+
+        validation_status = getattr(validation, "status", None)
+        if isinstance(validation_status, NTIAComplianceStatus) and validation_status == NTIAComplianceStatus.UNKNOWN:
+            status_value = NTIAComplianceStatus.UNKNOWN.value
+            is_compliant = False
+        elif isinstance(validation_status, str) and validation_status == NTIAComplianceStatus.UNKNOWN.value:
+            status_value = validation_status
+            is_compliant = False
+
+        serialised_errors = serialize_validation_errors(raw_errors)
+        serialised_warnings = serialize_validation_errors(raw_warnings)
+
+        section_results: list[dict[str, Any]] = []
+        section_summaries: dict[str, Dict[str, Any]] = {}
+        total_checks = 0
+        pass_checks = 0
+        warning_checks = 0
+        fail_checks = 0
+        unknown_checks = 0
+
+        for section in sections:
+            if hasattr(section, "model_dump"):
+                section_payload: Dict[str, Any] = section.model_dump(mode="json")
+                checks = list(getattr(section, "checks", []))
+            elif isinstance(section, dict):
+                section_payload = dict(section)
+                checks = section_payload.get("checks", [])
+            else:
+                section_payload = {"value": section}
+                checks = []
+
+            section_failures = 0
+            section_warnings = 0
+            section_passes = 0
+            section_unknown = 0
+
+            normalised_checks: list[Dict[str, Any]] = []
+
+            for check in checks or []:
+                if hasattr(check, "model_dump"):
+                    check_payload = check.model_dump(mode="json")
+                    check_status_value = getattr(check, "status", None)
+                    if isinstance(check_status_value, NTIACheckStatus):
+                        status = check_status_value.value
+                    else:
+                        status = check_payload.get("status") or str(check_status_value or "unknown")
+                elif isinstance(check, dict):
+                    check_payload = dict(check)
+                    status = str(check_payload.get("status", "unknown"))
+                else:
+                    check_payload = {"value": check}
+                    status = "unknown"
+
+                status_lower = status.lower()
+                if status_lower == NTIACheckStatus.FAIL.value:
+                    section_failures += 1
+                elif status_lower == NTIACheckStatus.WARNING.value:
+                    section_warnings += 1
+                elif status_lower == NTIACheckStatus.PASS.value:
+                    section_passes += 1
+                else:
+                    section_unknown += 1
+
+                normalised_checks.append(check_payload)
+
+            section_payload["checks"] = normalised_checks
+            section_total = section_failures + section_warnings + section_passes + section_unknown
+
+            if section_total == 0:
+                section_status = "unknown"
+            elif section_failures > 0:
+                section_status = NTIACheckStatus.FAIL.value
+            elif section_warnings > 0:
+                section_status = NTIACheckStatus.WARNING.value
+            else:
+                section_status = NTIACheckStatus.PASS.value
+
+            section_metrics = {
+                "total": section_total,
+                "pass": section_passes,
+                "warning": section_warnings,
+                "fail": section_failures,
+                "unknown": section_unknown,
+            }
+
+            section_payload["status"] = section_status
+            section_payload["metrics"] = section_metrics
+            section_results.append(section_payload)
+
+            section_key = section_payload.get("name") or f"section_{len(section_results)}"
+            section_summaries[str(section_key)] = {
+                "status": section_status,
+                "metrics": section_metrics,
+                "title": section_payload.get("title"),
+                "summary": section_payload.get("summary"),
+            }
+
+            total_checks += section_total
+            pass_checks += section_passes
+            warning_checks += section_warnings
+            fail_checks += section_failures
+            unknown_checks += section_unknown
+
+        checks_summary = {
+            "total": total_checks,
+            "pass": pass_checks,
+            "warning": warning_checks,
+            "fail": fail_checks,
+            "unknown": unknown_checks,
+        }
+        compliance_score = None
+        if total_checks > 0:
+            compliance_score = round((pass_checks / total_checks) * 100, 1)
 
         # 3) Build JSON-serializable details using shared utility
         details: Dict[str, Any] = {
             "is_compliant": is_compliant,
             "status": status_value,
-            "errors": serialize_validation_errors(getattr(validation, "errors", [])),
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "errors": serialised_errors,
+            "warnings": serialised_warnings,
+            "sections": section_results,
+            "summary": {
+                "errors": error_count,
+                "warnings": warning_count,
+                "status": status_value,
+                "checks": checks_summary,
+                "score": compliance_score,
+                "sections": section_summaries,
+            },
             "checked_at": getattr(validation, "checked_at", None).isoformat()
             if getattr(validation, "checked_at", None)
             else None,
+            "format": getattr(sbom_instance, "format", None),
         }
 
         # 4) Persist results
         from django.utils import timezone as django_timezone
 
-        sbom_update = SBOM.objects.select_for_update().get(id=sbom_id)
+        try:
+            sbom_update = SBOM.objects.select_for_update(nowait=True).get(id=sbom_id)
+        except OperationalError:
+            logger.warning(
+                "[TASK_check_sbom_ntia_compliance] SBOM %s is currently locked; retrying.",
+                sbom_id,
+                exc_info=True,
+            )
+            raise
         if status_value == NTIAComplianceStatus.UNKNOWN.value:
             sbom_update.ntia_compliance_status = SBOM.NTIAComplianceStatus.UNKNOWN
+        elif status_value == NTIAComplianceStatus.PARTIAL.value:
+            sbom_update.ntia_compliance_status = SBOM.NTIAComplianceStatus.PARTIAL
         else:
             sbom_update.ntia_compliance_status = (
                 SBOM.NTIAComplianceStatus.COMPLIANT if is_compliant else SBOM.NTIAComplianceStatus.NON_COMPLIANT
@@ -251,6 +398,8 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
             f"[TASK_check_sbom_ntia_compliance] NTIA compliance check completed for SBOM ID: {sbom_id}. "
             f"Status: {status_value}, Errors: {error_count}"
         )
+        if warning_count:
+            logger.info(f"[TASK_check_sbom_ntia_compliance] SBOM ID {sbom_id} recorded {warning_count} warning(s)")
 
         return {
             "sbom_id": str(sbom_id),
@@ -258,6 +407,7 @@ def check_sbom_ntia_compliance(sbom_id: str) -> Dict[str, Any]:
             "compliance_status": status_value,
             "is_compliant": is_compliant,
             "error_count": error_count,
+            "warning_count": warning_count,
             "message": "Validation completed",
         }
 
