@@ -8,12 +8,12 @@
   --sidebar-width: 280px;
   --sidebar-width-tablet: 260px;
   --sidebar-width-mobile: 300px;
-  --sidebar-bg: #ffffff;
-  --sidebar-border: #e9ecef;
-  --sidebar-color: #495057;
-  --sidebar-hover-bg: #f8f9fa;
-  --sidebar-active-bg: #0d6efd;
-  --sidebar-active-color: #ffffff;
+  --sidebar-bg: var(--surface-card);
+  --sidebar-border: var(--surface-border);
+  --sidebar-color: var(--text-primary);
+  --sidebar-hover-bg: var(--surface-card-muted);
+  --sidebar-active-bg: var(--brand-primary);
+  --sidebar-active-color: var(--text-inverse);
   --transition-sidebar: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: 0.15s ease-in-out;
   --topnav-height: 64px;
@@ -126,11 +126,11 @@ body {
 .sidebar-close:hover {
   background-color: rgba(220, 53, 69, 0.1);
   border-color: rgba(220, 53, 69, 0.2);
-  color: #dc3545;
+  color: var(--brand-danger);
 }
 
 .sidebar-close:focus {
-  outline: 2px solid #dc3545;
+  outline: 2px solid var(--brand-danger);
   outline-offset: 2px;
 }
 

@@ -101,21 +101,17 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
+
+  /* ===== SURFACE HELPERS ===== */
+  --surface-card: var(--white);
+  --surface-card-muted: var(--gray-50);
+  --surface-elevated: var(--bg-secondary);
+  --surface-border: var(--border-color);
+  --surface-border-strong: var(--border-color-dark);
+  --surface-overlay: rgba(15, 23, 42, 0.4);
+  --text-inverse: #ffffff;
 }
 
-/* Dark mode variables */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --text-title: #f1f5f9;
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --border-color: #334155;
-    --border-color-light: #475569;
-    --shadow-sm: rgba(0, 0, 0, 0.3);
-    --shadow-md: rgba(0, 0, 0, 0.15);
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
 }
