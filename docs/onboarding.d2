@@ -1,0 +1,885 @@
+direction: down
+
+# ============================================================================
+# ONBOARDING WIZARD FLOW
+# ============================================================================
+
+wizard: {
+  label: "Onboarding Wizard (10 Steps, ~3-5 min)"
+direction: right
+  style: {
+    fill: "#EEF2FF"
+    stroke: "#6366F1"
+    stroke-width: 2
+  }
+
+  start: {
+    label: "Start"
+    shape: circle
+    style: { fill: "#10B981" }
+  }
+
+  step1_goal: {
+    label: |md
+      # Step 1: What's your goal?
+
+      Select your primary use case:
+      - CRA Compliance
+      - NTIA / CISA Minimum Elements
+      - Supply Chain Security
+      - Create Trust Center
+      - Vulnerability Management
+      - Customer SBOM Requests
+      - Internal Asset Inventory
+      - Other
+    |
+    shape: rectangle
+    style: {
+      fill: "#FBCFE8"
+      stroke: "#EC4899"
+      stroke-width: 2
+    }
+  }
+
+  step2_product: {
+    label: |md
+      # Step 2: Your Product
+
+      - **Product name** (required)
+      - **Description** (optional)
+      - **Default License** (optional)
+        - MIT, Apache-2.0, GPL, etc.
+        - Propagates to components
+        - Can override per-component
+
+      **Optional Identifiers:**
+      - CPE, PURL, GTIN, SKU, MPN, ASIN
+
+      **Optional Links:**
+      - Website, Documentation
+      - VCS (GitHub/GitLab)
+      - Issue Tracker, Support
+    |
+      shape: rectangle
+    style: { fill: "#C7D2FE" }
+  }
+
+  step2b_access_level: {
+    label: |md
+      # Step 2b: Access Level
+
+      Reference: [Issue #354](https://github.com/sbomify/sbomify/issues/354)
+
+      How should your SBOMs be shared?
+
+      - **Public** - Anyone can view and download
+      - **Private** - Only team members
+      - **Gated** - Visible to all, but requires approval to download
+
+      **Gated documents:**
+      - Visitor can request access
+      - Optional NDA signature
+      - Owner/Admin approves requests
+      - Good for Trust Centers
+
+    |
+      shape: rectangle
+    style: { fill: "#C7D2FE" }
+  }
+
+  step3_project: {
+    label: |md
+      # Step 3: Organize with Projects
+
+      Projects group related components
+
+      **Examples:**
+      - 'Backend Services'
+      - 'Mobile Application'
+      - 'Web Frontend'
+      - 'Compliance Documents'
+
+      - Create your first project
+      - Name it based on component grouping
+      - Link it to your product
+
+      _(You can create more projects later)_
+    |
+      shape: rectangle
+    style: { fill: "#C7D2FE" }
+    }
+
+  decision_compliance: {
+    label: "CRA or Trust\nCenter selected?"
+      shape: diamond
+    style: { fill: "#FEF3C7" }
+  }
+
+  auto_compliance_project: {
+    label: |md
+      # Auto-Create Compliance Project
+
+      We'll automatically create:
+      - 'Compliance Documents' project
+      - Pre-configured for your use case
+    |
+    shape: rectangle
+    style: {
+      fill: "#D1FAE5"
+      stroke: "#10B981"
+      stroke-width: 2
+    }
+  }
+
+  cra_documents: {
+    label: |md
+      # CRA: Auto-Create Documents
+
+      Document components created:
+      - Risk Assessment Summary (Annex VII)
+      - Vulnerability Handling Policy
+      - User Instructions (Annex II)
+      - EU Declaration of Conformity (Annex V/VI)
+      - Technical Documentation (Annex VII)
+
+      All documents ready for upload
+      with proper CRA categorization
+    |
+    shape: rectangle
+    style: {
+      fill: "#FEE2E2"
+      stroke: "#DC2626"
+    }
+  }
+
+  trust_center_documents: {
+    label: |md
+      # Trust Center: Auto-Create Documents
+
+      Document components created:
+      - SOC 2 Report
+      - ISO 27001 Certificate
+      - Penetration Test Report
+      - Security Whitepaper
+      - Privacy Policy
+    |
+      shape: rectangle
+    style: {
+      fill: "#DBEAFE"
+      stroke: "#3B82F6"
+    }
+  }
+
+  trust_center_cname: {
+    label: |md
+      # Trust Center: Custom Domain
+
+      Reference: [Issue #339](https://github.com/sbomify/sbomify/issues/339)
+
+      Map your Trust Center to a custom domain:
+
+      **CNAME Configuration:**
+      - Enter your subdomain (e.g., trust.yourcompany.com)
+      - We'll provide CNAME record
+      - Add to your DNS settings
+      - Domain verification via automated task
+
+      Can configure in settings later
+
+    |
+      shape: rectangle
+    style: {
+      fill: "#DBEAFE"
+      stroke: "#3B82F6"
+    }
+  }
+
+  trust_center_branding: {
+    label: |md
+      # Trust Center: Branding
+
+      Customize your Trust Center appearance:
+
+      **Logo:**
+      - Upload company logo
+      - Used in header and favicon
+
+      **Colors:**
+      - Primary brand color
+      - Accent color
+      - Applies to Trust Center theme
+
+      **Benefits:**
+      - Fully branded experience
+      - Matches your company identity
+      - Professional customer-facing portal
+
+      Can customize in settings later
+
+    |
+    shape: rectangle
+    style: {
+      fill: "#DBEAFE"
+      stroke: "#3B82F6"
+    }
+  }
+
+  step4_stakeholders_intro: {
+    label: |md
+      # Step 4: Stakeholder Assignment
+
+      SBOMs require three roles:
+      - **Manufacturer** (who makes it)
+      - **Supplier** (who supplies it)
+      - **Authors** (who created the SBOM)
+
+      You'll add organizations and contacts,
+      then assign them to roles.
+    |
+    shape: page
+    style: { fill: "#DBEAFE" }
+  }
+
+  step5_add_orgs: {
+    label: |md
+      # Step 5: Add Organizations
+
+      Add one or more organizations:
+
+      **For each organization:**
+      - Company name (required)
+      - Website (optional)
+      - Address (optional)
+      - **Select roles:**
+        - ☐ Manufacturer
+        - ☐ Supplier
+        - ☐ Author
+
+      **Quick option:** Check all boxes for
+      your company (most common)
+
+      _[+ Add another organization]_
+    |
+    shape: rectangle
+    style: { fill: "#DBEAFE" }
+  }
+
+  step6_add_contacts: {
+    label: |md
+      # Step 6: Add Contacts
+
+      Add contacts for organizations:
+
+      **For each contact:**
+      - Name (required)
+      - Email (optional)
+      - Phone (optional)
+      - **Associate with:**
+        - ☐ Manufacturer contact
+        - ☐ Supplier contact
+        - ☐ Author contact
+        - ☐ Security contact
+
+      Select one or more roles.
+      Contacts are linked to the organizations
+      you added in Step 5.
+
+      _[+ Add another contact]_
+    |
+    shape: rectangle
+    style: { fill: "#DBEAFE" }
+  }
+
+  step7_review_assignments: {
+    label: |md
+      # Step 7: Review Assignments
+
+      **Organization roles:**
+      - Manufacturer: [Company + Contacts]
+      - Supplier: [Company + Contacts]
+      - Authors: [Companies/Contacts]
+
+      **Security Contacts:** [Contacts]
+
+      All organizations can have
+      associated contacts.
+
+      _[Edit] or [Continue]_
+    |
+    shape: rectangle
+    style: { fill: "#DBEAFE" }
+  }
+
+  step8_component: {
+    label: |md
+      # Step 8: First Component
+
+      - Component name (required)
+      - Supplier (auto-filled from contacts)
+      - License (inherited from product)
+      - Lifecycle phase (design/build/ops/etc.)
+      - Type (SBOM/Document)
+
+      **Next:** Upload your first SBOM
+    |
+    shape: rectangle
+    style: { fill: "#C7D2FE" }
+  }
+
+  step8b_upload_guide: {
+    label: |md
+      # Upload Your First SBOM
+
+      Choose your method:
+
+      **1. GitHub Actions (Recommended)**
+      - Generate higher quality SBOMs
+      - Automated CI/CD integration
+      - Continuous SBOM updates
+
+      **2. Manual Upload**
+      - Web interface
+      - Direct file upload
+
+      **3. API Integration**
+      - Programmatic upload
+      - Custom workflows
+
+      **All uploads include:**
+      - Auto-enrichment with metadata
+      - Vulnerability scanning
+      - License compliance checks
+    |
+    shape: rectangle
+    style: { fill: "#C7D2FE" }
+  }
+
+  tooltip_sbom_generation: {
+    label: |md
+      # SBOM Generation Best Practices
+
+      **Generation:**
+      - Use build SBOMs (not source)
+      - Capture all transient dependencies
+      - Include hashes for all components
+
+      **Verification:**
+      - Validate against format schema
+      - Check NTIA minimum elements
+
+      **Augmentation (sbomify does this):**
+      - Author information
+      - Supplier information
+      - License data
+
+      **Enrichment (sbomify does this):**
+      - Contact details
+      - Product metadata
+      - Component relationships
+
+      **Signing:**
+      - Cryptographic attestation
+      - Happens in GitHub Action
+
+      Source: CISA SBOM Working Group
+    |
+    shape: page
+    style: {
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+
+  step9_invite_team: {
+    label: |md
+      # Step 9: Invite Team Members (Optional)
+
+      Collaborate with your team:
+      - Invite by email
+      - Assign roles (Admin/Member/Guest)
+      - Can invite multiple at once
+      - Can skip and invite later
+
+      _[Skip] or [Invite teammates]_
+    |
+    shape: rectangle
+    style: { fill: "#E0E7FF" }
+  }
+
+  tooltip_project: {
+    label: |md
+      # What's a Project?
+
+      Projects organize components by function:
+      - **Product** = 'Acme Web App'
+      - **Projects** = 'Backend API', 'Mobile App', 'Compliance Documents'
+
+      Projects group related components.
+
+      _Releases (separate concept) are
+      versioned snapshots of your product._
+    |
+    shape: page
+    style: {
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+
+  tooltip_component: {
+    label: |md
+      # What's a Component?
+
+      A component is a container that holds
+      multiple SBOMs or documents:
+
+      **Software Component:**
+      - Component: 'API Server'
+      - Contains: SBOM v1.0, v1.1, v2.0
+        (versioned)
+
+      **Document Component:**
+      - Component: 'SOC 2 Report'
+      - Contains: 2023 report, 2024 report
+        (versioned)
+
+      **Benefits:**
+      - Track all versions in one place
+      - Compare versions over time
+      - Metadata applies to all versions
+
+      ### Advanced: Product Releases
+
+      Product releases are cut from
+      individual SBOMs within components.
+
+      Example: Product v2.0 may contain:
+      - SBOM v1.5 from Component A
+      - SBOM v3.2 from Component B
+
+      Release versions and SBOM versions
+      are independent.
+    |
+    shape: page
+    style: {
+      fill: "#FEF3C7"
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+
+  decision_cra: {
+    label: "CRA\nCompliance?"
+    shape: diamond
+    style: { fill: "#FEF3C7" }
+  }
+
+  cra_compliance: {
+    label: |md
+      # CRA Compliance Wizard
+
+      Reference: [Issue #373](https://github.com/sbomify/sbomify/issues/373)
+
+      **Product with Digital Elements (PwDE):**
+      - Intended use & target markets
+      - Version & support period
+      - Manufacturer contact info
+
+      **Required Documents:**
+      - Risk Assessment Summary (Annex VII)
+      - Vulnerability Handling Policy
+      - User Instructions (Annex II)
+      - EU Declaration of Conformity (Annex V/VI)
+
+      **Generates:**
+      - Technical Documentation bundle
+      - Pre-filled DoC template
+      - Export package (ZIP)
+    |
+    shape: rectangle
+    style: {
+      fill: "#FEE2E2"
+      stroke: "#DC2626"
+      stroke-width: 2
+    }
+  }
+
+  complete: {
+    label: |md
+      **Complete!**
+
+      Ready to upload
+      first SBOM
+    |
+    shape: circle
+    style: { fill: "#10B981" }
+  }
+
+  # Flow connections
+  start -> step1_goal: "Begin"
+
+  # Early CRA detection
+  step1_goal -> decision_cra: "Select goal"
+
+  # Main product/project flow
+  decision_cra -> step2_product: "Standard flow"
+  decision_cra -> cra_compliance: "CRA selected"
+  cra_compliance -> step2_product: "CRA info collected"
+
+  step2_product -> step2b_access_level
+  step2b_access_level -> step3_project
+  step3_project -> tooltip_project: "?" {
+    style: {
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+
+  # Compliance automation branch
+  step3_project -> decision_compliance: "Project created"
+  decision_compliance -> step4_stakeholders_intro: "No (standard flow)"
+  decision_compliance -> auto_compliance_project: "Yes (CRA or Trust Center)"
+
+  auto_compliance_project -> cra_documents: "CRA selected" {
+    style: { stroke: "#DC2626" }
+  }
+  auto_compliance_project -> trust_center_documents: "Trust Center selected" {
+    style: { stroke: "#3B82F6" }
+  }
+
+  cra_documents -> step4_stakeholders_intro: "Documents created"
+  trust_center_documents -> trust_center_cname: "Documents created"
+  trust_center_cname -> trust_center_branding: "Domain configured"
+  trust_center_branding -> step4_stakeholders_intro: "Branding set"
+
+  # Stakeholder assignment flow
+  step4_stakeholders_intro -> step5_add_orgs
+  step5_add_orgs -> step5_add_orgs: "Add another org" {
+    style: {
+      stroke: "#3B82F6"
+      stroke-dash: 3
+    }
+  }
+  step5_add_orgs -> step6_add_contacts: "Done adding orgs"
+  step6_add_contacts -> step6_add_contacts: "Add another contact" {
+    style: {
+      stroke: "#3B82F6"
+      stroke-dash: 3
+    }
+  }
+  step6_add_contacts -> step7_review_assignments: "Done adding contacts"
+  step7_review_assignments -> step8_component: "Confirmed"
+
+  step8_component -> tooltip_component: "?" {
+    style: {
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+  step8_component -> step8b_upload_guide: "Component created"
+  step8b_upload_guide -> tooltip_sbom_generation: "?" {
+    style: {
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+  step8b_upload_guide -> step9_invite_team: "Upload method selected"
+  step9_invite_team -> complete: "Done / Skip"
+}
+
+# ============================================================================
+# ENRICHMENT FLOW
+# ============================================================================
+
+enrichment: {
+  label: "SBOM Enrichment Process"
+  direction: right
+  style: {
+    fill: "#F0FDF4"
+    stroke: "#22C55E"
+    stroke-width: 2
+  }
+
+  metadata_store: {
+    label: |md
+      **Metadata Store**
+
+      - Organizations & Contacts
+      - Product metadata
+      - License defaults
+    |
+    shape: cylinder
+    style: { fill: "#DCFCE7" }
+  }
+
+  github_action: {
+    label: |md
+      **GitHub Action**
+
+      1. Generate base SBOM
+      2. Pull metadata via API
+      3. Embed in SBOM
+      4. Create attestation
+      5. Upload to sbomify
+    |
+    shape: rectangle
+    style: { fill: "#DCFCE7" }
+  }
+
+  sbom_store: {
+    label: |md
+      **Enriched SBOMs**
+
+      Ready for distribution
+    |
+    shape: cylinder
+    style: { fill: "#DCFCE7" }
+  }
+
+  metadata_store -> github_action: "API"
+  github_action -> sbom_store: "Upload"
+}
+
+# ============================================================================
+# SBOM FORMAT MAPPINGS
+# ============================================================================
+
+formats: {
+  label: "SBOM Format Mappings\nHow Your Metadata Maps to Standards"
+  direction: down
+  style: {
+    fill: "#FEF3C7"
+    stroke: "#F59E0B"
+    stroke-width: 2
+  }
+
+  cyclonedx15: {
+    label: |md
+      ## CycloneDX 1.5
+
+      **BOM-level metadata:**
+      - `metadata.tools[]` → sbomify
+      - `metadata.manufacture` → Manufacturer Org
+        - _(Note: 1.5 uses 'manufacture', deprecated)_
+      - `metadata.supplier` → Supplier Org
+      - `metadata.authors[]` → Author Contacts
+      - `metadata.lifecycles` → Lifecycle phases
+
+      **Component-level:**
+      - `component.supplier` → Supplier Org
+      - `component.licenses[]` → License data
+      - `externalReferences` → Product links
+      - `properties` → Additional metadata
+    |
+    shape: page
+    style: { fill: "#FEF9C3" }
+  }
+
+  cyclonedx16: {
+    label: |md
+      ## CycloneDX 1.6
+
+      **BOM-level metadata:**
+      - `metadata.tools[]` → sbomify
+      - `metadata.manufacturer` → Manufacturer Org + Contacts
+      - `metadata.supplier` → Supplier Org + Contacts
+      - `metadata.authors[]` → Author Contacts
+      - `metadata.lifecycles` → Lifecycle phases
+
+      **Component-level:**
+      - `component.manufacturer` → Manufacturer Org + Contacts
+        - _(New in 1.6)_
+      - `component.supplier` → Supplier Org + Contacts
+      - `component.authors[]` → Author Contacts
+        - _(New in 1.6)_
+      - `component.licenses[]` → License data
+      - `externalReferences` → Product links
+      - `properties` → Additional metadata
+    |
+    shape: page
+    style: { fill: "#FEF9C3" }
+  }
+
+  cyclonedx17: {
+    label: |md
+      ## CycloneDX 1.7 (Not Yet Supported)
+
+      All 1.6 features plus:
+      - `annotations` → Additional notes
+      - `declarations` → Regulatory claims
+      - `formulation` → Build/release process
+      - `citations` → References to standards
+      - `definitions` → Reusable objects
+      - `distributionConstraints` → Access control
+
+      Enhanced metadata capabilities for
+      compliance and regulatory requirements.
+    |
+    shape: page
+    style: {
+      fill: "#FEF9C3"
+      stroke: "#F59E0B"
+      stroke-dash: 5
+    }
+  }
+
+  spdx23: {
+    label: |md
+      ## SPDX 2.3
+
+      **Document-level:**
+      - `Creator: Tool` → sbomify
+      - `Creator: Person` → Author Contacts
+      - `Creator: Organization` → Organizations
+
+      **Package-level:**
+      - `PackageSupplier` → Supplier Org
+      - `PackageOriginator` → Manufacturer Org
+      - `FilesAnalyzed` → Component data
+      - `LicenseConcluded` → License data
+      - `ExternalRef` → Product identifiers (CPE, PURL)
+    |
+    shape: page
+    style: { fill: "#FEF9C3" }
+  }
+
+  spdx30: {
+    label: |md
+      ## SPDX 3.0
+
+      **Core metadata:**
+      - `createdBy` → sbomify (Tool Agent)
+      - `createdUsing` → sbomify software
+
+      **Software elements:**
+      - `suppliedBy` → Supplier Org
+      - `originatedBy` → Manufacturer Org
+      - `Software/Package` → Component data
+      - `Relationship` → Dependencies
+      - `Annotation` → Additional metadata
+    |
+    shape: page
+    style: { fill: "#FEF9C3" }
+  }
+
+  mapping_note: {
+    label: |md
+      **Currently Supported:**
+      - CycloneDX 1.5, 1.6
+      - SPDX 2.3, 3.0
+
+      **All formats support:**
+      - Organizations with contacts
+      - License information
+      - Product identifiers
+      - External references
+      - Vulnerability data
+      - NTIA minimum elements
+
+      **CycloneDX 1.7 support:** Planned
+      _(Released October 2025)_
+    |
+    shape: page
+    style: {
+      fill: "#FEF9C3"
+      stroke: "#F59E0B"
+      stroke-dash: 3
+    }
+  }
+}
+
+# ============================================================================
+# UX PRINCIPLES
+# ============================================================================
+
+ux_principles: {
+  label: "Key UX Principles"
+  direction: down
+  style: {
+    fill: "#F5F3FF"
+    stroke: "#A78BFA"
+    stroke-width: 2
+  }
+
+  core_principles: {
+    label: |md
+      ## Core Design Principles
+
+      **Product-First Approach**
+      - Users establish WHAT before WHO
+      - Hierarchy: Product → Project → Component
+
+      **Flexible Assignment**
+      - Inline checkboxes for role selection
+      - Simple: 1 org for all roles
+      - Complex: Different orgs per role
+
+      **Progressive Disclosure**
+      - Core fields first, advanced later
+      - Reduce cognitive load
+
+      **Intelligent Automation**
+      - Auto-creates compliance documents
+      - Based on selected goal (CRA/Trust Center)
+    |
+    shape: page
+    style: { fill: "#EDE9FE" }
+  }
+
+  key_features: {
+    label: |md
+      ## Key Features
+
+      **License Inheritance**
+      - Set at product level
+      - Propagates to all components
+      - Override per-component when needed
+
+      **Access Control**
+      - Public / Private / Gated
+      - Gated = visible, approval required
+
+      **Validation & Editing**
+      - Real-time validation
+      - Edit anytime, nothing final
+      - Override at component level
+    |
+    shape: page
+    style: { fill: "#EDE9FE" }
+  }
+}
+
+# ============================================================================
+# MAIN DATA FLOW CONNECTIONS
+# ============================================================================
+
+wizard.step7_review_assignments -> enrichment.metadata_store: "Save stakeholders"
+wizard.step3_project -> enrichment.metadata_store: "Save product"
+wizard.cra_documents -> enrichment.metadata_store: "Link entities"
+wizard.trust_center_branding -> enrichment.metadata_store: "Link entities"
+wizard.step8_component -> enrichment.metadata_store: "Save component"
+
+enrichment.github_action -> formats.cyclonedx15: "CDX 1.5" {
+  style: { stroke: "#22C55E" }
+}
+
+enrichment.github_action -> formats.cyclonedx16: "CDX 1.6" {
+  style: { stroke: "#22C55E" }
+}
+
+enrichment.github_action -> formats.cyclonedx17: "CDX 1.7" {
+  style: {
+    stroke: "#F59E0B"
+    stroke-dash: 5
+  }
+}
+
+enrichment.github_action -> formats.spdx23: "SPDX 2.3" {
+  style: { stroke: "#22C55E" }
+}
+
+enrichment.github_action -> formats.spdx30: "SPDX 3.0" {
+  style: { stroke: "#22C55E" }
+}
