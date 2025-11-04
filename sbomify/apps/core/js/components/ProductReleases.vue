@@ -176,84 +176,88 @@
       :show-page-size-selector="true"
     />
 
-    <!-- Add Release Modal (only for private view) -->
-    <div
-      v-if="hasCrudPermissions && !isPublicView"
-      id="addReleaseModal"
-      class="modal fade"
-      tabindex="-1"
-    >
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              {{ editingRelease ? 'Edit Release' : 'Create New Release' }}
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-            ></button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="submitRelease">
-              <div class="mb-3">
-                <label for="releaseName" class="form-label">Release Name</label>
-                <input
-                  id="releaseName"
-                  v-model="releaseForm.name"
-                  type="text"
-                  class="form-control"
-                  required
-                  placeholder="e.g., v1.0.0, 2024.1, beta-3"
-                >
-                <div class="form-text">Enter a unique name for this release</div>
-              </div>
-              <div class="mb-3">
-                <label for="releaseDescription" class="form-label">Description (Optional)</label>
-                <textarea
-                  id="releaseDescription"
-                  v-model="releaseForm.description"
-                  class="form-control"
-                  rows="3"
-                  placeholder="Describe what's included in this release..."
-                ></textarea>
-              </div>
-              <div class="form-check">
-                <input
-                  id="releaseIsPrerelease"
-                  v-model="releaseForm.is_prerelease"
-                  class="form-check-input"
-                  type="checkbox"
-                >
-                <label for="releaseIsPrerelease" class="form-check-label">
-                  Mark as pre-release
-                </label>
-                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              :disabled="isSubmitting"
-              @click="submitRelease"
-            >
-              <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
-              {{ editingRelease ? 'Update Release' : 'Create Release' }}
-            </button>
+    <Teleport to="body">
+      <!-- Add Release Modal (only for private view) -->
+      <div
+        v-if="hasCrudPermissions && !isPublicView"
+        id="addReleaseModal"
+        class="modal fade"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                {{ editingRelease ? 'Edit Release' : 'Create New Release' }}
+              </h5>
+              <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"
+              ></button>
+            </div>
+            <div class="modal-body">
+              <form @submit.prevent="submitRelease">
+                <div class="mb-3">
+                  <label for="releaseName" class="form-label">Release Name</label>
+                  <input
+                    id="releaseName"
+                    v-model="releaseForm.name"
+                    type="text"
+                    class="form-control"
+                    required
+                    placeholder="e.g., v1.0.0, 2024.1, beta-3"
+                  >
+                  <div class="form-text">Enter a unique name for this release</div>
+                </div>
+                <div class="mb-3">
+                  <label for="releaseDescription" class="form-label">Description (Optional)</label>
+                  <textarea
+                    id="releaseDescription"
+                    v-model="releaseForm.description"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Describe what's included in this release..."
+                  ></textarea>
+                </div>
+                <div class="form-check">
+                  <input
+                    id="releaseIsPrerelease"
+                    v-model="releaseForm.is_prerelease"
+                    class="form-check-input"
+                    type="checkbox"
+                  >
+                  <label for="releaseIsPrerelease" class="form-check-label">
+                    Mark as pre-release
+                  </label>
+                  <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="isSubmitting"
+                @click="submitRelease"
+              >
+                <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
+                {{ editingRelease ? 'Update Release' : 'Create Release' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </StandardCard>
 </template>
 
