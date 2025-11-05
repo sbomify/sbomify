@@ -15,15 +15,15 @@
 }
 
 .shadow-sm {
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  box-shadow: 0 0.125rem 0.25rem rgba(var(--black-rgb), 0.075);
 }
 
 .shadow-md {
-  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0.25rem 0.5rem rgba(var(--black-rgb), 0.1);
 }
 
 .shadow-lg {
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
 }
 
 .card-header {
@@ -230,7 +230,7 @@
 .dangerzone-card {
   border: 2px solid var(--brand-danger) !important;
   border-radius: 0.75rem;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(var(--brand-danger-rgb), 0.25) !important;
   transition: all var(--transition-normal);
   overflow: hidden;
   background: var(--surface-card);
@@ -238,12 +238,12 @@
 
 .dangerzone-card:hover {
   border-color: var(--brand-danger) !important;
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(var(--brand-danger-rgb), 0.3) !important;
 }
 
 .dangerzone-card .card-header {
-  background: linear-gradient(135deg, rgba(220, 53, 69, 0.12) 0%, rgba(220, 53, 69, 0.22) 100%) !important;
-  border-bottom: 2px solid rgba(220, 53, 69, 0.35) !important;
+  background: linear-gradient(135deg, rgba(var(--brand-danger-rgb), 0.12) 0%, rgba(var(--brand-danger-rgb), 0.22) 100%) !important;
+  border-bottom: 2px solid rgba(var(--brand-danger-rgb), 0.35) !important;
   border-radius: 0.75rem 0.75rem 0 0;
 }
 
