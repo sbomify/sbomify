@@ -191,24 +191,27 @@
       />
     </div>
 
-    <!-- Add Artifact Modal -->
-    <div
-      v-if="canModifyArtifacts"
-      id="addArtifactModal"
-      class="modal fade"
-      tabindex="-1"
-    >
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Add Artifact to Release</h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-            ></button>
-          </div>
-          <div class="modal-body">
+    <Teleport to="body">
+      <!-- Add Artifact Modal -->
+      <div
+        v-if="canModifyArtifacts"
+        id="addArtifactModal"
+        class="modal fade"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Add Artifact to Release</h5>
+              <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"
+              ></button>
+            </div>
+            <div class="modal-body">
             <!-- Search and Filter Controls -->
             <div class="mb-3">
               <div class="row g-2">
@@ -374,27 +377,28 @@
               />
             </div>
           </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              :disabled="selectedArtifacts.length === 0 || isSubmitting"
-              @click="addSelectedArtifacts"
-            >
-              <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
-              Add {{ selectedArtifacts.length }} Artifact{{ selectedArtifacts.length === 1 ? '' : 's' }}
-            </button>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="selectedArtifacts.length === 0 || isSubmitting"
+                @click="addSelectedArtifacts"
+              >
+                <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
+                Add {{ selectedArtifacts.length }} Artifact{{ selectedArtifacts.length === 1 ? '' : 's' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </StandardCard>
 </template>
 

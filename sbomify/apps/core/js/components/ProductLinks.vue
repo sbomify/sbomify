@@ -95,71 +95,81 @@
     </div>
 
     <!-- Add/Edit Modal -->
-    <div v-if="showAddModal || showEditModal" class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              {{ showEditModal ? 'Edit Link' : 'Add Link' }}
-            </h5>
-            <button type="button" class="btn-close" @click="closeModal"></button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="submitForm">
-              <div class="mb-3">
-                <label class="form-label">Link Type <span class="text-danger">*</span></label>
-                <select v-model="form.link_type" class="form-select" required>
-                  <option value="">Select type...</option>
-                  <option v-for="(label, value) in linkTypes" :key="value" :value="value">
-                    {{ label }}
-                  </option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Title <span class="text-danger">*</span></label>
-                <input
-                  v-model="form.title"
-                  type="text"
-                  class="form-control"
-                  :class="{ 'is-invalid': formError }"
-                  required
-                  placeholder="Enter link title"
-                />
-              </div>
-              <div class="mb-3">
-                <label class="form-label">URL <span class="text-danger">*</span></label>
-                <input
-                  v-model="form.url"
-                  type="url"
-                  class="form-control"
-                  :class="{ 'is-invalid': formError }"
-                  required
-                  placeholder="https://example.com"
-                />
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Description</label>
-                <textarea
-                  v-model="form.description"
-                  class="form-control"
-                  rows="3"
-                  placeholder="Optional description of this link"
-                ></textarea>
-              </div>
-              <div v-if="formError" class="alert alert-danger">
-                {{ formError }}
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-            <button type="button" class="btn btn-primary" :disabled="isSubmitting" @click="submitForm">
-              {{ isSubmitting ? 'Saving...' : (showEditModal ? 'Update' : 'Add') }}
-            </button>
+    <Teleport to="body">
+      <div
+        v-if="showAddModal || showEditModal"
+        class="modal fade show d-block"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+        style="background-color: rgba(0,0,0,0.5)"
+        @click.self="closeModal"
+      >
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                {{ showEditModal ? 'Edit Link' : 'Add Link' }}
+              </h5>
+              <button type="button" class="btn-close" @click="closeModal"></button>
+            </div>
+            <div class="modal-body">
+              <form @submit.prevent="submitForm">
+                <div class="mb-3">
+                  <label class="form-label">Link Type <span class="text-danger">*</span></label>
+                  <select v-model="form.link_type" class="form-select" required>
+                    <option value="">Select type...</option>
+                    <option v-for="(label, value) in linkTypes" :key="value" :value="value">
+                      {{ label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Title <span class="text-danger">*</span></label>
+                  <input
+                    v-model="form.title"
+                    type="text"
+                    class="form-control"
+                    :class="{ 'is-invalid': formError }"
+                    required
+                    placeholder="Enter link title"
+                  />
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">URL <span class="text-danger">*</span></label>
+                  <input
+                    v-model="form.url"
+                    type="url"
+                    class="form-control"
+                    :class="{ 'is-invalid': formError }"
+                    required
+                    placeholder="https://example.com"
+                  />
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Description</label>
+                  <textarea
+                    v-model="form.description"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Optional description of this link"
+                  ></textarea>
+                </div>
+                <div v-if="formError" class="alert alert-danger">
+                  {{ formError }}
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
+              <button type="button" class="btn btn-primary" :disabled="isSubmitting" @click="submitForm">
+                {{ isSubmitting ? 'Saving...' : (showEditModal ? 'Update' : 'Add') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </StandardCard>
 </template>
 

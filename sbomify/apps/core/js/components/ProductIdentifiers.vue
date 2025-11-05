@@ -141,51 +141,61 @@
     </div>
 
     <!-- Add/Edit Modal -->
-    <div v-if="showAddModal || showEditModal" class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5)">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              {{ showEditModal ? 'Edit Identifier' : 'Add Identifier' }}
-            </h5>
-            <button type="button" class="btn-close" @click="closeModal"></button>
-          </div>
-          <div class="modal-body">
-            <form @submit.prevent="submitForm">
-              <div class="mb-3">
-                <label class="form-label">Identifier Type <span class="text-danger">*</span></label>
-                <select v-model="form.identifier_type" class="form-select" required>
-                  <option value="">Select type...</option>
-                  <option v-for="(label, value) in identifierTypes" :key="value" :value="value">
-                    {{ label }}
-                  </option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Value <span class="text-danger">*</span></label>
-                <input
-                  v-model="form.value"
-                  type="text"
-                  class="form-control"
-                  :class="{ 'is-invalid': formError }"
-                  required
-                  placeholder="Enter identifier value"
-                />
-                <div v-if="formError" class="invalid-feedback">
-                  {{ formError }}
+    <Teleport to="body">
+      <div
+        v-if="showAddModal || showEditModal"
+        class="modal fade show d-block"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+        style="background-color: rgba(0,0,0,0.5)"
+        @click.self="closeModal"
+      >
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                {{ showEditModal ? 'Edit Identifier' : 'Add Identifier' }}
+              </h5>
+              <button type="button" class="btn-close" @click="closeModal"></button>
+            </div>
+            <div class="modal-body">
+              <form @submit.prevent="submitForm">
+                <div class="mb-3">
+                  <label class="form-label">Identifier Type <span class="text-danger">*</span></label>
+                  <select v-model="form.identifier_type" class="form-select" required>
+                    <option value="">Select type...</option>
+                    <option v-for="(label, value) in identifierTypes" :key="value" :value="value">
+                      {{ label }}
+                    </option>
+                  </select>
                 </div>
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
-            <button type="button" class="btn btn-primary" :disabled="isSubmitting" @click="submitForm">
-              {{ isSubmitting ? 'Saving...' : (showEditModal ? 'Update' : 'Add') }}
-            </button>
+                <div class="mb-3">
+                  <label class="form-label">Value <span class="text-danger">*</span></label>
+                  <input
+                    v-model="form.value"
+                    type="text"
+                    class="form-control"
+                    :class="{ 'is-invalid': formError }"
+                    required
+                    placeholder="Enter identifier value"
+                  />
+                  <div v-if="formError" class="invalid-feedback">
+                    {{ formError }}
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
+              <button type="button" class="btn btn-primary" :disabled="isSubmitting" @click="submitForm">
+                {{ isSubmitting ? 'Saving...' : (showEditModal ? 'Update' : 'Add') }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </StandardCard>
 </template>
 
