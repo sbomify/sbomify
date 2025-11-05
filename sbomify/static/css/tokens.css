@@ -11,6 +11,17 @@
   --brand-danger: #dc3545;
   --brand-warning: #fcb92c;
   --brand-info: #17a2b8;
+  --brand-primary-rgb: 59, 125, 221;
+  --brand-secondary-rgb: 108, 117, 125;
+  --brand-success-rgb: 28, 187, 140;
+  --brand-danger-rgb: 220, 53, 69;
+  --brand-warning-rgb: 252, 185, 44;
+  --brand-info-rgb: 23, 162, 184;
+  --bootstrap-primary: #0d6efd;
+  --bootstrap-primary-rgb: 13, 110, 253;
+  --accent-blue-rgb: 25, 118, 210;
+  --white-rgb: 255, 255, 255;
+  --black-rgb: 0, 0, 0;
 
   /* ===== NEUTRAL COLORS ===== */
   --white: #ffffff;
@@ -101,21 +112,13 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
-}
 
-/* Dark mode variables */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --text-title: #f1f5f9;
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --border-color: #334155;
-    --border-color-light: #475569;
-    --shadow-sm: rgba(0, 0, 0, 0.3);
-    --shadow-md: rgba(0, 0, 0, 0.15);
-  }
+  /* ===== SURFACE HELPERS ===== */
+  --surface-card: var(--white);
+  --surface-card-muted: var(--gray-50);
+  --surface-elevated: var(--bg-secondary);
+  --surface-border: var(--border-color);
+  --surface-border-strong: var(--border-color-dark);
+  --surface-overlay: rgba(15, 23, 42, 0.4);
+  --text-inverse: #ffffff;
 }

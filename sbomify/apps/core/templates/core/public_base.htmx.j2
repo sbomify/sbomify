@@ -12,6 +12,7 @@
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport"
                   content="width=device-width, initial-scale=1, shrink-to-fit=no">
+            <meta name="color-scheme" content="light">
             <!-- SEO Meta Tags -->
             <meta name="description"
                   content="{% block meta_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
@@ -150,7 +151,6 @@
                         {% endif %}
                         {% if brand.name %}<span class="brand-name">{{ brand.name }}</span>{% endif %}
                     </div>
-                    <!-- Optional: Add navigation or status indicators -->
                     {% block header_content %}{% endblock %}
                 </div>
             </header>

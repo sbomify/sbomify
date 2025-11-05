@@ -30,12 +30,13 @@
 .stat-number {
   font-weight: 700;
   line-height: 1;
+  color: var(--text-title);
 }
 
 .stat-unit {
   font-size: 1rem;
   font-weight: 500;
-  color: #6c757d;
+  color: var(--text-secondary);
   margin-left: 0.25rem;
 }
 
@@ -43,6 +44,7 @@
   font-size: 0.875rem;
   text-align: center;
   margin-bottom: 0.5rem;
+  color: var(--text-secondary);
 }
 
 .stat-trend {
@@ -50,6 +52,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-secondary);
 }
 
 .trend-value {
@@ -57,31 +60,31 @@
 }
 
 .text-primary-subtle {
-  color: #4a90e2 !important;
+  color: var(--brand-primary) !important;
 }
 
 .text-success-subtle {
-  color: #5cb85c !important;
+  color: var(--brand-success) !important;
 }
 
 .text-warning-subtle {
-  color: #f0ad4e !important;
+  color: var(--brand-warning) !important;
 }
 
 .text-danger-subtle {
-  color: #d9534f !important;
+  color: var(--brand-danger) !important;
 }
 
 .text-muted-emphasis {
-  color: #6c757d !important;
+  color: var(--text-secondary) !important;
 }
 
 .text-slate {
-  color: #64748b !important;
+  color: var(--text-secondary) !important;
 }
 
 .text-dark-emphasis {
-  color: #2c3e50 !important;
+  color: var(--text-title) !important;
 }
 
 @media (max-width: 768px) {
