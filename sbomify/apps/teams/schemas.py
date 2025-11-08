@@ -26,34 +26,6 @@ class TeamPatchSchema(BaseModel):
     name: str | None = Field(None, max_length=255, min_length=1)
 
 
-class TeamResponseSchema(BaseModel):
-    """Schema for workspace response data.
-
-    Note: This schema is used for workspaces (previously called teams).
-    """
-
-    key: str
-    name: str
-    created_at: str
-    has_completed_wizard: bool
-    billing_plan: str | None
-
-
-class TeamListItemSchema(BaseModel):
-    """Schema for workspace list item in dashboard.
-
-    Note: This schema is used for workspaces (previously called teams).
-    """
-
-    key: str
-    name: str
-    role: str
-    member_count: int
-    invitation_count: int
-    is_default_team: bool
-    membership_id: str
-
-
 class UserSchema(BaseModel):
     """Schema for user data."""
 
@@ -73,6 +45,7 @@ class MemberSchema(BaseModel):
     user: UserSchema
     role: str
     is_default_team: bool
+    is_me: bool = False
 
 
 class InvitationSchema(BaseModel):
@@ -86,6 +59,16 @@ class InvitationSchema(BaseModel):
     role: str
     created_at: str
     expires_at: str
+
+
+class TeamSchema(BaseModel):
+    key: str
+    name: str
+    created_at: str
+    has_completed_wizard: bool
+    billing_plan: str | None
+    members: list[MemberSchema]
+    invitations: list[InvitationSchema]
 
 
 class BrandingInfo(BaseModel):
