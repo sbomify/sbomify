@@ -22,7 +22,7 @@ from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import ContactProfile, Member, Team
 
 from .versioning import CycloneDXSupportedVersion
 
@@ -1646,16 +1646,40 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
     social_account = SocialAccount.objects.filter(user=user, provider="keycloak").first()
     user_metadata = social_account.extra_data.get("user_metadata", {}) if social_account else {}
 
+    default_profile = None
+    if custom_metadata is None:
+        default_profile = ContactProfile.objects.filter(team_id=component.team_id, is_default=True).first()
+        if default_profile:
+            component.contact_profile = default_profile
+            if default_profile.supplier_name or default_profile.company:
+                component.supplier_name = default_profile.supplier_name or default_profile.company
+            if default_profile.website_urls:
+                component.supplier_url = default_profile.website_urls
+            if default_profile.address:
+                component.supplier_address = default_profile.address
+
+            component.supplier_contacts.all().delete()
+            for order, contact in enumerate(default_profile.contacts.all()):
+                component.supplier_contacts.create(
+                    name=contact.name,
+                    email=contact.email,
+                    phone=contact.phone,
+                    order=order,
+                )
+    else:
+        component.contact_profile = None
+
     # Set supplier information
-    company_name = user_metadata.get("company")
-    if company_name:
-        component.supplier_name = company_name
-        supplier_url = user_metadata.get("supplier_url")
-        if supplier_url:
-            component.supplier_url = [supplier_url]
-    elif user.first_name and user.last_name:
-        # Use user name as supplier if no company
-        component.supplier_name = f"{user.first_name} {user.last_name}".strip()
+    if not component.contact_profile_id:
+        company_name = user_metadata.get("company")
+        if company_name:
+            component.supplier_name = company_name
+            supplier_url = user_metadata.get("supplier_url")
+            if supplier_url:
+                component.supplier_url = [supplier_url]
+        elif user.first_name and user.last_name:
+            # Use user name as supplier if no company
+            component.supplier_name = f"{user.first_name} {user.last_name}".strip()
 
     # Create default author if we have user name and email
     if user.first_name and user.last_name and user.email:

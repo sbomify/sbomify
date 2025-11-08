@@ -200,9 +200,23 @@ def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
 
             # Check if the scan had errors
             scan_metadata = latest_result.scan_metadata or {}
-            if scan_metadata.get("parse_error"):
-                error_message = f"Vulnerability scan had parsing errors: {scan_metadata['parse_error']}"
-                error_details = scan_metadata.get("raw_output", "")
+            if scan_metadata.get("error") or scan_metadata.get("parse_error"):
+                # Just pass through the error message from the scan metadata
+                error_message = scan_metadata.get("error_message", "An error occurred during vulnerability scanning")
+
+                # Pass through any additional details
+                error_details_data = scan_metadata.get("error_details", {})
+                if error_details_data and isinstance(error_details_data, dict):
+                    # Format the response_data if available for display
+                    response_data = error_details_data.get("response_data", {})
+                    if response_data:
+                        import json
+
+                        error_details = json.dumps(response_data, indent=2)
+                    else:
+                        error_details = None
+                else:
+                    error_details = scan_metadata.get("raw_output", None)
         else:
             # No scan results found
             vulnerabilities_data = None

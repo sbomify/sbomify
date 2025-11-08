@@ -6,14 +6,14 @@ echo "Starting release process..."
 
 # Step 1: Run migrations
 echo "Running migrations..."
-if ! poetry run python manage.py migrate --noinput; then
+if ! uv run python manage.py migrate --noinput; then
     echo "Failed to run migrations"
     exit 1
 fi
 
 # Step 2: Clear Redis cache
 echo "Clearing Redis cache..."
-if ! poetry run python manage.py shell -c "
+if ! uv run python manage.py shell -c "
 from django.core.cache import cache
 try:
     cache.clear()

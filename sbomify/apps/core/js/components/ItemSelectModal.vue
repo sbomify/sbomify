@@ -1,7 +1,8 @@
 <template>
-  <div class="modal fade show" tabindex="-1" style="display: block;" aria-modal="true" role="dialog">
-    <div class="modal-dialog modal-dialog-centered" role="document">
-      <div class="modal-content item-select-modal">
+  <Teleport to="body">
+    <div class="modal fade show" tabindex="-1" style="display: block;" aria-modal="true" role="dialog">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content item-select-modal">
         <div class="modal-header">
           <h3 class="modal-title text-black">Select {{ titledItemType }}</h3>
           <button type="button" class="btn" data-bs-dismiss="modal" aria-label="Close"
@@ -48,9 +49,10 @@
           </button>
           <button type="button" class="btn btn-primary" @click="$emit('selected')">Select</button>
         </div>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

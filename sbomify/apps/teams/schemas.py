@@ -107,3 +107,60 @@ class BrandingInfo(BaseModel):
 class BrandingInfoWithUrls(BrandingInfo):
     icon_url: str = ""
     logo_url: str = ""
+
+
+class ContactProfileContactSchema(BaseModel):
+    """Schema representing a contact tied to a workspace contact profile."""
+
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    order: int | None = None
+
+
+class ContactProfileSchema(BaseModel):
+    """Schema for returning workspace contact profiles."""
+
+    id: str
+    name: str
+    company: str | None = None
+    supplier_name: str | None = None
+    vendor: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    website_urls: list[str] = Field(default_factory=list)
+    contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
+    is_default: bool = False
+    created_at: str
+    updated_at: str
+
+
+class ContactProfileCreateSchema(BaseModel):
+    """Schema for creating a workspace contact profile."""
+
+    name: str = Field(..., max_length=255, min_length=1)
+    company: str | None = Field(default=None, max_length=255)
+    supplier_name: str | None = Field(default=None, max_length=255)
+    vendor: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None)
+    website_urls: list[str] = Field(default_factory=list)
+    contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
+    is_default: bool = False
+
+
+class ContactProfileUpdateSchema(BaseModel):
+    """Schema for updating a workspace contact profile."""
+
+    name: str | None = Field(default=None, max_length=255, min_length=1)
+    company: str | None = Field(default=None, max_length=255)
+    supplier_name: str | None = Field(default=None, max_length=255)
+    vendor: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None)
+    website_urls: list[str] | None = None
+    contacts: list[ContactProfileContactSchema] | None = None
+    is_default: bool | None = None

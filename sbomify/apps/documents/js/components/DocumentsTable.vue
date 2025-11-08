@@ -199,105 +199,120 @@
   />
 
   <!-- Edit Document Modal -->
-  <div v-if="showEditModal" class="modal fade show d-block" tabindex="-1" style="z-index: var(--z-index-modal);">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Edit Document</h5>
-          <button type="button" class="btn-close" aria-label="Close" @click="cancelEdit"></button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="updateDocument">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="editDocumentName" class="form-label">Name <span class="text-danger">*</span></label>
-                  <input
-                    id="editDocumentName"
-                    v-model="editForm.name"
-                    type="text"
-                    class="form-control"
-                    required
-                    placeholder="Enter document name"
-                  />
+  <Teleport to="body">
+    <div
+      v-if="showEditModal"
+      class="modal fade show d-block"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      style="z-index: var(--z-index-modal); background-color: rgba(0,0,0,0.5);"
+      @click.self="cancelEdit"
+    >
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit Document</h5>
+            <button type="button" class="btn-close" aria-label="Close" @click="cancelEdit"></button>
+          </div>
+          <div class="modal-body">
+            <form @submit.prevent="updateDocument">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="editDocumentName" class="form-label">Name <span class="text-danger">*</span></label>
+                    <input
+                      id="editDocumentName"
+                      v-model="editForm.name"
+                      type="text"
+                      class="form-control"
+                      required
+                      placeholder="Enter document name"
+                    />
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="editDocumentVersion" class="form-label">Version <span class="text-danger">*</span></label>
+                    <input
+                      id="editDocumentVersion"
+                      v-model="editForm.version"
+                      type="text"
+                      class="form-control"
+                      required
+                      placeholder="Enter version (e.g., 1.0)"
+                    />
+                  </div>
                 </div>
               </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <label for="editDocumentVersion" class="form-label">Version <span class="text-danger">*</span></label>
-                  <input
-                    id="editDocumentVersion"
-                    v-model="editForm.version"
-                    type="text"
-                    class="form-control"
-                    required
-                    placeholder="Enter version (e.g., 1.0)"
-                  />
-                </div>
+              <div class="mb-3">
+                <label for="editDocumentType" class="form-label">Document Type</label>
+                <select
+                  id="editDocumentType"
+                  v-model="editForm.document_type"
+                  class="form-select"
+                >
+                  <option value="">Select document type</option>
+                  <option value="specification">Specification</option>
+                  <option value="manual">Manual</option>
+                  <option value="readme">README</option>
+                  <option value="documentation">Documentation</option>
+                  <option value="build-instructions">Build Instructions</option>
+                  <option value="configuration">Configuration</option>
+                  <option value="license">License</option>
+                  <option value="compliance">Compliance</option>
+                  <option value="evidence">Evidence</option>
+                  <option value="changelog">Changelog</option>
+                  <option value="release-notes">Release Notes</option>
+                  <option value="security-advisory">Security Advisory</option>
+                  <option value="vulnerability-report">Vulnerability Report</option>
+                  <option value="threat-model">Threat Model</option>
+                  <option value="risk-assessment">Risk Assessment</option>
+                  <option value="pentest-report">Penetration Test Report</option>
+                  <option value="static-analysis">Static Analysis Report</option>
+                  <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                  <option value="quality-metrics">Quality Metrics</option>
+                  <option value="maturity-report">Maturity Report</option>
+                  <option value="report">Report</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
-            </div>
-            <div class="mb-3">
-              <label for="editDocumentType" class="form-label">Document Type</label>
-              <select
-                id="editDocumentType"
-                v-model="editForm.document_type"
-                class="form-select"
-              >
-                <option value="">Select document type</option>
-                <option value="specification">Specification</option>
-                <option value="manual">Manual</option>
-                <option value="readme">README</option>
-                <option value="documentation">Documentation</option>
-                <option value="build-instructions">Build Instructions</option>
-                <option value="configuration">Configuration</option>
-                <option value="license">License</option>
-                <option value="compliance">Compliance</option>
-                <option value="evidence">Evidence</option>
-                <option value="changelog">Changelog</option>
-                <option value="release-notes">Release Notes</option>
-                <option value="security-advisory">Security Advisory</option>
-                <option value="vulnerability-report">Vulnerability Report</option>
-                <option value="threat-model">Threat Model</option>
-                <option value="risk-assessment">Risk Assessment</option>
-                <option value="pentest-report">Penetration Test Report</option>
-                <option value="static-analysis">Static Analysis Report</option>
-                <option value="dynamic-analysis">Dynamic Analysis Report</option>
-                <option value="quality-metrics">Quality Metrics</option>
-                <option value="maturity-report">Maturity Report</option>
-                <option value="report">Report</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label for="editDocumentDescription" class="form-label">Description</label>
-              <textarea
-                id="editDocumentDescription"
-                v-model="editForm.description"
-                class="form-control"
-                rows="3"
-                placeholder="Enter description (optional)"
-              ></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" @click="cancelEdit">Cancel</button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            :disabled="isUpdating || !editForm.name || !editForm.version"
-            @click="updateDocument"
-          >
-            <span v-if="isUpdating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-            Update Document
-          </button>
+              <div class="mb-3">
+                <label for="editDocumentDescription" class="form-label">Description</label>
+                <textarea
+                  id="editDocumentDescription"
+                  v-model="editForm.description"
+                  class="form-control"
+                  rows="3"
+                  placeholder="Enter description (optional)"
+                ></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="cancelEdit">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="isUpdating || !editForm.name || !editForm.version"
+              @click="updateDocument"
+            >
+              <span v-if="isUpdating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Update Document
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Modal Backdrop -->
-  <div v-if="showEditModal" class="modal-backdrop fade show" style="z-index: var(--z-index-modal-backdrop);" @click="cancelEdit"></div>
+    <!-- Modal Backdrop -->
+    <div
+      v-if="showEditModal"
+      class="modal-backdrop fade show"
+      style="z-index: var(--z-index-modal-backdrop);"
+      @click="cancelEdit"
+    ></div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

@@ -3,6 +3,7 @@
     v-if="!isEditing"
     :key="infoComponentKey"
     :componentId="props.componentId"
+    :teamKey="props.teamKey"
     :showEditButton="allowEdit"
     @edit="isEditing = true"
     @copy="selectingCopyComponent = true"
@@ -10,6 +11,7 @@
   <ComponentMetaInfoEditor
     v-else
     :componentId="props.componentId"
+    :teamKey="props.teamKey"
     @closeEditor="isEditing=false"
   />
 
@@ -37,6 +39,7 @@
   interface Props {
     componentId: string;
     allowEdit?: boolean;
+    teamKey: string;
   }
 
   const props = defineProps<Props>();

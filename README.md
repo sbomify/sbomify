@@ -1,6 +1,6 @@
 [![CI/CD Pipeline](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml)
 
-![sbomify logo](static/img/sbomify.svg)
+![sbomify logo](sbomify/static/img/sbomify.svg)
 
 [![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/public/product/eP_4dk8ixV/)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/sbomify/sbomify/badge)](https://securityscorecards.dev/viewer/?uri=github.com/sbomify/sbomify&sort_by=check-score&sort_direction=desc)
@@ -48,12 +48,9 @@ For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
 
 ## Deployment
 
-The application is automatically deployed to [fly.io](https://fly.io) when changes are pushed to the `master` branch (staging) or when a new version tag is created (production).
-
 For detailed information about the deployment process, including:
 
 - CI/CD workflow
-- Fly.io configuration
 - Environment setup
 - Storage configuration
 
@@ -73,7 +70,7 @@ docker compose \
     -f docker-compose.yml \
     -f docker-compose.dev.yml exec \
     sbomify-backend \
-    poetry run python manage.py createsuperuser
+    uv run python manage.py createsuperuser
 ```
 
 Then access the admin interface at `http://localhost:8000/admin` to log in.
@@ -83,40 +80,34 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 ### Development Prerequisites
 
 - Python 3.12+
-- Poetry (Python package manager)
+- uv (Python package manager)
 - Docker (for running PostgreSQL and Minio)
 - Bun (for JavaScript development)
 
-#### Installing Poetry
+#### Installing uv
 
-- Install Poetry using the official installer:
+- Install uv using the official installer:
 
 ```bash
-curl -sSL https://install.python-poetry.org | python3 -
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 - Verify the installation:
 
 ```bash
-poetry --version
-```
-
-- Configure Poetry to create virtual environments in the project directory:
-
-```bash
-poetry config virtualenvs.in-project true
+uv --version
 ```
 
 #### Installing Dependencies
 
-- Install Python dependencies using Poetry:
+- Install Python dependencies using uv:
 
 ```bash
 # Install all dependencies including development dependencies
-poetry install
+uv sync
 
-# Activate the virtual environment
-poetry shell
+# Run commands using uv
+uv run python manage.py --help
 ```
 
 - Install JavaScript dependencies using Bun:
@@ -175,7 +166,7 @@ docker compose \
     -e DJANGO_SUPERUSER_PASSWORD=sbomifyadmin \
     -e DJANGO_SUPERUSER_EMAIL=admin@sbomify.com \
     sbomify-backend \
-    poetry run python manage.py createsuperuser --noinput
+    uv run python manage.py createsuperuser --noinput
 ```
 
 Access the application:
@@ -197,21 +188,21 @@ docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
 - Install dependencies:
 
 ```bash
-poetry install
+uv sync
 bun install  # for JavaScript dependencies
 ```
 
 - Run migrations:
 
 ```bash
-poetry run python manage.py migrate
+uv run python manage.py migrate
 ```
 
 - Start the development servers:
 
 ```bash
 # In one terminal, start Django
-poetry run python manage.py runserver
+uv run python manage.py runserver
 
 # In another terminal, start Vite
 bun run dev
@@ -390,18 +381,18 @@ Run the tests using Django's test profile:
 
 ```bash
 # Run all tests with coverage
-poetry run coverage run -m pytest
+uv run coverage run -m pytest
 
 # Run specific test groups
-poetry run coverage run -m pytest core/tests/
-poetry run coverage run -m pytest sboms/tests/
-poetry run coverage run -m pytest teams/tests/
+uv run coverage run -m pytest core/tests/
+uv run coverage run -m pytest sboms/tests/
+uv run coverage run -m pytest teams/tests/
 
 # Run with debugger on failure
-poetry run coverage run -m pytest --pdb -x -s
+uv run coverage run -m pytest --pdb -x -s
 
 # Generate coverage report
-poetry run coverage report
+uv run coverage report
 ```
 
 Test coverage must be at least 80% to pass CI checks.
@@ -494,17 +485,17 @@ To set up pre-commit:
 - Install pre-commit hooks:
 
 ```bash
-poetry run pre-commit install
+uv run pre-commit install
 ```
 
 - Run pre-commit checks manually:
 
 ```bash
 # Check all files
-poetry run pre-commit run --all-files
+uv run pre-commit run --all-files
 
 # Check staged files only
-poetry run pre-commit run
+uv run pre-commit run
 ```
 
 ## Production Deployment

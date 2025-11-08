@@ -24,11 +24,93 @@
                   </i>
                 </template>
 
-                <SupplierEditor
-                  v-model="metadata.supplier"
-                  :validation-errors="validationErrors.supplier"
-                  @update:modelValue="validateSupplier"
-                />
+                <div class="mb-3">
+                  <label class="form-label">Contact Profile</label>
+                  <select
+                    v-model="selectedProfileId"
+                    class="form-select"
+                    :disabled="!contactProfiles.length && !selectedProfile"
+                  >
+                    <option value="">Use custom contact info</option>
+                    <option
+                      v-if="selectedProfile && !contactProfiles.some(profile => profile.id === selectedProfile?.id)"
+                      :value="selectedProfile.id"
+                    >
+                      {{ selectedProfile.name }} (unavailable)
+                    </option>
+                    <option
+                      v-for="profile in contactProfiles"
+                      :key="profile.id"
+                      :value="profile.id"
+                    >
+                      {{ profile.name }}{{ profile.is_default ? ' (default)' : '' }}
+                    </option>
+                  </select>
+                  <div v-if="!contactProfiles.length" class="form-text text-muted">
+                    No contact profiles available. Manage them in Workspace Settings → Contact Profiles.
+                  </div>
+                </div>
+
+                <template v-if="isUsingProfile">
+                  <div class="alert alert-info">
+                    This component uses the <strong>{{ selectedProfile?.name || 'contact profile' }}</strong>.
+                    Contact details are managed at the workspace level.
+                  </div>
+                  <div v-if="selectedProfile" class="profile-details border rounded p-3">
+                    <div v-if="selectedProfile.company" class="mb-2">
+                      <strong>Company:</strong> {{ selectedProfile.company }}
+                    </div>
+                    <div v-if="selectedProfile.supplier_name" class="mb-2">
+                      <strong>Supplier:</strong> {{ selectedProfile.supplier_name }}
+                    </div>
+                    <div v-if="selectedProfile.vendor" class="mb-2">
+                      <strong>Vendor:</strong> {{ selectedProfile.vendor }}
+                    </div>
+                    <div v-if="selectedProfile.email" class="mb-2">
+                      <strong>Email:</strong>
+                      <a :href="`mailto:${selectedProfile.email}`">{{ selectedProfile.email }}</a>
+                    </div>
+                    <div v-if="selectedProfile.phone" class="mb-2">
+                      <strong>Phone:</strong> {{ selectedProfile.phone }}
+                    </div>
+                    <div v-if="selectedProfile.address" class="mb-2">
+                      <strong>Address:</strong>
+                      <div class="text-prewrap">{{ selectedProfile.address }}</div>
+                    </div>
+                    <div v-if="selectedProfile.website_urls?.length" class="mb-2">
+                      <strong>Website:</strong>
+                      <ul class="mb-0 ps-3">
+                        <li v-for="link in selectedProfile.website_urls" :key="link">
+                          <a :href="link" target="_blank" rel="noopener noreferrer">
+                            {{ link }}
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                    <div v-if="selectedProfile.contacts?.length" class="mb-1">
+                      <strong>Contacts:</strong>
+                      <div class="profile-contacts mt-2">
+                        <span
+                          v-for="contact in selectedProfile.contacts"
+                          :key="`${contact.name}-${contact.email}`"
+                          class="badge rounded-pill text-bg-light me-2 mb-2"
+                        >
+                          {{ contact.name }}
+                          <span v-if="contact.email"> ({{ contact.email }})</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-muted">Profile details unavailable.</div>
+                </template>
+
+                <template v-else>
+                  <SupplierEditor
+                    v-model="metadata.supplier"
+                    :validation-errors="validationErrors.supplier"
+                    @update:modelValue="validateSupplier"
+                  />
+                </template>
               </StandardCard>
             </div>
 
@@ -141,7 +223,7 @@
   import $axios from '../../../core/js/utils';
   import { isAxiosError } from 'axios';
   import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-  import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage } from '../type_defs';
+  import type { ComponentMetaInfo, SupplierInfo, ContactInfo, CustomLicense, AlertMessage, ContactProfile } from '../type_defs';
   import SupplierEditor from '@/sbomify/apps/sboms/js/components/SupplierEditor.vue';
 import LicensesEditor from '@/sbomify/apps/sboms/js/components/LicensesEditor.vue';
 import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vue';
@@ -150,6 +232,7 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
 
   interface Props {
     componentId: string;
+    teamKey: string;
   }
 
   const emits = defineEmits(['closeEditor'])
@@ -181,19 +264,24 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
     }));
   });
 
-  const metadata = ref<ComponentMetaInfo>({
-    id: '',
-    name: '',
-    supplier: {
-      name: null,
-      url: null,
-      address: null,
-      contacts: []
-    } as SupplierInfo,
-    authors: [],
-    licenses: [],
-    lifecycle_phase: null
-  });
+const metadata = ref<ComponentMetaInfo>({
+  id: '',
+  name: '',
+  supplier: {
+    name: null,
+    url: null,
+    address: null,
+    contacts: []
+  } as SupplierInfo,
+  authors: [],
+  licenses: [],
+  lifecycle_phase: null,
+  contact_profile_id: null,
+  contact_profile: null,
+  uses_custom_contact: true
+});
+
+const contactProfiles = ref<ContactProfile[]>([]);
 
   const alertMessage = ref<AlertMessage>({
     alertType: null,
@@ -240,6 +328,41 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
     validationErrors.value.supplier = errors;
     hasUnsavedChanges.value = true;
   };
+
+  const selectedProfileId = computed<string>({
+    get: () => metadata.value.contact_profile_id ?? '',
+    set: (value: string) => {
+      const nextId = value || null;
+      if (metadata.value.contact_profile_id === nextId) {
+        return;
+      }
+      metadata.value.contact_profile_id = nextId;
+      metadata.value.uses_custom_contact = nextId === null;
+      hasUnsavedChanges.value = true;
+
+      if (nextId === null) {
+        metadata.value.contact_profile = null;
+        validateSupplier(metadata.value.supplier);
+      } else {
+        const profile =
+          contactProfiles.value.find((p) => p.id === nextId) || metadata.value.contact_profile || null;
+        metadata.value.contact_profile = profile;
+        validationErrors.value.supplier = {};
+      }
+    },
+  });
+
+  const isUsingProfile = computed(() => metadata.value.contact_profile_id !== null);
+  const selectedProfile = computed<ContactProfile | null>(() => {
+    if (!metadata.value.contact_profile_id) {
+      return null;
+    }
+    return (
+      contactProfiles.value.find((profile) => profile.id === metadata.value.contact_profile_id) ||
+      metadata.value.contact_profile ||
+      null
+    );
+  });
 
   const validateAuthors = (authors: ContactInfo[]): void => {
     const errors: Record<string, string> = {};
@@ -315,6 +438,31 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
     }
   };
 
+  const loadContactProfiles = async () => {
+    if (!props.teamKey) {
+      return;
+    }
+
+    try {
+      const response = await $axios.get(`/api/v1/workspaces/${props.teamKey}/contact-profiles`);
+      const data = (response.data ?? []) as ContactProfile[];
+      contactProfiles.value = data.map((profile) => ({
+        ...profile,
+        website_urls: profile.website_urls ?? [],
+        contacts: profile.contacts ?? [],
+      }));
+
+      if (metadata.value.contact_profile_id) {
+        const profile = contactProfiles.value.find((p) => p.id === metadata.value.contact_profile_id);
+        if (profile) {
+          metadata.value.contact_profile = profile;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load contact profiles', error);
+    }
+  };
+
   // Add beforeunload event handler
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
     if (hasUnsavedChanges.value) {
@@ -336,10 +484,17 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
         throw new Error('Network response was not ok. ' + response.statusText);
       }
       metadata.value = {...metadata.value, ...response.data};
+      metadata.value.uses_custom_contact = !metadata.value.contact_profile_id;
       originalMetadata.value = JSON.stringify(metadata.value);
 
+      await loadContactProfiles();
+
       // Validate initial data
-      validateSupplier(metadata.value.supplier);
+      if (!metadata.value.contact_profile_id) {
+        validateSupplier(metadata.value.supplier);
+      } else {
+        validationErrors.value.supplier = {};
+      }
       validateAuthors(metadata.value.authors);
       validateLicenses(metadata.value.licenses);
 
@@ -404,6 +559,10 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
       const current = JSON.parse(currentMetadata);
 
       const updatePayload: Partial<ComponentMetaInfo> = {};
+
+      if ((current.contact_profile_id ?? null) !== (original.contact_profile_id ?? null)) {
+        updatePayload.contact_profile_id = current.contact_profile_id;
+      }
 
       // Check each field for changes (excluding read-only fields id and name)
       if (JSON.stringify(current.supplier) !== JSON.stringify(original.supplier)) {
@@ -741,5 +900,21 @@ import ContactsEditor from '@/sbomify/apps/sboms/js/components/ContactsEditor.vu
 .licenses-card-container :deep(.card-body) {
   overflow: visible !important;
 }
-</style>
 
+.profile-details {
+  background-color: #f8fafc;
+}
+
+.profile-contacts {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.profile-contacts .badge {
+  font-weight: 500;
+}
+
+.text-prewrap {
+  white-space: pre-wrap;
+}
+</style>

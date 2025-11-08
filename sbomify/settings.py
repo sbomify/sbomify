@@ -134,6 +134,18 @@ if DEBUG:
         # Debug toolbar not available (e.g., in production with DEBUG=True)
         pass
 
+    # Add CORS headers in development mode - allow all origins
+    try:
+        import corsheaders  # noqa: F401
+
+        INSTALLED_APPS.append("corsheaders")
+        MIDDLEWARE.insert(
+            MIDDLEWARE.index("django.middleware.common.CommonMiddleware"),
+            "corsheaders.middleware.CorsMiddleware",
+        )
+    except ImportError:
+        pass
+
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
@@ -194,11 +206,12 @@ USE_VITE_DEV_SERVER = os.environ.get("USE_VITE_DEV_SERVER", "False").lower() == 
 
 if USE_VITE_DEV_SERVER:
     # Development mode - Vite dev server serves at /dist/
+    # Note: Use localhost/127.0.0.1 for browser access, not Docker internal hostnames
     DJANGO_VITE = {
         "default": {
             "dev_mode": True,
-            "dev_server_host": "127.0.0.1",
-            "dev_server_port": 5170,
+            "dev_server_host": "127.0.0.1",  # Browser-accessible hostname
+            "dev_server_port": int(os.environ.get("VITE_DEV_SERVER_PORT", "5170")),
             "static_url_prefix": "/dist/",
         }
     }
@@ -503,6 +516,10 @@ if DEBUG:
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+
+    # CORS settings - allow all origins in development mode
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
 
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY

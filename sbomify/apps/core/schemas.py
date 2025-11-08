@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from sbomify.apps.teams.schemas import ContactProfileSchema
+
 
 class ErrorCode(str, Enum):
     """Structured error codes for API responses"""
@@ -515,11 +517,15 @@ class ComponentMetadataCore(BaseModel):
     authors: list[ContactInfo] = Field(default_factory=list)
     licenses: list[str] = Field(default_factory=list)
     lifecycle_phase: str | None = None
+    contact_profile_id: str | None = None
+    contact_profile: ContactProfileSchema | None = None
+    uses_custom_contact: bool = True
 
 
 class ComponentMetadataUpdateCore(BaseModel):
     """Core schema for updating component metadata."""
 
+    contact_profile_id: str | None = None
     supplier: SupplierInfo | None = None
     authors: list[ContactInfo] | None = None
     licenses: list[str] | None = None
@@ -529,6 +535,7 @@ class ComponentMetadataUpdateCore(BaseModel):
 class ComponentMetadataPatchCore(BaseModel):
     """Core schema for partially updating component metadata using PATCH."""
 
+    contact_profile_id: str | None = None
     supplier: SupplierInfo | None = None
     authors: list[ContactInfo] | None = None
     licenses: list[str] | None = None

@@ -8,31 +8,23 @@ This document outlines the steps to cut a new release of sbomify.
 
 ```bash
 # Run linting
-poetry run ruff check .
-poetry run ruff format --check .
+uv run ruff check .
+uv run ruff format --check .
 bun markdownlint "**/*.md" --ignore node_modules
 
 # Run tests and coverage
-poetry run coverage run -m pytest
-poetry run coverage report
+uv run coverage run -m pytest
+uv run coverage report
 ```
 
 Ensure all tests pass, coverage is at least 80%, and there are no linting errors.
 
-1. Bump the version in `pyproject.toml` using Poetry:
-
-```bash
-poetry version patch  # For patch version (0.0.x)
-# OR
-poetry version minor  # For minor version (0.x.0)
-# OR
-poetry version major  # For major version (x.0.0)
-```
+1. Bump the version in `pyproject.toml` manually by editing the version field.
 
 1. Get the new version number:
 
 ```bash
-poetry version --short
+grep '^version = ' pyproject.toml | cut -d'"' -f2
 ```
 
 1. Create and push a new git tag:
@@ -49,19 +41,21 @@ For a patch release from 0.2.0 to 0.2.1:
 
 ```bash
 # Run pre-release checks
-poetry run ruff check .
-poetry run ruff format --check .
+uv run ruff check .
+uv run ruff format --check .
 bun markdownlint "**/*.md"
-poetry run coverage run -m pytest
-poetry run coverage report
+uv run coverage run -m pytest
+uv run coverage report
 
-# Bump version
-poetry version patch
-# Version bumped to 0.2.1
+# Bump version (edit pyproject.toml manually)
+# Change version = "0.2.0" to version = "0.2.1"
+
+# Get version for tag
+VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
 
 # Create and push tag
-git tag -a v0.2.1 -m "Release version 0.2.1"
-git push origin v0.2.1
+git tag -a v${VERSION} -m "Release version ${VERSION}"
+git push origin v${VERSION}
 ```
 
 ## Notes
