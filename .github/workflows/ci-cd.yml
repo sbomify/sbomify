@@ -7,8 +7,8 @@ on:
     tags:
       - 'v*'  # Trigger on version tags
   pull_request:
-    branches:
-      - master
+    # branches:
+    #   - master
   release:
     types: [published]
 
