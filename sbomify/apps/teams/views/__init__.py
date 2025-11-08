@@ -50,12 +50,6 @@ def switch_team(request: HttpRequest, team_key: str):
     return redirect(redirect_to)
 
 
-"""Views package for Teams app.
-
-Re-exports class-based views for convenience.
-"""
-
-
 @login_required
 @validate_role_in_current_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str):
