@@ -9,7 +9,6 @@ import TeamDangerZone from './components/TeamDangerZone.vue';
 import TeamInvitations from './components/TeamInvitations.vue';
 import TeamMembers from './components/TeamMembers.vue';
 import VulnerabilitySettings from './components/VulnerabilitySettings.vue';
-import TeamsList from './components/TeamsList.vue';
 
 // Function to mount Vue components with teams-specific data handling
 function mountVueComponent(selector: string, component: Component, props: Record<string, unknown> = {}) {
@@ -84,5 +83,4 @@ document.addEventListener('DOMContentLoaded', () => {
   mountVueComponent('vc-team-invitations', TeamInvitations);
   mountVueComponent('vc-team-members', TeamMembers);
   mountVueComponent('vc-vulnerability-settings', VulnerabilitySettings);
-  mountVueComponent('vc-teams-list', TeamsList);
 });
