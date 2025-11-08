@@ -6,7 +6,7 @@ from django.core.validators import MinLengthValidator
 from django.db import models
 from django.utils import timezone
 
-from sbomify.apps.core.utils import generate_id
+from sbomify.apps.core.utils import generate_id, number_to_random_token
 
 
 def get_team_name_for_user(user) -> str:
@@ -86,6 +86,16 @@ class Team(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        super().save(*args, **kwargs)
+        if not is_new or self.key is not None:
+            return
+
+        self.key = number_to_random_token(self.pk)
+        super().save(update_fields=["key"])
 
 
 class Member(models.Model):

@@ -13,21 +13,22 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.logging import getLogger
-
-from .models import ContactProfile, Member, Team
-from .schemas import (
+from sbomify.apps.teams.models import ContactProfile, Member, Team
+from sbomify.apps.teams.schemas import (
     BrandingInfo,
     BrandingInfoWithUrls,
     ContactProfileContactSchema,
     ContactProfileCreateSchema,
     ContactProfileSchema,
     ContactProfileUpdateSchema,
+    InvitationSchema,
+    MemberSchema,
     TeamPatchSchema,
-    TeamResponseSchema,
+    TeamSchema,
     TeamUpdateSchema,
+    UserSchema,
 )
-from .utils import get_user_teams
+from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
@@ -36,6 +37,47 @@ router = Router(tags=["Workspaces"], auth=(PersonalAccessTokenAuth(), django_aut
 
 class FieldValue(BaseModel):
     value: str | bool | None
+
+
+def _build_team_response(request: HttpRequest, team: Team) -> dict:
+    current_user_id = getattr(getattr(request, "user", None), "id", None)
+
+    members_data = [
+        MemberSchema(
+            id=member.id,
+            user=UserSchema(
+                id=member.user.id,
+                first_name=member.user.first_name,
+                last_name=member.user.last_name,
+                email=member.user.email,
+            ),
+            role=member.role,
+            is_default_team=member.is_default_team,
+            is_me=(current_user_id == member.user.id),
+        )
+        for member in team.member_set.select_related("user").all()
+    ]
+
+    invitations_data = [
+        InvitationSchema(
+            id=invitation.id,
+            email=invitation.email,
+            role=invitation.role,
+            created_at=invitation.created_at.isoformat(),
+            expires_at=invitation.expires_at.isoformat(),
+        )
+        for invitation in team.invitation_set.all()
+    ]
+
+    return TeamSchema(
+        key=team.key,
+        name=team.name,
+        created_at=team.created_at.isoformat(),
+        billing_plan=team.billing_plan,
+        has_completed_wizard=team.has_completed_wizard,
+        members=members_data,
+        invitations=invitations_data,
+    )
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
@@ -390,7 +432,7 @@ def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str)
 
 @router.put(
     "/{team_key}",
-    response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     """Update workspace information.
@@ -416,13 +458,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
             team.name = payload.name
             team.save()
 
-        return 200, TeamResponseSchema(
-            key=team.key,
-            name=team.name,
-            created_at=team.created_at.isoformat(),
-            has_completed_wizard=team.has_completed_wizard,
-            billing_plan=team.billing_plan,
-        )
+        return 200, _build_team_response(request, team)
 
     except IntegrityError:
         return 400, {"detail": "A team with this name already exists"}
@@ -433,7 +469,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
 
 @router.patch(
     "/{team_key}",
-    response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
     """Partially update workspace information.
@@ -462,13 +498,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
                 setattr(team, field, value)
             team.save()
 
-        return 200, TeamResponseSchema(
-            key=team.key,
-            name=team.name,
-            created_at=team.created_at.isoformat(),
-            has_completed_wizard=team.has_completed_wizard,
-            billing_plan=team.billing_plan,
-        )
+        return 200, _build_team_response(request, team)
 
     except IntegrityError:
         return 400, {"detail": "A team with this name already exists"}
@@ -477,40 +507,17 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
         return 400, {"detail": "Invalid request"}
 
 
-@router.get("/", response={200: list[TeamResponseSchema], 403: ErrorResponse})
+@router.get("/", response={200: list[TeamSchema], 403: ErrorResponse})
 def list_teams(request: HttpRequest):
     """List all workspaces for the current user.
 
     Note: Returns workspace data. Teams are now called workspaces.
     """
-    try:
-        user_teams = get_user_teams(request.user)
-        teams_list = []
-
-        for team_key, team_data in user_teams.items():
-            try:
-                team = Team.objects.get(id=team_data["id"])
-                teams_list.append(
-                    TeamResponseSchema(
-                        key=team.key,
-                        name=team.name,
-                        created_at=team.created_at.isoformat(),
-                        has_completed_wizard=team.has_completed_wizard,
-                        billing_plan=team.billing_plan,
-                    )
-                )
-            except Team.DoesNotExist:
-                continue
-
-        return 200, teams_list
-    except Exception as e:
-        logger.error(f"Error listing teams for user {request.user.id}: {e}")
-        return 403, {"detail": "Unable to retrieve teams"}
+    memberships = Member.objects.filter(user=request.user).select_related("team").all()
+    return 200, [_build_team_response(request, membership.team) for membership in memberships]
 
 
-@router.get(
-    "/{team_key}", response={200: TeamResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse}
-)
+@router.get("/{team_key}", response={200: TeamSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse})
 def get_team(request: HttpRequest, team_key: str):
     """Get workspace information by workspace key.
 
@@ -530,10 +537,4 @@ def get_team(request: HttpRequest, team_key: str):
     if not Member.objects.filter(user=request.user, team=team).exists():
         return 403, {"detail": "Access denied"}
 
-    return 200, TeamResponseSchema(
-        key=team.key,
-        name=team.name,
-        created_at=team.created_at.isoformat(),
-        has_completed_wizard=team.has_completed_wizard,
-        billing_plan=team.billing_plan,
-    )
+    return 200, _build_team_response(request, team)

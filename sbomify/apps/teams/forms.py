@@ -1,13 +1,35 @@
 from django import forms
 from django.conf import settings
 
-from .models import Team
+from sbomify.apps.teams.models import Member, Team
 
 
-class TeamForm(forms.ModelForm):
+class AddTeamForm(forms.ModelForm):
     class Meta:
         model = Team
         fields = ["name"]
+
+    def save(self, *args, user=None, **kwargs):
+        is_new = self.instance._state.adding
+        super().save(*args, **kwargs)
+        if is_new and user:
+            is_default_team = not Member.objects.filter(user=user).exists()
+            Member.objects.create(team=self.instance, user=user, is_default_team=is_default_team, role="owner")
+        return self.instance
+
+
+class UpdateTeamForm(forms.Form):
+    key = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput(),
+    )
+
+
+class DeleteTeamForm(forms.Form):
+    key = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput(),
+    )
 
 
 class InviteUserForm(forms.Form):

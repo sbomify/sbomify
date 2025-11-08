@@ -1,0 +1,93 @@
+{% load widget_tweaks %}
+{% load static %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/delete-modal.css' %}">
+{% endblock %}
+<div class="modal fade"
+     id="{{ modal_id }}"
+     data-bs-backdrop="static"
+     data-bs-keyboard="true"
+     tabindex="-1"
+     aria-labelledby="{{ modal_id }}-label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
+        <div class="modal-content delete-modal">
+            <div class="delete-modal-header">
+                <div class="delete-modal-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="delete-modal-title" id="{{ modal_id }}-label">{{ modal_title }}</h3>
+                <button type="button"
+                        class="delete-modal-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="delete-modal-body">
+                <p class="delete-modal-message">
+                    {{ message_text }} <span class="delete-modal-name" id="{{ modal_id }}-display-name"></span>?
+                </p>
+                <p class="delete-modal-warning">
+                    {{ warning_text|default:"This action cannot be undone and will permanently remove the item from the system." }}
+                </p>
+            </div>
+            <div class="delete-modal-footer">
+                <button type="button"
+                        class="delete-modal-button delete-modal-button--secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ form_action }}"
+                      method="post"
+                      id="{{ modal_id }}-form"
+                      style="display:inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="_method" value="DELETE">
+                    {% for field in form %}{{ field }}{% endfor %}
+                    {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
+                    <button type="submit" class="delete-modal-button delete-modal-button--danger">
+                        <i class="fas fa-trash me-2"></i>
+                        {{ submit_text }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function() {
+        const modal = document.getElementById('{{ modal_id }}');
+        const form = document.getElementById('{{ modal_id }}-form');
+
+        modal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+
+            Array.from(button.attributes).forEach(attr => {
+                if (!attr.name.startsWith('data-form-')) {
+                    return;
+                }
+
+                const fieldName = attr.name.replace('data-form-', '');
+                const field = form.querySelector(`[name="${fieldName}"]`);
+
+                if (!field) {
+                    return;
+                }
+
+                field.value = attr.value;
+            });
+            
+            const displayName = button.getAttribute('data-display-name');
+            if (!displayName) {
+                return;
+            }
+
+            const displayElement = document.getElementById('{{ modal_id }}-display-name');
+            if (!displayElement) {
+                return;
+            }
+
+            displayElement.textContent = displayName;
+        });
+    })();
+</script>

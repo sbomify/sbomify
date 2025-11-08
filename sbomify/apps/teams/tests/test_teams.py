@@ -13,7 +13,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_api_client
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.core.utils import number_to_random_token
 
 from sbomify.apps.teams.fixtures import (  # noqa: F401
@@ -69,7 +69,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     )
 
     uri = reverse("teams:teams_dashboard")
-    form_data = urlencode({"name": "New Test Team"})
+    form_data = urlencode({"_method": "POST", "name": "New Test Team"})
     response: HttpResponse = client.post(
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
@@ -177,8 +177,11 @@ def test_set_default_team(sample_team_with_owner_member: Member):  # noqa: F811
         username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"]
     )
 
-    uri = reverse("teams:set_default_team", kwargs={"membership_id": sample_team_with_owner_member.id})
-    response: HttpResponse = client.get(uri)
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "PATCH", "key": sample_team_with_owner_member.team.key})
+    response: HttpResponse = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
     assert response.status_code == 302
     assert response.url == reverse("teams:teams_dashboard")
@@ -221,7 +224,11 @@ def test_delete_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the non-default team
-    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team.key}))
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "DELETE", "key": team.key})
+    response: HttpResponse = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
     # Check redirect to teams dashboard
     assert response.status_code == 302
@@ -265,13 +272,20 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
     session.save()
 
     # Try to delete the team
-    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team.key}))
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "DELETE", "key": team.key})
+    response = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
-    # Check forbidden response
-    assert response.status_code == 403
+    assert response.status_code == 302
 
     # Verify team still exists
     assert Team.objects.filter(pk=team.pk).exists()
+
+    messages = list(get_messages(response.wsgi_request))
+    assert len(messages) == 1
+    assert "Membership not found" in str(messages[0])
 
 
 @pytest.mark.django_db
@@ -877,10 +891,13 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the default team - should fail
-    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team1.key}))
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "DELETE", "key": team1.key})
+    response: HttpResponse = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
-    # Check that we get an error
-    assert response.status_code == 400
+    assert response.status_code == 302
 
     # Verify team still exists
     assert Team.objects.filter(pk=team1.pk).exists()
@@ -915,10 +932,13 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the only team - should fail
-    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team.key}))
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "DELETE", "key": team.key})
+    response: HttpResponse = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
-    # Check that we get an error
-    assert response.status_code == 400
+    assert response.status_code == 302
 
     # Verify team still exists
     assert Team.objects.filter(pk=team.pk).exists()
@@ -959,7 +979,11 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
     session.save()
 
     # Try to delete the non-default team - should succeed
-    response = client.post(reverse("teams:delete_team", kwargs={"team_key": team2.key}))
+    uri = reverse("teams:teams_dashboard")
+    form_data = urlencode({"_method": "DELETE", "key": team2.key})
+    response: HttpResponse = client.post(
+        uri, form_data, content_type="application/x-www-form-urlencoded"
+    )
 
     # Check redirect to teams dashboard
     assert response.status_code == 302

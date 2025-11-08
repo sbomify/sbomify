@@ -11,10 +11,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.http import (
     HttpResponse,
-    HttpResponseBadRequest,
     HttpResponseForbidden,
     HttpResponseNotFound,
 )
@@ -23,22 +22,22 @@ from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.utils import number_to_random_token, token_to_number
+from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.sboms.models import Component, Product, Project
-
-from .decorators import validate_role_in_current_team
-from .forms import (
+from sbomify.apps.teams.decorators import validate_role_in_current_team
+from sbomify.apps.teams.forms import (
     InviteUserForm,
     OnboardingComponentForm,
     OnboardingProductForm,
     OnboardingProjectForm,
-    TeamForm,
 )
-from .models import Invitation, Member, Team
-from .schemas import BrandingInfo
-from .utils import get_user_teams
+from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.teams.utils import get_user_teams
 
 log = getLogger(__name__)
+
+from sbomify.apps.teams.views.dashboard import TeamsDashboardView  # noqa: F401, E402
 
 
 # view to redirect to /home url
@@ -52,87 +51,10 @@ def switch_team(request: HttpRequest, team_key: str):
 
 
 @login_required
-def teams_dashboard(request: HttpRequest) -> HttpResponse:
-    context = dict(add_team_form=TeamForm())
-
-    if request.method == "POST":
-        form = TeamForm(request.POST)
-        if form.is_valid():
-            team = form.save()
-
-            # Generate team key
-            team.key = number_to_random_token(team.pk)
-            team.save()
-
-            member = Member(
-                user=request.user,
-                team=team,
-                role="owner",
-                is_default_team=False,
-            )
-            member.save()
-
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                f"Workspace {team.name} created successfully",
-            )
-
-            # If this is the only team, mark it as default
-            user_teams = get_user_teams(request.user)
-            if len(user_teams) == 1:
-                member.is_default_team = True
-                member.save()
-
-            request.session["user_teams"] = get_user_teams(request.user)
-            return redirect("teams:teams_dashboard")
-
-    memberships = Member.objects.filter(user=request.user).select_related("team").all()
-
-    # Serialize teams data for Vue component
-    teams_data = [
-        {
-            "key": membership.team.key,
-            "name": membership.team.name,
-            "role": membership.role,
-            "member_count": membership.team.member_set.count(),
-            "invitation_count": membership.team.invitation_set.count(),
-            "is_default_team": membership.is_default_team,
-            "membership_id": str(membership.id),
-        }
-        for membership in memberships
-    ]
-
-    context["memberships"] = teams_data
-    return render(request, "teams/dashboard.html.j2", context)
-
-
-@login_required
 @validate_role_in_current_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str):
     """Redirect to team settings for unified interface."""
     return redirect("teams:team_settings", team_key=team_key)
-
-
-@login_required
-@validate_role_in_current_team(["owner"])
-def set_default_team(request: HttpRequest, membership_id: int):
-    try:
-        membership = Member.objects.get(pk=membership_id)
-    except Member.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
-
-    with transaction.atomic():
-        # Set is_default_team for all records in membership for the current user to False
-        Member.objects.filter(user_id=request.user.id).update(is_default_team=False)
-        membership.is_default_team = True
-        membership.save()
-
-        messages.add_message(request, messages.INFO, f"Team {membership.team.name} set as the default team")
-
-    request.session["user_teams"] = get_user_teams(request.user)
-
-    return redirect("teams:teams_dashboard")
 
 
 @login_required
@@ -185,7 +107,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
         invite_user_form = InviteUserForm(request.POST)
 
         # Check user limits before form validation to show as form error
-        from .utils import can_add_user_to_team
+        from sbomify.apps.teams.utils import can_add_user_to_team
 
         can_add, error_message = can_add_user_to_team(team)
 
@@ -271,7 +193,7 @@ def accept_invite(request: HttpRequest, invite_id: int) -> HttpResponseNotFound 
         pass
 
     # Check user limits before accepting invitation
-    from .utils import can_add_user_to_team
+    from sbomify.apps.teams.utils import can_add_user_to_team
 
     can_add, error_message = can_add_user_to_team(invitation.team)
     if not can_add:
@@ -391,56 +313,6 @@ def team_settings(request: HttpRequest, team_key: str):
             "is_default_team": is_default_team,
         },
     )
-
-
-@login_required
-@validate_role_in_current_team(["owner"])
-def delete_team(request: HttpRequest, team_key: str):
-    team_id = token_to_number(team_key)
-
-    try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Team not found"))
-
-    # Check if this is the user's default team
-    try:
-        membership = Member.objects.get(user=request.user, team=team)
-        if membership.is_default_team:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Cannot delete the default workspace. Please set another workspace as default first.",
-            )
-            return error_response(request, HttpResponseBadRequest("Cannot delete the default workspace"))
-    except Member.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
-
-    # Check if this is the user's last team
-    user_team_count = Member.objects.filter(user=request.user).count()
-    if user_team_count <= 1:
-        messages.add_message(
-            request,
-            messages.ERROR,
-            "Cannot delete the default workspace. Please set another workspace as default first.",
-        )
-        return error_response(request, HttpResponseBadRequest("Cannot delete the default workspace"))
-
-    team_name = team.name
-    with transaction.atomic():
-        # Members will be automatically deleted due to CASCADE
-        team.delete()
-
-    # Update session after team deletion
-    request.session["user_teams"] = get_user_teams(request.user)
-
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Team {team_name} has been deleted",
-    )
-
-    return redirect("teams:teams_dashboard")
 
 
 @login_required
