@@ -91,7 +91,7 @@ class Team(models.Model):
         is_new = self.pk is None
 
         super().save(*args, **kwargs)
-        if not is_new:
+        if not is_new or self.key is not None:
             return
 
         self.key = number_to_random_token(self.pk)

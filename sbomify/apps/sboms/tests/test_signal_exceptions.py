@@ -188,7 +188,7 @@ class SignalExceptionHandlingTests(TestCase):
                 # Should log with unknown plan info
                 mock_logger.info.assert_called_once()
                 args, _ = mock_logger.info.call_args
-                self.assertIn("team None with unknown plan", args[0])
+                self.assertIn(f"team {self.component.team.key} with unknown plan", args[0])
 
 
 class SignalIntegrationTests(TestCase):

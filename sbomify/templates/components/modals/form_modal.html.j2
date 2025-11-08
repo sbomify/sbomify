@@ -19,7 +19,7 @@
                         aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form action="{{ form_action }}" method="POST">
+                <form action="{{ form_action }}" method="post">
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="POST">
                     {% if additional_fields %}{{ additional_fields|safe }}{% endif %}
