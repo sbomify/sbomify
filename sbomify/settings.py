@@ -196,7 +196,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 if not DEBUG:
     STORAGES = {
         "staticfiles": {
-            "BACKEND": "sbomify.apps.core.storage.lenient.LenientManifestStaticFilesStorage",
+            "BACKEND": "whitenoise.storage.ManifestStaticFilesStorage",
         },
     }
 
