@@ -67,7 +67,8 @@ export default defineConfig({
             type: 'image/svg+xml'
           }
         ]
-      }
+      },
+      includeAssets: ['manifest.webmanifest']
     })
   ],
   build: {

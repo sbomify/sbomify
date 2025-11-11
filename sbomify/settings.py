@@ -196,7 +196,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 if not DEBUG:
     STORAGES = {
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+            "BACKEND": "whitenoise.storage.ManifestStaticFilesStorage",
         },
     }
 
