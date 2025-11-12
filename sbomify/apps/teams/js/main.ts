@@ -1,4 +1,5 @@
 import 'vite/modulepreload-polyfill';
+import '../../core/js/layout-interactions';
 import { createApp, type Component } from 'vue';
 
 // Vue components (using standard Bootstrap/HTML classes provided by our CSS system)

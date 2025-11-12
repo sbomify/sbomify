@@ -1,3 +1,4 @@
+import '../../core/js/layout-interactions';
 import { createApp } from 'vue';
 import PlanSelection from './components/PlanSelection.vue';
 import './billing';  // Import billing utilities for notifications

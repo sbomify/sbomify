@@ -1,4 +1,5 @@
 import 'vite/modulepreload-polyfill'
+import '../../core/js/layout-interactions'
 
 import mountVueComponent from '../../core/js/common_vue'
 import EditableSingleField from '../../core/js/components/EditableSingleField.vue'
