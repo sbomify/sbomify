@@ -1,4 +1,4 @@
-from django.contrib.auth.mixins import  AccessMixin
+from django.contrib.auth.mixins import AccessMixin
 from django.http import HttpResponseForbidden
 
 from sbomify.apps.core.errors import error_response
