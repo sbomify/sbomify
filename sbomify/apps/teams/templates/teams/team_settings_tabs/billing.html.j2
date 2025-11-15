@@ -1,0 +1,101 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/team-billing.css' %}">
+<div class="card shadow-md">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Billing Plan</h5>
+        <div class="d-flex align-items-center gap-2">
+            {% if team.billing_plan == 'community' %}
+                <span class="badge bg-secondary-subtle text-secondary">Community</span>
+            {% elif team.billing_plan == 'business' %}
+                <span class="badge bg-success-subtle text-success">Business</span>
+            {% elif team.billing_plan == 'enterprise' %}
+                <span class="badge bg-primary-subtle text-primary">Enterprise</span>
+            {% endif %}
+            {% if request.session.current_team.role == 'owner' %}
+                <a href="{% url 'billing:select_plan' team.key %}"
+                   class="btn btn-sm btn-primary">
+                    <i class="fas fa-credit-card me-2"></i>
+                    {% if team.billing_plan == 'community' %}
+                        Upgrade Plan
+                    {% else %}
+                        Change Plan
+                    {% endif %}
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="billing-content">
+            <div class="plan-info">
+                <div class="plan-header">
+                    <h5 class="plan-title">{{ team.billing_plan|title }}</h5>
+                    <div class="plan-price">
+                        <span class="price-amount">{{ plan_pricing.amount }}</span>
+                        <span class="price-period">{{ plan_pricing.period }}</span>
+                    </div>
+                </div>
+                {% if team.billing_plan == 'community' %}
+                    <div class="plan-description">
+                        <div class="free-plan-message">
+                            <i class="fas fa-info-circle text-primary me-2"></i>
+                            <span>You're currently on the Community tier. Upgrade to unlock additional features and higher limits.</span>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if plan_limits %}
+                    <div class="plan-limits">
+                        <h6 class="limits-title">
+                            {% if team.billing_plan == 'community' %}
+                                Current Limits
+                            {% else %}
+                                Plan Limits
+                            {% endif %}
+                        </h6>
+                        <div class="limits-grid">
+                            {% for limit in plan_limits %}
+                                <div class="limit-item">
+                                    <div class="limit-icon">
+                                        <i class="fas fa-{{ limit.icon }}"></i>
+                                    </div>
+                                    <div class="limit-details">
+                                        <span class="limit-label">{{ limit.label }}</span>
+                                        <span class="limit-value">{{ limit.value }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+                {% if plan_features %}
+                    <div class="plan-features">
+                        <h6 class="features-title">Features</h6>
+                        <ul class="features-list">
+                            {% for feature in plan_features %}
+                                <li class="feature-item">
+                                    <i class="fas fa-check text-success me-2"></i>
+                                    {{ feature }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+                {% if team.billing_plan == 'community' %}
+                    <div class="upgrade-cta">
+                        <div class="cta-content">
+                            <h6 class="cta-title">Ready to upgrade?</h6>
+                            <p class="cta-description">Unlock advanced features, higher limits, and priority support.</p>
+                            {% if request.session.current_team.role == 'owner' %}
+                                <a href="{% url 'billing:select_plan' team.key %}"
+                                   class="btn btn-primary">
+                                    <i class="fas fa-arrow-up me-2"></i>
+                                    View Plans
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

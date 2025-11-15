@@ -18,5 +18,5 @@ urlpatterns: list[URLPattern] = [
     # Keep team_details as an alias that redirects to team_settings for backward compatibility
     path("<team_key>/details", views.team_details, name="team_details"),
     # Main team settings (unified interface) - must come after specific patterns
-    path("<team_key>", views.team_settings, name="team_settings"),
+    path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.conf import settings
 from pydantic import BaseModel, Field
 
@@ -57,16 +59,17 @@ class InvitationSchema(BaseModel):
     id: int
     email: str
     role: str
-    created_at: str
-    expires_at: str
+    created_at: datetime
+    expires_at: datetime
 
 
 class TeamSchema(BaseModel):
     key: str
     name: str
-    created_at: str
+    created_at: datetime
     has_completed_wizard: bool
     billing_plan: str | None
+    billing_plan_limits: dict | None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
 

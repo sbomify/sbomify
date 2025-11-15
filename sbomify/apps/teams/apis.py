@@ -63,8 +63,8 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
             id=invitation.id,
             email=invitation.email,
             role=invitation.role,
-            created_at=invitation.created_at.isoformat(),
-            expires_at=invitation.expires_at.isoformat(),
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
         )
         for invitation in team.invitation_set.all()
     ]
@@ -72,8 +72,9 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
     return TeamSchema(
         key=team.key,
         name=team.name,
-        created_at=team.created_at.isoformat(),
+        created_at=team.created_at,
         billing_plan=team.billing_plan,
+        billing_plan_limits=team.billing_plan_limits,
         has_completed_wizard=team.has_completed_wizard,
         members=members_data,
         invitations=invitations_data,

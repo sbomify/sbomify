@@ -168,4 +168,4 @@ line-ending = "auto"
 [tool.djlint]
 # Ignore inline styles rule for email templates (H021) since they're required for email client compatibility
 ignore = "H021"
-extension = "html.j2,htmx.j2"
+extension = "j2"

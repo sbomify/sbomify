@@ -105,3 +105,17 @@ class OnboardingComponentForm(forms.Form):
             "microservices, firmware modules, or any other distinct piece of software."
         ),
     )
+
+
+class DeleteMemberForm(forms.Form):
+    member_id = forms.IntegerField(
+        required=True,
+        widget=forms.HiddenInput(),
+    )
+
+
+class DeleteInvitationForm(forms.Form):
+    invitation_id = forms.IntegerField(
+        required=True,
+        widget=forms.HiddenInput(),
+    )

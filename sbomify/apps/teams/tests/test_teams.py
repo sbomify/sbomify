@@ -13,7 +13,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers, setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 
 from sbomify.apps.teams.fixtures import (  # noqa: F401
@@ -518,23 +518,14 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
 
 
 @pytest.mark.django_db
-def test_only_owners_are_allowed_to_access_team_settings(
+def test_access_team_settings__when_user_is_owner__should_succeed(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-
     client = Client()
-
-    # User not logged in
     uri = reverse(
         "teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key}
     )
-    response: HttpResponse = client.get(uri)
 
-    assert response.status_code == 302
-    assert response.url.startswith(settings.LOGIN_URL)
-
-    # Set up authenticated client session with proper team context
     setup_authenticated_client_session(
         client,
         sample_team_with_owner_member.team,
@@ -545,6 +536,58 @@ def test_only_owners_are_allowed_to_access_team_settings(
 
     assert response.status_code == 200
     assert response.request["PATH_INFO"] == uri
+
+@pytest.mark.django_db
+def test_access_team_settings__when_user_is_admin__should_succeed(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    client = Client()
+    uri = reverse(
+        "teams:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key}
+    )
+
+    setup_authenticated_client_session(
+        client,
+        sample_team_with_admin_member.team,
+        sample_team_with_admin_member.user
+    )
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 200
+    assert response.request["PATH_INFO"] == uri
+
+
+@pytest.mark.django_db
+def test_access_team_settings__when_user_is_guest__should_fail(
+    sample_team_with_guest_member: Member,  # noqa: F811
+):
+    client = Client()
+    uri = reverse(
+        "teams:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key}
+    )
+    setup_authenticated_client_session(
+        client,
+        sample_team_with_guest_member.team,
+        sample_team_with_guest_member.user
+    )
+    response: HttpResponse = client.get(uri)
+    assert response.status_code == 403
+    assert "You don&#x27;t have sufficient permissions to access this page" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_access_team_settings__when_user_is_not_member__should_fail(
+    sample_team: Team,
+):
+    client = Client()
+    uri = reverse(
+        "teams:team_settings", kwargs={"team_key": sample_team.key}
+    )
+
+    response: HttpResponse = client.get(uri)
+    assert response.status_code == 403
+    assert "You are not a member of any team" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db

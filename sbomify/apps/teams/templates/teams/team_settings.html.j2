@@ -1,4 +1,4 @@
-{% extends "core/dashboard_base.html.j2" %}
+{% extends "core/dashboard_base.htmx.j2" %}
 {% load widget_tweaks %}
 {% load django_vite %}
 {% load static %}
@@ -69,79 +69,32 @@
     </div>
     <!-- Tab Content -->
     <div class="tab-content settings-content mt-4">
-        <!-- Members Tab -->
         <div class="tab-pane fade" id="members">
             <div class="row g-4 g-lg-5">
-                <div class="col-12">
-                    <StandardCard title="Team Members" variant="settings" size="large" shadow="md">
-                    <!-- Team Members Component -->
-                    {{ members_data|json_script:"team-members-data" }}
-                    <div class="vc-team-members"
-                         data-team-key="{{ team.key }}"
-                         data-team-members-element-id="team-members-data"
-                         data-user-role="{{ request.session.current_team.role }}"
-                         data-csrf-token="{{ csrf_token }}"></div>
-                    </StandardCard>
-                </div>
-                {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
-                    <div class="col-12">
-                        <StandardCard title="Pending Invitations" variant="settings" size="large" shadow="md">
-                        <!-- Team Invitations Component -->
-                        {{ invitations_data|json_script:"team-invitations-data" }}
-                        <div class="vc-team-invitations"
-                             data-team-key="{{ team.key }}"
-                             data-team-invitations-element-id="team-invitations-data"
-                             data-user-role="{{ request.session.current_team.role }}"
-                             data-csrf-token="{{ csrf_token }}"></div>
-                        </StandardCard>
-                    </div>
-                {% endif %}
+                <div class="col-12">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
             </div>
         </div>
-        <!-- Branding Tab -->
         <div class="tab-pane fade" id="branding">
             <div class="row">
-                <div class="col-12">
-                    <!-- Team Branding Component -->
-                    <div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
-                </div>
+                <div class="col-12">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
             </div>
         </div>
         {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
             <div class="tab-pane fade" id="contact-profiles">
                 <div class="row">
-                    <div class="col-12">
-                        <div class="vc-contact-profiles"
-                             data-team-key="{{ team.key }}"
-                             data-user-role="{{ request.session.current_team.role }}"></div>
-                    </div>
+                    <div class="col-12">{% include "teams/team_settings_tabs/contact_profiles.html.j2" %}</div>
                 </div>
             </div>
         {% endif %}
         {% if request.session.current_team.role == 'owner' %}
-            <!-- Integrations Tab -->
             <div class="tab-pane fade" id="integrations">
                 <div class="row">
-                    <div class="col-12">
-                        <!-- Vulnerability Scanning Settings Component -->
-                        <div class="vc-vulnerability-settings"
-                             data-team-key="{{ team.key }}"
-                             data-billing-plan="{{ team.billing_plan }}"
-                             data-user-role="{{ request.session.current_team.role }}"></div>
-                    </div>
+                    <div class="col-12">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
                 </div>
             </div>
-            <!-- Billing Tab -->
             <div class="tab-pane fade" id="billing">
                 <div class="row">
-                    <div class="col-12">
-                        <!-- Team Billing Component -->
-                        <div class="vc-team-billing"
-                             data-team-key="{{ team.key }}"
-                             data-billing-plan="{{ team.billing_plan }}"
-                             data-billing-plan-limits="{{ team.billing_plan_limits|jsonify|escape }}"
-                             data-user-role="{{ request.session.current_team.role }}"></div>
-                    </div>
+                    <div class="col-12">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
                 </div>
             </div>
         {% endif %}
