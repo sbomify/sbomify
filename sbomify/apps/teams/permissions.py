@@ -2,6 +2,7 @@ from django.contrib.auth.mixins import AccessMixin
 from django.http import HttpResponseForbidden
 
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.teams.models import Member
 
 
 class TeamRoleRequiredMixin(AccessMixin):
@@ -12,17 +13,13 @@ class TeamRoleRequiredMixin(AccessMixin):
 
         team_key = current_team.get("key", None)
         if team_key is None:
-            return error_response(request, HttpResponseForbidden("No current team selected"))
+            return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
-        user_teams = request.session.get("user_teams", {})
-        if team_key not in user_teams:
-            return error_response(request, HttpResponseForbidden("Unknown team"))
-
-        user_role = user_teams[team_key].get("role", "")
-        if user_role not in self.allowed_roles:
+        try:
+            Member.objects.get(user=request.user, team__key=team_key, role__in=self.allowed_roles)
+        except Member.DoesNotExist:
             return error_response(
-                request,
-                HttpResponseForbidden("You don't have sufficient permissions to access this page"),
+                request, HttpResponseForbidden("You don't have sufficient permissions to access this page")
             )
 
         return super().dispatch(request, *args, **kwargs)
