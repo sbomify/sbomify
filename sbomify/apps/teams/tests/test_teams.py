@@ -590,48 +590,6 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
     assert "You are not a member of any team" in response.content.decode("utf-8")
 
 
-# @pytest.mark.django_db
-# def test_only_owners_are_allowed_to_access_team_settings(
-#     sample_team_with_owner_member: Member,  # noqa: F811
-#     sample_team_with_guest_member: Member,  # noqa: F811
-# ):
-#     from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-
-#     client = Client()
-
-#     # uri = reverse(
-#     #     "teams:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key}
-#     # )
-
-#     # setup_authenticated_client_session(
-#     #     client,
-#     #     sample_team_with_guest_member.team,
-#     #     sample_team_with_guest_member.user
-#     # )
-#     # response: HttpResponse = client.get(uri)
-
-#     # assert response.status_code == 403
-#     # assert "You don&#x27;t have sufficient permissions to access this page" in response.content.decode("utf-8")
-
-#     uri = reverse(
-#         "teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key}
-#     )
-
-#     client = Client()
-
-#     setup_authenticated_client_session(
-#         client,
-#         sample_team_with_owner_member.team,
-#         sample_team_with_owner_member.user
-#     )
-
-#     response: HttpResponse = client.get(uri)
-
-#     raise Exception(response.content.decode("utf-8"))
-#     assert response.status_code == 200
-#     assert response.request["PATH_INFO"] == uri
-
-
 @pytest.mark.django_db
 def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # noqa: F811
     client = Client()
