@@ -1,3 +1,2 @@
-import 'bootstrap';
-
+import './layout-interactions';
 import './alerts-global';
