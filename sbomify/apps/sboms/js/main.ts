@@ -11,6 +11,8 @@ import SbomMetadataCard from './components/SbomMetadataCard.vue'
 
 import SbomActionsCard from './components/SbomActionsCard.vue'
 import NTIAComplianceBadge from './components/NTIAComplianceBadge.vue'
+import NTIAComplianceAssistant from './components/NTIAComplianceAssistant.vue'
+import NTIAComplianceProgress from './components/NTIAComplianceProgress.vue'
 
 mountVueComponent('vc-editable-single-field', EditableSingleField)
 mountVueComponent('vc-licenses-editor', LicensesEditor)
@@ -21,3 +23,5 @@ mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
 
 mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
 mountVueComponent('vc-ntia-compliance-badge', NTIAComplianceBadge)
+mountVueComponent('vc-ntia-compliance-assistant', NTIAComplianceAssistant)
+mountVueComponent('vc-ntia-compliance-progress', NTIAComplianceProgress)
