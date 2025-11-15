@@ -32,12 +32,12 @@ from sbomify.apps.teams.forms import (
     OnboardingProjectForm,
 )
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.schemas import BrandingInfo
 from sbomify.apps.teams.utils import get_user_teams
 
 log = getLogger(__name__)
 
 from sbomify.apps.teams.views.dashboard import TeamsDashboardView  # noqa: F401, E402
+from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 
 
 # view to redirect to /home url
@@ -252,67 +252,6 @@ def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
     This provides backward compatibility for the old URL structure.
     """
     return redirect("teams:team_settings", team_key=team_key)
-
-
-@login_required
-@validate_role_in_current_team(["owner", "admin"])
-def team_settings(request: HttpRequest, team_key: str):
-    team_id = token_to_number(team_key)
-
-    try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Team not found"))
-
-    # Get current user's role from session
-    current_user_role = request.session.get("current_team", {}).get("role", "guest")
-
-    # Get default team status from session
-    is_default_team = request.session.get("user_teams", {}).get(team_key, {}).get("is_default_team", False)
-
-    # Serialize members data for Vue component
-    members_data = [
-        {
-            "id": member.id,
-            "user": {
-                "id": member.user.id,
-                "first_name": member.user.first_name,
-                "last_name": member.user.last_name,
-                "email": member.user.email,
-            },
-            "role": member.role,
-            "is_default_team": member.is_default_team,
-        }
-        for member in team.member_set.select_related("user").all()
-    ]
-
-    # Only provide invitation data to owners and admins
-    invitations_data = []
-    if current_user_role in ["owner", "admin"]:
-        invitations_data = [
-            {
-                "id": invitation.id,
-                "email": invitation.email,
-                "role": invitation.role,
-                "created_at": invitation.created_at.isoformat(),
-                "expires_at": invitation.expires_at.isoformat(),
-            }
-            for invitation in team.invitation_set.all()
-        ]
-
-    branding_info = BrandingInfo(**team.branding_info)
-    return render(
-        request,
-        "teams/team_settings.html.j2",
-        {
-            "team": team,
-            "branding_info": branding_info,
-            "members_data": members_data,
-            "invitations_data": invitations_data,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "is_default_team": is_default_team,
-        },
-    )
 
 
 @login_required

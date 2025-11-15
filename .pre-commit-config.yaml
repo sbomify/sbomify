@@ -57,14 +57,14 @@ repos:
 
       - id: djlint-check
         name: djlint format check
-        entry: uv run djlint . --extension=html.j2,htmx.j2 --check
+        entry: uv run djlint . --extension=j2 --check
         language: system
         pass_filenames: false
         files: \.(html|htmx)\.j2$
 
       - id: djlint-lint
         name: djlint
-        entry: uv run djlint . --extension=html.j2,htmx.j2 --lint
+        entry: uv run djlint . --extension=j2 --lint
         language: system
         pass_filenames: false
         files: \.(html|htmx)\.j2$

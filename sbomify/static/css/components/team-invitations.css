@@ -1,0 +1,173 @@
+.empty-state {
+  padding: 3rem 0;
+  text-align: center;
+}
+
+.invitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.invitation-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.invitation-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.invitation-avatar {
+  flex-shrink: 0;
+}
+
+.avatar-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+}
+
+.invitation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.invitation-email {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+}
+
+.invitation-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.invitation-role,
+.invitation-date,
+.invitation-expires {
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.role-owner {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.role-admin {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.role-guest {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.role-member {
+  background-color: #e5e7eb;
+  color: #4b5563;
+}
+
+.invitation-actions {
+  flex-shrink: 0;
+}
+
+.btn-group .btn {
+  border-radius: 6px;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  border: none;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #3730a3, #2563eb);
+}
+
+.btn-outline-danger {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-outline-danger:hover {
+  background-color: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+}
+
+.bg-warning-subtle {
+  background-color: #fef3c7;
+}
+
+.text-warning {
+  color: #f59e0b;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .invitation-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .invitation-info {
+    width: 100%;
+  }
+
+  .invitation-details {
+    flex-direction: row;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .invitation-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+}

@@ -1,0 +1,122 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/team-members.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/team-invitations.css' %}">
+<div class="card shadow-md">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Team Members</h5>
+        <span class="badge bg-primary-subtle text-primary">
+            {{ team.members|length }} member{{ team.members|length|pluralize }}
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="members-list">
+            {% for member in team.members %}
+                <div class="member-card">
+                    <div class="member-avatar">
+                        <div class="avatar-circle">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                    <div class="member-info">
+                        <h6 class="member-name">{{ member.user.first_name }} {{ member.user.last_name }}</h6>
+                        <div class="member-details">
+                            <span class="member-email">
+                                <i class="fas fa-envelope me-1"></i>
+                                {{ member.user.email }}
+                            </span>
+                            <span class="member-role">
+                                <i class="fas fa-user-tag me-1"></i>
+                                <span class="role-badge role-{{ member.role }}">{{ member.role }}</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="member-actions">
+                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-danger"
+                                        title="Remove member"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#delete-member-modal"
+                                        data-form-member_id="{{ member.id }}"
+                                        data-display-name="{{ member.user.first_name }} {{ member.user.last_name }}">
+                                    <i class="fas fa-user-minus"></i>
+                                </button>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove Member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the team and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove Member" %}
+{% endif %}
+{% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+    <div class="card shadow-md">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Pending Invitations</h5>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-warning-subtle text-warning">{{ team.invitations|length }} pending</span>
+                <a href="{% url 'teams:invite_user' team.key %}"
+                   class="btn btn-sm btn-primary">
+                    <i class="fas fa-user-plus me-2"></i>
+                    Invite Member
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if team.invitations|length == 0 %}
+                <div class="empty-state">
+                    <i class="fas fa-envelope fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted mb-2">No pending invitations</h5>
+                    <p class="text-muted">Invite team members to get started</p>
+                </div>
+            {% else %}
+                <div class="invitations-list">
+                    {% for invitation in team.invitations %}
+                        <div class="invitation-card">
+                            <div class="invitation-avatar">
+                                <div class="avatar-circle">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                            </div>
+                            <div class="invitation-info">
+                                <h6 class="invitation-email">{{ invitation.email }}</h6>
+                                <div class="invitation-details">
+                                    <span class="invitation-role">
+                                        <i class="fas fa-user-tag me-1"></i>
+                                        <span class="role-badge role-{{ invitation.role }}">{{ invitation.role }}</span>
+                                    </span>
+                                    <span class="invitation-date">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Invited {{ invitation.created_at|date:"M j, Y" }}
+                                    </span>
+                                    <span class="invitation-expires">
+                                        <i class="fas fa-hourglass-half me-1"></i>
+                                        Expires {{ invitation.expires_at|date:"M j, Y" }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="invitation-actions">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            title="Cancel invitation"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#delete-invitation-modal"
+                                            data-form-invitation_id="{{ invitation.id }}"
+                                            data-display-name="{{ invitation.email }}">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Cancel Invitation" message_text="Are you sure you want to cancel the invitation for" warning_text="This action will immediately cancel the invitation and the user will no longer be able to join the team using this invite." form_action=request.path form=delete_invitation_form submit_text="Cancel Invitation" %}
+{% endif %}

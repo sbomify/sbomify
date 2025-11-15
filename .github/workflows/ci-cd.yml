@@ -70,11 +70,11 @@ jobs:
 
           # Run format check
           echo "Checking template formatting..."
-          uv run djlint . --extension=html.j2,htmx.j2 --check
+          uv run djlint . --extension=j2 --check
 
           # Run linting
           echo "Running template linting..."
-          uv run djlint . --extension=html.j2,htmx.j2 --lint
+          uv run djlint . --extension=j2 --lint
 
           # Add results to GitHub step summary
           echo "## Django Template Linting Results" >> $GITHUB_STEP_SUMMARY

@@ -19,10 +19,12 @@ x-minio-env: &minio-env
   AWS_MEDIA_STORAGE_BUCKET_NAME: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}
 
 x-dev-env: &dev-env
+  BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
+  EMAIL_HOST: ${EMAIL_HOST:-mailhog}
+  EMAIL_PORT: ${EMAIL_PORT:-1025}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-True}
   VITE_DEV_SERVER_PORT: ${VITE_DEV_SERVER_PORT:-5170}
-  BUILD_ENV: ${BUILD_ENV:-development}
 
 services:
   keycloak:
@@ -136,6 +138,15 @@ services:
         reservations:
           memory: 512M
     restart: ${FRONTEND_RESTART_POLICY:-unless-stopped}
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    expose:
+      - 1025
+      - 8025
+    ports:
+      - "8025:8025"
+    hostname: mailhog
 
 volumes:
   keycloak_data:
