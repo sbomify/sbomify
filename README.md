@@ -148,12 +148,8 @@ For the development environment to work properly with Keycloak authentication, y
 Start the development environment (recommended method):
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml build
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml up
+./bin/developer_mode.sh build
+./bin/developer_mode.sh up
 ```
 
 Create a local admin account:
