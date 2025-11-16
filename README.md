@@ -60,6 +60,21 @@ For full production deployment instructions, see [the deployment guide](docs/dep
 
 ## Local Development
 
+### Reverse Proxy Architecture
+
+sbomify uses Caddy as a reverse proxy for all HTTP/HTTPS traffic. The Django application is NOT directly exposed to the internet.
+
+Internet → Caddy (ports 80/443) → Django Backend (internal port 8000)
+
+Access the application at:
+
+- Development: `http://localhost` (Caddy proxies to backend)
+- Production: `https://your-domain.com` (with automatic HTTPS via Let's Encrypt)
+
+**Important:** Set `APP_BASE_URL` to just the domain (e.g., `app.sbomify.com`), not a full URL with protocol. This variable is used by both Django and Caddy.
+
+For more details about Caddy configuration and custom domains, see [docs/caddy-custom-domains.md](docs/caddy-custom-domains.md).
+
 ### Authentication During Development
 
 For local development, authentication is handled through Django's admin interface:
@@ -73,7 +88,7 @@ docker compose \
     uv run python manage.py createsuperuser
 ```
 
-Then access the admin interface at `http://localhost:8000/admin` to log in.
+Then access the admin interface at `http://localhost/admin` to log in (note: through Caddy, not port 8000).
 
 > **Note**: Production environments use different authentication methods. See [docs/deployment.md](docs/deployment.md) for production authentication setup.
 

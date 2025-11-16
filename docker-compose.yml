@@ -75,13 +75,39 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
-    ports:
-      - "${SBOMIFY_PORT:-8000}:8000"
+    # No ports exposed - all traffic goes through Caddy
+    expose:
+      - 8000
     depends_on:
       sbomify-db:
         condition: service_healthy
       sbomify-migrations:
         condition: service_completed_successfully
+
+  sbomify-caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    restart: ${CADDY_RESTART_POLICY:-always}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      # Note: For Caddy, APP_BASE_URL should be just the domain (e.g., app.sbomify.com)
+      # not a full URL with protocol. Caddy handles the protocol automatically.
+      APP_BASE_URL: ${APP_BASE_URL:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
+    depends_on:
+      - sbomify-backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   sbomify-migrations:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
@@ -120,3 +146,5 @@ services:
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
+  caddy_data:
+  caddy_config:

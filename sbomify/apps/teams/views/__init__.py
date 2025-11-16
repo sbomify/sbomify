@@ -38,6 +38,7 @@ log = getLogger(__name__)
 
 from sbomify.apps.teams.views.dashboard import TeamsDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
+from sbomify.apps.teams.views.tls import tls_allow_host  # noqa: F401, E402
 
 
 # view to redirect to /home url

@@ -85,7 +85,8 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
-    # ports are inherited from docker-compose.yml
+    # No ports exposed in dev either - all traffic through Caddy
+    # expose is inherited from docker-compose.yml
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
@@ -97,6 +98,13 @@ services:
         condition: service_completed_successfully
       sbomify-frontend:
         condition: service_started
+
+  sbomify-caddy:
+    # Use development-specific environment variables
+    environment:
+      APP_BASE_URL: ${APP_BASE_URL:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-dev@localhost}
+      LOG_LEVEL: ${CADDY_LOG_LEVEL:-DEBUG}
 
   sbomify-migrations:
     build:
