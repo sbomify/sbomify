@@ -87,6 +87,7 @@
                      data-sboms-data-element-id="sboms-data"
                      data-component-id="{{ component.id }}"
                      data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}"
+                     data-team-key="{{ current_team.key|default:'' }}"
                      data-team-billing-plan="{{ team_billing_plan }}"></div>
             </div>
         </div>
