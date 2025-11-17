@@ -68,10 +68,12 @@ Internet → Caddy (ports 80/443) → Django Backend (internal port 8000)
 
 Access the application at:
 
-- Development: `http://localhost` (Caddy proxies to backend)
+- Development: `http://localhost:8000` or `https://localhost:8443` (Caddy proxies to backend)
 - Production: `https://your-domain.com` (with automatic HTTPS via Let's Encrypt)
 
 **Important:** Set `APP_BASE_URL` to just the domain (e.g., `app.sbomify.com`), not a full URL with protocol. This variable is used by both Django and Caddy.
+
+**Development Ports:** Non-privileged ports (8000/8443) are used in development to avoid requiring root/sudo access. Port 8000 is used for HTTP instead of 8080 since Keycloak uses 8080.
 
 For more details about Caddy configuration and custom domains, see [docs/caddy-custom-domains.md](docs/caddy-custom-domains.md).
 
@@ -88,7 +90,7 @@ docker compose \
     uv run python manage.py createsuperuser
 ```
 
-Then access the admin interface at `http://localhost/admin` to log in (note: through Caddy, not port 8000).
+Then access the admin interface at `http://localhost:8000/admin` to log in (note: through Caddy on port 8000, not the direct backend port 8000).
 
 > **Note**: Production environments use different authentication methods. See [docs/deployment.md](docs/deployment.md) for production authentication setup.
 

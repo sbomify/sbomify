@@ -34,8 +34,6 @@ services:
       POSTGRES_USER: ${DATABASE_USER:-sbomify}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
       POSTGRES_DB: ${DATABASE_NAME:-sbomify}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - sbomify_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -47,8 +45,6 @@ services:
   sbomify-redis:
     image: ${REDIS_IMAGE:-redis:8-alpine}
     restart: ${REDIS_RESTART_POLICY:-always}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - sbomify_redis_data:/data
     healthcheck:
@@ -100,10 +96,11 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-localhost}
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
+      CADDY_ADMIN: ${CADDY_ADMIN:-off}  # Admin API disabled by default for security
     depends_on:
       - sbomify-backend
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
       timeout: 5s
       retries: 3

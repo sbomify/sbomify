@@ -16,7 +16,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
     get_api_headers,
     team_with_business_plan,
 )
-from sbomify.apps.teams.models import CustomDomain
+from sbomify.apps.teams.models import CustomDomain, Member
 
 
 @pytest.mark.django_db

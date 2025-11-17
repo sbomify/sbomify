@@ -3,8 +3,9 @@
 
 # Global options
 {
-	# Enable admin API for health checks
-	admin 0.0.0.0:2019
+	# Disable admin API for security in production
+	# Can be overridden with environment variable for development
+	admin {$CADDY_ADMIN:off}
 
 	# On-demand TLS configuration
 	on_demand_tls {
@@ -18,10 +19,55 @@
 	email {$ACME_EMAIL:admin@example.com}
 }
 
-# Main application domain
-# Note: APP_BASE_URL should be just the domain (e.g., app.sbomify.com)
-# not a full URL with protocol. Caddy handles the protocol automatically.
-{$APP_BASE_URL:localhost} {
+# HTTP block - redirect to HTTPS (but respect X-Forwarded-Proto for Cloudflare Tunnel)
+http://{$APP_BASE_URL:localhost} {
+	# Logging
+	log {
+		output stdout
+		format json
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# Check if already HTTPS via proxy (Cloudflare Tunnel, etc.)
+	@already_https {
+		header X-Forwarded-Proto https
+	}
+
+	# If already HTTPS via proxy, serve normally (don't redirect)
+	handle @already_https {
+		# Block internal endpoints
+		@tls_internal {
+			path /_tls/*
+		}
+		handle @tls_internal {
+			respond "Not Found" 404
+		}
+
+		# Health check
+		@health {
+			path /health
+		}
+		handle @health {
+			respond "OK" 200
+		}
+
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto https
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
+	}
+
+	# Otherwise, redirect HTTP to HTTPS
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+# HTTPS block - main application domain
+https://{$APP_BASE_URL:localhost} {
 	# Enable on-demand TLS for custom domains
 	tls {
 		on_demand
@@ -63,13 +109,16 @@
 		header_up X-Real-IP {remote_host}
 		header_up Host {host}
 
+		# Trust proxy headers when behind Cloudflare
+		trusted_proxies 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+
 		# Remove server header for security
 		header_down -Server
 	}
 
 	# Security headers
 	header {
-		# HSTS
+		# HSTS (only set on HTTPS)
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		
 		# Prevent MIME type sniffing
@@ -101,7 +150,44 @@
 	# }
 }
 
-# Custom domains catch-all
+# Custom domains - HTTP catch-all (redirect to HTTPS, respect X-Forwarded-Proto)
+:80 {
+	log {
+		output stdout
+		format json
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# Check if already HTTPS via proxy (Cloudflare Tunnel, etc.)
+	@already_https {
+		header X-Forwarded-Proto https
+	}
+
+	# If already HTTPS via proxy, serve normally
+	handle @already_https {
+		@tls_internal {
+			path /_tls/*
+		}
+		handle @tls_internal {
+			respond "Not Found" 404
+		}
+
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto https
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
+	}
+
+	# Otherwise, redirect HTTP to HTTPS
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
+# Custom domains - HTTPS catch-all
 # Any domain not matching the main APP_BASE_URL will be handled here
 # These will use on-demand TLS and be verified via the /_tls/allow-host endpoint
 # Customers configure their custom domains (e.g., trust.customer.com) to CNAME to APP_BASE_URL
@@ -129,6 +215,10 @@
 		header_up X-Forwarded-Proto {scheme}
 		header_up X-Real-IP {remote_host}
 		header_up Host {host}
+
+		# Trust proxy headers when behind Cloudflare
+		trusted_proxies 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+
 		header_down -Server
 	}
 
