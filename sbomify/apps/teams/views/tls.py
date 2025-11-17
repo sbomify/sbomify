@@ -113,6 +113,12 @@ def tls_allow_host(request: HttpRequest) -> HttpResponse:
         logger.warning("[TLS] No domain parameter provided")
         return HttpResponse("Missing domain parameter", status=400)
 
+    # Reject localhost and non-FQDN domains immediately
+    # These should never trigger certificate issuance
+    if hostname in ("localhost", "127.0.0.1", "::1") or "." not in hostname:
+        logger.info(f"[TLS] DENY: Rejecting non-FQDN or localhost domain: {hostname}")
+        return HttpResponse("Invalid domain", status=403)
+
     # Get client IP for rate limiting and logging
     client_ip = request.META.get("REMOTE_ADDR", "unknown")
 

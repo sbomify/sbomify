@@ -66,10 +66,8 @@ http://{$APP_BASE_URL:localhost} {
 
 # HTTPS block - main application domain
 https://{$APP_BASE_URL:localhost} {
-	# Enable on-demand TLS for custom domains
-	tls {
-		on_demand
-	}
+	# Uses automatic HTTPS: Let's Encrypt for production domains, internal CA for localhost
+	# NOT on-demand TLS - that's only for custom domains in the :443 catch-all block
 
 	# Logging
 	log {
@@ -96,11 +94,6 @@ https://{$APP_BASE_URL:localhost} {
 
 	# Reverse proxy to Django backend
 	reverse_proxy sbomify-backend:8000 {
-		# Health check configuration
-		health_uri /health
-		health_interval 30s
-		health_timeout 5s
-
 		# Request headers
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}
@@ -137,15 +130,6 @@ https://{$APP_BASE_URL:localhost} {
 
 	# Compression
 	encode gzip zstd
-
-	# Rate limiting (adjust as needed)
-	# rate_limit {
-	#     zone static_limit {
-	#         key {remote_host}
-	#         events 100
-	#         window 1m
-	#     }
-	# }
 }
 
 # Custom domains - HTTP catch-all (redirect to HTTPS, respect X-Forwarded-Proto)

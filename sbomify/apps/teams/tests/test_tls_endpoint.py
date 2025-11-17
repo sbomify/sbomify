@@ -101,6 +101,28 @@ class TestTLSAllowHost:
 
         assert response.status_code == 403
 
+    def test_deny_localhost(self):
+        """Test that localhost is rejected immediately."""
+        cache.clear()
+        client = Client()
+
+        # Test various localhost formats
+        for hostname in ["localhost", "127.0.0.1", "::1"]:
+            url = f"/_tls/allow-host?domain={hostname}"
+            response = client.get(url)
+            assert response.status_code == 403, f"{hostname} should be rejected"
+
+    def test_deny_non_fqdn(self):
+        """Test that non-FQDN domains are rejected."""
+        cache.clear()
+        client = Client()
+
+        # Test domains without dots (not FQDN)
+        for hostname in ["single", "nodots", "internal"]:
+            url = f"/_tls/allow-host?domain={hostname}"
+            response = client.get(url)
+            assert response.status_code == 403, f"{hostname} should be rejected as non-FQDN"
+
     def test_missing_domain_parameter(self):
         """Test that requests without domain parameter are rejected."""
         cache.clear()

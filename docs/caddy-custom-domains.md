@@ -30,6 +30,19 @@ Internet → Caddy (80/443) → Django Backend (internal:8000)
 
 Port 8000 is used in dev because Keycloak uses 8080.
 
+## TLS Certificate Handling
+
+**Main application domain** (`APP_BASE_URL`):
+
+- Localhost: Automatic internal CA (self-signed)
+- Production domain: Automatic Let's Encrypt certificate
+- No on-demand TLS check needed
+
+**Custom domains** (catch-all `:443`):
+
+- On-demand TLS via `/_tls/allow-host` verification
+- Certificate issued only after Django validates the domain
+
 ## Custom Domain Flow
 
 1. Customer creates custom domain via API
@@ -37,7 +50,7 @@ Port 8000 is used in dev because Keycloak uses 8080.
 3. Customer triggers verification: `POST /api/v1/workspaces/{key}/custom-domain/verify`
 4. On first HTTPS request to custom domain:
    - Caddy queries internal endpoint: `GET http://sbomify-backend:8000/_tls/allow-host?domain=trust.example.com`
-   - Django validates domain (exists, verified, active, DNS check)
+   - Django validates domain (exists, verified, active, FQDN, DNS check)
    - If valid, Caddy issues Let's Encrypt certificate
    - Certificate cached for future requests
 
@@ -57,6 +70,15 @@ handle @tls_internal {
 ```
 
 Only Caddy (within Docker network) can access this endpoint.
+
+### Domain Validation
+
+The backend immediately rejects:
+
+- Localhost addresses (`localhost`, `127.0.0.1`, `::1`)
+- Non-FQDN domains (domains without dots, e.g., `internal`, `server`)
+
+This prevents certificate issuance for internal/development domains.
 
 ### Cloudflare Tunnel Support
 
