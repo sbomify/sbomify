@@ -11,8 +11,6 @@
 	on_demand_tls {
 		# Ask the Django backend if a certificate should be issued
 		ask http://sbomify-backend:8000/_tls/allow-host
-		interval 2m
-		burst 5
 	}
 
 	# Email for Let's Encrypt
