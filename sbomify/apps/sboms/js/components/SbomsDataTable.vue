@@ -35,6 +35,7 @@
               :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
               :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
               :teamBillingPlan="teamBillingPlan"
+              :teamKey="teamKey"
             />
           </td>
           <td data-label="Created">{{ utils.formatDate(itemData.sbom.created_at) }}</td>
@@ -132,6 +133,7 @@ const props = defineProps<{
   showDeleteButton?: boolean
   isDeleting?: string | null
   teamBillingPlan?: string
+  teamKey?: string
 }>()
 
 // Use composables

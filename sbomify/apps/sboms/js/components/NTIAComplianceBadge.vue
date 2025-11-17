@@ -42,123 +42,125 @@
     </div>
 
     <!-- Details Modal for Non-Compliant Status -->
-    <div
-      v-if="showDetailsModal"
-      class="modal fade show"
-      style="display: block; background-color: rgba(0,0,0,0.5);"
-      tabindex="-1"
-      @click.self="showDetailsModal = false"
-    >
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="fas fa-shield-exclamation text-warning me-2"></i>
-              NTIA Compliance Issues
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              @click="showDetailsModal = false"
-            ></button>
-          </div>
-          <div class="modal-body">
-            <div class="alert alert-warning d-flex align-items-start">
-              <i class="fas fa-exclamation-triangle me-3 mt-1 flex-shrink-0"></i>
-              <div>
-                <strong>This SBOM does not meet NTIA minimum elements requirements.</strong>
-                <br>
-                Please review the issues below and consider using our GitHub Actions module to generate compliant SBOMs.
-              </div>
+    <Teleport to="body">
+      <div
+        v-if="showDetailsModal"
+        class="modal fade show"
+        style="display: block; background-color: rgba(0,0,0,0.5);"
+        tabindex="-1"
+        @click.self="showDetailsModal = false"
+      >
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="fas fa-shield-exclamation text-warning me-2"></i>
+                NTIA Compliance Issues
+              </h5>
+              <button
+                type="button"
+                class="btn-close"
+                @click="showDetailsModal = false"
+              ></button>
             </div>
-
-            <div v-if="complianceErrors.length > 0" class="mb-4">
-              <div class="section-header mb-3">
-                <h6 class="section-title">
-                  <i class="fas fa-exclamation-circle me-2"></i>
-                  Issues Found ({{ complianceErrors.length }})
-                </h6>
+            <div class="modal-body">
+              <div class="alert alert-warning d-flex align-items-start">
+                <i class="fas fa-exclamation-triangle me-3 mt-1 flex-shrink-0"></i>
+                <div>
+                  <strong>This SBOM does not meet NTIA minimum elements requirements.</strong>
+                  <br>
+                  Please review the issues below and consider using our GitHub Actions module to generate compliant SBOMs.
+                </div>
               </div>
-              <div class="ntia-issues-list">
-                <div
-                  v-for="(error, index) in complianceErrors"
-                  :key="index"
-                  class="ntia-issue-item mb-3"
-                >
-                  <div class="ntia-issue-header" @click="toggleIssue(index)">
-                    <div class="d-flex align-items-center">
-                      <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                      <span class="ntia-issue-field">{{ error.field }}:</span>
-                      <span class="ntia-issue-message ms-2">{{ error.message }}</span>
-                      <i
-                        class="fas fa-chevron-down ms-auto transition-transform"
-                        :class="{ 'rotate-180': expandedIssues.includes(index) }"
-                      ></i>
-                    </div>
-                  </div>
+
+              <div v-if="complianceErrors.length > 0" class="mb-4">
+                <div class="section-header mb-3">
+                  <h6 class="section-title">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    Issues Found ({{ complianceErrors.length }})
+                  </h6>
+                </div>
+                <div class="ntia-issues-list">
                   <div
-                    v-if="expandedIssues.includes(index)"
-                    class="ntia-issue-body"
+                    v-for="(error, index) in complianceErrors"
+                    :key="index"
+                    class="ntia-issue-item mb-3"
                   >
-                    <div class="ntia-suggestion">
-                      <i class="fas fa-lightbulb text-info me-2"></i>
-                      <strong>Suggestion:</strong> {{ error.suggestion }}
+                    <div class="ntia-issue-header" @click="toggleIssue(index)">
+                      <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        <span class="ntia-issue-field">{{ error.field }}:</span>
+                        <span class="ntia-issue-message ms-2">{{ error.message }}</span>
+                        <i
+                          class="fas fa-chevron-down ms-auto transition-transform"
+                          :class="{ 'rotate-180': expandedIssues.includes(index) }"
+                        ></i>
+                      </div>
+                    </div>
+                    <div
+                      v-if="expandedIssues.includes(index)"
+                      class="ntia-issue-body"
+                    >
+                      <div class="ntia-suggestion">
+                        <i class="fas fa-lightbulb text-info me-2"></i>
+                        <strong>Suggestion:</strong> {{ error.suggestion }}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="alert alert-info">
-              <div class="section-header-info mb-3">
-                <h6 class="section-title-info">
-                  <i class="fas fa-lightbulb me-2"></i>
-                  How to Fix This
-                </h6>
-              </div>
-                <ul class="mb-0 fix-suggestions">
-                  <li class="mb-2">
-                    <strong>Use our <a href="https://github.com/sbomify/github-action" target="_blank" rel="noopener" class="text-decoration-none">GitHub Actions module</a></strong> for automated SBOM generation
-                  </li>
-                  <li class="mb-2">
-                    <strong>Ensure your SBOM includes all 7 NTIA minimum elements:</strong>
-                    <ul class="mt-2 ntia-elements-list">
-                      <li>Supplier name</li>
-                      <li>Component name</li>
-                      <li>Version of the component</li>
-                      <li>Other unique identifiers (PURL, CPE, etc.)</li>
-                      <li>Dependency relationships</li>
-                      <li>Author of SBOM data</li>
-                      <li>Timestamp</li>
-                    </ul>
-                  </li>
-                  <li>
-                    <strong>Validate your SBOM</strong> before uploading using SBOM validation tools
-                  </li>
-                                  </ul>
-              </div>
-          </div>
-          <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="showDetailsModal = false"
-            >
-              Close
-            </button>
-            <a
-              href="https://github.com/sbomify/github-action"
-              target="_blank"
-              rel="noopener"
-              class="btn btn-primary"
-            >
-              <i class="fab fa-github me-2"></i>
-              View GitHub Action
-            </a>
+              <div class="alert alert-info">
+                <div class="section-header-info mb-3">
+                  <h6 class="section-title-info">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    How to Fix This
+                  </h6>
+                </div>
+                  <ul class="mb-0 fix-suggestions">
+                    <li class="mb-2">
+                      <strong>Use our <a href="https://github.com/sbomify/github-action" target="_blank" rel="noopener" class="text-decoration-none">GitHub Actions module</a></strong> for automated SBOM generation
+                    </li>
+                    <li class="mb-2">
+                      <strong>Ensure your SBOM includes all 7 NTIA minimum elements:</strong>
+                      <ul class="mt-2 ntia-elements-list">
+                        <li>Supplier name</li>
+                        <li>Component name</li>
+                        <li>Version of the component</li>
+                        <li>Other unique identifiers (PURL, CPE, etc.)</li>
+                        <li>Dependency relationships</li>
+                        <li>Author of SBOM data</li>
+                        <li>Timestamp</li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong>Validate your SBOM</strong> before uploading using SBOM validation tools
+                    </li>
+                                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                @click="showDetailsModal = false"
+              >
+                Close
+              </button>
+              <a
+                href="https://github.com/sbomify/github-action"
+                target="_blank"
+                rel="noopener"
+                class="btn btn-primary"
+              >
+                <i class="fab fa-github me-2"></i>
+                View GitHub Action
+              </a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -180,12 +182,14 @@ interface Props {
   }
   isPublicView?: boolean
   teamBillingPlan?: string
+  teamKey?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   complianceDetails: () => ({}),
   isPublicView: false,
-  teamBillingPlan: 'community'
+  teamBillingPlan: 'community',
+  teamKey: ''
 })
 
 const showDetailsModal = ref(false)
@@ -241,8 +245,8 @@ const getUnknownStatusText = (): string => {
 
 const handleUnknownBadgeClick = (): void => {
   if (!isNtiaAvailable()) {
-    // Redirect to billing page - we'll need to get the team key from somewhere
-    window.location.href = '/billing/select-plan/'
+    const upgradePath = props.teamKey ? `/billing/select-plan/${props.teamKey}` : '/billing/select-plan/'
+    window.location.href = upgradePath
   }
 }
 
