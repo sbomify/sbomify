@@ -1,5 +1,7 @@
+{% load teams %}
+{% user_workspaces as available_workspaces %}
 <div class="navbar-nav me-auto workspace-selector">
-    <div class="nav-item dropdown">
+    <div class="nav-item dropdown d-flex align-items-center gap-3">
         <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none"
                 type="button"
                 data-bs-toggle="dropdown"
@@ -18,24 +20,30 @@
                 <i class="fas fa-briefcase me-2" aria-hidden="true"></i>
                 <span class="fw-medium">
                     {% if request.session.current_team %}
-                        {{ request.session.current_team.name }}
+                        {{ request.session.current_team.name|workspace_display }}
                     {% else %}
                         Select Workspace
                     {% endif %}
                 </span>
             </button>
+            {% if request.session.current_team %}
+                <span class="current-workspace-hint text-muted small">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i>
+                    You're viewing {{ request.session.current_team.name|workspace_display }}
+                </span>
+            {% endif %}
             <ul class="dropdown-menu shadow-sm" role="menu">
                 <li role="presentation">
                     <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
                 </li>
-                {% for t_key, t_info in request.session.user_teams.items %}
+                {% for t_key, t_info in available_workspaces.items %}
                     <li role="presentation">
-                        <a class="dropdown-item {% if request.session.current_team.key and t_key == request.session.current_team.key %}active{% endif %}"
+                        <a class="dropdown-item {% if current_workspace_key == t_key %}active{% endif %}"
                            href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"
                            role="menuitem">
                             <i class="fas fa-folder me-2" aria-hidden="true"></i>
-                            {{ t_info.name }}
-                            {% if request.session.current_team.key and t_key == request.session.current_team.key %}
+                            {{ t_info.name|workspace_display }}
+                            {% if current_workspace_key == t_key %}
                                 <i class="fas fa-check ms-auto text-success" aria-hidden="true"></i>
                                 <span class="visually-hidden">(current workspace)</span>
                             {% endif %}

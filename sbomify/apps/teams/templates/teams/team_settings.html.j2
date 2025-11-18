@@ -3,7 +3,8 @@
 {% load django_vite %}
 {% load static %}
 {% load json_extras %}
-{% block title %}sbomify Workspace Settings: {{ team.name }}{% endblock %}
+{% load teams %}
+{% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main">
@@ -15,6 +16,13 @@
                 <p class="item-subtitle">Manage your workspace configuration, members, and preferences</p>
             </div>
             <div class="header-actions">
+                <div class="current-workspace-badge">
+                    <span class="badge bg-primary-subtle text-primary">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                        Current workspace: {{ team.name|workspace_display }}
+                        <span class="visually-hidden">(current workspace)</span>
+                    </span>
+                </div>
                 <span class="workspace-key">
                     <span class="vc-copyable-value"
                           data-value="{{ team.key }}"

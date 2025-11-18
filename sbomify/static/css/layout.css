@@ -836,6 +836,25 @@ body {
   width: 1rem;
 }
 
+.workspace-selector .current-workspace-hint {
+  white-space: nowrap;
+  color: var(--bs-gray-600);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.workspace-selector .current-workspace-hint .fas {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .workspace-selector .current-workspace-hint {
+    display: none;
+  }
+}
+
 .workspace-selector .dropdown-item.active .fas {
   opacity: 1;
 }
@@ -843,6 +862,21 @@ body {
 .workspace-selector .fas.fa-check {
   font-size: 0.75rem;
   margin-left: auto;
+}
+
+.current-workspace-badge {
+  margin-top: 0.5rem;
+}
+
+.current-workspace-badge .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 500;
+}
+
+.header-actions .current-workspace-badge {
+  margin-top: 0;
 }
 
 /* Mobile adjustments for workspace selector */
