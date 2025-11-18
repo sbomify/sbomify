@@ -79,6 +79,7 @@ import sbomify.apps.onboarding.cron  # noqa: F401, E402
 
 # Import onboarding tasks and cron jobs to register them with the broker (AFTER broker config)
 import sbomify.apps.onboarding.tasks  # noqa: F401, E402
+import sbomify.apps.teams.tasks  # noqa: F401, E402
 import sbomify.apps.vulnerability_scanning.tasks  # noqa: F401, E402
 
 

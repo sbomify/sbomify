@@ -61,7 +61,7 @@ if DEBUG:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "sbomify-backend"]
 
 # Append 'APP_HOSTNAME' value if defined
 if os.environ.get("APP_BASE_URL", False):

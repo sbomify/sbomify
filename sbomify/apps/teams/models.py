@@ -196,3 +196,56 @@ class ContactProfileContact(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.profile_id})"
+
+
+class CustomDomain(models.Model):
+    """Custom domain (CNAME) configuration for a workspace.
+
+    Each workspace can have one custom domain that points to the edge server.
+    The domain must be verified via DNS before it can be used for SSL/TLS.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_custom_domains"
+        indexes = [
+            models.Index(fields=["team"]),
+            models.Index(fields=["hostname"]),
+            models.Index(fields=["is_verified", "is_active"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["team"],
+                name="unique_custom_domain_per_team",
+            )
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    team = models.OneToOneField(
+        Team,
+        on_delete=models.CASCADE,
+        related_name="custom_domain",
+        help_text="Workspace that owns this custom domain",
+    )
+    hostname = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Fully qualified domain name (e.g., trust.example.com)",
+    )
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Whether the domain has been verified via DNS",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether the domain is active and should be used",
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the domain was successfully verified",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.hostname} ({self.team.name})"
