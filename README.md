@@ -20,7 +20,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Upload SBOMs via web interface or API
 - Vulnerability scanning integration
 - Public and private access controls
-- Team-based organization
+- Workspace-based organization
 
 ### Document Management
 
@@ -35,7 +35,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 - **Components**: Core entities that can contain either SBOMs or documents
 - **Projects**: Group related components together
 - **Products**: Organize multiple projects
-- **Teams**: Control access and permissions
+- **Workspaces**: Control access and permissions
 
 ## Roadmap and Goals
 
@@ -120,8 +120,8 @@ bun install
 
 The API documentation is available at:
 
-- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
-- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+- Interactive API docs (Swagger UI): `http://localhost:8000/api/v2/docs`
+- OpenAPI specification: `http://localhost:8000/api/v2/openapi.json`
 
 The API provides endpoints for managing:
 
@@ -129,7 +129,7 @@ The API provides endpoints for managing:
 - **Documents**: Upload, retrieve, and manage document artifacts
 - **Components**: Manage components that contain SBOMs or documents
 - **Projects & Products**: Organize and group components
-- **Teams**: User management and access control
+- **Workspaces**: User management and access control
 
 These endpoints are available when running the development server.
 
@@ -221,7 +221,7 @@ DJANGO_VITE_DEV_SERVER_HOST=http://localhost
 STATIC_URL=/static/
 DEV_JS_SERVER=http://127.0.0.1:5170
 WEBSITE_BASE_URL=http://127.0.0.1:8000
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v2
 VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 
@@ -271,7 +271,7 @@ development, we use Minio as a local S3 replacement.
 
 The application uses separate S3 buckets for different types of content:
 
-- **Media Bucket**: User avatars, team logos, and other media assets
+- **Media Bucket**: User avatars, workspace logos, and other media assets
 - **SBOMs Bucket**: Software Bill of Materials files
 - **Documents Bucket**: Document artifacts (specifications, manuals, reports, compliance documents, etc.)
   - If not configured separately, documents will use the SBOMs bucket automatically
@@ -310,7 +310,7 @@ Benefits of separate buckets:
 
 sbomify supports integration with [Dependency Track](https://dependencytrack.org/) for advanced vulnerability management and analysis. Dependency Track integration is available for Business and Enterprise plans.
 
-**Note:** Dependency Track only supports CycloneDX format SBOMs. SPDX SBOMs will automatically use OSV scanning regardless of team configuration.
+**Note:** Dependency Track only supports CycloneDX format SBOMs. SPDX SBOMs will automatically use OSV scanning regardless of workspace configuration.
 
 ##### Environment-Based Project Naming
 
@@ -342,7 +342,7 @@ To integrate with Dependency Track, you need to create an API token with the fol
 - `VIEW_PORTFOLIO`
 - `VIEW_VULNERABILITY`
 
-You can create a token under **Administration → Access Management → Teams** in your Dependency Track instance.
+You can create a token under **Administration → Access Management** in your Dependency Track instance (use the team management interface there).
 
 ##### DT Configuration
 
@@ -356,16 +356,16 @@ You can create a token under **Administration → Access Management → Teams** 
      - **Priority**: Lower numbers = higher priority for load balancing
      - **Max Concurrent Scans**: Maximum number of simultaneous SBOM uploads
 
-2. **Configure Team Settings**:
-   - Business/Enterprise teams can choose Dependency Track in **Settings → Integrations**
-   - Enterprise teams can optionally configure custom Dependency Track instances
-   - Business teams use the shared server pool
+2. **Configure Workspace Settings**:
+   - Business/Enterprise workspaces can choose Dependency Track in **Settings → Integrations**
+   - Enterprise workspaces can optionally configure custom Dependency Track instances
+   - Business workspaces use the shared server pool
 
 ##### DT Features
 
 - **Automatic Vulnerability Scanning**:
-  - Community teams: Weekly vulnerability scans using OSV
-  - Business/Enterprise teams: Vulnerability updates every 12 hours using Dependency Track
+  - Community workspaces: Weekly vulnerability scans using OSV
+  - Business/Enterprise workspaces: Vulnerability updates every 12 hours using Dependency Track
 - **Load Balancing**: Distribute scans across multiple Dependency Track servers
 - **Health Monitoring**: Automatic server health checks and capacity management
 - **Historical Tracking**: Complete scan result history for trend analysis
@@ -382,7 +382,7 @@ uv run coverage run -m pytest
 # Run specific test groups
 uv run coverage run -m pytest core/tests/
 uv run coverage run -m pytest sboms/tests/
-uv run coverage run -m pytest teams/tests/
+uv run coverage run -m pytest sbomify/apps/teams/tests/
 
 # Run with debugger on failure
 uv run coverage run -m pytest --pdb -x -s
@@ -399,19 +399,20 @@ The application includes management commands to help set up and manage test data
 
 ```bash
 # Create a test environment with sample SBOM data
-# If no team is specified, uses the first team found in the database
+# If no workspace is specified, the first workspace in the database is used
+# (the management command retains the --team-id flag name for compatibility)
 python manage.py create_test_sbom_environment
 
-# Create test environment for a specific team
+# Create test environment for a specific workspace (still uses --team-id)
 python manage.py create_test_sbom_environment --team-id=your_team_id
 
 # Clean up existing test data and create fresh environment
 python manage.py create_test_sbom_environment --clean
 
-# Clean up all test data across all teams
+# Clean up all test data across all workspaces
 python manage.py cleanup_test_sbom_environment
 
-# Clean up test data for a specific team
+# Clean up test data for a specific workspace (still uses --team-id)
 python manage.py cleanup_test_sbom_environment --team-id=your_team_id
 
 # Preview what would be deleted (dry run)
@@ -427,7 +428,7 @@ These commands will:
 
 The test data is grouped by source (e.g., hello-world and sbomify) rather than by format, so each component will have both SPDX and CycloneDX SBOMs attached to it.
 
-Note: You must have at least one team in the database to use these commands without specifying a team ID.
+Note: You must have at least one workspace in the database to use these commands without specifying a team ID (legacy flag name).
 
 ### JS build tooling
 
