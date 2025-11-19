@@ -28,14 +28,14 @@ const mockSessionStorage = {
 const mockDocument = {
   getElementById: (id: string) => {
     const mockElements: { [key: string]: { textContent: string } } = {
-      'valid-teams-data': { textContent: JSON.stringify({
-        'team-1': { name: 'Team Alpha' },
-        'team-2': { name: 'Team Beta' },
-        'team-3': { name: 'Team Gamma' }
+      'valid-workspaces-data': { textContent: JSON.stringify({
+        'team-1': { name: 'Workspace Alpha' },
+        'team-2': { name: 'Workspace Beta' },
+        'team-3': { name: 'Workspace Gamma' }
       }) },
-      'empty-teams-data': { textContent: '{}' },
-      'invalid-teams-data': { textContent: 'invalid json' },
-      'non-object-teams-data': { textContent: '["not", "object"]' }
+      'empty-workspaces-data': { textContent: '{}' },
+      'invalid-workspaces-data': { textContent: 'invalid json' },
+      'non-object-workspaces-data': { textContent: '["not", "object"]' }
     }
     return mockElements[id] || null
   }
@@ -68,8 +68,8 @@ describe('DangerZone Business Logic', () => {
       expect(parseIsOwner('TRUE')).toBe(false)
     })
 
-    test('should parse user teams data from JSON script element', () => {
-      const parseUserTeams = (elementId?: string): Record<string, { name: string }> => {
+    test('should parse user workspaces data from JSON script element', () => {
+      const parseUserWorkspaces = (elementId?: string): Record<string, { name: string }> => {
         try {
           if (elementId) {
             const element = document.getElementById(elementId)
@@ -79,20 +79,20 @@ describe('DangerZone Business Logic', () => {
           }
           return {}
         } catch (err) {
-          console.error('Error parsing user teams:', err)
+          console.error('Error parsing user workspaces:', err)
           return {}
         }
       }
 
-      const result = parseUserTeams('valid-teams-data')
+      const result = parseUserWorkspaces('valid-workspaces-data')
       expect(Object.keys(result)).toHaveLength(3)
-      expect(result['team-1'].name).toBe('Team Alpha')
-      expect(result['team-2'].name).toBe('Team Beta')
-      expect(result['team-3'].name).toBe('Team Gamma')
+      expect(result['team-1'].name).toBe('Workspace Alpha')
+      expect(result['team-2'].name).toBe('Workspace Beta')
+      expect(result['team-3'].name).toBe('Workspace Gamma')
     })
 
-    test('should handle empty teams data', () => {
-      const parseUserTeams = (elementId?: string): Record<string, { name: string }> => {
+    test('should handle empty workspace data', () => {
+      const parseUserWorkspaces = (elementId?: string): Record<string, { name: string }> => {
         try {
           if (elementId) {
             const element = document.getElementById(elementId)
@@ -102,17 +102,17 @@ describe('DangerZone Business Logic', () => {
           }
           return {}
         } catch (err) {
-          console.error('Error parsing user teams:', err)
+          console.error('Error parsing user workspaces:', err)
           return {}
         }
       }
 
-      const result = parseUserTeams('empty-teams-data')
+      const result = parseUserWorkspaces('empty-workspaces-data')
       expect(Object.keys(result)).toHaveLength(0)
     })
 
     test('should handle invalid JSON data gracefully', () => {
-      const parseUserTeams = (elementId?: string): Record<string, { name: string }> => {
+      const parseUserWorkspaces = (elementId?: string): Record<string, { name: string }> => {
         try {
           if (elementId) {
             const element = document.getElementById(elementId)
@@ -122,17 +122,17 @@ describe('DangerZone Business Logic', () => {
           }
           return {}
         } catch (err) {
-          console.error('Error parsing user teams:', err)
+          console.error('Error parsing user workspaces:', err)
           return {}
         }
       }
 
-      const result = parseUserTeams('invalid-teams-data')
+      const result = parseUserWorkspaces('invalid-workspaces-data')
       expect(Object.keys(result)).toHaveLength(0)
     })
 
     test('should handle missing element ID', () => {
-      const parseUserTeams = (elementId?: string): Record<string, { name: string }> => {
+      const parseUserWorkspaces = (elementId?: string): Record<string, { name: string }> => {
         try {
           if (elementId) {
             const element = document.getElementById(elementId)
@@ -142,12 +142,12 @@ describe('DangerZone Business Logic', () => {
           }
           return {}
         } catch (err) {
-          console.error('Error parsing user teams:', err)
+          console.error('Error parsing user workspaces:', err)
           return {}
         }
       }
 
-      const result = parseUserTeams('non-existent-element')
+      const result = parseUserWorkspaces('non-existent-element')
       expect(Object.keys(result)).toHaveLength(0)
     })
   })
@@ -207,39 +207,39 @@ describe('DangerZone Business Logic', () => {
     })
   })
 
-  describe('Team Selection Logic', () => {
-    test('should handle team selection for transfer', () => {
-      const teams = {
-        'team-1': { name: 'Team Alpha' },
-        'team-2': { name: 'Team Beta' },
-        'team-3': { name: 'Team Gamma' }
+  describe('Workspace Selection Logic', () => {
+    test('should handle workspace selection for transfer', () => {
+      const workspaces = {
+        'team-1': { name: 'Workspace Alpha' },
+        'team-2': { name: 'Workspace Beta' },
+        'team-3': { name: 'Workspace Gamma' }
       }
 
-      const getTeamOptions = (teams: Record<string, { name: string }>) => {
-        return Object.entries(teams).map(([key, team]) => ({
+      const getWorkspaceOptions = (items: Record<string, { name: string }>) => {
+        return Object.entries(items).map(([key, workspace]) => ({
           value: key,
-          text: team.name
+          text: workspace.name
         }))
       }
 
-      const options = getTeamOptions(teams)
+      const options = getWorkspaceOptions(workspaces)
       expect(options).toHaveLength(3)
-      expect(options[0]).toEqual({ value: 'team-1', text: 'Team Alpha' })
-      expect(options[1]).toEqual({ value: 'team-2', text: 'Team Beta' })
-      expect(options[2]).toEqual({ value: 'team-3', text: 'Team Gamma' })
+      expect(options[0]).toEqual({ value: 'team-1', text: 'Workspace Alpha' })
+      expect(options[1]).toEqual({ value: 'team-2', text: 'Workspace Beta' })
+      expect(options[2]).toEqual({ value: 'team-3', text: 'Workspace Gamma' })
     })
 
-    test('should handle empty teams list', () => {
-      const teams = {}
+    test('should handle empty workspace list', () => {
+      const workspaces = {}
 
-      const getTeamOptions = (teams: Record<string, { name: string }>) => {
-        return Object.entries(teams).map(([key, team]) => ({
+      const getWorkspaceOptions = (items: Record<string, { name: string }>) => {
+        return Object.entries(items).map(([key, workspace]) => ({
           value: key,
-          text: team.name
+          text: workspace.name
         }))
       }
 
-      const options = getTeamOptions(teams)
+      const options = getWorkspaceOptions(workspaces)
       expect(options).toHaveLength(0)
     })
   })
@@ -277,14 +277,14 @@ describe('DangerZone Business Logic', () => {
       interface DangerZoneState {
         showConfirmModal: boolean
         parsedIsOwner: boolean
-        parsedUserTeams: Record<string, { name: string }>
+        parsedUserWorkspaces: Record<string, { name: string }>
         error: string | null
       }
 
       const createInitialState = (): DangerZoneState => ({
         showConfirmModal: false,
         parsedIsOwner: false,
-        parsedUserTeams: {},
+        parsedUserWorkspaces: {},
         error: null
       })
 
@@ -299,17 +299,17 @@ describe('DangerZone Business Logic', () => {
       let state = createInitialState()
       expect(state.showConfirmModal).toBe(false)
       expect(state.parsedIsOwner).toBe(false)
-      expect(Object.keys(state.parsedUserTeams)).toHaveLength(0)
+      expect(Object.keys(state.parsedUserWorkspaces)).toHaveLength(0)
 
       state = updateState(state, { showConfirmModal: true })
       expect(state.showConfirmModal).toBe(true)
 
       state = updateState(state, {
         parsedIsOwner: true,
-        parsedUserTeams: { 'team-1': { name: 'Team Alpha' } }
+        parsedUserWorkspaces: { 'team-1': { name: 'Workspace Alpha' } }
       })
       expect(state.parsedIsOwner).toBe(true)
-      expect(Object.keys(state.parsedUserTeams)).toHaveLength(1)
+      expect(Object.keys(state.parsedUserWorkspaces)).toHaveLength(1)
     })
   })
 
@@ -317,40 +317,40 @@ describe('DangerZone Business Logic', () => {
     test('should handle parsing errors gracefully', () => {
       const parsePropsWithErrorHandling = (
         isOwner: string,
-        userTeamsElementId?: string
+        userWorkspacesElementId?: string
       ) => {
         let parsedIsOwner = false
-        let parsedUserTeams: Record<string, { name: string }> = {}
+        let parsedUserWorkspaces: Record<string, { name: string }> = {}
         let error: string | null = null
 
         try {
           parsedIsOwner = isOwner === 'true'
 
-          if (userTeamsElementId) {
-            const element = document.getElementById(userTeamsElementId)
+          if (userWorkspacesElementId) {
+            const element = document.getElementById(userWorkspacesElementId)
             if (element && element.textContent) {
-              parsedUserTeams = JSON.parse(element.textContent)
+              parsedUserWorkspaces = JSON.parse(element.textContent)
             }
           }
         } catch (err) {
           error = err instanceof Error ? err.message : 'Failed to parse props'
           parsedIsOwner = false
-          parsedUserTeams = {}
+          parsedUserWorkspaces = {}
         }
 
-        return { parsedIsOwner, parsedUserTeams, error }
+        return { parsedIsOwner, parsedUserWorkspaces, error }
       }
 
       // Test successful parsing
-      const successResult = parsePropsWithErrorHandling('true', 'valid-teams-data')
+      const successResult = parsePropsWithErrorHandling('true', 'valid-workspaces-data')
       expect(successResult.parsedIsOwner).toBe(true)
-      expect(Object.keys(successResult.parsedUserTeams)).toHaveLength(3)
+      expect(Object.keys(successResult.parsedUserWorkspaces)).toHaveLength(3)
       expect(successResult.error).toBe(null)
 
       // Test parsing error
-      const errorResult = parsePropsWithErrorHandling('true', 'invalid-teams-data')
+      const errorResult = parsePropsWithErrorHandling('true', 'invalid-workspaces-data')
       expect(errorResult.parsedIsOwner).toBe(false)
-      expect(Object.keys(errorResult.parsedUserTeams)).toHaveLength(0)
+      expect(Object.keys(errorResult.parsedUserWorkspaces)).toHaveLength(0)
       expect(errorResult.error).toContain('JSON Parse error')
     })
   })
@@ -361,7 +361,7 @@ describe('DangerZone Business Logic', () => {
         componentId: string,
         componentName: string,
         isOwner: string,
-        userTeamsElementId?: string,
+        userWorkspacesElementId?: string,
         csrfToken?: string
       ) => {
         // Validate required props
@@ -371,17 +371,17 @@ describe('DangerZone Business Logic', () => {
 
         // Parse props
         const parsedIsOwner = isOwner === 'true'
-        let parsedUserTeams: Record<string, { name: string }> = {}
+        let parsedUserWorkspaces: Record<string, { name: string }> = {}
 
         try {
-          if (userTeamsElementId) {
-            const element = document.getElementById(userTeamsElementId)
+          if (userWorkspacesElementId) {
+            const element = document.getElementById(userWorkspacesElementId)
             if (element && element.textContent) {
-              parsedUserTeams = JSON.parse(element.textContent)
+              parsedUserWorkspaces = JSON.parse(element.textContent)
             }
           }
         } catch (err) {
-          console.error('Failed to parse user teams:', err)
+          console.error('Failed to parse user workspaces:', err)
         }
 
         // Validate CSRF token if transfer is available
@@ -392,9 +392,9 @@ describe('DangerZone Business Logic', () => {
           componentId,
           componentName,
           parsedIsOwner,
-          parsedUserTeams,
+          parsedUserWorkspaces,
           canTransfer,
-          teamCount: Object.keys(parsedUserTeams).length
+          workspaceCount: Object.keys(parsedUserWorkspaces).length
         }
       }
 
@@ -403,19 +403,19 @@ describe('DangerZone Business Logic', () => {
         'comp-123',
         'Test Component',
         'true',
-        'valid-teams-data',
+        'valid-workspaces-data',
         'valid-csrf-token'
       )
       expect(ownerResult.parsedIsOwner).toBe(true)
       expect(ownerResult.canTransfer).toBe(true)
-      expect(ownerResult.teamCount).toBe(3)
+      expect(ownerResult.workspaceCount).toBe(3)
 
       // Test non-owner
       const nonOwnerResult = initializeDangerZone(
         'comp-123',
         'Test Component',
         'false',
-        'valid-teams-data',
+        'valid-workspaces-data',
         'valid-csrf-token'
       )
       expect(nonOwnerResult.parsedIsOwner).toBe(false)
@@ -426,7 +426,7 @@ describe('DangerZone Business Logic', () => {
         'comp-123',
         'Test Component',
         'true',
-        'valid-teams-data'
+        'valid-workspaces-data'
       )
       expect(noCsrfResult.canTransfer).toBe(false)
     })

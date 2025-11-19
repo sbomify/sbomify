@@ -81,6 +81,8 @@ NOTIFICATION_PROVIDERS = [
 
 ### Workspace Billing Check
 
+> Note: Workspaces are implemented through the `teams` app, so session keys and models still use `team` naming internally.
+
 ```python
 def check_billing_plan(request):
     """Check if a workspace has a billing plan selected"""

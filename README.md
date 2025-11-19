@@ -341,7 +341,7 @@ To integrate with Dependency Track, you need to create an API token with the fol
 - `VIEW_PORTFOLIO`
 - `VIEW_VULNERABILITY`
 
-You can create a token under **Administration → Access Management** in your Dependency Track instance (use the team management interface there).
+You can create a token under **Administration → Access Management** in your Dependency Track instance (use the workspace management interface there).
 
 ##### DT Configuration
 
@@ -399,10 +399,10 @@ The application includes management commands to help set up and manage test data
 ```bash
 # Create a test environment with sample SBOM data
 # If no workspace is specified, the first workspace in the database is used
-# (the management command retains the --team-id flag name for compatibility)
+# (the management command retains the legacy --team-id flag name for compatibility)
 python manage.py create_test_sbom_environment
 
-# Create test environment for a specific workspace (still uses --team-id)
+# Create test environment for a specific workspace (still uses the legacy --team-id flag)
 python manage.py create_test_sbom_environment --team-id=your_team_id
 
 # Clean up existing test data and create fresh environment
@@ -411,7 +411,7 @@ python manage.py create_test_sbom_environment --clean
 # Clean up all test data across all workspaces
 python manage.py cleanup_test_sbom_environment
 
-# Clean up test data for a specific workspace (still uses --team-id)
+# Clean up test data for a specific workspace (still uses the legacy --team-id flag)
 python manage.py cleanup_test_sbom_environment --team-id=your_team_id
 
 # Preview what would be deleted (dry run)
@@ -427,7 +427,7 @@ These commands will:
 
 The test data is grouped by source (e.g., hello-world and sbomify) rather than by format, so each component will have both SPDX and CycloneDX SBOMs attached to it.
 
-Note: You must have at least one workspace in the database to use these commands without specifying a team ID (legacy flag name).
+Note: You must have at least one workspace in the database to use these commands without specifying the legacy `--team-id` flag.
 
 ### JS build tooling
 

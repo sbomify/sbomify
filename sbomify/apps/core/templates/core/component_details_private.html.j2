@@ -113,12 +113,12 @@
     {% if component.has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ request.session.user_teams|json_script:"user-teams-data" }}
+                {{ request.session.user_teams|json_script:"user-workspaces-data" }}
                 <div class="vc-danger-zone"
                      data-component-id="{{ component.id }}"
                      data-component-name="{{ component.name }}"
                      data-is-owner="{% if is_owner %} true {% else %} false {% endif %}"
-                     data-user-teams-element-id="user-teams-data"
+                     data-user-workspaces-element-id="user-workspaces-data"
                      data-csrf-token="{{ csrf_token }}"></div>
             </div>
         </div>

@@ -247,7 +247,7 @@ body {
   margin-left: auto;
 }
 
-/* Team selector styling */
+/* Workspace selector styling */
 .navbar .form-select {
   border: 1px solid var(--border-color);
   background-color: var(--white);

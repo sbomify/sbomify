@@ -246,7 +246,7 @@ def test_delete_team(sample_user: AbstractBaseUser):
     # Check success message
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
-    assert str(messages[0]) == f"Team {team.name} has been deleted"
+    assert str(messages[0]) == f"Workspace {team.name} has been deleted"
 
 
 @pytest.mark.django_db
@@ -1041,7 +1041,7 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
     # Check success message
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
-    assert str(messages[0]) == f"Team {team2.name} has been deleted"
+    assert str(messages[0]) == f"Workspace {team2.name} has been deleted"
 
 
 @pytest.mark.django_db
@@ -1053,7 +1053,7 @@ def test_delete_team_auto_makes_another_default_when_needed(sample_user: Abstrac
 
 
 # ============================================================================
-# Teams API Tests
+# Workspaces API Tests
 # ============================================================================
 
 @pytest.mark.django_db
@@ -1186,7 +1186,7 @@ def test_get_team_api_invalid_team_key(authenticated_api_client):
 
     assert response.status_code == 404
     data = response.json()
-    assert "Team not found" in data["detail"]
+    assert "Workspace not found" in data["detail"]
 
 
 @pytest.mark.django_db
@@ -1202,7 +1202,7 @@ def test_get_team_api_nonexistent_team(authenticated_api_client):
 
     assert response.status_code == 404
     data = response.json()
-    assert "Team not found" in data["detail"]
+    assert "Workspace not found" in data["detail"]
 
 
 @pytest.mark.django_db
