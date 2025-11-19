@@ -227,7 +227,7 @@ class Release(models.Model):
     name = models.CharField(max_length=255, help_text="Release name (e.g., 'v1.0.0', 'latest')")
     description = models.TextField(blank=True, help_text="Optional release description")
     created_at = models.DateTimeField(default=timezone.now, help_text="When this release record was created")
-    released_at = models.DateTimeField(default=timezone.now, help_text="When this release became available")
+    released_at = models.DateTimeField(blank=True, null=True, help_text="When this release became available")
     is_latest = models.BooleanField(
         default=False, help_text="Whether this is the default 'latest' release that auto-updates with new artifacts"
     )
@@ -250,7 +250,7 @@ class Release(models.Model):
     def save(self, *args, **kwargs):
         if not self.created_at:
             self.created_at = timezone.now()
-        if not self.released_at:
+        if self.released_at is None:
             self.released_at = self.created_at
         self.clean()
         super().save(*args, **kwargs)
