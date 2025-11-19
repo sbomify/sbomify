@@ -15,16 +15,16 @@
         </div>
         <div class="section-content">
           <h6 class="section-title">Transfer Component</h6>
-          <p class="section-description">Move this component to a different team</p>
+          <p class="section-description">Move this component to a different workspace</p>
         </div>
       </div>
       <form :action="`/component/${componentId}/transfer`" method="post" class="transfer-form">
         <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken">
         <div class="mb-3">
-          <label for="team_key" class="form-label">Select Team</label>
+          <label for="team_key" class="form-label">Select Workspace</label>
           <div class="input-group">
             <select id="team_key" name="team_key" class="form-select modern-select">
-              <option value="" disabled selected>Choose a team...</option>
+              <option value="" disabled selected>Choose a workspace...</option>
               <option
                 v-for="(team, teamKey) in parsedUserTeams"
                 :key="teamKey"

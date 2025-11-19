@@ -5,7 +5,7 @@ from . import views
 
 app_name = "teams"
 urlpatterns: list[URLPattern] = [
-    path("", views.TeamsDashboardView.as_view(), name="teams_dashboard"),
+    path("", views.WorkspacesDashboardView.as_view(), name="teams_dashboard"),
     path("switch/<team_key>/", views.switch_team, name="switch_team"),
     path("invite/<team_key>/", views.invite, name="invite_user"),
     path("accept_invite/<invite_id>/", views.accept_invite, name="accept_invite"),

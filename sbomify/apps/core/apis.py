@@ -302,7 +302,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     try:
         team = Team.objects.get(id=team_id)
     except Team.DoesNotExist:
-        return False, "Team not found", ErrorCode.TEAM_NOT_FOUND
+        return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
     if not team.billing_plan:
         return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
@@ -381,7 +381,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
+        return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating product: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -1147,7 +1147,7 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
+        return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating project: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -1420,7 +1420,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Team.DoesNotExist:
-        return 403, {"detail": "Team not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
+        return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception as e:
         log.error(f"Error creating component: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}

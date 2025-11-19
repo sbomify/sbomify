@@ -63,17 +63,17 @@
     {% else %}
         <div class="stats-container">
             <div class="stats-card">
-                <h3>Users &amp; Teams</h3>
+                <h3>Users &amp; Workspaces</h3>
                 <div class="chart-container">
                     <div class="loading">Loading chart...</div>
-                    <canvas id="usersTeamsChart" class="chart-canvas hidden"></canvas>
+                    <canvas id="usersWorkspacesChart" class="chart-canvas hidden"></canvas>
                 </div>
             </div>
             <div class="stats-card">
-                <h3>Users per Team</h3>
+                <h3>Users per Workspace</h3>
                 <div class="chart-container">
                     <div class="loading">Loading chart...</div>
-                    <canvas id="usersPerTeamChart" class="chart-canvas hidden"></canvas>
+                    <canvas id="usersPerWorkspaceChart" class="chart-canvas hidden"></canvas>
                 </div>
             </div>
             <div class="stats-card">
@@ -100,11 +100,11 @@
                 }
 
                 try {
-                    // Users & Teams Bar Chart
-                    const usersTeamsChart = new Chart(document.getElementById('usersTeamsChart'), {
+                    // Users & Workspaces Bar Chart
+                    const usersWorkspacesChart = new Chart(document.getElementById('usersWorkspacesChart'), {
                         type: 'bar',
                         data: {
-                            labels: ['Users', 'Teams'],
+                            labels: ['Users', 'Workspaces'],
                             datasets: [{
                                 label: 'Count',
                                 data: [{{ stats.users }}, {{ stats.teams }}],
@@ -124,10 +124,10 @@
                             }
                         }
                     });
-                    showChart('usersTeamsChart');
+                    showChart('usersWorkspacesChart');
 
-                    // Users per Team Chart
-                    const usersPerTeamChart = new Chart(document.getElementById('usersPerTeamChart'), {
+                    // Users per Workspace Chart
+                    const usersPerWorkspaceChart = new Chart(document.getElementById('usersPerWorkspaceChart'), {
                         type: 'bar',
                         data: {
                             labels: [{% for team in stats.users_per_team %}'{{ team.name }}'{% if not forloop.last %},{% endif %}{% endfor %}],
@@ -150,7 +150,7 @@
                             }
                         }
                     });
-                    showChart('usersPerTeamChart');
+                    showChart('usersPerWorkspaceChart');
 
                     // Components Overview Bar Chart
                     const componentsChart = new Chart(document.getElementById('componentsChart'), {

@@ -16,11 +16,11 @@ logger = getLogger(__name__)
 
 
 def check_billing_plan_exists(team: Team) -> NotificationSchema | None:
-    """Check if team has a billing plan selected"""
+    """Check if a workspace has a billing plan selected"""
     if not team.billing_plan:
         return NotificationSchema(
-            id=f"team_billing_required_{team.key}",
-            type="team_billing_required",
+            id=f"workspace_billing_required_{team.key}",
+            type="workspace_billing_required",
             message="Please add your billing information to continue using premium features.",
             severity="warning",
             created_at=datetime.utcnow().isoformat(),
@@ -85,7 +85,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     try:
         team = Team.objects.get(key=team_key)
 
-        # Only show billing notifications to team owners
+        # Only show billing notifications to workspace owners
         if not team.members.filter(member__user=request.user, member__role="owner").exists():
             return notifications
 
@@ -95,6 +95,6 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
                 notifications.append(notification)
 
     except Team.DoesNotExist:
-        logger.warning(f"Team {team_key} not found when checking billing notifications")
+        logger.warning(f"Workspace {team_key} not found when checking billing notifications")
 
     return notifications

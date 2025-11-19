@@ -120,8 +120,8 @@ bun install
 
 The API documentation is available at:
 
-- Interactive API docs (Swagger UI): `http://localhost:8000/api/v2/docs`
-- OpenAPI specification: `http://localhost:8000/api/v2/openapi.json`
+- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
+- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
 
 The API provides endpoints for managing:
 
@@ -221,7 +221,6 @@ DJANGO_VITE_DEV_SERVER_HOST=http://localhost
 STATIC_URL=/static/
 DEV_JS_SERVER=http://127.0.0.1:5170
 WEBSITE_BASE_URL=http://127.0.0.1:8000
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v2
 VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 

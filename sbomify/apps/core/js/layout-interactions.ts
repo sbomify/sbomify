@@ -31,7 +31,7 @@ function initializeWorkspaceSelector() {
           return;
         }
 
-        const switchUrl = `/teams/switch/${encodeURIComponent(workspaceKey)}/`;
+        const switchUrl = `/workspaces/switch/${encodeURIComponent(workspaceKey)}/`;
         const currentPath = window.location.pathname;
         const targetUrl = `${switchUrl}?next=${encodeURIComponent(currentPath)}`;
 

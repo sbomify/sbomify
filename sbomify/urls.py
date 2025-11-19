@@ -28,7 +28,8 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
     path("", include("sbomify.apps.core.urls")),
-    path("workspace/", include("sbomify.apps.teams.urls")),
+    path("workspace/", include("sbomify.apps.teams.urls")),  # legacy prefix
+    path("workspaces/", include("sbomify.apps.teams.urls")),
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),

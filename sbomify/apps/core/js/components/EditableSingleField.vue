@@ -84,7 +84,7 @@
     data[fieldName] = fieldValue.value;
 
     switch (props.itemType) {
-      case 'team':
+      case 'workspace':
         apiUrl = `/api/v1/workspaces/${props.itemId}`;
         break;
       case 'component':
