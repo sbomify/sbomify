@@ -581,6 +581,8 @@ class ReleaseCreateSchema(BaseModel):
     description: str | None = Field(default="", max_length=1000)
     is_prerelease: bool = Field(default=False)
     product_id: str = Field(..., description="ID of the product this release belongs to")
+    created_at: datetime | None = None
+    released_at: datetime | None = None
 
 
 class ReleaseUpdateSchema(BaseModel):
@@ -590,6 +592,7 @@ class ReleaseUpdateSchema(BaseModel):
     description: str | None = Field(default="", max_length=1000)
     is_prerelease: bool = Field(default=False)
     created_at: datetime | None = None
+    released_at: datetime | None = None
 
 
 class ReleasePatchSchema(BaseModel):
@@ -599,6 +602,7 @@ class ReleasePatchSchema(BaseModel):
     description: str | None = None
     is_prerelease: bool | None = None
     created_at: datetime | None = None
+    released_at: datetime | None = None
 
 
 class ReleaseResponseSchema(BaseModel):
@@ -613,6 +617,7 @@ class ReleaseResponseSchema(BaseModel):
     is_prerelease: bool
     is_public: bool
     created_at: datetime
+    released_at: datetime
     artifact_count: int | None = None
     artifacts: list[ReleaseArtifactDetailSchema] | None = None
 

@@ -76,6 +76,8 @@ def test_release_creation(sample_product: Product):  # noqa: F811
     assert release.product == sample_product
     assert release.is_latest is False
     assert release.created_at is not None
+    assert release.released_at is not None
+    assert release.created_at == release.released_at
 
 
 @pytest.mark.django_db
