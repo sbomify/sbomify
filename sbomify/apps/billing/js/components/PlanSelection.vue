@@ -397,7 +397,7 @@ async function handlePlanSelection(plan: Plan | undefined) {
       if (!confirmed) return;
     }
 
-    const response = await $axios.post('/api/v1/billing/change-plan/', {
+    const response = await $axios.post(`/api/v1/billing/change-plan/`, {
       plan: plan.key,
       billing_period: plan.key === 'business' ? billingPeriod.value : null,
       team_key: props.initialTeamKey
