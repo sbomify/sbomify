@@ -113,16 +113,24 @@ def test_release_released_at_not_before_created_at(sample_product: Product):  # 
 def test_release_ordering_places_nulls_last(sample_product: Product):  # noqa: F811
     """Ordering should place releases with null released_at at the end."""
     now = timezone.now()
-    newest = Release.objects.create(product=sample_product, name="v3.0.0")
-    older = Release.objects.create(product=sample_product, name="v2.0.0")
-    unset = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    newest.released_at = now
-    newest.save(update_fields=["released_at"])
-
-    older.released_at = now - timedelta(days=7)
-    older.save(update_fields=["released_at"])
-
+    newest = Release.objects.create(
+        product=sample_product,
+        name="v3.0.0",
+        created_at=now - timedelta(days=1),
+        released_at=now,
+    )
+    older = Release.objects.create(
+        product=sample_product,
+        name="v2.0.0",
+        created_at=now - timedelta(days=14),
+        released_at=now - timedelta(days=7),
+    )
+    unset = Release.objects.create(
+        product=sample_product,
+        name="v1.0.0",
+        created_at=now - timedelta(days=21),
+        released_at=now - timedelta(days=21),
+    )
     unset.released_at = None
     unset.save(update_fields=["released_at"])
 
