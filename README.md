@@ -381,7 +381,7 @@ uv run coverage run -m pytest
 # Run specific test groups
 uv run coverage run -m pytest core/tests/
 uv run coverage run -m pytest sboms/tests/
-uv run coverage run -m pytest sbomify/apps/teams/tests/
+uv run coverage run -m pytest teams/tests/
 
 # Run with debugger on failure
 uv run coverage run -m pytest --pdb -x -s
