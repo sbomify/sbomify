@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
@@ -78,6 +80,57 @@ def test_release_creation(sample_product: Product):  # noqa: F811
     assert release.created_at is not None
     assert release.released_at is not None
     assert release.created_at == release.released_at
+
+
+@pytest.mark.django_db
+def test_release_released_at_can_be_cleared(sample_product: Product):  # noqa: F811
+    """Ensure released_at can be explicitly set to None on update."""
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+
+    release.released_at = None
+    release.save()
+    release.refresh_from_db()
+
+    assert release.released_at is None
+
+
+@pytest.mark.django_db
+def test_release_released_at_not_before_created_at(sample_product: Product):  # noqa: F811
+    """Validation should fail if released_at is earlier than created_at."""
+    created_at = timezone.now()
+    release = Release(
+        product=sample_product,
+        name="v1.0.0-invalid",
+        created_at=created_at,
+        released_at=created_at - timedelta(days=1),
+    )
+
+    with pytest.raises(ValidationError):
+        release.save()
+
+
+@pytest.mark.django_db
+def test_release_ordering_places_nulls_last(sample_product: Product):  # noqa: F811
+    """Ordering should place releases with null released_at at the end."""
+    now = timezone.now()
+    newest = Release.objects.create(product=sample_product, name="v3.0.0")
+    older = Release.objects.create(product=sample_product, name="v2.0.0")
+    unset = Release.objects.create(product=sample_product, name="v1.0.0")
+
+    newest.released_at = now
+    newest.save(update_fields=["released_at"])
+
+    older.released_at = now - timedelta(days=7)
+    older.save(update_fields=["released_at"])
+
+    unset.released_at = None
+    unset.save(update_fields=["released_at"])
+
+    ordered_names = list(
+        Release.objects.filter(product=sample_product).values_list("name", flat=True)
+    )
+
+    assert ordered_names == ["v3.0.0", "v2.0.0", "v1.0.0"]
 
 
 @pytest.mark.django_db

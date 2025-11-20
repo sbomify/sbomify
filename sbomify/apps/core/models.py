@@ -214,7 +214,7 @@ class Release(models.Model):
     class Meta:
         db_table = "core_releases"
         unique_together = ("product", "name")
-        ordering = ["-released_at", "-created_at"]
+        ordering = [models.F("released_at").desc(nulls_last=True), "-created_at"]
         indexes = [
             models.Index(fields=["product", "-released_at"], name="core_rel_prod_released_idx"),
             models.Index(fields=["is_latest"], name="core_rel_is_latest_idx"),
@@ -239,7 +239,7 @@ class Release(models.Model):
         return f"{self.product.name} - {self.name}"
 
     def clean(self):
-        """Ensure only one latest release per product."""
+        """Ensure only one latest release per product and valid release dates."""
         if self.is_latest:
             # Check if another release is already marked as latest for this product
             existing_latest = Release.objects.filter(product=self.product, is_latest=True).exclude(pk=self.pk)
@@ -247,11 +247,17 @@ class Release(models.Model):
             if existing_latest.exists():
                 raise ValidationError("A product can only have one latest release.")
 
+        if self.created_at and self.released_at and self.released_at < self.created_at:
+            raise ValidationError("Release date cannot be earlier than creation date.")
+
     def save(self, *args, **kwargs):
         if not self.created_at:
             self.created_at = timezone.now()
-        if self.released_at is None:
+
+        if self._state.adding and self.released_at is None:
+            # Default release date to creation time for new records only
             self.released_at = self.created_at
+
         self.clean()
         super().save(*args, **kwargs)
 
