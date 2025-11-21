@@ -1,6 +1,8 @@
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
+from sbomify.apps.vulnerability_scanning.views import VulnerabilityScansView
+
 from . import views
 
 app_name = "teams"
@@ -17,6 +19,7 @@ urlpatterns: list[URLPattern] = [
     path("<team_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),
     # Keep team_details as an alias that redirects to team_settings for backward compatibility
     path("<team_key>/details", views.team_details, name="team_details"),
+    path("<team_key>/vulnerability-scans", VulnerabilityScansView.as_view(), name="vulnerability_scans"),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]
