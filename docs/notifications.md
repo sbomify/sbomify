@@ -79,11 +79,13 @@ NOTIFICATION_PROVIDERS = [
 
 ## Examples
 
-### Team Billing Check
+### Workspace Billing Check
+
+> Note: Workspaces are implemented through the `teams` app, so session keys and models still use `team` naming internally.
 
 ```python
 def check_billing_plan(request):
-    """Check if team has a billing plan selected"""
+    """Check if a workspace has a billing plan selected"""
     if "current_team" in request.session:
         team_key = request.session["current_team"]["key"]
         try:
@@ -94,8 +96,8 @@ def check_billing_plan(request):
                     member__role="owner"
                 ).exists():
                     return {
-                        "id": f"team_billing_required_{team.key}",
-                        "type": "team_billing_required",
+                        "id": f"workspace_billing_required_{team.key}",
+                        "type": "workspace_billing_required",
                         "message": "Please add billing information",
                         "severity": "warning",
                         "created_at": datetime.utcnow().isoformat(),
@@ -136,7 +138,7 @@ def check_subscription_status(request):
 1. **Single Responsibility**: Each provider should check for one specific type of notification
 2. **Error Handling**: Always handle exceptions gracefully
 3. **Return Values**: Return `None` or empty list when no notifications
-4. **Unique IDs**: Use clear, unique IDs that include context (e.g., `billing_past_due_${team_id}`)
+4. **Unique IDs**: Use clear, unique IDs that include context (e.g., `billing_past_due_${workspace_id}`)
 5. **Action URLs**: Include action URLs when there's a specific action to take
 6. **Logging**: Log errors and important state changes
 7. **Performance**: Keep checks lightweight and cache where appropriate

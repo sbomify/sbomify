@@ -268,10 +268,14 @@ def test_public_pages_accessibility(
     client = Client()
 
     for uri in uris:
-        response: HttpResponse = client.get(uri)
+        response: HttpResponse = client.get(uri, follow=True)
 
-        response.status_code == 200
-        assert quote(response.request["PATH_INFO"]) == uri
+        assert response.status_code == 200
+        if "sbom" in uri:
+            assert "component" in response.request["PATH_INFO"]
+            assert "detailed" in response.request["PATH_INFO"]
+        else:
+            assert quote(response.request["PATH_INFO"]) == uri
 
 
 @pytest.mark.django_db
@@ -584,6 +588,3 @@ def test_sbom_download_product_private_authorized(
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
     assert response["Content-Disposition"] == f"attachment; filename={sample_product.name}.cdx.json"
-
-
-

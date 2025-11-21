@@ -4,7 +4,7 @@ Hello {{ user.first_name }} {{ user.last_name}}!
 Hello {{user.pk}}
 {% endif %}
 
-Welcome to sbomify! We've created a default team for you and enrolled you in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan.
+Welcome to sbomify! We've created a default workspace for you and enrolled you in a {{ TRIAL_PERIOD_DAYS }}-day trial of our Business plan.
 
 During your trial, you'll have access to all Business plan features:
 - Up to {{ plan_limits.max_products }} products

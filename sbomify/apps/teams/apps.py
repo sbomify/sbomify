@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class TeamsConfig(AppConfig):
+class WorkspacesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sbomify.apps.teams"
     label = "teams"

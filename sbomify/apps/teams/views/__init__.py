@@ -36,7 +36,7 @@ from sbomify.apps.teams.utils import get_user_teams
 
 log = getLogger(__name__)
 
-from sbomify.apps.teams.views.dashboard import TeamsDashboardView  # noqa: F401, E402
+from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 
 

@@ -53,7 +53,7 @@ describe('EditableSingleField Business Logic', () => {
 
     it('should make correct API call to rename team', async () => {
       const newName = 'New Team Name'
-      const apiUrl = `/api/v1/teams/${mockTeamId}`
+      const apiUrl = `/api/v1/workspaces/${mockTeamId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -187,7 +187,7 @@ describe('EditableSingleField Business Logic', () => {
     it('should construct correct API URL for different item types', () => {
       const testCases = [
         { itemType: 'component', itemId: mockComponentId, expected: `/api/v1/components/${mockComponentId}` },
-        { itemType: 'team', itemId: mockTeamId, expected: `/api/v1/teams/${mockTeamId}` },
+        { itemType: 'workspace', itemId: mockTeamId, expected: `/api/v1/workspaces/${mockTeamId}` },
         { itemType: 'project', itemId: mockProjectId, expected: `/api/v1/projects/${mockProjectId}` },
         { itemType: 'product', itemId: mockProductId, expected: `/api/v1/products/${mockProductId}` }
       ]
@@ -195,8 +195,8 @@ describe('EditableSingleField Business Logic', () => {
       testCases.forEach(({ itemType, itemId, expected }) => {
         let apiUrl: string;
         switch (itemType) {
-          case 'team':
-            apiUrl = `/api/v1/teams/${itemId}`;
+          case 'workspace':
+            apiUrl = `/api/v1/workspaces/${itemId}`;
             break;
           case 'component':
             apiUrl = `/api/v1/components/${itemId}`;

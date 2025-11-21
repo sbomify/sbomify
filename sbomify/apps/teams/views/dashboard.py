@@ -9,15 +9,19 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.apis import list_teams
 from sbomify.apps.teams.forms import AddTeamForm, DeleteTeamForm, UpdateTeamForm
 from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.utils import get_user_teams
 
 
-class TeamsDashboardView(LoginRequiredMixin, View):
+class WorkspacesDashboardView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         status_code, teams = list_teams(request)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=teams.get("detail", "Unknown error"))
             )
+
+        request.session["user_teams"] = get_user_teams(request.user)
+        request.session.modified = True
 
         return render(
             request,
@@ -48,6 +52,8 @@ class TeamsDashboardView(LoginRequiredMixin, View):
             return redirect("teams:teams_dashboard")
 
         form.save(user=request.user)
+        request.session["user_teams"] = get_user_teams(request.user)
+        request.session.modified = True
         messages.add_message(
             request,
             messages.SUCCESS,
@@ -76,11 +82,13 @@ class TeamsDashboardView(LoginRequiredMixin, View):
                 messages.INFO,
                 f"Workspace {team.name} updated successfully",
             )
+            request.session["user_teams"] = get_user_teams(request.user)
+            request.session.modified = True
 
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
         except Team.DoesNotExist:
-            messages.error(request, "Team not found")
+            messages.error(request, "Workspace not found")
 
         return redirect("teams:teams_dashboard")
 
@@ -108,11 +116,13 @@ class TeamsDashboardView(LoginRequiredMixin, View):
                 messages.add_message(
                     request,
                     messages.INFO,
-                    f"Team {team.name} has been deleted",
+                    f"Workspace {team.name} has been deleted",
                 )
+                request.session["user_teams"] = get_user_teams(request.user)
+                request.session.modified = True
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
         except Team.DoesNotExist:
-            messages.error(request, "Team not found")
+            messages.error(request, "Workspace not found")
 
         return redirect("teams:teams_dashboard")

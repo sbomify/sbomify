@@ -303,7 +303,7 @@ The following dangerzone components are available and use the `variant="dangerzo
 - **Components**: `vc-danger-zone` (transfer + delete functionality)
 - **Projects**: `vc-project-danger-zone` (delete only)
 - **Products**: `vc-product-danger-zone` (delete only)
-- **Teams/Workspaces**: `vc-team-danger-zone` (delete only)
+- **Workspaces**: `vc-team-danger-zone` (delete only, legacy component name retained)
 
 Each component implements collapsible behavior, confirmation modals, and consistent styling patterns.
 

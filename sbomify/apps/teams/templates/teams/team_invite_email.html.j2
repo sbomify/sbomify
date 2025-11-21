@@ -2,10 +2,12 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta name="description" content="sbomify team invitation notification">
-        <meta name="keywords" content="sbomify, team, invitation, notification">
+        <meta name="description"
+              content="sbomify workspace invitation notification">
+        <meta name="keywords"
+              content="sbomify, workspace, invitation, notification">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>You've been invited to join a team on sbomify</title>
+        <title>You've been invited to join a workspace on sbomify</title>
         <style>
             .invite-button {
                 background-color: #007bff;
@@ -18,10 +20,10 @@
         </style>
     </head>
     <body>
-        <h1>You've been invited to join a team!</h1>
+        <h1>You've been invited to join a workspace!</h1>
         <p>Hello,</p>
         <p>
-            {{ user.get_full_name|default:user.email }} has invited you to join the team <strong>{{ team.name }}</strong> on sbomify.
+            {{ user.get_full_name|default:user.email }} has invited you to join the workspace <strong>{{ team.name }}</strong> on sbomify.
         </p>
         <p>
             <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.id %}"
