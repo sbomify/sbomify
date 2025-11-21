@@ -26,12 +26,7 @@
                     {% endif %}
                 </span>
             </button>
-            {% if request.session.current_team %}
-                <span class="current-workspace-hint text-muted small">
-                    <i class="fas fa-info-circle" aria-hidden="true"></i>
-                    You're viewing {{ request.session.current_team.name|workspace_display }}
-                </span>
-            {% endif %}
+            {% if request.session.current_team %}{% endif %}
             <ul class="dropdown-menu shadow-sm" role="menu">
                 <li role="presentation">
                     <h6 class="dropdown-header" role="heading" aria-level="2">Switch Workspace</h6>
