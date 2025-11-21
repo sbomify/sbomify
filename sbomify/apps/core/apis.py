@@ -4,6 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.http import HttpRequest, HttpResponse
+from django.utils import timezone
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -1929,7 +1930,9 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
         release_ids.update(document_releases)
 
         # Get the actual release objects
-        releases_queryset = Release.objects.filter(id__in=release_ids).select_related("product").order_by("-created_at")
+        releases_queryset = (
+            Release.objects.filter(id__in=release_ids).select_related("product").order_by("-released_at", "-created_at")
+        )
 
         # Apply pagination
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
@@ -1957,6 +1960,7 @@ def list_component_releases(request: HttpRequest, component_id: str, page: int =
                     "is_prerelease": release.is_prerelease,
                     "is_public": release.product.is_public,  # Inherit from product
                     "created_at": release.created_at,
+                    "released_at": release.released_at,
                     "artifacts_count": artifact_count,
                     "has_sboms": has_sboms,
                     "product": {
@@ -2228,7 +2232,7 @@ def list_all_releases(
             for product in team_products:
                 _ensure_latest_release_exists(product)
 
-        releases_queryset = query.order_by("-created_at")
+        releases_queryset = query.order_by("-released_at", "-created_at")
 
         # Apply pagination
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
@@ -2259,6 +2263,7 @@ def list_all_releases(
                         "is_prerelease": release.is_prerelease,
                         "is_public": release.product.is_public,  # Inherit from product
                         "created_at": release.created_at,
+                        "released_at": release.released_at,
                         "artifacts_count": artifact_count,
                         "has_sboms": has_sboms,
                         "product": {
@@ -2297,6 +2302,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
         "is_prerelease": release.is_prerelease,
         "is_public": release.product.is_public,  # Inherit from product
         "created_at": release.created_at,
+        "released_at": release.released_at,
         "artifacts_count": artifact_count,
         "has_sboms": has_sboms,
         "product": {
@@ -2381,12 +2387,16 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema):
 
     try:
         with transaction.atomic():
+            created_at = payload.created_at or timezone.now()
+            released_at = payload.released_at or created_at
             release = Release.objects.create(
                 product=product,
                 name=payload.name,
                 description=payload.description or "",
                 is_latest=False,  # Manual releases are never latest
                 is_prerelease=payload.is_prerelease,
+                created_at=created_at,
+                released_at=released_at,
             )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
@@ -2466,6 +2476,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
             release.is_prerelease = payload.is_prerelease
             if payload.created_at is not None:
                 release.created_at = payload.created_at
+            if payload.released_at is not None:
+                release.released_at = payload.released_at
             release.save()
 
         return 200, _build_release_response(request, release, include_artifacts=True)
@@ -2517,6 +2529,10 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
                     ),
                     "error_code": ErrorCode.DUPLICATE_NAME,
                 }
+
+            # Normalize nullable fields that can't be NULL in the DB
+            if "description" in update_data and update_data["description"] is None:
+                update_data["description"] = ""
 
             # Update only fields that have actually changed to avoid unnecessary unique constraint checks
             changed = False
@@ -2995,7 +3011,7 @@ def list_document_releases(request: HttpRequest, document_id: str, page: int = Q
     release_artifacts_queryset = (
         ReleaseArtifact.objects.filter(document=document)
         .select_related("release", "release__product")
-        .order_by("-release__created_at")
+        .order_by("-release__released_at", "-release__created_at")
     )
 
     # Apply pagination
@@ -3175,7 +3191,7 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     release_artifacts_queryset = (
         ReleaseArtifact.objects.filter(sbom=sbom)
         .select_related("release", "release__product")
-        .order_by("-release__created_at")
+        .order_by("-release__released_at", "-release__created_at")
     )
 
     # Apply pagination

@@ -26,7 +26,7 @@
                     <div class="header-meta">
                         <span class="meta-item">
                             <i class="fas fa-calendar me-2 text-primary"></i>
-                            <span class="meta-label">Released {{ release.created_at|date:"M d, Y" }}</span>
+                            <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                         </span>
                         <span class="meta-divider">•</span>
                         <span class="meta-item">

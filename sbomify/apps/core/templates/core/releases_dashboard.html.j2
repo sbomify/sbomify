@@ -88,8 +88,9 @@
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span class="date-info" title="{{ release.created_at|date:'F d, Y H:i' }}">
-                                                        {{ release.created_at|date:"M d, Y" }}
+                                                    <span class="date-info"
+                                                          title="{{ release.released_at|default_if_none:release.created_at|date:'F d, Y H:i' }}">
+                                                        {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
                                                     </span>
                                                 </td>
                                                 <td class="text-center">
