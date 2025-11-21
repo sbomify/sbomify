@@ -2530,6 +2530,10 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
                     "error_code": ErrorCode.DUPLICATE_NAME,
                 }
 
+            # Normalize nullable fields that can't be NULL in the DB
+            if "description" in update_data and update_data["description"] is None:
+                update_data["description"] = ""
+
             # Update only fields that have actually changed to avoid unnecessary unique constraint checks
             changed = False
             for field, value in update_data.items():

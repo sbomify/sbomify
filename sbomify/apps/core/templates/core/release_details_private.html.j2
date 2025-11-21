@@ -54,8 +54,8 @@
                               data-item-type="release"
                               data-item-id="{{ release.id }}"
                               data-field-name="created_at"
-                              data-field-type="date"
-                              data-item-value="{{ release.created_at|date:'Y-m-d' }}"
+                              data-field-type="datetime"
+                              data-item-value="{{ release.created_at|date:'Y-m-d\\TH:i' }}"
                               data-display-value="Created {{ release.created_at|date:'M d, Y' }}">Created {{ release.created_at|date:"M d, Y" }}</span>
                     {% else %}
                         <span>Created {{ release.created_at|date:"M d, Y" }}</span>
@@ -71,8 +71,8 @@
                           data-item-type="release"
                           data-item-id="{{ release.id }}"
                           data-field-name="released_at"
-                          data-field-type="date"
-                          data-item-value="{{ release.released_at|default_if_none:release.created_at|date:'Y-m-d' }}"
+                          data-field-type="datetime"
+                          data-item-value="{{ release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' }}"
                           data-display-value="Released {{ release.released_at|default_if_none:release.created_at|date:'M d, Y' }}">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                 {% else %}
                     <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
