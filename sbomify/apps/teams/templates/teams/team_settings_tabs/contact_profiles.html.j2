@@ -1,3 +1,25 @@
-<div class="vc-contact-profiles"
-     data-team-key="{{ team.key }}"
-     data-user-role="{{ request.session.current_team.role }}"></div>
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/contact-profiles.css' %}">
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">Contact Profiles</h5>
+        <button class="btn btn-primary btn-sm"
+                hx-get="{% url 'teams:contact_profiles_form' team.key %}"
+                hx-target="#contact-profiles-content"
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-plus me-1"></i>
+            Add Profile
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="contact-profiles-content"
+             hx-get="{% url 'teams:contact_profiles_list' team.key %}"
+             hx-trigger="load, refreshProfileList from:body"
+             hx-swap="innerHTML">
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-spinner fa-spin me-2"></i>Loading contact profiles...
+            </div>
+        </div>
+    </div>
+</div>

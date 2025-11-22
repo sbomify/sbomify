@@ -326,6 +326,27 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
+@router.get(
+    "/{team_key}/contact-profiles/{profile_id}",
+    response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False):
+    team, role, error = _get_team_and_membership_role(request, team_key)
+    if error:
+        return error
+
+    if not _user_can_manage_profiles(role):
+        return 403, {"detail": "Only owners and admins can view contact profiles"}
+
+    try:
+        profile = ContactProfile.objects.prefetch_related("contacts").get(team=team, pk=profile_id)
+    except ContactProfile.DoesNotExist:
+        return 404, {"detail": "Contact profile not found"}
+
+    response = profile if return_instance else serialize_contact_profile(profile)
+    return 200, response
+
+
 @router.post(
     "/{team_key}/contact-profiles",
     response={201: ContactProfileSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},

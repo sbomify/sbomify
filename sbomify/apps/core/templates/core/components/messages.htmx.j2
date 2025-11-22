@@ -1,34 +1,53 @@
-{% if messages %}
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            {% for message in messages %}
-                const messageType = '{{ message.level_tag }}';
-                const messageText = '{{ message|escapejs }}';
+<script>
+    (function() {
+        function showMessage(messageType, messageText) {
+            let type;
+            switch(messageType) {
+                case 'alert-danger':
+                case 'error':
+                    type = 'error';
+                    break;
+                case 'alert-success':
+                case 'success':
+                    type = 'success';
+                    break;
+                case 'alert-warning':
+                case 'warning':
+                    type = 'warning';
+                    break;
+                case 'alert-info':
+                case 'info':
+                    type = 'info';
+                    break;
+                default:
+                    type = 'info';
+            }
 
-                let type;
-                switch(messageType) {
-                    case 'alert-danger':
-                        type = 'error';
-                        break;
-                    case 'alert-success':
-                        type = 'success';
-                        break;
-                    case 'alert-warning':
-                        type = 'warning';
-                        break;
-                    case 'alert-info':
-                        type = 'info';
-                        break;
-                    default:
-                        type = 'info';
-                }
-
+            if (window.showToast) {
                 window.showToast({
                     title: type.charAt(0).toUpperCase() + type.slice(1),
                     message: messageText,
                     type: type
                 });
+            }
+        }
+
+        {% if messages %}
+        document.addEventListener('DOMContentLoaded', function() {
+            {% for message in messages %}
+            showMessage('{{ message.level_tag }}', '{{ message|escapejs }}');
             {% endfor %}
         });
-    </script>
-{% endif %}
+        {% endif %}
+
+        document.body.addEventListener('messages', function(event) {
+            if (!event.detail.value || !Array.isArray(event.detail.value)) {
+                return;
+            }
+
+            event.detail.value.forEach(function(msg) {
+                showMessage(msg.type, msg.message);
+            });
+        });
+    })();
+</script>

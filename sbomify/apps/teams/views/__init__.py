@@ -36,6 +36,10 @@ from sbomify.apps.teams.utils import get_user_teams
 
 log = getLogger(__name__)
 
+from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
+    ContactProfileFormView,
+    ContactProfileView,
+)
 from sbomify.apps.teams.views.dashboard import TeamsDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 
@@ -151,8 +155,8 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 subject=f"Invitation to join {team.name} at sbomify",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[invite_user_form.cleaned_data["email"]],
-                message=render_to_string("teams/team_invite_email.txt", email_context),
-                html_message=render_to_string("teams/team_invite_email.html.j2", email_context),
+                message=render_to_string("teams/emails/team_invite_email.txt", email_context),
+                html_message=render_to_string("teams/emails/team_invite_email.html.j2", email_context),
             )
 
             messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")

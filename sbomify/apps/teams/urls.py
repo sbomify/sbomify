@@ -17,6 +17,18 @@ urlpatterns: list[URLPattern] = [
     path("<team_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),
     # Keep team_details as an alias that redirects to team_settings for backward compatibility
     path("<team_key>/details", views.team_details, name="team_details"),
+    # Contact profiles HTMX endpoints
+    path("<team_key>/contact-profiles", views.ContactProfileView.as_view(), name="contact_profiles_list"),
+    path(
+        "<team_key>/contact-profiles/form",
+        views.ContactProfileFormView.as_view(),
+        name="contact_profiles_form",
+    ),
+    path(
+        "<team_key>/contact-profiles/<profile_id>/form",
+        views.ContactProfileFormView.as_view(),
+        name="contact_profiles_detail_form",
+    ),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]
