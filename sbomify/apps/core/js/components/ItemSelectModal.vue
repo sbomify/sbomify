@@ -17,7 +17,7 @@
               <tr>
                 <th scope="col"></th>
                 <th scope="col">{{ titledItemType }} ID</th>
-                <th scope="col">Team</th>
+                <th scope="col">Workspace</th>
                 <th scope="col">{{ titledItemType }} Name</th>
               </tr>
               </thead>
@@ -110,7 +110,7 @@
         name: string;
       }) => ({
         team_key: item.team_id,
-        team_name: 'Current Team', // We could get this from context if needed
+        team_name: 'Current Workspace', // We could get this from context if needed
         item_key: item.id,
         item_name: item.name
       }));

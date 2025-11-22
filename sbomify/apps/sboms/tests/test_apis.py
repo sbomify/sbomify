@@ -1305,7 +1305,7 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
-    # Test 4: Teams without billing plan can make items private (fallback behavior)
+    # Test 4: Workspaces without billing plan can make items private (fallback behavior)
     team.billing_plan = None
     team.save()
 

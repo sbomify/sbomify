@@ -4,7 +4,8 @@
 {% load django_htmx %}
 {% load static %}
 {% load json_extras %}
-{% block title %}sbomify Workspace Settings: {{ team.name }}{% endblock %}
+{% load teams %}
+{% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
         <div class="header-main">
@@ -13,7 +14,7 @@
                     <i class="fas fa-cog me-3 text-primary"></i>
                     Workspace Settings
                 </h1>
-                <p class="item-subtitle">Manage your workspace configuration, members, and preferences</p>
+                <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
             </div>
             <div class="header-actions">
                 <span class="workspace-key">

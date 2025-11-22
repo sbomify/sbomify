@@ -124,12 +124,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if owner_count == 1:
                 messages.warning(
                     request,
-                    "Cannot delete the only owner of the team. Please assign another owner first.",
+                    "Cannot delete the only owner of the workspace. Please assign another owner first.",
                 )
                 return redirect("teams:team_settings", team_key=team_key)
 
         membership.delete()
-        messages.info(request, f"Member {membership.user.username} removed from team {membership.team.name}")
+        messages.info(request, f"Member {membership.user.username} removed from workspace {membership.team.name}")
 
         return redirect("teams:team_settings", team_key=team_key)
 

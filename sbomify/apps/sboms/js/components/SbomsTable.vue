@@ -34,6 +34,7 @@
         :show-delete-button="hasCrudPermissions"
         :is-deleting="isDeleting"
         :team-billing-plan="teamBillingPlan"
+        :team-key="teamKey"
         @delete="confirmDelete"
         @scan-completed="handleScanCompleted"
       />
@@ -79,6 +80,7 @@
         :show-delete-button="false"
         :is-deleting="null"
         :team-billing-plan="teamBillingPlan"
+        :team-key="teamKey"
         @delete="confirmDelete"
         @scan-completed="handleScanCompleted"
       />
@@ -173,6 +175,7 @@ const props = defineProps<{
   hasCrudPermissions?: boolean | string
   isPublicView?: boolean
   teamBillingPlan?: string
+  teamKey?: string
 }>()
 
 // State

@@ -24,7 +24,7 @@
         <p>sbomify is the quickest way to meet government and industry compliance requirements. Here's your fast track:</p>
         <ul class="feature-list">
             <li>
-                <strong>5 minutes:</strong> Set up your workspace and invite your team
+                <strong>5 minutes:</strong> Set up your workspace and invite collaborators
             </li>
             <li>
                 <strong>10 minutes:</strong> Create your first product (like "My Web App")
@@ -71,12 +71,14 @@
         <strong>Security Scanning:</strong> Automatically find security problems in all your software.
     </p>
     <p>
-        <strong>Team Collaboration:</strong> Work with your team to keep all your software secure.
+        <strong>Workspace Collaboration:</strong> Work with your workspace members to keep all your software secure.
     </p>
     {% if workspace_name %}
         <p>
             You're currently part of the <strong>{{ workspace_name }}</strong> workspace.
-            {% if user_role == "owner" %}You can invite team members and change workspace settings from your dashboard.{% endif %}
+            {% if user_role == "owner" %}
+                You can invite workspace members and change workspace settings from your dashboard.
+            {% endif %}
         </p>
     {% endif %}
     <div class="highlight-box">

@@ -47,6 +47,20 @@
                               data-placeholder="Click to add description..."></span>
                     </p>
                 {% endif %}
+                <div class="created-info text-muted">
+                    <i class="fas fa-calendar-plus me-2"></i>
+                    {% if release.has_crud_permissions and not release.is_latest %}
+                        <span class="vc-editable-single-field"
+                              data-item-type="release"
+                              data-item-id="{{ release.id }}"
+                              data-field-name="created_at"
+                              data-field-type="datetime"
+                              data-item-value="{{ release.created_at|date:'Y-m-d\\TH:i' }}"
+                              data-display-value="Created {{ release.created_at|date:'M d, Y' }}">Created {{ release.created_at|date:"M d, Y" }}</span>
+                    {% else %}
+                        <span>Created {{ release.created_at|date:"M d, Y" }}</span>
+                    {% endif %}
+                </div>
             </div>
         </div>
         <div class="header-meta">
@@ -56,12 +70,12 @@
                     <span class="vc-editable-single-field meta-label"
                           data-item-type="release"
                           data-item-id="{{ release.id }}"
-                          data-field-name="created_at"
-                          data-field-type="date"
-                          data-item-value="{{ release.created_at|date:'Y-m-d' }}"
-                          data-display-value="Released {{ release.created_at|date:'M d, Y' }}">Released {{ release.created_at|date:"M d, Y" }}</span>
+                          data-field-name="released_at"
+                          data-field-type="datetime"
+                          data-item-value="{{ release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' }}"
+                          data-display-value="Released {{ release.released_at|default_if_none:release.created_at|date:'M d, Y' }}">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                 {% else %}
-                    <span class="meta-label">Released {{ release.created_at|date:"M d, Y" }}</span>
+                    <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                 {% endif %}
             </span>
             <span class="meta-divider">•</span>

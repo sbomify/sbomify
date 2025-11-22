@@ -52,7 +52,7 @@ def check_billing_limits(resource_type: str):
             try:
                 team = Team.objects.get(key=team_key)
             except Team.DoesNotExist:
-                return HttpResponseForbidden("Team not found")
+                return HttpResponseForbidden("Workspace not found")
 
             # Check if team has a billing plan
             if not team.billing_plan:

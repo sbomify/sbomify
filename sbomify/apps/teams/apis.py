@@ -85,17 +85,17 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
 def get_team_branding(request: HttpRequest, team_key: str):
     """Get workspace branding information.
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     branding_info = BrandingInfo(**team.branding_info)
     response_data = {
@@ -118,7 +118,7 @@ def update_team_branding(
 ):
     """Update a single workspace branding field.
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
 
     # Validate field name
@@ -129,8 +129,8 @@ def update_team_branding(
     try:
         team = Team.objects.get(pk=token_to_number(team_key))
     except (ValueError, Team.DoesNotExist):
-        logger.warning(f"Team not found: {team_key}")
-        return 404, {"detail": "Team not found"}
+        logger.warning(f"Workspace not found: {team_key}")
+        return 404, {"detail": "Workspace not found"}
 
     if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
         logger.warning(f"User {request.user.username} is not owner of team {team_key}")
@@ -177,7 +177,7 @@ def upload_branding_file(
 ):
     """Upload workspace branding files (icon or logo).
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
     if file_type not in ["icon", "logo"]:
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
@@ -185,7 +185,7 @@ def upload_branding_file(
     try:
         team = Team.objects.get(pk=token_to_number(team_key))
     except (ValueError, Team.DoesNotExist):
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
         return 403, {"detail": "Only allowed for owners"}
@@ -239,12 +239,12 @@ def _get_team_and_membership_role(request: HttpRequest, team_key: str):
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return None, None, (404, {"detail": "Team not found"})
+        return None, None, (404, {"detail": "Workspace not found"})
 
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
-        return None, None, (404, {"detail": "Team not found"})
+        return None, None, (404, {"detail": "Workspace not found"})
 
     membership = Member.objects.filter(user=request.user, team=team).first()
     if not membership:
@@ -459,17 +459,17 @@ def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str)
 def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     """Update workspace information.
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
     if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
@@ -496,17 +496,17 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
 def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
     """Partially update workspace information.
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is retained for backward compatibility and represents the workspace key.
     """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     # Check if user is owner
     if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
@@ -533,7 +533,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
 def list_teams(request: HttpRequest):
     """List all workspaces for the current user.
 
-    Note: Returns workspace data. Teams are now called workspaces.
+    Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
     memberships = Member.objects.filter(user=request.user).select_related("team").all()
     return 200, [_build_team_response(request, membership.team) for membership in memberships]
@@ -543,17 +543,17 @@ def list_teams(request: HttpRequest):
 def get_team(request: HttpRequest, team_key: str):
     """Get workspace information by workspace key.
 
-    Note: 'team_key' parameter refers to workspace key. Teams are now called workspaces.
+    Note: 'team_key' parameter name is kept for backward compatibility and represents the workspace key.
     """
     try:
         team_id = token_to_number(team_key)
     except ValueError:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     try:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
     if not Member.objects.filter(user=request.user, team=team).exists():

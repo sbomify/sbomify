@@ -74,11 +74,53 @@ def test_create_release_success(
     assert data["is_latest"] is False
     assert "id" in data
     assert "created_at" in data
+    assert "released_at" in data
 
     # Verify release was created in database
     release = Release.objects.get(id=data["id"])
     assert release.name == "v1.0.0"
     assert release.product_id == sample_product.id
+    assert release.created_at == release.released_at
+
+
+@pytest.mark.django_db
+def test_create_release_with_custom_dates(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test creating a release with custom created and release dates."""
+    from datetime import datetime, timezone
+
+    client = Client()
+    url = reverse("api-1:create_release")
+
+    custom_created = datetime(2023, 5, 10, 9, 0, tzinfo=timezone.utc)
+    custom_released = datetime(2023, 5, 12, 10, 30, tzinfo=timezone.utc)
+    payload = {
+        "name": "v2.0.0",
+        "product_id": str(sample_product.id),
+        "created_at": custom_created.isoformat(),
+        "released_at": custom_released.isoformat(),
+    }
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["created_at"].startswith("2023-05-10")
+    assert data["released_at"].startswith("2023-05-12")
+
+    release = Release.objects.get(id=data["id"])
+    assert release.created_at == custom_created
+    assert release.released_at == custom_released
 
 
 @pytest.mark.django_db
@@ -1128,24 +1170,32 @@ def test_list_available_artifacts_excludes_existing(
 
 
 @pytest.mark.django_db
-def test_update_release_date(
+def test_update_release_dates(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test updating release creation date."""
+    """Test updating both release and created dates."""
     from datetime import datetime, timezone
 
     client = Client()
 
     # Create a release
     release = Release.objects.create(product=sample_product, name="v1.0.0")
-    original_date = release.created_at
+    original_released = release.released_at
+    original_created = release.created_at
 
     # Set a new date
-    new_date = datetime(2023, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    new_released = datetime(2023, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    new_created = datetime(2022, 12, 20, 9, 30, 0, tzinfo=timezone.utc)
 
     url = reverse("api-1:update_release", kwargs={"release_id": release.id})
-    data = {"name": "v1.0.0", "description": "Test release", "is_prerelease": False, "created_at": new_date.isoformat()}
+    data = {
+        "name": "v1.0.0",
+        "description": "Test release",
+        "is_prerelease": False,
+        "created_at": new_created.isoformat(),
+        "released_at": new_released.isoformat(),
+    }
 
     response = client.put(
         url,
@@ -1156,6 +1206,9 @@ def test_update_release_date(
 
     assert response.status_code == 200
 
-    # Verify the date was updated
+    # Verify the dates were updated
     release.refresh_from_db()
-    assert release.created_at.date() == new_date.date()
+    assert release.released_at.date() == new_released.date()
+    assert release.created_at.date() == new_created.date()
+    assert original_released != release.released_at
+    assert original_created != release.created_at

@@ -48,6 +48,9 @@
   // Determine input type based on fieldType
   const inputType = computed(() => {
     switch (props.fieldType) {
+      case 'datetime':
+      case 'datetime-local':
+        return 'datetime-local';
       case 'date':
         return 'date';
       case 'email':
@@ -72,6 +75,29 @@
     fieldValue.value = props.itemValue;
   };
 
+  const normalizeValueForApi = (): string | number | boolean | null => {
+    // Convert date/time inputs to ISO to preserve time zone details
+    if (typeof fieldValue.value === 'string') {
+      const trimmedValue = fieldValue.value.trim();
+
+      if (!trimmedValue) {
+        return null;
+      }
+
+      if (['date', 'datetime', 'datetime-local'].includes(props.fieldType || '')) {
+        const parsedDate = new Date(trimmedValue);
+        if (Number.isNaN(parsedDate.getTime())) {
+          throw new Error('Please enter a valid date/time value.');
+        }
+        return parsedDate.toISOString();
+      }
+
+      return trimmedValue;
+    }
+
+    return fieldValue.value;
+  };
+
   const updateField = async () => {
     errorMessage.value = ''
 
@@ -81,10 +107,16 @@
     // Use proper CRUD endpoints
     let apiUrl: string;
     const data: Record<string, string | number | boolean | null> = {};
-    data[fieldName] = fieldValue.value;
+    try {
+      data[fieldName] = normalizeValueForApi();
+    } catch (error) {
+      errorMessage.value = (error as Error).message;
+      fieldValue.value = originalValue;
+      return;
+    }
 
     switch (props.itemType) {
-      case 'team':
+      case 'workspace':
         apiUrl = `/api/v1/workspaces/${props.itemId}`;
         break;
       case 'component':

@@ -27,7 +27,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--team-key",
             type=str,
-            help="Team key to create the test environment for. If not provided, will use the first team found.",
+            help="Workspace key to create the test environment for (flag name retained for compatibility).",
         )
         parser.add_argument(
             "--clean",
@@ -45,7 +45,7 @@ class Command(BaseCommand):
         else:
             team = Team.objects.first()
             if not team:
-                self.stdout.write(self.style.ERROR("No team found. Please create a team first."))
+                self.stdout.write(self.style.ERROR("No workspace found. Please create a workspace first."))
                 return
 
         # Clean up existing test data if requested
@@ -58,18 +58,18 @@ class Command(BaseCommand):
             self.create_test_environment(team)
 
     def cleanup_test_data(self, team):
-        """Clean up existing test data for the team"""
-        self.stdout.write(f"Cleaning up existing test data for team {team.key}...")
+        """Clean up existing test data for the workspace"""
+        self.stdout.write(f"Cleaning up existing test data for workspace {team.key}...")
 
-        # Get all test products for this team
+        # Get all test products for this workspace
         test_products = Product.objects.filter(team=team, name__startswith="test-product")
         self.stdout.write(f"Found {test_products.count()} test products to delete")
 
-        # Get all test projects for this team
+        # Get all test projects for this workspace
         test_projects = Project.objects.filter(team=team, name__startswith="test-project")
         self.stdout.write(f"Found {test_projects.count()} test projects to delete")
 
-        # Get all test components for this team
+        # Get all test components for this workspace
         test_components = Component.objects.filter(team=team, name__startswith="test-component-")
         self.stdout.write(f"Found {test_components.count()} test components to delete")
 

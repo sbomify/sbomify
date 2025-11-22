@@ -5,9 +5,9 @@
       <div class="container">
         <div class="row justify-content-center text-center">
           <div class="col-lg-8">
-            <h1 class="hero-title mb-4">Choose the Perfect Plan for Your Team</h1>
+            <h1 class="hero-title mb-4">Choose the Perfect Plan for Your Workspace</h1>
                          <p class="hero-subtitle mb-4">
-               Secure, scalable security and product artifact management for teams of all sizes. Start with Community, upgrade when you need more.
+               Secure, scalable security and product artifact management for workspaces of all sizes. Start with Community, upgrade when you need more.
              </p>
             <div class="billing-toggle-wrapper mb-5">
               <div class="billing-toggle">
@@ -285,7 +285,7 @@ const getFeatures = (planKey: string): PlanFeature[] => {
       { key: 'vulnerability-scanning', label: 'Advanced vulnerability scanning (every 12 hours)' },
       { key: 'product-identifiers', label: 'Product identifiers (SKUs/barcodes)' },
       { key: 'priority-support', label: 'Priority support' },
-      { key: 'team-management', label: 'Team management' }
+      { key: 'team-management', label: 'Workspace management' }
     );
   } else if (planKey === 'enterprise') {
     baseFeatures.push(

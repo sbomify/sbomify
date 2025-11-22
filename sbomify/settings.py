@@ -486,7 +486,7 @@ sentry_sdk.init(
 )
 
 
-# Teams app related config
+# Workspaces app related config (legacy 'teams' app)
 TEAMS_SUPPORTED_ROLES = [("owner", "Owner"), ("admin", "Admin"), ("guest", "Guest")]
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
