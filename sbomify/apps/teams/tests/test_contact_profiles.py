@@ -4,8 +4,10 @@ import json
 
 import pytest
 
-from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, get_api_headers, guest_api_client
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.fixtures import (  # noqa: F401
+    sample_contact_profile_with_contacts,
+    sample_team_with_admin_member,
     sample_team_with_guest_member,
     sample_team_with_owner_member,
 )
@@ -93,3 +95,113 @@ def test_contact_profile_access_forbidden_for_guest(sample_team_with_guest_membe
     list_url = f"/api/v1/workspaces/{team.key}/contact-profiles"
     response = client.get(list_url, **headers)
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_get_contact_profile_success(
+    sample_team_with_owner_member,
+    sample_contact_profile_with_contacts,
+    authenticated_api_client,
+):
+    team = sample_team_with_owner_member.team
+    profile = sample_contact_profile_with_contacts
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/{profile.id}", **headers)
+    assert response.status_code == 200
+    assert response.json() == {
+        "address": None,
+        "company": "Test Company",
+        "contacts": [
+            {
+                "email": "john@example.com",
+                "name": "John Doe",
+                "order": 0,
+                "phone": None,
+            },
+        ],
+        "created_at": profile.created_at.isoformat(),
+        "email": None,
+        "id": profile.id,
+        "is_default": False,
+        "name": "Test Profile",
+        "phone": None,
+        "supplier_name": None,
+        "updated_at": profile.updated_at.isoformat(),
+        "vendor": None,
+        "website_urls": [],
+    }
+
+
+@pytest.mark.django_db
+def test_get_contact_profile_admin_access(
+    sample_team_with_admin_member,
+    sample_contact_profile_with_contacts,
+    authenticated_api_client,
+):
+    team = sample_team_with_admin_member.team
+    profile = sample_contact_profile_with_contacts
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/{profile.id}", **headers)
+    assert response.status_code == 200
+    assert response.json() == {
+        "address": None,
+        "company": "Test Company",
+        "contacts": [
+            {
+                "email": "john@example.com",
+                "name": "John Doe",
+                "order": 0,
+                "phone": None,
+            },
+        ],
+        "created_at": profile.created_at.isoformat(),
+        "email": None,
+        "id": profile.id,
+        "is_default": False,
+        "name": "Test Profile",
+        "phone": None,
+        "supplier_name": None,
+        "updated_at": profile.updated_at.isoformat(),
+        "vendor": None,
+        "website_urls": [],
+    }
+
+
+@pytest.mark.django_db
+def test_get_contact_profile_forbidden_for_guest(
+    sample_team_with_guest_member,
+    sample_contact_profile_with_contacts,
+    guest_api_client,
+):
+    team = sample_team_with_guest_member.team
+    profile = sample_contact_profile_with_contacts
+    client, token = guest_api_client
+    headers = get_api_headers(token)
+
+    response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/{profile.id}", **headers)
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Forbidden",
+        "error_code": None,
+    }
+
+
+@pytest.mark.django_db
+def test_get_contact_profile_not_found(
+    sample_team_with_owner_member,
+    authenticated_api_client,
+):
+    team = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/nonexistent-id", **headers)
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Contact profile not found",
+        "error_code": None,
+    }

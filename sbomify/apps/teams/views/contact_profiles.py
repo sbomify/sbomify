@@ -15,8 +15,8 @@ from sbomify.apps.teams.apis import (
 )
 from sbomify.apps.teams.forms import (
     ContactProfileContactFormSet,
-    ContactProfileModelForm,
     ContactProfileForm,
+    ContactProfileModelForm,
 )
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import (

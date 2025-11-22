@@ -8,7 +8,7 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
 
-from .models import Member, Team
+from .models import ContactProfile, ContactProfileContact, Member, Team
 
 
 @pytest.fixture
@@ -90,4 +90,29 @@ def sample_team_with_guest_member(
     try:
         membership.delete()
     except Member.DoesNotExist:
+        pass
+
+
+@pytest.fixture
+def sample_contact_profile_with_contacts(
+    sample_team: Team,
+) -> Generator[ContactProfile, Any, None]:
+    profile = ContactProfile.objects.create(
+        team=sample_team,
+        name="Test Profile",
+        company="Test Company",
+    )
+
+    ContactProfileContact.objects.create(
+        profile=profile,
+        name="John Doe",
+        email="john@example.com",
+        order=0,
+    )
+
+    yield profile
+
+    try:
+        profile.delete()
+    except ContactProfile.DoesNotExist:
         pass
