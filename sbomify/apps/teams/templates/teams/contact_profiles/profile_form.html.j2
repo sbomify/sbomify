@@ -7,7 +7,7 @@
         {% endif %}
         Contact Profile
     </h5>
-    <form {% if is_create %} hx-post="{% url 'teams:contact_profiles_form' team.key %}" {% else %} hx-post="{% url 'teams:contact_profiles_detail_form' team.key profile.id %}" {% endif %}
+    <form hx-post="{% if is_create %}{% url 'teams:contact_profiles_form' team.key %}{% else %}{% url 'teams:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
           hx-target="#contact-profiles-content"
           hx-swap="innerHTML">
         {% csrf_token %}
