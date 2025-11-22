@@ -1,0 +1,13 @@
+<button type="button" class="btn btn-sm btn-danger delete-contact-btn">
+    <i class="fas fa-times"></i>
+</button>
+{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+{% for field in form.visible_fields %}
+    <div class="mb-2">
+        <label class="form-label small" for="{{ field.id_for_label }}">
+            {{ field.label }}
+            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+        </label>
+        {{ field }}
+    </div>
+{% endfor %}

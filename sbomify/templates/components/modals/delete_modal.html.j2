@@ -4,7 +4,7 @@
     <link rel="stylesheet"
           href="{% static 'css/components/delete-modal.css' %}">
 {% endblock %}
-<div class="modal fade"
+<div class="modal fade {% if use_htmx %}htmx-modal{% endif %}"
      id="{{ modal_id }}"
      data-bs-backdrop="static"
      data-bs-keyboard="true"
@@ -40,7 +40,8 @@
                 <form action="{{ form_action }}"
                       method="post"
                       id="{{ modal_id }}-form"
-                      style="display:inline">
+                      style="display:inline"
+                      {% if use_htmx %}hx-post="{{ form_action }}" hx-swap="none"{% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="DELETE">
                     {% for field in form %}{{ field }}{% endfor %}
@@ -89,5 +90,18 @@
 
             displayElement.textContent = displayName;
         });
+
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
+        {% if use_htmx %}
+        form.addEventListener('htmx:afterRequest', function(event) {
+            if (!event.detail.successful) { return; }
+            const modalElement = bootstrap.Modal.getInstance(modal);
+            if (!modalElement) { return; }
+            modalElement.hide();
+        });
+        {% endif %}
     })();
 </script>

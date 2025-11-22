@@ -253,10 +253,10 @@ def _send_welcome_email(user, team: Team, business_plan: BillingPlan) -> None:
         }
         send_mail(
             subject="Welcome to sbomify - Your Business Plan Trial",
-            message=render_to_string("teams/new_user_email.txt", context),
+            message=render_to_string("teams/emails/new_user_email.txt", context),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
-            html_message=render_to_string("teams/new_user_email.html.j2", context),
+            html_message=render_to_string("teams/emails/new_user_email.html.j2", context),
         )
         logger.info(f"Sent welcome email to {user.email}")
     except Exception as e:
