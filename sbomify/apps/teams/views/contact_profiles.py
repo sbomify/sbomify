@@ -1,10 +1,9 @@
-import json
-
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
     create_contact_profile,
     delete_contact_profile,
@@ -24,28 +23,6 @@ from sbomify.apps.teams.schemas import (
     ContactProfileCreateSchema,
     ContactProfileUpdateSchema,
 )
-
-
-def htmx_success_response(message: str) -> HttpResponse:
-    response = HttpResponse()
-    response["HX-Trigger"] = json.dumps(
-        {
-            "messages": [{"type": "success", "message": message}],
-            "refreshProfileList": True,
-        }
-    )
-    return response
-
-
-def htmx_error_response(message: str) -> HttpResponse:
-    response = HttpResponse()
-    response["HX-Reswap"] = "none"
-    response["HX-Trigger"] = json.dumps(
-        {
-            "messages": [{"type": "error", "message": message}],
-        }
-    )
-    return response
 
 
 class ValidationError(Exception):
@@ -93,7 +70,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 204:
             return htmx_error_response(result.get("detail", "Failed to delete profile"))
 
-        return htmx_success_response("Contact profile deleted successfully")
+        return htmx_success_response("Contact profile deleted successfully", triggers={"refreshProfileList": True})
 
     def _patch(self, request: HttpRequest, team_key: str) -> HttpResponse:
         form = ContactProfileForm(request.POST)
@@ -111,7 +88,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if status_code != 200:
                 return htmx_error_response(result.get("detail", "Failed to set default profile"))
 
-        return htmx_success_response(f"'{profile.name}' set as default profile")
+        return htmx_success_response(f"'{profile.name}' set as default profile", triggers={"refreshProfileList": True})
 
 
 class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -188,7 +165,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 201:
             return htmx_error_response(result.get("detail", "Failed to create profile"))
 
-        return htmx_success_response("Contact profile created successfully")
+        return htmx_success_response("Contact profile created successfully", triggers={"refreshProfileList": True})
 
     def _update_profile(self, request: HttpRequest, team_key: str, profile_id: str) -> HttpResponse:
         status_code, profile = get_contact_profile(request, team_key, profile_id, return_instance=True)
@@ -209,4 +186,4 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update profile"))
 
-        return htmx_success_response("Contact profile updated successfully")
+        return htmx_success_response("Contact profile updated successfully", triggers={"refreshProfileList": True})

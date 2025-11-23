@@ -32,6 +32,11 @@ urlpatterns: list[URLPattern] = [
         views.ContactProfileFormView.as_view(),
         name="contact_profiles_detail_form",
     ),
+    path(
+        "<team_key>/vulnerability-settings",
+        views.VulnerabilitySettingsView.as_view(),
+        name="vulnerability_settings",
+    ),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

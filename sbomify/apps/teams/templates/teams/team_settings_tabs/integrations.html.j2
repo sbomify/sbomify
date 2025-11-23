@@ -1,4 +1,14 @@
-<div class="vc-vulnerability-settings"
-     data-team-key="{{ team.key }}"
-     data-billing-plan="{{ team.billing_plan }}"
-     data-user-role="{{ request.session.current_team.role }}"></div>
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/vulnerability-settings.css' %}">
+<div id="vulnerability-settings-wrapper"
+     hx-get="{% url 'teams:vulnerability_settings' team.key %}"
+     hx-trigger="load, refreshVulnerabilitySettings from:body"
+     hx-swap="innerHTML">
+    <div class="text-center py-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Loading vulnerability settings...</p>
+    </div>
+</div>
