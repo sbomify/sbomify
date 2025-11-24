@@ -101,17 +101,12 @@ services:
         condition: service_started
 
   sbomify-caddy:
-    # Use non-privileged ports for development
+    # Enable admin API for development debugging
     ports:
-      - "${HTTP_PORT:-8000}:80"
-      - "${HTTPS_PORT:-8443}:443"
-      - "2019:2019"  # Admin API for debugging
-    # Use development-specific environment variables
+      - "2019:2019"
     environment:
-      APP_BASE_URL: ${APP_BASE_URL:-localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-dev@localhost}
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-DEBUG}
-      CADDY_ADMIN: "0.0.0.0:2019"  # Enable admin API in development
+      CADDY_ADMIN: "0.0.0.0:2019"
 
   sbomify-migrations:
     build:

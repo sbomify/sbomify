@@ -84,23 +84,16 @@ services:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
     restart: ${CADDY_RESTART_POLICY:-always}
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-8000}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
     environment:
-      # Note: For Caddy, APP_BASE_URL should be just the domain (e.g., app.sbomify.com)
-      # not a full URL with protocol. Caddy handles the protocol automatically.
-      APP_BASE_URL: ${APP_BASE_URL:-localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
-      CADDY_ADMIN: ${CADDY_ADMIN:-off}  # Admin API disabled by default for security
+      CADDY_ADMIN: ${CADDY_ADMIN:-off}
     depends_on:
       - sbomify-backend
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://sbomify-caddy/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -143,5 +136,3 @@ services:
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
-  caddy_data:
-  caddy_config:
