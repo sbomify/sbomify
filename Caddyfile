@@ -1,0 +1,33 @@
+# Caddyfile for sbomify
+# Simple HTTP reverse proxy configuration
+{
+	admin {$CADDY_ADMIN:off}
+}
+
+# HTTP - All traffic
+:80 {
+	log {
+		output stdout
+		format json
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# Health check endpoint
+	@health {
+		path /health
+	}
+	handle @health {
+		respond "OK" 200
+	}
+
+	# Reverse proxy to Django backend
+	reverse_proxy sbomify-backend:8000 {
+		# X-Forwarded-For and X-Forwarded-Proto are passed by default
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+		header_down -Server
+	}
+
+	# Compression
+	encode gzip zstd
+}
