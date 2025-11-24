@@ -167,30 +167,3 @@ class ContactProfileUpdateSchema(BaseModel):
     website_urls: list[str] | None = None
     contacts: list[ContactProfileContactSchema] | None = None
     is_default: bool | None = None
-
-
-class CustomDomainSchema(BaseModel):
-    """Schema for returning custom domain data."""
-
-    id: str
-    hostname: str
-    is_verified: bool
-    is_active: bool
-    verified_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-
-
-class CustomDomainCreateSchema(BaseModel):
-    """Schema for creating a custom domain."""
-
-    class Config:
-        str_strip_whitespace = True
-
-    hostname: str = Field(..., max_length=255, min_length=1)
-
-
-class CustomDomainUpdateSchema(BaseModel):
-    """Schema for updating a custom domain."""
-
-    is_active: bool | None = None

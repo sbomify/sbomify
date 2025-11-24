@@ -60,8 +60,10 @@ To deploy sbomify in production:
    AWS_SBOMS_STORAGE_BUCKET_NAME=sbomify-prod-sboms
    AWS_SBOMS_STORAGE_BUCKET_URL=https://your-s3-endpoint.com/sbomify-prod-sboms
 
-   # Optional: Custom port (defaults to 8000)
-   HTTP_PORT=8000
+   # Optional: Custom ports
+   SBOMIFY_PORT=8000
+   POSTGRES_PORT=5432
+   REDIS_PORT=6379
    ```
 
 3. **Deploy**:
@@ -72,7 +74,7 @@ To deploy sbomify in production:
 
 That's it! sbomify will be running with your specified configuration.
 
-> **Note on Reverse Proxy**: sbomify includes Caddy as a built-in reverse proxy that handles HTTP traffic on port 8000. The Django backend is NOT directly exposed - all traffic flows through Caddy. Port 8000 is used instead of port 80 to avoid requiring root/sudo access. TLS/HTTPS support on port 8443 will be added in a future release.
+> **⚠️ Important**: For production deployments, you should place a load balancer (such as nginx) in front of sbomify to handle HTTP/HTTPS traffic, SSL termination, and provide additional security features. The sbomify application runs on port 8000 by default and should not be directly exposed to the internet.
 
 ## Environment Configuration
 
@@ -86,18 +88,11 @@ The Docker Compose configuration supports extensive customization through enviro
 - `SBOMIFY_TAG` - Image tag/version (default: `latest`)
 - `SBOMIFY_PULL_POLICY` - Pull policy (default: `always`)
 - `SBOMIFY_RESTART_POLICY` - Restart policy (default: `always`)
-- `APP_BASE_URL` - Application base URL with protocol (e.g., `https://app.sbomify.com`)
+- `SBOMIFY_PORT` - External port mapping (default: `8000`)
+- `APP_BASE_URL` - Application base URL
 - `SECRET_KEY` - Django secret key
 - `SIGNED_URL_SALT` - Salt for signed URLs
 - `BILLING` - Enable billing features (default: `False`)
-
-#### Caddy Settings
-
-- `CADDY_IMAGE` - Caddy image (default: `caddy:2-alpine`)
-- `CADDY_RESTART_POLICY` - Caddy restart policy (default: `always`)
-- `HTTP_PORT` - HTTP port (default: `8000`, use non-privileged port to avoid requiring root)
-- `CADDY_LOG_LEVEL` - Log level (default: `INFO`)
-- `CADDY_ADMIN` - Admin API endpoint (default: `off`)
 
 #### Database Settings
 
@@ -149,9 +144,8 @@ The Docker Compose configuration supports extensive customization through enviro
 # Create production environment file
 cat > production.env << EOF
 SBOMIFY_TAG=v1.2.3
-APP_BASE_URL=http://sbomify.example.com
+APP_BASE_URL=https://sbomify.example.com
 SECRET_KEY=$(openssl rand -base64 32)
-SIGNED_URL_SALT=$(openssl rand -hex 32)
 DATABASE_HOST=prod-db.example.com
 KEYCLOAK_SERVER_URL=https://auth.example.com/
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -167,7 +161,7 @@ docker compose --env-file ./production.env up -d
 # Create staging environment file
 cat > staging.env << EOF
 SBOMIFY_TAG=staging
-APP_BASE_URL=http://staging.sbomify.example.com
+APP_BASE_URL=https://staging.sbomify.example.com
 DATABASE_HOST=staging-db.example.com
 KEYCLOAK_SERVER_URL=https://staging-auth.example.com/
 EOF

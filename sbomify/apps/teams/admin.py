@@ -4,7 +4,7 @@ from django.utils.html import format_html
 
 from sbomify.apps.billing.models import BillingPlan
 
-from .models import CustomDomain, Invitation, Member, Team
+from .models import Invitation, Member, Team
 
 
 class TeamAdminForm(forms.ModelForm):
@@ -272,38 +272,6 @@ class InvitationAdmin(admin.ModelAdmin):
             return format_html('<span style="color: #28a745;">✓ Valid</span>')
 
     expiry_status.short_description = "Status"
-
-    def get_queryset(self, request):
-        """Optimize queryset with select_related."""
-        return super().get_queryset(request).select_related("team")
-
-
-@admin.register(CustomDomain)
-class CustomDomainAdmin(admin.ModelAdmin):
-    """Admin configuration for CustomDomain model."""
-
-    list_display = (
-        "hostname",
-        "team",
-        "is_verified",
-        "is_active",
-        "verified_at",
-        "created_at",
-    )
-
-    list_filter = (
-        "is_verified",
-        "is_active",
-        "created_at",
-        "verified_at",
-    )
-
-    search_fields = (
-        "hostname",
-        "team__name",
-    )
-
-    readonly_fields = ("id", "created_at", "updated_at", "verified_at")
 
     def get_queryset(self, request):
         """Optimize queryset with select_related."""

@@ -20,7 +20,6 @@ from django.urls import include, path
 
 from sbomify.apps.billing.views import public_enterprise_contact
 from sbomify.apps.core.admin import admin_site
-from sbomify.apps.teams.views import tls_allow_host
 
 from .apis import api
 
@@ -28,7 +27,6 @@ urlpatterns = [
     path("admin/", admin_site.urls),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
-    path("_tls/allow-host", tls_allow_host, name="tls_allow_host"),  # Caddy on-demand TLS
     path("", include("sbomify.apps.core.urls")),
     path("workspace/", include("sbomify.apps.teams.urls")),
     path("", include("sbomify.apps.sboms.urls")),
