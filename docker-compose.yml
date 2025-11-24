@@ -75,13 +75,33 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
-    ports:
-      - "${SBOMIFY_PORT:-8000}:8000"
+    # No ports exposed - all traffic goes through Caddy
+    expose:
+      - 8000
     depends_on:
       sbomify-db:
         condition: service_healthy
       sbomify-migrations:
         condition: service_completed_successfully
+
+  sbomify-caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    restart: ${CADDY_RESTART_POLICY:-always}
+    ports:
+      - "${HTTP_PORT:-8000}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
+      CADDY_ADMIN: ${CADDY_ADMIN:-off}
+    depends_on:
+      - sbomify-backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://sbomify-caddy/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   sbomify-migrations:
     image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
