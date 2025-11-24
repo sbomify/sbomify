@@ -1,0 +1,28 @@
+import pytest
+from django.test import Client
+from django.urls import reverse
+
+from sbomify.apps.core.models import Component, Product
+from sbomify.apps.teams.models import Team
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_renders_products_and_global_artifacts():
+    client = Client()
+    team = Team.objects.create(name="Public Workspace")
+
+    Product.objects.create(name="Public Product", team=team, is_public=True)
+    Component.objects.create(
+        name="Global Artifact",
+        team=team,
+        is_public=True,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Public Product" in content
+    assert "Global Artifact" in content

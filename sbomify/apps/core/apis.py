@@ -224,6 +224,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
                 "id": component.id,
                 "name": component.name,
                 "is_public": component.is_public,
+                "is_global": getattr(component, "is_global", False),
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
             }
@@ -234,6 +235,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
         base_response["component_type_display"] = item.get_component_type_display()
+        base_response["is_global"] = getattr(item, "is_global", False)
 
     return base_response
 
@@ -1335,6 +1337,14 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                             )
                         }
 
+                # Enforce scope exclusivity: If assigning to a project, components cannot be global
+                # We automatically demote them from global scope
+                # Enforce scope exclusivity: If assigning to a project, components cannot be global
+                # We automatically demote them from global scope
+                global_component_ids = [c.id for c in components if c.is_global]
+                if global_component_ids:
+                    Component.objects.filter(id__in=global_component_ids).update(is_global=False)
+
                 # Update relationships
                 project.components.set(components)
 
@@ -1405,11 +1415,18 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
         if not verify_item_access(request, team, ["owner", "admin"]):
             return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
 
+        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
+            return 400, {
+                "detail": "Only document components can be marked as workspace-wide",
+                "error_code": ErrorCode.INVALID_DATA,
+            }
+
         with transaction.atomic():
             component = Component.objects.create(
                 name=payload.name,
                 team_id=team_id,
                 component_type=payload.component_type,
+                is_global=payload.is_global,
                 metadata=payload.metadata,
             )
 
@@ -1505,10 +1522,23 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
+                return 400, {
+                    "detail": "Only document components can be marked as workspace-wide",
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
+
             component.name = payload.name
             component.component_type = payload.component_type
             component.is_public = payload.is_public
+            if payload.is_global is not None:
+                component.is_global = payload.is_global
             component.metadata = payload.metadata
+
+            # Enforce scope exclusivity: If global, remove from all projects
+            if component.is_global:
+                component.projects.clear()
+
             component.save()
 
         return 200, _build_item_response(request, component, "component")
@@ -1542,6 +1572,14 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         with transaction.atomic():
             # Validate public/private constraints before making changes
             update_data = payload.model_dump(exclude_unset=True)
+            new_component_type = update_data.get("component_type", component.component_type)
+            new_is_global = update_data.get("is_global", component.is_global)
+
+            if new_is_global and new_component_type != Component.ComponentType.DOCUMENT:
+                return 400, {
+                    "detail": "Only document components can be marked as workspace-wide",
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
             new_is_public = update_data.get("is_public", component.is_public)
 
             # Check billing plan restrictions when trying to make items private
@@ -1574,6 +1612,15 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             # Only update fields that were provided
             for field, value in update_data.items():
                 setattr(component, field, value)
+
+            # Enforce scope exclusivity: If global, remove from all projects
+            # Only run this if is_global is explicitly set to True or if it was already True and we are not changing it
+            # But actually, we only need to clear projects if is_global is effectively True at the end of this operation
+            if component.is_global:
+                # Optimization: Only clear if there are actually projects to clear
+                if component.projects.exists():
+                    component.projects.clear()
+
             component.save()
 
         return 200, _build_item_response(request, component, "component")
