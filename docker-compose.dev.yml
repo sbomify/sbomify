@@ -85,7 +85,9 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
-    # ports are inherited from docker-compose.yml
+    pull_policy: never  # Don't pull when building from source
+    # No ports exposed in dev either - all traffic through Caddy
+    # expose is inherited from docker-compose.yml
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
@@ -98,11 +100,20 @@ services:
       sbomify-frontend:
         condition: service_started
 
+  sbomify-caddy:
+    # Enable admin API for development debugging
+    ports:
+      - "2019:2019"
+    environment:
+      LOG_LEVEL: ${CADDY_LOG_LEVEL:-DEBUG}
+      CADDY_ADMIN: "0.0.0.0:2019"
+
   sbomify-migrations:
     build:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
+    pull_policy: never  # Don't pull when building from source
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
@@ -113,6 +124,7 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
+    pull_policy: never  # Don't pull when building from source
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
@@ -123,6 +135,7 @@ services:
     build:
       context: . # Must be defined as it's a new service
       target: ${FRONTEND_BUILD_TARGET:-frontend-dev-server}
+    pull_policy: never  # Don't pull when building from source
     ports:
       - "${FRONTEND_PORT:-5170}:5170"
     volumes:

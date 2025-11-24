@@ -27,12 +27,20 @@ build() {
 
 clean() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" kill "$@"
-    $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" rm "$@"
-    $CONTAINER_RUNTIME volume rm -f \
-        sbomify_keycloak_data \
-        sbomify_sbomify_minio_data \
-        sbomify_sbomify_postgres_data \
-        sbomify_sbomify_redis_data
+    if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+        # `rm` isn't implemented in `podman compose`.
+        # See https://github.com/containers/podman-compose/issues/540
+        podman system prune --all
+    else
+        $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" rm "$@"
+        $CONTAINER_RUNTIME volume rm -f \
+            sbomify_keycloak_data \
+            sbomify_sbomify_minio_data \
+            sbomify_sbomify_postgres_data \
+            sbomify_sbomify_redis_data \
+            sbomify_caddy_data \
+            sbomify_caddy_config
+    fi
 }
 
 case "${1:-}" in
