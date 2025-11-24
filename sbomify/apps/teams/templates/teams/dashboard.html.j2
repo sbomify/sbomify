@@ -6,7 +6,7 @@
 {% block extra_styles %}
     <link rel="stylesheet" href="{% static 'css/components/teams-list.css' %}">
 {% endblock %}
-{% block title %}sbomify Team Dashboard{% endblock %}
+{% block title %}sbomify Workspace Dashboard{% endblock %}
 {% block dashboard_content %}
     {% include "core/base_messages.html.j2" %}
     <div class="page-header mb-4">
@@ -15,7 +15,7 @@
                 <h1 class="item-title">
                     <i class="fas fa-users me-3 text-primary"></i>Workspaces
                 </h1>
-                <p class="item-subtitle">Manage your teams and collaborative workspaces</p>
+                <p class="item-subtitle">Manage your collaborative workspaces</p>
             </div>
             <div class="header-actions">
                 <button class="btn btn-primary px-4"
@@ -34,8 +34,10 @@
                     <h4 class="card-title mb-0">Your Workspaces</h4>
                     <div class="header-actions">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="badge bg-primary-subtle text-primary">{{ teams|length }} workspace
-                                {% if teams|length != 1 %}s{% endif %}
+                            <span class="badge bg-primary-subtle text-primary">
+                                {# djlint:off #}
+                                {{ teams|length }} workspace{% if teams|length != 1 %}s{% endif %}
+                                {# djlint:on #}
                             </span>
                         </div>
                     </div>
@@ -50,7 +52,13 @@
                                     {% current_member team.members as me %}
                                     <h6 class="team-name">
                                         <a href="{% url 'teams:team_settings' team.key %}"
-                                           class="text-decoration-none">{{ team.name }}</a>
+                                           class="text-decoration-none">{{ team.name|workspace_display }}</a>
+                                        {% if request.session.current_team and request.session.current_team.key == team.key %}
+                                            <span class="badge bg-success ms-2">
+                                                <i class="fas fa-eye me-1" aria-hidden="true"></i>
+                                                Current
+                                            </span>
+                                        {% endif %}
                                         {% if team.is_default_team %}<span class="badge bg-primary ms-2">Default</span>{% endif %}
                                     </h6>
                                     <div class="team-meta">
@@ -90,7 +98,7 @@
                                                     class="btn btn-sm btn-outline-danger"
                                                     title="Delete workspace"
                                                     data-form-key="{{ team.key }}"
-                                                    data-display-name="{{ team.name }}"
+                                                    data-display-name="{{ team.name|workspace_display }}"
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#delete-workspace-modal">
                                                 <i class="fas fa-trash"></i>

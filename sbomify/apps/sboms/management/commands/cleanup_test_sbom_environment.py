@@ -12,7 +12,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--team-id",
             type=str,
-            help="Team ID to clean up test data for. If not provided, will clean up for all teams.",
+            help="Workspace ID to clean up test data for (flag name retained for compatibility).",
         )
         parser.add_argument(
             "--dry-run",
@@ -33,8 +33,8 @@ class Command(BaseCommand):
             self.cleanup_team_data(team, dry_run)
 
     def cleanup_team_data(self, team, dry_run):
-        """Clean up test data for a specific team"""
-        self.stdout.write(f"\nCleaning up test data for team: {team.name}")
+        """Clean up test data for a specific workspace"""
+        self.stdout.write(f"\nCleaning up test data for workspace: {team.name}")
 
         # Get counts before deletion
         components = Component.objects.filter(team=team, name__startswith="test-component-")
@@ -61,4 +61,4 @@ class Command(BaseCommand):
             deleted_products = products.delete()
             self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_products[0]} test products"))
 
-        self.stdout.write(self.style.SUCCESS(f"Cleanup completed for team: {team.name}"))
+        self.stdout.write(self.style.SUCCESS(f"Cleanup completed for workspace: {team.name}"))

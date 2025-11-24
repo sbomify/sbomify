@@ -3,7 +3,6 @@ import '../../core/js/layout-interactions';
 import { createApp, type Component } from 'vue';
 
 // Vue components (using standard Bootstrap/HTML classes provided by our CSS system)
-import ContactProfiles from './components/ContactProfiles.vue';
 import TeamBranding from './components/TeamBranding.vue';
 import VulnerabilitySettings from './components/VulnerabilitySettings.vue';
 
@@ -33,7 +32,6 @@ function mountVueComponent(selector: string, component: Component, props: Record
 
 // Mount components when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  mountVueComponent('vc-contact-profiles', ContactProfiles);
   mountVueComponent('vc-team-branding', TeamBranding);
   mountVueComponent('vc-vulnerability-settings', VulnerabilitySettings);
 });

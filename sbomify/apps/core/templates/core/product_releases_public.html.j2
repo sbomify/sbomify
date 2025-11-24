@@ -42,7 +42,7 @@
                                     <div class="release-meta">
                                         <small class="text-muted">
                                             <i class="fas fa-clock me-1"></i>
-                                            {{ release.created_at|date:"M d, Y" }}
+                                            {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
                                         </small>
                                     </div>
                                 </div>

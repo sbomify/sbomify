@@ -935,7 +935,7 @@ const addSelectedArtifacts = async () => {
           if (errorDetail.includes('latest')) {
             return `${f.artifact.name}: Cannot add artifacts to the 'latest' release`
           } else if (errorDetail.includes('team')) {
-            return `${f.artifact.name}: This artifact doesn't belong to your team`
+            return `${f.artifact.name}: This artifact doesn't belong to your workspace`
           } else if (errorDetail.includes('already exists')) {
             return `${f.artifact.name}: This artifact is already in the release`
           } else if (errorDetail.includes('already contains')) {

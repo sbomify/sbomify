@@ -87,7 +87,7 @@
                 <!-- Main content area -->
                 <div class="main">
                     <!-- Top navigation -->
-                    {% cache 300 'header' request.user.id %}
+                    {% cache 300 'header' request.user.id request.session.current_team.id %}
                     {% include "core/components/topnav.html.j2" %}
                 {% endcache %}
                 <!-- Main content -->

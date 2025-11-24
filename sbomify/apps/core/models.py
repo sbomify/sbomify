@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
 
@@ -213,9 +214,9 @@ class Release(models.Model):
     class Meta:
         db_table = "core_releases"
         unique_together = ("product", "name")
-        ordering = ["-created_at"]
+        ordering = [models.F("released_at").desc(nulls_last=True), "-created_at"]
         indexes = [
-            models.Index(fields=["product", "-created_at"], name="core_rel_prod_created_idx"),
+            models.Index(fields=["product", "-released_at"], name="core_rel_prod_released_idx"),
             models.Index(fields=["is_latest"], name="core_rel_is_latest_idx"),
             models.Index(fields=["is_prerelease"], name="core_rel_is_prerel_idx"),
             models.Index(fields=["product", "is_latest"], name="core_rel_prod_latest_idx"),
@@ -225,7 +226,8 @@ class Release(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="releases")
     name = models.CharField(max_length=255, help_text="Release name (e.g., 'v1.0.0', 'latest')")
     description = models.TextField(blank=True, help_text="Optional release description")
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, help_text="When this release record was created")
+    released_at = models.DateTimeField(blank=True, null=True, help_text="When this release became available")
     is_latest = models.BooleanField(
         default=False, help_text="Whether this is the default 'latest' release that auto-updates with new artifacts"
     )
@@ -237,7 +239,7 @@ class Release(models.Model):
         return f"{self.product.name} - {self.name}"
 
     def clean(self):
-        """Ensure only one latest release per product."""
+        """Ensure only one latest release per product and valid release dates."""
         if self.is_latest:
             # Check if another release is already marked as latest for this product
             existing_latest = Release.objects.filter(product=self.product, is_latest=True).exclude(pk=self.pk)
@@ -245,7 +247,17 @@ class Release(models.Model):
             if existing_latest.exists():
                 raise ValidationError("A product can only have one latest release.")
 
+        if self.created_at and self.released_at and self.released_at < self.created_at:
+            raise ValidationError("Release date cannot be earlier than creation date.")
+
     def save(self, *args, **kwargs):
+        if not self.created_at:
+            self.created_at = timezone.now()
+
+        if self._state.adding and self.released_at is None:
+            # Default release date to creation time for new records only
+            self.released_at = self.created_at
+
         self.clean()
         super().save(*args, **kwargs)
 

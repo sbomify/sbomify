@@ -15,22 +15,22 @@
         </div>
         <div class="section-content">
           <h6 class="section-title">Transfer Component</h6>
-          <p class="section-description">Move this component to a different team</p>
+          <p class="section-description">Move this component to a different workspace</p>
         </div>
       </div>
       <form :action="`/component/${componentId}/transfer`" method="post" class="transfer-form">
         <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken">
         <div class="mb-3">
-          <label for="team_key" class="form-label">Select Team</label>
+          <label for="team_key" class="form-label">Select Workspace</label>
           <div class="input-group">
             <select id="team_key" name="team_key" class="form-select modern-select">
-              <option value="" disabled selected>Choose a team...</option>
+              <option value="" disabled selected>Choose a workspace...</option>
               <option
-                v-for="(team, teamKey) in parsedUserTeams"
-                :key="teamKey"
-                :value="teamKey"
+                v-for="(workspace, workspaceKey) in parsedUserWorkspaces"
+                :key="workspaceKey"
+                :value="workspaceKey"
               >
-                {{ team.name }}
+                {{ workspace.name }}
               </option>
             </select>
             <button type="submit" class="btn btn-warning modern-btn transfer-btn">
@@ -87,7 +87,7 @@ import DeleteConfirmationModal from '../../../core/js/components/DeleteConfirmat
 import $axios from '../../../core/js/utils'
 import { showSuccess, showError } from '../../../core/js/alerts'
 
-interface Team {
+interface Workspace {
   name: string
 }
 
@@ -95,13 +95,13 @@ const props = defineProps<{
   componentId: string
   componentName: string
   isOwner: string
-  userTeamsElementId?: string
+  userWorkspacesElementId?: string
   csrfToken: string
 }>()
 
 const showConfirmModal = ref(false)
 const parsedIsOwner = ref(false)
-const parsedUserTeams = ref<Record<string, Team>>({})
+const parsedUserWorkspaces = ref<Record<string, Workspace>>({})
 
 const showDeleteConfirmation = (): void => {
   showConfirmModal.value = true
@@ -133,17 +133,17 @@ const parseProps = (): void => {
     // Parse isOwner boolean
     parsedIsOwner.value = props.isOwner === 'true'
 
-    // Parse userTeams from JSON script element
-    if (props.userTeamsElementId) {
-      const element = document.getElementById(props.userTeamsElementId)
+    // Parse user workspaces from JSON script element
+    if (props.userWorkspacesElementId) {
+      const element = document.getElementById(props.userWorkspacesElementId)
       if (element && element.textContent) {
-        parsedUserTeams.value = JSON.parse(element.textContent)
+        parsedUserWorkspaces.value = JSON.parse(element.textContent)
       }
     }
   } catch (err) {
     console.error('Error parsing DangerZone props:', err)
     parsedIsOwner.value = false
-    parsedUserTeams.value = {}
+    parsedUserWorkspaces.value = {}
   }
 }
 

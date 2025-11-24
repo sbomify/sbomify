@@ -20,7 +20,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Upload SBOMs via web interface or API
 - Vulnerability scanning integration
 - Public and private access controls
-- Team-based organization
+- Workspace-based organization
 
 ### Document Management
 
@@ -35,7 +35,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 - **Components**: Core entities that can contain either SBOMs or documents
 - **Projects**: Group related components together
 - **Products**: Organize multiple projects
-- **Teams**: Control access and permissions
+- **Workspaces**: Control access and permissions
 
 ## Roadmap and Goals
 
@@ -129,7 +129,7 @@ The API provides endpoints for managing:
 - **Documents**: Upload, retrieve, and manage document artifacts
 - **Components**: Manage components that contain SBOMs or documents
 - **Projects & Products**: Organize and group components
-- **Teams**: User management and access control
+- **Workspaces**: User management and access control
 
 These endpoints are available when running the development server.
 
@@ -148,12 +148,8 @@ For the development environment to work properly with Keycloak authentication, y
 Start the development environment (recommended method):
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml build
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml up
+./bin/developer_mode.sh build
+./bin/developer_mode.sh up
 ```
 
 Create a local admin account:
@@ -275,7 +271,7 @@ development, we use Minio as a local S3 replacement.
 
 The application uses separate S3 buckets for different types of content:
 
-- **Media Bucket**: User avatars, team logos, and other media assets
+- **Media Bucket**: User avatars, workspace logos, and other media assets
 - **SBOMs Bucket**: Software Bill of Materials files
 - **Documents Bucket**: Document artifacts (specifications, manuals, reports, compliance documents, etc.)
   - If not configured separately, documents will use the SBOMs bucket automatically
@@ -314,7 +310,7 @@ Benefits of separate buckets:
 
 sbomify supports integration with [Dependency Track](https://dependencytrack.org/) for advanced vulnerability management and analysis. Dependency Track integration is available for Business and Enterprise plans.
 
-**Note:** Dependency Track only supports CycloneDX format SBOMs. SPDX SBOMs will automatically use OSV scanning regardless of team configuration.
+**Note:** Dependency Track only supports CycloneDX format SBOMs. SPDX SBOMs will automatically use OSV scanning regardless of workspace configuration.
 
 ##### Environment-Based Project Naming
 
@@ -346,7 +342,7 @@ To integrate with Dependency Track, you need to create an API token with the fol
 - `VIEW_PORTFOLIO`
 - `VIEW_VULNERABILITY`
 
-You can create a token under **Administration → Access Management → Teams** in your Dependency Track instance.
+You can create a token under **Administration → Access Management** in your Dependency Track instance (use the workspace management interface there).
 
 ##### DT Configuration
 
@@ -360,16 +356,16 @@ You can create a token under **Administration → Access Management → Teams** 
      - **Priority**: Lower numbers = higher priority for load balancing
      - **Max Concurrent Scans**: Maximum number of simultaneous SBOM uploads
 
-2. **Configure Team Settings**:
-   - Business/Enterprise teams can choose Dependency Track in **Settings → Integrations**
-   - Enterprise teams can optionally configure custom Dependency Track instances
-   - Business teams use the shared server pool
+2. **Configure Workspace Settings**:
+   - Business/Enterprise workspaces can choose Dependency Track in **Settings → Integrations**
+   - Enterprise workspaces can optionally configure custom Dependency Track instances
+   - Business workspaces use the shared server pool
 
 ##### DT Features
 
 - **Automatic Vulnerability Scanning**:
-  - Community teams: Weekly vulnerability scans using OSV
-  - Business/Enterprise teams: Vulnerability updates every 12 hours using Dependency Track
+  - Community workspaces: Weekly vulnerability scans using OSV
+  - Business/Enterprise workspaces: Vulnerability updates every 12 hours using Dependency Track
 - **Load Balancing**: Distribute scans across multiple Dependency Track servers
 - **Health Monitoring**: Automatic server health checks and capacity management
 - **Historical Tracking**: Complete scan result history for trend analysis
@@ -403,19 +399,20 @@ The application includes management commands to help set up and manage test data
 
 ```bash
 # Create a test environment with sample SBOM data
-# If no team is specified, uses the first team found in the database
+# If no workspace is specified, the first workspace in the database is used
+# (the management command retains the legacy --team-id flag name for compatibility)
 python manage.py create_test_sbom_environment
 
-# Create test environment for a specific team
+# Create test environment for a specific workspace (still uses the legacy --team-id flag)
 python manage.py create_test_sbom_environment --team-id=your_team_id
 
 # Clean up existing test data and create fresh environment
 python manage.py create_test_sbom_environment --clean
 
-# Clean up all test data across all teams
+# Clean up all test data across all workspaces
 python manage.py cleanup_test_sbom_environment
 
-# Clean up test data for a specific team
+# Clean up test data for a specific workspace (still uses the legacy --team-id flag)
 python manage.py cleanup_test_sbom_environment --team-id=your_team_id
 
 # Preview what would be deleted (dry run)
@@ -431,7 +428,7 @@ These commands will:
 
 The test data is grouped by source (e.g., hello-world and sbomify) rather than by format, so each component will have both SPDX and CycloneDX SBOMs attached to it.
 
-Note: You must have at least one team in the database to use these commands without specifying a team ID.
+Note: You must have at least one workspace in the database to use these commands without specifying the legacy `--team-id` flag.
 
 ### JS build tooling
 

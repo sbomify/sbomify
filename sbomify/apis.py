@@ -19,7 +19,7 @@ A comprehensive API for managing Software Bill of Materials (SBOM) and document 
 - **Project Organization**: Manage projects within products for better structure
 - **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
 - **Release Management**: Tag and organize artifacts by product releases with download capabilities
-- **Workspace Collaboration**: Multi-user access with role-based permissions (workspaces were previously called teams)
+- **Workspace Collaboration**: Multi-user access with role-based permissions
 - **Public & Private Access**: Flexible sharing and access controls with signed URLs for private components
 - **Vulnerability Scanning**: Integrated security analysis with OSV database
 - **Signed URL Security**: Time-limited, secure access to private components without authentication
@@ -86,8 +86,7 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
             {
                 "name": "Workspaces",
                 "description": "Manage workspace settings, members, branding, and collaboration features. "
-                "Control access and permissions across your organization. "
-                "Note: Workspaces were previously called 'teams' in the internal data model.",
+                "Control access and permissions across your organization.",
             },
             {
                 "name": "Billing",
@@ -97,12 +96,12 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
             {
                 "name": "Notifications",
                 "description": "Retrieve system notifications, alerts, and updates relevant to the "
-                "current user and team.",
+                "current user and workspace.",
             },
             {
                 "name": "Vulnerability Scanning",
                 "description": "Configure and manage vulnerability scanning providers including OSV and "
-                "Dependency Track. View scanning statistics and configure team preferences.",
+                "Dependency Track. View scanning statistics and configure workspace preferences.",
             },
             {
                 "name": "Licensing",

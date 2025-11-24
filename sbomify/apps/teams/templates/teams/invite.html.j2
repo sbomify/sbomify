@@ -1,6 +1,6 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
-{% block title %}sbomify Team Invite{% endblock %}
+{% block title %}sbomify Workspace Invite{% endblock %}
 {% block content %}
     <div class="page-invite">
         <button type="button"
@@ -10,7 +10,7 @@
         </button>
         <div class="d-flex flex-column justify-content-center align-items-center">
             <div class="invite-form">
-                <h3 class="page-title">Invite User</h3>
+                <h3 class="page-title">Invite Workspace Member</h3>
                 <div class="card w-100">
                     <div class="card-body">
                         <form action="{% url 'teams:invite_user' team_key %}" method="post">
@@ -32,7 +32,7 @@
                                 {% for error in invite_user_form.role.errors %}<span class="help-block">{{ error }}</span>{% endfor %}
                                 <ul class="invite-notes mb-4">
                                     <li class="mb-2">
-                                        <strong>Owner</strong> has full control include removing team, inviting other users etc.
+                                        <strong>Owner</strong> has full control including removing the workspace and inviting other users.
                                     </li>
                                     <li class="mb-2">
                                         <strong>Admin</strong> can create projects, upload/manage SBOMs.
@@ -43,7 +43,7 @@
                                 </ul>
                             </div>
                             <div class="col col-12 text-end">
-                                <input type="submit" class="btn btn-primary" value="Invite to team" />
+                                <input type="submit" class="btn btn-primary" value="Invite to workspace" />
                             </div>
                         </form>
                     </div>

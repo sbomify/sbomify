@@ -1,0 +1,106 @@
+<div class="profile-form mt-4">
+    <h5 class="mb-3">
+        {% if is_create %}
+            Create
+        {% else %}
+            Edit
+        {% endif %}
+        Contact Profile
+    </h5>
+    <form hx-post="{% if is_create %}{% url 'teams:contact_profiles_form' team.key %}{% else %}{% url 'teams:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
+          hx-target="#contact-profiles-content"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+        <div class="row g-4">
+            {% for field in form.visible_fields %}
+                {% if field.name != 'is_default' %}
+                    <div class="col-12 col-lg-6">
+                        <div class="mb-3">
+                            <label class="form-label" for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ field }}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="col-12 col-lg-6">
+                <div class="mb-3">
+                    <label class="form-label">Contacts</label>
+                    {{ formset.management_form }}
+                    <div id="contacts-formset">
+                        {% for contact_form in formset %}
+                            <div class="contact-form-row mb-3 p-3 border rounded d-flex flex-column">
+                                {% include "teams/contact_profiles/forms/contact.html.j2" with form=contact_form %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            id="add-contact-btn">
+                        <i class="fas fa-plus me-1"></i> Add Contact
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="form-check mb-3">
+            {{ form.is_default }}
+            <label class="form-check-label" for="{{ form.is_default.id_for_label }}">{{ form.is_default.label }}</label>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    hx-get="{% url 'teams:contact_profiles_list' team.key %}"
+                    hx-target="#contact-profiles-content"
+                    hx-swap="innerHTML">Cancel</button>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-save me-2"></i>Save Profile
+            </button>
+        </div>
+    </form>
+</div>
+<template id="contact-form-template">
+    <div class="contact-form-row mb-3 p-3 border rounded d-flex flex-column">
+        {% include "teams/contact_profiles/forms/contact.html.j2" with form=formset.empty_form %}
+    </div>
+</template>
+<script>
+(function() {
+    const template = document.getElementById('contact-form-template');
+    const formsetContainer = document.getElementById('contacts-formset');
+
+    function updateTotalForms() {
+        const index = formsetContainer.querySelectorAll('.contact-form-row').length;
+
+        formsetContainer.closest('form').querySelector('input[name$="-TOTAL_FORMS"]').value = index;
+    }
+
+    function createContactForm() {
+        const index = formsetContainer.querySelectorAll('.contact-form-row').length;
+
+        const div = document.createElement('div');
+        div.appendChild(template.content.cloneNode(true));
+        div.innerHTML = div.innerHTML.replace(/__prefix__/g, index);
+
+        return div.firstElementChild;
+    }
+
+    document.querySelector('#add-contact-btn').addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        formsetContainer.appendChild(createContactForm());
+        updateTotalForms();
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.delete-contact-btn')) return;
+
+        e.preventDefault();
+
+        e.target.closest('.contact-form-row').remove();
+        updateTotalForms();
+    });
+})();
+</script>

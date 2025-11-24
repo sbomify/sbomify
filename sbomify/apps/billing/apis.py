@@ -55,7 +55,7 @@ def get_usage(request: HttpRequest):
             current_plan=team.billing_plan if team.billing_plan else None,
         )
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
 
 
 @router.post(
@@ -168,7 +168,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
         return 400, {"detail": "Invalid plan"}
 
     except Team.DoesNotExist:
-        return 404, {"detail": "Team not found"}
+        return 404, {"detail": "Workspace not found"}
     except BillingPlan.DoesNotExist:
         return 400, {"detail": "Invalid plan"}
     except Exception:

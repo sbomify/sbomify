@@ -130,7 +130,17 @@ services:
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
-    command: uv run dramatiq sbomify.tasks
+    command:
+      [
+        "uv",
+        "run",
+        "dramatiq",
+        "--processes",
+        "${DRAMATIQ_PROCESSES:-2}",
+        "--threads",
+        "${DRAMATIQ_THREADS:-4}",
+        "sbomify.tasks",
+      ]
     depends_on:
       sbomify-redis:
         condition: service_healthy

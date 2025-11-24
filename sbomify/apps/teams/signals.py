@@ -71,10 +71,10 @@ def ensure_user_has_team(user):
             }
             send_mail(
                 subject="Welcome to sbomify - Your Business Plan Trial",
-                message=render_to_string("teams/new_user_email.txt", context),
+                message=render_to_string("teams/emails/new_user_email.txt", context),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
-                html_message=render_to_string("teams/new_user_email.html.j2", context),
+                html_message=render_to_string("teams/emails/new_user_email.html.j2", context),
             )
         except Exception as e:
             logger.error(f"Failed to create trial subscription for team {team.key} [post_save]: {str(e)}")

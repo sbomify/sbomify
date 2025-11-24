@@ -114,7 +114,7 @@
             <div class="release-meta">
               <small class="text-muted">
                 <i class="fas fa-calendar me-1"></i>
-                {{ formatDate(release.created_at) }}
+                {{ formatDate(release.released_at || release.created_at) }}
               </small>
             </div>
             <div class="action-buttons">
@@ -222,6 +222,28 @@
                     placeholder="Describe what's included in this release..."
                   ></textarea>
                 </div>
+                <div class="mb-3">
+                  <label for="releaseCreatedAt" class="form-label">Created Date</label>
+                  <input
+                    id="releaseCreatedAt"
+                    v-model="releaseForm.created_at"
+                    type="datetime-local"
+                    class="form-control"
+                    placeholder="Select created date and time"
+                  >
+                  <div class="form-text">Defaults to the moment you create the release</div>
+                </div>
+                <div class="mb-3">
+                  <label for="releaseDate" class="form-label">Release Date</label>
+                  <input
+                    id="releaseDate"
+                    v-model="releaseForm.released_at"
+                    type="datetime-local"
+                    class="form-control"
+                    placeholder="Select release date and time"
+                  >
+                  <div class="form-text">This date determines when the release is shown as available</div>
+                </div>
                 <div class="form-check">
                   <input
                     id="releaseIsPrerelease"
@@ -277,6 +299,7 @@ interface Release {
   is_latest: boolean
   is_prerelease: boolean
   created_at: string
+  released_at?: string
   artifacts_count?: number
   has_sboms?: boolean
 }
@@ -285,6 +308,8 @@ interface ReleaseForm {
   name: string
   description: string
   is_prerelease: boolean
+  created_at: string
+  released_at: string
 }
 
 interface PaginationMeta {
@@ -324,8 +349,34 @@ const pageSize = ref(15)
 const releaseForm = ref<ReleaseForm>({
   name: '',
   description: '',
-  is_prerelease: false
+  is_prerelease: false,
+  created_at: '',
+  released_at: ''
 })
+
+const formatDateTimeForInput = (value?: string | Date): string => {
+  if (!value) {
+    return ''
+  }
+
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const pad = (num: number): string => num.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const getDefaultReleaseDate = (): string => formatDateTimeForInput(new Date())
+
+const setDefaultFormDates = () => {
+  const now = getDefaultReleaseDate()
+  releaseForm.value.created_at = now
+  releaseForm.value.released_at = now
+}
+
+setDefaultFormDates()
 
 // Computed
 const hasCrudPermissions = computed(() => {
@@ -363,12 +414,34 @@ const shouldShowPagination = computed(() => {
 })
 
 // Methods
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
+const formatDate = (dateString?: string): string => {
+  if (!dateString) {
+    return '-'
+  }
+
+  const parsedDate = new Date(dateString)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '-'
+  }
+
+  return parsedDate.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric'
   })
+}
+
+const toIsoString = (value: string): string | null => {
+  if (!value) {
+    return null
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return date.toISOString()
 }
 
 const getReleaseUrl = (release: Release): string => {
@@ -415,10 +488,13 @@ const loadReleases = async () => {
 
 
 const resetForm = () => {
+  const defaultDate = getDefaultReleaseDate()
   releaseForm.value = {
     name: '',
     description: '',
-    is_prerelease: false
+    is_prerelease: false,
+    created_at: defaultDate,
+    released_at: defaultDate
   }
   editingRelease.value = null
 }
@@ -428,7 +504,9 @@ const editRelease = (release: Release) => {
   releaseForm.value = {
     name: release.name,
     description: release.description || '',
-    is_prerelease: release.is_prerelease || false
+    is_prerelease: release.is_prerelease || false,
+    created_at: formatDateTimeForInput(release.created_at),
+    released_at: formatDateTimeForInput(release.released_at || release.created_at)
   }
 
   const modalElement = document.getElementById('addReleaseModal')
@@ -470,12 +548,18 @@ const submitRelease = async () => {
   isSubmitting.value = true
 
   try {
+    const nowIso = new Date().toISOString()
+    const createdAtIso = toIsoString(releaseForm.value.created_at) || nowIso
+    const releasedAtIso = toIsoString(releaseForm.value.released_at) || createdAtIso
+
     if (editingRelease.value) {
       // Update existing release using top-level API
       const data = {
         name: releaseForm.value.name.trim(),
         description: releaseForm.value.description.trim() || null,
-        is_prerelease: releaseForm.value.is_prerelease
+        is_prerelease: releaseForm.value.is_prerelease,
+        created_at: createdAtIso,
+        released_at: releasedAtIso
       }
 
       await $axios.patch(`/api/v1/releases/${editingRelease.value.id}`, data)
@@ -486,7 +570,9 @@ const submitRelease = async () => {
         name: releaseForm.value.name.trim(),
         description: releaseForm.value.description.trim() || null,
         is_prerelease: releaseForm.value.is_prerelease,
-        product_id: props.productId
+        product_id: props.productId,
+        created_at: createdAtIso,
+        released_at: releasedAtIso
       }
 
       await $axios.post('/api/v1/releases', data)

@@ -1,0 +1,79 @@
+{% load static %}
+{% if not profiles %}
+    <div class="empty-state">
+        <i class="fas fa-address-book fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted mb-2">No contact profiles yet</h5>
+        <p class="text-muted">Create a profile to reuse supplier information across components.</p>
+    </div>
+{% else %}
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Supplier</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Default</th>
+                    <th scope="col" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for profile in profiles %}
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">{{ profile.name }}</div>
+                            {% if profile.email %}
+                                <div class="text-muted small">
+                                    <i class="fas fa-envelope me-1"></i>{{ profile.email }}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if profile.supplier_name %}
+                                <span class="badge bg-primary-subtle text-primary">{{ profile.supplier_name }}</span>
+                            {% else %}
+                                <span class="text-muted">Not set</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if profile.company %}
+                                <span>{{ profile.company }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if profile.is_default %}<span class="badge bg-success-subtle text-success">Default</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button class="btn btn-outline-secondary"
+                                        hx-get="{% url 'teams:contact_profiles_detail_form' team.key profile.id %}"
+                                        hx-target="#contact-profiles-content"
+                                        hx-swap="innerHTML">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-primary"
+                                        {% if profile.is_default %}disabled{% endif %}
+                                        hx-post="{% url 'teams:contact_profiles_list' team.key %}"
+                                        hx-vals='{"_method": "PATCH", "profile_id": "{{ profile.id }}"}'
+                                        hx-target="#contact-profiles-content"
+                                        hx-swap="innerHTML">
+                                    <i class="fas fa-star"></i>
+                                </button>
+                                <button class="btn btn-outline-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#delete-contact-profile-modal"
+                                        data-form-profile_id="{{ profile.id }}"
+                                        data-display-name="{{ profile.name }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True %}

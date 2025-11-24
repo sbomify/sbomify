@@ -21,6 +21,10 @@ start() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" up "$@"
 }
 
+end() {
+    $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" down "$@"
+}
+
 build() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" build "$@"
 }
@@ -39,6 +43,10 @@ case "${1:-}" in
     start)
         shift
         start "$@"
+        ;;
+    end)
+        shift
+        end "$@"
         ;;
     restart)
         shift

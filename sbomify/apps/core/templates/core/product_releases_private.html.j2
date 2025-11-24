@@ -79,6 +79,26 @@
                                           rows="3"
                                           placeholder="Describe what's included in this release..."></textarea>
                             </div>
+                            <div class="mb-3">
+                                <label for="releaseCreatedAt" class="form-label">Created Date</label>
+                                <input type="datetime-local"
+                                       class="form-control"
+                                       id="releaseCreatedAt"
+                                       name="created_at"
+                                       placeholder="Select created date and time"
+                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
+                                <div class="form-text">Defaults to when you create the release.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="releaseDate" class="form-label">Release Date</label>
+                                <input type="datetime-local"
+                                       class="form-control"
+                                       id="releaseDate"
+                                       name="released_at"
+                                       placeholder="Select release date and time"
+                                       value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
+                                <div class="form-text">This date is shown on public and private release pages</div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

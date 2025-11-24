@@ -1,0 +1,48 @@
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  border: 1px dashed #dee2e6;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.profile-form {
+  border-top: 1px solid #e5e9f2;
+  padding-top: 1.5rem;
+}
+
+.profile-form textarea {
+  resize: vertical;
+}
+
+.btn-group .btn {
+  min-width: 2.5rem;
+}
+
+.input-group .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.input-group .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.contact-form-row {
+  background-color: #f8f9fa;
+}
+
+.contact-form-row .form-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 0.25rem;
+}
+
+.contact-form-row .form-control {
+  font-size: 0.875rem;
+}
+
+.delete-contact-btn {
+  margin-left: auto;
+}
