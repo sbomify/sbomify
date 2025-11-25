@@ -17,6 +17,7 @@
 		path /health
 	}
 	handle @health {
+		skip_log
 		respond "OK" 200
 	}
 
