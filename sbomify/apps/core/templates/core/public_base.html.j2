@@ -159,16 +159,28 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Footer -->
+            <!-- Enhanced Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
-                    <div class="footer-content">
-                        <div class="footer-branding">
-                            {% if brand.name %}<span class="footer-brand-name">{{ brand.name }}</span>{% endif %}
-                            <span class="footer-powered-by">Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                    <div class="footer-content-wrapper">
+                        <div class="footer-bottom">
+                            <div class="footer-powered">
+                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                                <span class="footer-separator">•</span>
+                                <span>Software transparency platform</span>
+                            </div>
+                            <div class="footer-meta">
+                                <span>© {% now "Y" %}
+                                    {% if brand.name %}
+                                        {{ brand.name }}
+                                    {% else %}
+                                        sbomify
+                                    {% endif %}
+                                </span>
+                            </div>
                         </div>
-                        {% block footer_content %}{% endblock %}
                     </div>
+                    {% block footer_content %}{% endblock %}
                 </div>
             </footer>
         </div>
@@ -260,11 +272,11 @@
     padding: 2rem 1.5rem;
 }
 
-/* Footer */
+/* Enhanced Footer */
 .public-footer {
-    background: var(--bg-primary);
-    border-top: 1px solid var(--border-color);
-    padding: 2rem 0;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-top: 1px solid #e2e8f0;
+    padding: 3rem 0 1.5rem;
     margin-top: 4rem;
 }
 
@@ -274,39 +286,148 @@
     padding: 0 1.5rem;
 }
 
-.footer-content {
+.footer-content-wrapper {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.footer-main {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.footer-branding-section {
+    display: flex;
+    align-items: flex-start;
     gap: 1rem;
 }
 
-.footer-branding {
+.footer-logo img {
+    height: 32px;
+    width: auto;
+    opacity: 0.9;
+}
+
+.footer-brand-text {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-muted);
-    font-size: 0.875rem;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .footer-brand-name {
-    font-weight: 600;
-    color: var(--brand-color);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #0f172a;
 }
 
-.footer-powered-by a {
-    color: var(--accent-color);
+.footer-tagline {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.footer-info {
+    display: flex;
+    gap: 3rem;
+}
+
+.footer-section {
+    flex: 1;
+}
+
+.footer-section-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #0f172a;
+    margin-bottom: 0.75rem;
+}
+
+.footer-section-text {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #64748b;
+    margin: 0;
+}
+
+.footer-security-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.security-badge i {
+    color: #6366f1;
+    font-size: 0.875rem;
+}
+
+.footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: 1.5rem;
+}
+
+.footer-powered {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.footer-powered a {
+    color: #6366f1;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 600;
     transition: color 0.2s ease;
 }
 
-.footer-powered-by a:hover {
-    color: var(--accent-color-dark);
+.footer-powered a:hover {
+    color: #4f46e5;
+}
+
+.footer-separator {
+    color: #cbd5e1;
+}
+
+.footer-meta {
+    font-size: 0.8125rem;
+    color: #94a3b8;
 }
 
 /* Responsive Design */
+@media (max-width: 968px) {
+    .footer-main {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+    
+    .footer-info {
+        flex-direction: column;
+        gap: 2rem;
+    }
+}
+
 @media (max-width: 768px) {
     .public-header {
         padding: 1.5rem 0;
@@ -333,8 +454,14 @@
         font-size: 1.25rem;
     }
 
-    .footer-content {
+    .footer-bottom {
         flex-direction: column;
+        text-align: center;
+    }
+    
+    .footer-branding-section {
+        flex-direction: column;
+        align-items: center;
         text-align: center;
     }
 }

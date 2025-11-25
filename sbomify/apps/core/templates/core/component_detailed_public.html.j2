@@ -13,8 +13,25 @@
 {% block extra_css %}
     <link rel="stylesheet"
           href="{% static 'css/component-detailed-public.css' %}">
-    <link rel="stylesheet"
-          href="{% static 'css/components/public-page-layout.css' %}">
+    <style>
+      .meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #eef2ff;
+        border: 1px solid #e0e7ff;
+        color: #475569;
+        font-weight: 600;
+      }
+      .meta-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+    </style>
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
@@ -25,6 +42,7 @@
             <div class="content-container">
                 <div class="public-page-header">
                     <div class="page-header-content">
+                        <p class="eyebrow text-muted mb-1">Public {{ component.component_type_display }}</p>
                         <h1 class="page-title">
                             <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} title-icon"></i>
                             {{ data.name }}
@@ -35,33 +53,41 @@
                                 <a href="{% url 'core:component_details_public' component.id %}"
                                    class="component-breadcrumb-link">{{ component.name }}</a>
                             </small>
-                            {% if component.component_type == 'sbom' %}
-                                <small class="sbom-format">
-                                    <i class="fas fa-tag me-1"></i>
-                                    {% if data.format == 'cyclonedx' %}
-                                        CycloneDX
-                                    {% elif data.format == 'spdx' %}
-                                        SPDX
-                                    {% else %}
-                                        {{ data.format|upper }}
+                            <div class="meta-row">
+                                <span class="meta-chip">
+                                    <i class="fas fa-tag"></i>
+                                    {{ component.component_type_display }}
+                                </span>
+                                {% if component.component_type == 'sbom' %}
+                                    <span class="meta-chip">
+                                        <i class="fas fa-tag"></i>
+                                        {% if data.format == 'cyclonedx' %}
+                                            CycloneDX
+                                        {% elif data.format == 'spdx' %}
+                                            SPDX
+                                        {% else %}
+                                            {{ data.format|upper }}
+                                        {% endif %}
+                                        {{ data.format_version }}
+                                    </span>
+                                    {% if data.version %}
+                                        <span class="meta-chip">
+                                            <i class="fas fa-code-branch"></i>
+                                            <span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                        </span>
                                     {% endif %}
-                                    {{ data.format_version }}
-                                </small>
-                                {% if data.version %}
-                                    <small class="sbom-version">
-                                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
-                                    </small>
+                                {% elif component.component_type == 'document' %}
+                                    <span class="meta-chip">
+                                        <i class="fas fa-tag"></i>{{ data.document_type|default:"Document" }}
+                                    </span>
+                                    {% if data.version %}
+                                        <span class="meta-chip">
+                                            <i class="fas fa-code-branch"></i>
+                                            <span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                        </span>
+                                    {% endif %}
                                 {% endif %}
-                            {% elif component.component_type == 'document' %}
-                                <small class="document-type">
-                                    <i class="fas fa-tag me-1"></i>{{ data.document_type|default:"Document" }}
-                                </small>
-                                {% if data.version %}
-                                    <small class="document-version">
-                                        <i class="fas fa-code-branch me-1"></i><span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
-                                    </small>
-                                {% endif %}
-                            {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -118,6 +118,295 @@
                     --shadow-color-light: rgba(0, 0, 0, 0.15);
                 }
             }
+
+            /* Force light theme for all public pages - override dark mode */
+            :root {
+                color-scheme: light only !important;
+                --text-primary: #0f172a !important;
+                --text-secondary: #475569 !important;
+                --text-muted: #64748b !important;
+                --bg-primary: #ffffff !important;
+                --bg-secondary: #f8fafc !important;
+                --bg-tertiary: #f1f5f9 !important;
+                --border-color: #e2e8f0 !important;
+                --border-color-light: #f1f5f9 !important;
+                --shadow-color: rgba(0, 0, 0, 0.1) !important;
+                --shadow-color-light: rgba(0, 0, 0, 0.05) !important;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --text-primary: #0f172a !important;
+                    --text-secondary: #475569 !important;
+                    --text-muted: #64748b !important;
+                    --bg-primary: #ffffff !important;
+                    --bg-secondary: #f8fafc !important;
+                    --bg-tertiary: #f1f5f9 !important;
+                    --border-color: #e2e8f0 !important;
+                    --border-color-light: #f1f5f9 !important;
+                    --shadow-color: rgba(0, 0, 0, 0.1) !important;
+                    --shadow-color-light: rgba(0, 0, 0, 0.05) !important;
+                }
+            }
+
+            body.public-page {
+                background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+                color: #0f172a !important;
+                min-height: 100vh;
+            }
+
+            .public-main {
+                background: transparent !important;
+            }
+
+            /* Public Page Layout Styles */
+            .public-page {
+                font-family: var(--font-family-primary);
+                color: var(--text-primary);
+                background-color: var(--bg-secondary);
+                line-height: 1.6;
+                margin: 0;
+                padding: 0;
+            }
+
+            .public-page-layout {
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* Public Header */
+            .public-header {
+                background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-tertiary) 100%);
+                padding: 2rem 0;
+                position: relative;
+                overflow: hidden;
+                border-bottom: 1px solid var(--border-color);
+                border-top: 3px solid var(--brand-color);
+            }
+
+            .public-header::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(135deg, transparent 0%, rgba(var(--brand-color-rgb), 0.03) 100%);
+                pointer-events: none;
+            }
+
+            .public-header-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 0 1.5rem;
+                position: relative;
+                z-index: 1;
+                text-align: center;
+            }
+
+            .brand-section {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .brand-logo {
+                height: 3rem;
+                max-width: 12rem;
+                width: auto;
+                object-fit: contain;
+                filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.05));
+            }
+
+            .brand-name {
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: var(--brand-color);
+                text-shadow: none;
+            }
+
+            /* Main Content */
+            .public-main {
+                flex: 1;
+                position: relative;
+                background: var(--bg-secondary);
+            }
+
+            .public-content-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem 1.5rem;
+            }
+
+            /* Enhanced Footer */
+            .public-footer {
+                background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+                border-top: 1px solid #e2e8f0;
+                padding: 3rem 0 1.5rem;
+                margin-top: 4rem;
+            }
+
+            .public-footer-container,
+            .public-header-container,
+            .public-content-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            
+            .public-content-container {
+                width: 100%;
+            }
+
+            .footer-content-wrapper {
+                display: flex;
+                flex-direction: column;
+                gap: 2rem;
+            }
+
+            .footer-main {
+                display: grid;
+                grid-template-columns: 1fr 2fr;
+                gap: 3rem;
+                padding-bottom: 2rem;
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            .footer-branding-section {
+                display: flex;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .footer-logo img {
+                height: 32px;
+                width: auto;
+                opacity: 0.9;
+            }
+
+            .footer-brand-text {
+                display: flex;
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            .footer-brand-name {
+                font-size: 1.125rem;
+                font-weight: 700;
+                color: #0f172a;
+            }
+
+            .footer-tagline {
+                font-size: 0.875rem;
+                color: #64748b;
+            }
+
+            .footer-info {
+                display: flex;
+                gap: 3rem;
+            }
+
+            .footer-section {
+                flex: 1;
+            }
+
+            .footer-section-title {
+                font-size: 0.875rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: #0f172a;
+                margin-bottom: 0.75rem;
+            }
+
+            .footer-section-text {
+                font-size: 0.875rem;
+                line-height: 1.6;
+                color: #64748b;
+                margin: 0;
+            }
+
+            .footer-security-badges {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .security-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 0.75rem;
+                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: #475569;
+            }
+
+            .security-badge i {
+                color: #6366f1;
+                font-size: 0.875rem;
+            }
+
+            .footer-bottom {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 1rem;
+                padding-top: 1.5rem;
+            }
+
+            .footer-powered {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 0.8125rem;
+                color: #64748b;
+            }
+
+            .footer-powered a {
+                color: #6366f1;
+                text-decoration: none;
+                font-weight: 600;
+                transition: color 0.2s ease;
+            }
+
+            .footer-powered a:hover {
+                color: #4f46e5;
+            }
+
+            .footer-separator {
+                color: #cbd5e1;
+            }
+
+            .footer-meta {
+                font-size: 0.8125rem;
+                color: #64748b;
+            }
+
+            @media (max-width: 768px) {
+                .footer-main {
+                    grid-template-columns: 1fr;
+                    gap: 2rem;
+                }
+
+                .footer-info {
+                    flex-direction: column;
+                    gap: 2rem;
+                }
+
+                .footer-bottom {
+                    flex-direction: column;
+                    text-align: center;
+                }
+            }
             </style>
             {% block extra_css %}{% endblock %}
             <title>
@@ -166,16 +455,28 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Footer -->
+            <!-- Enhanced Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
-                    <div class="footer-content">
-                        <div class="footer-branding">
-                            {% if brand.name %}<span class="footer-brand-name">{{ brand.name }}</span>{% endif %}
-                            <span class="footer-powered-by">Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                    <div class="footer-content-wrapper">
+                        <div class="footer-bottom">
+                            <div class="footer-powered">
+                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                                <span class="footer-separator">•</span>
+                                <span>Software transparency platform</span>
+                            </div>
+                            <div class="footer-meta">
+                                <span>© {% now "Y" %}
+                                    {% if brand.name %}
+                                        {{ brand.name }}
+                                    {% else %}
+                                        sbomify
+                                    {% endif %}
+                                </span>
+                            </div>
                         </div>
-                        {% block footer_content %}{% endblock %}
                     </div>
+                    {% block footer_content %}{% endblock %}
                 </div>
             </footer>
         </div>

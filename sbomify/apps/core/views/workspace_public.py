@@ -20,7 +20,6 @@ class WorkspacePublicView(View):
         branding_info = BrandingInfo(**team.branding_info)
         brand = {
             **team.branding_info,
-            "name": team.name,
             "brand_image": branding_info.brand_image,
             "brand_color": branding_info.brand_color,
             "accent_color": branding_info.accent_color,
@@ -53,7 +52,10 @@ class WorkspacePublicView(View):
             "core/workspace_public.html.j2",
             {
                 "brand": brand,
-                "workspace": {"name": team.name, "key": team.key},
+                "workspace": {
+                    "name": team.name.replace("Workspace", "").replace("workspace", "").strip().rstrip("'s"),
+                    "key": team.key,
+                },
                 "products": products_data,
                 "global_components": global_artifacts_data,
             },

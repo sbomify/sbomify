@@ -106,6 +106,36 @@ def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business
 
 
 @pytest.mark.django_db
+def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    component = Component.objects.create(
+        name="Global Doc",
+        team=team_with_business_plan,
+        component_type=Component.ComponentType.DOCUMENT,
+        is_global=True,
+        is_public=True,
+    )
+
+    payload = {
+        "name": component.name,
+        "component_type": "sbom",
+        "is_public": True,
+        "metadata": {},
+    }
+
+    response = client.put(
+        reverse("api-1:update_component", kwargs={"component_id": component.id}),
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
 def test_list_components_returns_scope_flag(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)

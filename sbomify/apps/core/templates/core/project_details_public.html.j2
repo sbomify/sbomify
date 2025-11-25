@@ -8,11 +8,28 @@
 {% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
-          href="{% static 'css/components/public-page-layout.css' %}">
-    <link rel="stylesheet"
           href="{% static 'css/components/public-project-components.css' %}">
     <link rel="stylesheet"
           href="{% static 'css/components/public-download-card.css' %}">
+    <style>
+      .meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #eef2ff;
+        border: 1px solid #e0e7ff;
+        color: #475569;
+        font-weight: 600;
+      }
+      .meta-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+    </style>
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb project 'project' %}
@@ -23,10 +40,22 @@
             <div class="content-container">
                 <div class="public-page-header">
                     <div class="page-header-content">
+                        <p class="eyebrow text-muted mb-1">Public project</p>
                         <h1 class="page-title">
                             <i class="fas fa-project-diagram title-icon"></i>
                             {{ project.name }}
                         </h1>
+                        <p class="text-muted mb-1">Components and SBOMs shared for this project.</p>
+                        <div class="meta-row">
+                            <span class="meta-chip">
+                                <i class="fas fa-cube"></i>
+                                {{ project.components|length }} component{{ project.components|length|pluralize }}
+                            </span>
+                            <span class="meta-chip">
+                                <i class="fas fa-globe"></i>
+                                Public
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div class="public-main-content">

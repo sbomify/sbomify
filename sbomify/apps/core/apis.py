@@ -1522,7 +1522,11 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
-            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
+            # Evaluate final state after this update to enforce document-only constraint for globals
+            new_component_type = payload.component_type
+            new_is_global = payload.is_global if payload.is_global is not None else component.is_global
+
+            if new_is_global and new_component_type != Component.ComponentType.DOCUMENT:
                 return 400, {
                     "detail": "Only document components can be marked as workspace-wide",
                     "error_code": ErrorCode.INVALID_DATA,
