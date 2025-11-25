@@ -64,7 +64,7 @@ def test_patch_component_scope(authenticated_api_client, team_with_business_plan
     component = Component.objects.create(
         name="Scoped Component",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.DOCUMENT,
         is_global=False,
     )
 

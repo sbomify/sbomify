@@ -1339,8 +1339,6 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 
                 # Enforce scope exclusivity: If assigning to a project, components cannot be global
                 # We automatically demote them from global scope
-                # Enforce scope exclusivity: If assigning to a project, components cannot be global
-                # We automatically demote them from global scope
                 global_component_ids = [c.id for c in components if c.is_global]
                 if global_component_ids:
                     Component.objects.filter(id__in=global_component_ids).update(is_global=False)
@@ -1617,9 +1615,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             for field, value in update_data.items():
                 setattr(component, field, value)
 
-            # Enforce scope exclusivity: If global, remove from all projects
             # Only run this if is_global is explicitly set to True or if it was already True and we are not changing it
-            # But actually, we only need to clear projects if is_global is effectively True at the end of this operation
             if component.is_global:
                 # Optimization: Only clear if there are actually projects to clear
                 if component.projects.exists():
