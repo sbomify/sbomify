@@ -2,6 +2,14 @@
 # Simple HTTP reverse proxy configuration
 {
 	admin {$CADDY_ADMIN:off}
+
+    # Docker network IP ranges included below.
+    # For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
+	# and add below to the servers block if using CF
+    servers {
+        trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+        client_ip_headers X-Forwarded-For Cf-Connecting-Ip X-Real-IP
+    }
 }
 
 # HTTP - All traffic
@@ -17,6 +25,7 @@
 		path /health
 	}
 	handle @health {
+		skip_log
 		respond "OK" 200
 	}
 
