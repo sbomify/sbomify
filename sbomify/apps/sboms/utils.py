@@ -22,6 +22,7 @@ from sbomify.apps.core.models import Component, Product, Project
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
+from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_7 as cdx17
 from sbomify.apps.teams.models import ContactProfile, Member, Team
 
 from .versioning import CycloneDXSupportedVersion
@@ -1559,6 +1560,7 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
         CycloneDXSupportedVersion.v1_5: cdx15.CyclonedxSoftwareBillOfMaterialsStandard,
         CycloneDXSupportedVersion.v1_6: cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
+        CycloneDXSupportedVersion.v1_7: cdx17.CyclonedxBillOfMaterialsStandard,
     }
     return module_map[spec_version]
 

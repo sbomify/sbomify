@@ -13,6 +13,7 @@ from sbomify.apps.teams.schemas import ContactProfileSchema
 
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
+from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 
@@ -44,12 +45,14 @@ class DashboardStatsResponse(Schema):
 class CycloneDXSupportedVersion(str, Enum):
     v1_5 = "1.5"
     v1_6 = "1.6"
+    v1_7 = "1.7"
 
 
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
         CycloneDXSupportedVersion.v1_5: cdx15,
         CycloneDXSupportedVersion.v1_6: cdx16,
+        CycloneDXSupportedVersion.v1_7: cdx17,
     }
     return module_map[spec_version]
 

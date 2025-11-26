@@ -2,13 +2,9 @@ import pytest
 
 from sbomify.apps.sboms.cyclonedx_validator import (
     CycloneDXValidator,
-    CycloneDXValidationError,
-    SBOMVersionError,
     SBOMSchemaError,
-    CycloneDXSchemaError,
+    SBOMVersionError,
 )
-from sbomify.apps.sboms.versioning import CycloneDXSupportedVersion
-from sbomify.apps.sboms.tests.test_sbom_schemas import sample_cyclonedx_schema_dict
 
 
 def test_validate_valid_1_5_sbom(sample_cyclonedx_schema_dict):
@@ -29,15 +25,24 @@ def test_validate_valid_1_6_sbom(sample_cyclonedx_schema_dict):
     assert validated_sbom.bomFormat == "CycloneDX"
 
 
+def test_validate_valid_1_7_sbom(sample_cyclonedx_schema_dict):
+    """Test validation of a valid CycloneDX 1.7 SBOM."""
+    sbom_data = sample_cyclonedx_schema_dict.copy()
+    sbom_data["specVersion"] = "1.7"
+    validated_sbom = CycloneDXValidator("1.7").validate(sbom_data)
+    assert validated_sbom.spec_version == "1.7"
+    assert validated_sbom.bom_format.value == "CycloneDX"
+
+
 def test_validate_invalid_version():
     """Test validation with an invalid version."""
-    with pytest.raises(SBOMVersionError) as exc_info:
+    with pytest.raises(SBOMVersionError):
         CycloneDXValidator("1.4")
 
 
 def test_validate_missing_version():
     """Test validation with missing version."""
-    with pytest.raises(SBOMVersionError) as exc_info:
+    with pytest.raises(SBOMVersionError):
         CycloneDXValidator("1.4")
 
 
@@ -68,6 +73,16 @@ def test_get_version_specific_fields_1_6():
     assert "metadata" in fields["required"]
 
 
+def test_get_version_specific_fields_1_7():
+    """Test getting version-specific fields for 1.7."""
+    validator = CycloneDXValidator("1.7")
+    fields = validator.get_version_specific_fields()
+    assert "required" in fields
+    assert "optional" in fields
+    assert "bomFormat" in fields["required"]
+    assert "metadata" in fields["required"]
+
+
 def test_validate_version_specific_requirements_1_5():
     """Test version-specific requirements validation for 1.5."""
     validator = CycloneDXValidator("1.5")
@@ -86,6 +101,18 @@ def test_validate_version_specific_requirements_1_6():
     data = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
+        "metadata": {"component": {"name": "test"}},
+    }
+    # This should not raise any exception
+    validator.validate_version_specific_requirements(data)
+
+
+def test_validate_version_specific_requirements_1_7():
+    """Test version-specific requirements validation for 1.7."""
+    validator = CycloneDXValidator("1.7")
+    data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
         "metadata": {"component": {"name": "test"}},
     }
     # This should not raise any exception

@@ -26,6 +26,7 @@ from .schemas import (
     SPDXSchema,
     cdx15,
     cdx16,
+    cdx17,
 )
 
 log = logging.getLogger(__name__)
@@ -87,6 +88,8 @@ def sbom_upload_cyclonedx(
                 payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
             elif spec_version == "1.6":
                 payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+            elif spec_version == "1.7":
+                payload = cdx17.CyclonedxBillOfMaterialsStandard(**sbom_data)
             else:
                 return 400, {"detail": f"Unsupported CycloneDX specVersion: {spec_version}"}
         except ValidationError as e:
