@@ -3,13 +3,13 @@
 {
 	admin {$CADDY_ADMIN:off}
 
-    # Docker network IP ranges included below.
-    # For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
+	# Docker network IP ranges included below.
+	# For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
 	# and add below to the servers block if using CF
-    servers {
-        trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
-        client_ip_headers X-Forwarded-For Cf-Connecting-Ip X-Real-IP
-    }
+	servers {
+		trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+		client_ip_headers X-Forwarded-For Cf-Connecting-Ip X-Real-IP
+	}
 }
 
 # HTTP - All traffic
@@ -25,8 +25,21 @@
 		path /health
 	}
 	handle @health {
-		skip_log
+		log_skip
 		respond "OK" 200
+	}
+
+	# Django health check endpoint - suppress logging on success
+	@django_health {
+		path /UuPha8mu/*
+	}
+	handle @django_health {
+		log_skip
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
 	}
 
 	# Reverse proxy to Django backend
@@ -35,6 +48,13 @@
 		header_up X-Real-IP {remote_host}
 		header_up Host {host}
 		header_down -Server
+
+		# Active health checks using Django's health endpoint
+		# This endpoint checks database connectivity and other dependencies
+		health_uri /UuPha8mu/
+		health_interval 30s
+		health_timeout 5s
+		health_status 200
 	}
 
 	# Compression
