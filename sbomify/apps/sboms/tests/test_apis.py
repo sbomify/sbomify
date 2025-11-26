@@ -5,14 +5,13 @@ import os
 import pathlib
 
 import pytest
-from django.http import HttpResponse
 from django.test import Client, override_settings
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers, sample_user
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import ContactProfile, Member
 
@@ -75,9 +74,6 @@ def test_sbom_api_is_public(
     response = client.get(product_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
-
-
-
 
 
 @pytest.mark.django_db
@@ -154,6 +150,144 @@ def test_sbom_upload_api_cyclonedx(
     assert patched_upload_data_as_file.call_count == 1
 
     assert SBOM.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_cyclonedx_1_6_with_manufacturer(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that CycloneDX 1.6 SBOMs with manufacturer field are accepted."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "tools": {
+                "components": [
+                    {
+                        "type": "application",
+                        "manufacturer": {"name": "Test Manufacturer"},
+                        "name": "test-tool",
+                        "version": "1.0.0",
+                    }
+                ]
+            },
+            "component": {"type": "application", "name": "test-component", "version": "1.0.0"},
+        },
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    assert "id" in response.json()
+
+    # Verify the SBOM was created correctly
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.component.id == sample_component.id
+    assert sbom.format == "cyclonedx"
+    assert sbom.format_version == "1.6"
+    assert sbom.name == "test-component"
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_cyclonedx_1_5(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that CycloneDX 1.5 SBOMs are still accepted."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "test-component-1.5", "version": "2.0.0"}},
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    assert "id" in response.json()
+
+    # Verify the SBOM was created correctly
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.component.id == sample_component.id
+    assert sbom.format == "cyclonedx"
+    assert sbom.format_version == "1.5"
+    assert sbom.name == "test-component-1.5"
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_cyclonedx_unsupported_version(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    """Test that unsupported CycloneDX versions are rejected."""
+    SBOM.objects.all().delete()
+
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "2.0",
+        "metadata": {},
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported CycloneDX specVersion" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_cyclonedx_invalid_json(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+):
+    """Test that invalid JSON is rejected."""
+    SBOM.objects.all().delete()
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data="not valid json{",
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert "Invalid JSON" in response.json()["detail"]
 
 
 @pytest.mark.django_db
@@ -280,6 +414,8 @@ def test_component_metadata_with_contact_profile(
     assert response_data["supplier"]["address"] == "123 Example Street"
     assert response_data["supplier"]["url"] == ["https://supplier.example.com"]
     assert response_data["supplier"]["contacts"][0]["name"] == "Profile Owner"
+
+
 @pytest.mark.django_db
 def test_component_copy_metadata_api(
     sample_component: Component,  # noqa: F811
@@ -287,7 +423,7 @@ def test_component_copy_metadata_api(
 ):
     client = Client()
 
-        # Create another component and set its metadata using the API
+    # Create another component and set its metadata using the API
     another_component = Component.objects.create(
         name="Another Component",
         team_id=sample_component.team_id,

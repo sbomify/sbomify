@@ -1,3 +1,4 @@
+import json
 import logging
 
 from django.conf import settings
@@ -62,7 +63,6 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
-    payload: cdx15.CyclonedxSoftwareBillOfMaterialsStandard | cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
 ):
     "Upload CycloneDX format SBOM for a component."
     try:
@@ -72,6 +72,25 @@ def sbom_upload_cyclonedx(
 
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
+
+        # Parse JSON and check version before validation
+        try:
+            sbom_data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return 400, {"detail": "Invalid JSON"}
+
+        spec_version = sbom_data.get("specVersion", "1.5")
+
+        # Validate against correct schema based on specVersion
+        try:
+            if spec_version == "1.5":
+                payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+            elif spec_version == "1.6":
+                payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+            else:
+                return 400, {"detail": f"Unsupported CycloneDX specVersion: {spec_version}"}
+        except ValidationError as e:
+            return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
@@ -100,7 +119,8 @@ def sbom_upload_cyclonedx(
 
         return 201, {"id": sbom.id}
 
-    except Exception:
+    except Exception as e:
+        log.error(f"Error processing CycloneDX SBOM upload: {str(e)}")
         return 400, {"detail": "Invalid request"}
 
 
