@@ -1339,7 +1339,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 
                 # Enforce scope exclusivity: If assigning to a project, components cannot be global
                 # We automatically demote them from global scope
-                global_component_ids = [c.id for c in components if c.is_global]
+                global_component_ids = [component.id for component in components if component.is_global]
                 if global_component_ids:
                     Component.objects.filter(id__in=global_component_ids).update(is_global=False)
 

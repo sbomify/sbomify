@@ -53,7 +53,7 @@ class WorkspacePublicView(View):
             {
                 "brand": brand,
                 "workspace": {
-                    "name": team.name.replace("Workspace", "").replace("workspace", "").strip().rstrip("'s"),
+                    "name": team.name.replace("Workspace", "").replace("workspace", "").strip().removesuffix("'s"),
                     "key": team.key,
                 },
                 "products": products_data,
