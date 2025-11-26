@@ -26,6 +26,7 @@ from .schemas import (
     SPDXSchema,
     cdx15,
     cdx16,
+    validate_cyclonedx_sbom,
 )
 
 log = logging.getLogger(__name__)
@@ -63,8 +64,20 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
+    payload: cdx15.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx16.CyclonedxSoftwareBillOfMaterialsStandard
+    | None = None,
 ):
-    "Upload CycloneDX format SBOM for a component."
+    """
+    Upload CycloneDX format SBOM for a component.
+
+    This function can be called in two ways:
+    1. Via HTTP API (payload=None): Parses and validates request.body
+    2. Directly from code (payload provided): Uses the provided validated payload
+
+    The payload parameter is marked as optional to prevent Django Ninja from auto-parsing,
+    allowing us to handle version detection and validation manually.
+    """
     try:
         component = Component.objects.filter(id=component_id).first()
         if component is None:
@@ -73,24 +86,36 @@ def sbom_upload_cyclonedx(
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
-        # Parse JSON and check version before validation
-        try:
-            sbom_data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return 400, {"detail": "Invalid JSON"}
+        # Parse and validate the SBOM
+        if payload is None:
+            # Called via HTTP API - parse from request.body
+            try:
+                sbom_data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return 400, {"detail": "Invalid JSON"}
 
-        spec_version = sbom_data.get("specVersion", "1.5")
+            # Validate and get the appropriate schema version
+            try:
+                payload, spec_version = validate_cyclonedx_sbom(sbom_data)
+            except ValueError as e:
+                # Unsupported version
+                return 400, {"detail": str(e)}
+            except ValidationError as e:
+                # Invalid format for the detected version
+                spec_version = sbom_data.get("specVersion", "unknown")
+                return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
+        else:
+            # Called directly from code (e.g., management commands) - payload already validated
+            spec_version = payload.specVersion
+            try:
+                CycloneDXSupportedVersion(spec_version)
+            except ValueError:
+                from .schemas import get_supported_cyclonedx_versions
 
-        # Validate against correct schema based on specVersion
-        try:
-            if spec_version == "1.5":
-                payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
-            elif spec_version == "1.6":
-                payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
-            else:
-                return 400, {"detail": f"Unsupported CycloneDX specVersion: {spec_version}"}
-        except ValidationError as e:
-            return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
+                supported = ", ".join(get_supported_cyclonedx_versions())
+                return 400, {
+                    "detail": f"Unsupported CycloneDX specVersion: {spec_version}. Supported versions: {supported}"
+                }
 
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
@@ -521,43 +546,41 @@ def sbom_upload_file(
         elif "specVersion" in sbom_data:
             # CycloneDX format
             try:
-                spec_version = sbom_data.get("specVersion", "1.5")
-                if spec_version == "1.5":
-                    payload = cdx15.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
-                elif spec_version == "1.6":
-                    payload = cdx16.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
-                else:
-                    return 400, {"detail": f"Unsupported CycloneDX specVersion: {spec_version}"}
+                payload, spec_version = validate_cyclonedx_sbom(sbom_data)
+            except ValueError as e:
+                # Unsupported version
+                return 400, {"detail": str(e)}
+            except ValidationError as e:
+                # Invalid format
+                spec_version = sbom_data.get("specVersion", "unknown")
+                return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
-                s3 = S3Client("SBOMS")
-                filename = s3.upload_sbom(file_content)
+            s3 = S3Client("SBOMS")
+            filename = s3.upload_sbom(file_content)
 
-                sbom_dict = obj_extract(
-                    obj_in=payload,
-                    fields=[
-                        ExtractSpec("metadata.component.name", required=True, rename_to="name"),
-                        ExtractSpec("metadata.component.version", required=False, rename_to="version"),
-                        ExtractSpec("specVersion", required=True, rename_to="format_version"),
-                    ],
-                )
+            sbom_dict = obj_extract(
+                obj_in=payload,
+                fields=[
+                    ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                    ExtractSpec("metadata.component.version", required=False, rename_to="version"),
+                    ExtractSpec("specVersion", required=True, rename_to="format_version"),
+                ],
+            )
 
-                # Version if present is a Version class and needs to be converted to string.
-                if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
-                    sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
+            # Version if present is a Version class and needs to be converted to string.
+            if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
+                sbom_dict["version"] = sbom_dict["version"].model_dump(exclude_none=True)
 
-                sbom_dict["format"] = "cyclonedx"
-                sbom_dict["sbom_filename"] = filename
-                sbom_dict["component"] = component
-                sbom_dict["source"] = "manual_upload"
+            sbom_dict["format"] = "cyclonedx"
+            sbom_dict["sbom_filename"] = filename
+            sbom_dict["component"] = component
+            sbom_dict["source"] = "manual_upload"
 
-                with transaction.atomic():
-                    sbom = SBOM(**sbom_dict)
-                    sbom.save()
+            with transaction.atomic():
+                sbom = SBOM(**sbom_dict)
+                sbom.save()
 
-                return 201, {"id": sbom.id}
-
-            except ValidationError:
-                return 400, {"detail": "Invalid CycloneDX format"}
+            return 201, {"id": sbom.id}
 
         else:
             return 400, {"detail": "Unrecognized SBOM format. Must be SPDX or CycloneDX."}

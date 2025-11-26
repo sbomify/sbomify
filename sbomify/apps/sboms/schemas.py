@@ -54,6 +54,43 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     return module_map[spec_version]
 
 
+def get_supported_cyclonedx_versions() -> list[str]:
+    """Get list of supported CycloneDX version strings."""
+    return [v.value for v in CycloneDXSupportedVersion]
+
+
+def validate_cyclonedx_sbom(
+    sbom_data: dict,
+) -> tuple[cdx15.CyclonedxSoftwareBillOfMaterialsStandard | cdx16.CyclonedxSoftwareBillOfMaterialsStandard, str]:
+    """
+    Validate a CycloneDX SBOM and return the validated payload and spec version.
+
+    Args:
+        sbom_data: Dictionary containing the SBOM data
+
+    Returns:
+        Tuple of (validated_payload, spec_version)
+
+    Raises:
+        ValueError: If the spec version is unsupported
+        ValidationError: If the SBOM data is invalid for the detected version
+    """
+    spec_version = sbom_data.get("specVersion", "1.5")
+
+    # Check if version is supported
+    try:
+        version_enum = CycloneDXSupportedVersion(spec_version)
+    except ValueError:
+        supported = ", ".join(get_supported_cyclonedx_versions())
+        raise ValueError(f"Unsupported CycloneDX specVersion: {spec_version}. Supported versions: {supported}")
+
+    # Get the appropriate module and validate
+    module = get_cyclonedx_module(version_enum)
+    payload = module.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+
+    return payload, spec_version
+
+
 class BaseLicenseSchema(BaseModel):
     pass
 

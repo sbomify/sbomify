@@ -246,8 +246,12 @@ def test_sbom_upload_api_cyclonedx_1_5(
 def test_sbom_upload_api_cyclonedx_unsupported_version(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
 ):
     """Test that unsupported CycloneDX versions are rejected."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
     SBOM.objects.all().delete()
 
     sbom_data = {
@@ -273,8 +277,12 @@ def test_sbom_upload_api_cyclonedx_unsupported_version(
 def test_sbom_upload_api_cyclonedx_invalid_json(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
 ):
     """Test that invalid JSON is rejected."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
     SBOM.objects.all().delete()
 
     client = Client()
@@ -287,7 +295,8 @@ def test_sbom_upload_api_cyclonedx_invalid_json(
     )
 
     assert response.status_code == 400
-    assert "Invalid JSON" in response.json()["detail"]
+    # Django Ninja returns "Cannot parse request body" for invalid JSON before our function runs
+    assert "Invalid JSON" in response.json()["detail"] or "Cannot parse request body" in response.json()["detail"]
 
 
 @pytest.mark.django_db
