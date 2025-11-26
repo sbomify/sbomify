@@ -50,39 +50,21 @@
         {% if component.component_type == 'document' %}
             <div class="mt-3">
                 <div class="standard-card p-3">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <span class="badge {% if component.is_global %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
-                                {% if component.is_global %}
-                                    <i class="fas fa-building me-1"></i>Workspace-wide
-                                {% else %}
-                                    <i class="fas fa-project-diagram me-1"></i>Project-scoped
-                                {% endif %}
-                            </span>
-                            <p class="text-muted small mb-0 mt-2">
-                                {% if component.is_global %}
-                                    Visible on the workspace trust center and not tied to projects.
-                                {% else %}
-                                    Restricted to the projects this component is assigned to.
-                                {% endif %}
-                            </p>
-                        </div>
-                        {% if component.has_crud_permissions %}
-                            <form method="post" action="{% url 'core:component_scope' component.id %}">
-                                {% csrf_token %}
-                                {% if component.is_global %}
-                                    <input type="hidden" name="target_scope" value="project">
-                                    <button class="btn btn-outline-secondary btn-sm" type="submit">
-                                        <i class="fas fa-lock me-1"></i>Make Project-scoped
-                                    </button>
-                                {% else %}
-                                    <input type="hidden" name="target_scope" value="workspace">
-                                    <button class="btn btn-primary btn-sm" type="submit">
-                                        <i class="fas fa-globe me-1"></i>Make Workspace-wide
-                                    </button>
-                                {% endif %}
-                            </form>
-                        {% endif %}
+                    <div>
+                        <span class="badge {% if component.is_global %}bg-primary-subtle text-primary{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                            {% if component.is_global %}
+                                <i class="fas fa-building me-1"></i>Workspace-wide
+                            {% else %}
+                                <i class="fas fa-project-diagram me-1"></i>Project-scoped
+                            {% endif %}
+                        </span>
+                        <p class="text-muted small mb-0 mt-2">
+                            {% if component.is_global %}
+                                Visible on the workspace trust center and not tied to projects.
+                            {% else %}
+                                Restricted to the projects this component is assigned to.
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
