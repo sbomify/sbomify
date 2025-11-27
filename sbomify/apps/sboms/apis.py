@@ -27,6 +27,7 @@ from .schemas import (
     cdx15,
     cdx16,
     validate_cyclonedx_sbom,
+    validate_spdx_sbom,
 )
 
 log = logging.getLogger(__name__)
@@ -138,8 +139,18 @@ def sbom_upload_cyclonedx(
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
-def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchema):
-    "Upload SPDX format SBOM for a component."
+def sbom_upload_spdx(request: HttpRequest, component_id: str):
+    """
+    Upload SPDX format SBOM for a component.
+
+    Supports multiple SPDX versions. The version is detected from the spdxVersion
+    field in the SBOM data, and validated accordingly.
+
+    To add support for a new SPDX version:
+    1. Add the version to SPDXSupportedVersion enum in schemas.py
+    2. If needed, add version-specific schema handling in validate_spdx_sbom()
+    3. That's it! The API will automatically support the new version.
+    """
     try:
         component = Component.objects.filter(id=component_id).first()
         if component is None:
@@ -147,6 +158,23 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
 
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
+
+        # Parse JSON from request body
+        try:
+            sbom_data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return 400, {"detail": "Invalid JSON"}
+
+        # Validate and get the appropriate SPDX version
+        try:
+            payload, spdx_version = validate_spdx_sbom(sbom_data)
+        except ValueError as e:
+            # Unsupported version or invalid format
+            return 400, {"detail": str(e)}
+        except ValidationError as e:
+            # Invalid format for the detected version
+            spdx_version_str = sbom_data.get("spdxVersion", "unknown")
+            return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
 
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
@@ -162,7 +190,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, payload: SPDXSchem
         sbom_dict["sbom_filename"] = filename
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
-        sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
+        sbom_dict["format_version"] = spdx_version  # Already extracted from validation
 
         # Error message constants
         NO_PACKAGES_ERROR = "No packages found in SPDX document"

@@ -398,6 +398,70 @@ class SBOMFormat(str, Enum):
     cyclonedx = "cyclonedx"
 
 
+class SPDXSupportedVersion(str, Enum):
+    """
+    Supported SPDX specification versions.
+
+    To add support for a new SPDX version (e.g., 3.0):
+    1. Add the version here: v3_0 = "3.0"
+    2. If needed, create version-specific schema handling
+    3. Add it to validate_spdx_sbom() function below
+    4. That's it! The API will automatically support the new version.
+
+    Note: Currently all SPDX 2.x versions use the same schema (SPDXSchema),
+    but SPDX 3.0 will require a different schema structure.
+    """
+
+    v2_2 = "2.2"
+    v2_3 = "2.3"
+    # v3_0 = "3.0"  # Uncomment when SPDX 3.0 schema is available
+
+
+def get_supported_spdx_versions() -> list[str]:
+    """Get list of supported SPDX version strings."""
+    return [v.value for v in SPDXSupportedVersion]
+
+
+def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema", str]:
+    """
+    Validate an SPDX SBOM and return the validated payload and spec version.
+
+    Args:
+        sbom_data: Dictionary containing the SBOM data
+
+    Returns:
+        Tuple of (validated_payload, spdx_version)
+
+    Raises:
+        ValueError: If the SPDX version is unsupported
+        ValidationError: If the SBOM data is invalid for the detected version
+    """
+    # Extract version from spdxVersion field (e.g., "SPDX-2.3" -> "2.3")
+    spdx_version_str = sbom_data.get("spdxVersion", "")
+    if not spdx_version_str.startswith("SPDX-"):
+        raise ValueError(f"Invalid spdxVersion format: {spdx_version_str}. Expected format: SPDX-X.X")
+
+    version = spdx_version_str.removeprefix("SPDX-")
+
+    # Check if version is supported
+    try:
+        SPDXSupportedVersion(version)
+    except ValueError:
+        supported = ", ".join(get_supported_spdx_versions())
+        raise ValueError(f"Unsupported SPDX version: {version}. Supported versions: {supported}")
+
+    # For now, all SPDX 2.x versions use the same schema
+    # When SPDX 3.0 is added, we'll need version-specific schema selection here
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        payload = SPDXSchema(**sbom_data)
+    except PydanticValidationError as e:
+        raise e
+
+    return payload, version
+
+
 class SPDXPackage(BaseModel):
     model_config = ConfigDict(extra="allow")
 

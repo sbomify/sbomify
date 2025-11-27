@@ -11,7 +11,6 @@ from django.http import HttpRequest
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
-from sbomify.apps.sboms.schemas import SPDXSchema
 from sbomify.apps.teams.models import Team
 
 
@@ -182,8 +181,8 @@ class Command(BaseCommand):
                         format_type = "spdx"
                         self.stdout.write(f"Processing {format_type.upper()} SBOM: {sbom_file}")
                         try:
-                            payload = SPDXSchema(**sbom_data_dict)
-                            status_code, response_data = sbom_upload_spdx(mock_request, component.id, payload)
+                            # SPDX format - function handles version detection and validation
+                            status_code, response_data = sbom_upload_spdx(mock_request, component.id)
                             if status_code == 201:
                                 sbom_id = response_data.get("id")
                                 success_msg = f"API call successful for {sbom_file}, SBOM ID: {sbom_id}"

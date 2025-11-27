@@ -9,7 +9,6 @@ from django.http import HttpRequest
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
-from sbomify.apps.sboms.schemas import SPDXSchema
 from sbomify.apps.teams.models import Team
 
 User = get_user_model()
@@ -115,15 +114,13 @@ class Command(BaseCommand):
                     mock_request.user = user
                     mock_request.session = MagicMock()
 
-                    # Upload SBOM via API
+                    # Upload SBOM via API - functions handle version detection and validation
                     with patch("sbomify.apps.sboms.apis.verify_item_access", return_value=True):
                         if "spdxVersion" in sbom_data_dict:
                             # SPDX format
-                            payload = SPDXSchema(**sbom_data_dict)
-                            status_code, response_data = sbom_upload_spdx(mock_request, component.id, payload)
+                            status_code, response_data = sbom_upload_spdx(mock_request, component.id)
                         else:
-                            # CycloneDX format - just call with request and component_id
-                            # The function will parse and validate the version from request.body
+                            # CycloneDX format
                             status_code, response_data = sbom_upload_cyclonedx(mock_request, component.id)
 
                         if status_code == 201:
