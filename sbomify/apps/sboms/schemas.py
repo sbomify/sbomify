@@ -42,14 +42,32 @@ class DashboardStatsResponse(Schema):
 
 
 class CycloneDXSupportedVersion(str, Enum):
+    """
+    Supported CycloneDX specification versions.
+
+    To add support for a new CycloneDX version (e.g., 1.7 or 2.0):
+    1. Add the version here: v1_7 = "1.7"
+    2. Import the schema module at the top of this file: from sbomify.apps.sboms.sbom_format_schemas import cdx17
+    3. Add it to the module_map in get_cyclonedx_module() below
+    4. That's it! The API will automatically support the new version.
+    """
+
     v1_5 = "1.5"
     v1_6 = "1.6"
 
 
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
+    """
+    Get the appropriate CycloneDX schema module for a given version.
+
+    When adding a new version, add it to this mapping.
+    """
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
         CycloneDXSupportedVersion.v1_5: cdx15,
         CycloneDXSupportedVersion.v1_6: cdx16,
+        # Add new versions here:
+        # CycloneDXSupportedVersion.v1_7: cdx17,
+        # CycloneDXSupportedVersion.v2_0: cdx20,
     }
     return module_map[spec_version]
 

@@ -64,19 +64,17 @@ def _public_api_item_access_checks(request, item_type: str, item_id: str):
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
-    payload: cdx15.CyclonedxSoftwareBillOfMaterialsStandard
-    | cdx16.CyclonedxSoftwareBillOfMaterialsStandard
-    | None = None,
 ):
     """
     Upload CycloneDX format SBOM for a component.
 
-    This function can be called in two ways:
-    1. Via HTTP API (payload=None): Parses and validates request.body
-    2. Directly from code (payload provided): Uses the provided validated payload
+    Supports multiple CycloneDX versions. The version is detected from the specVersion
+    field in the SBOM data, and the appropriate schema is used for validation.
 
-    The payload parameter is marked as optional to prevent Django Ninja from auto-parsing,
-    allowing us to handle version detection and validation manually.
+    To add support for a new CycloneDX version:
+    1. Add the version to CycloneDXSupportedVersion enum in schemas.py
+    2. Import the new schema module (e.g., cdx17)
+    3. Add it to the module_map in get_cyclonedx_module()
     """
     try:
         component = Component.objects.filter(id=component_id).first()
@@ -86,36 +84,22 @@ def sbom_upload_cyclonedx(
         if not verify_item_access(request, component, ["owner", "admin"]):
             return 403, {"detail": "Forbidden"}
 
-        # Parse and validate the SBOM
-        if payload is None:
-            # Called via HTTP API - parse from request.body
-            try:
-                sbom_data = json.loads(request.body)
-            except json.JSONDecodeError:
-                return 400, {"detail": "Invalid JSON"}
+        # Parse JSON from request body
+        try:
+            sbom_data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return 400, {"detail": "Invalid JSON"}
 
-            # Validate and get the appropriate schema version
-            try:
-                payload, spec_version = validate_cyclonedx_sbom(sbom_data)
-            except ValueError as e:
-                # Unsupported version
-                return 400, {"detail": str(e)}
-            except ValidationError as e:
-                # Invalid format for the detected version
-                spec_version = sbom_data.get("specVersion", "unknown")
-                return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
-        else:
-            # Called directly from code (e.g., management commands) - payload already validated
-            spec_version = payload.specVersion
-            try:
-                CycloneDXSupportedVersion(spec_version)
-            except ValueError:
-                from .schemas import get_supported_cyclonedx_versions
-
-                supported = ", ".join(get_supported_cyclonedx_versions())
-                return 400, {
-                    "detail": f"Unsupported CycloneDX specVersion: {spec_version}. Supported versions: {supported}"
-                }
+        # Validate and get the appropriate schema version
+        try:
+            payload, spec_version = validate_cyclonedx_sbom(sbom_data)
+        except ValueError as e:
+            # Unsupported version
+            return 400, {"detail": str(e)}
+        except ValidationError as e:
+            # Invalid format for the detected version
+            spec_version = sbom_data.get("specVersion", "unknown")
+            return 400, {"detail": f"Invalid CycloneDX {spec_version} format: {str(e)}"}
 
         s3 = S3Client("SBOMS")
         filename = s3.upload_sbom(request.body)
