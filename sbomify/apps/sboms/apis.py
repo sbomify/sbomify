@@ -23,9 +23,9 @@ from .schemas import (
     CycloneDXSupportedVersion,
     SBOMUploadRequest,
     SPDXPackage,
-    SPDXSchema,
     cdx15,
     cdx16,
+    cdx17,
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
@@ -245,7 +245,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
 @router.post(
     "/artifact/cyclonedx/{spec_version}/{component_id}/metadata",
     response={
-        200: cdx15.Metadata | cdx16.Metadata,
+        200: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
@@ -259,7 +259,7 @@ def get_cyclonedx_component_metadata(
     request,
     spec_version: CycloneDXSupportedVersion,
     component_id: str,
-    metadata: cdx15.Metadata | cdx16.Metadata,
+    metadata: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
     sbom_version: str = Query(
         None,
         description="If provided, overwrites the version present in SBOM's metadata",
@@ -271,7 +271,7 @@ def get_cyclonedx_component_metadata(
         "present in both sbom metadata and component metadata then component metadata will be "
         "used, otherwise sbom metadata is be used",
     ),
-) -> cdx15.Metadata | cdx16.Metadata:
+) -> cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
     """
     Return metadata section of cyclone-x format sbom.
 
@@ -289,7 +289,9 @@ def get_cyclonedx_component_metadata(
     metadata_dict["name"] = component.name
     component_metadata = ComponentMetaData(**metadata_dict)
 
-    component_cdx_metadata: cdx15.Metadata | cdx16.Metadata = component_metadata.to_cyclonedx(spec_version)
+    component_cdx_metadata: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata = component_metadata.to_cyclonedx(
+        spec_version
+    )
     sbom_metadata_dict = metadata.model_dump(mode="json", exclude_none=True, exclude_unset=True, by_alias=True)
     component_metadata_dict = component_cdx_metadata.model_dump(
         mode="json", exclude_none=True, exclude_unset=True, by_alias=True
@@ -311,11 +313,16 @@ def get_cyclonedx_component_metadata(
     final_metadata = component_cdx_metadata.__class__(**final_dict)
 
     if sbom_version:
-        # For cyclone dx 1.5, version is a string, for 1.6, version is an Version object whose root value is string.
+        # For CycloneDX 1.5, version is a string
+        # For 1.6+, version is a Version object whose root value is a string
         if spec_version == CycloneDXSupportedVersion.v1_5:
             final_metadata.component.version = sbom_version
-        elif spec_version == CycloneDXSupportedVersion.v1_6:
-            final_metadata.component.version = cdx16.Version(sbom_version)
+        else:
+            # 1.6, 1.7, and future versions use Version object
+            from .schemas import get_cyclonedx_module
+
+            cdx_module = get_cyclonedx_module(spec_version)
+            final_metadata.component.version = cdx_module.Version(sbom_version)
 
     if override_name:
         final_metadata.component.name = component.name
@@ -498,62 +505,66 @@ def sbom_upload_file(
         if "spdxVersion" in sbom_data:
             # SPDX format
             try:
-                payload = SPDXSchema(**sbom_data)
+                payload, spdx_version = validate_spdx_sbom(sbom_data)
+            except ValueError as e:
+                # Unsupported version
+                return 400, {"detail": str(e)}
+            except ValidationError as e:
+                # Invalid format
+                spdx_version_str = sbom_data.get("spdxVersion", "unknown")
+                return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
 
-                s3 = S3Client("SBOMS")
-                filename = s3.upload_sbom(file_content)
+            s3 = S3Client("SBOMS")
+            filename = s3.upload_sbom(file_content)
 
-                sbom_dict = obj_extract(
-                    obj_in=payload,
-                    fields=[
-                        ExtractSpec("name", required=True),
-                    ],
-                )
+            sbom_dict = obj_extract(
+                obj_in=payload,
+                fields=[
+                    ExtractSpec("name", required=True),
+                ],
+            )
 
-                sbom_dict["format"] = "spdx"
-                sbom_dict["sbom_filename"] = filename
-                sbom_dict["component"] = component
-                sbom_dict["source"] = "manual_upload"
-                sbom_dict["format_version"] = payload.spdx_version.removeprefix("SPDX-")
+            sbom_dict["format"] = "spdx"
+            sbom_dict["sbom_filename"] = filename
+            sbom_dict["component"] = component
+            sbom_dict["source"] = "manual_upload"
+            sbom_dict["format_version"] = spdx_version  # Already extracted from validation
 
-                # Error message constants
-                NO_PACKAGES_ERROR = "No packages found in SPDX document"
-                NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
+            # Error message constants
+            NO_PACKAGES_ERROR = "No packages found in SPDX document"
+            NO_MATCHING_PACKAGE_ERROR = "No package found with name '{name}' in SPDX document"
 
-                if not payload.packages:
-                    return 400, {"detail": NO_PACKAGES_ERROR}
+            if not payload.packages:
+                return 400, {"detail": NO_PACKAGES_ERROR}
 
-                # Find the primary package
-                package: SPDXPackage | None = None
+            # Find the primary package
+            package: SPDXPackage | None = None
 
-                # First check documentDescribes
-                if hasattr(payload, "documentDescribes") and payload.documentDescribes:
-                    described_ref: str = payload.documentDescribes[0]
-                    for pkg in payload.packages:
-                        if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
-                            package = pkg
-                            break
+            # First check documentDescribes
+            if hasattr(payload, "documentDescribes") and payload.documentDescribes:
+                described_ref: str = payload.documentDescribes[0]
+                for pkg in payload.packages:
+                    if hasattr(pkg, "SPDXID") and pkg.SPDXID == described_ref:
+                        package = pkg
+                        break
 
-                # Fall back to name matching
-                if not package:
-                    for pkg in payload.packages:
-                        if pkg.name == payload.name:
-                            package = pkg
-                            break
+            # Fall back to name matching
+            if not package:
+                for pkg in payload.packages:
+                    if pkg.name == payload.name:
+                        package = pkg
+                        break
 
-                if not package:
-                    return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
+            if not package:
+                return 400, {"detail": NO_MATCHING_PACKAGE_ERROR.format(name=payload.name)}
 
-                sbom_dict["version"] = package.version
+            sbom_dict["version"] = package.version
 
-                with transaction.atomic():
-                    sbom = SBOM(**sbom_dict)
-                    sbom.save()
+            with transaction.atomic():
+                sbom = SBOM(**sbom_dict)
+                sbom.save()
 
-                return 201, {"id": sbom.id}
-
-            except ValidationError:
-                return 400, {"detail": "Invalid SPDX format"}
+            return 201, {"id": sbom.id}
 
         elif "specVersion" in sbom_data:
             # CycloneDX format

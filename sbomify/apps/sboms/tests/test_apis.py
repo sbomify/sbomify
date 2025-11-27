@@ -419,6 +419,252 @@ def test_cyclonedx_1_6_declarations_field(
 
 
 @pytest.mark.django_db
+def test_cyclonedx_1_7_citations_field(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test CycloneDX 1.7 new feature: citations for data attribution tracking."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # CycloneDX 1.7 adds 'citations' for tracking who supplied what data
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "modern-app", "version": "2.0.0"},
+        },
+        "citations": [  # New in 1.7
+            {
+                "timestamp": "2025-11-27T00:00:00Z",
+                "pointers": ["/metadata/component/name"],
+                "attributedTo": "org-123",
+            }
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "cyclonedx"
+    assert sbom.format_version == "1.7"
+    assert sbom.name == "modern-app"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_7_distribution_constraints(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test CycloneDX 1.7 new feature: distributionConstraints with TLP classification."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # CycloneDX 1.7 adds distributionConstraints with Traffic Light Protocol (TLP)
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "sensitive-app", "version": "1.0.0"},
+            "distributionConstraints": {  # New in 1.7
+                "tlp": "AMBER"  # Traffic Light Protocol classification
+            },
+        },
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format_version == "1.7"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_7_patents_in_definitions(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test CycloneDX 1.7 enhancement: patents field added to definitions (not in 1.6)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # CycloneDX 1.7 adds 'patents' to definitions (1.6 definitions only had standards)
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "app-with-patents", "version": "1.0.0"},
+        },
+        "definitions": {
+            "patents": []  # New in 1.7 - empty list is valid
+        },
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format_version == "1.7"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_6_rejects_citations_field(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that CycloneDX 1.6 rejects 'citations' field (only in 1.7+)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # Try to use 1.7 'citations' field with 1.6 spec
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "test-app", "version": "1.0.0"},
+        },
+        "citations": [  # Not valid in 1.6, only in 1.7+
+            {
+                "timestamp": "2025-11-27T00:00:00Z",
+                "pointers": ["/metadata/component/name"],
+                "attributedTo": "org-123",
+            }
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    # Should fail validation because 1.6 doesn't allow 'citations'
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Invalid CycloneDX 1.6 format" in detail or "Extra inputs are not permitted" in detail
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_6_definitions_rejects_patents(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that CycloneDX 1.6 definitions field rejects 'patents' (added in 1.7)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # Try to use 1.7 'patents' inside definitions with 1.6 spec
+    # Note: 1.6 HAS definitions, but only with 'standards', not 'patents'
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "test-app", "version": "1.0.0"},
+        },
+        "definitions": {
+            "patents": []  # Not valid in 1.6 definitions, only in 1.7+
+        },
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    # Should fail validation because 1.6 definitions don't support 'patents'
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Invalid CycloneDX 1.6 format" in detail or "Extra inputs are not permitted" in detail
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_6_rejects_distribution_constraints(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Test that CycloneDX 1.6 rejects 'distributionConstraints' field (only in 1.7+)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    # Try to use 1.7 'distributionConstraints' with 1.6 spec
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {"type": "application", "name": "test-app", "version": "1.0.0"},
+            "distributionConstraints": {"tlp": "AMBER"},  # Not valid in 1.6
+        },
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    # Should fail validation because 1.6 doesn't allow 'distributionConstraints'
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "Invalid CycloneDX 1.6 format" in detail or "Extra inputs are not permitted" in detail
+
+
+@pytest.mark.django_db
 def test_cyclonedx_1_5_rejects_declarations_field(
     sample_access_token: AccessToken,  # noqa: F811
     sample_component: Component,  # noqa: F811
@@ -1064,6 +1310,87 @@ def test_metadata_enrichment_on_no_component_in_metadata(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Missing required 'component' field in SBOM metadata"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_1_7_metadata_endpoint(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test CycloneDX 1.7 metadata endpoint with version-specific handling."""
+    client = Client()
+
+    # Set component metadata first
+    component_metadata = {
+        "supplier": {
+            "name": "Test Supplier 1.7",
+            "url": ["https://supplier17.com"],
+            "address": "123 Future Street",
+            "contacts": [{"name": "Contact 1.7", "email": "contact@supplier17.com"}],
+        },
+        "authors": [{"name": "Author 1.7", "email": "author@example.com"}],
+        "licenses": ["MIT"],
+    }
+
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        url,
+        json.dumps(component_metadata),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
+
+    # Now test the CycloneDX 1.7 metadata endpoint
+    sbom_metadata = {
+        "timestamp": "2025-11-27T00:00:00+00:00",
+        "component": {
+            "bom-ref": "component-1.7",
+            "type": "application",
+            "name": "test-app-1.7",
+            "version": "2.0.0",
+        },
+    }
+
+    url = reverse(
+        "api-1:get_cyclonedx_component_metadata",
+        kwargs={"spec_version": "1.7", "component_id": sample_component.id},
+    )
+
+    response = client.post(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # Verify 1.7 metadata structure includes component metadata
+    # The endpoint merges component metadata with SBOM metadata
+    assert response_json["component"]["name"] == "test-app-1.7"
+    assert response_json["component"]["version"] == "2.0.0"
+
+    # Component metadata should be included
+    if "supplier" in response_json:
+        assert response_json["supplier"]["name"] == "Test Supplier 1.7"
+        # 1.7 supports PostalAddress (like 1.6)
+        if "address" in response_json["supplier"]:
+            assert response_json["supplier"]["address"]["streetAddress"] == "123 Future Street"
+
+    # Test version override for 1.7 (should use Version object like 1.6)
+    response = client.post(
+        url + "?sbom_version=3.0.0",
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+    # In 1.7, version should be a Version object (like 1.6)
+    assert response_json["component"]["version"] == "3.0.0"
 
 
 @pytest.mark.django_db

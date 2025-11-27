@@ -13,6 +13,7 @@ from sbomify.apps.teams.schemas import ContactProfileSchema
 
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
+from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 
@@ -45,15 +46,16 @@ class CycloneDXSupportedVersion(str, Enum):
     """
     Supported CycloneDX specification versions.
 
-    To add support for a new CycloneDX version (e.g., 1.7 or 2.0):
-    1. Add the version here: v1_7 = "1.7"
-    2. Import the schema module at the top of this file: from sbomify.apps.sboms.sbom_format_schemas import cdx17
+    To add support for a new CycloneDX version (e.g., 2.0):
+    1. Add the version here: v2_0 = "2.0"
+    2. Import the schema module at the top of this file: from sbomify.apps.sboms.sbom_format_schemas import cdx20
     3. Add it to the module_map in get_cyclonedx_module() below
     4. That's it! The API will automatically support the new version.
     """
 
     v1_5 = "1.5"
     v1_6 = "1.6"
+    v1_7 = "1.7"
 
 
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
@@ -65,8 +67,8 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
         CycloneDXSupportedVersion.v1_5: cdx15,
         CycloneDXSupportedVersion.v1_6: cdx16,
+        CycloneDXSupportedVersion.v1_7: cdx17,
         # Add new versions here:
-        # CycloneDXSupportedVersion.v1_7: cdx17,
         # CycloneDXSupportedVersion.v2_0: cdx20,
     }
     return module_map[spec_version]
@@ -79,7 +81,12 @@ def get_supported_cyclonedx_versions() -> list[str]:
 
 def validate_cyclonedx_sbom(
     sbom_data: dict,
-) -> tuple[cdx15.CyclonedxSoftwareBillOfMaterialsStandard | cdx16.CyclonedxSoftwareBillOfMaterialsStandard, str]:
+) -> tuple[
+    cdx15.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx16.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx17.CyclonedxSoftwareBillOfMaterialsStandard,
+    str,
+]:
     """
     Validate a CycloneDX SBOM and return the validated payload and spec version.
 
@@ -118,14 +125,15 @@ class CustomLicenseSchema(BaseLicenseSchema):
     url: str | None = None
     text: str | None = None
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.License2 | cdx16.License2:
+    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.License2 | cdx16.License2 | cdx17.License2:
         CycloneDx = get_cyclonedx_module(spec_version)
-        result: cdx15.License | cdx16.License = CycloneDx.License2(name=self.name)
+        result = CycloneDx.License2(name=self.name)
         set_values_if_not_empty(result, url=self.url)
 
-        if spec_version == CycloneDXSupportedVersion.v1_6:
-            if hasattr(cdx16, "LicenseAcknowledgementEnumeration"):
-                result.acknowledgement = cdx16.LicenseAcknowledgementEnumeration.declared
+        # License acknowledgement added in 1.6
+        if spec_version in [CycloneDXSupportedVersion.v1_6, CycloneDXSupportedVersion.v1_7]:
+            if hasattr(CycloneDx, "LicenseAcknowledgementEnumeration"):
+                result.acknowledgement = CycloneDx.LicenseAcknowledgementEnumeration.declared
 
         if self.text:
             result.text = CycloneDx.Attachment(content=self.text)
@@ -262,9 +270,9 @@ class ComponentMetaData(BaseModel):
             return cleaned_authors
         return v
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata:
+    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
         CycloneDx = get_cyclonedx_module(spec_version)
-        result: cdx15.Metadata | cdx16.Metadata = CycloneDx.Metadata()
+        result = CycloneDx.Metadata()
 
         if self.supplier and (
             self.supplier.name or self.supplier.url or self.supplier.address or self.supplier.contacts
@@ -272,8 +280,12 @@ class ComponentMetaData(BaseModel):
             result.supplier = CycloneDx.OrganizationalEntity()
             set_values_if_not_empty(result.supplier, name=self.supplier.name)
 
-            if spec_version == CycloneDXSupportedVersion.v1_6 and self.supplier.address:
-                result.supplier.address = cdx16.PostalAddress(streetAddress=self.supplier.address)
+            # PostalAddress added in 1.6
+            if (
+                spec_version in [CycloneDXSupportedVersion.v1_6, CycloneDXSupportedVersion.v1_7]
+                and self.supplier.address
+            ):
+                result.supplier.address = CycloneDx.PostalAddress(streetAddress=self.supplier.address)
 
             if self.supplier.url:
                 result.supplier.url = self.supplier.url
