@@ -3,6 +3,8 @@ from datetime import datetime
 from django.conf import settings
 from pydantic import BaseModel, Field
 
+from sbomify.apps.billing.config import is_billing_enabled
+
 
 class TeamUpdateSchema(BaseModel):
     """Schema for updating workspace information.
@@ -14,6 +16,7 @@ class TeamUpdateSchema(BaseModel):
         str_strip_whitespace = True
 
     name: str = Field(..., max_length=255, min_length=1)
+    is_public: bool | None = None
 
 
 class TeamPatchSchema(BaseModel):
@@ -26,6 +29,7 @@ class TeamPatchSchema(BaseModel):
         str_strip_whitespace = True
 
     name: str | None = Field(None, max_length=255, min_length=1)
+    is_public: bool | None = None
 
 
 class UserSchema(BaseModel):
@@ -66,6 +70,7 @@ class InvitationSchema(BaseModel):
 class TeamSchema(BaseModel):
     key: str
     name: str
+    is_public: bool
     created_at: datetime
     has_completed_wizard: bool
     billing_plan: str | None
@@ -76,6 +81,19 @@ class TeamSchema(BaseModel):
     custom_domain_last_checked_at: datetime | None = None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
+
+    def can_be_private(self) -> bool:
+        """
+        Mirror Team.can_be_private for schema instances (used by views/templates).
+        Billing-disabled environments always allow private; otherwise any non-community,
+        non-blank plan may be private.
+        """
+        if not is_billing_enabled():
+            return True
+        plan = (self.billing_plan or "").strip().lower()
+        if not plan:
+            return False
+        return plan != "community"
 
 
 class TeamDomainSchema(BaseModel):

@@ -257,6 +257,225 @@ class TestPublicPrivateConstraints:
         assert "Cannot make project private because it's assigned to public products" in response.json()["detail"]
         assert "Test Product" in response.json()["detail"]
 
+    def test_community_plan_rejects_private_product(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan users cannot set products private."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        product = Product.objects.create(name="Community Product", team=team, is_public=True)
+        url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
+        response = self.client.patch(
+            url,
+            json.dumps({"is_public": False}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
+    def test_community_plan_rejects_private_project(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan users cannot set projects private."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        project = Project.objects.create(name="Community Project", team=team, is_public=True)
+        url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
+        response = self.client.patch(
+            url,
+            json.dumps({"is_public": False}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
+    def test_community_plan_rejects_private_component(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan users cannot set components private."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        component = Component.objects.create(name="Community Component", team=team, is_public=True)
+        url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
+        response = self.client.patch(
+            url,
+            json.dumps({"is_public": False}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
+    def test_community_plan_put_update_product_without_is_public_allows(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan can update products without sending is_public."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        product = Product.objects.create(name="Community Product", team=team, is_public=True, description="orig")
+
+        url = reverse("api-1:update_product", kwargs={"product_id": product.id})
+        response = self.client.put(
+            url,
+            json.dumps({"name": "Updated Product", "description": "orig"}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["is_public"] is True
+
+    def test_community_plan_put_update_project_without_is_public_allows(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan can update projects without sending is_public."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        project = Project.objects.create(name="Community Project", team=team, is_public=True, metadata={"a": 1})
+
+        url = reverse("api-1:update_project", kwargs={"project_id": project.id})
+        response = self.client.put(
+            url,
+            json.dumps({"name": "Updated Project", "metadata": {"a": 1}}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["is_public"] is True
+
+    def test_community_plan_put_update_component_without_is_public_allows(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan can update components without sending is_public."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        component = Component.objects.create(name="Community Component", team=team, is_public=True)
+
+        url = reverse("api-1:update_component", kwargs={"component_id": component.id})
+        response = self.client.put(
+            url,
+            json.dumps(
+                {
+                    "name": "Updated Component",
+                    "component_type": component.component_type,
+                    "metadata": {},
+                    "is_global": False,
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json()["is_public"] is True
+
+    def test_community_plan_put_cannot_make_product_private(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan cannot flip product to private via PUT."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        product = Product.objects.create(name="Community Product", team=team, is_public=True, description="orig")
+
+        url = reverse("api-1:update_product", kwargs={"product_id": product.id})
+        response = self.client.put(
+            url,
+            json.dumps({"name": "Updated Product", "description": "orig", "is_public": False}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
+    def test_community_plan_put_cannot_make_project_private(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan cannot flip project to private via PUT."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        project = Project.objects.create(name="Community Project", team=team, is_public=True, metadata={"a": 1})
+
+        url = reverse("api-1:update_project", kwargs={"project_id": project.id})
+        response = self.client.put(
+            url,
+            json.dumps({"name": "Updated Project", "metadata": {"a": 1}, "is_public": False}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
+    def test_community_plan_put_cannot_make_component_private(
+        self, sample_team_with_owner_member, sample_user  # noqa: F811
+    ):
+        """Community plan cannot flip component to private via PUT."""
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "community"
+        team.save()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, team.members.first())
+
+        component = Component.objects.create(name="Community Component", team=team, is_public=True)
+
+        url = reverse("api-1:update_component", kwargs={"component_id": component.id})
+        response = self.client.put(
+            url,
+            json.dumps(
+                {
+                    "name": "Updated Component",
+                    "component_type": component.component_type,
+                    "metadata": {},
+                    "is_global": False,
+                    "is_public": False,
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert "cannot make items private" in response.json()["detail"]
+
     def test_cannot_make_public_project_private_when_assigned_to_public_product(
         self, sample_team_with_owner_member, sample_user  # noqa: F811
     ):

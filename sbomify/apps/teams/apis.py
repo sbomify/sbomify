@@ -74,6 +74,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
     return TeamSchema(
         key=team.key,
         name=team.name,
+        is_public=team.is_public,
         created_at=team.created_at,
         billing_plan=team.billing_plan,
         billing_plan_limits=team.billing_plan_limits,
@@ -85,6 +86,10 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         members=members_data,
         invitations=invitations_data,
     )
+
+
+def _private_workspace_allowed(team: Team) -> bool:
+    return team.can_be_private()
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
@@ -566,6 +571,10 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
     try:
         with transaction.atomic():
             team.name = payload.name
+            if payload.is_public is not None:
+                if payload.is_public is False and not _private_workspace_allowed(team):
+                    return 403, {"detail": "Private trust center is available on Business or Enterprise plans."}
+                team.is_public = payload.is_public
             team.save()
 
         return 200, _build_team_response(request, team)
@@ -604,6 +613,9 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
         with transaction.atomic():
             # Only update fields that were provided
             update_data = payload.model_dump(exclude_unset=True)
+            desired_visibility = update_data.get("is_public")
+            if desired_visibility is False and not _private_workspace_allowed(team):
+                return 403, {"detail": "Private trust center is available on Business or Enterprise plans."}
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()

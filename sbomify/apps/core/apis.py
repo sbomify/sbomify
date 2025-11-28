@@ -128,6 +128,10 @@ class CreateProjectRequest(BaseModel):
 
 router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
 
+PRIVATE_ITEMS_UPGRADE_MESSAGE = (
+    "Community plan users cannot make items private. Upgrade to a paid plan to enable private items."
+)
+
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
     """Get the current user's team ID from the session or fall back to user's first team."""
@@ -146,6 +150,10 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
             return str(first_team.id)
 
     return None
+
+
+def _private_items_allowed(team: Team) -> bool:
+    return team.can_be_private()
 
 
 def _ensure_latest_release_exists(product: "Product") -> None:
@@ -369,11 +377,14 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema):
         if not verify_item_access(request, team, ["owner", "admin"]):
             return 403, {"detail": "Only owners and admins can create products", "error_code": ErrorCode.FORBIDDEN}
 
+        allow_private = _private_items_allowed(team)
+
         with transaction.atomic():
             product = Product.objects.create(
                 name=payload.name,
                 description=payload.description,
                 team_id=team_id,
+                is_public=True if not allow_private else False,
             )
 
         return 201, _build_item_response(request, product, "product")
@@ -476,9 +487,14 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
+            final_is_public = payload.is_public if payload.is_public is not None else product.is_public
+
+            if final_is_public is False and product.is_public and not _private_items_allowed(product.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+
             product.name = payload.name
             product.description = payload.description
-            product.is_public = payload.is_public
+            product.is_public = final_is_public
             product.save()
 
         return 200, _build_item_response(request, product, "product")
@@ -517,18 +533,8 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             new_is_public = update_data.get("is_public", product.is_public)
 
             # Check billing plan restrictions when trying to make items private
-            if not new_is_public and product.is_public:
-                # Get the team from the product
-                team = product.team
-
-                # Only enforce billing restrictions if billing is enabled
-                if is_billing_enabled() and team.billing_plan == "community":
-                    return 403, {
-                        "detail": (
-                            "Community plan users cannot make items private. "
-                            "Upgrade to a paid plan to enable private items."
-                        )
-                    }
+            if not new_is_public and product.is_public and not _private_items_allowed(product.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # If making product public, check if it has private projects
             if new_is_public and not product.is_public:
@@ -1135,11 +1141,14 @@ def create_project(request: HttpRequest, payload: ProjectCreateSchema):
         if not verify_item_access(request, team, ["owner", "admin"]):
             return 403, {"detail": "Only owners and admins can create projects", "error_code": ErrorCode.FORBIDDEN}
 
+        allow_private = _private_items_allowed(team)
+
         with transaction.atomic():
             project = Project.objects.create(
                 name=payload.name,
                 team_id=team_id,
                 metadata=payload.metadata,
+                is_public=True if not allow_private else False,
             )
 
         return 201, _build_item_response(request, project, "project")
@@ -1234,8 +1243,13 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
 
     try:
         with transaction.atomic():
+            final_is_public = payload.is_public if payload.is_public is not None else project.is_public
+
+            if final_is_public is False and project.is_public and not _private_items_allowed(project.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+
             project.name = payload.name
-            project.is_public = payload.is_public
+            project.is_public = final_is_public
             project.metadata = payload.metadata
             project.save()
 
@@ -1276,18 +1290,8 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
             new_is_public = update_data.get("is_public", project.is_public)
 
             # Check billing plan restrictions when trying to make items private
-            if not new_is_public and project.is_public:
-                # Get the team from the project
-                team = project.team
-
-                # Only enforce billing restrictions if billing is enabled
-                if is_billing_enabled() and team.billing_plan == "community":
-                    return 403, {
-                        "detail": (
-                            "Community plan users cannot make items private. "
-                            "Upgrade to a paid plan to enable private items."
-                        )
-                    }
+            if not new_is_public and project.is_public and not _private_items_allowed(project.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # If making project public, check if it has private components
             if new_is_public and not project.is_public:
@@ -1419,6 +1423,8 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 "error_code": ErrorCode.INVALID_DATA,
             }
 
+        allow_private = _private_items_allowed(team)
+
         with transaction.atomic():
             component = Component.objects.create(
                 name=payload.name,
@@ -1426,6 +1432,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema):
                 component_type=payload.component_type,
                 is_global=payload.is_global,
                 metadata=payload.metadata,
+                is_public=True if not allow_private else False,
             )
 
         return 201, _build_item_response(request, component, "component")
@@ -1520,6 +1527,10 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
+            final_is_public = payload.is_public if payload.is_public is not None else component.is_public
+            if final_is_public is False and component.is_public and not _private_items_allowed(component.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
+
             # Evaluate final state after this update to enforce document-only constraint for globals
             new_component_type = payload.component_type
             new_is_global = payload.is_global if payload.is_global is not None else component.is_global
@@ -1532,7 +1543,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
             component.name = payload.name
             component.component_type = payload.component_type
-            component.is_public = payload.is_public
+            component.is_public = final_is_public
             if payload.is_global is not None:
                 component.is_global = payload.is_global
             component.metadata = payload.metadata
@@ -1585,18 +1596,8 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             new_is_public = update_data.get("is_public", component.is_public)
 
             # Check billing plan restrictions when trying to make items private
-            if not new_is_public and component.is_public:
-                # Get the team from the component
-                team = component.team
-
-                # Only enforce billing restrictions if billing is enabled
-                if is_billing_enabled() and team.billing_plan == "community":
-                    return 403, {
-                        "detail": (
-                            "Community plan users cannot make items private. "
-                            "Upgrade to a paid plan to enable private items."
-                        )
-                    }
+            if not new_is_public and component.is_public and not _private_items_allowed(component.team):
+                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # If making component private, check if it's assigned to any public projects
             if not new_is_public and component.is_public:

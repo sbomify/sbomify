@@ -6,6 +6,7 @@ from django.core.validators import MinLengthValidator
 from django.db import models
 from django.utils import timezone
 
+from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.core.utils import generate_id, number_to_random_token
 
 
@@ -52,6 +53,11 @@ def get_team_name_for_user(user) -> str:
 
 
 class Team(models.Model):
+    class Plan(models.TextChoices):
+        COMMUNITY = "community", "Community"
+        BUSINESS = "business", "Business"
+        ENTERPRISE = "enterprise", "Enterprise"
+
     class Meta:
         db_table = apps.get_app_config("teams").label + "_teams"
         indexes = [
@@ -85,7 +91,10 @@ class Team(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
-    billing_plan = models.CharField(max_length=30, null=True)
+    is_public = models.BooleanField(
+        default=True, help_text="Controls whether the workspace trust center is publicly accessible."
+    )
+    billing_plan = models.CharField(max_length=30, null=True, choices=Plan.choices)
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
     custom_domain = models.CharField(max_length=255, unique=True, null=True, blank=True)
     custom_domain_validated = models.BooleanField(default=False)
@@ -96,8 +105,59 @@ class Team(models.Model):
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
 
+    @property
+    def display_name(self) -> str:
+        """
+        User-friendly workspace name.
+
+        Removes a trailing "'s Workspace"/"’s Workspace"/"Workspace" suffix if present,
+        otherwise returns the raw name. Avoids brittle substring replacement.
+        """
+        if not self.name:
+            return "Workspace"
+
+        trimmed = str(self.name).strip()
+        lowered = trimmed.casefold()
+
+        # Remove explicit "'s workspace"/"’s workspace" suffixes
+        for suffix in ("'s workspace", "’s workspace"):
+            if lowered.endswith(suffix):
+                return trimmed[: -len(suffix)].rstrip()
+
+        # Remove trailing "workspace" if it's the last word
+        workspace_suffix = "workspace"
+        if lowered.endswith(workspace_suffix):
+            return trimmed[: -len(workspace_suffix)].rstrip(" -–—_:")
+
+        return trimmed
+
+    def can_be_private(self) -> bool:
+        """
+        Determine if this workspace can be set to private based on billing status.
+
+        Billing-disabled environments always allow private. Otherwise only paid plans
+        (anything not community/blank) can be private.
+        """
+        if not is_billing_enabled():
+            return True
+        plan = (self.billing_plan or "").strip().lower()
+        if not plan:
+            return False
+        return plan != Team.Plan.COMMUNITY
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        current_plan = (self.billing_plan or "").strip().lower()
+
+        is_paid_plan = bool(current_plan) and current_plan != Team.Plan.COMMUNITY
+
+        # Default paid plans to private only at creation time (opt-in later for upgrades)
+        if is_new and is_paid_plan and self.is_public:
+            self.is_public = False
+
+        # Community or unset (anything not in paid plans) must remain public
+        if (not self.can_be_private()) and (not self.is_public):
+            self.is_public = True
 
         super().save(*args, **kwargs)
         if not is_new or self.key is not None:

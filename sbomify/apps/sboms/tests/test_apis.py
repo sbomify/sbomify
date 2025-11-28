@@ -2172,40 +2172,49 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
-    # Test 4: Workspaces without billing plan can make items private (fallback behavior)
+    # Test 4: Workspaces without billing plan cannot make items private
     team.billing_plan = None
     team.save()
+    product = Product.objects.get(pk=sample_product.id)
+    project = Project.objects.get(pk=sample_project.id)
+    component = Component.objects.get(pk=sample_component.id)
 
     # Need to handle hierarchy constraints: make product private first, then project, then component
-    # Product can be made private independently
+    # Product cannot be made private
     response = client.patch(
         product_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
-    assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.status_code == 403
+    assert "cannot make items private" in response.json()["detail"]
+    product.refresh_from_db()
+    assert product.is_public is True
 
-    # Project can be made private independently
+    # Project cannot be made private
     response = client.patch(
         project_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
-    assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.status_code == 403
+    assert "cannot make items private" in response.json()["detail"]
+    project.refresh_from_db()
+    assert project.is_public is True
 
-    # Now component can be made private since project is private
+    # Component cannot be made private
     response = client.patch(
         component_uri,
         json.dumps({"is_public": False}),
         content_type="application/json",
         **get_api_headers(sample_access_token),
     )
-    assert response.status_code == 200
-    assert response.json()["is_public"] is False
+    assert response.status_code == 403
+    assert "cannot make items private" in response.json()["detail"]
+    component.refresh_from_db()
+    assert component.is_public is True
 
 
 @pytest.mark.django_db

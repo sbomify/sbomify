@@ -1,6 +1,7 @@
 # skip_file  # nosec
 from __future__ import annotations
 
+import json
 import os
 from urllib.parse import urlencode
 
@@ -10,12 +11,18 @@ from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
 from django.http import HttpResponse, HttpResponseRedirect
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers, setup_authenticated_client_session
+from sbomify.apps.core.tests.shared_fixtures import (
+    get_api_headers,
+    setup_authenticated_client_session,
+    team_with_business_plan,
+    team_with_community_plan,
+)
 from sbomify.apps.core.utils import number_to_random_token
 
+from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.fixtures import (  # noqa: F401
     guest_user,
     sample_team,
@@ -23,6 +30,7 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
     sample_team_with_owner_member,
     sample_user,
 )
+from sbomify.apps.teams.apis import _private_workspace_allowed
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
 
@@ -591,6 +599,110 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
 
 
 @pytest.mark.django_db
+def test_visibility_toggle__owner_can_make_public(
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+):
+    client = Client()
+    # Start from private (paid plans default to private on creation)
+    team_with_business_plan.is_public = False
+    team_with_business_plan.billing_plan = Team.Plan.BUSINESS
+    team_with_business_plan.save(update_fields=["is_public", "billing_plan"])
+
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key})
+    response = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false", "true"]},
+    )
+
+    assert response.status_code == 302
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.is_public is True
+    assert client.session["current_team"]["is_public"] is True
+
+    messages = list(get_messages(response.wsgi_request))
+    assert any("Trust center is now public." in msg.message for msg in messages)
+
+
+@pytest.mark.django_db
+def test_visibility_toggle__community_cannot_be_private(
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
+):
+    client = Client()
+    setup_authenticated_client_session(client, team_with_community_plan, sample_user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    response = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false"]},
+    )
+
+    assert response.status_code == 302
+    team_with_community_plan.refresh_from_db()
+    assert team_with_community_plan.is_public is True
+
+    messages = list(get_messages(response.wsgi_request))
+    assert any("Private trust center is available on Business or Enterprise plans." in msg.message for msg in messages)
+
+
+@pytest.mark.django_db
+def test_visibility_toggle__non_owner_blocked(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    client = Client()
+    team = sample_team_with_admin_member.team
+    team.billing_plan = Team.Plan.BUSINESS
+    team.is_public = False
+    team.save(update_fields=["billing_plan", "is_public"])
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false", "true"]},
+    )
+
+    assert response.status_code == 302
+    team.refresh_from_db()
+    assert team.is_public is False
+
+    messages = list(get_messages(response.wsgi_request))
+    assert any("Only workspace owners can change visibility" in msg.message for msg in messages)
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_visibility_toggle_allows_private_when_billing_disabled(
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_community_plan: Team,  # noqa: F811
+):
+    client = Client()
+    setup_authenticated_client_session(client, team_with_community_plan, sample_user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    response = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false"]},
+    )
+
+    assert response.status_code == 302
+    team_with_community_plan.refresh_from_db()
+    assert team_with_community_plan.is_public is False
+
+
+@pytest.mark.django_db
+@override_settings(BILLING=False)
+def test_model_allows_private_when_billing_disabled():
+    team = Team.objects.create(name="Dev Env Team", billing_plan=None, is_public=False)
+    team.refresh_from_db()
+    assert team.is_public is False
+
+
+@pytest.mark.django_db
 def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # noqa: F811
     client = Client()
 
@@ -1093,6 +1205,7 @@ def test_list_teams_api_success(authenticated_api_client, sample_user):  # noqa:
         assert "name" in team
         assert "created_at" in team
         assert "has_completed_wizard" in team
+        assert "is_public" in team
         assert "billing_plan" in team
 
 
@@ -1268,6 +1381,107 @@ def test_get_team_api_different_roles(authenticated_api_client, guest_api_client
 
 
 @pytest.mark.django_db
+def test_patch_team_toggles_public_flag(authenticated_api_client, sample_user):  # noqa: F811
+    """Owners can toggle workspace public visibility via API."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    team = Team.objects.create(name="Visibility Toggle", billing_plan="business")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+    Member.objects.create(team=team, user=sample_user, role="owner")
+
+    response = client.patch(
+        f"/api/v1/workspaces/{team.key}",
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_public"] is False
+
+    team.refresh_from_db()
+    assert team.is_public is False
+
+
+@pytest.mark.django_db
+def test_patch_team_private_not_allowed_on_community(authenticated_api_client, sample_user):  # noqa: F811
+    """Community workspaces cannot be made private."""
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    team = Team.objects.create(name="Community Team")
+    team.key = number_to_random_token(team.pk)
+    team.save()
+    Member.objects.create(team=team, user=sample_user, role="owner")
+
+    response = client.patch(
+        f"/api/v1/workspaces/{team.key}",
+        json.dumps({"is_public": False}),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 403
+    assert "Private trust center" in response.json()["detail"]
+
+    team.refresh_from_db()
+    assert team.is_public is True
+
+
+@pytest.mark.django_db
+def test_paid_plans_default_private():
+    """Business and Enterprise plans start private by default."""
+    business = Team.objects.create(name="Business Default", billing_plan="business")
+    assert business.is_public is False
+
+    enterprise = Team.objects.create(name="Enterprise Default", billing_plan="enterprise")
+    assert enterprise.is_public is False
+
+
+@pytest.mark.django_db
+def test_paid_plans_case_insensitive_for_privacy_flag():
+    """Paid plans with capitalized keys should still allow private workspaces."""
+    team = Team.objects.create(name="Business Case", billing_plan="Business", is_public=False)
+    assert team.is_public is False
+
+
+@pytest.mark.django_db
+def test_private_workspace_allowed_case_insensitive():
+    """API helper treats mixed-case plans as paid."""
+    team = Team.objects.create(name="Enterprise Case", billing_plan="Enterprise", is_public=False)
+    assert _private_workspace_allowed(team) is True
+
+
+@pytest.mark.django_db
+def test_private_workspace_allowed_custom_plan():
+    """Custom paid plans (non-community) are treated as paid."""
+    team = Team.objects.create(name="Custom Plan", billing_plan="test_plan", is_public=False)
+    assert _private_workspace_allowed(team) is True
+
+
+@pytest.mark.django_db
+def test_community_plan_defaults_public_even_if_set_false():
+    """Community plan workspaces cannot end up private."""
+    team = Team.objects.create(name="Community Default", billing_plan="community", is_public=False)
+    assert team.is_public is True
+
+
+@pytest.mark.django_db
+def test_downgrading_from_paid_to_community_forces_public():
+    """Switching from paid plan back to community makes workspace public again."""
+    team = Team.objects.create(name="Paid Workspace", billing_plan="business", is_public=False)
+
+    team.billing_plan = "community"
+    team.save()
+
+    team.refresh_from_db()
+    assert team.is_public is True
+
+
+@pytest.mark.django_db
 def test_teams_api_response_schema_validation(authenticated_api_client, sample_user):  # noqa: F811
     """Test that API responses match expected schema."""
     client, access_token = authenticated_api_client
@@ -1293,7 +1507,7 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     team_data = data[0]
 
     # Required fields
-    required_fields = ["key", "name", "created_at", "has_completed_wizard", "billing_plan"]
+    required_fields = ["key", "name", "created_at", "has_completed_wizard", "is_public", "billing_plan"]
     for field in required_fields:
         assert field in team_data, f"Field {field} missing from response"
 
@@ -1310,4 +1524,5 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     assert isinstance(data["name"], str)
     assert isinstance(data["created_at"], str)
     assert isinstance(data["has_completed_wizard"], bool)
+    assert isinstance(data["is_public"], bool)
     assert data["billing_plan"] is None or isinstance(data["billing_plan"], str)

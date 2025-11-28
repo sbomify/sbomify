@@ -65,9 +65,35 @@ def get_user_teams(user) -> dict:
             "has_completed_wizard": membership.team.has_completed_wizard,
             "billing_plan": membership.team.billing_plan,
             "branding_info": membership.team.branding_info,
+            "is_public": membership.team.is_public,
         }
 
     return dict(teams)
+
+
+def refresh_current_team_session(request, team: Team) -> None:
+    """
+    Update the current_team session entry to reflect the latest team state.
+
+    Centralizes session mutation so callers don't manually patch keys.
+    """
+    current_team = request.session.get("current_team") or {}
+    if current_team.get("key") != team.key:
+        return
+
+    request.session["current_team"] = {
+        **current_team,
+        "id": team.id,
+        "key": team.key,
+        "name": team.name,
+        "role": current_team.get("role"),
+        "is_default_team": current_team.get("is_default_team"),
+        "has_completed_wizard": team.has_completed_wizard,
+        "billing_plan": team.billing_plan,
+        "branding_info": team.branding_info,
+        "is_public": team.is_public,
+    }
+    request.session.modified = True
 
 
 def get_user_default_team(user) -> int:
