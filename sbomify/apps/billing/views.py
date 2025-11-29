@@ -19,7 +19,7 @@ from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
 from . import billing_processing
-from .forms import EnterpriseContactForm, PublicEnterpriseContactForm
+from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
 from .tasks import send_enterprise_inquiry_email
@@ -35,7 +35,7 @@ stripe_client = StripeClient()
 def enterprise_contact(request: HttpRequest) -> HttpResponse:
     """Display enterprise contact form and handle submissions."""
     if request.method == "POST":
-        form = EnterpriseContactForm(request.POST)
+        form = PublicEnterpriseContactForm(request.POST)
         if form.is_valid():
             # Form is valid, proceed with email sending asynchronously
             try:
@@ -85,7 +85,7 @@ def enterprise_contact(request: HttpRequest) -> HttpResponse:
         if user.email:
             initial_data["email"] = user.email
 
-        form = EnterpriseContactForm(initial=initial_data)
+        form = PublicEnterpriseContactForm(initial=initial_data)
 
     return render(
         request,
@@ -129,7 +129,7 @@ def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
                     f"Thank you for your inquiry! We'll be in touch with "
                     f"{form.cleaned_data['company_name']} within 1-2 business days.",
                 )
-                return redirect("public_enterprise_contact")
+                return redirect("https://sbomify.com")
 
             except Exception as e:
                 logger.error(f"Failed to queue public enterprise contact email: {e}")
@@ -194,16 +194,7 @@ def select_plan(request: HttpRequest, team_key: str):
 
         elif plan.key == "enterprise":
             # Just show the contact information page
-            return render(
-                request,
-                "billing/enterprise_contact.html.j2",
-                {
-                    "team_key": team_key,
-                    "form": EnterpriseContactForm(),
-                    "turnstile_site_key": settings.TURNSTILE_SITE_KEY,
-                    "debug": settings.DEBUG,
-                },
-            )
+            return redirect("billing:enterprise_contact")
 
         elif plan.key == "business":
             # Store the selection in session for use in billing_redirect
