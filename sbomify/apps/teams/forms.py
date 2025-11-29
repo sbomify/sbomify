@@ -212,9 +212,7 @@ class VulnerabilitySettingsForm(forms.Form):
     vulnerability_provider = forms.ChoiceField(
         required=True,
         choices=[("osv", "OSV"), ("dependency_track", "Dependency Track")],
-        widget=forms.RadioSelect(),
     )
     custom_dt_server_id = forms.CharField(
         required=False,
-        widget=forms.HiddenInput(),
     )
