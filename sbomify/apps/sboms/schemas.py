@@ -13,6 +13,7 @@ from sbomify.apps.teams.schemas import ContactProfileSchema
 
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
+from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
 
 
@@ -42,16 +43,77 @@ class DashboardStatsResponse(Schema):
 
 
 class CycloneDXSupportedVersion(str, Enum):
+    """
+    Supported CycloneDX specification versions.
+
+    To add support for a new CycloneDX version (e.g., 2.0):
+    1. Add the version here: v2_0 = "2.0"
+    2. Import the schema module at the top of this file: from sbomify.apps.sboms.sbom_format_schemas import cdx20
+    3. Add it to the module_map in get_cyclonedx_module() below
+    4. That's it! The API will automatically support the new version.
+    """
+
     v1_5 = "1.5"
     v1_6 = "1.6"
+    v1_7 = "1.7"
 
 
 def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
+    """
+    Get the appropriate CycloneDX schema module for a given version.
+
+    When adding a new version, add it to this mapping.
+    """
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
         CycloneDXSupportedVersion.v1_5: cdx15,
         CycloneDXSupportedVersion.v1_6: cdx16,
+        CycloneDXSupportedVersion.v1_7: cdx17,
+        # Add new versions here:
+        # CycloneDXSupportedVersion.v2_0: cdx20,
     }
     return module_map[spec_version]
+
+
+def get_supported_cyclonedx_versions() -> list[str]:
+    """Get list of supported CycloneDX version strings."""
+    return [v.value for v in CycloneDXSupportedVersion]
+
+
+def validate_cyclonedx_sbom(
+    sbom_data: dict,
+) -> tuple[
+    cdx15.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx16.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx17.CyclonedxSoftwareBillOfMaterialsStandard,
+    str,
+]:
+    """
+    Validate a CycloneDX SBOM and return the validated payload and spec version.
+
+    Args:
+        sbom_data: Dictionary containing the SBOM data
+
+    Returns:
+        Tuple of (validated_payload, spec_version)
+
+    Raises:
+        ValueError: If the spec version is unsupported
+        ValidationError: If the SBOM data is invalid for the detected version
+    """
+    spec_version = sbom_data.get("specVersion", "1.5")
+
+    # Check if version is supported
+    try:
+        version_enum = CycloneDXSupportedVersion(spec_version)
+    except ValueError:
+        supported = ", ".join(get_supported_cyclonedx_versions())
+        raise ValueError(f"Unsupported CycloneDX specVersion: {spec_version}. Supported versions: {supported}")
+
+    # Get the appropriate module and validate
+    module = get_cyclonedx_module(version_enum)
+    payload = module.CyclonedxSoftwareBillOfMaterialsStandard(**sbom_data)
+
+    return payload, spec_version
 
 
 class BaseLicenseSchema(BaseModel):
@@ -63,14 +125,15 @@ class CustomLicenseSchema(BaseLicenseSchema):
     url: str | None = None
     text: str | None = None
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.License2 | cdx16.License2:
+    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.License2 | cdx16.License2 | cdx17.License2:
         CycloneDx = get_cyclonedx_module(spec_version)
-        result: cdx15.License | cdx16.License = CycloneDx.License2(name=self.name)
+        result = CycloneDx.License2(name=self.name)
         set_values_if_not_empty(result, url=self.url)
 
-        if spec_version == CycloneDXSupportedVersion.v1_6:
-            if hasattr(cdx16, "LicenseAcknowledgementEnumeration"):
-                result.acknowledgement = cdx16.LicenseAcknowledgementEnumeration.declared
+        # License acknowledgement added in 1.6
+        if spec_version in [CycloneDXSupportedVersion.v1_6, CycloneDXSupportedVersion.v1_7]:
+            if hasattr(CycloneDx, "LicenseAcknowledgementEnumeration"):
+                result.acknowledgement = CycloneDx.LicenseAcknowledgementEnumeration.declared
 
         if self.text:
             result.text = CycloneDx.Attachment(content=self.text)
@@ -207,9 +270,9 @@ class ComponentMetaData(BaseModel):
             return cleaned_authors
         return v
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata:
+    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
         CycloneDx = get_cyclonedx_module(spec_version)
-        result: cdx15.Metadata | cdx16.Metadata = CycloneDx.Metadata()
+        result = CycloneDx.Metadata()
 
         if self.supplier and (
             self.supplier.name or self.supplier.url or self.supplier.address or self.supplier.contacts
@@ -217,8 +280,12 @@ class ComponentMetaData(BaseModel):
             result.supplier = CycloneDx.OrganizationalEntity()
             set_values_if_not_empty(result.supplier, name=self.supplier.name)
 
-            if spec_version == CycloneDXSupportedVersion.v1_6 and self.supplier.address:
-                result.supplier.address = cdx16.PostalAddress(streetAddress=self.supplier.address)
+            # PostalAddress added in 1.6
+            if (
+                spec_version in [CycloneDXSupportedVersion.v1_6, CycloneDXSupportedVersion.v1_7]
+                and self.supplier.address
+            ):
+                result.supplier.address = CycloneDx.PostalAddress(streetAddress=self.supplier.address)
 
             if self.supplier.url:
                 result.supplier.url = self.supplier.url
@@ -341,6 +408,70 @@ class ComponentMetadataRequest(BaseModel):
 class SBOMFormat(str, Enum):
     spdx = "spdx"
     cyclonedx = "cyclonedx"
+
+
+class SPDXSupportedVersion(str, Enum):
+    """
+    Supported SPDX specification versions.
+
+    To add support for a new SPDX version (e.g., 3.0):
+    1. Add the version here: v3_0 = "3.0"
+    2. If needed, create version-specific schema handling
+    3. Add it to validate_spdx_sbom() function below
+    4. That's it! The API will automatically support the new version.
+
+    Note: Currently all SPDX 2.x versions use the same schema (SPDXSchema),
+    but SPDX 3.0 will require a different schema structure.
+    """
+
+    v2_2 = "2.2"
+    v2_3 = "2.3"
+    # v3_0 = "3.0"  # Uncomment when SPDX 3.0 schema is available
+
+
+def get_supported_spdx_versions() -> list[str]:
+    """Get list of supported SPDX version strings."""
+    return [v.value for v in SPDXSupportedVersion]
+
+
+def validate_spdx_sbom(sbom_data: dict) -> tuple["SPDXSchema", str]:
+    """
+    Validate an SPDX SBOM and return the validated payload and spec version.
+
+    Args:
+        sbom_data: Dictionary containing the SBOM data
+
+    Returns:
+        Tuple of (validated_payload, spdx_version)
+
+    Raises:
+        ValueError: If the SPDX version is unsupported
+        ValidationError: If the SBOM data is invalid for the detected version
+    """
+    # Extract version from spdxVersion field (e.g., "SPDX-2.3" -> "2.3")
+    spdx_version_str = sbom_data.get("spdxVersion", "")
+    if not spdx_version_str.startswith("SPDX-"):
+        raise ValueError(f"Invalid spdxVersion format: {spdx_version_str}. Expected format: SPDX-X.X")
+
+    version = spdx_version_str.removeprefix("SPDX-")
+
+    # Check if version is supported
+    try:
+        SPDXSupportedVersion(version)
+    except ValueError:
+        supported = ", ".join(get_supported_spdx_versions())
+        raise ValueError(f"Unsupported SPDX version: {version}. Supported versions: {supported}")
+
+    # For now, all SPDX 2.x versions use the same schema
+    # When SPDX 3.0 is added, we'll need version-specific schema selection here
+    from pydantic import ValidationError as PydanticValidationError
+
+    try:
+        payload = SPDXSchema(**sbom_data)
+    except PydanticValidationError as e:
+        raise e
+
+    return payload, version
 
 
 class SPDXPackage(BaseModel):
