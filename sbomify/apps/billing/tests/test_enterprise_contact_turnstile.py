@@ -69,3 +69,43 @@ class TestEnterpriseContactTurnstile:
                 
                 # And the task should NOT have been called
                 assert not mock_task.send.called
+
+    def test_public_submission_redirects_to_homepage(self, client):
+        """
+        Test that successful public submission redirects to sbomify.com.
+        """
+        form_data = {
+            "company_name": "Test Co",
+            "first_name": "John",
+            "last_name": "Doe",
+            "email": "john@example.com",
+            "company_size": "startup",
+            "primary_use_case": "compliance",
+            "message": "This is a test message that is long enough.",
+            "cf_turnstile_response": "test-token",
+        }
+        
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(settings, "TURNSTILE_SITE_KEY", "test-site-key")
+            # Force DEBUG=True to match the behavior we expect in test environment for bypass
+            # Or force validation logic if we want to test that path specifically.
+            # Here we just want to ensure that IF valid, it redirects to the right place.
+            m.setattr(settings, "DEBUG", True)
+    
+            url = reverse("public_enterprise_contact")
+    
+            with pytest.MonkeyPatch.context() as mp:
+                mock_task = MagicMock()
+                mp.setattr("sbomify.apps.billing.views.send_enterprise_inquiry_email", mock_task)
+    
+                response = client.post(url, form_data)
+                
+                # If form validation fails, status code will be 200.
+                if response.status_code == 200:
+                    print(response.context['form'].errors)
+    
+                assert response.status_code == 302
+                assert response.url == "https://sbomify.com"
+                
+                # Task should be called
+                assert mock_task.send.called

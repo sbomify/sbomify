@@ -129,7 +129,7 @@ def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
                     f"Thank you for your inquiry! We'll be in touch with "
                     f"{form.cleaned_data['company_name']} within 1-2 business days.",
                 )
-                return redirect("public_enterprise_contact")
+                return redirect("https://sbomify.com")
 
             except Exception as e:
                 logger.error(f"Failed to queue public enterprise contact email: {e}")
