@@ -4,7 +4,6 @@ import { createApp, type Component } from 'vue';
 
 // Vue components (using standard Bootstrap/HTML classes provided by our CSS system)
 import TeamBranding from './components/TeamBranding.vue';
-import VulnerabilitySettings from './components/VulnerabilitySettings.vue';
 
 // Function to mount Vue components with teams-specific data handling
 function mountVueComponent(selector: string, component: Component, props: Record<string, unknown> = {}) {
@@ -33,5 +32,4 @@ function mountVueComponent(selector: string, component: Component, props: Record
 // Mount components when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   mountVueComponent('vc-team-branding', TeamBranding);
-  mountVueComponent('vc-vulnerability-settings', VulnerabilitySettings);
 });
