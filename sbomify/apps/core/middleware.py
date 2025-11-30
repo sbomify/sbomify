@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 
 class RealIPMiddleware(MiddlewareMixin):
     """
-    Middleware to correct the REMOTE_ADDR using CF-Connecting-IP and X-Real-IP
-    headers when behind a trusted proxy.
+    Middleware to correct the REMOTE_ADDR using X-Real-IP header set by Caddy.
 
     This ensures that logging, Sentry, and views see the correct client IP.
     """
