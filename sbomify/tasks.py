@@ -75,6 +75,7 @@ if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TE
 logger = logging.getLogger(__name__)
 
 # Import vulnerability scanning tasks to register them with the broker (AFTER broker config)
+import sbomify.apps.billing.tasks  # noqa: F401, E402
 import sbomify.apps.onboarding.cron  # noqa: F401, E402
 
 # Import onboarding tasks and cron jobs to register them with the broker (AFTER broker config)

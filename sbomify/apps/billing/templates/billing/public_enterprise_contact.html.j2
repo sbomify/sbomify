@@ -23,6 +23,11 @@
         <link href="{% static 'css/components.css' %}" rel="stylesheet">
         <link href="{% static 'css/pages.css' %}" rel="stylesheet">
         <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
+        {% if turnstile_site_key and not debug %}
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+                    async
+                    defer></script>
+        {% endif %}
     </head>
     <body>
         <div class="wrapper min-vh-100 d-flex flex-column">
@@ -32,5 +37,6 @@
             <!-- Modern Footer -->
             {% include "core/components/footer.html.j2" %}
         </div>
+        {% include "billing/_turnstile_scripts.html.j2" %}
     </body>
 </html>

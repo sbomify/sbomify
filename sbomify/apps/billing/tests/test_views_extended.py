@@ -394,9 +394,8 @@ class TestEnterpriseContactView:
             {"plan": "enterprise"}
         )
 
-        assert response.status_code == 200
-        assert "billing/enterprise_contact.html.j2" in [t.name for t in response.templates]
-        assert response.context["team_key"] == team_with_business_plan.key
+        assert response.status_code == 302
+        assert response.url == reverse("billing:enterprise_contact")
 
 
 class TestWebhookViewIntegration:
