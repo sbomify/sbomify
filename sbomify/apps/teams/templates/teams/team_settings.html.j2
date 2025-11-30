@@ -17,11 +17,7 @@
                 <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
             </div>
             <div class="header-actions">
-                <span class="workspace-key">
-                    <span class="vc-copyable-value"
-                          data-value="{{ team.key }}"
-                          title="Workspace Key: {{ team.key }} (click to copy)">{{ team.key }}</span>
-                </span>
+                {% include 'core/components/copyable-value.html.j2' with value=team.key title="Workspace Key: "|add:team.key|add:" (click to copy)" %}
             </div>
         </div>
     </div>

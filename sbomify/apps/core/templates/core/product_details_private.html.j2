@@ -38,9 +38,7 @@
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ product.id }}"
-                      title="Product ID: {{ product.id }} (click to copy)">{{ product.id }}</span>
+                {% include 'core/components/copyable-value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
             </span>
         </div>
     </div>

@@ -45,9 +45,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ project.id }}"
-                      title="Project ID: {{ project.id }} (click to copy)">{{ project.id }}</span>
+                {% include 'core/components/copyable-value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
             </span>
         </div>
     </div>
