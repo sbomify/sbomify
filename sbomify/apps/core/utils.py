@@ -87,8 +87,7 @@ def get_client_ip(request: HttpRequest) -> str | None:
        proxy headers like CF-Connecting-IP and X-Real-IP.
 
     It prioritizes headers that are likely set by trusted infrastructure
-    (Cloudflare or Caddy) over X-Forwarded-For, which requires complex
-    parsing to handle spoofing correctly.
+    (Cloudflare or Caddy) and avoids X-Forwarded-For to prevent spoofing.
     """
     remote_addr = request.META.get("REMOTE_ADDR")
 

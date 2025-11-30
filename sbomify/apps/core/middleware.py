@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 class RealIPMiddleware(MiddlewareMixin):
     """
-    Middleware to correct the REMOTE_ADDR using X-Forwarded-For, X-Real-IP,
-    and Cloudflare headers.
+    Middleware to correct the REMOTE_ADDR using CF-Connecting-IP and X-Real-IP
+    headers when behind a trusted proxy.
 
     This ensures that logging, Sentry, and views see the correct client IP.
     """
