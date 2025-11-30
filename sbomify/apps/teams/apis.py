@@ -26,6 +26,7 @@ from sbomify.apps.teams.schemas import (
     TeamPatchSchema,
     TeamSchema,
     TeamUpdateSchema,
+    UpdateTeamBrandingSchema,
     UserSchema,
 )
 from sbomify.logging import getLogger
@@ -110,7 +111,7 @@ def get_team_branding(request: HttpRequest, team_key: str):
     "/{team_key}/branding/{field}",
     response={200: BrandingInfoWithUrls, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def update_team_branding(
+def update_team_branding_field(
     request: HttpRequest,
     team_key: str,
     field: str,
@@ -156,6 +157,88 @@ def update_team_branding(
     team.save()
 
     # Create a new BrandingInfo object with the updated data to get correct URLs
+    updated_branding = BrandingInfo(**team.branding_info)
+    response_data = {
+        **team.branding_info,
+        "icon_url": updated_branding.brand_icon_url,
+        "logo_url": updated_branding.brand_logo_url,
+    }
+    return 200, BrandingInfoWithUrls(**response_data)
+
+
+def generate_branding_filename(team: Team, field: str, file) -> str:
+    file_ext = Path(file.name).suffix
+    unique_id = str(uuid.uuid4())
+    return f"team_{team.key}_{field}_{unique_id}{file_ext}"
+
+
+def upload_to_s3(
+    filename: str,
+    file,
+) -> None:
+    s3_client = S3Client("MEDIA")
+    file.seek(0)
+    s3_client.upload_media(filename, file.read())
+
+
+def delete_from_s3(
+    filename: str,
+) -> None:
+    s3_client = S3Client("MEDIA")
+    s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
+
+
+@router.put(
+    "/{team_key}/branding",
+    response={200: BrandingInfoWithUrls, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_team_branding(
+    request: HttpRequest,
+    team_key: str,
+    payload: UpdateTeamBrandingSchema,
+):
+    # TODO: has to be in middleware or decorator or anything else
+    try:
+        team = Team.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Team.DoesNotExist):
+        logger.warning(f"Workspace not found: {team_key}")
+        return 404, {"detail": "Workspace not found"}
+
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        logger.warning(f"User {request.user.username} is not owner of team {team_key}")
+        return 403, {"detail": "Only allowed for owners"}
+
+    # TODO: has to be a separate model
+    branding_info = BrandingInfo(**team.branding_info).model_dump()
+
+    for field in ["icon", "logo"]:
+        old_filename = branding_info.get(field)
+
+        if getattr(payload, f"{field}_pending_deletion", False):
+            branding_info[field] = ""
+        elif file := request.FILES.get(field):
+            branding_info[field] = generate_branding_filename(team, field, file)
+
+            try:
+                upload_to_s3(branding_info[field], file)
+            except Exception as e:
+                logger.error(f"Failed to upload {field} file {file.name}: {e}")
+                raise e
+        else:
+            continue
+
+        try:
+            delete_from_s3(old_filename)
+        except Exception as e:
+            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+
+    branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
+    branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
+    branding_info["prefer_logo_over_icon"] = payload.prefer_logo_over_icon or branding_info.get("prefer_logo_over_icon")
+
+    team.branding_info = branding_info
+    team.save(update_fields=["branding_info"])
+
     updated_branding = BrandingInfo(**team.branding_info)
     response_data = {
         **team.branding_info,

@@ -29,9 +29,7 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ document.id }}"
-                      title="Document ID: {{ document.id }} (click to copy)">{{ document.id }}</span>
+                {% include 'core/components/copyable-value.html.j2' with value=document.id title="Document ID: "|add:document.id|add:" (click to copy)" %}
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
