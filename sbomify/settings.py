@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+    "django_dramatiq",
     "django_extensions",
     "django_vite",
     "django_htmx",
@@ -317,6 +318,20 @@ else:
             },
         }
     }
+
+DRAMATIQ_BROKER = {
+    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "OPTIONS": {"url": REDIS_WORKER_URL},
+    "MIDDLEWARE": [
+        "dramatiq.middleware.Callbacks",
+        "dramatiq.middleware.Retries",
+        "dramatiq.middleware.TimeLimit",
+        "dramatiq.results.Results",
+        "django_dramatiq.middleware.DbConnectionsMiddleware",
+    ],
+}
+
+DRAMATIQ_RESULTS_BACKEND = {"BACKEND": "dramatiq.results.backends.RedisBackend", "OPTIONS": {"url": REDIS_WORKER_URL}}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
