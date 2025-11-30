@@ -1,6 +1,6 @@
 # Migration (Vue.js → Django + HTMX + Alpine.js) Guide
 
-### Goal
+## Goal
 
 Fully replace Vue.js with **Django Templates + HTMX + Alpine.js**,
 while **preserving UI, behavior, and CSS exactly**.
