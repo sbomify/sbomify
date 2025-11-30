@@ -7,8 +7,12 @@
 	# For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
 	# and add below to the servers block if using CF
 	servers {
-		trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
-		client_ip_headers X-Forwarded-For Cf-Connecting-Ip X-Real-IP
+		# Trusted proxies include:
+		# - Private IP ranges (Docker bridge, local network)
+		# - Cloudflare IPv4 ranges (https://www.cloudflare.com/ips/)
+		trusted_proxies static 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+		trusted_proxies_strict
+		client_ip_headers Cf-Connecting-Ip X-Forwarded-For X-Real-IP
 	}
 }
 
@@ -42,6 +46,12 @@
 		}
 	}
 
+	# Reject untrusted traffic (optional - uncomment to enable)
+	# @untrusted {
+	# 	not remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+	# }
+	# abort @untrusted
+
 	# Reverse proxy to Django backend
 	reverse_proxy sbomify-backend:8000 {
 		# X-Forwarded-For and X-Forwarded-Proto are passed by default
@@ -55,6 +65,12 @@
 		health_interval 30s
 		health_timeout 5s
 		health_status 200
+
+		# Retry logic for resilience
+		lb_try_duration 5s
+		lb_try_interval 250ms
+		fail_duration 10s
+		max_fails 3
 	}
 
 	# Compression

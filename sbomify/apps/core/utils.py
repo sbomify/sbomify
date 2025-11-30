@@ -64,6 +64,17 @@ def get_current_team_id(request: HttpRequest) -> int | None:
     return token_to_number(team_key)
 
 
+def get_client_ip(request: HttpRequest) -> str | None:
+    """
+    Get the client IP address from the request.
+
+    We assume the application is running behind a trusted reverse proxy (Caddy)
+    which validates the source and sets the X-Real-IP header to the correct
+    client IP (handling Cloudflare, etc.).
+    """
+    return request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR")
+
+
 def dict_update(d, u):
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):
