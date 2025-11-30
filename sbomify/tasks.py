@@ -37,9 +37,6 @@ from typing import Any, Dict
 
 import dramatiq
 from django.db import DatabaseError, OperationalError
-from dramatiq.brokers.redis import RedisBroker
-from dramatiq.results import Results
-from dramatiq.results.backends import RedisBackend
 from tenacity import (
     before_sleep_log,
     retry,
@@ -55,8 +52,6 @@ import django  # noqa: E402
 django.setup()
 
 
-from django.conf import settings  # noqa: E402
-
 from sbomify.apps.sboms.models import SBOM  # noqa: E402
 from sbomify.apps.sboms.ntia_validator import (  # noqa: E402
     NTIAComplianceStatus,
@@ -64,13 +59,6 @@ from sbomify.apps.sboms.ntia_validator import (  # noqa: E402
 )
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data, serialize_validation_errors  # noqa: E402
 from sbomify.task_utils import format_task_error, sbom_processing_task  # noqa: E402
-
-# Configure Dramatiq
-if not (getattr(settings, "TESTING", False) or os.environ.get("PYTEST_CURRENT_TEST")):
-    redis_broker = RedisBroker(url=settings.REDIS_WORKER_URL)
-    result_backend = RedisBackend(url=settings.REDIS_WORKER_URL)
-    redis_broker.add_middleware(Results(backend=result_backend))
-    dramatiq.set_broker(redis_broker)
 
 logger = logging.getLogger(__name__)
 
