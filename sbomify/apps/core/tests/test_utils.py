@@ -86,59 +86,57 @@ def test_schema_org_metadata_tag(mocker):
         assert "billingIncrement" in ps
 
 
-def test_get_client_ip_priority():
-    """Test get_client_ip prioritizes headers correctly."""
+def test_get_client_ip_trusted_proxy_logic():
+    """Test get_client_ip only trusts headers from private IPs."""
     request = HttpRequest()
     
-    # 1. Cloudflare IP should be highest priority
+    # 1. Untrusted source (Public IP)
+    # Should ignore headers and return REMOTE_ADDR
     request.META = {
+        "REMOTE_ADDR": "8.8.8.8", # Public IP
         "HTTP_CF_CONNECTING_IP": "1.1.1.1",
-        "HTTP_X_FORWARDED_FOR": "2.2.2.2",
-        "HTTP_X_REAL_IP": "3.3.3.3",
-        "REMOTE_ADDR": "4.4.4.4"
+        "HTTP_X_REAL_IP": "2.2.2.2",
+    }
+    assert get_client_ip(request) == "8.8.8.8"
+
+    # 2. Trusted source (Loopback)
+    # Should use Cloudflare IP if present
+    request.META = {
+        "REMOTE_ADDR": "127.0.0.1",
+        "HTTP_CF_CONNECTING_IP": "1.1.1.1",
+        "HTTP_X_REAL_IP": "2.2.2.2",
     }
     assert get_client_ip(request) == "1.1.1.1"
 
-    # 2. X-Forwarded-For should be second priority
+    # 3. Trusted source (Private Network)
+    # Should use X-Real-IP if CF header missing
     request.META = {
-        "HTTP_X_FORWARDED_FOR": "2.2.2.2",
-        "HTTP_X_REAL_IP": "3.3.3.3",
-        "REMOTE_ADDR": "4.4.4.4"
+        "REMOTE_ADDR": "10.0.0.5",
+        "HTTP_X_REAL_IP": "2.2.2.2",
     }
     assert get_client_ip(request) == "2.2.2.2"
 
-    # 3. X-Real-IP should be third priority
+    # 4. Trusted source but no headers
+    # Should fallback to REMOTE_ADDR
     request.META = {
-        "HTTP_X_REAL_IP": "3.3.3.3",
-        "REMOTE_ADDR": "4.4.4.4"
+        "REMOTE_ADDR": "192.168.1.1",
     }
-    assert get_client_ip(request) == "3.3.3.3"
-
-    # 4. REMOTE_ADDR is fallback
-    request.META = {
-        "REMOTE_ADDR": "4.4.4.4"
-    }
-    assert get_client_ip(request) == "4.4.4.4"
-
-    # 5. None if nothing exists
-    request.META = {}
-    assert get_client_ip(request) is None
+    assert get_client_ip(request) == "192.168.1.1"
 
 
-def test_get_client_ip_xff_parsing():
-    """Test get_client_ip handles multi-value X-Forwarded-For headers."""
+def test_get_client_ip_spoofing_prevention():
+    """
+    Test that we don't accidentally pick up spoofed headers 
+    when the source is not trusted.
+    """
     request = HttpRequest()
     
-    # Standard comma-separated list
+    # Attacker sending fake headers directly to backend (if exposed)
     request.META = {
-        "HTTP_X_FORWARDED_FOR": "203.0.113.195, 70.41.3.18, 150.172.238.178",
-        "REMOTE_ADDR": "127.0.0.1"
+        "REMOTE_ADDR": "8.8.4.4", # Attacker IP
+        "HTTP_X_FORWARDED_FOR": "fake_ip", 
+        "HTTP_X_REAL_IP": "fake_ip",
+        "HTTP_CF_CONNECTING_IP": "fake_ip"
     }
-    assert get_client_ip(request) == "203.0.113.195"
-
-    # With spaces
-    request.META = {
-        "HTTP_X_FORWARDED_FOR": "10.0.0.1,  10.0.0.2",
-        "REMOTE_ADDR": "127.0.0.1"
-    }
-    assert get_client_ip(request) == "10.0.0.1"
+    # Should ignore all headers and see attacker IP
+    assert get_client_ip(request) == "8.8.4.4"
