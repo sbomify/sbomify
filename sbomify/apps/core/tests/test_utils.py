@@ -1,13 +1,18 @@
-from random import randint
-import pytest
-from django.template import Context, Template
-from django.http import HttpRequest
-from sbomify.apps.billing.services import get_stripe_prices
-
-from sbomify.apps.core.utils import generate_id, number_to_random_token, token_to_number, get_client_ip
-
 import json
 import re
+from random import randint
+
+import pytest
+from django.http import HttpRequest
+from django.template import Context, Template
+
+from sbomify.apps.billing.services import get_stripe_prices
+from sbomify.apps.core.utils import (
+    generate_id,
+    get_client_ip,
+    number_to_random_token,
+    token_to_number,
+)
 
 
 def test_id_token_conversion():
@@ -86,57 +91,22 @@ def test_schema_org_metadata_tag(mocker):
         assert "billingIncrement" in ps
 
 
-def test_get_client_ip_trusted_proxy_logic():
-    """Test get_client_ip only trusts headers from private IPs."""
-    request = HttpRequest()
-    
-    # 1. Untrusted source (Public IP)
-    # Should ignore headers and return REMOTE_ADDR
-    request.META = {
-        "REMOTE_ADDR": "8.8.8.8", # Public IP
-        "HTTP_CF_CONNECTING_IP": "1.1.1.1",
-        "HTTP_X_REAL_IP": "2.2.2.2",
-    }
-    assert get_client_ip(request) == "8.8.8.8"
-
-    # 2. Trusted source (Loopback)
-    # Should use Cloudflare IP if present
-    request.META = {
-        "REMOTE_ADDR": "127.0.0.1",
-        "HTTP_CF_CONNECTING_IP": "1.1.1.1",
-        "HTTP_X_REAL_IP": "2.2.2.2",
-    }
-    assert get_client_ip(request) == "1.1.1.1"
-
-    # 3. Trusted source (Private Network)
-    # Should use X-Real-IP if CF header missing
-    request.META = {
-        "REMOTE_ADDR": "10.0.0.5",
-        "HTTP_X_REAL_IP": "2.2.2.2",
-    }
-    assert get_client_ip(request) == "2.2.2.2"
-
-    # 4. Trusted source but no headers
-    # Should fallback to REMOTE_ADDR
-    request.META = {
-        "REMOTE_ADDR": "192.168.1.1",
-    }
-    assert get_client_ip(request) == "192.168.1.1"
-
-
-def test_get_client_ip_spoofing_prevention():
+def test_get_client_ip_simplified():
     """
-    Test that we don't accidentally pick up spoofed headers 
-    when the source is not trusted.
+    Test get_client_ip simply returns X-Real-IP if present, otherwise REMOTE_ADDR.
+    The application trusts the upstream proxy (Caddy) to sanitize these headers.
     """
     request = HttpRequest()
     
-    # Attacker sending fake headers directly to backend (if exposed)
+    # 1. X-Real-IP present (from Caddy)
     request.META = {
-        "REMOTE_ADDR": "8.8.4.4", # Attacker IP
-        "HTTP_X_FORWARDED_FOR": "fake_ip", 
-        "HTTP_X_REAL_IP": "fake_ip",
-        "HTTP_CF_CONNECTING_IP": "fake_ip"
+        "HTTP_X_REAL_IP": "1.2.3.4",
+        "REMOTE_ADDR": "10.0.0.1"
     }
-    # Should ignore all headers and see attacker IP
-    assert get_client_ip(request) == "8.8.4.4"
+    assert get_client_ip(request) == "1.2.3.4"
+
+    # 2. X-Real-IP missing, fallback to REMOTE_ADDR
+    request.META = {
+        "REMOTE_ADDR": "10.0.0.1"
+    }
+    assert get_client_ip(request) == "10.0.0.1"

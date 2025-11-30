@@ -1,5 +1,8 @@
+"""
+Utility code used by multiple apps.
+"""
+
 import collections.abc
-import ipaddress
 import logging
 import string
 import uuid
@@ -61,58 +64,15 @@ def get_current_team_id(request: HttpRequest) -> int | None:
     return token_to_number(team_key)
 
 
-def is_trusted_proxy(ip: str) -> bool:
-    """
-    Check if an IP address is a trusted proxy.
-
-    Defaults to checking against private IP ranges.
-    """
-    if not ip:
-        return False
-
-    try:
-        ip_obj = ipaddress.ip_address(ip)
-        return ip_obj.is_private or ip_obj.is_loopback
-    except ValueError:
-        return False
-
-
 def get_client_ip(request: HttpRequest) -> str | None:
     """
     Get the client IP address from the request.
 
-    This function attempts to find the correct client IP by:
-    1. Checking the immediate REMOTE_ADDR.
-    2. If REMOTE_ADDR is a trusted proxy (private/loopback), it inspects
-       proxy headers like CF-Connecting-IP and X-Real-IP.
-
-    It prioritizes headers that are likely set by trusted infrastructure
-    (Cloudflare or Caddy) and avoids X-Forwarded-For to prevent spoofing.
+    We assume the application is running behind a trusted reverse proxy (Caddy)
+    which validates the source and sets the X-Real-IP header to the correct
+    client IP (handling Cloudflare, etc.).
     """
-    remote_addr = request.META.get("REMOTE_ADDR")
-
-    # If the request comes from an untrusted source (public Internet),
-    # we trust REMOTE_ADDR as the client IP.
-    if not is_trusted_proxy(remote_addr):
-        return remote_addr
-
-    # If we are here, REMOTE_ADDR is a trusted proxy (e.g. Caddy, Load Balancer).
-    # We can inspect headers that our trusted proxy passes or sets.
-
-    # Cloudflare (CF-Connecting-IP)
-    # Caddy should be configured to only pass this if it trusts Cloudflare.
-    cf_connecting_ip = request.META.get("HTTP_CF_CONNECTING_IP")
-    if cf_connecting_ip:
-        return cf_connecting_ip
-
-    # X-Real-IP
-    # Caddy sets this to the resolved client IP using its 'trusted_proxies' logic.
-    x_real_ip = request.META.get("HTTP_X_REAL_IP")
-    if x_real_ip:
-        return x_real_ip
-
-    # Fallback to REMOTE_ADDR if no better info is available from trusted proxy
-    return remote_addr
+    return request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR")
 
 
 def dict_update(d, u):
