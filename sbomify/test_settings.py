@@ -105,12 +105,6 @@ manifest = {
         "isEntry": True,
         "css": ["assets/main.css"]
     },
-    "sbomify/apps/teams/js/main.ts": {
-        "file": "assets/teams.js",
-        "src": "sbomify/apps/teams/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/teams.css"]
-    },
     "sbomify/apps/billing/js/main.ts": {
         "file": "assets/billing.js",
         "src": "sbomify/apps/billing/js/main.ts",

@@ -81,7 +81,6 @@ export default defineConfig({
       input: {
         core: resolve('./sbomify/apps/core/js/main.ts'),
         sboms: resolve('./sbomify/apps/sboms/js/main.ts'),
-        teams: resolve('./sbomify/apps/teams/js/main.ts'),
         billing: resolve('./sbomify/apps/billing/js/main.ts'),
         documents: resolve('./sbomify/apps/documents/js/main.ts'),
         vulnerability_scanning: resolve('./sbomify/apps/vulnerability_scanning/js/main.ts'),
