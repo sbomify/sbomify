@@ -25,7 +25,6 @@ export function registerTeamBranding() {
             },
 
             handleFileFromComponent(field: FileFields, file: File) {
-                console.log('handleFileFromComponent', field, file);
                 const dt = new DataTransfer();
                 dt.items.add(file);
                 const input = document.querySelector<HTMLInputElement>(
