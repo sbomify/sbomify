@@ -1,0 +1,195 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/file-drag-and-drop.css' %}">
+<div class="file-upload-container"
+     x-data="fileDragAndDrop({ accept: '{{ accept }}', existingUrl: '{{ existing_url|default:"" }}', fieldName: '{{ field_name|default:"" }}' })">
+    <div class="drop-zone"
+         :class="{ 'has-file': hasFile, 'is-dragover': dragover }"
+         @click="$refs.fileInput.click()"
+         @dragover.prevent="dragover = true"
+         @dragleave.prevent="dragover = false"
+         @drop.prevent="handleDrop">
+        <input type="file"
+               name="{{ field_name }}"
+               x-ref="fileInput"
+               class="file-input"
+               :accept="accept"
+               @change="handleFileSelect">
+        <template x-if="isEmpty">
+            <div class="drop-zone-content">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Drop file here or click to upload</p>
+                <span class="accept-hint" x-text="acceptHint"></span>
+            </div>
+        </template>
+        <template x-if="isImagePreview">
+            <div class="image-preview">
+                <img :src="previewUrl" alt="Preview" width="200" height="200">
+            </div>
+        </template>
+        <template x-if="showExisting">
+            <div class="image-preview existing-file">
+                <img :src="existingUrl" alt="Current file" width="200" height="200">
+                <div class="existing-file-overlay">
+                    <p>Click to change</p>
+                </div>
+            </div>
+        </template>
+    </div>
+    <template x-if="file">
+        <div class="file-info">
+            <span class="file-name" x-text="file.name"></span>
+            <button type="button"
+                    class="remove-button"
+                    @click.prevent="removeFile"
+                    aria-label="Remove file">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="24"
+                     height="24"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     class="feather feather-trash-2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+        </div>
+    </template>
+    <template x-if="showExisting">
+        <div class="file-info existing-file-info">
+            <span class="file-name">Current file</span>
+            <button type="button"
+                    class="remove-button"
+                    @click.prevent="removeExistingFile"
+                    aria-label="Remove existing file">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="24"
+                     height="24"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     class="feather feather-trash-2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+            </button>
+        </div>
+    </template>
+</div>
+<script>
+function fileDragAndDrop({ accept = '', existingUrl = '', fieldName = '' }) {
+    return {
+        file: null,
+        previewUrl: null,
+        existingUrl,
+        accept,
+        fieldName,
+        dragover: false,
+
+        get isEmpty() {
+            return !this.file && !this.existingUrl;
+        },
+
+        get hasFile() {
+            return !!this.file || !!this.existingUrl;
+        },
+
+        get showExisting() {
+            return !!this.existingUrl && !this.file;
+        },
+
+        get isImagePreview() {
+            return !!this.file && this.isImage(this.file);
+        },
+
+        get acceptHint() {
+            if (!this.accept) return '';
+            return `Accepted: ${this.accept}`;
+        },
+
+        isImage(file) {
+            if (!file) return false;
+            if (!file.type) return false;
+            return file.type.startsWith('image/');
+        },
+
+        cleanupPreview() {
+            if (!this.previewUrl) return;
+            URL.revokeObjectURL(this.previewUrl);
+            this.previewUrl = null;
+        },
+
+        emitSelected(file) {
+            if (!file) return;
+
+            this.$dispatch('file-selected', {
+                field: this.fieldName,
+                file,
+            });
+        },
+
+        handleFileSelect(e) {
+            if (!e?.target?.files?.length) return;
+            this.setFile(e.target.files[0]);
+        },
+
+        handleDrop(e) {
+            this.dragover = false;
+
+            if (!e?.dataTransfer?.files?.length) return;
+            this.setFile(e.dataTransfer.files[0]);
+        },
+
+        setFile(file) {
+            if (!file) return;
+
+            this.cleanupPreview();
+            this.file = file;
+
+            if (!this.isImage(file)) {
+                this.emitSelected(file);
+                return;
+            }
+
+            this.previewUrl = URL.createObjectURL(file);
+            this.emitSelected(file);
+        },
+
+        removeFile() {
+            if (!this.file) return;
+
+            this.cleanupPreview();
+            this.file = null;
+
+            if (this.$refs?.fileInput) {
+                this.$refs.fileInput.value = '';
+            }
+
+            this.$dispatch('file-removed', {
+                field: this.fieldName
+            });
+        },
+
+        removeExistingFile() {
+            if (!this.existingUrl) return;
+
+            this.existingUrl = '';
+
+            this.$dispatch('existing-file-removed', {
+                field: this.fieldName
+            });
+        }
+    };
+}
+</script>
