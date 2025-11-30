@@ -14,7 +14,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
@@ -120,7 +119,7 @@ def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
                 # Send via Dramatiq task
                 send_enterprise_inquiry_email.send(
                     form_data=form_data,
-                    source_ip=get_client_ip(request),
+                    source_ip=request.META.get("REMOTE_ADDR"),
                     user_agent=request.META.get("HTTP_USER_AGENT"),
                     is_public=True,
                 )

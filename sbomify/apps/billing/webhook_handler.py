@@ -17,8 +17,6 @@ except ImportError:
         status_code = 429
 
 
-from sbomify.apps.core.utils import get_client_ip
-
 from .stripe_client import StripeClient, StripeError
 
 logger = logging.getLogger(__name__)
@@ -35,7 +33,7 @@ class WebhookHandler:
 
     def _rate_limit_check(self, request):
         """Check if request is within rate limits."""
-        client_ip = get_client_ip(request)
+        client_ip = request.META.get("REMOTE_ADDR")
         key = f"webhook_rate_limit_{client_ip}"
 
         # Get current requests count
