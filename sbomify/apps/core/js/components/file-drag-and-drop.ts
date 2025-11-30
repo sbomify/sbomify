@@ -92,7 +92,9 @@ export function registerFileDragAndDrop() {
                 this.cleanupPreview();
                 this.file = null;
 
-                const fileInput = (this as any).$refs?.fileInput as HTMLInputElement;
+                const fileInput = document.querySelector<HTMLInputElement>(
+                    `[name="${this.fieldName}"]`
+                );
                 if (fileInput) {
                     fileInput.value = '';
                 }

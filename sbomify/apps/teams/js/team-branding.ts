@@ -33,8 +33,8 @@ export function registerTeamBranding() {
                 );
                 if (input) input.files = dt.files;
 
-                (this.localBrandingInfo as any)[field] = file;
-                (this.localBrandingInfo as any)[`${field}_pending_deletion`] = false;
+                this.localBrandingInfo[field] = file;
+                this.localBrandingInfo[`${field}_pending_deletion`] = false;
             },
 
             removeFile(field: FileFields) {
@@ -42,12 +42,12 @@ export function registerTeamBranding() {
                     `#team-branding-form [name="${field}"]`
                 );
                 if (input) input.value = '';
-                (this.localBrandingInfo as any)[field] = null;
+                this.localBrandingInfo[field] = null;
             },
 
             handleExistingFileRemoval(field: FileFields) {
-                (this.localBrandingInfo as any)[`${field}_url`] = '';
-                (this.localBrandingInfo as any)[`${field}_pending_deletion`] = true;
+                this.localBrandingInfo[`${field}_url`] = '';
+                this.localBrandingInfo[`${field}_pending_deletion`] = true;
             }
         };
     });
