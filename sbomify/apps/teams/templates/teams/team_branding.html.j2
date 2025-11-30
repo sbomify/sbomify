@@ -5,7 +5,7 @@
 <div class="standard-card">
     <div id="team-branding-content"
          class="card settings-card shadow-md"
-         x-data="teamBranding()">
+         x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4 class="card-title mb-0">Workspace Branding</h4>
             <div class="d-flex align-items-center gap-2">
@@ -156,35 +156,3 @@
         </div>
     </div>
 </div>
-<script>
-function teamBranding() {
-    const brandingInfo = '{{ branding_info|pydantic_json|safe }}';
-
-    return {
-        initialBrandingInfo: JSON.parse(brandingInfo),
-        localBrandingInfo: JSON.parse(brandingInfo),
-
-        hasUnsavedChanges() {
-            return JSON.stringify(this.localBrandingInfo) !== JSON.stringify(this.initialBrandingInfo);
-        },
-
-        handleFileFromComponent(field, file) {
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            document.querySelector(`#team-branding-form [name="${field}"]`).files = dt.files;
-            this.localBrandingInfo[field] = file;
-            this.localBrandingInfo[`${field}_pending_deletion`] = false;
-        },
-
-        removeFile(field) {
-            document.querySelector(`#team-branding-form [name="${field}"]`).value = '';
-            this.localBrandingInfo[field] = null;
-        },
-
-        handleExistingFileRemoval(field) {
-            this.localBrandingInfo[`${field}_url`] = '';
-            this.localBrandingInfo[`${field}_pending_deletion`] = true;
-        }
-    };
-}
-</script>

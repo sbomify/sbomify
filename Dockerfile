@@ -23,6 +23,7 @@ RUN bun install --frozen-lockfile --production
 # Copy source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
 COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
@@ -50,6 +51,7 @@ COPY eslint.config.js ./
 COPY .prettierrc.js ./
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
 COPY sbomify/apps/sboms/js/ ./sbomify/apps/sboms/js/
+COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
 COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/

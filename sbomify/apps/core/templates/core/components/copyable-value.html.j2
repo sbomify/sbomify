@@ -20,34 +20,3 @@
         </svg>
     </span>
 </span>
-<script>
-function copyableValue({ value, hideValue, copyFrom, title }) {
-    return {
-        value,
-        hideValue,
-        copyFrom,
-        title,
-
-        copyToClipboard() {
-            let valueToCopy = this.copyFrom ? document.getElementById(this.copyFrom).innerText : this.value;
-
-            navigator.clipboard.writeText(valueToCopy).then(() => {
-                this.$dispatch('messages', {
-                    value: [{
-                        type: 'success',
-                        message: 'Copied to clipboard'
-                    }]
-                });
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-                this.$dispatch('messages', {
-                    value: [{
-                        type: 'error',
-                        message: 'Failed to copy to clipboard'
-                    }]
-                });
-            });
-        }
-    };
-}
-</script>
