@@ -64,6 +64,34 @@ def get_current_team_id(request: HttpRequest) -> int | None:
     return token_to_number(team_key)
 
 
+def get_client_ip(request: HttpRequest) -> str | None:
+    """
+    Get the client IP address from the request.
+
+    This function accounts for reverse proxies like Caddy which set
+    X-Real-IP or X-Forwarded-For headers, as well as Cloudflare which sets
+    CF-Connecting-IP.
+    """
+    # Cloudflare
+    cf_connecting_ip = request.META.get("HTTP_CF_CONNECTING_IP")
+    if cf_connecting_ip:
+        return cf_connecting_ip
+
+    # Standard X-Forwarded-For
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        # X-Forwarded-For can be a comma-separated list of IPs.
+        # The first IP is the original client IP.
+        return x_forwarded_for.split(",")[0].strip()
+
+    # Caddy / Upstream Proxy
+    x_real_ip = request.META.get("HTTP_X_REAL_IP")
+    if x_real_ip:
+        return x_real_ip
+
+    return request.META.get("REMOTE_ADDR")
+
+
 def dict_update(d, u):
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):

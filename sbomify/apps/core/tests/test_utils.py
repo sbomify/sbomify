@@ -1,9 +1,10 @@
 from random import randint
 import pytest
 from django.template import Context, Template
+from django.http import HttpRequest
 from sbomify.apps.billing.services import get_stripe_prices
 
-from sbomify.apps.core.utils import generate_id, number_to_random_token, token_to_number
+from sbomify.apps.core.utils import generate_id, number_to_random_token, token_to_number, get_client_ip
 
 import json
 import re
@@ -83,3 +84,61 @@ def test_schema_org_metadata_tag(mocker):
         assert "priceCurrency" in ps
         assert "billingDuration" in ps
         assert "billingIncrement" in ps
+
+
+def test_get_client_ip_priority():
+    """Test get_client_ip prioritizes headers correctly."""
+    request = HttpRequest()
+    
+    # 1. Cloudflare IP should be highest priority
+    request.META = {
+        "HTTP_CF_CONNECTING_IP": "1.1.1.1",
+        "HTTP_X_FORWARDED_FOR": "2.2.2.2",
+        "HTTP_X_REAL_IP": "3.3.3.3",
+        "REMOTE_ADDR": "4.4.4.4"
+    }
+    assert get_client_ip(request) == "1.1.1.1"
+
+    # 2. X-Forwarded-For should be second priority
+    request.META = {
+        "HTTP_X_FORWARDED_FOR": "2.2.2.2",
+        "HTTP_X_REAL_IP": "3.3.3.3",
+        "REMOTE_ADDR": "4.4.4.4"
+    }
+    assert get_client_ip(request) == "2.2.2.2"
+
+    # 3. X-Real-IP should be third priority
+    request.META = {
+        "HTTP_X_REAL_IP": "3.3.3.3",
+        "REMOTE_ADDR": "4.4.4.4"
+    }
+    assert get_client_ip(request) == "3.3.3.3"
+
+    # 4. REMOTE_ADDR is fallback
+    request.META = {
+        "REMOTE_ADDR": "4.4.4.4"
+    }
+    assert get_client_ip(request) == "4.4.4.4"
+
+    # 5. None if nothing exists
+    request.META = {}
+    assert get_client_ip(request) is None
+
+
+def test_get_client_ip_xff_parsing():
+    """Test get_client_ip handles multi-value X-Forwarded-For headers."""
+    request = HttpRequest()
+    
+    # Standard comma-separated list
+    request.META = {
+        "HTTP_X_FORWARDED_FOR": "203.0.113.195, 70.41.3.18, 150.172.238.178",
+        "REMOTE_ADDR": "127.0.0.1"
+    }
+    assert get_client_ip(request) == "203.0.113.195"
+
+    # With spaces
+    request.META = {
+        "HTTP_X_FORWARDED_FOR": "10.0.0.1,  10.0.0.2",
+        "REMOTE_ADDR": "127.0.0.1"
+    }
+    assert get_client_ip(request) == "10.0.0.1"

@@ -26,7 +26,7 @@ from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
-from sbomify.apps.core.utils import token_to_number, verify_item_access
+from sbomify.apps.core.utils import get_client_ip, token_to_number, verify_item_access
 from sbomify.apps.core.views.component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
@@ -367,7 +367,7 @@ Message:
 
 Submitted by: {request.user.email} ({request.user.get_full_name() or request.user.username})
 Submitted at: {timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")}
-Source IP: {request.META.get("REMOTE_ADDR", "Unknown")}
+Source IP: {get_client_ip(request) or "Unknown"}
 User Agent: {request.META.get("HTTP_USER_AGENT", "Unknown")}
 """
 
