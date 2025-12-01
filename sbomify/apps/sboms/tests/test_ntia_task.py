@@ -14,7 +14,7 @@ from django.utils import timezone as django_timezone
 
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team
-from sbomify.tasks import check_sbom_ntia_compliance
+from sbomify.apps.sboms.tasks import check_sbom_ntia_compliance
 
 
 @pytest.mark.django_db
@@ -257,7 +257,7 @@ class TestNTIAComplianceTask:
             sbom.refresh_from_db()
             assert sbom.ntia_compliance_status == SBOM.NTIAComplianceStatus.COMPLIANT
 
-    @patch('sbomify.tasks.logger')
+    @patch('sbomify.apps.sboms.tasks.logger')
     @patch('sbomify.apps.sboms.utils.log')
     def test_logging_behavior(self, mock_utils_logger, mock_task_logger, sbom, compliant_cyclonedx_data):
         """Test that appropriate logging occurs during task execution."""

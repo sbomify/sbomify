@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team, Member
-from sbomify.tasks import check_sbom_ntia_compliance
+from sbomify.apps.sboms.tasks import check_sbom_ntia_compliance
 
 User = get_user_model()
 
@@ -307,7 +307,7 @@ class TestNTIAComplianceIntegration:
         component.team.save()
 
         # Mock the task to verify it gets called
-        with patch('sbomify.tasks.check_sbom_ntia_compliance.send_with_options') as mock_task:
+        with patch('sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options') as mock_task:
             # Create SBOM directly (simulates what happens in upload endpoints)
             sbom = SBOM.objects.create(
                 name="test-sbom",
