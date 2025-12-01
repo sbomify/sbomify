@@ -56,25 +56,6 @@
   gap: var(--spacing-md);
 }
 
-.workspace-key {
-  background: var(--gray-100);
-  padding: 0.5rem var(--spacing-md);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
-  color: var(--gray-700);
-}
-
-.workspace-key .vc-copyable-value {
-  cursor: pointer;
-  transition: color var(--transition-normal);
-}
-
-.workspace-key .vc-copyable-value:hover {
-  color: var(--text-title);
-}
-
 .settings-nav {
   background: var(--white);
   border: 1px solid var(--border-color);

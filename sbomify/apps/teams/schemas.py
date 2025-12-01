@@ -112,6 +112,14 @@ class BrandingInfoWithUrls(BrandingInfo):
     logo_url: str = ""
 
 
+class UpdateTeamBrandingSchema(BaseModel):
+    brand_color: str | None = None
+    accent_color: str | None = None
+    prefer_logo_over_icon: bool = False
+    icon_pending_deletion: bool = False
+    logo_pending_deletion: bool = False
+
+
 class ContactProfileContactSchema(BaseModel):
     """Schema representing a contact tied to a workspace contact profile."""
 

@@ -1,12 +1,18 @@
-from random import randint
-import pytest
-from django.template import Context, Template
-from sbomify.apps.billing.services import get_stripe_prices
-
-from sbomify.apps.core.utils import generate_id, number_to_random_token, token_to_number
-
 import json
 import re
+from random import randint
+
+import pytest
+from django.http import HttpRequest
+from django.template import Context, Template
+
+from sbomify.apps.billing.services import get_stripe_prices
+from sbomify.apps.core.utils import (
+    generate_id,
+    get_client_ip,
+    number_to_random_token,
+    token_to_number,
+)
 
 
 def test_id_token_conversion():
@@ -83,3 +89,24 @@ def test_schema_org_metadata_tag(mocker):
         assert "priceCurrency" in ps
         assert "billingDuration" in ps
         assert "billingIncrement" in ps
+
+
+def test_get_client_ip_simplified():
+    """
+    Test get_client_ip simply returns X-Real-IP if present, otherwise REMOTE_ADDR.
+    The application trusts the upstream proxy (Caddy) to sanitize these headers.
+    """
+    request = HttpRequest()
+    
+    # 1. X-Real-IP present (from Caddy)
+    request.META = {
+        "HTTP_X_REAL_IP": "1.2.3.4",
+        "REMOTE_ADDR": "10.0.0.1"
+    }
+    assert get_client_ip(request) == "1.2.3.4"
+
+    # 2. X-Real-IP missing, fallback to REMOTE_ADDR
+    request.META = {
+        "REMOTE_ADDR": "10.0.0.1"
+    }
+    assert get_client_ip(request) == "10.0.0.1"

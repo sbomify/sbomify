@@ -37,6 +37,11 @@ urlpatterns: list[URLPattern] = [
         views.VulnerabilitySettingsView.as_view(),
         name="vulnerability_settings",
     ),
+    path(
+        "<team_key>/branding",
+        views.TeamBrandingView.as_view(),
+        name="team_branding",
+    ),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

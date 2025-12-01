@@ -85,9 +85,7 @@
             </span>
             <span class="meta-divider">•</span>
             <span class="meta-item">
-                <span class="vc-copyable-value meta-id"
-                      data-value="{{ release.id }}"
-                      title="Release ID: {{ release.id }} (click to copy)">{{ release.id }}</span>
+                {% include 'core/components/copyable-value.html.j2' with value=release.id title="Release ID: "|add:release.id|add:" (click to copy)" %}
             </span>
         </div>
     </div>

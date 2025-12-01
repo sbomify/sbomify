@@ -1,1 +1,14 @@
-<div class="vc-team-branding" data-team-key="{{ team.key }}"></div>
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/team-branding.css' %}">
+<div id="team-branding-wrapper"
+     hx-get="{% url 'teams:team_branding' team.key %}"
+     hx-trigger="load, refreshTeamBranding from:body"
+     hx-swap="innerHTML">
+    <div class="text-center py-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Loading branding settings...</p>
+    </div>
+</div>

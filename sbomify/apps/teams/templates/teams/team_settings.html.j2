@@ -17,11 +17,7 @@
                 <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
             </div>
             <div class="header-actions">
-                <span class="workspace-key">
-                    <span class="vc-copyable-value"
-                          data-value="{{ team.key }}"
-                          title="Workspace Key: {{ team.key }} (click to copy)">{{ team.key }}</span>
-                </span>
+                {% include 'core/components/copyable-value.html.j2' with value=team.key title="Workspace Key: "|add:team.key|add:" (click to copy)" %}
             </div>
         </div>
     </div>
@@ -35,14 +31,14 @@
                 <i class="fas fa-users me-2"></i>
                 Members
             </a>
-            <a class="nav-link"
-               data-bs-toggle="pill"
-               href="#branding"
-               data-tab="branding">
-                <i class="fas fa-palette me-2"></i>
-                Branding
-            </a>
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                <a class="nav-link"
+                   data-bs-toggle="pill"
+                   href="#branding"
+                   data-tab="branding">
+                    <i class="fas fa-palette me-2"></i>
+                    Branding
+                </a>
                 <a class="nav-link"
                    data-bs-toggle="pill"
                    href="#contact-profiles"

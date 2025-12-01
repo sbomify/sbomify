@@ -12,4 +12,6 @@ def split(value, delimiter):
 
 @register.filter
 def pydantic_json(value):
+    if not isinstance(value, list):
+        return json.dumps(value.dict())
     return json.dumps([v.dict() for v in value])
