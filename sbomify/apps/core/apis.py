@@ -1327,9 +1327,9 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
 
                 # If project is (or will be) public, ensure no private components are being assigned
                 if new_is_public:
-                    private_components = [c for c in components if not c.is_public]
+                    private_components = [component for component in components if not component.is_public]
                     if private_components:
-                        component_names = ", ".join([c.name for c in private_components])
+                        component_names = ", ".join([component.name for component in private_components])
                         return 400, {
                             "detail": (
                                 f"Cannot assign private components to a public project: {component_names}. "
@@ -1615,7 +1615,6 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             for field, value in update_data.items():
                 setattr(component, field, value)
 
-            # Only run this if is_global is explicitly set to True or if it was already True and we are not changing it
             if component.is_global:
                 # Optimization: Only clear if there are actually projects to clear
                 if component.projects.exists():

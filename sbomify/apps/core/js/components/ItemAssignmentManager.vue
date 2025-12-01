@@ -418,9 +418,9 @@
           // Filter out assigned components from available list
           const assignedIds = assignedItems.value.map((c: AssignmentItem) => c.id)
           availableItems.value = availableResponse.data.items.filter(
-            (c: AssignmentItem) => {
-              const alreadyAssigned = assignedIds.includes(c.id)
-              const isGlobalDocument = c.is_global && c.component_type === 'document'
+            (component: AssignmentItem) => {
+              const alreadyAssigned = assignedIds.includes(component.id)
+              const isGlobalDocument = component.is_global && component.component_type === 'document'
               return !alreadyAssigned && !isGlobalDocument
             }
           )
