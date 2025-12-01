@@ -489,7 +489,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         with transaction.atomic():
             final_is_public = payload.is_public if payload.is_public is not None else product.is_public
 
-            if final_is_public is False and product.is_public and not _private_items_allowed(product.team):
+            if final_is_public is False and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             product.name = payload.name
@@ -1245,7 +1245,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
         with transaction.atomic():
             final_is_public = payload.is_public if payload.is_public is not None else project.is_public
 
-            if final_is_public is False and project.is_public and not _private_items_allowed(project.team):
+            if final_is_public is False and not _private_items_allowed(project.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             project.name = payload.name
@@ -1528,7 +1528,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
     try:
         with transaction.atomic():
             final_is_public = payload.is_public if payload.is_public is not None else component.is_public
-            if final_is_public is False and component.is_public and not _private_items_allowed(component.team):
+            if final_is_public is False and not _private_items_allowed(component.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # Evaluate final state after this update to enforce document-only constraint for globals
