@@ -23,6 +23,7 @@ from sbomify.apps.teams.schemas import (
     ContactProfileUpdateSchema,
     InvitationSchema,
     MemberSchema,
+    TeamDomainSchema,
     TeamPatchSchema,
     TeamSchema,
     TeamUpdateSchema,
@@ -77,6 +78,8 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         billing_plan=team.billing_plan,
         billing_plan_limits=team.billing_plan_limits,
         has_completed_wizard=team.has_completed_wizard,
+        custom_domain=team.custom_domain,
+        custom_domain_validated=team.custom_domain_validated,
         members=members_data,
         invitations=invitations_data,
     )
@@ -610,6 +613,99 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
         return 400, {"detail": "Invalid request"}
+
+
+class TeamDomainResponseSchema(BaseModel):
+    domain: str
+    validated: bool
+
+
+@router.put(
+    "/{team_key}/domain",
+    response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+@router.patch(
+    "/{team_key}/domain",
+    response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema):
+    """Set or update workspace custom domain."""
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Workspace not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team domain"}
+
+    # Feature gating: Check billing plan
+
+    # Get plan key from team (which stores the key as string)
+    plan_key = team.billing_plan or "free"
+    # Create temporary plan object to check permissions (avoid DB hit if possible, or use simple check)
+    # Using the property we just added. We need a real instance or mimic it.
+    # Since billing_plan is just a string on Team, let's check against list directly or fetch plan object if needed.
+    # But for cleaner code, let's use the logic defined in BillingPlan model property if we can,
+    # or replicate it here if we don't want to fetch the plan every time.
+    # However, Team.billing_plan is a string key.
+
+    # Direct check for now to avoid extra DB call, mirroring the logic in BillingPlan model
+    has_access = plan_key in ["business", "enterprise"]
+
+    if not has_access:
+        return 403, {"detail": "Custom domains are available on Business and Enterprise plans only"}
+
+    # Validate domain format (basic check)
+    domain = payload.domain.strip().lower()
+    if not domain or " " in domain:
+        return 400, {"detail": "Invalid domain format"}
+
+    try:
+        with transaction.atomic():
+            team.custom_domain = domain
+            team.custom_domain_validated = False  # Reset validation on change
+            team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+        return 200, {"domain": team.custom_domain, "validated": team.custom_domain_validated}
+
+    except IntegrityError:
+        return 400, {"detail": "This domain is already in use by another workspace"}
+    except Exception as e:
+        logger.error(f"Error updating team domain {team_key}: {e}")
+        return 400, {"detail": "Invalid request"}
+
+
+@router.delete(
+    "/{team_key}/domain",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_team_domain(request: HttpRequest, team_key: str):
+    """Remove workspace custom domain."""
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Workspace not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team domain"}
+
+    team.custom_domain = None
+    team.custom_domain_validated = False
+    team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+    return 204, None
 
 
 @router.get("/", response={200: list[TeamSchema], 403: ErrorResponse})

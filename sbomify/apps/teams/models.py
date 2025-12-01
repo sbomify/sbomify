@@ -82,6 +82,8 @@ class Team(models.Model):
     has_completed_wizard = models.BooleanField(default=False)
     billing_plan = models.CharField(max_length=30, null=True)
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
+    custom_domain = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    custom_domain_validated = models.BooleanField(default=False)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:
