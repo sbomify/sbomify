@@ -134,12 +134,12 @@ services:
       [
         "uv",
         "run",
-        "dramatiq",
-        "--processes",
+        "manage.py",
+        "rundramatiq",
+        "-p",
         "${DRAMATIQ_PROCESSES:-2}",
-        "--threads",
-        "${DRAMATIQ_THREADS:-4}",
-        "sbomify.tasks",
+        "-t",
+        "${DRAMATIQ_THREADS:-4}"
       ]
     depends_on:
       sbomify-redis:

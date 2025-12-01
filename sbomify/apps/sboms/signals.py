@@ -39,7 +39,7 @@ def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
                 return
 
             # Proceed with NTIA compliance check for business/enterprise plans
-            from sbomify.tasks import check_sbom_ntia_compliance
+            from sbomify.apps.sboms.tasks import check_sbom_ntia_compliance
 
             logger.info(
                 f"Triggering NTIA compliance check for SBOM {instance.id} - plan '{plan.key}' includes NTIA compliance"
@@ -67,7 +67,7 @@ def trigger_vulnerability_scan(sender, instance, created, **kwargs):
             # - Community teams: OSV only
             # - Business/Enterprise teams: OSV or Dependency Track based on team settings
 
-            from sbomify.tasks import scan_sbom_for_vulnerabilities_unified
+            from sbomify.apps.vulnerability_scanning.tasks import scan_sbom_for_vulnerabilities_unified
 
             # Determine plan type for logging
             plan_info = "community (no billing plan)"

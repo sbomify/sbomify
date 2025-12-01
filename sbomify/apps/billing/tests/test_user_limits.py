@@ -217,7 +217,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.assertTrue(self.business_plan.has_dependency_track_access)
         self.assertTrue(self.enterprise_plan.has_dependency_track_access)
 
-    @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
+    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_not_triggered_for_community(self, mock_task):
         """Test that NTIA compliance is not triggered for community plans."""
         team = Team.objects.create(name="Community Team", billing_plan="community")
@@ -234,7 +234,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should not be called
         mock_task.assert_not_called()
 
-    @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
+    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_triggered_for_business(self, mock_task):
         """Test that NTIA compliance is triggered for business plans."""
         team = Team.objects.create(name="Business Team", billing_plan="business")
@@ -251,7 +251,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=60000)
 
-    @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
+    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_triggered_for_enterprise(self, mock_task):
         """Test that NTIA compliance is triggered for enterprise plans."""
         team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
@@ -268,7 +268,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=60000)
 
-    @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
+    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_not_triggered_for_no_plan(self, mock_task):
         """Test that NTIA compliance is not triggered when team has no billing plan."""
         team = Team.objects.create(name="No Plan Team")  # No billing_plan set
@@ -285,7 +285,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should not be called
         mock_task.assert_not_called()
 
-    @patch("sbomify.tasks.check_sbom_ntia_compliance.send_with_options")
+    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
     def test_ntia_compliance_not_triggered_for_invalid_plan(self, mock_task):
         """Test that NTIA compliance is not triggered for invalid billing plans."""
         team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
@@ -302,7 +302,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # NTIA compliance task should not be called
         mock_task.assert_not_called()
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_community(self, mock_task):
         """Test that vulnerability scanning is triggered for community plans (using OSV)."""
         team = Team.objects.create(name="Community Team", billing_plan="community")
@@ -319,7 +319,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_business(self, mock_task):
         """Test that vulnerability scanning is triggered for business plans."""
         team = Team.objects.create(name="Business Team", billing_plan="business")
@@ -336,7 +336,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_enterprise(self, mock_task):
         """Test that vulnerability scanning is triggered for enterprise plans."""
         team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
@@ -353,7 +353,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_no_plan(self, mock_task):
         """Test that vulnerability scanning is triggered when team has no billing plan (using OSV)."""
         team = Team.objects.create(name="No Plan Team")  # No billing_plan set
@@ -370,7 +370,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
 
-    @patch("sbomify.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
+    @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_invalid_plan(self, mock_task):
         """Test that vulnerability scanning is triggered for invalid billing plans (using OSV)."""
         team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")

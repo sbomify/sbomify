@@ -98,7 +98,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sbomify.tasks.check_sbom_ntia_compliance') as mock_task:
+        with patch('sbomify.apps.sboms.tasks.check_sbom_ntia_compliance') as mock_task:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
 
@@ -120,7 +120,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
+        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
@@ -150,7 +150,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
+        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
@@ -175,7 +175,7 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
+        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_task:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=True)
 
@@ -211,7 +211,7 @@ class SignalIntegrationTests(TestCase):
 
     def test_signals_triggered_on_sbom_creation(self):
         """Test that both signals are triggered when an SBOM is created."""
-        with patch('sbomify.tasks.scan_sbom_for_vulnerabilities_unified') as mock_vuln_task:
+        with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_vuln_task:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 # Create SBOM - this should trigger both signals
                 sbom = SBOM.objects.create(

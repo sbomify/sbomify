@@ -327,12 +327,14 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
-        "dramatiq.results.Results",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
     ],
 }
 
-DRAMATIQ_RESULTS_BACKEND = {"BACKEND": "dramatiq.results.backends.RedisBackend", "OPTIONS": {"url": REDIS_WORKER_URL}}
+DRAMATIQ_RESULT_BACKEND = {
+    "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
+    "BACKEND_OPTIONS": {"url": REDIS_WORKER_URL},
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
