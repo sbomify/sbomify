@@ -14,6 +14,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.test import Client, override_settings
 from django.urls import reverse
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
     get_api_headers,
     setup_authenticated_client_session,
@@ -545,6 +546,50 @@ def test_access_team_settings__when_user_is_owner__should_succeed(
     assert response.status_code == 200
     assert response.request["PATH_INFO"] == uri
 
+
+@pytest.mark.django_db
+def test_team_settings_handles_invalid_billing_plan_gracefully(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    client = Client()
+    team = sample_team_with_owner_member.team
+    team.billing_plan = "invalid_plan"
+    team.save()
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 200
+    # Page should render and default to public when plan is invalid
+    assert team.is_public is True
+
+
+@pytest.mark.django_db
+def test_update_visibility_blocks_invalid_billing_plan(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    client = Client()
+    team = sample_team_with_owner_member.team
+    team.billing_plan = "invalid_plan"
+    team.save()
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response: HttpResponse = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false"]},
+    )
+
+    assert response.status_code == 302
+    assert response.url == uri
+
+    messages = list(get_messages(response.wsgi_request))
+    assert any("Private trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+
+
 @pytest.mark.django_db
 def test_access_team_settings__when_user_is_admin__should_succeed(
     sample_team_with_admin_member: Member,  # noqa: F811
@@ -676,7 +721,7 @@ def test_visibility_toggle__non_owner_blocked(
 
 @pytest.mark.django_db
 @override_settings(BILLING=False)
-def test_visibility_toggle_allows_private_when_billing_disabled(
+def test_visibility_toggle_disallowed_even_when_billing_disabled(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_community_plan: Team,  # noqa: F811
 ):
@@ -691,7 +736,9 @@ def test_visibility_toggle_allows_private_when_billing_disabled(
 
     assert response.status_code == 302
     team_with_community_plan.refresh_from_db()
-    assert team_with_community_plan.is_public is False
+    assert team_with_community_plan.is_public is True
+    messages = list(get_messages(response.wsgi_request))
+    assert any("Private trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -699,7 +746,7 @@ def test_visibility_toggle_allows_private_when_billing_disabled(
 def test_model_allows_private_when_billing_disabled():
     team = Team.objects.create(name="Dev Env Team", billing_plan=None, is_public=False)
     team.refresh_from_db()
-    assert team.is_public is False
+    assert team.is_public is True
 
 
 @pytest.mark.django_db
@@ -1456,9 +1503,17 @@ def test_private_workspace_allowed_case_insensitive():
 
 
 @pytest.mark.django_db
-def test_private_workspace_allowed_custom_plan():
-    """Custom paid plans (non-community) are treated as paid."""
-    team = Team.objects.create(name="Custom Plan", billing_plan="test_plan", is_public=False)
+def test_private_workspace_rejects_unknown_plan():
+    """Unsupported billing plans should not allow private workspaces."""
+    team = Team(name="Custom Plan", billing_plan="test_plan", is_public=False)
+    assert _private_workspace_allowed(team) is False
+
+
+@pytest.mark.django_db
+def test_private_workspace_allowed_custom_plan_when_registered():
+    """Custom plans that exist in BillingPlan are treated as paid/allowing private workspaces."""
+    plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan")
+    team = Team.objects.create(name="Custom Plan Workspace", billing_plan=plan.key, is_public=False)
     assert _private_workspace_allowed(team) is True
 
 

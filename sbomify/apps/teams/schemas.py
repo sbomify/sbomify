@@ -75,6 +75,7 @@ class TeamSchema(BaseModel):
     has_completed_wizard: bool
     billing_plan: str | None
     billing_plan_limits: dict | None
+    can_be_private: bool
     custom_domain: str | None
     custom_domain_validated: bool = False
     custom_domain_verification_failures: int = 0

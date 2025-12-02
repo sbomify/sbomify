@@ -5,6 +5,7 @@ from django.test import Client
 from django.urls import reverse
 import pytest
 
+from sbomify.apps.core.apis import _private_items_allowed
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
@@ -20,194 +21,122 @@ class TestPublicPrivateConstraints:
         """Set up test data."""
         self.client = Client()
 
-    def test_cannot_make_project_public_with_private_components(
-        self, sample_team_with_owner_member, sample_user  # noqa: F811
-    ):
-        """Test that making a project public fails if it has private components."""
-        team = sample_team_with_owner_member.team
 
-        # Create billing plan
-        BillingPlan.objects.create(
-            key="test_plan",
-            name="Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
-        )
-        team.billing_plan = "test_plan"
-        team.save()
+@pytest.mark.django_db
+def test_private_items_invalid_plan_treated_as_public(sample_team_with_owner_member):
+    """Invalid billing plans should not 500 core APIs; treat as public-only."""
+    team = sample_team_with_owner_member.team
+    team.billing_plan = "invalid_plan"
+    team.save()
 
-        # Set up authentication and session
-        self.client.login(username=sample_user.username, password="test")
-        setup_test_session(self.client, team, team.members.first())
+    assert _private_items_allowed(team) is False
 
-        # Create a private project and private component
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=False
-        )
-        component = Component.objects.create(
-            name="Test Component",
-            team=team,
-            is_public=False
-        )
 
-        # Assign component to project
-        project.components.add(component)
+@pytest.mark.django_db
+def test_cannot_make_project_public_with_private_components(
+    sample_team_with_owner_member, sample_user  # noqa: F811
+):
+    """Test that making a project public fails if it has private components."""
+    client = Client()
+    team = sample_team_with_owner_member.team
 
-        # Try to make project public - should fail
-        url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
-        response = self.client.patch(
-            url,
-            json.dumps({"is_public": True}),
-            content_type="application/json"
-        )
+    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10, max_projects=10)
+    team.billing_plan = "test_plan"
+    team.save()
 
-        assert response.status_code == 400
-        assert "Cannot make project public because it contains private components" in response.json()["detail"]
-        assert "Test Component" in response.json()["detail"]
+    client.login(username=sample_user.username, password="test")
+    setup_test_session(client, team, team.members.first())
 
-    def test_cannot_assign_private_component_to_public_project(
-        self, sample_team_with_owner_member, sample_user  # noqa: F811
-    ):
-        """Test that assigning a private component to a public project fails."""
-        team = sample_team_with_owner_member.team
+    project = Project.objects.create(name="Test Project", team=team, is_public=False)
+    component = Component.objects.create(name="Test Component", team=team, is_public=False)
+    project.components.add(component)
 
-        # Create billing plan
-        BillingPlan.objects.create(
-            key="test_plan",
-            name="Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
-        )
-        team.billing_plan = "test_plan"
-        team.save()
+    url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
+    response = client.patch(url, json.dumps({"is_public": True}), content_type="application/json")
 
-        # Set up authentication and session
-        self.client.login(username=sample_user.username, password="test")
-        setup_test_session(self.client, team, team.members.first())
+    assert response.status_code == 400
+    assert "Cannot make project public because it contains private components" in response.json()["detail"]
+    assert "Test Component" in response.json()["detail"]
 
-        # Create a public project and private component
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True
-        )
-        component = Component.objects.create(
-            name="Test Component",
-            team=team,
-            is_public=False
-        )
 
-        # Try to assign private component to public project - should fail
-        url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
-        response = self.client.patch(
-            url,
-            json.dumps({"component_ids": [component.id]}),
-            content_type="application/json"
-        )
+@pytest.mark.django_db
+def test_cannot_assign_private_component_to_public_project(
+    sample_team_with_owner_member, sample_user  # noqa: F811
+):
+    """Test that assigning a private component to a public project fails."""
+    client = Client()
+    team = sample_team_with_owner_member.team
 
-        assert response.status_code == 400
-        assert "Cannot assign private components to a public project" in response.json()["detail"]
-        assert "Test Component" in response.json()["detail"]
+    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10, max_projects=10)
+    team.billing_plan = "test_plan"
+    team.save()
 
-    def test_cannot_make_component_private_when_assigned_to_public_project(
-        self, sample_team_with_owner_member, sample_user  # noqa: F811
-    ):
-        """Test that making a component private fails if it's assigned to public projects."""
-        team = sample_team_with_owner_member.team
+    client.login(username=sample_user.username, password="test")
+    setup_test_session(client, team, team.members.first())
 
-        # Create billing plan
-        BillingPlan.objects.create(
-            key="test_plan",
-            name="Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
-        )
-        team.billing_plan = "test_plan"
-        team.save()
+    project = Project.objects.create(name="Test Project", team=team, is_public=True)
+    component = Component.objects.create(name="Test Component", team=team, is_public=False)
 
-        # Set up authentication and session
-        self.client.login(username=sample_user.username, password="test")
-        setup_test_session(self.client, team, team.members.first())
+    url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
+    response = client.patch(url, json.dumps({"component_ids": [component.id]}), content_type="application/json")
 
-        # Create a public project and public component
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True
-        )
-        component = Component.objects.create(
-            name="Test Component",
-            team=team,
-            is_public=True
-        )
+    assert response.status_code == 400
+    assert "Cannot assign private components to a public project" in response.json()["detail"]
+    assert "Test Component" in response.json()["detail"]
 
-        # Assign component to project
-        project.components.add(component)
 
-        # Try to make component private - should fail
-        url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
-        response = self.client.patch(
-            url,
-            json.dumps({"is_public": False}),
-            content_type="application/json"
-        )
+@pytest.mark.django_db
+def test_cannot_make_component_private_when_assigned_to_public_project(
+    sample_team_with_owner_member, sample_user  # noqa: F811
+):
+    """Test that making a component private fails if it's assigned to public projects."""
+    client = Client()
+    team = sample_team_with_owner_member.team
 
-        assert response.status_code == 400
-        assert "Cannot make component private because it's assigned to public projects" in response.json()["detail"]
-        assert "Test Project" in response.json()["detail"]
+    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10, max_projects=10)
+    team.billing_plan = "test_plan"
+    team.save()
 
-    def test_cannot_make_product_public_with_private_projects(
-        self, sample_team_with_owner_member, sample_user  # noqa: F811
-    ):
-        """Test that making a product public fails if it has private projects."""
-        team = sample_team_with_owner_member.team
+    client.login(username=sample_user.username, password="test")
+    setup_test_session(client, team, team.members.first())
 
-        # Create billing plan
-        BillingPlan.objects.create(
-            key="test_plan",
-            name="Test Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
-        )
-        team.billing_plan = "test_plan"
-        team.save()
+    project = Project.objects.create(name="Test Project", team=team, is_public=True)
+    component = Component.objects.create(name="Test Component", team=team, is_public=True)
+    project.components.add(component)
 
-        # Set up authentication and session
-        self.client.login(username=sample_user.username, password="test")
-        setup_test_session(self.client, team, team.members.first())
+    url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
+    response = client.patch(url, json.dumps({"is_public": False}), content_type="application/json")
 
-        # Create a private product and private project
-        product = Product.objects.create(
-            name="Test Product",
-            team=team,
-            is_public=False
-        )
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=False
-        )
+    assert response.status_code == 400
+    assert "Cannot make component private because it's assigned to public projects" in response.json()["detail"]
+    assert "Test Project" in response.json()["detail"]
 
-        # Assign project to product
-        product.projects.add(project)
 
-        # Try to make product public - should fail
-        url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
-        response = self.client.patch(
-            url,
-            json.dumps({"is_public": True}),
-            content_type="application/json"
-        )
+@pytest.mark.django_db
+def test_cannot_make_product_public_with_private_projects(
+    sample_team_with_owner_member, sample_user  # noqa: F811
+):
+    """Test that making a product public fails if it has private projects."""
+    client = Client()
+    team = sample_team_with_owner_member.team
 
-        assert response.status_code == 400
-        assert "Cannot make product public because it contains private projects" in response.json()["detail"]
-        assert "Test Project" in response.json()["detail"]
+    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10, max_projects=10)
+    team.billing_plan = "test_plan"
+    team.save()
+
+    client.login(username=sample_user.username, password="test")
+    setup_test_session(client, team, team.members.first())
+
+    product = Product.objects.create(name="Test Product", team=team, is_public=False)
+    project = Project.objects.create(name="Test Project", team=team, is_public=False)
+    product.projects.add(project)
+
+    url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
+    response = client.patch(url, json.dumps({"is_public": True}), content_type="application/json")
+
+    assert response.status_code == 400
+    assert "Cannot make product public because it contains private projects" in response.json()["detail"]
+    assert "Test Project" in response.json()["detail"]
 
     def test_cannot_make_project_private_when_assigned_to_public_product(
         self, sample_team_with_owner_member, sample_user  # noqa: F811

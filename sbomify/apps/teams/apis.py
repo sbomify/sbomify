@@ -83,6 +83,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         custom_domain_validated=team.custom_domain_validated,
         custom_domain_verification_failures=team.custom_domain_verification_failures,
         custom_domain_last_checked_at=team.custom_domain_last_checked_at,
+        can_be_private=team.can_be_private(),
         members=members_data,
         invitations=invitations_data,
     )
@@ -581,6 +582,9 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
 
     except IntegrityError:
         return 400, {"detail": "A team with this name already exists"}
+    except ValueError as exc:
+        logger.warning(f"Invalid billing plan for team {team_key}: {exc}")
+        return 400, {"detail": str(exc)}
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
         return 400, {"detail": "Invalid request"}
@@ -624,6 +628,9 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
 
     except IntegrityError:
         return 400, {"detail": "A team with this name already exists"}
+    except ValueError as exc:
+        logger.warning(f"Invalid billing plan for team {team_key}: {exc}")
+        return 400, {"detail": str(exc)}
     except Exception as e:
         logger.error(f"Error updating team {team_key}: {e}")
         return 400, {"detail": "Invalid request"}

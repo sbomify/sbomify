@@ -6,7 +6,7 @@ from django.core.validators import MinLengthValidator
 from django.db import models
 from django.utils import timezone
 
-from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
 
 
@@ -134,16 +134,20 @@ class Team(models.Model):
     def can_be_private(self) -> bool:
         """
         Determine if this workspace can be set to private based on billing status.
-
-        Billing-disabled environments always allow private. Otherwise only paid plans
-        (anything not community/blank) can be private.
         """
-        if not is_billing_enabled():
-            return True
         plan = (self.billing_plan or "").strip().lower()
         if not plan:
             return False
-        return plan != Team.Plan.COMMUNITY
+
+        allowed_plans = {choice.value for choice in Team.Plan}
+        if plan in allowed_plans:
+            return plan != Team.Plan.COMMUNITY
+
+        # Custom plan keys that exist in BillingPlan are treated as paid/allowed
+        if BillingPlan.objects.filter(key__iexact=plan).exists():
+            return True
+
+        return False
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
