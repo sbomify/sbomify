@@ -36,11 +36,13 @@ class ComponentsDashboardView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest) -> HttpResponse:
         name = request.POST.get("name", "").strip()
         component_type = request.POST.get("component_type", "sbom")
+        is_global = request.POST.get("is_global") == "on"
 
         payload = ComponentCreateSchema(
             name=name,
             component_type=component_type,
             metadata={},
+            is_global=is_global,
         )
 
         status_code, response = create_component(request, payload)

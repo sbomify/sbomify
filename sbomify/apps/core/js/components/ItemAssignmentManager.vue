@@ -57,16 +57,19 @@
                         </h6>
                         <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
-                      <div class="d-flex align-items-center gap-2">
-                        <span v-if="item.is_public" class="badge bg-success-subtle text-success">
-                          <i class="fas fa-globe me-1"></i>Public
-                        </span>
-                        <span v-else class="badge bg-secondary-subtle text-secondary">
-                          <i class="fas fa-lock me-1"></i>Private
-                        </span>
-                      </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span v-if="item.is_public" class="badge bg-success-subtle text-success">
+                        <i class="fas fa-globe me-1"></i>Public
+                      </span>
+                      <span v-else class="badge bg-secondary-subtle text-secondary">
+                        <i class="fas fa-lock me-1"></i>Private
+                      </span>
+                      <span v-if="item.is_global" class="badge bg-primary-subtle text-primary">
+                        Workspace
+                      </span>
                     </div>
                   </div>
+                </div>
 
                   <button
                     v-if="hasCrudPermissions"
@@ -153,16 +156,19 @@
                         </h6>
                         <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
-                      <div class="d-flex align-items-center gap-2">
-                        <span v-if="item.is_public" class="badge bg-success-subtle text-success">
-                          <i class="fas fa-globe me-1"></i>Public
-                        </span>
-                        <span v-else class="badge bg-secondary-subtle text-secondary">
-                          <i class="fas fa-lock me-1"></i>Private
-                        </span>
-                      </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span v-if="item.is_public" class="badge bg-success-subtle text-success">
+                        <i class="fas fa-globe me-1"></i>Public
+                      </span>
+                      <span v-else class="badge bg-secondary-subtle text-secondary">
+                        <i class="fas fa-lock me-1"></i>Private
+                      </span>
+                      <span v-if="item.is_global" class="badge bg-primary-subtle text-primary">
+                        Workspace
+                      </span>
                     </div>
                   </div>
+                </div>
 
                   <button
                     class="btn btn-sm btn-outline-primary add-item-btn"
@@ -203,6 +209,8 @@
     name: string
     version?: string
     is_public: boolean
+    is_global?: boolean
+    component_type?: string
   }
 
   const props = defineProps<{
@@ -410,7 +418,11 @@
           // Filter out assigned components from available list
           const assignedIds = assignedItems.value.map((c: AssignmentItem) => c.id)
           availableItems.value = availableResponse.data.items.filter(
-            (c: AssignmentItem) => !assignedIds.includes(c.id)
+            (component: AssignmentItem) => {
+              const alreadyAssigned = assignedIds.includes(component.id)
+              const isGlobalDocument = component.is_global && component.component_type === 'document'
+              return !alreadyAssigned && !isGlobalDocument
+            }
           )
         }
       } catch (error) {

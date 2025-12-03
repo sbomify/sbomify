@@ -7,8 +7,25 @@
     {{ component.name }} - {{ component.component_type_display }} component. View SBOMs and documents associated with this component.
 {% endblock %}
 {% block extra_css %}
-    <link rel="stylesheet"
-          href="{% static 'css/components/public-page-layout.css' %}">
+    <style>
+  .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #eef2ff;
+    border: 1px solid #e0e7ff;
+    color: #475569;
+    font-weight: 600;
+  }
+  .meta-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+    </style>
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
@@ -19,10 +36,23 @@
             <div class="content-container">
                 <div class="public-page-header">
                     <div class="page-header-content">
+                        <p class="eyebrow text-muted mb-1">Public component</p>
                         <h1 class="page-title">
                             <i class="fas fa-cube title-icon"></i>
                             {{ component.name }}
                         </h1>
+                        <div class="meta-row">
+                            <span class="meta-chip">
+                                <i class="fas fa-tag"></i>
+                                {{ component.component_type_display }}
+                            </span>
+                            {% if component.is_global %}
+                                <span class="meta-chip">
+                                    <i class="fas fa-building"></i>
+                                    Workspace-wide
+                                </span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 <div class="public-main-content">
