@@ -25,17 +25,17 @@
         <div class="mb-4">
             <div class="card settings-card workspace-visibility-card shadow-sm">
                 <div class="card-header">
-                    <h4 class="card-title mb-0">Trust Center Visibility</h4>
+                    <h4 class="card-title mb-0">Trust Center Availability</h4>
                 </div>
                 <div class="card-body">
                     <div class="visibility-wrapper">
                         <div class="copy">
-                            <p class="eyebrow">Workspace access</p>
-                            <h3 class="title">Choose who can see your trust center</h3>
-                            <p class="description">Control whether your trust center is publicly accessible.</p>
+                            <p class="eyebrow">Workspace trust center</p>
+                            <h3 class="title">Enable or disable your trust center</h3>
+                            <p class="description">Control whether your trust center is accessible to visitors.</p>
                             <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
                                 <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
-                                {{ team.is_public|yesno:'Public,Private' }}
+                                {{ team.is_public|yesno:'Enabled,Disabled' }}
                             </span>
                             {% if team.is_public %}
                                 {% with public_url=APP_BASE_URL|add:'/public/workspace/'|add:team.key %}
@@ -55,7 +55,7 @@
                             {% if not is_owner %}
                                 <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
                             {% elif not can_set_private %}
-                                <div class="text-muted mt-2 small">Private trust center is available on Business or Enterprise plans.</div>
+                                <div class="text-muted mt-2 small">Disabling the trust center is available on Business or Enterprise plans.</div>
                             {% endif %}
                         </div>
                         <div class="control">
@@ -74,7 +74,7 @@
                                            {% if team.is_public %}checked{% endif %}
                                            {% if not is_owner %}disabled{% endif %}
                                            onchange="this.form.submit()">
-                                    <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Public,Private' }}</label>
+                                    <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
                                 </div>
                                 <button type="submit" class="visually-hidden">Save visibility</button>
                                 <small class="text-muted hint">

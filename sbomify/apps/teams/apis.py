@@ -84,6 +84,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         custom_domain_verification_failures=team.custom_domain_verification_failures,
         custom_domain_last_checked_at=team.custom_domain_last_checked_at,
         can_be_private=team.can_be_private(),
+        can_set_private=team.can_be_private(),
         members=members_data,
         invitations=invitations_data,
     )
@@ -574,7 +575,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
             team.name = payload.name
             if payload.is_public is not None:
                 if payload.is_public is False and not _private_workspace_allowed(team):
-                    return 403, {"detail": "Private trust center is available on Business or Enterprise plans."}
+                    return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
                 team.is_public = payload.is_public
             team.save()
 
@@ -619,7 +620,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
             update_data = payload.model_dump(exclude_unset=True)
             desired_visibility = update_data.get("is_public")
             if desired_visibility is False and not _private_workspace_allowed(team):
-                return 403, {"detail": "Private trust center is available on Business or Enterprise plans."}
+                return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()

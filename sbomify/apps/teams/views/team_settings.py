@@ -66,7 +66,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
         plan_features = PLAN_FEATURES.get(billing_plan, [])
         plan_pricing = PLAN_PRICING.get(billing_plan, {"amount": "Contact us", "period": ""})
-        can_set_private = team.can_be_private
+        if hasattr(team, "can_set_private"):
+            can_set_private = bool(team.can_set_private)
+        elif callable(getattr(team, "can_be_private", None)):
+            can_set_private = team.can_be_private()
+        else:
+            can_set_private = False
         is_owner = request.session.get("current_team", {}).get("role") == "owner"
 
         # Process plan limits into structured data
@@ -176,7 +181,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         can_set_private = team.can_be_private()
         if desired_visibility is False and not can_set_private:
-            messages.error(request, "Private trust center is available on Business or Enterprise plans.")
+            messages.error(request, "Disabling the trust center is available on Business or Enterprise plans.")
             return redirect("teams:team_settings", team_key=team_key)
 
         team.is_public = desired_visibility

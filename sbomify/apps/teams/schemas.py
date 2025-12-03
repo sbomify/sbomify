@@ -75,6 +75,7 @@ class TeamSchema(BaseModel):
     has_completed_wizard: bool
     billing_plan: str | None
     billing_plan_limits: dict | None
+    can_set_private: bool | None = None
     can_be_private: bool
     custom_domain: str | None
     custom_domain_validated: bool = False
@@ -82,6 +83,10 @@ class TeamSchema(BaseModel):
     custom_domain_last_checked_at: datetime | None = None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
+
+    def can_be_private(self) -> bool:
+        """Compatibility helper to mirror model API."""
+        return bool(self.can_set_private)
 
     def can_be_private(self) -> bool:
         """

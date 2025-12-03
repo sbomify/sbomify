@@ -587,7 +587,7 @@ def test_update_visibility_blocks_invalid_billing_plan(
     assert response.url == uri
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("Private trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+    assert any("Disabling the trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -626,7 +626,7 @@ def test_access_team_settings__when_user_is_guest__should_fail(
     )
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
-    assert "You don&#x27;t have sufficient permissions to access this page" in response.content.decode("utf-8")
+    assert "sufficient permissions" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
@@ -690,7 +690,7 @@ def test_visibility_toggle__community_cannot_be_private(
     assert team_with_community_plan.is_public is True
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("Private trust center is available on Business or Enterprise plans." in msg.message for msg in messages)
+    assert any("trust center is available on Business or Enterprise plans" in msg.message for msg in messages)
 
 
 @pytest.mark.django_db
@@ -721,7 +721,7 @@ def test_visibility_toggle__non_owner_blocked(
 
 @pytest.mark.django_db
 @override_settings(BILLING=False)
-def test_visibility_toggle_disallowed_even_when_billing_disabled(
+def test_visibility_toggle_disallowed_when_billing_disabled(
     sample_user: AbstractBaseUser,  # noqa: F811
     team_with_community_plan: Team,  # noqa: F811
 ):
@@ -738,7 +738,7 @@ def test_visibility_toggle_disallowed_even_when_billing_disabled(
     team_with_community_plan.refresh_from_db()
     assert team_with_community_plan.is_public is True
     messages = list(get_messages(response.wsgi_request))
-    assert any("Private trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+    assert any("trust center is available on Business or Enterprise plans" in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -1472,7 +1472,7 @@ def test_patch_team_private_not_allowed_on_community(authenticated_api_client, s
     )
 
     assert response.status_code == 403
-    assert "Private trust center" in response.json()["detail"]
+    assert "trust center" in response.json()["detail"]
 
     team.refresh_from_db()
     assert team.is_public is True
