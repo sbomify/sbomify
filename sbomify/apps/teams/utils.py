@@ -17,6 +17,31 @@ from sbomify.apps.core.utils import number_to_random_token
 
 from .models import Member, Team, get_team_name_for_user
 
+
+def normalize_host(host: str) -> str:
+    """
+    Normalize a host header value to extract just the hostname.
+
+    Strips port numbers and converts to lowercase for consistent matching.
+    Used by both DynamicAllowedHosts and domain verification endpoints.
+
+    Args:
+        host: Host header value (may include port, e.g., "example.com:8000")
+
+    Returns:
+        Normalized hostname in lowercase without port
+
+    Examples:
+        >>> normalize_host("example.com")
+        'example.com'
+        >>> normalize_host("Example.Com:8000")
+        'example.com'
+        >>> normalize_host("APP.EXAMPLE.COM:443")
+        'app.example.com'
+    """
+    return host.split(":")[0].lower()
+
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 stripe_client = StripeClient()

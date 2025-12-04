@@ -88,11 +88,12 @@ class DynamicAllowedHosts(list):
             from django.core.cache import cache
 
             from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.utils import normalize_host
 
-            # Strip port from incoming host (e.g., "app.example.com:8000" -> "app.example.com")
+            # Normalize host (strip port and lowercase)
             # Note: DB never contains ports (validated/sanitized at API level),
             # but Django may pass Host header with port included
-            hostname = host.split(":")[0]
+            hostname = normalize_host(host)
 
             # Try cache first (5 minute TTL)
             cache_key = f"custom_domain:{hostname}"

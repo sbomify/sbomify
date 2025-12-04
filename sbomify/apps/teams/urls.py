@@ -28,10 +28,10 @@ def domain_check(request):
     from django.utils import timezone
 
     from sbomify.apps.teams.models import Team
-    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache, normalize_host
 
     # Get the host from the request
-    host = request.META.get("HTTP_HOST", "").split(":")[0].lower()
+    host = normalize_host(request.META.get("HTTP_HOST", ""))
 
     # If this is a custom domain, validate it
     if host:
