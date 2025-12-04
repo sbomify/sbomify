@@ -61,7 +61,7 @@ def verify_custom_domains():
             url = f"{protocol}://{team.custom_domain}/health"
 
             try:
-                _ = requests.get(url, headers=headers, timeout=10)
+                _ = requests.get(url, headers=headers, timeout=10, verify=True)
                 # If we get a response (even 404), it means DNS is likely configured
                 # and pointing to a server. If it points to US, our middleware
                 # should have intercepted it and marked it valid.
