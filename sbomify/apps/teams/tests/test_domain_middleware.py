@@ -43,30 +43,47 @@ def test_dynamic_allowed_hosts():
 
 
 @pytest.mark.django_db
-def test_custom_domain_middleware_validation(client, sample_user):
-    """Test that the middleware validates domains upon traffic."""
+def test_domain_check_endpoint_validates_domain():
+    """
+    Test that the .well-known/com.sbomify.domain-check endpoint validates domains.
+
+    This test directly calls the view function to test the validation logic,
+    bypassing ALLOWED_HOSTS checks which are tested separately.
+    """
+    import json
+
+    from django.http import HttpRequest
+
     from sbomify.apps.core.utils import number_to_random_token
     from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.urls import domain_check
 
     # Create team with unvalidated domain
-    team = Team.objects.create(name="Middleware Test Team", billing_plan="business")
+    team = Team.objects.create(name="Check Endpoint Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = "validated.example.com"
     team.custom_domain_validated = False
     team.save()
 
-    # Send request with matching Host header
-    # We use a path that doesn't require auth to keep it simple, or handle 404/302
-    _ = client.get("/health/", HTTP_HOST="validated.example.com")
+    # Create mock request with the custom domain as Host
+    request = HttpRequest()
+    request.META = {"HTTP_HOST": "validated.example.com"}
 
-    # Check DB - should be validated now
+    # Call the view directly
+    response = domain_check(request)
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/json"
+
+    # Check response structure
+    data = json.loads(response.content)
+    assert data["ok"] is True
+    assert data["service"] == "sbomify"
+    assert data["domain"] == "validated.example.com"
+    assert "ts" in data
+    assert "region" in data
+
+    # Check DB - should be validated now by the domain-check endpoint
     team.refresh_from_db()
     assert team.custom_domain_validated is True
     assert team.custom_domain_last_checked_at is not None
-
-    # Send request with unknown host
-    # Django's ALLOWED_HOSTS check happens deep in the request processing
-    # If we mock ALLOWED_HOSTS or if the test client bypasses it in a specific way...
-    # The test client normally enforces ALLOWED_HOSTS if we don't override it.
-    # However, since we patched settings in the test environment, let's see.
-    # Note: In tests, ALLOWED_HOSTS might be ['testserver'] by default.
+    assert team.custom_domain_verification_failures == 0

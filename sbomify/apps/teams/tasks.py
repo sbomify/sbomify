@@ -62,9 +62,10 @@ def verify_custom_domains():
             # We add a special header so we can potentially identify these probes if needed
             headers = {"User-Agent": "sbomify-domain-verification/1.0"}
 
-            # Try HTTPS first, then HTTP
+            # Use .well-known/com.sbomify.domain-check endpoint to ensure ALLOWED_HOSTS is validated
+            # This prevents random domains from using our server as a verification endpoint
             protocol = "https"
-            url = f"{protocol}://{team.custom_domain}/health"
+            url = f"{protocol}://{team.custom_domain}/.well-known/com.sbomify.domain-check"
 
             try:
                 _ = requests.get(url, headers=headers, timeout=10, verify=True)

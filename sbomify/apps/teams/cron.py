@@ -22,8 +22,11 @@ def periodic_domain_verification():
     This task runs every 15 minutes and:
     1. Finds teams with unvalidated custom domains
     2. Checks if enough time has passed based on exponential backoff
-    3. Sends probe requests to verify DNS configuration
-    4. Auto-validates domains when traffic is received (via middleware)
+    3. Sends probe requests to /.well-known/com.sbomify.domain-check
+    4. Auto-validates domains when traffic is received
+
+    Security: Uses Django endpoint (not Caddy /health) to ensure ALLOWED_HOSTS
+    validation prevents DoS from random domains pointing to our server.
 
     The task uses exponential backoff to avoid spamming domains:
     - First attempt: immediate

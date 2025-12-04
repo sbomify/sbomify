@@ -160,7 +160,6 @@ with open(STATIC_ROOT / "manifest.json", "w") as f:
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "sbomify.apps.core.middleware.RealIPMiddleware",
-    "sbomify.apps.teams.middleware.CustomDomainMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

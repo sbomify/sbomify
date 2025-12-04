@@ -1,9 +1,69 @@
+import logging
+import os
+
+from django.http import JsonResponse
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
 from sbomify.apps.vulnerability_scanning.views import VulnerabilityScansView
 
 from . import views
+
+logger = logging.getLogger(__name__)
+
+
+def domain_check(request):
+    """
+    RFC 8615 .well-known endpoint for sbomify domain verification.
+
+    Returns structured JSON response for any request that passes Django's ALLOWED_HOSTS validation.
+    Used by the domain verification task to confirm DNS points to our server.
+
+    This endpoint also validates the domain if it's not already validated,
+    so validation logic runs only when the task hits this endpoint (not on every request).
+
+    Returns:
+        JSON response with domain verification status and metadata
+    """
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+    # Get the host from the request
+    host = request.META.get("HTTP_HOST", "").split(":")[0].lower()
+
+    # If this is a custom domain, validate it
+    if host:
+        try:
+            team = Team.objects.filter(custom_domain=host).first()
+            if team and not team.custom_domain_validated:
+                team.custom_domain_validated = True
+                team.custom_domain_verification_failures = 0
+                team.custom_domain_last_checked_at = timezone.now()
+                team.save(
+                    update_fields=[
+                        "custom_domain_validated",
+                        "custom_domain_verification_failures",
+                        "custom_domain_last_checked_at",
+                    ]
+                )
+                invalidate_custom_domain_cache(host)
+        except Exception as e:
+            # Log error but don't fail the request - validation can happen on next attempt
+            logger.warning(f"Failed to validate domain {host}: {e}")
+
+    # Return structured response
+    return JsonResponse(
+        {
+            "ok": True,
+            "service": "sbomify",
+            "domain": host,
+            "ts": timezone.now().isoformat(),
+            "region": os.environ.get("AWS_REGION", "auto"),
+        }
+    )
+
 
 app_name = "teams"
 urlpatterns: list[URLPattern] = [
