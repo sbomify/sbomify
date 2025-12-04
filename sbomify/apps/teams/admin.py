@@ -91,6 +91,7 @@ class TeamAdmin(admin.ModelAdmin):
         "key",
         "billing_plan_display",
         "member_count",
+        "custom_domain_display",
         "has_completed_wizard",
         "created_at",
         "billing_status_display",
@@ -98,6 +99,7 @@ class TeamAdmin(admin.ModelAdmin):
 
     list_filter = (
         "billing_plan",
+        "custom_domain_validated",
         "has_completed_wizard",
         "created_at",
     )
@@ -106,6 +108,7 @@ class TeamAdmin(admin.ModelAdmin):
         "name",
         "key",
         "billing_plan",
+        "custom_domain",
     )
 
     readonly_fields = (
@@ -113,6 +116,7 @@ class TeamAdmin(admin.ModelAdmin):
         "member_count",
         "billing_status_display",
         "billing_plan_display",
+        "custom_domain_status_display",
         "branding_info",
         "billing_plan_limits",
     )
@@ -141,6 +145,21 @@ class TeamAdmin(admin.ModelAdmin):
                 "description": (
                     "Billing and subscription information for this team. "
                     "Plan limits are auto-populated based on selected plan."
+                ),
+            },
+        ),
+        (
+            "Custom Domain",
+            {
+                "fields": (
+                    "custom_domain",
+                    "custom_domain_validated",
+                    "custom_domain_status_display",
+                    "custom_domain_verification_failures",
+                    "custom_domain_last_checked_at",
+                ),
+                "description": (
+                    "Custom domain configuration for this workspace. Available on Business and Enterprise plans."
                 ),
             },
         ),
@@ -199,6 +218,54 @@ class TeamAdmin(admin.ModelAdmin):
             return format_html('<span style="color: #ffc107;">⚠ Setup incomplete</span>')
 
     billing_status_display.short_description = "Billing Status"
+
+    def custom_domain_display(self, obj):
+        """Display custom domain with validation status."""
+        if not obj.custom_domain:
+            return format_html('<span style="color: #666;">—</span>')
+
+        if obj.custom_domain_validated:
+            return format_html(
+                '<span style="color: #28a745;">✓</span> <span style="color: #417690;">{}</span>',
+                obj.custom_domain,
+            )
+        else:
+            return format_html(
+                '<span style="color: #ffc107;">⚠</span> <span style="color: #666;">{}</span>',
+                obj.custom_domain,
+            )
+
+    custom_domain_display.short_description = "Custom Domain"
+
+    def custom_domain_status_display(self, obj):
+        """Display detailed custom domain status."""
+        if not obj.custom_domain:
+            return format_html('<span style="color: #666;">No custom domain configured</span>')
+
+        status_parts = []
+
+        if obj.custom_domain_validated:
+            status_parts.append('<span style="color: #28a745; font-weight: bold;">✓ Validated</span>')
+        else:
+            status_parts.append('<span style="color: #ffc107; font-weight: bold;">⚠ Pending Validation</span>')
+
+        if obj.custom_domain_verification_failures > 0:
+            status_parts.append(
+                f'<small style="color: #dc3545;">'
+                f"Verification failures: {obj.custom_domain_verification_failures}"
+                f"</small>"
+            )
+
+        if obj.custom_domain_last_checked_at:
+            from django.utils.timesince import timesince
+
+            status_parts.append(
+                f'<small style="color: #666;">Last checked: {timesince(obj.custom_domain_last_checked_at)} ago</small>'
+            )
+
+        return format_html("<br>".join(status_parts))
+
+    custom_domain_status_display.short_description = "Domain Status"
 
     def get_queryset(self, request):
         """Optimize queryset with prefetch_related for members."""

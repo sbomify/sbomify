@@ -23,6 +23,7 @@ from sbomify.apps.teams.schemas import (
     ContactProfileUpdateSchema,
     InvitationSchema,
     MemberSchema,
+    TeamDomainSchema,
     TeamPatchSchema,
     TeamSchema,
     TeamUpdateSchema,
@@ -77,6 +78,10 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         billing_plan=team.billing_plan,
         billing_plan_limits=team.billing_plan_limits,
         has_completed_wizard=team.has_completed_wizard,
+        custom_domain=team.custom_domain,
+        custom_domain_validated=team.custom_domain_validated,
+        custom_domain_verification_failures=team.custom_domain_verification_failures,
+        custom_domain_last_checked_at=team.custom_domain_last_checked_at,
         members=members_data,
         invitations=invitations_data,
     )
@@ -612,6 +617,117 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
         return 400, {"detail": "Invalid request"}
 
 
+class TeamDomainResponseSchema(BaseModel):
+    domain: str
+    validated: bool
+
+
+@router.put(
+    "/{team_key}/domain",
+    response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+@router.patch(
+    "/{team_key}/domain",
+    response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema):
+    """Set or update workspace custom domain."""
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+    from sbomify.apps.teams.validators import validate_custom_domain
+
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Workspace not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team domain"}
+
+    # Feature gating: Check billing plan
+    from sbomify.apps.billing.models import BillingPlan
+
+    plan_key = team.billing_plan or "free"
+    try:
+        plan = BillingPlan.objects.get(key=plan_key)
+        has_access = plan.has_custom_domain_access
+    except BillingPlan.DoesNotExist:
+        # Fallback for unknown plans
+        has_access = plan_key in ["business", "enterprise"]
+
+    if not has_access:
+        return 403, {"detail": "Custom domains are available on Business and Enterprise plans only"}
+
+    # Validate domain format using comprehensive FQDN validation
+    is_valid, error_message = validate_custom_domain(payload.domain)
+    if not is_valid:
+        return 400, {"detail": error_message}
+
+    # Store old domain for cache invalidation
+    old_domain = team.custom_domain
+
+    try:
+        # Normalize domain (validator already does this, but be explicit)
+        normalized_domain = payload.domain.strip().lower()
+
+        with transaction.atomic():
+            team.custom_domain = normalized_domain
+            team.custom_domain_validated = False  # Reset validation on change
+            team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+        # Invalidate cache for both old and new domains
+        invalidate_custom_domain_cache(old_domain)
+        invalidate_custom_domain_cache(normalized_domain)
+
+        return 200, {"domain": team.custom_domain, "validated": team.custom_domain_validated}
+
+    except IntegrityError:
+        return 400, {"detail": "This domain is already in use by another workspace"}
+    except Exception as e:
+        logger.error(f"Error updating team domain {team_key}: {e}")
+        return 400, {"detail": "Invalid request"}
+
+
+@router.delete(
+    "/{team_key}/domain",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_team_domain(request: HttpRequest, team_key: str):
+    """Remove workspace custom domain."""
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+    try:
+        team_id = token_to_number(team_key)
+    except ValueError:
+        return 404, {"detail": "Workspace not found"}
+
+    try:
+        team = Team.objects.get(pk=team_id)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found"}
+
+    # Check if user is owner
+    if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
+        return 403, {"detail": "Only owners can update team domain"}
+
+    # Store domain for cache invalidation
+    old_domain = team.custom_domain
+
+    team.custom_domain = None
+    team.custom_domain_validated = False
+    team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+    # Invalidate cache for removed domain
+    invalidate_custom_domain_cache(old_domain)
+
+    return 204, None
+
+
 @router.get("/", response={200: list[TeamSchema], 403: ErrorResponse})
 def list_teams(request: HttpRequest):
     """List all workspaces for the current user.
@@ -643,3 +759,61 @@ def get_team(request: HttpRequest, team_key: str):
         return 403, {"detail": "Access denied"}
 
     return 200, _build_team_response(request, team)
+
+
+# Internal endpoints (no auth required - secured at proxy level)
+internal_router = Router(tags=["Internal"], auth=None)
+
+
+@internal_router.get("/domains", response={200: None, 404: None})
+def check_domain_allowed(request: HttpRequest, domain: str):
+    """
+    Check if a domain is allowed for on-demand TLS certificate provisioning.
+
+    This endpoint is used by Caddy's on-demand TLS feature. Caddy will call this
+    endpoint with ?domain=example.com before issuing a certificate.
+
+    Expected behavior (per Caddy docs):
+    - Return 200 OK if the domain is recognized and should get a certificate
+    - Return 404 (or any non-200) if the domain should NOT get a certificate
+
+    Only domains from teams with Business or Enterprise plans are allowed.
+
+    Security: This endpoint MUST be blocked from external access at the proxy level.
+    See Caddyfile configuration for access restrictions.
+
+    Args:
+        domain: The domain name to check (provided as query parameter by Caddy)
+
+    Returns:
+        200 OK if domain is allowed, 404 if not allowed
+    """
+    from urllib.parse import urlparse
+
+    # Sanitize and normalize domain input using urlparse
+    # This handles cases where input might include protocol, port, or path
+    # Note: urlparse requires a scheme to identify hostname, so we add one if missing
+    domain_input = domain.strip()
+    if not domain_input.startswith(("http://", "https://")):
+        domain_input = f"http://{domain_input}"
+
+    try:
+        parsed = urlparse(domain_input)
+        # Extract just the hostname (strips port, path, query, etc.)
+        domain_normalized = parsed.hostname
+        if not domain_normalized:
+            return 404, None
+        domain_normalized = domain_normalized.lower()
+    except (ValueError, AttributeError):
+        # Invalid domain format
+        return 404, None
+
+    # Check if domain exists and belongs to Business/Enterprise team
+    is_allowed = Team.objects.filter(
+        custom_domain=domain_normalized, billing_plan__in=["business", "enterprise"]
+    ).exists()
+
+    if is_allowed:
+        return 200, None
+    else:
+        return 404, None

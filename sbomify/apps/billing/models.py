@@ -50,3 +50,8 @@ class BillingPlan(models.Model):
     def allows_unlimited_users(self) -> bool:
         """Check if this plan allows unlimited users."""
         return self.max_users is None
+
+    @property
+    def has_custom_domain_access(self) -> bool:
+        """Check if this plan includes custom domain feature."""
+        return self.key in ["business", "enterprise"]

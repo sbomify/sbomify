@@ -20,6 +20,7 @@ from django.urls import include, path
 
 from sbomify.apps.billing.views import public_enterprise_contact
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.teams.urls import domain_check
 
 from .apis import api
 
@@ -27,6 +28,7 @@ urlpatterns = [
     path("admin/", admin_site.urls),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
+    path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
     path("", include("sbomify.apps.core.urls")),
     # Keep the legacy prefix but avoid clashing namespaces with the primary teams URLs
     path("workspace/", include(("sbomify.apps.teams.urls", "teams"), namespace="teams-legacy")),

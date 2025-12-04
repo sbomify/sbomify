@@ -70,8 +70,18 @@ class TeamSchema(BaseModel):
     has_completed_wizard: bool
     billing_plan: str | None
     billing_plan_limits: dict | None
+    custom_domain: str | None
+    custom_domain_validated: bool = False
+    custom_domain_verification_failures: int = 0
+    custom_domain_last_checked_at: datetime | None = None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
+
+
+class TeamDomainSchema(BaseModel):
+    """Schema for updating workspace custom domain."""
+
+    domain: str = Field(..., max_length=255)
 
 
 class BrandingInfo(BaseModel):

@@ -1,7 +1,15 @@
 # Caddyfile for sbomify
-# Simple HTTP reverse proxy configuration
+# Reverse proxy with automatic HTTPS/TLS via Let's Encrypt
 {
 	admin {$CADDY_ADMIN:off}
+
+	# Email for Let's Encrypt notifications (REQUIRED for production)
+	# Set ACME_EMAIL environment variable
+	email {$ACME_EMAIL:admin@example.com}
+
+	# Use Let's Encrypt production by default
+	# Set ACME_CA to staging for testing: https://acme-staging-v02.api.letsencrypt.org/directory
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
 
 	# Docker network IP ranges included below.
 	# For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
@@ -14,17 +22,16 @@
 		trusted_proxies_strict
 		client_ip_headers Cf-Connecting-Ip X-Forwarded-For X-Real-IP
 	}
+
+	# On-demand TLS configuration
+	on_demand_tls {
+		# Query internal endpoint for allowed domains
+		ask http://sbomify-backend:8000/api/v1/internal/domains
+	}
 }
 
-# HTTP - All traffic
-:80 {
-	log {
-		output stdout
-		format json
-		level {$LOG_LEVEL:INFO}
-	}
-
-	# Health check endpoint
+# Snippet: Common proxy configuration
+(proxy_common) {
 	@health {
 		path /health
 	}
@@ -33,7 +40,6 @@
 		respond "OK" 200
 	}
 
-	# Django health check endpoint - suppress logging on success
 	@django_health {
 		path /UuPha8mu/*
 	}
@@ -46,21 +52,40 @@
 		}
 	}
 
-	# Reject untrusted traffic (optional - uncomment to enable)
-	# @untrusted {
-	# 	not remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
-	# }
-	# abort @untrusted
+	# Internal API endpoints - block external access
+	@internal_api {
+		path /api/v1/internal/*
+	}
+	handle @internal_api {
+		@allowed_internal {
+			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+		}
+		handle @allowed_internal {
+			reverse_proxy sbomify-backend:8000 {
+				header_up X-Real-IP {remote_host}
+				header_up Host {host}
+				header_down -Server
+			}
+		}
+		respond "Forbidden" 403
+	}
 
-	# Reverse proxy to Django backend
+	# Main reverse proxy to Django backend
 	reverse_proxy sbomify-backend:8000 {
-		# X-Forwarded-For and X-Forwarded-Proto are passed by default
+		# Headers
 		header_up X-Real-IP {remote_host}
 		header_up Host {host}
 		header_down -Server
 
-		# Active health checks using Django's health endpoint
-		# This endpoint checks database connectivity and other dependencies
+		# Timeouts
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 30s
+			read_timeout 0
+			write_timeout 0
+		}
+
+		# Active health checks
 		health_uri /UuPha8mu/
 		health_interval 30s
 		health_timeout 5s
@@ -75,4 +100,77 @@
 
 	# Compression
 	encode gzip zstd
+}
+
+# Main domain with automatic HTTPS
+{$APP_DOMAIN:localhost} {
+	# Enable on-demand TLS for custom domains
+	tls {
+		on_demand
+	}
+
+	log {
+		output stdout
+		format console
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# Security headers
+	header {
+		# Prevent clickjacking
+		X-Frame-Options "SAMEORIGIN"
+		# Prevent MIME type sniffing
+		X-Content-Type-Options "nosniff"
+		# Enable XSS protection
+		X-XSS-Protection "1; mode=block"
+		# Referrer policy
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# HSTS (only if using HTTPS)
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Don't expose server info
+		-Server
+	}
+
+	import proxy_common
+}
+
+# HTTP fallback (redirect to HTTPS in production, or serve directly in dev)
+:80 {
+	log {
+		output stdout
+		format console
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# Development mode: serve localhost directly without redirect
+	@localhost {
+		host localhost 127.0.0.1 sbomify-backend
+	}
+
+	# Behind HTTPS proxy (Cloudflare, etc.): serve without redirect
+	@already_https {
+		header X-Forwarded-Proto https
+	}
+
+	# Serve localhost directly
+	handle @localhost {
+		import proxy_common
+	}
+
+	# Serve behind HTTPS proxy directly
+	handle @already_https {
+		# Add security headers for proxied HTTPS
+		header {
+			X-Frame-Options "SAMEORIGIN"
+			X-Content-Type-Options "nosniff"
+			X-XSS-Protection "1; mode=block"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+			-Server
+		}
+		import proxy_common
+	}
+
+	# Production: redirect HTTP to HTTPS
+	redir https://{host}{uri} permanent
 }
