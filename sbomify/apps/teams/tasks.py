@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 
 # Base delay in minutes
 BASE_DELAY_MINUTES = 5
-# Max retries before giving up (or checking very infrequently)
+# Max retries cap for backoff calculation
+# Note: This doesn't stop verification attempts, it just caps the backoff delay at ~3.5 days
+# The system will continue checking indefinitely at this maximum interval
 MAX_RETRIES = 10
 
 
@@ -39,7 +41,8 @@ def verify_custom_domains():
             # failures=1 -> 10 min
             # failures=2 -> 20 min
             # ...
-            # failures=10 -> ~3.5 days
+            # failures=10+ -> ~3.5 days (plateaus at MAX_RETRIES)
+            # Note: We never stop trying, the backoff just caps at ~3.5 days
             failures = min(team.custom_domain_verification_failures, MAX_RETRIES)
             backoff_minutes = BASE_DELAY_MINUTES * (2**failures)
             next_check_time = team.custom_domain_last_checked_at + timedelta(minutes=backoff_minutes)
