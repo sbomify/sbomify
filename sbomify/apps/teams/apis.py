@@ -83,7 +83,6 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         custom_domain_validated=team.custom_domain_validated,
         custom_domain_verification_failures=team.custom_domain_verification_failures,
         custom_domain_last_checked_at=team.custom_domain_last_checked_at,
-        can_be_private=team.can_be_private(),
         can_set_private=team.can_be_private(),
         members=members_data,
         invitations=invitations_data,
