@@ -1,7 +1,14 @@
 # Caddyfile for sbomify
-# Simple HTTP reverse proxy configuration
+# Reverse proxy with automatic HTTPS/TLS via Let's Encrypt
 {
 	admin {$CADDY_ADMIN:off}
+
+	# Email for Let's Encrypt notifications (required for production)
+	email {$ACME_EMAIL:admin@example.com}
+
+	# Use Let's Encrypt production by default
+	# Set ACME_CA to staging for testing: https://acme-staging-v02.api.letsencrypt.org/directory
+	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
 
 	# Docker network IP ranges included below.
 	# For Cloudflare, get latest IP ranges from https://www.cloudflare.com/ips/
@@ -14,13 +21,24 @@
 		trusted_proxies_strict
 		client_ip_headers Cf-Connecting-Ip X-Forwarded-For X-Real-IP
 	}
+
+	# On-demand TLS configuration
+	on_demand_tls {
+		# Query internal endpoint for allowed domains
+		ask http://sbomify-backend:8000/api/v1/internal/domains
+	}
 }
 
-# HTTP - All traffic
-:80 {
+# Main domain with automatic HTTPS
+{$APP_DOMAIN:localhost} {
+	# Enable on-demand TLS for custom domains
+	tls {
+		on_demand
+	}
+
 	log {
 		output stdout
-		format json
+		format console
 		level {$LOG_LEVEL:INFO}
 	}
 
@@ -44,6 +62,25 @@
 			header_up Host {host}
 			header_down -Server
 		}
+	}
+
+	# Internal API endpoints - block external access
+	@internal_api {
+		path /api/v1/internal/*
+	}
+	handle @internal_api {
+		# Only allow from Docker network
+		@allowed_internal {
+			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+		}
+		handle @allowed_internal {
+			reverse_proxy sbomify-backend:8000 {
+				header_up X-Real-IP {remote_host}
+				header_up Host {host}
+				header_down -Server
+			}
+		}
+		respond "Forbidden" 403
 	}
 
 	# Reject untrusted traffic (optional - uncomment to enable)
@@ -75,4 +112,79 @@
 
 	# Compression
 	encode gzip zstd
+}
+
+# HTTP fallback (redirect to HTTPS in production, or serve directly in dev)
+:80 {
+	log {
+		output stdout
+		format console
+		level {$LOG_LEVEL:INFO}
+	}
+
+	# In production, redirect HTTP to HTTPS
+	# In development (localhost), serve directly
+	@localhost {
+		host localhost 127.0.0.1 sbomify-backend
+	}
+
+	handle @localhost {
+		# Same handlers as HTTPS for local development
+
+		@health {
+			path /health
+		}
+		handle @health {
+			log_skip
+			respond "OK" 200
+		}
+
+		@django_health {
+			path /UuPha8mu/*
+		}
+		handle @django_health {
+			log_skip
+			reverse_proxy sbomify-backend:8000 {
+				header_up X-Real-IP {remote_host}
+				header_up Host {host}
+				header_down -Server
+			}
+		}
+
+		@internal_api {
+			path /api/v1/internal/*
+		}
+		handle @internal_api {
+			@allowed_internal {
+				remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			}
+			handle @allowed_internal {
+				reverse_proxy sbomify-backend:8000 {
+					header_up X-Real-IP {remote_host}
+					header_up Host {host}
+					header_down -Server
+				}
+			}
+			respond "Forbidden" 403
+		}
+
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+			health_uri /UuPha8mu/
+			health_interval 30s
+			health_timeout 5s
+			health_status 200
+			lb_try_duration 5s
+			lb_try_interval 250ms
+			fail_duration 10s
+			max_fails 3
+		}
+
+		encode gzip zstd
+	}
+
+	# For production domains, redirect to HTTPS
+	redir https://{host}{uri} permanent
 }

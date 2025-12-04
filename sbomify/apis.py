@@ -108,6 +108,11 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "description": "Validate license expressions, manage custom licenses, and access "
                 "comprehensive license information database.",
             },
+            {
+                "name": "Internal",
+                "description": "Internal endpoints for infrastructure integration. These endpoints are "
+                "restricted from external access at the proxy level.",
+            },
         ],
     },
 )
@@ -120,3 +125,4 @@ api.add_router("/billing", "sbomify.apps.billing.apis.router")
 api.add_router("/notifications", "sbomify.apps.notifications.apis.router")
 api.add_router("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router")
 api.add_router("/licensing", "sbomify.apps.licensing.api.router")
+api.add_router("/internal", "sbomify.apps.teams.apis.internal_router")

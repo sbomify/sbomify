@@ -759,3 +759,37 @@ def get_team(request: HttpRequest, team_key: str):
         return 403, {"detail": "Access denied"}
 
     return 200, _build_team_response(request, team)
+
+
+# Internal endpoints (no auth required - secured at proxy level)
+internal_router = Router(tags=["Internal"], auth=None)
+
+
+class DomainListSchema(BaseModel):
+    """Schema for listing all custom domains for TLS provisioning."""
+
+    domains: list[str]
+
+
+@internal_router.get("/domains", response={200: DomainListSchema})
+def list_all_domains(request: HttpRequest):
+    """
+    List all custom domains for TLS certificate provisioning.
+
+    This endpoint is intended for internal use by Caddy or other reverse proxies
+    to fetch the list of domains that need TLS certificates. Only returns domains
+    from teams with Business or Enterprise plans, regardless of validation status.
+
+    Security: This endpoint MUST be blocked from external access at the proxy level.
+    See Caddyfile configuration for access restrictions.
+
+    Returns:
+        DomainListSchema: List of custom domain names from Business/Enterprise teams.
+    """
+    domains = list(
+        Team.objects.filter(custom_domain__isnull=False, billing_plan__in=["business", "enterprise"])
+        .exclude(custom_domain="")
+        .values_list("custom_domain", flat=True)
+    )
+
+    return 200, {"domains": domains}
