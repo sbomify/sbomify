@@ -36,10 +36,6 @@ def validate_custom_domain(domain: str) -> tuple[bool, str | None]:
     # Strip and lowercase for further processing
     domain = domain.strip().lower()
 
-    # Check if empty after stripping
-    if not domain:
-        return False, "Domain cannot be empty"
-
     # Check for protocol
     if "://" in domain:
         return False, "Domain must not include protocol (http:// or https://)"

@@ -68,7 +68,8 @@ def verify_custom_domains():
             url = f"{protocol}://{team.custom_domain}/.well-known/com.sbomify.domain-check"
 
             try:
-                _ = requests.get(url, headers=headers, timeout=10, verify=True)
+                response = requests.get(url, headers=headers, timeout=10, verify=True)
+                logger.debug(f"Probe response status: {response.status_code}")
                 # If we get a response (even 404), it means DNS is likely configured
                 # and pointing to a server. If it points to US, our middleware
                 # should have intercepted it and marked it valid.
