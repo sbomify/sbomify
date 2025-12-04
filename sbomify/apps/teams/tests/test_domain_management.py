@@ -324,6 +324,46 @@ def test_caddy_ask_endpoint_validation_status_irrelevant(client):
 
 
 @pytest.mark.django_db
+def test_caddy_ask_endpoint_sanitizes_input(client):
+    """
+    Test that the endpoint properly sanitizes domain input using urlparse.
+
+    This prevents issues where malicious input includes protocols, ports, or paths.
+    """
+    team = Team.objects.create(name="Business Team", billing_plan="business")
+    team.key = number_to_random_token(team.pk)
+    team.custom_domain = "app.example.com"
+    team.save()
+
+    # Test with protocol prefix - should be stripped
+    response = client.get("/api/v1/internal/domains?domain=https://app.example.com")
+    assert response.status_code == 200
+
+    response = client.get("/api/v1/internal/domains?domain=http://app.example.com")
+    assert response.status_code == 200
+
+    # Test with port - should be stripped
+    response = client.get("/api/v1/internal/domains?domain=app.example.com:8000")
+    assert response.status_code == 200
+
+    # Test with path - should be stripped
+    response = client.get("/api/v1/internal/domains?domain=app.example.com/some/path")
+    assert response.status_code == 200
+
+    # Test with query string - should be stripped
+    response = client.get("/api/v1/internal/domains?domain=app.example.com?query=param")
+    assert response.status_code == 200
+
+    # Test with full URL - should extract hostname
+    response = client.get("/api/v1/internal/domains?domain=https://app.example.com:443/path?query=1")
+    assert response.status_code == 200
+
+    # Test that wrong domain still returns 404 even with sanitization
+    response = client.get("/api/v1/internal/domains?domain=https://wrong.example.com:8000/path")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
 def test_caddy_ask_endpoint_filters_by_billing_plan(client):
     """
     Test that only Business and Enterprise plan domains are allowed certificates.

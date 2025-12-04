@@ -788,8 +788,25 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     Returns:
         200 OK if domain is allowed, 404 if not allowed
     """
-    # Normalize domain (lowercase, strip whitespace)
-    domain_normalized = domain.strip().lower()
+    from urllib.parse import urlparse
+
+    # Sanitize and normalize domain input using urlparse
+    # This handles cases where input might include protocol, port, or path
+    # Note: urlparse requires a scheme to identify hostname, so we add one if missing
+    domain_input = domain.strip()
+    if not domain_input.startswith(("http://", "https://")):
+        domain_input = f"http://{domain_input}"
+
+    try:
+        parsed = urlparse(domain_input)
+        # Extract just the hostname (strips port, path, query, etc.)
+        domain_normalized = parsed.hostname
+        if not domain_normalized:
+            return 404, None
+        domain_normalized = domain_normalized.lower()
+    except (ValueError, AttributeError):
+        # Invalid domain format
+        return 404, None
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(
