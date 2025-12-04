@@ -21,72 +21,70 @@
             </div>
         </div>
     </div>
-    {% with plan=team.billing_plan|default:''|lower %}
-        <div class="mb-4">
-            <div class="card settings-card workspace-visibility-card shadow-sm">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">Trust Center Availability</h4>
-                </div>
-                <div class="card-body">
-                    <div class="visibility-wrapper">
-                        <div class="copy">
-                            <p class="eyebrow">Workspace trust center</p>
-                            <h3 class="title">Enable or disable your trust center</h3>
-                            <p class="description">Control whether your trust center is accessible to visitors.</p>
-                            <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
-                                <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
-                                {{ team.is_public|yesno:'Enabled,Disabled' }}
-                            </span>
-                            {% if team.is_public %}
-                                {% with public_url=APP_BASE_URL|add:'/public/workspace/'|add:team.key %}
-                                    <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                                        <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
-                                        <button type="button"
-                                                class="copy-url-btn visibility-copy-btn"
-                                                title="Copy public URL"
-                                                aria-label="Copy public URL"
-                                                data-public-url="{{ public_url }}">
-                                            <i class="fas fa-copy"></i>
-                                            <span class="copy-text">Copy public URL</span>
-                                        </button>
-                                    </div>
-                                {% endwith %}
-                            {% endif %}
-                            {% if not is_owner %}
-                                <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
-                            {% elif not can_set_private %}
-                                <div class="text-muted mt-2 small">Disabling the trust center is available on Business or Enterprise plans.</div>
-                            {% endif %}
-                        </div>
-                        <div class="control">
-                            <form method="post"
-                                  action="{% url 'teams:team_settings' team.key %}"
-                                  class="d-inline-block">
-                                {% csrf_token %}
-                                <input type="hidden" name="visibility_action" value="update">
-                                <input type="hidden" name="is_public" value="false">
-                                <div class="form-check form-switch">
-                                    <input id="workspace-visibility-toggle"
-                                           class="form-check-input"
-                                           type="checkbox"
-                                           name="is_public"
-                                           value="true"
-                                           {% if team.is_public %}checked{% endif %}
-                                           {% if not is_owner %}disabled{% endif %}
-                                           onchange="this.form.submit()">
-                                    <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
+    <div class="mb-4">
+        <div class="card settings-card workspace-visibility-card shadow-sm">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Trust Center Availability</h4>
+            </div>
+            <div class="card-body">
+                <div class="visibility-wrapper">
+                    <div class="copy">
+                        <p class="eyebrow">Workspace trust center</p>
+                        <h3 class="title">Enable or disable your trust center</h3>
+                        <p class="description">Control whether your trust center is accessible to visitors.</p>
+                        <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
+                            <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
+                            {{ team.is_public|yesno:'Enabled,Disabled' }}
+                        </span>
+                        {% if team.is_public %}
+                            {% with public_url=APP_BASE_URL|add:'/public/workspace/'|add:team.key %}
+                                <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                                    <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
+                                    <button type="button"
+                                            class="copy-url-btn visibility-copy-btn"
+                                            title="Copy public URL"
+                                            aria-label="Copy public URL"
+                                            data-public-url="{{ public_url }}">
+                                        <i class="fas fa-copy"></i>
+                                        <span class="copy-text">Copy public URL</span>
+                                    </button>
                                 </div>
-                                <button type="submit" class="visually-hidden">Save visibility</button>
-                                <small class="text-muted hint">
-                                    {% if can_set_private %}Toggle anytime.{% endif %}
-                                </small>
-                            </form>
-                        </div>
+                            {% endwith %}
+                        {% endif %}
+                        {% if not is_owner %}
+                            <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
+                        {% elif not can_set_private %}
+                            <div class="text-muted mt-2 small">Disabling the trust center is available on Business or Enterprise plans.</div>
+                        {% endif %}
+                    </div>
+                    <div class="control">
+                        <form method="post"
+                              action="{% url 'teams:team_settings' team.key %}"
+                              class="d-inline-block">
+                            {% csrf_token %}
+                            <input type="hidden" name="visibility_action" value="update">
+                            <input type="hidden" name="is_public" value="false">
+                            <div class="form-check form-switch">
+                                <input id="workspace-visibility-toggle"
+                                       class="form-check-input"
+                                       type="checkbox"
+                                       name="is_public"
+                                       value="true"
+                                       {% if team.is_public %}checked{% endif %}
+                                       {% if not is_owner %}disabled{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
+                            </div>
+                            <button type="submit" class="visually-hidden">Save visibility</button>
+                            <small class="text-muted hint">
+                                {% if can_set_private %}Toggle anytime.{% endif %}
+                            </small>
+                        </form>
                     </div>
                 </div>
             </div>
         </div>
-    {% endwith %}
+    </div>
     <style>
         .workspace-visibility-card .visibility-wrapper {
             display: flex;

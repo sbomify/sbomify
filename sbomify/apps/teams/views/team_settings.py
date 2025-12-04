@@ -66,12 +66,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
         plan_features = PLAN_FEATURES.get(billing_plan, [])
         plan_pricing = PLAN_PRICING.get(billing_plan, {"amount": "Contact us", "period": ""})
-        if hasattr(team, "can_set_private"):
-            can_set_private = bool(team.can_set_private)
-        elif callable(getattr(team, "can_be_private", None)):
-            can_set_private = team.can_be_private()
-        else:
-            can_set_private = False
+        can_set_private = team.can_be_private()
         is_owner = request.session.get("current_team", {}).get("role") == "owner"
 
         # Process plan limits into structured data

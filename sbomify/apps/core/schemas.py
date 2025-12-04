@@ -175,7 +175,7 @@ class ProductUpdateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     description: str = Field(default="", max_length=1000)
-    is_public: bool | None = None
+    is_public: bool = False
 
 
 class ProductPatchSchema(BaseModel):

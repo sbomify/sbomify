@@ -1525,6 +1525,18 @@ def test_community_plan_defaults_public_even_if_set_false():
 
 
 @pytest.mark.django_db
+def test_community_plan_save_cannot_flip_to_private():
+    """Existing community workspaces stay public even if saved with is_public=False."""
+    team = Team.objects.create(name="Community Existing", billing_plan="community", is_public=True)
+
+    team.is_public = False
+    team.save()
+    team.refresh_from_db()
+
+    assert team.is_public is True
+
+
+@pytest.mark.django_db
 def test_downgrading_from_paid_to_community_forces_public():
     """Switching from paid plan back to community makes workspace public again."""
     team = Team.objects.create(name="Paid Workspace", billing_plan="business", is_public=False)
