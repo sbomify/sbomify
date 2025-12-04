@@ -14,7 +14,12 @@ from .tasks import verify_custom_domains
 # Schedule domain verification to run every 15 minutes
 # This checks unvalidated domains with exponential backoff
 @cron("*/15 * * * *")  # Every 15 minutes
-@dramatiq.actor(queue_name="domain_verification_cron", max_retries=1, time_limit=300000)
+@dramatiq.actor(
+    queue_name="domain_verification_cron",
+    max_retries=0,  # Don't retry - next cron run will handle it
+    time_limit=300000,  # 5 minute timeout for the cron wrapper
+    max_age=3600000,  # 1 hour - skip if queued for too long
+)
 def periodic_domain_verification():
     """
     Periodic task to verify custom domains.

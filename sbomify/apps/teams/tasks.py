@@ -84,10 +84,14 @@ def verify_custom_domains():
                 # Let's count as failure for now.
                 pass
 
-            # If we are here, validation failed (middleware didn't trigger or request failed)
-            team.custom_domain_verification_failures += 1
-            team.custom_domain_last_checked_at = now
-            team.save(update_fields=["custom_domain_verification_failures", "custom_domain_last_checked_at"])
+            # If we are here, validation failed (endpoint didn't validate or request failed)
+            # Use F() expression for atomic increment to prevent race conditions
+            from django.db.models import F
+
+            Team.objects.filter(pk=team.pk).update(
+                custom_domain_verification_failures=F("custom_domain_verification_failures") + 1,
+                custom_domain_last_checked_at=now,
+            )
 
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")

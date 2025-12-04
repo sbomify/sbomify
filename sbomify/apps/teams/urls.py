@@ -36,19 +36,24 @@ def domain_check(request):
     # If this is a custom domain, validate it
     if host:
         try:
-            team = Team.objects.filter(custom_domain=host).first()
-            if team and not team.custom_domain_validated:
-                team.custom_domain_validated = True
-                team.custom_domain_verification_failures = 0
-                team.custom_domain_last_checked_at = timezone.now()
-                team.save(
-                    update_fields=[
-                        "custom_domain_validated",
-                        "custom_domain_verification_failures",
-                        "custom_domain_last_checked_at",
-                    ]
-                )
-                invalidate_custom_domain_cache(host)
+            from django.db import transaction
+
+            # Use select_for_update to prevent race conditions when multiple requests
+            # hit this endpoint simultaneously (e.g., verification task + real user traffic)
+            with transaction.atomic():
+                team = Team.objects.select_for_update().filter(custom_domain=host).first()
+                if team and not team.custom_domain_validated:
+                    team.custom_domain_validated = True
+                    team.custom_domain_verification_failures = 0
+                    team.custom_domain_last_checked_at = timezone.now()
+                    team.save(
+                        update_fields=[
+                            "custom_domain_validated",
+                            "custom_domain_verification_failures",
+                            "custom_domain_last_checked_at",
+                        ]
+                    )
+                    invalidate_custom_domain_cache(host)
         except Exception as e:
             # Log error but don't fail the request - validation can happen on next attempt
             logger.warning(f"Failed to validate domain {host}: {e}")
