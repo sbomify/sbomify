@@ -10,7 +10,7 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
@@ -218,8 +218,6 @@ def _setup_community_plan(team: Team) -> None:
         logger.info(f"Set up community plan for team {team.key} ({team.name})")
     except BillingPlan.DoesNotExist:
         # Fallback to unlimited limits if community plan doesn't exist
-        from sbomify.apps.billing.config import get_unlimited_plan_limits
-
         team.billing_plan = "community"
         team.billing_plan_limits = get_unlimited_plan_limits()
         team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
@@ -261,3 +259,26 @@ def _send_welcome_email(user, team: Team, business_plan: BillingPlan) -> None:
         logger.info(f"Sent welcome email to {user.email}")
     except Exception as e:
         logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
+
+
+def invalidate_custom_domain_cache(domain: str | None) -> None:
+    """
+    Invalidate the cache for a custom domain.
+
+    This should be called whenever a domain is added, removed, or validated.
+
+    Args:
+        domain: The domain to invalidate, or None to skip
+    """
+    if not domain:
+        return
+
+    try:
+        from django.core.cache import cache
+
+        cache_key = f"custom_domain:{domain}"
+        cache.delete(cache_key)
+        logger.debug(f"Invalidated cache for custom domain: {domain}")
+    except Exception as e:
+        # Cache invalidation failure shouldn't break the flow
+        logger.warning(f"Failed to invalidate cache for domain {domain}: {e}")

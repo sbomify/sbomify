@@ -54,7 +54,12 @@ def get_team_name_for_user(user) -> str:
 class Team(models.Model):
     class Meta:
         db_table = apps.get_app_config("teams").label + "_teams"
-        indexes = [models.Index(fields=["key"])]
+        indexes = [
+            models.Index(fields=["key"]),
+            models.Index(fields=["custom_domain"]),
+            # Composite index for verification task queries
+            models.Index(fields=["custom_domain_validated", "custom_domain_last_checked_at"]),
+        ]
         ordering = ["name"]
         constraints = [
             models.CheckConstraint(
@@ -84,6 +89,8 @@ class Team(models.Model):
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
     custom_domain = models.CharField(max_length=255, unique=True, null=True, blank=True)
     custom_domain_validated = models.BooleanField(default=False)
+    custom_domain_verification_failures = models.PositiveIntegerField(default=0)
+    custom_domain_last_checked_at = models.DateTimeField(null=True, blank=True)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:

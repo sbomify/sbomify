@@ -72,6 +72,8 @@ class TeamSchema(BaseModel):
     billing_plan_limits: dict | None
     custom_domain: str | None
     custom_domain_validated: bool = False
+    custom_domain_verification_failures: int = 0
+    custom_domain_last_checked_at: datetime | None = None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
 

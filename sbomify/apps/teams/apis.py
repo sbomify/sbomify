@@ -80,6 +80,8 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
         has_completed_wizard=team.has_completed_wizard,
         custom_domain=team.custom_domain,
         custom_domain_validated=team.custom_domain_validated,
+        custom_domain_verification_failures=team.custom_domain_verification_failures,
+        custom_domain_last_checked_at=team.custom_domain_last_checked_at,
         members=members_data,
         invitations=invitations_data,
     )
@@ -630,6 +632,9 @@ class TeamDomainResponseSchema(BaseModel):
 )
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema):
     """Set or update workspace custom domain."""
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+    from sbomify.apps.teams.validators import validate_custom_domain
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -645,32 +650,39 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 403, {"detail": "Only owners can update team domain"}
 
     # Feature gating: Check billing plan
+    from sbomify.apps.billing.models import BillingPlan
 
-    # Get plan key from team (which stores the key as string)
     plan_key = team.billing_plan or "free"
-    # Create temporary plan object to check permissions (avoid DB hit if possible, or use simple check)
-    # Using the property we just added. We need a real instance or mimic it.
-    # Since billing_plan is just a string on Team, let's check against list directly or fetch plan object if needed.
-    # But for cleaner code, let's use the logic defined in BillingPlan model property if we can,
-    # or replicate it here if we don't want to fetch the plan every time.
-    # However, Team.billing_plan is a string key.
-
-    # Direct check for now to avoid extra DB call, mirroring the logic in BillingPlan model
-    has_access = plan_key in ["business", "enterprise"]
+    try:
+        plan = BillingPlan.objects.get(key=plan_key)
+        has_access = plan.has_custom_domain_access
+    except BillingPlan.DoesNotExist:
+        # Fallback for unknown plans
+        has_access = plan_key in ["business", "enterprise"]
 
     if not has_access:
         return 403, {"detail": "Custom domains are available on Business and Enterprise plans only"}
 
-    # Validate domain format (basic check)
-    domain = payload.domain.strip().lower()
-    if not domain or " " in domain:
-        return 400, {"detail": "Invalid domain format"}
+    # Validate domain format using comprehensive FQDN validation
+    is_valid, error_message = validate_custom_domain(payload.domain)
+    if not is_valid:
+        return 400, {"detail": error_message}
+
+    # Store old domain for cache invalidation
+    old_domain = team.custom_domain
 
     try:
+        # Normalize domain (validator already does this, but be explicit)
+        normalized_domain = payload.domain.strip().lower()
+
         with transaction.atomic():
-            team.custom_domain = domain
+            team.custom_domain = normalized_domain
             team.custom_domain_validated = False  # Reset validation on change
             team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+        # Invalidate cache for both old and new domains
+        invalidate_custom_domain_cache(old_domain)
+        invalidate_custom_domain_cache(normalized_domain)
 
         return 200, {"domain": team.custom_domain, "validated": team.custom_domain_validated}
 
@@ -687,6 +699,8 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
 )
 def delete_team_domain(request: HttpRequest, team_key: str):
     """Remove workspace custom domain."""
+    from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
     try:
         team_id = token_to_number(team_key)
     except ValueError:
@@ -701,9 +715,15 @@ def delete_team_domain(request: HttpRequest, team_key: str):
     if not Member.objects.filter(user=request.user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
+    # Store domain for cache invalidation
+    old_domain = team.custom_domain
+
     team.custom_domain = None
     team.custom_domain_validated = False
     team.save(update_fields=["custom_domain", "custom_domain_validated"])
+
+    # Invalidate cache for removed domain
+    invalidate_custom_domain_cache(old_domain)
 
     return 204, None
 

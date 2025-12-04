@@ -1,9 +1,9 @@
-import os
 import pytest
-from django.conf import settings
+
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
+
 
 @pytest.mark.django_db
 def test_manage_team_domain(authenticated_api_client, sample_user):
@@ -20,15 +20,10 @@ def test_manage_team_domain(authenticated_api_client, sample_user):
     Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
 
     base_uri = f"/api/v1/workspaces/{team.key}/domain"
-    domain_name = "example.com"
+    domain_name = "app.example.com"
 
     # 1. Add a domain (PUT)
-    response = client.put(
-        base_uri,
-        {"domain": domain_name},
-        content_type="application/json",
-        **headers
-    )
+    response = client.put(base_uri, {"domain": domain_name}, content_type="application/json", **headers)
     assert response.status_code == 200
     data = response.json()
     assert data["domain"] == domain_name
@@ -44,13 +39,8 @@ def test_manage_team_domain(authenticated_api_client, sample_user):
     team.save()
 
     # 2. Update domain (PUT replaces existing) - check reset
-    new_domain = "new-example.com"
-    response = client.put(
-        base_uri,
-        {"domain": new_domain},
-        content_type="application/json",
-        **headers
-    )
+    new_domain = "new-app.example.com"
+    response = client.put(base_uri, {"domain": new_domain}, content_type="application/json", **headers)
     assert response.status_code == 200
     data = response.json()
     assert data["domain"] == new_domain
@@ -65,13 +55,8 @@ def test_manage_team_domain(authenticated_api_client, sample_user):
     team.save()
 
     # 3. Patch domain (PATCH) - check reset
-    patched_domain = "patched-example.com"
-    response = client.patch(
-        base_uri,
-        {"domain": patched_domain},
-        content_type="application/json",
-        **headers
-    )
+    patched_domain = "patched.example.com"
+    response = client.patch(base_uri, {"domain": patched_domain}, content_type="application/json", **headers)
     assert response.status_code == 200
     data = response.json()
     assert data["domain"] == patched_domain
@@ -99,7 +84,7 @@ def test_domain_uniqueness(authenticated_api_client, sample_user):
     # Create team 1
     team1 = Team.objects.create(name="Team 1", billing_plan="business")
     team1.key = number_to_random_token(team1.pk)
-    team1.custom_domain = "unique.com"
+    team1.custom_domain = "team1.unique.com"
     team1.save()
     Member.objects.create(team=team1, user=sample_user, role="owner")
 
@@ -112,9 +97,9 @@ def test_domain_uniqueness(authenticated_api_client, sample_user):
     # Try to assign same domain to team 2
     response = client.put(
         f"/api/v1/workspaces/{team2.key}/domain",
-        {"domain": "unique.com"},
+        {"domain": "team1.unique.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
 
     assert response.status_code == 400
@@ -142,9 +127,9 @@ def test_domain_permissions(authenticated_api_client, guest_api_client, sample_u
 
     response = guest_client.put(
         f"/api/v1/workspaces/{team.key}/domain",
-        {"domain": "hacker.com"},
+        {"domain": "hacker.example.com"},
         content_type="application/json",
-        **guest_headers
+        **guest_headers,
     )
     assert response.status_code == 403
 
@@ -165,7 +150,7 @@ def test_domain_validation(authenticated_api_client, sample_user):
         f"/api/v1/workspaces/{team.key}/domain",
         {"domain": "invalid domain.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
     assert response.status_code == 400
 
@@ -185,10 +170,7 @@ def test_validation_cannot_be_set_via_api(authenticated_api_client, sample_user)
 
     # Try to set validated=True in the payload
     response = client.put(
-        base_uri,
-        {"domain": "api-check.com", "validated": True},
-        content_type="application/json",
-        **headers
+        base_uri, {"domain": "api-check.com", "validated": True}, content_type="application/json", **headers
     )
 
     assert response.status_code == 200
@@ -213,9 +195,9 @@ def test_domain_feature_gating(authenticated_api_client, sample_user):
 
     response = client.put(
         f"/api/v1/workspaces/{team_free.key}/domain",
-        {"domain": "free.com"},
+        {"domain": "app.free.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
     assert response.status_code == 403
     assert "Business and Enterprise" in response.json()["detail"]
@@ -228,9 +210,9 @@ def test_domain_feature_gating(authenticated_api_client, sample_user):
 
     response = client.put(
         f"/api/v1/workspaces/{team_comm.key}/domain",
-        {"domain": "comm.com"},
+        {"domain": "app.comm.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
     assert response.status_code == 403
 
@@ -242,9 +224,9 @@ def test_domain_feature_gating(authenticated_api_client, sample_user):
 
     response = client.put(
         f"/api/v1/workspaces/{team_biz.key}/domain",
-        {"domain": "biz.com"},
+        {"domain": "app.biz.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
     assert response.status_code == 200
 
@@ -256,8 +238,8 @@ def test_domain_feature_gating(authenticated_api_client, sample_user):
 
     response = client.put(
         f"/api/v1/workspaces/{team_ent.key}/domain",
-        {"domain": "ent.com"},
+        {"domain": "app.ent.com"},
         content_type="application/json",
-        **headers
+        **headers,
     )
     assert response.status_code == 200
