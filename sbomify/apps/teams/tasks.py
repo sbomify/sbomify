@@ -15,13 +15,16 @@ BASE_DELAY_MINUTES = 5
 MAX_RETRIES = 10
 
 
-@dramatiq.actor(time_limit=300000)  # 5 minutes
+@dramatiq.actor(time_limit=900000)  # 15 minutes
 def verify_custom_domains():
     """
     Periodic task to verify unvalidated custom domains.
 
     This task iterates through unvalidated domains and sends a probe request.
     It uses exponential backoff to avoid spamming domains that are not yet configured.
+
+    Time limit: 15 minutes to accommodate large numbers of domains.
+    If the number of domains grows further, implement batching/pagination.
     """
     now = timezone.now()
 

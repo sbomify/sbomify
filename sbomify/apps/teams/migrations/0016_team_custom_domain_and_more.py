@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0015_contact_profiles"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -34,9 +33,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="team",
-            index=models.Index(
-                fields=["custom_domain"], name="teams_teams_custom__db3a3f_idx"
-            ),
+            index=models.Index(fields=["custom_domain"], name="teams_teams_custom__db3a3f_idx"),
         ),
         migrations.AddIndex(
             model_name="team",
