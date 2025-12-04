@@ -107,7 +107,7 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
     fi
 
 ### Stage 5: Go Builder for OSV-Scanner
-FROM golang:1.25-alpine@sha256:3587db7cc96576822c606d119729370dbf581931c5f43ac6d3fa03ab4ed85a10 AS go-builder
+FROM golang:1.25-alpine@sha256:26111811bc967321e7b6f852e914d14bede324cd1accb7f81811929a6a57fea9 AS go-builder
 ARG OSV_SCANNER_VERSION
 ARG CYCLONEDX_GOMOD_VERSION
 
