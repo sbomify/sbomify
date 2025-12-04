@@ -253,6 +253,7 @@ class ComponentSummarySchema(BaseModel):
     id: str
     name: str
     is_public: bool
+    is_global: bool
     component_type: ComponentType
     component_type_display: str
 
@@ -263,6 +264,7 @@ class ComponentCreateSchema(BaseModel):
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
     metadata: dict = Field(default_factory=dict)
+    is_global: bool = False
 
 
 class ComponentUpdateSchema(BaseModel):
@@ -271,6 +273,8 @@ class ComponentUpdateSchema(BaseModel):
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
     is_public: bool = False
+    # is_global defaults to None so existing clients that omit it do not overwrite scope
+    is_global: bool | None = None
     metadata: dict = Field(default_factory=dict)
 
 
@@ -280,6 +284,7 @@ class ComponentPatchSchema(BaseModel):
     name: str | None = Field(None, max_length=255, min_length=1)
     component_type: ComponentType | None = None
     is_public: bool | None = None
+    is_global: bool | None = None
     metadata: dict | None = None
 
 
@@ -291,6 +296,7 @@ class ComponentResponseSchema(BaseModel):
     team_id: str
     created_at: datetime
     is_public: bool
+    is_global: bool
     component_type: ComponentType
     metadata: dict
     sbom_count: int | None = None

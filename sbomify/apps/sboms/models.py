@@ -287,6 +287,10 @@ class Component(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
+    is_global = models.BooleanField(
+        default=False,
+        help_text="Whether the component is available at the workspace level rather than scoped to a project",
+    )
 
     # Native fields for contact information (migrated from JSONField)
     supplier_name = models.CharField(max_length=255, blank=True, null=True, help_text="The name of the supplier")

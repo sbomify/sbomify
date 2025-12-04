@@ -31,6 +31,7 @@ from sbomify.apps.core.views.component_detailed_private import ComponentDetailed
 from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: F401, E402
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
@@ -44,6 +45,7 @@ from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # 
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 
 from ..errors import error_response

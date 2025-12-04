@@ -63,6 +63,11 @@ urlpatterns = [
         views.ComponentDetailsPrivateView.as_view(),
         name="component_details",
     ),
+    path(
+        "component/<str:component_id>/scope",
+        views.ComponentScopeView.as_view(),
+        name="component_scope",
+    ),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path(
         "component/<str:component_id>/detailed/",
@@ -78,6 +83,16 @@ urlpatterns = [
         "public/component/<str:component_id>/detailed/",
         views.ComponentDetailedPublicView.as_view(),
         name="component_detailed_public",
+    ),
+    path(
+        "public/workspace/<str:workspace_key>/",
+        views.WorkspacePublicView.as_view(),
+        name="workspace_public",
+    ),
+    path(
+        "public/workspace/",
+        views.WorkspacePublicView.as_view(),
+        name="workspace_public_current",
     ),
     path(
         "component/<str:component_id>/transfer",
