@@ -1,5 +1,6 @@
-import pytest
 from urllib.parse import urlparse
+
+import pytest
 
 
 @pytest.mark.django_db
@@ -12,9 +13,9 @@ def test_dynamic_allowed_hosts():
     # Setup allowed hosts list
     allowed_hosts = DynamicAllowedHosts(["localhost", "sbomify.com"])
 
-    # 1. Test static hosts
-    assert "localhost" in allowed_hosts  # Unchanged, as "sbomify.com" is a bare host, safe
-    assert "sbomify.com" in allowed_hosts  # Unchanged, as "sbomify.com" is a bare host, safe
+    # 1. Test static hosts - parse hostname and ensure exact matching for bare host
+    assert urlparse("http://localhost").hostname in allowed_hosts
+    assert urlparse("http://sbomify.com").hostname in allowed_hosts
     assert "google.com" not in allowed_hosts
 
     # 2. Test custom domain (not yet in DB)
