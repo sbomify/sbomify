@@ -246,118 +246,122 @@ def test_domain_feature_gating(authenticated_api_client, sample_user):
 
 
 @pytest.mark.django_db
-def test_internal_domains_list(client, sample_user):
+def test_caddy_ask_endpoint_allowed_domain(client):
     """
-    Test the internal domains endpoint that lists all custom domains for TLS provisioning.
+    Test that the Caddy on-demand TLS ask endpoint returns 200 OK for allowed domains.
 
-    This endpoint is intended for internal use by Caddy and does not require authentication
-    (secured at proxy level).
+    Per Caddy documentation: The ask endpoint receives ?domain=example.com and should
+    return 200 OK if the domain is allowed to get a certificate.
     """
-    # Create teams with various domain configurations
+    # Create a team with Business plan and custom domain
+    team = Team.objects.create(name="Business Team", billing_plan="business")
+    team.key = number_to_random_token(team.pk)
+    team.custom_domain = "app.example.com"
+    team.save()
+
+    # Caddy will call with ?domain= query parameter
+    response = client.get("/api/v1/internal/domains?domain=app.example.com")
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_caddy_ask_endpoint_denied_domain(client):
+    """
+    Test that the Caddy on-demand TLS ask endpoint returns 404 for unknown domains.
+
+    Per Caddy documentation: The ask endpoint should return non-200 status if the
+    domain should NOT get a certificate.
+    """
+    # No domain configured in database
+    response = client.get("/api/v1/internal/domains?domain=unknown.example.com")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_caddy_ask_endpoint_case_insensitive(client):
+    """Test that domain checking is case-insensitive."""
+    team = Team.objects.create(name="Business Team", billing_plan="business")
+    team.key = number_to_random_token(team.pk)
+    team.custom_domain = "app.example.com"
+    team.save()
+
+    # Test with different case variations
+    response = client.get("/api/v1/internal/domains?domain=APP.EXAMPLE.COM")
+    assert response.status_code == 200
+
+    response = client.get("/api/v1/internal/domains?domain=App.Example.Com")
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_caddy_ask_endpoint_validation_status_irrelevant(client):
+    """
+    Test that domain validation status doesn't affect certificate issuance approval.
+
+    Validation happens AFTER certificate is issued, so both validated and unvalidated
+    domains should return 200 OK.
+    """
+    # Unvalidated domain
     team1 = Team.objects.create(name="Team 1", billing_plan="business")
     team1.key = number_to_random_token(team1.pk)
-    team1.custom_domain = "app1.example.com"
-    team1.custom_domain_validated = False  # Not validated yet
+    team1.custom_domain = "unvalidated.example.com"
+    team1.custom_domain_validated = False
     team1.save()
 
+    # Validated domain
     team2 = Team.objects.create(name="Team 2", billing_plan="business")
     team2.key = number_to_random_token(team2.pk)
-    team2.custom_domain = "app2.example.com"
-    team2.custom_domain_validated = True  # Already validated
+    team2.custom_domain = "validated.example.com"
+    team2.custom_domain_validated = True
     team2.save()
 
-    team3 = Team.objects.create(name="Team 3", billing_plan="business")
-    team3.key = number_to_random_token(team3.pk)
-    team3.custom_domain = None  # No custom domain
-    team3.save()
-
-    team4 = Team.objects.create(name="Team 4", billing_plan="business")
-    team4.key = number_to_random_token(team4.pk)
-    team4.custom_domain = ""  # Empty custom domain
-    team4.save()
-
-    # Call the internal endpoint (no auth needed)
-    response = client.get("/api/v1/internal/domains")
+    # Both should be allowed
+    response = client.get("/api/v1/internal/domains?domain=unvalidated.example.com")
     assert response.status_code == 200
 
-    data = response.json()
-    assert "domains" in data
-    domains = data["domains"]
-
-    # Should only include teams with actual domains (team1 and team2)
-    assert len(domains) == 2
-    assert "app1.example.com" in domains
-    assert "app2.example.com" in domains
-
-    # Validate that validation status doesn't affect inclusion
-    # (both validated and non-validated domains are included)
+    response = client.get("/api/v1/internal/domains?domain=validated.example.com")
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db
-def test_internal_domains_list_empty(client):
-    """Test internal domains endpoint when no domains are configured."""
-    # Don't create any teams with domains
-    Team.objects.create(name="Team Without Domain", billing_plan="business")
-
-    response = client.get("/api/v1/internal/domains")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "domains" in data
-    assert len(data["domains"]) == 0
-
-
-@pytest.mark.django_db
-def test_internal_domains_list_filters_by_billing_plan(client):
+def test_caddy_ask_endpoint_filters_by_billing_plan(client):
     """
-    Test that internal domains endpoint only returns domains from Business and Enterprise plans.
-
-    This test verifies that even if free/community teams somehow have domains set
-    (e.g., from a plan downgrade), they won't be included in the TLS provisioning list.
+    Test that only Business and Enterprise plan domains are allowed certificates.
     """
-    # Business plan - should be included
+    # Business plan - should be allowed
     team_business = Team.objects.create(name="Business Team", billing_plan="business")
     team_business.key = number_to_random_token(team_business.pk)
     team_business.custom_domain = "business.example.com"
     team_business.save()
 
-    # Enterprise plan - should be included
+    # Enterprise plan - should be allowed
     team_enterprise = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
     team_enterprise.key = number_to_random_token(team_enterprise.pk)
     team_enterprise.custom_domain = "enterprise.example.com"
     team_enterprise.save()
 
-    # Free plan - should NOT be included (bypass API by setting directly in DB)
+    # Free plan - should be denied
     team_free = Team.objects.create(name="Free Team", billing_plan="free")
     team_free.key = number_to_random_token(team_free.pk)
     team_free.custom_domain = "free.example.com"
     team_free.save()
 
-    # Community plan - should NOT be included (bypass API by setting directly in DB)
+    # Community plan - should be denied
     team_community = Team.objects.create(name="Community Team", billing_plan="community")
     team_community.key = number_to_random_token(team_community.pk)
     team_community.custom_domain = "community.example.com"
     team_community.save()
 
-    # No billing plan set - should NOT be included
-    team_no_plan = Team.objects.create(name="No Plan Team", billing_plan=None)
-    team_no_plan.key = number_to_random_token(team_no_plan.pk)
-    team_no_plan.custom_domain = "noplan.example.com"
-    team_no_plan.save()
-
-    # Call the internal endpoint
-    response = client.get("/api/v1/internal/domains")
+    # Test allowed domains
+    response = client.get("/api/v1/internal/domains?domain=business.example.com")
     assert response.status_code == 200
 
-    data = response.json()
-    domains = data["domains"]
+    response = client.get("/api/v1/internal/domains?domain=enterprise.example.com")
+    assert response.status_code == 200
 
-    # Should only include business and enterprise domains
-    assert len(domains) == 2
-    assert "business.example.com" in domains
-    assert "enterprise.example.com" in domains
+    # Test denied domains
+    response = client.get("/api/v1/internal/domains?domain=free.example.com")
+    assert response.status_code == 404
 
-    # Should NOT include free, community, or no-plan domains
-    assert "free.example.com" not in domains
-    assert "community.example.com" not in domains
-    assert "noplan.example.com" not in domains
+    response = client.get("/api/v1/internal/domains?domain=community.example.com")
+    assert response.status_code == 404

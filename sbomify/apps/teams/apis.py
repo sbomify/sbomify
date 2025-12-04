@@ -765,31 +765,38 @@ def get_team(request: HttpRequest, team_key: str):
 internal_router = Router(tags=["Internal"], auth=None)
 
 
-class DomainListSchema(BaseModel):
-    """Schema for listing all custom domains for TLS provisioning."""
-
-    domains: list[str]
-
-
-@internal_router.get("/domains", response={200: DomainListSchema})
-def list_all_domains(request: HttpRequest):
+@internal_router.get("/domains", response={200: None, 404: None})
+def check_domain_allowed(request: HttpRequest, domain: str):
     """
-    List all custom domains for TLS certificate provisioning.
+    Check if a domain is allowed for on-demand TLS certificate provisioning.
 
-    This endpoint is intended for internal use by Caddy or other reverse proxies
-    to fetch the list of domains that need TLS certificates. Only returns domains
-    from teams with Business or Enterprise plans, regardless of validation status.
+    This endpoint is used by Caddy's on-demand TLS feature. Caddy will call this
+    endpoint with ?domain=example.com before issuing a certificate.
+
+    Expected behavior (per Caddy docs):
+    - Return 200 OK if the domain is recognized and should get a certificate
+    - Return 404 (or any non-200) if the domain should NOT get a certificate
+
+    Only domains from teams with Business or Enterprise plans are allowed.
 
     Security: This endpoint MUST be blocked from external access at the proxy level.
     See Caddyfile configuration for access restrictions.
 
-    Returns:
-        DomainListSchema: List of custom domain names from Business/Enterprise teams.
-    """
-    domains = list(
-        Team.objects.filter(custom_domain__isnull=False, billing_plan__in=["business", "enterprise"])
-        .exclude(custom_domain="")
-        .values_list("custom_domain", flat=True)
-    )
+    Args:
+        domain: The domain name to check (provided as query parameter by Caddy)
 
-    return 200, {"domains": domains}
+    Returns:
+        200 OK if domain is allowed, 404 if not allowed
+    """
+    # Normalize domain (lowercase, strip whitespace)
+    domain_normalized = domain.strip().lower()
+
+    # Check if domain exists and belongs to Business/Enterprise team
+    is_allowed = Team.objects.filter(
+        custom_domain=domain_normalized, billing_plan__in=["business", "enterprise"]
+    ).exists()
+
+    if is_allowed:
+        return 200, None
+    else:
+        return 404, None
