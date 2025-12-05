@@ -18,8 +18,6 @@ class ComponentDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
 
-        current_team = request.session.get("current_team", {})
-
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
@@ -46,6 +44,7 @@ class ComponentDetailsPublicView(View):
 
         team = Team.objects.filter(pk=component.get("team_id")).first()
         brand = build_branding_context(team)
+        current_team = request.session.get("current_team") or {}
         team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")
 
         return render(

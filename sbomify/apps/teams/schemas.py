@@ -115,8 +115,6 @@ class BrandingInfo(BaseModel):
             return self.brand_logo_url
         if self.icon:
             return self.brand_icon_url
-        if self.logo:
-            return self.brand_logo_url
         return ""
 
 
