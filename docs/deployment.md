@@ -1,445 +1,296 @@
-# Deployment Process
+# Deployment
 
-This document outlines how to deploy sbomify using Docker Compose for production environments.
+Deploy sbomify using Docker Compose with cryptographic image verification.
 
-## Overview
+## Prerequisites
 
-The recommended deployment approach is to use Docker Compose with an external configuration file. This method provides:
+**Tools:**
 
-- **Simplicity**: Single command deployment
-- **Flexibility**: Environment-specific configuration via override files
-- **Scalability**: External services (Keycloak, S3) for production reliability
-- **Version Control**: Easy tag-based deployments
+- Docker & Docker Compose
+- cosign v2.0.0+ ([install guide](https://docs.sigstore.dev/cosign/installation/))
 
-## Quick Deployment
+**External Services:**
 
-To deploy sbomify in production:
+- **Keycloak** (required) - Authentication provider, must be configured before deploying
+- **S3 Storage** (required) - AWS S3, MinIO, or compatible service with 2 buckets
 
-1. **Download the compose file**:
+**Included Services:**
 
-   ```bash
-   curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/docker-compose.yml
-   ```
+- PostgreSQL 17 - Production-ready database
+- Redis 8 - Cache and message broker
 
-2. **Create your environment override file** (`override.env`):
+> Use external database/Redis only if you need HA or managed services.
 
-   ```env
-   # Application Configuration
-   SBOMIFY_TAG=v1.2.3
-   APP_BASE_URL=https://your-domain.com
-   SECRET_KEY=your-super-secret-key-here
-   SIGNED_URL_SALT=your-signed-url-salt-here
-
-   # Database Configuration
-   DATABASE_HOST=your-postgres-host
-   DATABASE_NAME=sbomify_prod
-   DATABASE_USER=sbomify_user
-   DATABASE_PASSWORD=secure-db-password
-
-   # Redis Configuration
-   REDIS_URL=redis://your-redis-host:6379/0
-
-   # External Keycloak Configuration
-   KEYCLOAK_SERVER_URL=https://your-keycloak.com/
-   KEYCLOAK_CLIENT_ID=sbomify
-   KEYCLOAK_CLIENT_SECRET=your-keycloak-client-secret
-   KEYCLOAK_REALM=sbomify
-   KC_HOSTNAME_URL=https://your-keycloak.com/
-
-   # External S3 Configuration
-   AWS_ENDPOINT_URL_S3=https://your-s3-endpoint.com
-   AWS_REGION=us-east-1
-   AWS_ACCESS_KEY_ID=your-access-key
-   AWS_SECRET_ACCESS_KEY=your-secret-key
-   AWS_MEDIA_ACCESS_KEY_ID=your-media-access-key
-   AWS_MEDIA_SECRET_ACCESS_KEY=your-media-secret-key
-   AWS_SBOMS_ACCESS_KEY_ID=your-sboms-access-key
-   AWS_SBOMS_SECRET_ACCESS_KEY=your-sboms-secret-key
-   AWS_MEDIA_STORAGE_BUCKET_NAME=sbomify-prod-media
-   AWS_MEDIA_STORAGE_BUCKET_URL=https://your-s3-endpoint.com/sbomify-prod-media
-   AWS_SBOMS_STORAGE_BUCKET_NAME=sbomify-prod-sboms
-   AWS_SBOMS_STORAGE_BUCKET_URL=https://your-s3-endpoint.com/sbomify-prod-sboms
-
-   # Optional: Custom ports
-   SBOMIFY_PORT=8000
-   POSTGRES_PORT=5432
-   REDIS_PORT=6379
-   ```
-
-3. **Deploy**:
-
-   ```bash
-   docker compose --env-file ./override.env up -d
-   ```
-
-That's it! sbomify will be running with your specified configuration.
-
-> **⚠️ Important**: For production deployments, you should place a load balancer (such as nginx) in front of sbomify to handle HTTP/HTTPS traffic, SSL termination, and provide additional security features. The sbomify application runs on port 8000 by default and should not be directly exposed to the internet.
-
-## Environment Configuration
-
-### Available Environment Variables
-
-The Docker Compose configuration supports extensive customization through environment variables:
-
-#### Application Settings
-
-- `SBOMIFY_IMAGE` - Container registry and image name (default: `sbomifyhub/sbomify`)
-- `SBOMIFY_TAG` - Image tag/version (default: `latest`)
-- `SBOMIFY_PULL_POLICY` - Pull policy (default: `always`)
-- `SBOMIFY_RESTART_POLICY` - Restart policy (default: `always`)
-- `SBOMIFY_PORT` - External port mapping (default: `8000`)
-- `APP_BASE_URL` - Application base URL
-- `SECRET_KEY` - Django secret key
-- `SIGNED_URL_SALT` - Salt for signed URLs
-- `BILLING` - Enable billing features (default: `False`)
-
-#### Database Settings
-
-- `POSTGRES_IMAGE` - PostgreSQL image (default: `postgres:17-alpine`)
-- `POSTGRES_RESTART_POLICY` - PostgreSQL restart policy (default: `always`)
-- `POSTGRES_PORT` - External PostgreSQL port (default: `5432`)
-- `DATABASE_HOST` - Database host (default: `localhost`)
-- `DATABASE_NAME` - Database name (default: `sbomify`)
-- `DATABASE_USER` - Database user (default: `sbomify`)
-- `DATABASE_PASSWORD` - Database password (default: `sbomify`)
-- `DATABASE_PORT` - Database port (default: `5432`)
-- `DOCKER_DATABASE_HOST` - Internal database host (default: `sbomify-db`)
-
-#### Redis Settings
-
-- `REDIS_IMAGE` - Redis image (default: `redis:8-alpine`)
-- `REDIS_RESTART_POLICY` - Redis restart policy (default: `always`)
-- `REDIS_PORT` - External Redis port (default: `6379`)
-- `REDIS_URL` - Redis connection URL
-
-#### Authentication (Keycloak)
-
-- `KEYCLOAK_SERVER_URL` - Keycloak server URL
-- `KEYCLOAK_CLIENT_ID` - OAuth client ID (default: `sbomify`)
-- `KEYCLOAK_CLIENT_SECRET` - OAuth client secret
-- `KEYCLOAK_REALM` - Keycloak realm (default: `sbomify`)
-- `KC_HOSTNAME_URL` - Keycloak hostname URL
-
-#### Storage (S3-Compatible)
-
-- `AWS_ENDPOINT_URL_S3` - S3 endpoint URL
-- `AWS_REGION` - AWS region (default: `auto`)
-- `AWS_ACCESS_KEY_ID` - Primary access key
-- `AWS_SECRET_ACCESS_KEY` - Primary secret key
-- `AWS_MEDIA_ACCESS_KEY_ID` - Media storage access key
-- `AWS_MEDIA_SECRET_ACCESS_KEY` - Media storage secret key
-- `AWS_SBOMS_ACCESS_KEY_ID` - SBOM storage access key
-- `AWS_SBOMS_SECRET_ACCESS_KEY` - SBOM storage secret key
-- `AWS_MEDIA_STORAGE_BUCKET_NAME` - Media files bucket
-- `AWS_MEDIA_STORAGE_BUCKET_URL` - Media files bucket URL
-- `AWS_SBOMS_STORAGE_BUCKET_NAME` - SBOM files bucket
-- `AWS_SBOMS_STORAGE_BUCKET_URL` - SBOM files bucket URL
-
-## Deployment Scenarios
-
-### Production Deployment
+## Quick Start
 
 ```bash
-# Create production environment file
-cat > production.env << EOF
-SBOMIFY_TAG=v1.2.3
-APP_BASE_URL=https://sbomify.example.com
-SECRET_KEY=$(openssl rand -base64 32)
-DATABASE_HOST=prod-db.example.com
-KEYCLOAK_SERVER_URL=https://auth.example.com/
+# 1. Download files
+curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/docker-compose.yml
+curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/bin/deploy.sh
+curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/Caddyfile
+chmod +x deploy.sh
+
+# 2. Configure
+cat > override.env << 'EOF'
+SBOMIFY_TAG=latest
+APP_BASE_URL=https://your-domain.com
+
+# Generate secrets (run these commands and paste the output below):
+# openssl rand -base64 32
+# openssl rand -base64 32
+SECRET_KEY=PASTE_GENERATED_SECRET_HERE
+SIGNED_URL_SALT=PASTE_GENERATED_SALT_HERE
+
+# Keycloak (setup externally first)
+KEYCLOAK_SERVER_URL=https://keycloak.example.com/
+KEYCLOAK_CLIENT_ID=sbomify
+KEYCLOAK_CLIENT_SECRET=your-secret
+KEYCLOAK_REALM=sbomify
+KC_HOSTNAME_URL=https://keycloak.example.com/
+
+# S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=key
+AWS_SECRET_ACCESS_KEY=secret
+AWS_MEDIA_ACCESS_KEY_ID=media-key
+AWS_MEDIA_SECRET_ACCESS_KEY=media-secret
+AWS_SBOMS_ACCESS_KEY_ID=sboms-key
+AWS_SBOMS_SECRET_ACCESS_KEY=sboms-secret
+AWS_MEDIA_STORAGE_BUCKET_NAME=sbomify-media
+AWS_MEDIA_STORAGE_BUCKET_URL=https://s3.example.com/sbomify-media
+AWS_SBOMS_STORAGE_BUCKET_NAME=sbomify-sboms
+AWS_SBOMS_STORAGE_BUCKET_URL=https://s3.example.com/sbomify-sboms
 EOF
 
-# Deploy
-docker compose --env-file ./production.env up -d
+# 3. Deploy
+./deploy.sh
+
+# 4. Verify
+docker compose ps
 ```
 
-### Staging Deployment
+The deploy script:
 
-```bash
-# Create staging environment file
-cat > staging.env << EOF
-SBOMIFY_TAG=staging
-APP_BASE_URL=https://staging.sbomify.example.com
-DATABASE_HOST=staging-db.example.com
-KEYCLOAK_SERVER_URL=https://staging-auth.example.com/
-EOF
+1. Pulls and verifies the image signature
+2. Deploys all services
+3. Cleans up unused resources
 
-# Deploy
-docker compose --env-file ./staging.env up -d
+> **Production:** Use a reverse proxy (nginx/Caddy) for SSL termination. App runs on port 8000.
+
+## Reverse Proxy (Caddy)
+
+The included `Caddyfile` provides automatic HTTPS with Let's Encrypt:
+
+**Features:**
+
+- Automatic TLS certificate provisioning and renewal
+- HTTP/2 and HTTP/3 support
+- Security headers (HSTS, XSS protection, etc.)
+- Health checks and failover
+- Cloudflare proxy support
+- On-demand TLS for custom domains
+
+**Configuration:**
+
+Add to your `override.env`:
+
+```env
+# Caddy Configuration
+APP_DOMAIN=sbomify.example.com
+ACME_EMAIL=admin@example.com
+ACME_CA=https://acme-v02.api.letsencrypt.org/directory  # Production
+# ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory  # Staging/testing
+LOG_LEVEL=INFO
 ```
 
-### Development with External Services
+The Caddyfile will:
 
-```bash
-# For development with external Keycloak/S3 but local database
-cat > dev-external.env << EOF
-SBOMIFY_TAG=dev
-APP_BASE_URL=http://localhost:8000
-DATABASE_HOST=localhost
-KEYCLOAK_SERVER_URL=https://dev-auth.example.com/
-AWS_ENDPOINT_URL_S3=https://dev-s3.example.com
-EOF
+- Serve your app on port 80/443
+- Automatically obtain and renew SSL certificates
+- Redirect HTTP to HTTPS
+- Proxy requests to the Django backend
+- Block external access to internal API endpoints
 
-# Deploy (will use local PostgreSQL and Redis from compose)
-docker compose --env-file ./dev-external.env up -d
+> **Note:** Ensure ports 80 and 443 are open in your firewall for ACME challenges.
+
+## Environment Variables
+
+### Required
+
+```env
+# Application
+APP_BASE_URL=https://your-domain.com
+# Generate with: openssl rand -base64 32
+SECRET_KEY=your-generated-secret-key
+# Generate with: openssl rand -base64 32
+SIGNED_URL_SALT=your-generated-salt
+
+# Keycloak
+KEYCLOAK_SERVER_URL=https://keycloak.example.com/
+KEYCLOAK_CLIENT_ID=sbomify
+KEYCLOAK_CLIENT_SECRET=secret
+KEYCLOAK_REALM=sbomify
+KC_HOSTNAME_URL=https://keycloak.example.com/
+
+# S3
+AWS_ENDPOINT_URL_S3=https://s3.example.com
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=key
+AWS_SECRET_ACCESS_KEY=secret
+AWS_MEDIA_ACCESS_KEY_ID=key
+AWS_MEDIA_SECRET_ACCESS_KEY=secret
+AWS_SBOMS_ACCESS_KEY_ID=key
+AWS_SBOMS_SECRET_ACCESS_KEY=secret
+AWS_MEDIA_STORAGE_BUCKET_NAME=bucket
+AWS_MEDIA_STORAGE_BUCKET_URL=https://s3.example.com/bucket
+AWS_SBOMS_STORAGE_BUCKET_NAME=bucket
+AWS_SBOMS_STORAGE_BUCKET_URL=https://s3.example.com/bucket
 ```
 
-## Management Commands
+### Optional
 
-### Updating to a New Version
+```env
+# Version
+SBOMIFY_TAG=latest  # or v1.2.3
 
-```bash
-# Update to specific version
-echo "SBOMIFY_TAG=v1.3.0" >> override.env
-docker compose --env-file ./override.env pull
-docker compose --env-file ./override.env up -d
+# External database (default: uses included PostgreSQL)
+DATABASE_HOST=postgres.example.com
+DATABASE_NAME=sbomify
+DATABASE_USER=sbomify
+DATABASE_PASSWORD=password
+
+# External Redis (default: uses included Redis)
+REDIS_HOST=redis.example.com:6379
+
+# Features
+BILLING=False
 ```
 
-### Scaling Services
+## Common Tasks
+
+### Update Version
 
 ```bash
-# Scale backend instances
-docker compose --env-file ./override.env up -d --scale sbomify-backend=3
-
-# Scale worker instances
-docker compose --env-file ./override.env up -d --scale sbomify-worker=2
+DOCKER_TAG=v1.3.0 ./deploy.sh
 ```
 
-### Viewing Logs
+### Rollback
 
 ```bash
-# All services
+DOCKER_TAG=v1.2.0 ./deploy.sh
+```
+
+### View Logs
+
+```bash
 docker compose logs -f
-
-# Specific service
 docker compose logs -f sbomify-backend
+```
 
-# Recent logs
-docker compose logs --tail=100 -f
+### Scale Services
+
+```bash
+docker compose up -d --scale sbomify-backend=3 --scale sbomify-worker=2
 ```
 
 ### Database Operations
 
 ```bash
-# Run migrations
 docker compose exec sbomify-backend python manage.py migrate
-
-# Create superuser
 docker compose exec sbomify-backend python manage.py createsuperuser
+```
 
-# Database shell
-docker compose exec sbomify-backend python manage.py dbshell
+### Backup Database
+
+```bash
+docker compose exec sbomify-db pg_dump -U sbomify sbomify > backup.sql
 ```
 
 ## Troubleshooting
 
-### Common Issues
-
-#### Container Won't Start
+### Signature Verification Fails
 
 ```bash
-# Check container logs
+# Check cosign version (need v2.0.0+)
+cosign version
+
+# Test network access
+curl -I https://rekor.sigstore.dev
+```
+
+Common causes: outdated cosign, network issues, unsigned image (only master/tags are signed).
+
+### Container Won't Start
+
+```bash
 docker compose logs sbomify-backend
-
-# Check if environment variables are loaded correctly
-docker compose config
-
-# Verify image exists and is accessible
-docker compose pull
+docker compose config  # Check env vars
 ```
 
-#### Database Connection Issues
+### Keycloak Issues
 
 ```bash
-# Test database connectivity
-docker compose exec sbomify-backend python manage.py dbshell
-
-# Check database host resolution
-docker compose exec sbomify-backend nslookup $DATABASE_HOST
-
-# Verify database credentials
-docker compose exec sbomify-backend env | grep DATABASE
-```
-
-#### Authentication Problems
-
-```bash
-# Verify Keycloak configuration
 docker compose exec sbomify-backend env | grep KEYCLOAK
-
-# Test Keycloak connectivity
 docker compose exec sbomify-backend curl -f $KEYCLOAK_SERVER_URL/realms/$KEYCLOAK_REALM
 ```
 
-#### Storage Issues
+### S3 Issues
 
 ```bash
-# Check S3 configuration
 docker compose exec sbomify-backend env | grep AWS
-
-# Test S3 connectivity
-docker compose exec sbomify-backend python manage.py shell -c "
-from django.core.files.storage import default_storage
-print(default_storage.bucket_name)
-"
 ```
 
-### Performance Tuning
+## Keycloak Setup
 
-#### Resource Limits
+Configure before deploying sbomify:
 
-Add resource limits to your override file:
-
-```env
-# Limit memory usage
-COMPOSE_MEMORY_LIMIT=1g
-
-# Set CPU limits
-COMPOSE_CPU_LIMIT=1.0
-```
-
-#### Database Optimization
-
-```bash
-# Monitor database connections
-docker compose exec sbomify-backend python manage.py shell -c "
-from django.db import connection
-print(f'Database connections: {len(connection.queries)}')
-"
-```
-
-## Rollback Procedure
-
-### Quick Rollback
-
-```bash
-# Rollback to previous version
-SBOMIFY_TAG=v1.2.2 docker compose --env-file ./override.env up -d
-```
-
-### Full Rollback with Database
-
-```bash
-# Stop services
-docker compose down
-
-# Restore database backup (if needed)
-# ... your database restore process ...
-
-# Start with previous version
-SBOMIFY_TAG=v1.2.2 docker compose --env-file ./override.env up -d
-```
-
-## Monitoring and Maintenance
-
-### Health Checks
-
-```bash
-# Check service health
-docker compose ps
-
-# Application health endpoint
-curl http://localhost:8000/health/
-
-# Database health
-docker compose exec sbomify-backend python manage.py check --database
-```
-
-### Backups
-
-```bash
-# Database backup
-docker compose exec sbomify-db pg_dump -U $DATABASE_USER $DATABASE_NAME > backup_$(date +%Y%m%d).sql
-
-# Volume backup
-docker run --rm -v sbomify_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup_$(date +%Y%m%d).tar.gz /data
-```
-
-### Log Management
-
-```bash
-# Rotate logs
-docker compose logs --no-log-prefix > app_logs_$(date +%Y%m%d).log
-docker system prune -f
-
-# Monitor disk usage
-docker system df
-```
-
-## External Service Requirements
-
-When deploying sbomify with external services, ensure the following are properly configured:
-
-### External Keycloak Setup
-
-Your external Keycloak instance should have:
-
-1. **Realm Configuration**:
-   - Realm name: `sbomify` (or set via `KEYCLOAK_REALM`)
-   - Realm enabled and configured
-
-2. **Client Configuration**:
-   - Client ID: `sbomify` (or set via `KEYCLOAK_CLIENT_ID`)
+1. **Create Realm**: Name `sbomify`
+2. **Create Client**:
+   - Client ID: `sbomify`
    - Client type: OpenID Connect
    - Client authentication: Enabled
-   - Standard flow: Enabled
-   - Direct access grants: Enabled
    - Valid redirect URIs: `https://your-domain.com/*`
    - Valid web origins: `https://your-domain.com`
+3. **Get Client Secret**: From admin console → Clients → sbomify → Credentials
 
-3. **Client Secret**:
-   - Copy from Keycloak admin console → Clients → sbomify → Credentials tab
-   - Set as `KEYCLOAK_CLIENT_SECRET` in your override.env
+## S3 Storage Setup
 
-### External S3-Compatible Storage
+Create two buckets before deploying:
 
-Your S3-compatible storage should have:
+1. **Media bucket** (`sbomify-media`): Public read access
+2. **SBOM bucket** (`sbomify-sboms`): Private access
 
-1. **Buckets Created**:
-   - Media bucket: `sbomify-[env]-media` (public read access)
-   - SBOM bucket: `sbomify-[env]-sboms` (private access)
+Example bucket policy for media:
 
-2. **Access Credentials**:
-   - Media storage: `AWS_MEDIA_ACCESS_KEY_ID` and `AWS_MEDIA_SECRET_ACCESS_KEY`
-   - SBOM storage: `AWS_SBOMS_ACCESS_KEY_ID` and `AWS_SBOMS_SECRET_ACCESS_KEY`
-   - General access: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::sbomify-media/*"
+  }]
+}
+```
 
-3. **Bucket Policies**:
+## Manual Deployment
 
-   ```json
-   // Media bucket policy (public read)
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Principal": "*",
-         "Action": "s3:GetObject",
-         "Resource": "arn:aws:s3:::sbomify-prod-media/*"
-       }
-     ]
-   }
-   ```
+If you prefer not to use the deploy script:
 
-### External Database
+```bash
+docker pull sbomifyhub/sbomify:latest
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' sbomifyhub/sbomify:latest | cut -d'@' -f2)
 
-Your PostgreSQL database should:
+# Verify (optional)
+cosign verify-attestation \
+  --type https://slsa.dev/provenance/v1 \
+  --certificate-identity-regexp "^https://github.com/sbomify/sbomify/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  "sbomifyhub/sbomify@${DIGEST}"
 
-1. **Be accessible** from your deployment environment
-2. **Have the database created**: `CREATE DATABASE sbomify_prod;`
-3. **Have a dedicated user** with appropriate permissions:
-
-   ```sql
-   CREATE USER sbomify_user WITH PASSWORD 'secure-password';
-   GRANT ALL PRIVILEGES ON DATABASE sbomify_prod TO sbomify_user;
-   ```
-
-### External Redis
-
-Your Redis instance should:
-
-1. **Be accessible** from your deployment environment
-2. **Have appropriate memory** for session storage and caching
-3. **Be configured** with proper persistence if needed
+# Deploy
+docker compose --env-file ./override.env up -d --force-recreate --remove-orphans
+docker system prune -f
+```
