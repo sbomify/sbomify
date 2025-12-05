@@ -163,7 +163,10 @@
 	}
 
 	# Production: redirect HTTP to HTTPS (only if not already HTTPS)
-	handle {
+	@http {
+		protocol http
+	}
+	handle @http {
 		redir https://{host}{uri} permanent
 	}
 }
