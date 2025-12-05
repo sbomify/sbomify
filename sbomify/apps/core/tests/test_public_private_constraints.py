@@ -256,10 +256,10 @@ def test_community_plan_put_update_product_requires_explicit_public_flag(
 
 
 @pytest.mark.django_db
-def test_community_plan_put_update_project_without_is_public_allows(
+def test_community_plan_put_update_project_allows_public(
     sample_team_with_owner_member, sample_user  # noqa: F811
 ):
-    """Community plan can update projects without sending is_public."""
+    """Community plan can update projects (is_public=True required)."""
     client = Client()
     team = sample_team_with_owner_member.team
     team.billing_plan = "community"
@@ -273,7 +273,7 @@ def test_community_plan_put_update_project_without_is_public_allows(
     url = reverse("api-1:update_project", kwargs={"project_id": project.id})
     response = client.put(
         url,
-        json.dumps({"name": "Updated Project", "metadata": {"a": 1}}),
+        json.dumps({"name": "Updated Project", "metadata": {"a": 1}, "is_public": True}),
         content_type="application/json",
     )
 
@@ -282,10 +282,10 @@ def test_community_plan_put_update_project_without_is_public_allows(
 
 
 @pytest.mark.django_db
-def test_community_plan_put_update_component_without_is_public_allows(
+def test_community_plan_put_update_component_allows_public(
     sample_team_with_owner_member, sample_user  # noqa: F811
 ):
-    """Community plan can update components without sending is_public."""
+    """Community plan can update components (is_public=True required)."""
     client = Client()
     team = sample_team_with_owner_member.team
     team.billing_plan = "community"
@@ -305,6 +305,7 @@ def test_community_plan_put_update_component_without_is_public_allows(
                 "component_type": component.component_type,
                 "metadata": {},
                 "is_global": False,
+                "is_public": True,
             }
         ),
         content_type="application/json",
