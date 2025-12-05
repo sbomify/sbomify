@@ -87,6 +87,8 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}  # Use 1 replica by default in dev
     # ports are inherited from docker-compose.yml
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
@@ -117,6 +119,8 @@ services:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
         <<: *dev-env
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}  # Use 1 replica by default in dev
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:

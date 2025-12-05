@@ -66,6 +66,8 @@ services:
         BUILD_ENV: ${BUILD_ENV:-production}
     pull_policy: ${SBOMIFY_PULL_POLICY:-always}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
@@ -127,6 +129,8 @@ services:
       args:
         BUILD_ENV: ${BUILD_ENV:-production}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
@@ -137,7 +141,7 @@ services:
         "manage.py",
         "rundramatiq",
         "-p",
-        "${DRAMATIQ_PROCESSES:-2}",
+        "${DRAMATIQ_PROCESSES:-1}",
         "-t",
         "${DRAMATIQ_THREADS:-4}"
       ]
