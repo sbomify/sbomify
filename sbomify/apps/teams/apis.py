@@ -94,11 +94,8 @@ def _private_workspace_allowed(team: Team) -> bool:
 
 
 def _normalize_branding_payload(branding: dict | None) -> dict:
-    data = (branding or {}).copy()
-    # Default to branding being disabled unless explicitly enabled.
-    if data.get("branding_enabled") is None:
-        data["branding_enabled"] = False
-    return data
+    # Lightweight copy; rely on schema defaults for missing fields.
+    return (branding or {}).copy()
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
@@ -302,7 +299,7 @@ def upload_branding_file(
 
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
-    update_data = current_branding.dict()
+    update_data = current_branding.model_dump()
     s3_client = S3Client("MEDIA")
 
     # Generate new filename first

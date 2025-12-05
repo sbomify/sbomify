@@ -37,7 +37,7 @@ def build_branding_context(team: "Team | None") -> dict:
     accent_color = branding_info.accent_color or "#7c8b9d"
     brand_logo_url = branding_info.brand_logo_url
     brand_icon_url = branding_info.brand_icon_url
-    brand_image = brand_logo_url or branding_info.brand_image or default_image
+    brand_image = branding_info.brand_image or default_image
 
     return {
         **branding_info.model_dump(),
