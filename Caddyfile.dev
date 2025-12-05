@@ -7,6 +7,7 @@
 
 # Snippet: Common proxy configuration
 (proxy_common) {
+	# Caddy readiness check for Docker
 	@health {
 		path /health
 	}

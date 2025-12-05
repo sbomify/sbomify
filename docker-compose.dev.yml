@@ -92,6 +92,8 @@ services:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
       <<: *dev-env
+    deploy:
+      replicas: 1
     depends_on:
       sbomify-db:
         condition: service_healthy
@@ -121,6 +123,8 @@ services:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
       <<: *dev-env
+    deploy:
+      replicas: 1
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
