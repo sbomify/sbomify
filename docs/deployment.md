@@ -34,8 +34,12 @@ chmod +x deploy.sh
 cat > override.env << 'EOF'
 SBOMIFY_TAG=latest
 APP_BASE_URL=https://your-domain.com
-SECRET_KEY=$(openssl rand -base64 32)
-SIGNED_URL_SALT=$(openssl rand -base64 32)
+
+# Generate secrets (run these commands and paste the output below):
+# openssl rand -base64 32
+# openssl rand -base64 32
+SECRET_KEY=PASTE_GENERATED_SECRET_HERE
+SIGNED_URL_SALT=PASTE_GENERATED_SALT_HERE
 
 # Keycloak (setup externally first)
 KEYCLOAK_SERVER_URL=https://keycloak.example.com/
@@ -117,8 +121,10 @@ The Caddyfile will:
 ```env
 # Application
 APP_BASE_URL=https://your-domain.com
-SECRET_KEY=$(openssl rand -base64 32)
-SIGNED_URL_SALT=$(openssl rand -base64 32)
+# Generate with: openssl rand -base64 32
+SECRET_KEY=your-generated-secret-key
+# Generate with: openssl rand -base64 32
+SIGNED_URL_SALT=your-generated-salt
 
 # Keycloak
 KEYCLOAK_SERVER_URL=https://keycloak.example.com/
