@@ -331,19 +331,22 @@ onMounted(() => {
         subtitleTemplate.remove()
       }
 
+      // Use explicit breadcrumb slot when provided; otherwise move the server-rendered breadcrumb.
+      const breadcrumbTemplate = document.querySelector('template[data-slot="breadcrumb"]') as HTMLTemplateElement
+      const breadcrumbSlot = document.querySelector('#breadcrumb-slot')
+      if (breadcrumbTemplate && breadcrumbSlot) {
+        const fragment = breadcrumbTemplate.content.cloneNode(true)
+        breadcrumbSlot.appendChild(fragment)
+        breadcrumbTemplate.remove()
+        return
+      }
+
       // Find breadcrumbs rendered by Django and move them to the correct location
       const breadcrumbElement = document.querySelector('.public-breadcrumb')
-      const breadcrumbSlot = document.querySelector('#breadcrumb-slot')
 
       if (breadcrumbElement && breadcrumbSlot) {
         // Move the breadcrumb from its current location to the slot within Vue component
         breadcrumbSlot.appendChild(breadcrumbElement)
-        console.log('Breadcrumb moved successfully')
-      } else {
-        console.log('Breadcrumb elements not found:', {
-          breadcrumbElement: !!breadcrumbElement,
-          breadcrumbSlot: !!breadcrumbSlot
-        })
       }
     } catch (error) {
       console.error('Error processing templates:', error)
@@ -407,7 +410,8 @@ const handleAction = (action: QuickAction) => {
 
 <style scoped>
 .public-page-layout {
-  min-height: 100vh;
+  /* Avoid stacking nested 100vh containers inside public_base layout */
+  min-height: auto;
   display: flex;
   flex-direction: column;
   --brand-color: #4f46e5;

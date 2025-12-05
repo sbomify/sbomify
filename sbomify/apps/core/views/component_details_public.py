@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
@@ -44,11 +45,19 @@ class ComponentDetailsPublicView(View):
 
         team = Team.objects.filter(pk=component.get("team_id")).first()
         brand = build_branding_context(team)
+        workspace_public_url = ""
+        if team and team.key:
+            workspace_public_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
         current_team = request.session.get("current_team") or {}
         team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")
 
         return render(
             request,
             "core/component_details_public.html.j2",
-            {**context, "brand": brand, "team_billing_plan": team_billing_plan},
+            {
+                **context,
+                "brand": brand,
+                "team_billing_plan": team_billing_plan,
+                "workspace_public_url": workspace_public_url,
+            },
         )
