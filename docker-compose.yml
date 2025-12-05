@@ -78,6 +78,8 @@ services:
     # No ports exposed - all traffic goes through Caddy
     expose:
       - 8000
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
     depends_on:
       sbomify-db:
         condition: service_healthy
@@ -141,6 +143,8 @@ services:
         "-t",
         "${DRAMATIQ_THREADS:-4}"
       ]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
     depends_on:
       sbomify-redis:
         condition: service_healthy
