@@ -318,6 +318,8 @@ onMounted(() => {
   // Use a more robust approach to ensure DOM is ready
   const processTemplates = () => {
     try {
+      const breadcrumbSlot = document.querySelector('#breadcrumb-slot')
+
       // Find and process subtitle content
       const subtitleTemplate = document.querySelector('template[data-slot="subtitle"]') as HTMLTemplateElement
       if (subtitleTemplate) {
@@ -333,7 +335,6 @@ onMounted(() => {
 
       // Use explicit breadcrumb slot when provided; otherwise move the server-rendered breadcrumb.
       const breadcrumbTemplate = document.querySelector('template[data-slot="breadcrumb"]') as HTMLTemplateElement
-      const breadcrumbSlot = document.querySelector('#breadcrumb-slot')
       if (breadcrumbTemplate && breadcrumbSlot) {
         const fragment = breadcrumbTemplate.content.cloneNode(true)
         breadcrumbSlot.appendChild(fragment)
