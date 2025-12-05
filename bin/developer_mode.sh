@@ -21,6 +21,10 @@ start() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" up --force-recreate "$@"
 }
 
+stop() {
+    $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" stop "$@"
+}
+
 end() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" down "$@"
 }
@@ -44,6 +48,10 @@ case "${1:-}" in
         shift
         start "$@"
         ;;
+    stop)
+        shift
+        stop "$@"
+        ;;
     end)
         shift
         end "$@"
@@ -61,7 +69,7 @@ case "${1:-}" in
         clean "$@"
         ;;
     *)
-        echo "Usage: $0 {start|restart|build|clean} [args...]"
+        echo "Usage: $0 {start|stop|end|restart|build|clean} [args...]"
         exit 1
         ;;
 esac
