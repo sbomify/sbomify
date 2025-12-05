@@ -24,6 +24,16 @@ docker-compose up
 
 This command will handle starting all required services for development.
 
+### Environment Variables
+
+When using `docker-compose.dev.yml`, the following development-specific environment variables are automatically configured:
+
+- `LOCAL_DEV=True`: Enables local development mode, which allows Django to accept requests from any hostname (wildcards in `ALLOWED_HOSTS`). This is separate from `DEBUG` for security reasons - `LOCAL_DEV` should only be enabled on your local development machine, never in staging or production, even if `DEBUG` is temporarily enabled for troubleshooting.
+- `DEBUG=True`: Enables Django debug mode
+- `USE_VITE_DEV_SERVER=True`: Enables hot module reloading for frontend development
+
+These variables are set in the `x-dev-env` anchor in `docker-compose.dev.yml` and are automatically applied to relevant services.
+
 ## Stack Overview
 
 ### Backend

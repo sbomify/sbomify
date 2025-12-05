@@ -61,11 +61,21 @@ if DEBUG:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "sbomify-backend"]
+# Local development mode (separate from DEBUG for security)
+# Only use wildcard ALLOWED_HOSTS when explicitly in local dev environment
+LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
-# Append 'APP_HOSTNAME' value if defined
-if os.environ.get("APP_BASE_URL", False):
-    ALLOWED_HOSTS.append(urlparse(os.environ.get("APP_BASE_URL")).netloc)
+if LOCAL_DEV:
+    # In local development, allow any hostname for flexibility (local IPs, custom /etc/hosts, etc.)
+    ALLOWED_HOSTS = ["*"]
+else:
+    # Production/deployed environments - only allow explicitly configured hostnames
+    # Docker internal hostname for container-to-container communication
+    ALLOWED_HOSTS = ["sbomify-backend"]
+
+    # Append APP_BASE_URL hostname if defined (required for production)
+    if os.environ.get("APP_BASE_URL", False):
+        ALLOWED_HOSTS.append(urlparse(os.environ.get("APP_BASE_URL")).netloc)
 
 
 class DynamicAllowedHosts(list):

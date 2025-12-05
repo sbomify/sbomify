@@ -5,7 +5,7 @@ KC_URL="${KEYCLOAK_SERVER_URL}"
 REALM="${KEYCLOAK_REALM}"
 CLIENT_ID="${KEYCLOAK_CLIENT_ID}"
 ADMIN_USER="${KC_BOOTSTRAP_ADMIN_USERNAME}"
-ADMIN_PASS="${KC_BOOTSTRAP_ADMIN_USERNAME}"
+ADMIN_PASS="${KC_BOOTSTRAP_ADMIN_PASSWORD}"
 CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET}"
 
 # Wait for Keycloak REST API to be ready
@@ -29,20 +29,42 @@ fi
 
 # Create client if it doesn't exist
 if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID" | grep -q '"id"'; then
-  /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
-    -s "clientId=$CLIENT_ID" \
-    -s enabled=true \
-    -s protocol=openid-connect \
-    -s publicClient=false \
-    -s 'redirectUris=["http://localhost:8000/*","http://127.0.0.1:8000/*"]' \
-    -s 'webOrigins=["http://localhost:8000","http://127.0.0.1:8000"]' \
-    -s standardFlowEnabled=true \
-    -s directAccessGrantsEnabled=true \
-    -s serviceAccountsEnabled=true \
-    -s "secret=$CLIENT_SECRET"
+  # In dev mode, allow all redirect URIs and web origins for flexibility
+  if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+    /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
+      -s "clientId=$CLIENT_ID" \
+      -s enabled=true \
+      -s protocol=openid-connect \
+      -s publicClient=false \
+      -s 'redirectUris=["*"]' \
+      -s 'webOrigins=["*"]' \
+      -s standardFlowEnabled=true \
+      -s directAccessGrantsEnabled=true \
+      -s serviceAccountsEnabled=true \
+      -s "secret=$CLIENT_SECRET"
+  else
+    /opt/keycloak/bin/kcadm.sh create clients -r "$REALM" \
+      -s "clientId=$CLIENT_ID" \
+      -s enabled=true \
+      -s protocol=openid-connect \
+      -s publicClient=false \
+      -s 'redirectUris=["http://localhost:8000/*","http://127.0.0.1:8000/*"]' \
+      -s 'webOrigins=["http://localhost:8000","http://127.0.0.1:8000"]' \
+      -s standardFlowEnabled=true \
+      -s directAccessGrantsEnabled=true \
+      -s serviceAccountsEnabled=true \
+      -s "secret=$CLIENT_SECRET"
+  fi
 else
   CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q clientId="$CLIENT_ID" --fields id --format csv | tail -n1 | tr -d '"')
   /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" -s secret="$CLIENT_SECRET"
+
+  # In dev mode, also update redirect URIs to allow all
+  if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+    /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" \
+      -s 'redirectUris=["*"]' \
+      -s 'webOrigins=["*"]'
+  fi
 fi
 
 # Always enable user registration after all other steps
