@@ -185,6 +185,7 @@ static/css/bootstrap.min.css.map
 static/css/fontawesome.min.css
 static/webfonts/
 .DS_Store
+._*
 
 .ruff_cache
 .pytets_cache

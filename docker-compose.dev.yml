@@ -21,6 +21,7 @@ x-minio-env: &minio-env
 x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
+  LOCAL_DEV: ${LOCAL_DEV:-True}
   EMAIL_HOST: ${EMAIL_HOST:-mailhog}
   EMAIL_PORT: ${EMAIL_PORT:-1025}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-True}
@@ -80,6 +81,7 @@ services:
     entrypoint: /bin/sh /opt/bin/create-minio-buckets.sh
 
   sbomify-backend:
+    pull_policy: build  # Always build in development, never pull
     build:
       # context is inherited from docker-compose.yml
       target: ${BUILD_TARGET:-python-app-dev}
@@ -99,6 +101,7 @@ services:
         condition: service_started
 
   sbomify-migrations:
+    pull_policy: build  # Always build in development, never pull
     build:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
@@ -109,6 +112,7 @@ services:
       <<: *dev-env
 
   sbomify-worker:
+    pull_policy: build  # Always build in development, never pull
     build:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
@@ -120,6 +124,7 @@ services:
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
+    pull_policy: build  # Always build in development, never pull
     build:
       context: . # Must be defined as it's a new service
       target: ${FRONTEND_BUILD_TARGET:-frontend-dev-server}
@@ -147,6 +152,11 @@ services:
     ports:
       - "8025:8025"
     hostname: mailhog
+
+  # Use Caddyfile.dev for development
+  sbomify-caddy:
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
 
 volumes:
   keycloak_data:

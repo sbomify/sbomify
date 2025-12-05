@@ -18,7 +18,7 @@ restart() {
 }
 
 start() {
-    $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" up "$@"
+    $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" up --force-recreate "$@"
 }
 
 end() {

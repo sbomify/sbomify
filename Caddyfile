@@ -134,7 +134,7 @@
 	import proxy_common
 }
 
-# HTTP fallback (redirect to HTTPS in production, or serve directly in dev)
+# HTTP fallback (redirect to HTTPS in production)
 :80 {
 	log {
 		output stdout
@@ -142,19 +142,9 @@
 		level {$LOG_LEVEL:INFO}
 	}
 
-	# Development mode: serve localhost directly without redirect
-	@localhost {
-		host localhost 127.0.0.1 sbomify-backend
-	}
-
 	# Behind HTTPS proxy (Cloudflare, etc.): serve without redirect
 	@already_https {
 		header X-Forwarded-Proto https
-	}
-
-	# Serve localhost directly
-	handle @localhost {
-		import proxy_common
 	}
 
 	# Serve behind HTTPS proxy directly

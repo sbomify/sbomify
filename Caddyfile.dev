@@ -1,0 +1,77 @@
+# Caddyfile for sbomify (Development)
+{
+	admin off
+	# Local certificates for development
+	local_certs
+}
+
+# Snippet: Common proxy configuration
+(proxy_common) {
+	@health {
+		path /health
+	}
+	handle @health {
+		log_skip
+		respond "OK" 200
+	}
+
+	@django_health {
+		path /UuPha8mu/*
+	}
+	handle @django_health {
+		log_skip
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
+	}
+
+	# Internal API endpoints - block external access
+	@internal_api {
+		path /api/v1/internal/*
+	}
+	handle @internal_api {
+		@allowed_internal {
+			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+		}
+		handle @allowed_internal {
+			reverse_proxy sbomify-backend:8000 {
+				header_up X-Real-IP {remote_host}
+				header_up Host {host}
+				header_down -Server
+			}
+		}
+		respond "Forbidden" 403
+	}
+
+	# Main reverse proxy to Django backend
+	reverse_proxy sbomify-backend:8000 {
+		# Headers
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+		header_down -Server
+
+		# Timeouts
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 30s
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+
+	# Compression
+	encode gzip zstd
+}
+
+# Development: serve on port 80 (catches any hostname)
+http://:80 {
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+
+	import proxy_common
+}
