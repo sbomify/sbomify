@@ -21,7 +21,7 @@ from django.shortcuts import redirect, render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.teams.branding import build_branding_context
 
 # from .decorators import validate_role_in_current_team
 from .models import SBOM
@@ -41,14 +41,14 @@ def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
     if not sbom.public_access_allowed:
         return error_response(request, HttpResponseNotFound("SBOM not found"))
 
-    branding_info = BrandingInfo(**sbom.component.team.branding_info)
+    brand = build_branding_context(sbom.component.team)
 
     return render(
         request,
         "sboms/sbom_details_public.html.j2",
         {
             "sbom": sbom,
-            "brand": branding_info,
+            "brand": brand,
             "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
         },
     )
