@@ -1,6 +1,7 @@
 import html
 
 import pytest
+from django.conf import settings
 from django.test import Client
 from django.urls import reverse
 
@@ -51,3 +52,28 @@ def test_workspace_public_page_uses_display_name_for_title():
     content = html.unescape(response.content.decode())
     assert "Aurangzaib's Trust Center" in content
     assert "Workspace Trust Center" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_prefers_logo_when_available():
+    client = Client()
+    team = Team.objects.create(
+        name="Public Workspace",
+        is_public=True,
+        branding_info={
+            "icon": "workspace-icon.png",
+            "logo": "workspace-logo.png",
+            "brand_color": "",
+            "accent_color": "",
+        },
+    )
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    expected_logo_url = (
+        f"{settings.AWS_MEDIA_STORAGE_BUCKET_URL}/workspace-logo.png"
+    )
+    assert expected_logo_url in content
+    assert "img/sbomify.svg" not in content

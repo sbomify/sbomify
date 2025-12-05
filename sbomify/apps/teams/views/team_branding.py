@@ -9,6 +9,7 @@ from sbomify.apps.teams.apis import (
     get_team_branding,
     update_team_branding,
 )
+from sbomify.apps.teams.forms import TeamBrandingForm
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
@@ -43,13 +44,16 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
-        # TODO: TeamBrandingForm
+        form = TeamBrandingForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return htmx_error_response(form.errors.as_text())
+
         payload = UpdateTeamBrandingSchema(
-            brand_color=request.POST.get("brand_color", None),
-            accent_color=request.POST.get("accent_color", None),
-            prefer_logo_over_icon=request.POST.get("prefer_logo_over_icon", False),
-            icon_pending_deletion=request.POST.get("icon_pending_deletion") == "true",
-            logo_pending_deletion=request.POST.get("logo_pending_deletion") == "true",
+            brand_color=form.cleaned_data.get("brand_color"),
+            accent_color=form.cleaned_data.get("accent_color"),
+            branding_enabled=form.cleaned_data.get("branding_enabled"),
+            icon_pending_deletion=form.cleaned_data.get("icon_pending_deletion", False),
+            logo_pending_deletion=form.cleaned_data.get("logo_pending_deletion", False),
         )
         status_code, result = update_team_branding(request, team_key, payload)
         if status_code != 200:

@@ -8,7 +8,7 @@ from django.shortcuts import render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.teams.branding import build_branding_context
 
 from .models import Document
 
@@ -41,12 +41,12 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
     if not document.public_access_allowed:
         return error_response(request, HttpResponseForbidden("Document is not public"))
 
-    branding_info = BrandingInfo(**document.component.team.branding_info)
+    brand = build_branding_context(document.component.team)
 
     return render(
         request,
         "documents/document_details_public.html.j2",
-        {"document": document, "brand": branding_info, "APP_BASE_URL": settings.APP_BASE_URL},
+        {"document": document, "brand": brand, "APP_BASE_URL": settings.APP_BASE_URL},
     )
 
 
