@@ -1035,32 +1035,48 @@ def test_branding_schema():
     assert branding_info.accent_color == "blue"
     assert (
         branding_info.brand_icon_url
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     )
     assert (
         branding_info.brand_logo_url
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/logo.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/logo.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
 
     branding_info.prefer_logo_over_icon = False
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     )
 
     branding_info.prefer_logo_over_icon = True
     branding_info.logo = ""
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     )
 
     branding_info.icon = ""
     assert branding_info.brand_image == ""
+
+
+def test_branding_schema_uses_bucket_url_over_endpoint():
+    custom_bucket_url = "https://cdn.example.com/media-bucket"
+    branding_info = BrandingInfo(
+        icon="icon.png",
+        logo="logo.png",
+    )
+
+    with override_settings(
+        AWS_MEDIA_STORAGE_BUCKET_URL=custom_bucket_url,
+        AWS_ENDPOINT_URL_S3="http://ignored-endpoint",
+        AWS_MEDIA_STORAGE_BUCKET_NAME="should-not-appear",
+    ):
+        assert branding_info.brand_icon_url == f"{custom_bucket_url}/icon.png"
+        assert branding_info.brand_logo_url == f"{custom_bucket_url}/logo.png"
 
 
 @pytest.mark.django_db

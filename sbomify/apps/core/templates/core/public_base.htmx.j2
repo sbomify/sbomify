@@ -23,18 +23,18 @@
             <!-- Favicon -->
             <link rel="apple-touch-icon"
                   sizes="180x180"
-                  href="{% static 'img/favicons/apple-touch-icon.png' %}">
+                  href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/apple-touch-icon.png' %}{% endif %}">
             <link rel="icon"
                   type="image/png"
                   sizes="32x32"
-                  href="{% static 'img/favicons/favicon-32x32.png' %}">
+                  href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/favicon-32x32.png' %}{% endif %}">
             <link rel="icon"
                   type="image/png"
                   sizes="16x16"
-                  href="{% static 'img/favicons/favicon-16x16.png' %}">
+                  href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/favicon-16x16.png' %}{% endif %}">
             <link rel="icon"
                   type="image/svg+xml"
-                  href="{% static 'img/favicons/favicon.svg' %}">
+                  href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/favicon.svg' %}{% endif %}">
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
             <!-- Schema.org metadata -->
             {% schema_org_metadata %}
@@ -441,7 +441,6 @@
                                  width="32"
                                  height="32">
                         {% endif %}
-                        {% if brand.name %}<span class="brand-name">{{ brand.name }}</span>{% endif %}
                     </div>
                     {% block header_content %}{% endblock %}
                 </div>

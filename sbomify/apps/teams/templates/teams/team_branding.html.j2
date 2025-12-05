@@ -35,7 +35,15 @@
                 <div class="section-card">
                     <div class="section-header">
                         <h3 class="section-title">Brand Colors</h3>
-                        <p class="section-description">Define your primary brand colors for consistent visual identity.</p>
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <p class="section-description mb-0">Define your primary brand colors for consistent visual identity.</p>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    @click="setDefaultColors">
+                                <i class="fas fa-undo me-1"></i>
+                                Use defaults
+                            </button>
+                        </div>
                     </div>
                     <div class="section-content row g-4">
                         <div class="col-md-6">
@@ -43,14 +51,16 @@
                                 <label for="brand-color" class="field-label">Primary Brand Color</label>
                                 <div class="color-input-group">
                                     <input type="color"
-                                           name="brand_color"
                                            id="brand-color"
-                                           value="{{ branding_info.brand_color|default:'' }}"
                                            class="color-picker-modern"
-                                           x-model="localBrandingInfo.brand_color"
-                                           @input="localBrandingInfo.brand_color = $event.target.value">
+                                           x-model="uiColors.brand_color"
+                                           :value="uiColors.brand_color"
+                                           @input="updateColor('brand_color', $event.target.value)">
+                                    <input type="hidden"
+                                           name="brand_color"
+                                           :value="localBrandingInfo.brand_color || ''">
                                     <div class="color-info">
-                                        <span class="color-hex" x-text="localBrandingInfo.brand_color || 'Not set'"></span>
+                                        <span class="color-hex" x-text="displayColor('brand_color')"></span>
                                         <small class="color-hint">Click to choose color</small>
                                     </div>
                                 </div>
@@ -62,15 +72,16 @@
                                 <label for="accent-color" class="field-label">Accent Color</label>
                                 <div class="color-input-group">
                                     <input type="color"
-                                           name="accent_color"
                                            id="accent-color"
-                                           value="{{ branding_info.accent_color|default:'' }}"
                                            class="color-picker-modern"
-                                           x-model="localBrandingInfo.accent_color"
-                                           @input="localBrandingInfo.accent_color = $event.target.value">
+                                           x-model="uiColors.accent_color"
+                                           :value="uiColors.accent_color"
+                                           @input="updateColor('accent_color', $event.target.value)">
+                                    <input type="hidden"
+                                           name="accent_color"
+                                           :value="localBrandingInfo.accent_color || ''">
                                     <div class="color-info">
-                                        <span class="color-hex"
-                                              x-text="localBrandingInfo.accent_color || 'Not set'"></span>
+                                        <span class="color-hex" x-text="displayColor('accent_color')"></span>
                                         <small class="color-hint">Click to choose color</small>
                                     </div>
                                 </div>
@@ -124,30 +135,28 @@
                 <div class="section-card">
                     <div class="section-header">
                         <h3 class="section-title">Display Preferences</h3>
-                        <p class="section-description">Configure how your brand assets are displayed across the platform.</p>
+                        <p class="section-description">Toggle workspace branding on or off without losing your uploaded assets or colors.</p>
                     </div>
                     <div class="section-content">
                         <div class="preference-row">
                             <div class="preference-content">
-                                <label class="preference-label" for="prefer-logo-over-icon">Primary Brand Asset</label>
+                                <label class="preference-label" for="branding-enabled-toggle">Workspace Branding</label>
                                 <p class="preference-description">
-                                    When you upload both an icon and logo, choose which one takes priority in public pages.
-                                    <br>
-                                    <strong>Icon:</strong> Better for compact spaces (headers, favicons)
-                                    <br>
-                                    <strong>Logo:</strong> Better for prominent branding areas
+                                    Turn off to use the default sbomify visuals while keeping your custom assets and colors saved for later.
                                 </p>
                             </div>
                             <div class="preference-control">
                                 <div class="form-check form-switch">
                                     <input type="checkbox"
-                                           name="prefer_logo_over_icon"
-                                           id="prefer-logo-over-icon"
-                                           {% if branding_info.prefer_logo_over_icon %}checked{% endif %}
+                                           id="branding-enabled-toggle"
+                                           {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
                                            class="form-check-input"
                                            role="switch"
-                                           x-model="localBrandingInfo.prefer_logo_over_icon">
+                                           x-model="localBrandingInfo.branding_enabled">
                                 </div>
+                                <input type="hidden"
+                                       name="branding_enabled"
+                                       :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
                             </div>
                         </div>
                     </div>

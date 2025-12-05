@@ -92,22 +92,22 @@ class BrandingInfo(BaseModel):
     icon: str = ""
     logo: str = ""
     prefer_logo_over_icon: bool | None = None
+    branding_enabled: bool = False
     brand_color: str = ""
     accent_color: str = ""
 
     @property
     def brand_icon_url(self) -> str:
+        # Fallback to the logo when a dedicated icon is not provided.
         if self.icon:
-            return f"{settings.AWS_ENDPOINT_URL_S3}/{settings.AWS_MEDIA_STORAGE_BUCKET_NAME}/{self.icon}"
-
+            return _build_media_url(self.icon)
+        if self.logo:
+            return _build_media_url(self.logo)
         return ""
 
     @property
     def brand_logo_url(self) -> str:
-        if self.logo:
-            return f"{settings.AWS_ENDPOINT_URL_S3}/{settings.AWS_MEDIA_STORAGE_BUCKET_NAME}/{self.logo}"
-
-        return ""
+        return _build_media_url(self.logo)
 
     @property
     def brand_image(self) -> str:
@@ -126,10 +126,22 @@ class BrandingInfoWithUrls(BrandingInfo):
     logo_url: str = ""
 
 
+def _build_media_url(key: str) -> str:
+    """Construct a public media URL for branding assets."""
+    if not key:
+        return ""
+
+    bucket_url = getattr(settings, "AWS_MEDIA_STORAGE_BUCKET_URL", None)
+    if bucket_url:
+        return f"{bucket_url.rstrip('/')}/{key.lstrip('/')}"
+    return ""
+
+
 class UpdateTeamBrandingSchema(BaseModel):
     brand_color: str | None = None
     accent_color: str | None = None
-    prefer_logo_over_icon: bool = False
+    prefer_logo_over_icon: bool | None = None
+    branding_enabled: bool | None = None
     icon_pending_deletion: bool = False
     logo_pending_deletion: bool = False
 

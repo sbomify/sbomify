@@ -6,6 +6,8 @@ from django.views import View
 from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
+from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.teams.models import Team
 
 
 class ComponentDetailsPublicView(View):
@@ -17,14 +19,10 @@ class ComponentDetailsPublicView(View):
             )
 
         current_team = request.session.get("current_team", {})
-        brand = current_team.get("branding_info")
-        team_billing_plan = current_team.get("billing_plan")
 
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
-            "brand": brand,
             "component": component,
-            "team_billing_plan": team_billing_plan,
         }
 
         if component.get("component_type") == Component.ComponentType.SBOM:
@@ -46,4 +44,12 @@ class ComponentDetailsPublicView(View):
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
-        return render(request, "core/component_details_public.html.j2", context)
+        team = Team.objects.filter(pk=component.get("team_id")).first()
+        brand = build_branding_context(team)
+        team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")
+
+        return render(
+            request,
+            "core/component_details_public.html.j2",
+            {**context, "brand": brand, "team_billing_plan": team_billing_plan},
+        )

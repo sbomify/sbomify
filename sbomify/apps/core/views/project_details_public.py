@@ -5,6 +5,8 @@ from django.views import View
 from sbomify.apps.core.apis import get_project
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.teams.models import Team
 
 
 class ProjectDetailsPublicView(View):
@@ -16,8 +18,8 @@ class ProjectDetailsPublicView(View):
             )
 
         has_downloadable_content = SBOM.objects.filter(component__projects=project["id"]).exists()
-        current_team = request.session.get("current_team", {})
-        brand = current_team.get("branding_info")
+        team = Team.objects.filter(pk=project.get("team_id")).first()
+        brand = build_branding_context(team)
 
         return render(
             request,

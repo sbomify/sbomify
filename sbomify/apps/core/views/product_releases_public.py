@@ -4,6 +4,8 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_product, list_all_releases
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.teams.models import Team
 
 
 class ProductReleasesPublicView(View):
@@ -20,8 +22,8 @@ class ProductReleasesPublicView(View):
                 request, HttpResponse(status=status_code, content=releases.get("detail", "Unknown error"))
             )
 
-        current_team = request.session.get("current_team", {})
-        brand = current_team.get("branding_info")
+        team = Team.objects.filter(pk=product.get("team_id")).first()
+        brand = build_branding_context(team)
 
         return render(
             request,

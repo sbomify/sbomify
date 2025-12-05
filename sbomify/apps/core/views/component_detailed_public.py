@@ -8,6 +8,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.teams.branding import build_branding_context
 
 
 class ComponentDetailedPublicView(View):
@@ -31,8 +32,8 @@ class ComponentDetailedPublicView(View):
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
-        current_team = request.session.get("current_team", {})
-        brand = current_team.get("branding_info")
+        component_obj = getattr(data, "component", None)
+        brand = build_branding_context(getattr(component_obj, "team", None))
 
         return render(
             request,

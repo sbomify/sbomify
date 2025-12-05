@@ -45,6 +45,16 @@ class InviteUserForm(forms.Form):
     )
 
 
+class TeamBrandingForm(forms.Form):
+    brand_color = forms.CharField(required=False)
+    accent_color = forms.CharField(required=False)
+    branding_enabled = forms.BooleanField(required=False)
+    icon_pending_deletion = forms.BooleanField(required=False)
+    logo_pending_deletion = forms.BooleanField(required=False)
+    icon = forms.FileField(required=False)
+    logo = forms.FileField(required=False)
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 
