@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
+from django.urls import reverse
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
@@ -42,11 +43,23 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
         return error_response(request, HttpResponseForbidden("Document is not public"))
 
     brand = build_branding_context(document.component.team)
+    workspace_public_url = ""
+    team = getattr(document.component, "team", None)
+    team_key = getattr(team, "key", None)
+    if team_key:
+        workspace_public_url = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
+    else:
+        workspace_public_url = reverse("core:workspace_public_current")
 
     return render(
         request,
         "documents/document_details_public.html.j2",
-        {"document": document, "brand": brand, "APP_BASE_URL": settings.APP_BASE_URL},
+        {
+            "document": document,
+            "brand": brand,
+            "APP_BASE_URL": settings.APP_BASE_URL,
+            "workspace_public_url": workspace_public_url,
+        },
     )
 
 

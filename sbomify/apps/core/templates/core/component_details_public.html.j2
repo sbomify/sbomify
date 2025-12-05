@@ -36,6 +36,14 @@
             <div class="content-container">
                 <div class="public-page-header">
                     <div class="page-header-content">
+                        {% if workspace_public_url and component.is_global %}
+                            <div class="mb-2">
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   href="{{ workspace_public_url }}">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to trust center
+                                </a>
+                            </div>
+                        {% endif %}
                         <p class="eyebrow text-muted mb-1">Public component</p>
                         <h1 class="page-title">
                             <i class="fas fa-cube title-icon"></i>
