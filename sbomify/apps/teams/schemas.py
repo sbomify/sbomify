@@ -111,14 +111,13 @@ class BrandingInfo(BaseModel):
 
     @property
     def brand_image(self) -> str:
-        if self.icon and self.logo:
-            return self.brand_logo_url if self.prefer_logo_over_icon else self.brand_icon_url
-        elif self.icon:
-            return self.brand_icon_url
-        elif self.logo:
+        if self.logo and (self.prefer_logo_over_icon is not False):
             return self.brand_logo_url
-        else:
-            return ""
+        if self.icon:
+            return self.brand_icon_url
+        if self.logo:
+            return self.brand_logo_url
+        return ""
 
 
 class BrandingInfoWithUrls(BrandingInfo):
