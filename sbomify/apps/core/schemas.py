@@ -175,7 +175,7 @@ class ProductUpdateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     description: str = Field(default="", max_length=1000)
-    is_public: bool = False
+    is_public: bool
 
 
 class ProductPatchSchema(BaseModel):
@@ -221,7 +221,7 @@ class ProjectUpdateSchema(BaseModel):
     """Schema for updating a Project."""
 
     name: str = Field(..., max_length=255, min_length=1)
-    is_public: bool = False
+    is_public: bool
     metadata: dict = Field(default_factory=dict)
 
 
@@ -272,9 +272,9 @@ class ComponentUpdateSchema(BaseModel):
 
     name: str = Field(..., max_length=255, min_length=1)
     component_type: ComponentType = ComponentType.SBOM
-    is_public: bool = False
+    is_public: bool
     # is_global defaults to None so existing clients that omit it do not overwrite scope
-    is_global: bool | None = None
+    is_global: bool
     metadata: dict = Field(default_factory=dict)
 
 

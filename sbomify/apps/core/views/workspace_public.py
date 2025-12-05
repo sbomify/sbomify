@@ -17,6 +17,9 @@ class WorkspacePublicView(View):
         if not team:
             return error_response(request, HttpResponseNotFound("Workspace not found"))
 
+        if not team.is_public:
+            return error_response(request, HttpResponseNotFound("Workspace not found"))
+
         branding_info = BrandingInfo(**team.branding_info)
         brand = {
             **team.branding_info,
@@ -53,7 +56,7 @@ class WorkspacePublicView(View):
             {
                 "brand": brand,
                 "workspace": {
-                    "name": team.name.replace("Workspace", "").replace("workspace", "").strip().removesuffix("'s"),
+                    "name": team.display_name,
                     "key": team.key,
                 },
                 "products": products_data,

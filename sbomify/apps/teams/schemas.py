@@ -14,6 +14,7 @@ class TeamUpdateSchema(BaseModel):
         str_strip_whitespace = True
 
     name: str = Field(..., max_length=255, min_length=1)
+    is_public: bool | None = None
 
 
 class TeamPatchSchema(BaseModel):
@@ -26,6 +27,7 @@ class TeamPatchSchema(BaseModel):
         str_strip_whitespace = True
 
     name: str | None = Field(None, max_length=255, min_length=1)
+    is_public: bool | None = None
 
 
 class UserSchema(BaseModel):
@@ -66,10 +68,12 @@ class InvitationSchema(BaseModel):
 class TeamSchema(BaseModel):
     key: str
     name: str
+    is_public: bool
     created_at: datetime
     has_completed_wizard: bool
     billing_plan: str | None
     billing_plan_limits: dict | None
+    can_set_private: bool | None = None
     custom_domain: str | None
     custom_domain_validated: bool = False
     custom_domain_verification_failures: int = 0

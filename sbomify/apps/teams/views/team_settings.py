@@ -8,8 +8,9 @@ from django.views import View
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
-from sbomify.apps.teams.models import Invitation, Member
+from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.utils import refresh_current_team_session
 
 PLAN_FEATURES = {
     "business": [
@@ -62,9 +63,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
         # Get plan features and pricing based on billing plan
-        billing_plan = team.billing_plan or "community"
+        billing_plan = team.billing_plan or Team.Plan.COMMUNITY
         plan_features = PLAN_FEATURES.get(billing_plan, [])
         plan_pricing = PLAN_PRICING.get(billing_plan, {"amount": "Contact us", "period": ""})
+        can_set_private = team.can_set_private
+        is_owner = request.session.get("current_team", {}).get("role") == "owner"
 
         # Process plan limits into structured data
         plan_limits = []
@@ -94,10 +97,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "plan_features": plan_features,
                 "plan_pricing": plan_pricing,
                 "plan_limits": plan_limits,
+                "can_set_private": can_set_private,
+                "is_owner": is_owner,
             },
         )
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        if request.POST.get("visibility_action") == "update":
+            return self._update_visibility(request, team_key)
+
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
                 return self._delete_member(request, team_key)
@@ -150,3 +158,46 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         messages.info(request, f"Invitation for {invitation_email} deleted")
 
         return redirect("teams:team_settings", team_key=team_key)
+
+    def _update_visibility(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return redirect("teams:team_settings", team_key=team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change visibility")
+            return redirect("teams:team_settings", team_key=team_key)
+
+        visibility_values = request.POST.getlist("is_public")
+        desired_visibility = self._parse_checkbox_value(visibility_values, default=team.is_public)
+
+        can_set_private = team.can_be_private()
+        if desired_visibility is False and not can_set_private:
+            messages.error(request, "Disabling the trust center is available on Business or Enterprise plans.")
+            return redirect("teams:team_settings", team_key=team_key)
+
+        team.is_public = desired_visibility
+        team.save()
+
+        refresh_current_team_session(request, team)
+
+        messages.success(request, f"Trust center is now {'public' if team.is_public else 'private'}.")
+        return redirect("teams:team_settings", team_key=team_key)
+
+    @staticmethod
+    def _parse_checkbox_value(values: list[str], default: bool) -> bool:
+        # Hidden field + checkbox submit two values; reverse to prefer the user's checked value
+        if not values:
+            return default
+
+        for raw in reversed(values):
+            val = (raw or "").strip().lower()
+            if val in {"true", "1", "on", "yes"}:
+                return True
+            if val in {"false", "0", "off", "no"}:
+                return False
+
+        return default

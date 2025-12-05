@@ -92,6 +92,7 @@ class TeamAdmin(admin.ModelAdmin):
         "billing_plan_display",
         "member_count",
         "custom_domain_display",
+        "is_public",
         "has_completed_wizard",
         "created_at",
         "billing_status_display",
@@ -101,6 +102,7 @@ class TeamAdmin(admin.ModelAdmin):
         "billing_plan",
         "custom_domain_validated",
         "has_completed_wizard",
+        "is_public",
         "created_at",
     )
 
@@ -129,6 +131,7 @@ class TeamAdmin(admin.ModelAdmin):
                     "name",
                     "key",
                     "has_completed_wizard",
+                    "is_public",
                     "created_at",
                 )
             },

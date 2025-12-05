@@ -1,3 +1,5 @@
+import html
+
 import pytest
 from django.test import Client
 from django.urls import reverse
@@ -9,7 +11,7 @@ from sbomify.apps.teams.models import Team
 @pytest.mark.django_db
 def test_workspace_public_page_renders_products_and_global_artifacts():
     client = Client()
-    team = Team.objects.create(name="Public Workspace")
+    team = Team.objects.create(name="Public Workspace", is_public=True)
 
     Product.objects.create(name="Public Product", team=team, is_public=True)
     Component.objects.create(
@@ -26,3 +28,26 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
     content = response.content.decode()
     assert "Public Product" in content
     assert "Global Artifact" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_returns_404_when_workspace_private():
+    client = Client()
+    team = Team.objects.create(name="Private Workspace", billing_plan="business", is_public=False)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_workspace_public_page_uses_display_name_for_title():
+    client = Client()
+    team = Team.objects.create(name="Aurangzaib's Workspace", is_public=True)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = html.unescape(response.content.decode())
+    assert "Aurangzaib's Trust Center" in content
+    assert "Workspace Trust Center" not in content
