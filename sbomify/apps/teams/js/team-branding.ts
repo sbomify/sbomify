@@ -5,7 +5,7 @@ interface BrandingInfo {
     logo: File | null;
     icon_url: string;
     logo_url: string;
-    prefer_logo_over_icon: boolean | null;
+    prefer_logo_over_icon: boolean;
     branding_enabled?: boolean;
     brand_color: string;
     accent_color: string;

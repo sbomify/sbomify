@@ -91,18 +91,15 @@ class TeamDomainSchema(BaseModel):
 class BrandingInfo(BaseModel):
     icon: str = ""
     logo: str = ""
-    prefer_logo_over_icon: bool | None = None
+    prefer_logo_over_icon: bool = False
     branding_enabled: bool = False
     brand_color: str = ""
     accent_color: str = ""
 
     @property
     def brand_icon_url(self) -> str:
-        # Fallback to the logo when a dedicated icon is not provided.
         if self.icon:
             return _build_media_url(self.icon)
-        if self.logo:
-            return _build_media_url(self.logo)
         return ""
 
     @property
@@ -111,7 +108,8 @@ class BrandingInfo(BaseModel):
 
     @property
     def brand_image(self) -> str:
-        if self.logo and (self.prefer_logo_over_icon is not False):
+        """Primary brand image for public pages (logo-first, icon as fallback)."""
+        if self.logo:
             return self.brand_logo_url
         if self.icon:
             return self.brand_icon_url
@@ -137,7 +135,7 @@ def _build_media_url(key: str) -> str:
 class UpdateTeamBrandingSchema(BaseModel):
     brand_color: str | None = None
     accent_color: str | None = None
-    prefer_logo_over_icon: bool | None = None
+    prefer_logo_over_icon: bool = False
     branding_enabled: bool | None = None
     icon_pending_deletion: bool = False
     logo_pending_deletion: bool = False

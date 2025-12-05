@@ -1049,9 +1049,14 @@ def test_branding_schema():
     branding_info.prefer_logo_over_icon = False
     assert (
         branding_info.brand_image
-        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
 
+    branding_info.icon = ""
+    assert branding_info.brand_icon_url == ""
+
+    branding_info.icon = "icon.png"
+    assert branding_info.brand_icon_url == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     branding_info.prefer_logo_over_icon = True
     branding_info.logo = ""
     assert (
