@@ -27,6 +27,7 @@ Deploy sbomify using Docker Compose with cryptographic image verification.
 # 1. Download files
 curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/docker-compose.yml
 curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/bin/deploy.sh
+curl -O https://raw.githubusercontent.com/sbomify/sbomify/master/Caddyfile
 chmod +x deploy.sh
 
 # 2. Configure
@@ -72,6 +73,42 @@ The deploy script:
 3. Cleans up unused resources
 
 > **Production:** Use a reverse proxy (nginx/Caddy) for SSL termination. App runs on port 8000.
+
+## Reverse Proxy (Caddy)
+
+The included `Caddyfile` provides automatic HTTPS with Let's Encrypt:
+
+**Features:**
+
+- Automatic TLS certificate provisioning and renewal
+- HTTP/2 and HTTP/3 support
+- Security headers (HSTS, XSS protection, etc.)
+- Health checks and failover
+- Cloudflare proxy support
+- On-demand TLS for custom domains
+
+**Configuration:**
+
+Add to your `override.env`:
+
+```env
+# Caddy Configuration
+APP_DOMAIN=sbomify.example.com
+ACME_EMAIL=admin@example.com
+ACME_CA=https://acme-v02.api.letsencrypt.org/directory  # Production
+# ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory  # Staging/testing
+LOG_LEVEL=INFO
+```
+
+The Caddyfile will:
+
+- Serve your app on port 80/443
+- Automatically obtain and renew SSL certificates
+- Redirect HTTP to HTTPS
+- Proxy requests to the Django backend
+- Block external access to internal API endpoints
+
+> **Note:** Ensure ports 80 and 443 are open in your firewall for ACME challenges.
 
 ## Environment Variables
 
