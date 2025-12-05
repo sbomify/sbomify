@@ -162,6 +162,12 @@ class Team(models.Model):
         # Community or unset (anything not in paid plans) must remain public
         if (not self.can_be_private()) and (not self.is_public):
             self.is_public = True
+            # If we're forcing public due to plan constraints, ensure it gets saved
+            if "update_fields" in kwargs:
+                # Convert to set to avoid duplicates, then list for compatibility
+                fields = set(kwargs["update_fields"])
+                fields.add("is_public")
+                kwargs["update_fields"] = list(fields)
 
         super().save(*args, **kwargs)
         if not is_new or self.key is not None:

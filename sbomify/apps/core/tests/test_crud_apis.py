@@ -624,6 +624,7 @@ def test_update_component_success(
     payload = {
         "name": "Updated Component",
         "is_public": True,
+        "is_global": False,
         "metadata": {"version": "2.0.0", "description": "Updated component"},
     }
 
@@ -789,7 +790,7 @@ def test_update_nonexistent_item(
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
 
-    payload = {"name": "Updated Name", "is_public": False}
+    payload = {"name": "Updated Name", "is_public": False, "is_global": False}
 
     urls = [
         reverse("api-1:update_product", kwargs={"product_id": "nonexistent"}),

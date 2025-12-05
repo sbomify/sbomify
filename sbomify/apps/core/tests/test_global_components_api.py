@@ -122,6 +122,7 @@ def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, 
         "name": component.name,
         "component_type": "sbom",
         "is_public": True,
+        "is_global": True,
         "metadata": {},
     }
 

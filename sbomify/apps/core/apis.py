@@ -487,14 +487,12 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
-            final_is_public = payload.is_public if payload.is_public is not None else product.is_public
-
-            if final_is_public is False and not _private_items_allowed(product.team):
+            if payload.is_public is False and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             product.name = payload.name
             product.description = payload.description
-            product.is_public = final_is_public
+            product.is_public = payload.is_public
             product.save()
 
         return 200, _build_item_response(request, product, "product")
@@ -1243,13 +1241,11 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
 
     try:
         with transaction.atomic():
-            final_is_public = payload.is_public if payload.is_public is not None else project.is_public
-
-            if final_is_public is False and not _private_items_allowed(project.team):
+            if payload.is_public is False and not _private_items_allowed(project.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             project.name = payload.name
-            project.is_public = final_is_public
+            project.is_public = payload.is_public
             project.metadata = payload.metadata
             project.save()
 
@@ -1527,15 +1523,11 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
     try:
         with transaction.atomic():
-            final_is_public = payload.is_public if payload.is_public is not None else component.is_public
-            if final_is_public is False and not _private_items_allowed(component.team):
+            if payload.is_public is False and not _private_items_allowed(component.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             # Evaluate final state after this update to enforce document-only constraint for globals
-            new_component_type = payload.component_type
-            new_is_global = payload.is_global if payload.is_global is not None else component.is_global
-
-            if new_is_global and new_component_type != Component.ComponentType.DOCUMENT:
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:
                 return 400, {
                     "detail": "Only document components can be marked as workspace-wide",
                     "error_code": ErrorCode.INVALID_DATA,
@@ -1543,9 +1535,8 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
             component.name = payload.name
             component.component_type = payload.component_type
-            component.is_public = final_is_public
-            if payload.is_global is not None:
-                component.is_global = payload.is_global
+            component.is_public = payload.is_public
+            component.is_global = payload.is_global
             component.metadata = payload.metadata
 
             # Enforce scope exclusivity: If global, remove from all projects
