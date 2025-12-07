@@ -1,3 +1,7 @@
+const MAX_VISIBLE_PAGES = 7
+const PAGES_AROUND_CURRENT = 2
+const ELLIPSIS = '...'
+
 export function createPaginationData(
   totalItems: number,
   pageSizeOptions: number[] = [10, 15, 25, 50, 100],
@@ -8,6 +12,7 @@ export function createPaginationData(
     totalItems,
     pageSize: pageSizeOptions[0],
     pageSizeOptions,
+    ellipsis: ELLIPSIS,
 
     get totalPages(): number {
       return Math.ceil(this.totalItems / this.pageSize) || 1
@@ -29,33 +34,33 @@ export function createPaginationData(
 
     get visiblePages(): (number | string)[] {
       const pages: (number | string)[] = []
-      const maxVisiblePages = 7
 
-      if (this.totalPages <= maxVisiblePages) {
+      if (this.totalPages <= MAX_VISIBLE_PAGES) {
         for (let i = 1; i <= this.totalPages; i++) {
           pages.push(i)
         }
-      } else {
-        const start = Math.max(1, this.currentPage - 2)
-        const end = Math.min(this.totalPages, this.currentPage + 2)
+        return pages
+      }
 
-        if (start > 1) {
-          pages.push(1)
-          if (start > 2) {
-            pages.push('...')
-          }
-        }
+      const startPage = Math.max(1, this.currentPage - PAGES_AROUND_CURRENT)
+      const endPage = Math.min(this.totalPages, this.currentPage + PAGES_AROUND_CURRENT)
 
-        for (let i = start; i <= end; i++) {
-          pages.push(i)
+      if (startPage > 1) {
+        pages.push(1)
+        if (startPage > 2) {
+          pages.push(ELLIPSIS)
         }
+      }
 
-        if (end < this.totalPages) {
-          if (end < this.totalPages - 1) {
-            pages.push('...')
-          }
-          pages.push(this.totalPages)
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+
+      if (endPage < this.totalPages) {
+        if (endPage < this.totalPages - 1) {
+          pages.push(ELLIPSIS)
         }
+        pages.push(this.totalPages)
       }
 
       return pages
@@ -63,7 +68,7 @@ export function createPaginationData(
 
     goToPage(page: number): void {
       if (page < 1 || page > this.totalPages || page === this.currentPage) {
-        return;
+        return
       }
       this.currentPage = page
     },

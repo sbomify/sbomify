@@ -1,48 +1,36 @@
 import Alpine from 'alpinejs'
 
+const MAX_INITIAL_DISPLAY = 1
+const MAX_EXPANDED_DISPLAY = 10
+
 interface Release {
   id: string
   version: string
-  [key: string]: unknown
-}
-
-interface ReleaseListData {
-  releases: Release[]
-  itemId: string
-  isPublicView: boolean
+  product_id: string
+  product_name: string
+  name: string
+  is_latest: boolean
+  is_prerelease: boolean
 }
 
 export function registerReleaseList() {
-  Alpine.data('releaseList', (releasesJson: string, itemId: string, isPublicView: boolean) => {
-    const releases = JSON.parse(releasesJson)
-    const data: ReleaseListData = {
-      releases,
-      itemId,
-      isPublicView
-    }
-    const MAX_INITIAL_DISPLAY = 3
-    const MAX_EXPANDED_DISPLAY = 10
-
-    const getInitialExpandedState = (): boolean => {
-      return sessionStorage.getItem(`release-expanded-${data.itemId}`) === 'true'
-    }
+  Alpine.data('releaseList', (itemId: string, releasesJson: string) => {
+    const releases: Release[] = JSON.parse(releasesJson)
+    const expandedKey = `release-expanded-${itemId}`
+    const initialExpanded = sessionStorage.getItem(expandedKey) === 'true'
 
     return {
-      releases: data.releases || [],
-      itemId: data.itemId,
-      isPublicView: data.isPublicView || false,
-      isExpanded: getInitialExpandedState(),
+      releases: releases || [],
+      itemId,
+      isExpanded: initialExpanded,
 
-      get displayedReleases() {
+      get displayedReleases(): Release[] {
         if (this.releases.length <= MAX_INITIAL_DISPLAY) {
           return this.releases
         }
 
-        if (this.isExpanded) {
-          return this.releases.slice(0, Math.min(MAX_EXPANDED_DISPLAY, this.releases.length))
-        }
-
-        return this.releases.slice(0, MAX_INITIAL_DISPLAY)
+        const maxDisplay = this.isExpanded ? MAX_EXPANDED_DISPLAY : MAX_INITIAL_DISPLAY
+        return this.releases.slice(0, maxDisplay)
       },
 
       get shouldShowExpansion(): boolean {
@@ -50,22 +38,20 @@ export function registerReleaseList() {
       },
 
       get remainingCount(): number {
-        if (this.isExpanded) {
-          return Math.max(0, this.releases.length - MAX_EXPANDED_DISPLAY)
-        }
-        return Math.max(0, this.releases.length - MAX_INITIAL_DISPLAY)
+        const maxDisplay = this.isExpanded ? MAX_EXPANDED_DISPLAY : MAX_INITIAL_DISPLAY
+        return Math.max(0, this.releases.length - maxDisplay)
       },
 
-      toggleExpansion(): void {
-        this.isExpanded = !this.isExpanded
-        sessionStorage.setItem(`release-expanded-${this.itemId}`, this.isExpanded.toString())
-      },
-
-      getExpandButtonText(): string {
+      get expandButtonText(): string {
         if (this.isExpanded) {
           return '− Show less'
         }
         return `+ ${this.remainingCount} more`
+      },
+
+      toggleExpansion(): void {
+        this.isExpanded = !this.isExpanded
+        sessionStorage.setItem(expandedKey, this.isExpanded.toString())
       }
     }
   })

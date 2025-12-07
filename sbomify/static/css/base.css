@@ -93,6 +93,11 @@ code {
   outline-offset: 2px;
 }
 
+/* Alpine.js x-cloak support */
+[x-cloak] {
+  display: none !important;
+}
+
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *,

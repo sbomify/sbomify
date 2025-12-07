@@ -39,14 +39,8 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
 
         elif component.get("component_type") == Component.ComponentType.DOCUMENT:
             # Documents table is loaded via HTMX from DocumentsTableView
-            # Only need to pass delete_form and delete_url for the modal
-            from django.urls import reverse
-
-            from sbomify.apps.documents.forms import DocumentDeleteForm
-
-            context["delete_form"] = DocumentDeleteForm()
-            context["delete_url"] = reverse("documents:documents_table", kwargs={"component_id": component_id})
-
+            # No need to load documents data here
+            pass
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
