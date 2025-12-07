@@ -36,7 +36,7 @@ export function registerDocumentsTable() {
         description: ''
       },
 
-      ...createPaginationData(allDocuments.length, [1, 15, 25, 50, 100], 1),
+      ...createPaginationData(allDocuments.length, [10, 15, 25, 50, 100], 1),
 
       editDocument(documentId: string): void {
         const item = this.allDocuments.find(doc => doc.document.id === documentId)

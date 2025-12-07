@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs'
 
-const MAX_INITIAL_DISPLAY = 1
+const MAX_INITIAL_DISPLAY = 3
 const MAX_EXPANDED_DISPLAY = 10
 
 interface Release {
