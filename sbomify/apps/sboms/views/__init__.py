@@ -21,15 +21,11 @@ from django.shortcuts import redirect, render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.views.sboms_table import SbomsTableView  # noqa: F401
 from sbomify.apps.teams.branding import build_branding_context
 
-# from .decorators import validate_role_in_current_team
-from .models import SBOM
-
 logger = logging.getLogger(__name__)
-
-
-# Product/Project/Component views moved to core app
 
 
 def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
@@ -267,17 +263,11 @@ def sbom_download(request: HttpRequest, sbom_id: str) -> HttpResponse:
     return response
 
 
-# Product/Project SBOM downloads moved to core app
-
-
 @login_required
 def sbom_upload_cyclonedx(request: HttpRequest) -> HttpResponse:
     # Implementation of sbom_upload_cyclonedx view
     # This is a placeholder and should be replaced with the actual implementation
     return JsonResponse({"detail": "SBOM uploaded successfully", "supplier": None}, status=201)
-
-
-# Component metadata view moved to core app
 
 
 @login_required

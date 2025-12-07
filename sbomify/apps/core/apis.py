@@ -3549,7 +3549,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                         "format": sbom.format,
                         "format_version": sbom.format_version,
                         "version": sbom.version,
-                        "created_at": sbom.created_at.isoformat(),
+                        "created_at": sbom.created_at,
                         "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", None),
                         "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
                     },
