@@ -13,11 +13,16 @@ urlpatterns = [
         views.document_download,
         name="document_download",
     ),
-    # Documents table view (for HTMX loading)
-    path("component/<str:component_id>/documents/", views.DocumentsTableView.as_view(), name="documents_table"),
+    path(
+        "component/<str:component_id>/documents/",
+        views.DocumentsTableView.as_view(),
+        name="documents_table",
+        kwargs={"is_public_view": False},
+    ),
     path(
         "public/component/<str:component_id>/documents/",
         views.DocumentsTableView.as_view(),
         name="documents_table_public",
+        kwargs={"is_public_view": True},
     ),
 ]

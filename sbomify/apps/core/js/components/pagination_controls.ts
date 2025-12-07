@@ -21,6 +21,12 @@ export function createPaginationData(
       return Math.min(this.currentPage * this.pageSize, this.totalItems)
     },
 
+    isVisible(index: number): boolean {
+      const start = (this.currentPage - 1) * this.pageSize
+      const end = start + this.pageSize
+      return index >= start && index < end
+    },
+
     get visiblePages(): (number | string)[] {
       const pages: (number | string)[] = []
       const maxVisiblePages = 7

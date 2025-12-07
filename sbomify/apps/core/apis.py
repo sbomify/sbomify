@@ -3627,6 +3627,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
                         "id": str(document.id),
                         "name": document.name,
                         "document_type": document.document_type,
+                        "document_type_display": document.get_document_type_display(),
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,

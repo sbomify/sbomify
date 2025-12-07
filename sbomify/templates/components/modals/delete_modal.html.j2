@@ -10,7 +10,8 @@
      data-bs-keyboard="true"
      tabindex="-1"
      aria-labelledby="{{ modal_id }}-label"
-     aria-hidden="true">
+     aria-hidden="true"
+     style="display: none">
     <div class="modal-dialog modal-dialog-centered delete-modal-dialog">
         <div class="modal-content delete-modal">
             <div class="delete-modal-header">
@@ -37,11 +38,9 @@
                 <button type="button"
                         class="delete-modal-button delete-modal-button--secondary"
                         data-bs-dismiss="modal">Cancel</button>
-                <form action="{{ form_action }}"
-                      method="post"
-                      id="{{ modal_id }}-form"
+                <form id="{{ modal_id }}-form"
                       style="display:inline"
-                      {% if use_htmx %}hx-post="{{ form_action }}" hx-swap="none"{% endif %}>
+                      {% if use_htmx %} hx-post="{{ form_action }}" hx-swap="none" {% else %} method="post" action="{{ form_action }}" {% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="DELETE">
                     {% for field in form %}{{ field }}{% endfor %}
@@ -93,6 +92,11 @@
 
         if (modal.parentElement !== document.body) {
             document.body.appendChild(modal);
+            {% if use_htmx %}
+            if (typeof htmx !== 'undefined') {
+                htmx.process(modal);
+            }
+            {% endif %}
         }
 
         {% if use_htmx %}
