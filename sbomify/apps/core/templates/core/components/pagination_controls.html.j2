@@ -1,0 +1,68 @@
+{% load static %}
+{% load json_extras %}
+<link rel="stylesheet"
+      href="{% static 'css/components/pagination-controls.css' %}">
+<div x-show="totalPages > 1"
+     class="pagination-controls"
+     style="display: none">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-3">
+            <small class="text-muted">
+                Showing <span x-text="startItem"></span>-<span x-text="endItem"></span> of <span x-text="totalItems"></span> items
+            </small>
+            <div x-show="pageSizeOptions && pageSizeOptions.length > 0"
+                 class="d-flex align-items-center gap-2"
+                 style="display: none">
+                <label class="small text-muted mb-0">Items per page:</label>
+                <select x-model="pageSize"
+                        @change="handlePageSizeChange($event)"
+                        class="form-select form-select-sm"
+                        style="width: auto">
+                    <template x-for="size in pageSizeOptions" :key="size">
+                        <option :value="size" x-text="size"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link"
+                            :disabled="currentPage === 1"
+                            title="First page"
+                            @click="goToPage(1)">First</button>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage === 1 }">
+                    <button class="page-link"
+                            :disabled="currentPage === 1"
+                            title="Previous page"
+                            @click="goToPage(currentPage - 1)">Previous</button>
+                </li>
+                <template x-for="page in visiblePages" :key="page">
+                    <li class="page-item"
+                        :class="{ disabled: page === '...', active: page !== '...' && page === currentPage }">
+                        <span x-show="page === '...'" class="page-link" style="display: none;">...</span>
+                        <button x-show="page !== '...'"
+                                class="page-link"
+                                :title="`Go to page ${page}`"
+                                @click="goToPage(page)"
+                                x-text="page"
+                                style="display: none"></button>
+                    </li>
+                </template>
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link"
+                            :disabled="currentPage === totalPages"
+                            title="Next page"
+                            @click="goToPage(currentPage + 1)">Next</button>
+                </li>
+                <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+                    <button class="page-link"
+                            :disabled="currentPage === totalPages"
+                            title="Last page"
+                            @click="goToPage(totalPages)">Last</button>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>

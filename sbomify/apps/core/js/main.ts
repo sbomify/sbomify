@@ -11,7 +11,6 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import Alpine from 'alpinejs';
 import { registerCopyableValue } from './components/copyable-value';
 
 // Register Chart.js components
@@ -28,7 +27,7 @@ Chart.register(
 declare global {
   interface Window {
     Chart: typeof Chart;
-    Alpine: typeof Alpine;
+    // Alpine: typeof Alpine;
   }
 }
 
@@ -73,8 +72,6 @@ import ReleaseList from './components/ReleaseList.vue';
 document.addEventListener('alpine:init', () => {
   registerCopyableValue();
 });
-window.Alpine = Alpine;
-Alpine.start();
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);

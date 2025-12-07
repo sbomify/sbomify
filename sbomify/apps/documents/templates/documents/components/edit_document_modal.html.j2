@@ -1,0 +1,105 @@
+<div class="modal fade"
+     id="edit-document-modal"
+     tabindex="-1"
+     aria-labelledby="editDocumentModalLabel"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editDocumentModalLabel">Edit Document</h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <form hx-post="{% if is_public_view %}{% url 'documents:documents_table_public' component_id %}{% else %}{% url 'documents:documents_table' component_id %}{% endif %}"
+                  hx-swap="none"
+                  @htmx:after-request="if ($event.detail.successful) { handleEditSuccess() }"
+                  @submit="isUpdating = true">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="_method" value="PATCH">
+                    <input type="hidden" name="document_id" x-model="editForm.document_id">
+                    <div class="mb-3">
+                        <label for="edit-document-name" class="form-label">
+                            Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="edit-document-name"
+                               name="name"
+                               x-model="editForm.name"
+                               required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-version" class="form-label">
+                            Version <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="edit-document-version"
+                               name="version"
+                               x-model="editForm.version"
+                               required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-type" class="form-label">
+                            Document Type <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select"
+                                id="edit-document-type"
+                                name="document_type"
+                                x-model="editForm.document_type"
+                                required>
+                            <option value="">Select a type...</option>
+                            <option value="specification">Specification</option>
+                            <option value="manual">Manual</option>
+                            <option value="readme">README</option>
+                            <option value="documentation">Documentation</option>
+                            <option value="build-instructions">Build Instructions</option>
+                            <option value="configuration">Configuration</option>
+                            <option value="license">License</option>
+                            <option value="compliance">Compliance</option>
+                            <option value="evidence">Evidence</option>
+                            <option value="changelog">Changelog</option>
+                            <option value="release-notes">Release Notes</option>
+                            <option value="security-advisory">Security Advisory</option>
+                            <option value="vulnerability-report">Vulnerability Report</option>
+                            <option value="threat-model">Threat Model</option>
+                            <option value="risk-assessment">Risk Assessment</option>
+                            <option value="pentest-report">Penetration Test Report</option>
+                            <option value="static-analysis">Static Analysis Report</option>
+                            <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                            <option value="quality-metrics">Quality Metrics</option>
+                            <option value="maturity-report">Maturity Report</option>
+                            <option value="report">Report</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-description" class="form-label">Description</label>
+                        <textarea class="form-control"
+                                  id="edit-document-description"
+                                  name="description"
+                                  rows="3"
+                                  x-model="editForm.description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" x-bind:disabled="isUpdating">
+                        <span x-show="!isUpdating">Save Changes</span>
+                        <span x-show="isUpdating">
+                            <span class="spinner-border spinner-border-sm me-1"
+                                  role="status"
+                                  aria-hidden="true"></span>
+                            Saving...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

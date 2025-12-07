@@ -1,0 +1,34 @@
+{% load static %}
+{% load json_extras %}
+<link rel="stylesheet"
+      href="{% static 'css/components/release-list.css' %}">
+{% if releases and releases|length > 0 %}
+    <div class="releases-display"
+         x-data="releaseList('{{ releases|jsonify|escapejs }}', '{{ document_id }}', {{ is_public_view|yesno:"true,false" }})">
+        <div class="releases-list">
+            <template x-for="release in displayedReleases" :key="release.id">
+                <a :href="`{% if is_public_view %}{% url 'core:product_releases_public' 0 %}{% else %}{% url 'core:product_releases' 0 %}{% endif %}`.replace('0', release.product_id)"
+                   class="release-link">
+                    <span class="product-name" x-text="release.product_name"></span>
+                    <span class="version-info">
+                        <span class="version-text"
+                              :class="{ 'is-latest': release.is_latest }"
+                              x-text="release.is_latest ? 'latest' : release.name"></span>
+                        <span x-show="release.is_prerelease" class="prerelease-label">pre</span>
+                    </span>
+                </a>
+            </template>
+        </div>
+        <div x-show="shouldShowExpansion" class="release-expand">
+            <div class="release-actions">
+                <button class="expand-btn"
+                        @click="toggleExpansion"
+                        x-text="getExpandButtonText()"></button>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="empty-releases">
+        <span>No releases</span>
+    </div>
+{% endif %}

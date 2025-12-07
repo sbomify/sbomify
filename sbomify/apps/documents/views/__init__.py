@@ -8,9 +8,9 @@ from django.shortcuts import render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.views.documents_table import DocumentsTableView  # noqa: F401
 from sbomify.apps.teams.branding import build_branding_context
-
-from .models import Document
 
 logger = logging.getLogger(__name__)
 

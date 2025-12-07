@@ -1,0 +1,82 @@
+{% load static %}
+<div x-show="!hasData"
+     class="text-center text-muted py-4"
+     style="display: none">
+    <i class="fas fa-file-alt fa-3x mb-3"></i>
+    <p>No documents found for this component.</p>
+</div>
+<div x-show="hasData" style="display: none;">
+    <div class="data-table">
+        <table class="table" x-bind:class="{ 'dashboard-table': !isPublicView }">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Artifact Type</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Version</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Releases</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in documents_data %}
+                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
+                        <td x-bind:data-label="!isPublicView ? 'Name' : null">
+                            {% if is_public_view %}
+                                <a href="{% url 'documents:document_details_public' item.document.id %}"
+                                   title="Details"
+                                   class="icon-link">{{ item.document.name }}</a>
+                            {% else %}
+                                <a href="{% url 'documents:document_details' item.document.id %}"
+                                   title="Details"
+                                   class="icon-link">{{ item.document.name }}</a>
+                            {% endif %}
+                        </td>
+                        <td x-bind:data-label="!isPublicView ? 'Artifact Type' : null">Document</td>
+                        <td x-bind:data-label="!isPublicView ? 'Type' : null">
+                            <span class="badge bg-warning-subtle text-warning"
+                                  x-text="getDocumentTypeDisplay('{{ item.document.document_type|default:""|escapejs }}')"></span>
+                        </td>
+                        <td x-bind:data-label="!isPublicView ? 'Version' : null"
+                            title="{{ item.document.version }}">
+                            <span x-text="truncateText('{{ item.document.version|escapejs }}', 20)"></span>
+                        </td>
+                        <td x-bind:data-label="!isPublicView ? 'Created' : null">{{ item.document.created_at|date:"M d, Y" }}</td>
+                        <td x-bind:data-label="!isPublicView ? 'Releases' : null">
+                            {% include 'documents/components/release_list.html.j2' with releases=item.releases document_id=item.document.id is_public_view=is_public_view %}
+                        </td>
+                        <td x-bind:data-label="!isPublicView ? 'Actions' : null">
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'documents:document_download' item.document.id %}"
+                                   title="Download"
+                                   class="btn btn-outline-primary btn-sm action-btn">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                <template x-if="hasCrudPermissions">
+                                    <button class="btn btn-sm btn-outline-secondary action-btn"
+                                            title="Edit Document"
+                                            @click="editDocument('{{ item.document.id }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </template>
+                                <template x-if="hasCrudPermissions">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger action-btn"
+                                            title="Delete Document"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#delete-document-modal"
+                                            data-display-name="{{ item.document.name|escapejs }}"
+                                            data-form-document_id="{{ item.document.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </template>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'core/components/pagination_controls.html.j2' %}
+</div>
