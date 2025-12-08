@@ -82,7 +82,7 @@
         {% endif %}
         <div class="vc-component-meta-info"
              data-component-id="{{ component.id }}"
-             data-team-key="{{ request.session.current_team.key }}"
+             data-team-key="{{ current_team.key }}"
              {% if component.has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
     {% if component.component_type == 'sbom' %}
@@ -90,7 +90,7 @@
         <div class="row mt-3">
             <div class="col-12">
                 <div class="vc-vulnerability-timeseries"
-                     data-team-key="{{ request.session.current_team.key }}"
+                     data-team-key="{{ current_team.key }}"
                      data-component-id="{{ component.id }}"
                      data-default-days="30"></div>
             </div>

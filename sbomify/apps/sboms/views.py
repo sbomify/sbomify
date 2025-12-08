@@ -21,8 +21,8 @@ from django.shortcuts import redirect, render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.sboms.utils import build_ntia_template_context
+from sbomify.apps.teams.branding import build_branding_context
 
 # from .decorators import validate_role_in_current_team
 from .models import SBOM

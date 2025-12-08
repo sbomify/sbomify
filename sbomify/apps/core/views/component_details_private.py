@@ -41,7 +41,7 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
 
             sbom_queryset = (
                 SBOM.objects.filter(component_id=component_id)
-                .only("ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at")
+                .only("id", "ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at")
                 .order_by()
             )
             ntia_summary = calculate_ntia_compliance_summary(sbom_queryset)
@@ -52,6 +52,35 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
                     "scope_name": component.get("name"),
                 }
             )
+
+            # Aggregate vulnerability data from latest scan results
+            from django.db.models import Sum
+
+            from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+            sbom_ids = list(sbom_queryset.values_list("id", flat=True))
+            if sbom_ids:
+                # Get the latest scan result for each SBOM and aggregate
+
+                latest_scan_ids = (
+                    VulnerabilityScanResult.objects.filter(sbom_id__in=sbom_ids)
+                    .order_by("sbom_id", "-created_at")
+                    .distinct("sbom_id")
+                    .values_list("id", flat=True)
+                )
+                vuln_totals = VulnerabilityScanResult.objects.filter(id__in=latest_scan_ids).aggregate(
+                    critical=Sum("critical_vulnerabilities"),
+                    high=Sum("high_vulnerabilities"),
+                    medium=Sum("medium_vulnerabilities"),
+                    low=Sum("low_vulnerabilities"),
+                )
+                ntia_summary["vulnerabilities"] = {
+                    "critical": vuln_totals["critical"] or 0,
+                    "high": vuln_totals["high"] or 0,
+                    "medium": vuln_totals["medium"] or 0,
+                    "low": vuln_totals["low"] or 0,
+                }
+
             context["ntia_component_summary"] = ntia_summary
 
         elif component.get("component_type") == Component.ComponentType.DOCUMENT:

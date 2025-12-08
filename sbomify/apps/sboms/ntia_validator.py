@@ -1172,6 +1172,205 @@ class NTIAValidator:
             checks=checks,
         )
 
+    def _evaluate_sbomqs_ntia(self, sbom: NormalizedSBOM) -> NTIAValidationResult:
+        """
+        NTIA validation aligned with sbomqs: checks author, timestamp, dependencies, and per-component fields.
+        """
+        checks: List[NTIACheckResult] = []
+        errors: List[NTIAValidationError] = []
+
+        # Automation support: requires SPDX or CycloneDX
+        if sbom.format.lower() in {"cyclonedx", "spdx"}:
+            checks.append(
+                NTIACheckResult(
+                    element="automation_support",
+                    title="Automation support",
+                    status=NTIACheckStatus.PASS,
+                    message=f"{sbom.format} {sbom.spec_version or ''}".strip(),
+                )
+            )
+        else:
+            msg = f"Unsupported SBOM format: {sbom.format}"
+            checks.append(
+                NTIACheckResult(
+                    element="automation_support",
+                    title="Automation support",
+                    status=NTIACheckStatus.FAIL,
+                    message=msg,
+                    suggestion="Provide CycloneDX or SPDX in a machine-readable format.",
+                )
+            )
+            errors.append(
+                NTIAValidationError(field="automation_support", message=msg, suggestion="Use CycloneDX/SPDX.")
+            )
+
+        # Timestamp
+        if sbom.creation_timestamp:
+            checks.append(
+                NTIACheckResult(
+                    element="timestamp",
+                    title="Creation timestamp",
+                    status=NTIACheckStatus.PASS,
+                    message=sbom.creation_timestamp.isoformat(),
+                )
+            )
+        else:
+            msg = "Missing creation timestamp"
+            checks.append(
+                NTIACheckResult(
+                    element="timestamp",
+                    title="Creation timestamp",
+                    status=NTIACheckStatus.FAIL,
+                    message=msg,
+                    suggestion="Include creationInfo.created or metadata.timestamp.",
+                )
+            )
+            errors.append(NTIAValidationError(field="timestamp", message=msg, suggestion="Add created timestamp."))
+
+        # Author/creator/tool (doc-level)
+        if sbom.authors or sbom.tools or sbom.contacts:
+            checks.append(
+                NTIACheckResult(
+                    element="author",
+                    title="Author/creator",
+                    status=NTIACheckStatus.PASS,
+                    message="Author, supplier, or tool details present.",
+                )
+            )
+        else:
+            msg = "Author/creator details not found"
+            checks.append(
+                NTIACheckResult(
+                    element="author",
+                    title="Author/creator",
+                    status=NTIACheckStatus.FAIL,
+                    message=msg,
+                    suggestion="Include authors/tools or supplier/manufacturer details.",
+                )
+            )
+            errors.append(NTIAValidationError(field="author", message=msg, suggestion="Add author/tool metadata."))
+
+        # Dependency relationships
+        has_dependencies = any(deps for deps in sbom.dependencies.values())
+        if has_dependencies:
+            checks.append(
+                NTIACheckResult(
+                    element="dependency_relationship",
+                    title="Dependency relationships",
+                    status=NTIACheckStatus.PASS,
+                    message="Dependency graph present.",
+                )
+            )
+        else:
+            msg = "No dependency relationships recorded"
+            checks.append(
+                NTIACheckResult(
+                    element="dependency_relationship",
+                    title="Dependency relationships",
+                    status=NTIACheckStatus.FAIL,
+                    message=msg,
+                    suggestion="Provide relationships/dependsOn for components.",
+                )
+            )
+            errors.append(
+                NTIAValidationError(
+                    field="dependency_relationship", message=msg, suggestion="Add dependency relationships."
+                )
+            )
+
+        # Component-level checks
+        missing_names: List[str] = []
+        missing_suppliers: List[str] = []
+        missing_versions: List[str] = []
+        missing_ids: List[str] = []
+
+        for component in sbom.components:
+            label = component.label()
+            if _is_placeholder(component.name):
+                missing_names.append(label)
+            if not component.has_supplier():
+                missing_suppliers.append(label)
+            if not component.has_version():
+                missing_versions.append(label)
+            if not component.has_any_identifier():
+                missing_ids.append(label)
+
+        def add_component_issue(element: str, title: str, affected: List[str], suggestion: str):
+            nonlocal errors, checks
+            if not affected:
+                checks.append(
+                    NTIACheckResult(
+                        element=element, title=title, status=NTIACheckStatus.PASS, message="All components populated."
+                    )
+                )
+                return
+            msg = f"{len(affected)} component(s) missing {title.lower()}"
+            checks.append(
+                NTIACheckResult(
+                    element=element,
+                    title=title,
+                    status=NTIACheckStatus.FAIL,
+                    message=msg,
+                    suggestion=suggestion,
+                    affected=affected,
+                )
+            )
+            errors.append(NTIAValidationError(field=element, message=msg, suggestion=suggestion))
+
+        add_component_issue(
+            "component_name",
+            "Component name",
+            missing_names,
+            "Ensure every component has a name.",
+        )
+        add_component_issue(
+            "supplier_name",
+            "Supplier/creator",
+            missing_suppliers,
+            "Provide supplier/manufacturer or author for each component.",
+        )
+        add_component_issue(
+            "component_version",
+            "Component version",
+            missing_versions,
+            "Add a version for every component (no placeholders).",
+        )
+        add_component_issue(
+            "unique_identifiers",
+            "Unique identifiers",
+            missing_ids,
+            "Include PURL/CPE/hash/external identifiers for components.",
+        )
+
+        automation_section = NTIASectionResult(
+            name=NTIASection.AUTOMATION_SUPPORT,
+            title="Automation Support",
+            summary="Machine-readable format",
+            checks=[check for check in checks if check.element == "automation_support"],
+        )
+        data_fields_section = NTIASectionResult(
+            name=NTIASection.DATA_FIELDS,
+            title="SBOM Data Fields",
+            summary="Supplier, names, versions, IDs, dependencies, author, timestamp",
+            checks=[check for check in checks if check.element != "automation_support"],
+        )
+        practices_section = NTIASectionResult(
+            name=NTIASection.PRACTICES_PROCESSES,
+            title="Practices & Processes",
+            summary="Not evaluated in sbomqs alignment",
+            checks=[],
+        )
+
+        is_compliant = len(errors) == 0
+        status = NTIAComplianceStatus.COMPLIANT if is_compliant else NTIAComplianceStatus.NON_COMPLIANT
+
+        return NTIAValidationResult(
+            is_compliant=is_compliant,
+            status=status,
+            errors=errors,
+            sections=[automation_section, data_fields_section, practices_section],
+        )
+
 
 def validate_sbom_ntia_compliance(sbom_data: Union[str, Dict[str, Any]], sbom_format: str) -> NTIAValidationResult:
     """
@@ -1196,7 +1395,8 @@ def validate_sbom_ntia_compliance(sbom_data: Union[str, Dict[str, Any]], sbom_fo
                 message=f"Invalid JSON format: {exc}",
                 suggestion="Provide SBOM data as valid JSON.",
             )
-            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
+        return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
 
     validator = NTIAValidator()
-    return validator.validate_sbom(sbom_data, sbom_format)
+    normalized = validator._normalize_sbom(sbom_data, sbom_format)
+    return validator._evaluate_sbomqs_ntia(normalized)

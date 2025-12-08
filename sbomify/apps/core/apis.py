@@ -2105,7 +2105,7 @@ def get_dashboard_summary(
         summary_scope = ("team", current_team.get("key"), current_team.get("name"))
 
     sboms_summary_queryset = sboms_qs.only(
-        "ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at"
+        "id", "ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at"
     ).order_by()
     ntia_summary = calculate_ntia_compliance_summary(sboms_summary_queryset)
     ntia_summary.update(
@@ -2115,6 +2115,33 @@ def get_dashboard_summary(
             "scope_name": summary_scope[2],
         }
     )
+
+    # Aggregate vulnerability data from latest scan results
+    from django.db.models import Sum
+
+    from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+    sbom_ids = list(sboms_summary_queryset.values_list("id", flat=True))
+    if sbom_ids:
+        # Get the latest scan result for each SBOM and aggregate
+        latest_scan_ids = (
+            VulnerabilityScanResult.objects.filter(sbom_id__in=sbom_ids)
+            .order_by("sbom_id", "-created_at")
+            .distinct("sbom_id")
+            .values_list("id", flat=True)
+        )
+        vuln_totals = VulnerabilityScanResult.objects.filter(id__in=latest_scan_ids).aggregate(
+            critical=Sum("critical_vulnerabilities"),
+            high=Sum("high_vulnerabilities"),
+            medium=Sum("medium_vulnerabilities"),
+            low=Sum("low_vulnerabilities"),
+        )
+        ntia_summary["vulnerabilities"] = {
+            "critical": vuln_totals["critical"] or 0,
+            "high": vuln_totals["high"] or 0,
+            "medium": vuln_totals["medium"] or 0,
+            "low": vuln_totals["low"] or 0,
+        }
 
     total_products = products_qs.count()
     total_projects = projects_qs.count()
@@ -3477,6 +3504,27 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 log.error(f"Unexpected error checking vulnerability report for SBOM {sbom_id}: {e}")
                 return False
 
+        def get_vulnerability_counts(sbom_id: str) -> dict:
+            """Get vulnerability counts by severity for an SBOM."""
+            try:
+                from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+                # Get the latest scan result for this SBOM
+                latest_result = VulnerabilityScanResult.objects.filter(sbom_id=sbom_id).order_by("-created_at").first()
+
+                if latest_result:
+                    return {
+                        "critical": latest_result.critical_vulnerabilities,
+                        "high": latest_result.high_vulnerabilities,
+                        "medium": latest_result.medium_vulnerabilities,
+                        "low": latest_result.low_vulnerabilities,
+                        "total": latest_result.total_vulnerabilities,
+                    }
+                return None
+            except Exception as e:
+                log.warning(f"Error getting vulnerability counts for SBOM {sbom_id}: {e}")
+                return None
+
         try:
             sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
             # Apply pagination
@@ -3550,6 +3598,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     },
                     "has_vulnerabilities_report": vuln_status,
                     "releases": releases,
+                    "vulnerability_counts": get_vulnerability_counts(sbom.id),
                 }
             )
 

@@ -152,6 +152,15 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
     </div>
     <div class="row mt-4">
         <div class="col-12">
+            <div class="vc-vulnerability-timeseries"
+                 data-team-key="{{ sbom.component.team.key }}"
+                 data-component-id="{{ sbom.component.id }}"
+                 data-sbom-id="{{ sbom.id }}"
+                 data-default-days="90"></div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-12">
             {% if ntia_template.has_data %}
                 <div class="ntia-summary-card">
                     <div class="ntia-summary-card__header">
@@ -304,6 +313,7 @@ APP_BASE_URL: Base URL for the application (for AJAX requests)
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+    {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
 {% endblock %}
 <style>
 .ntia-summary-card {
