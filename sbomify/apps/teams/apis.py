@@ -826,8 +826,6 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     """
     from urllib.parse import urlparse
 
-    from django.conf import settings
-
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
     # Note: urlparse requires a scheme to identify hostname, so we add one if missing
