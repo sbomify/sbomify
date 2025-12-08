@@ -63,9 +63,9 @@ To deploy sbomify in production:
    # Optional: Custom ports and binding
    HTTP_PORT=8000
    HTTPS_PORT=8443
-   POSTGRES_PORT=5432
-   REDIS_PORT=6379
-   BIND_IP=127.0.0.1
+   # For production, use 0.0.0.0 to accept connections from any interface.
+   # Use 127.0.0.1 to restrict access to localhost (e.g., for local development).
+   BIND_IP=0.0.0.0
    ```
 
 3. **Deploy**:
