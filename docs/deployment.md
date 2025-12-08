@@ -60,10 +60,11 @@ To deploy sbomify in production:
    AWS_SBOMS_STORAGE_BUCKET_NAME=sbomify-prod-sboms
    AWS_SBOMS_STORAGE_BUCKET_URL=https://your-s3-endpoint.com/sbomify-prod-sboms
 
-   # Optional: Custom ports
+   # Optional: Custom ports and binding
    SBOMIFY_PORT=8000
    POSTGRES_PORT=5432
    REDIS_PORT=6379
+   BIND_IP=127.0.0.1
    ```
 
 3. **Deploy**:
@@ -89,6 +90,7 @@ The Docker Compose configuration supports extensive customization through enviro
 - `SBOMIFY_PULL_POLICY` - Pull policy (default: `always`)
 - `SBOMIFY_RESTART_POLICY` - Restart policy (default: `always`)
 - `SBOMIFY_PORT` - External port mapping (default: `8000`)
+- `BIND_IP` - IP address to bind Caddy ports to (default: `127.0.0.1`)
 - `APP_BASE_URL` - Application base URL
 - `SECRET_KEY` - Django secret key
 - `SIGNED_URL_SALT` - Salt for signed URLs
