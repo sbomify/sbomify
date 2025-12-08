@@ -811,7 +811,9 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     - Return 200 OK if the domain is recognized and should get a certificate
     - Return 404 (or any non-200) if the domain should NOT get a certificate
 
-    Only domains from teams with Business or Enterprise plans are allowed.
+    Allowed domains:
+    - Main application domain (APP_BASE_URL)
+    - Custom domains from teams with Business or Enterprise plans
 
     Security: This endpoint MUST be blocked from external access at the proxy level.
     See Caddyfile configuration for access restrictions.
@@ -823,6 +825,8 @@ def check_domain_allowed(request: HttpRequest, domain: str):
         200 OK if domain is allowed, 404 if not allowed
     """
     from urllib.parse import urlparse
+
+    from django.conf import settings
 
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
@@ -841,6 +845,20 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     except (ValueError, AttributeError):
         # Invalid domain format
         return 404, None
+
+    # Check if domain is the main application domain
+    if settings.APP_BASE_URL:
+        try:
+            app_base_url_input = settings.APP_BASE_URL.strip()
+            if not app_base_url_input.startswith(("http://", "https://")):
+                app_base_url_input = f"http://{app_base_url_input}"
+            parsed_app = urlparse(app_base_url_input)
+            app_domain = parsed_app.hostname
+            if app_domain and domain_normalized == app_domain.lower():
+                return 200, None
+        except (ValueError, AttributeError):
+            # Invalid APP_BASE_URL - continue to check custom domains
+            pass
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(
