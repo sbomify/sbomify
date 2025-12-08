@@ -54,7 +54,7 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
             )
 
             # Aggregate vulnerability data from latest scan results
-            from django.db.models import Sum
+            from django.db.models import F, OuterRef, Subquery, Sum
 
             from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
 
@@ -62,10 +62,15 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
             if sbom_ids:
                 # Get the latest scan result for each SBOM and aggregate
 
+                latest_scan_subquery = (
+                    VulnerabilityScanResult.objects.filter(sbom_id=OuterRef("sbom_id"))
+                    .order_by("-created_at")
+                    .values("created_at")[:1]
+                )
                 latest_scan_ids = (
                     VulnerabilityScanResult.objects.filter(sbom_id__in=sbom_ids)
-                    .order_by("sbom_id", "-created_at")
-                    .distinct("sbom_id")
+                    .annotate(latest_created_at=Subquery(latest_scan_subquery))
+                    .filter(created_at=F("latest_created_at"))
                     .values_list("id", flat=True)
                 )
                 vuln_totals = VulnerabilityScanResult.objects.filter(id__in=latest_scan_ids).aggregate(

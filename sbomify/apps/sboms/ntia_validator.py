@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Set, Union
 
 from pydantic import BaseModel, Field
 
@@ -284,113 +284,47 @@ class NormalizedSBOM:
         return components_without
 
 
-class NTIAValidator:
-    """NTIA minimum elements validator for SBOM compliance checking."""
+class SBOMNormalizer(Protocol):
+    """Protocol describing a normalizer that produces a NormalizedSBOM."""
 
-    def __init__(self):
-        """Initialize the NTIA validator."""
-        self.logger = logging.getLogger(__name__)
+    format: str
 
-    def validate_sbom(self, sbom_data: Dict[str, Any], sbom_format: str) -> NTIAValidationResult:
-        """
-        Validate an SBOM against NTIA minimum elements.
+    def normalize(self, data: Dict[str, Any]) -> NormalizedSBOM: ...
 
-        Args:
-            sbom_data: The parsed SBOM data as a dictionary
-            sbom_format: The SBOM format ('spdx' or 'cyclonedx')
 
-        Returns:
-            NTIAValidationResult with compliance status and any errors
-        """
-        sbom_format_normalized = (sbom_format or "").lower()
-        if sbom_format_normalized not in {"spdx", "cyclonedx"}:
-            error = NTIAValidationError(
-                field="format",
-                message=f"Unsupported SBOM format: {sbom_format}",
-                suggestion="Use SPDX or CycloneDX SBOM formats for NTIA validation.",
-            )
-            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.NON_COMPLIANT, errors=[error])
+class CycloneDXNormalizer:
+    """Normalize CycloneDX SBOMs into the shared NormalizedSBOM shape."""
 
-        self.logger.info("Starting NTIA validation for %s SBOM", sbom_format_normalized.upper())
+    format = "cyclonedx"
 
-        try:
-            normalized = self._normalize_sbom(sbom_data, sbom_format_normalized)
-        except Exception as exc:  # pragma: no cover - defensive
-            self.logger.exception("Failed to normalise SBOM for NTIA validation: %s", exc)
-            error = NTIAValidationError(
-                field="validation",
-                message=f"Validation failed due to error: {exc}",
-                suggestion="Ensure the SBOM conforms to the SPDX or CycloneDX specification.",
-            )
-            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
+    def normalize(self, data: Dict[str, Any]) -> NormalizedSBOM:
+        components = self._parse_components(data)
+        dependencies = self._parse_dependencies(data)
+        metadata = data.get("metadata", {}) or {}
 
-        sections: List[NTIASectionResult] = [
-            self._evaluate_data_fields(normalized),
-            self._evaluate_automation_support(normalized),
-            self._evaluate_practices_and_processes(normalized),
-        ]
+        authors, contacts, tools, timestamp = self._extract_participants(metadata)
+        properties = self._extract_properties(metadata)
+        external_refs = self._extract_external_references(metadata)
+        metadata_component_ref, document_name = self._extract_document_metadata(metadata)
 
-        field_aliases = {
-            "supplier_name": "supplier",
-            "component_name": "component_name",
-            "component_version": "version",
-            "unique_identifiers": "unique_id",
-            "dependency_relationships": "dependencies",
-            "sbom_author": "sbom_author",
-            "timestamp": "timestamp",
-        }
-
-        errors: List[NTIAValidationError] = []
-        for section in sections:
-            for check in section.checks:
-                if check.status == NTIACheckStatus.FAIL:
-                    alias_field = field_aliases.get(check.element, check.element or "unknown")
-                    errors.append(
-                        NTIAValidationError(
-                            field=alias_field,
-                            message=check.message,
-                            suggestion=check.suggestion or "Refer to NTIA guidance for remediation.",
-                        )
-                    )
-
-        has_failures = any(section.has_failures for section in sections)
-        has_warnings = any(section.has_warnings for section in sections)
-
-        if has_failures:
-            status = NTIAComplianceStatus.NON_COMPLIANT
-            is_compliant = False
-        elif has_warnings:
-            status = NTIAComplianceStatus.PARTIAL
-            is_compliant = False
-        else:
-            status = NTIAComplianceStatus.COMPLIANT
-            is_compliant = True
-
-        self.logger.info(
-            "NTIA validation completed. Status: %s. Components: %d. Errors: %d",
-            status.value,
-            normalized.component_count,
-            len(errors),
+        return NormalizedSBOM(
+            format=self.format,
+            spec_version=_normalise_label(data.get("specVersion")),
+            components=components,
+            dependencies=dependencies,
+            authors=authors,
+            contacts=contacts,
+            tools=tools,
+            creation_timestamp=timestamp,
+            document_name=document_name,
+            document_describes=[metadata_component_ref] if metadata_component_ref else [],
+            metadata_component_ref=metadata_component_ref,
+            external_references=external_refs,
+            properties=properties,
+            raw=data,
         )
 
-        return NTIAValidationResult(
-            is_compliant=is_compliant,
-            status=status,
-            errors=errors,
-            sections=sections,
-        )
-
-    # Normalisation
-    def _normalize_sbom(self, sbom_data: Dict[str, Any], sbom_format: str) -> NormalizedSBOM:
-        sbom_format = (sbom_format or "").lower()
-        if sbom_format not in {"spdx", "cyclonedx"}:
-            raise ValueError(f"Unsupported SBOM format: {sbom_format}")
-
-        if sbom_format == "cyclonedx":
-            return self._normalize_cyclonedx(sbom_data)
-        return self._normalize_spdx(sbom_data)
-
-    def _normalize_cyclonedx(self, data: Dict[str, Any]) -> NormalizedSBOM:
+    def _parse_components(self, data: Dict[str, Any]) -> List[NormalizedComponent]:
         components: List[NormalizedComponent] = []
         for index, component in enumerate(data.get("components", []) or []):
             supplier = None
@@ -464,6 +398,9 @@ class NTIAValidator:
                 )
             )
 
+        return components
+
+    def _parse_dependencies(self, data: Dict[str, Any]) -> Dict[str, Set[str]]:
         dependencies: Dict[str, Set[str]] = {}
         for dependency in data.get("dependencies", []) or []:
             raw_ref = dependency.get("ref") or dependency.get("reference")
@@ -496,9 +433,13 @@ class NTIAValidator:
                         normalised_targets.add(str(target))
                 dependencies.setdefault(ref, set()).update(normalised_targets)
 
-        metadata = data.get("metadata", {}) or {}
-        authors = []
-        contacts = []
+        return dependencies
+
+    def _extract_participants(
+        self, metadata: Dict[str, Any]
+    ) -> tuple[List[str], List[str], List[str], Optional[datetime]]:
+        authors: List[str] = []
+        contacts: List[str] = []
         for author in metadata.get("authors", []) or []:
             if isinstance(author, dict):
                 composed = " ".join(filter(None, [author.get("name"), author.get("email")]))
@@ -509,7 +450,7 @@ class NTIAValidator:
             elif isinstance(author, str):
                 authors.append(author)
 
-        tools = []
+        tools: List[str] = []
         for tool in metadata.get("tools", []) or []:
             if isinstance(tool, dict):
                 components_bits = [tool.get("vendor"), tool.get("name"), tool.get("version")]
@@ -520,43 +461,78 @@ class NTIAValidator:
                 tools.append(tool)
 
         timestamp = _parse_iso_timestamp(metadata.get("timestamp"))
+        return authors, contacts, tools, timestamp
 
-        metadata_component = metadata.get("component") or {}
-        metadata_component_ref = metadata_component.get("bom-ref") or metadata_component.get("bomRef")
-
-        properties = {}
+    def _extract_properties(self, metadata: Dict[str, Any]) -> Dict[str, str]:
+        properties: Dict[str, str] = {}
         for prop in metadata.get("properties", []) or []:
             name = prop.get("name")
             value = prop.get("value")
             if name and value:
                 properties[str(name)] = str(value)
 
-        external_refs = []
+        return properties
+
+    def _extract_external_references(self, metadata: Dict[str, Any]) -> List[str]:
+        external_refs: List[str] = []
         for ref in metadata.get("externalReferences", []) or []:
             reference = ref.get("url") or ref.get("referenceLocator")
             if reference:
                 external_refs.append(reference)
+        return external_refs
+
+    def _extract_document_metadata(self, metadata: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        metadata_component = metadata.get("component") or {}
+        metadata_component_ref = metadata_component.get("bom-ref") or metadata_component.get("bomRef")
+        document_name = _normalise_label(metadata_component.get("name") or metadata.get("name"))
+        return metadata_component_ref, document_name
+
+
+class SPDXNormalizer:
+    """Normalize SPDX SBOMs into the shared NormalizedSBOM shape."""
+
+    format = "spdx"
+
+    def normalize(self, data: Dict[str, Any]) -> NormalizedSBOM:
+        document_ref = str(data.get("SPDXID") or data.get("spdxId") or "SPDXRef-DOCUMENT")
+
+        packages, supplier_contacts = self._parse_packages(data)
+        file_hashes = self._collect_file_hashes(data)
+        self._apply_file_hashes_to_packages(packages, file_hashes)
+
+        relationships = self._parse_relationships(data)
+
+        (
+            authors,
+            contacts,
+            tools,
+            timestamp,
+            properties,
+            document_describes,
+            external_refs,
+            document_name,
+            spec_version,
+        ) = self._extract_document_metadata(data, supplier_contacts, document_ref, relationships)
 
         return NormalizedSBOM(
-            format="cyclonedx",
-            spec_version=_normalise_label(data.get("specVersion")),
-            components=components,
-            dependencies=dependencies,
+            format=self.format,
+            spec_version=spec_version,
+            components=packages,
+            dependencies=relationships,
             authors=authors,
             contacts=contacts,
             tools=tools,
             creation_timestamp=timestamp,
-            document_name=_normalise_label(metadata_component.get("name") or data.get("metadata", {}).get("name")),
-            document_describes=[metadata_component_ref] if metadata_component_ref else [],
-            metadata_component_ref=metadata_component_ref,
+            document_name=document_name,
+            document_describes=document_describes,
+            metadata_component_ref=document_describes[0] if document_describes else None,
             external_references=external_refs,
             properties=properties,
             raw=data,
         )
 
-    def _normalize_spdx(self, data: Dict[str, Any]) -> NormalizedSBOM:
+    def _parse_packages(self, data: Dict[str, Any]) -> tuple[List[NormalizedComponent], Set[str]]:
         packages: List[NormalizedComponent] = []
-        document_ref = str(data.get("SPDXID") or data.get("spdxId") or "SPDXRef-DOCUMENT")
         supplier_contacts: Set[str] = set()
 
         for index, package in enumerate(data.get("packages", []) or []):
@@ -634,6 +610,9 @@ class NTIAValidator:
                 )
             )
 
+        return packages, supplier_contacts
+
+    def _collect_file_hashes(self, data: Dict[str, Any]) -> Set[str]:
         file_hashes: Set[str] = set()
         for file_entry in data.get("files", []) or []:
             for checksum in file_entry.get("checksums", []) or []:
@@ -641,13 +620,18 @@ class NTIAValidator:
                 value = checksum.get("checksumValue")
                 if algorithm and value:
                     file_hashes.add(f"{algorithm}:{value}")
+        return file_hashes
 
-        if file_hashes:
-            for pkg in packages:
-                if not pkg.has_global_identifier():
-                    pkg.global_identifiers.update(file_hashes)
-                    pkg.hashes.update(file_hashes)
+    def _apply_file_hashes_to_packages(self, packages: List[NormalizedComponent], file_hashes: Set[str]) -> None:
+        if not file_hashes:
+            return
 
+        for pkg in packages:
+            if not pkg.has_global_identifier():
+                pkg.global_identifiers.update(file_hashes)
+                pkg.hashes.update(file_hashes)
+
+    def _parse_relationships(self, data: Dict[str, Any]) -> Dict[str, Set[str]]:
         relationships: Dict[str, Set[str]] = {}
         dependency_mappings = {
             "depends_on": "forward",
@@ -709,6 +693,25 @@ class NTIAValidator:
                 for single_target in targets:
                     relationships.setdefault(single_target, set()).add(src)
 
+        return relationships
+
+    def _extract_document_metadata(
+        self,
+        data: Dict[str, Any],
+        supplier_contacts: Set[str],
+        document_ref: str,
+        relationships: Dict[str, Set[str]],
+    ) -> tuple[
+        List[str],
+        List[str],
+        List[str],
+        Optional[datetime],
+        Dict[str, str],
+        List[str],
+        List[str],
+        Optional[str],
+        Optional[str],
+    ]:
         creation_info = data.get("creationInfo", {}) or {}
         creators = creation_info.get("creators", []) or []
         authors: List[str] = []
@@ -735,7 +738,7 @@ class NTIAValidator:
         contacts = list(dict.fromkeys(email for email in contacts if email))
         timestamp = _parse_iso_timestamp(creation_info.get("created"))
 
-        properties = {}
+        properties: Dict[str, str] = {}
         for annotation in data.get("annotations", []) or []:
             comment = annotation.get("comment")
             if comment and ":" in comment:
@@ -753,14 +756,7 @@ class NTIAValidator:
                 external_refs.append(doc_ref["uri"])
 
         document_name = _normalise_label(data.get("name") or creation_info.get("comment"))
-
-        spec_version_raw = data.get("specVersion") or data.get("spdxVersion")
-        spec_version = None
-        if spec_version_raw:
-            spec_version_str = str(spec_version_raw).strip()
-            if spec_version_str.upper().startswith("SPDX-"):
-                spec_version_str = spec_version_str.split("-", 1)[1]
-            spec_version = _normalise_label(spec_version_str)
+        spec_version = self._normalize_spec_version(data)
 
         if data.get("documentNamespace"):
             properties["document_namespace"] = str(data.get("documentNamespace"))
@@ -769,21 +765,137 @@ class NTIAValidator:
         if creation_info.get("comment"):
             properties["creation_comment"] = creation_info.get("comment")
 
-        return NormalizedSBOM(
-            format="spdx",
-            spec_version=spec_version,
-            components=packages,
-            dependencies=relationships,
-            authors=authors,
-            contacts=contacts,
-            tools=tools,
-            creation_timestamp=timestamp,
-            document_name=document_name,
-            document_describes=[str(entry) for entry in document_describes],
-            metadata_component_ref=document_describes[0] if document_describes else None,
-            external_references=external_refs,
-            properties=properties,
-            raw=data,
+        return (
+            authors,
+            contacts,
+            tools,
+            timestamp,
+            properties,
+            describe_targets,
+            external_refs,
+            document_name,
+            spec_version,
+        )
+
+    def _normalize_spec_version(self, data: Dict[str, Any]) -> Optional[str]:
+        spec_version_raw = data.get("specVersion") or data.get("spdxVersion")
+        if not spec_version_raw:
+            return None
+
+        spec_version_str = str(spec_version_raw).strip()
+        if spec_version_str.upper().startswith("SPDX-"):
+            spec_version_str = spec_version_str.split("-", 1)[1]
+        return _normalise_label(spec_version_str)
+
+
+class NTIAValidator:
+    """NTIA minimum elements validator for SBOM compliance checking."""
+
+    def __init__(self):
+        """Initialize the NTIA validator."""
+        self.logger = logging.getLogger(__name__)
+        self.normalizers: Dict[str, SBOMNormalizer] = {
+            "cyclonedx": CycloneDXNormalizer(),
+            "spdx": SPDXNormalizer(),
+        }
+
+    def validate_sbom(self, sbom_data: Dict[str, Any], sbom_format: str) -> NTIAValidationResult:
+        """
+        Validate an SBOM against NTIA minimum elements.
+
+        Args:
+            sbom_data: The parsed SBOM data as a dictionary
+            sbom_format: The SBOM format ('spdx' or 'cyclonedx')
+
+        Returns:
+            NTIAValidationResult with compliance status and any errors
+        """
+        sbom_format_normalized = (sbom_format or "").lower()
+        if sbom_format_normalized not in self.normalizers:
+            error = NTIAValidationError(
+                field="format",
+                message=f"Unsupported SBOM format: {sbom_format}",
+                suggestion="Use SPDX or CycloneDX SBOM formats for NTIA validation.",
+            )
+            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.NON_COMPLIANT, errors=[error])
+
+        self.logger.info("Starting NTIA validation for %s SBOM", sbom_format_normalized.upper())
+
+        try:
+            normalized = self.normalize(sbom_data, sbom_format_normalized)
+        except Exception as exc:  # pragma: no cover - defensive
+            self.logger.exception("Failed to normalise SBOM for NTIA validation: %s", exc)
+            error = NTIAValidationError(
+                field="validation",
+                message=f"Validation failed due to error: {exc}",
+                suggestion="Ensure the SBOM conforms to the SPDX or CycloneDX specification.",
+            )
+            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
+
+        return self.validate(normalized)
+
+    def normalize(self, sbom_data: Dict[str, Any], sbom_format: str) -> NormalizedSBOM:
+        """Normalize an SBOM using the registered normalizer for its format."""
+        sbom_format_normalized = (sbom_format or "").lower()
+        if sbom_format_normalized not in self.normalizers:
+            raise ValueError(f"Unsupported SBOM format: {sbom_format}")
+        return self.normalizers[sbom_format_normalized].normalize(sbom_data)
+
+    def validate(self, normalized: NormalizedSBOM) -> NTIAValidationResult:
+        sections: List[NTIASectionResult] = [
+            self._evaluate_data_fields(normalized),
+            self._evaluate_automation_support(normalized),
+            self._evaluate_practices_and_processes(normalized),
+        ]
+
+        field_aliases = {
+            "supplier_name": "supplier",
+            "component_name": "component_name",
+            "component_version": "version",
+            "unique_identifiers": "unique_id",
+            "dependency_relationships": "dependencies",
+            "sbom_author": "sbom_author",
+            "timestamp": "timestamp",
+        }
+
+        errors: List[NTIAValidationError] = []
+        for section in sections:
+            for check in section.checks:
+                if check.status == NTIACheckStatus.FAIL:
+                    alias_field = field_aliases.get(check.element, check.element or "unknown")
+                    errors.append(
+                        NTIAValidationError(
+                            field=alias_field,
+                            message=check.message,
+                            suggestion=check.suggestion or "Refer to NTIA guidance for remediation.",
+                        )
+                    )
+
+        has_failures = any(section.has_failures for section in sections)
+        has_warnings = any(section.has_warnings for section in sections)
+
+        if has_failures:
+            status = NTIAComplianceStatus.NON_COMPLIANT
+            is_compliant = False
+        elif has_warnings:
+            status = NTIAComplianceStatus.PARTIAL
+            is_compliant = False
+        else:
+            status = NTIAComplianceStatus.COMPLIANT
+            is_compliant = True
+
+        self.logger.info(
+            "NTIA validation completed. Status: %s. Components: %d. Errors: %d",
+            status.value,
+            normalized.component_count,
+            len(errors),
+        )
+
+        return NTIAValidationResult(
+            is_compliant=is_compliant,
+            status=status,
+            errors=errors,
+            sections=sections,
         )
 
     # Evaluation helpers
@@ -1260,7 +1372,13 @@ class NTIAValidator:
             errors.append(NTIAValidationError(field="author", message=msg, suggestion="Add author/tool metadata."))
 
         # Dependency relationships
-        has_dependencies = any(deps for deps in sbom.dependencies.values())
+        has_dependency_graph = bool(sbom.dependencies)
+        has_dependency_edges = any(deps for deps in sbom.dependencies.values())
+        if sbom.component_count <= 1:
+            has_dependencies = has_dependency_graph or has_dependency_edges
+        else:
+            has_dependencies = has_dependency_edges
+
         if has_dependencies:
             checks.append(
                 NTIACheckResult(
@@ -1351,6 +1469,41 @@ class NTIAValidator:
             "Include PURL/CPE/hash/external identifiers for components.",
         )
 
+        missing_global_ids = sbom.components_missing_global_identifiers()
+        if missing_global_ids:
+            affected_labels = sbom.component_labels(missing_global_ids)
+            global_status = (
+                NTIACheckStatus.FAIL if len(missing_global_ids) == sbom.component_count else NTIACheckStatus.WARNING
+            )
+            message = "Some components are missing globally resolvable identifiers (PURL, CPE, SWID, hashes)."
+            checks.append(
+                NTIACheckResult(
+                    element="global_identifier",
+                    title="Global identifiers present",
+                    status=global_status,
+                    message=message,
+                    suggestion="Add globally resolvable identifiers such as PURL, CPE, SWID tags, or hashes.",
+                    affected=affected_labels if global_status != NTIACheckStatus.PASS else [],
+                )
+            )
+            if global_status == NTIACheckStatus.FAIL:
+                errors.append(
+                    NTIAValidationError(
+                        field="global_identifier",
+                        message=message,
+                        suggestion="Add globally resolvable identifiers such as PURL, CPE, SWID tags, or hashes.",
+                    )
+                )
+        else:
+            checks.append(
+                NTIACheckResult(
+                    element="global_identifier",
+                    title="Global identifiers present",
+                    status=NTIACheckStatus.PASS,
+                    message="Global identifiers available for all components.",
+                )
+            )
+
         automation_section = NTIASectionResult(
             name=NTIASection.AUTOMATION_SUPPORT,
             title="Automation Support",
@@ -1404,8 +1557,8 @@ def validate_sbom_ntia_compliance(sbom_data: Union[str, Dict[str, Any]], sbom_fo
                 message=f"Invalid JSON format: {exc}",
                 suggestion="Provide SBOM data as valid JSON.",
             )
-        return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
+            return NTIAValidationResult(is_compliant=False, status=NTIAComplianceStatus.UNKNOWN, errors=[error])
 
     validator = NTIAValidator()
-    normalized = validator._normalize_sbom(sbom_data, sbom_format)
+    normalized = validator.normalize(sbom_data, sbom_format)
     return validator._evaluate_sbomqs_ntia(normalized)
