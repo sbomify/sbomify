@@ -36,6 +36,17 @@
                 </small>
             {% endif %}
         </template>
+        <template data-slot="breadcrumb">
+            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                {% if workspace_public_url and document.component.is_global %}
+                    <a href="{{ workspace_public_url }}"
+                       class="btn btn-outline-secondary btn-sm back-to-trust-center">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Trust Center
+                    </a>
+                {% endif %}
+                {% breadcrumb document.component 'component' %}
+            </div>
+        </template>
     </div>
 {% endblock %}
 {% block extra_css %}

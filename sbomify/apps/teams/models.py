@@ -92,7 +92,7 @@ class Team(models.Model):
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
     is_public = models.BooleanField(
-        default=True, help_text="Controls whether the workspace trust center is publicly accessible."
+        default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )
     billing_plan = models.CharField(max_length=30, null=True, choices=Plan.choices)
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits

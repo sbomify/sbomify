@@ -176,7 +176,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         can_set_private = team.can_be_private()
         if desired_visibility is False and not can_set_private:
-            messages.error(request, "Disabling the trust center is available on Business or Enterprise plans.")
+            messages.error(request, "Disabling the Trust Center is available on Business or Enterprise plans.")
             return redirect("teams:team_settings", team_key=team_key)
 
         team.is_public = desired_visibility
