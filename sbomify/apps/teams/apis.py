@@ -589,7 +589,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
             team.name = payload.name
             if payload.is_public is not None:
                 if payload.is_public is False and not _private_workspace_allowed(team):
-                    return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
+                    return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
                 team.is_public = payload.is_public
             team.save()
 
@@ -634,7 +634,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
             update_data = payload.model_dump(exclude_unset=True)
             desired_visibility = update_data.get("is_public")
             if desired_visibility is False and not _private_workspace_allowed(team):
-                return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
+                return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()

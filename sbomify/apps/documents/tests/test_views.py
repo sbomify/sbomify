@@ -202,7 +202,7 @@ def test_document_details_public_shows_trust_center_link_for_global(
     client: Client,
     public_document,
 ):
-    """Workspace-wide documents should show a back link to the trust center."""
+    """Workspace-wide documents should show a back link to the Trust Center."""
     public_document.component.is_global = True
     public_document.component.save(update_fields=["is_global"])
 
@@ -211,7 +211,7 @@ def test_document_details_public_shows_trust_center_link_for_global(
     )
 
     assert response.status_code == 200
-    assert b"Back to trust center" in response.content
+    assert b"Back to Trust Center" in response.content
     expected_url = reverse("core:workspace_public", kwargs={"workspace_key": public_document.component.team.key})
     assert expected_url.encode() in response.content
 
@@ -230,7 +230,7 @@ def test_document_details_public_hides_trust_center_link_for_project_scoped(
     )
 
     assert response.status_code == 200
-    assert b"Back to trust center" not in response.content
+    assert b"Back to Trust Center" not in response.content
 
 
 @pytest.mark.django_db

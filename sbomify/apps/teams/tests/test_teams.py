@@ -587,7 +587,7 @@ def test_update_visibility_blocks_invalid_billing_plan(
     assert response.url == uri
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("Disabling the trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+    assert any("Disabling the Trust Center is available on Business or Enterprise plans." in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -690,7 +690,7 @@ def test_visibility_toggle__community_cannot_be_private(
     assert team_with_community_plan.is_public is True
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("trust center is available on Business or Enterprise plans" in msg.message for msg in messages)
+    assert any("Trust Center is available on Business or Enterprise plans" in msg.message for msg in messages)
 
 
 @pytest.mark.django_db
@@ -738,7 +738,7 @@ def test_visibility_toggle_disallowed_when_billing_disabled(
     team_with_community_plan.refresh_from_db()
     assert team_with_community_plan.is_public is True
     messages = list(get_messages(response.wsgi_request))
-    assert any("trust center is available on Business or Enterprise plans" in str(msg) for msg in messages)
+    assert any("Trust Center is available on Business or Enterprise plans" in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -1493,7 +1493,7 @@ def test_patch_team_private_not_allowed_on_community(authenticated_api_client, s
     )
 
     assert response.status_code == 403
-    assert "trust center" in response.json()["detail"]
+    assert "Trust Center" in response.json()["detail"]
 
     team.refresh_from_db()
     assert team.is_public is True
