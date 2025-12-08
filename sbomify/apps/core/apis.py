@@ -2038,11 +2038,15 @@ def get_dashboard_summary(
     product = None
     project = None
     component = None
+    is_authenticated = bool(request.user and request.user.is_authenticated)
+    user_teams_qs = Team.objects.filter(member__user=request.user) if is_authenticated else Team.objects.none()
 
     if product_id:
         try:
             product = Product.objects.get(pk=product_id)
-            if not product.is_public and (not request.user or not request.user.is_authenticated):
+            if not product.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=product.team_id).exists()
+            ):
                 return 403, {
                     "detail": "Authentication required for private items",
                     "error_code": ErrorCode.UNAUTHORIZED,
@@ -2052,7 +2056,9 @@ def get_dashboard_summary(
     elif project_id:
         try:
             project = Project.objects.get(pk=project_id)
-            if not project.is_public and (not request.user or not request.user.is_authenticated):
+            if not project.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=project.team_id).exists()
+            ):
                 return 403, {
                     "detail": "Authentication required for private items",
                     "error_code": ErrorCode.UNAUTHORIZED,
@@ -2062,7 +2068,9 @@ def get_dashboard_summary(
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if not component.is_public and (not request.user or not request.user.is_authenticated):
+            if not component.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=component.team_id).exists()
+            ):
                 return 403, {
                     "detail": "Authentication required for private items",
                     "error_code": ErrorCode.UNAUTHORIZED,
@@ -2070,7 +2078,7 @@ def get_dashboard_summary(
         except Component.DoesNotExist:
             return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
     else:
-        if not request.user or not request.user.is_authenticated:
+        if not is_authenticated:
             return 403, {"detail": "Authentication required.", "error_code": ErrorCode.UNAUTHORIZED}
 
     # Import SBOM here to avoid circular import
@@ -2096,7 +2104,6 @@ def get_dashboard_summary(
         sboms_qs = SBOM.objects.filter(component_id=component_id)
         summary_scope = ("component", component.id, component.name)
     else:
-        user_teams_qs = Team.objects.filter(member__user=request.user)
         products_qs = Product.objects.filter(team__in=user_teams_qs)
         projects_qs = Project.objects.filter(team__in=user_teams_qs)
         components_qs = Component.objects.filter(team__in=user_teams_qs)

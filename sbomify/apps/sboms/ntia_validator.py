@@ -172,6 +172,15 @@ def _flatten(items: Iterable[Iterable[str]]) -> List[str]:
     return flattened
 
 
+def _format_hash_entry(hash_entry: Dict[str, Any]) -> Optional[str]:
+    value = hash_entry.get("content") or hash_entry.get("value")
+    if not value:
+        return None
+
+    algorithm = str(hash_entry.get("alg") or hash_entry.get("algorithm") or "").upper()
+    return f"{algorithm}:{value}"
+
+
 @dataclass
 class NormalizedComponent:
     """Unified representation of an SBOM component/package."""
@@ -434,11 +443,11 @@ class NTIAValidator:
                     if ref_type in {"purl", "cpe22uri", "cpe23uri", "swid", "vcs", "distribution", "other"}:
                         global_ids.add(url)
 
-            hashes = {
-                f"{hash_entry.get('alg', hash_entry.get('algorithm', '')).upper()}:{hash_entry.get('content') or hash_entry.get('value')}"  # noqa: E501
-                for hash_entry in component.get("hashes", []) or []
-                if hash_entry.get("content") or hash_entry.get("value")
-            }
+            hashes: Set[str] = set()
+            for hash_entry in component.get("hashes", []) or []:
+                formatted_hash = _format_hash_entry(hash_entry)
+                if formatted_hash:
+                    hashes.add(formatted_hash)
             if hashes:
                 global_ids.update(hashes)
 

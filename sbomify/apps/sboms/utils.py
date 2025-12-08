@@ -119,14 +119,12 @@ def calculate_ntia_compliance_summary(sboms: Iterable[Any]) -> Dict[str, Any]:
         counts[status] += 1
         total_items += 1
 
-        summary_block = {}
         if isinstance(details, dict):
-            summary_block = details.get("summary", {})
-            total_errors += summary_block.get("errors", len(details.get("errors", []) if details else []))
-            total_warnings += summary_block.get("warnings", len(details.get("warnings", []) if details else []))
-        else:
-            total_errors += 0
-            total_warnings += 0
+            summary_block = details.get("summary", {}) or {}
+            errors_fallback = len(details.get("errors", []))
+            warnings_fallback = len(details.get("warnings", []))
+            total_errors += summary_block.get("errors", errors_fallback)
+            total_warnings += summary_block.get("warnings", warnings_fallback)
 
         if checked_at:
             if latest_checked is None or checked_at > latest_checked:
