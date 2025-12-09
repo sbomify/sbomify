@@ -59,7 +59,7 @@
 	}
 	handle @internal_api {
 		@allowed_internal {
-			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
 		}
 		handle @allowed_internal {
 			reverse_proxy sbomify-backend:8000 {
@@ -68,7 +68,9 @@
 				header_down -Server
 			}
 		}
-		respond "Forbidden" 403
+		handle {
+			respond "Forbidden" 403
+		}
 	}
 
 	# Main reverse proxy to Django backend
@@ -170,7 +172,7 @@ https:// {
 		# Internal API endpoints - block external access
 		@internal_api path /api/v1/internal/*
 		handle @internal_api {
-			@allowed_internal remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			@allowed_internal client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
 			handle @allowed_internal {
 				reverse_proxy sbomify-backend:8000 {
 					header_up X-Real-IP {remote_host}
@@ -178,7 +180,9 @@ https:// {
 					header_down -Server
 				}
 			}
-			respond "Forbidden" 403
+			handle {
+				respond "Forbidden" 403
+			}
 		}
 
 		# Main reverse proxy to Django backend
