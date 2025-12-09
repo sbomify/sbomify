@@ -226,6 +226,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "sbomify.apps.core.context_processors.version_context",
+                "sbomify.apps.core.context_processors.pending_invitations_context",
             ],
         },
     },

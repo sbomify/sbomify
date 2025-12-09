@@ -1,13 +1,20 @@
 <li class="nav-item dropdown">
-    <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none"
+    <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none position-relative"
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
             aria-haspopup="true"
             aria-label="User menu (mobile)">
         <i class="align-middle fas fa-cog"></i>
+        {% if pending_invitations_count > 0 %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style="font-size: 0.65rem; min-width: 1.35rem;">
+                {{ pending_invitations_count }}
+                <span class="visually-hidden">pending invitations</span>
+            </span>
+        {% endif %}
     </button>
-    <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center"
+    <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center position-relative"
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
@@ -31,6 +38,13 @@
                 {{ request.user.username }}
             {% endif %}
         </span>
+        {% if pending_invitations_count > 0 %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style="font-size: 0.65rem; min-width: 1.35rem;">
+                {{ pending_invitations_count }}
+                <span class="visually-hidden">pending invitations</span>
+            </span>
+        {% endif %}
     </button>
     <ul class="dropdown-menu dropdown-menu-end shadow-sm" role="menu">
         <li role="presentation">
@@ -42,8 +56,17 @@
             <a class="dropdown-item"
                href="{% url 'core:settings' %}"
                role="menuitem">
-                <i class="align-middle me-2 fas fa-cog"></i>
-                Settings
+                <span class="d-flex align-items-center justify-content-between">
+                    <span class="d-flex align-items-center">
+                        <i class="align-middle me-2 fas fa-cog"></i>
+                        Settings
+                    </span>
+                    {% if pending_invitations_count > 0 %}
+                        <span class="badge bg-danger ms-2 rounded-pill">
+                            {{ pending_invitations_count }}
+                        </span>
+                    {% endif %}
+                </span>
             </a>
         </li>
         <li role="presentation">
