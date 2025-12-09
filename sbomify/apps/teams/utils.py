@@ -15,7 +15,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
 
-from .models import Member, Team, get_team_name_for_user
+from .models import Invitation, Member, Team, get_team_name_for_user
 
 
 def normalize_host(host: str) -> str:
@@ -96,6 +96,47 @@ def refresh_current_team_session(request, team: Team) -> None:
     request.session.modified = True
 
 
+def switch_active_workspace(request, team: Team, role: str | None = None) -> dict:
+    """
+    Canonical helper to switch the user's active session context.
+
+    Updates the user_teams cache and sets the current_team payload in a single place to avoid drift.
+    """
+    membership = None
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        membership = Member.objects.filter(user=user, team=team).first()
+
+    effective_role = role or (membership.role if membership else None)
+    is_default_team = membership.is_default_team if membership else None
+
+    user_teams = None
+    existing_entry: dict = {}
+    if user is not None and getattr(user, "is_authenticated", False):
+        user_teams = get_user_teams(user)
+        existing_entry = user_teams.get(team.key, {})
+
+    team_entry = {
+        "id": team.id,
+        "name": team.name,
+        "role": effective_role or existing_entry.get("role"),
+        "is_default_team": is_default_team if is_default_team is not None else existing_entry.get("is_default_team"),
+        "has_completed_wizard": team.has_completed_wizard,
+        "billing_plan": team.billing_plan,
+        "branding_info": team.branding_info,
+        "is_public": team.is_public,
+    }
+
+    if user is not None and getattr(user, "is_authenticated", False):
+        user_teams = user_teams or {}
+        user_teams[team.key] = {**existing_entry, **team_entry}
+        request.session["user_teams"] = user_teams
+
+    request.session["current_team"] = {"key": team.key, **team_entry}
+    request.session.modified = True
+    return team_entry
+
+
 def get_user_default_team(user) -> int:
     """Get the user's default team ID. Returns the first team they're a member of."""
     try:
@@ -154,6 +195,9 @@ def create_user_team_and_subscription(user) -> Team | None:
 
     This is the canonical function for setting up a new user's workspace.
     Used by both SSO and username/password signup flows to ensure consistency.
+    If the user already has a pending invitation that can be accepted, we
+    skip auto-creating a personal workspace so they land directly in the
+    invited workspace.
 
     Args:
         user: The newly created user instance (must have email set)
@@ -169,6 +213,31 @@ def create_user_team_and_subscription(user) -> Team | None:
     if user.pk and Team.objects.filter(members=user).exists():
         logger.debug(f"User {user.username} already has a team, skipping creation")
         return Team.objects.filter(members=user).first()
+
+    # Skip auto-creation if the user has an active invitation to another workspace
+    if user.email:
+        pending_invitations = list(
+            Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related("team")
+        )
+        if pending_invitations:
+            joinable_invites = []
+            for invitation in pending_invitations:
+                can_add, _ = can_add_user_to_team(invitation.team)
+                if can_add:
+                    joinable_invites.append(invitation)
+
+            if joinable_invites:
+                logger.info(
+                    "User %s has %s joinable pending invitation(s); skipping auto workspace creation",
+                    user.username,
+                    len(joinable_invites),
+                )
+                return None
+
+            logger.info(
+                "User %s has pending invitations but none can be accepted due to limits; creating personal workspace",
+                user.username,
+            )
 
     # Validate user has email
     if not user.email:

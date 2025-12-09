@@ -34,6 +34,7 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
 from sbomify.apps.teams.apis import _private_workspace_allowed
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.teams.utils import create_user_team_and_subscription
 
 
 @pytest.mark.django_db
@@ -402,12 +403,13 @@ def test_accept_invitation(
 ):
     test_team_invitation(sample_team_with_owner_member)
 
+    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    assert invitation is not None
+
     # accept_invite
     client = Client()
+    uri = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
     assert client.login(username="guest", password="guest")  # nosec B106
-
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
-    uri = reverse("teams:accept_invite", kwargs={"invite_id": invitation.id})
 
     response: HttpResponse = client.get(uri)
 
@@ -418,6 +420,102 @@ def test_accept_invitation(
 
     assert len(messages) == 1
     assert messages[0].message.startswith("You have joined")
+
+
+@pytest.mark.django_db
+def test_accept_invitation_sets_default_team_and_session(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="invited-user",
+        email="invited-user@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Invited Workspace")
+    invitation = Invitation.objects.create(team=team, email=invited_user.email, role="admin")
+
+    client = Client()
+    assert client.login(username="invited-user", password="secret")
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+
+    membership = Member.objects.get(user=invited_user, team=team)
+    assert membership.is_default_team is True
+
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == invitation.role
+    assert session["user_teams"][team.key]["role"] == invitation.role
+    assert session["user_teams"][team.key]["is_default_team"] is True
+
+
+@pytest.mark.django_db
+def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="pending-invite-user",
+        email="pending-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Host Workspace")
+    Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    created_team = create_user_team_and_subscription(invited_user)
+
+    assert created_team is None
+    assert Member.objects.filter(user=invited_user).count() == 0
+
+
+@pytest.mark.django_db
+def test_pending_invitation_auto_accept_on_login(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="login-invite-user",
+        email="login-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Invited Team")
+    Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    client = Client()
+    assert client.login(username="login-invite-user", password="secret")
+
+    # Session should now reflect the joined workspace
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == "guest"
+
+    membership = Member.objects.get(user=invited_user, team=team)
+    assert membership.is_default_team is True
+    assert not Invitation.objects.filter(email=invited_user.email, team=team).exists()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_workspace_full_status_page(django_user_model):
+    owner = django_user_model.objects.create_user(
+        username="capacity-owner",
+        email="capacity-owner@example.com",
+        password="secret",
+    )
+    invited_user = django_user_model.objects.create_user(
+        username="capacity-guest",
+        email="capacity-guest@example.com",
+        password="secret",
+    )
+
+    team = Team.objects.create(name="Capacity Limited Workspace")
+    Member.objects.create(user=owner, team=team, role="owner", is_default_team=True)
+    invitation = Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    client = Client()
+    assert client.login(username="capacity-guest", password="secret")
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+
+    assert response.status_code == 403
+    assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
+
+    availability = response.context["availability"]
+    assert availability["plan_name"] == Team.Plan.COMMUNITY.label
+    assert availability["member_limit"] == 1
+    assert availability["current_members"] == 1
 
 
 @pytest.mark.django_db

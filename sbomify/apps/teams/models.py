@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 
 from django.apps import apps
 from django.conf import settings
@@ -202,6 +203,7 @@ class Invitation(models.Model):
         unique_together = ("team", "email")
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
