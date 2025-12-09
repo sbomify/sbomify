@@ -123,7 +123,8 @@ def team_details(request: HttpRequest, team_key: str):
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+@login_required
+@validate_role_in_current_team(["owner", "admin"])
 def delete_member(request: HttpRequest, membership_id: int):
     from sbomify.apps.teams.utils import remove_member_safely
 
@@ -134,6 +135,17 @@ def delete_member(request: HttpRequest, membership_id: int):
         # Return to dashboard as safer default if team unknown, else try referrer?
         # Since we don't know the team key if membership doesn't exist, dashboard is safe.
         return redirect("core:dashboard")
+
+    # Check if actor is an admin trying to remove an owner
+    # We query the actor's membership explicitly to be safe, although session usually has it.
+    actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
+    if actor_membership and actor_membership.role == "admin" and membership.role == "owner":
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Admins cannot remove workspace owners.",
+        )
+        return redirect("teams:team_settings", team_key=membership.team.key)
 
     # Prevent removing the last owner
     if membership.role == "owner":

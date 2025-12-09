@@ -131,6 +131,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect("teams:team_settings", team_key=team_key)
 
         if membership.role == "owner":
+            # Check if actor is an admin trying to remove an owner
+            actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
+            if actor_membership and actor_membership.role == "admin":
+                messages.error(
+                    request,
+                    "Admins cannot remove workspace owners.",
+                )
+                return redirect("teams:team_settings", team_key=team_key)
+
             owners_count = Member.objects.filter(team=membership.team, role="owner").count()
             if owners_count <= 1:
                 messages.warning(
