@@ -59,7 +59,7 @@
 	}
 	handle @internal_api {
 		@allowed_internal {
-			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
 		}
 		handle @allowed_internal {
 			reverse_proxy sbomify-backend:8000 {
@@ -68,7 +68,9 @@
 				header_down -Server
 			}
 		}
-		respond "Forbidden" 403
+		handle {
+			respond "Forbidden" 403
+		}
 	}
 
 	# Main reverse proxy to Django backend
@@ -137,10 +139,26 @@ https:// {
 		level {$LOG_LEVEL:INFO}
 	}
 
-	# Serve directly if already behind HTTPS proxy (Cloudflare Tunnel)
-	@behind_https_proxy {
-		header X-Forwarded-Proto https
+	# Health check endpoints - serve directly without HTTPS redirect
+	# This prevents TLS certificate requests for internal health checks
+	@health path /health
+	handle @health {
+		log_skip
+		respond "OK" 200
 	}
+
+	@django_health path /UuPha8mu/*
+	handle @django_health {
+		log_skip
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
+	}
+
+	# Serve directly if already behind HTTPS proxy (Cloudflare Tunnel)
+	@behind_https_proxy header X-Forwarded-Proto https
 	handle @behind_https_proxy {
 		header {
 			X-Frame-Options "SAMEORIGIN"
@@ -150,9 +168,49 @@ https:// {
 			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 			-Server
 		}
-		import proxy_common
+
+		# Internal API endpoints - block external access
+		@internal_api path /api/v1/internal/*
+		handle @internal_api {
+			@allowed_internal client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			handle @allowed_internal {
+				reverse_proxy sbomify-backend:8000 {
+					header_up X-Real-IP {remote_host}
+					header_up Host {host}
+					header_down -Server
+				}
+			}
+			handle {
+				respond "Forbidden" 403
+			}
+		}
+
+		# Main reverse proxy to Django backend
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 30s
+				read_timeout 0
+				write_timeout 0
+			}
+			health_uri /UuPha8mu/
+			health_interval 10s
+			health_timeout 3s
+			health_status 200
+			lb_try_duration 60s
+			lb_try_interval 100ms
+			fail_duration 30s
+			max_fails 5
+		}
+
+		encode gzip zstd
 	}
 
-	# Otherwise redirect to HTTPS
-	redir https://{host}{uri} permanent
+	# Otherwise redirect to HTTPS (for public domain names)
+	handle {
+		redir https://{host}{uri} permanent
+	}
 }
