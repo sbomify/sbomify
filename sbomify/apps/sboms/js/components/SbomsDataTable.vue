@@ -32,7 +32,7 @@
           </td>
           <td data-label="NTIA Compliant">
             <NTIAComplianceBadge
-              :status="(itemData.sbom.ntia_compliance_status as 'compliant' | 'non_compliant' | 'unknown') || 'unknown'"
+              :status="(itemData.sbom.ntia_compliance_status as NtiaStatus) || 'unknown'"
               :complianceDetails="itemData.sbom.ntia_compliance_details || {}"
               :teamBillingPlan="teamBillingPlan"
               :teamKey="teamKey"
@@ -48,13 +48,23 @@
             />
           </td>
           <td v-if="showVulnerabilities" data-label="Vulnerabilities">
-            <a
-              :href="`/sbom/${itemData.sbom.id}/vulnerabilities`"
-              title="Vulnerabilities"
-              :class="['btn', 'btn-sm', 'btn-outline-warning', 'action-btn', { 'disabled': !itemData.has_vulnerabilities_report }]"
-            >
-              <i class="fas fa-shield-alt me-1"></i> View
-            </a>
+            <div v-if="itemData.vulnerability_counts" class="vuln-counts">
+              <a :href="`/sbom/${itemData.sbom.id}/vulnerabilities`" class="vuln-counts-link">
+                <span class="vuln-badge vuln-badge--critical" :title="`${itemData.vulnerability_counts.critical} Critical`">
+                  {{ itemData.vulnerability_counts.critical }}
+                </span>
+                <span class="vuln-badge vuln-badge--high" :title="`${itemData.vulnerability_counts.high} High`">
+                  {{ itemData.vulnerability_counts.high }}
+                </span>
+                <span class="vuln-badge vuln-badge--medium" :title="`${itemData.vulnerability_counts.medium} Medium`">
+                  {{ itemData.vulnerability_counts.medium }}
+                </span>
+                <span class="vuln-badge vuln-badge--low" :title="`${itemData.vulnerability_counts.low} Low`">
+                  {{ itemData.vulnerability_counts.low }}
+                </span>
+              </a>
+            </div>
+            <span v-else class="text-muted small">No scan</span>
           </td>
           <td data-label="Actions">
             <div class="d-flex gap-2">
@@ -86,6 +96,80 @@ import ReleaseList from '../../../core/js/components/ReleaseList.vue'
 import { useCommonUtils } from '../../../core/js/composables/useCommonUtils'
 import { useUrlGeneration } from '../../../core/js/composables/useUrlGeneration'
 
+type NtiaStatus = 'compliant' | 'partial' | 'non_compliant' | 'unknown'
+
+interface NtiaComplianceError {
+  field: string
+  message: string
+  suggestion?: string
+}
+
+interface NtiaComplianceCheck {
+  element?: string
+  title: string
+  status?: string
+  message: string
+  suggestion?: string | null
+  affected?: string[]
+}
+
+interface NtiaComplianceSection {
+  name?: string
+  title: string
+  summary: string
+  status?: string
+  metrics?: {
+    total?: number
+    pass?: number
+    warning?: number
+    fail?: number
+    unknown?: number
+  }
+  checks?: NtiaComplianceCheck[]
+}
+
+interface NtiaComplianceSummary {
+  errors?: number
+  warnings?: number
+  status?: string
+  score?: number | null
+  checks?: {
+    total?: number
+    pass?: number
+    warning?: number
+    fail?: number
+    unknown?: number
+  }
+  sections?: Record<
+    string,
+    {
+      status?: string
+      metrics?: {
+        total?: number
+        pass?: number
+        warning?: number
+        fail?: number
+        unknown?: number
+      }
+      title?: string
+      summary?: string
+    }
+  >
+}
+
+interface NtiaComplianceDetails {
+  is_compliant?: boolean
+  status?: string
+  error_count?: number
+  warning_count?: number
+  errors?: NtiaComplianceError[]
+  warnings?: NtiaComplianceCheck[]
+  sections?: NtiaComplianceSection[]
+  summary?: NtiaComplianceSummary
+  checked_at?: string | null
+  format?: string
+}
+
 interface Sbom {
   id: string
   name: string
@@ -93,16 +177,8 @@ interface Sbom {
   format_version: string
   version: string
   created_at: string
-  ntia_compliance_status?: string
-  ntia_compliance_details?: {
-    errors?: Array<{
-      field: string
-      message: string
-      suggestion: string
-    }>
-    checked_at?: string
-    error_count?: number
-  }
+  ntia_compliance_status?: NtiaStatus
+  ntia_compliance_details?: NtiaComplianceDetails | null
 }
 
 interface Release {
@@ -119,10 +195,19 @@ interface Release {
   }
 }
 
+interface VulnerabilityCounts {
+  critical: number
+  high: number
+  medium: number
+  low: number
+  total: number
+}
+
 interface SbomData {
   sbom: Sbom
   has_vulnerabilities_report: boolean
   releases: Release[]
+  vulnerability_counts?: VulnerabilityCounts | null
 }
 
 const props = defineProps<{
@@ -280,11 +365,71 @@ const truncateText = (text: string | null | undefined, maxLength: number): strin
   transform: none;
 }
 
+/* Vulnerability Count Badges */
+.vuln-counts {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.vuln-counts-link {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  text-decoration: none;
+}
+
+.vuln-counts-link:hover .vuln-badge {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.vuln-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.35rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.vuln-badge--critical {
+  background: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.vuln-badge--high {
+  background: rgba(234, 88, 12, 0.15);
+  color: #ea580c;
+  border: 1px solid rgba(234, 88, 12, 0.3);
+}
+
+.vuln-badge--medium {
+  background: rgba(202, 138, 4, 0.15);
+  color: #ca8a04;
+  border: 1px solid rgba(202, 138, 4, 0.3);
+}
+
+.vuln-badge--low {
+  background: rgba(37, 99, 235, 0.15);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+}
+
 /* Responsive badge handling */
 @media (max-width: 768px) {
   .release-tags {
     flex-direction: column;
     align-items: flex-start;
+  }
+  
+  .vuln-counts {
+    flex-wrap: wrap;
   }
 }
 </style>

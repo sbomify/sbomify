@@ -7,6 +7,7 @@ import pathlib
 import pytest
 from django.test import Client, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from pytest_mock.plugin import MockerFixture
 
 from sbomify.apps.access_tokens.models import AccessToken
@@ -1421,6 +1422,9 @@ def test_get_dashboard_summary_authenticated_no_data(
     assert data["total_projects"] == 0
     assert data["total_components"] == 0
     assert data["latest_uploads"] == []
+    assert "ntia_compliance_summary" in data
+    assert data["ntia_compliance_summary"]["total"] == 0
+    assert data["ntia_compliance_summary"]["status"] == "unknown"
 
 
 @pytest.mark.django_db
@@ -1441,10 +1445,16 @@ def test_get_dashboard_summary_authenticated_with_data(
     sample_sbom.component = sample_component
     sample_sbom.name = "Test SBOM 1"
     sample_sbom.version = "1.0"
+    sample_sbom.ntia_compliance_status = SBOM.NTIAComplianceStatus.COMPLIANT
+    sample_sbom.ntia_compliance_details = {
+        "status": "compliant",
+        "summary": {"errors": 0, "warnings": 0},
+    }
+    sample_sbom.ntia_compliance_checked_at = timezone.now()
     sample_sbom.save()
 
     # Create a second SBOM for the same component to test ordering and limit
-    SBOM.objects.create(
+    second_sbom = SBOM.objects.create(
         name="Test SBOM 2",
         version="2.0",
         component=sample_component,
@@ -1452,6 +1462,13 @@ def test_get_dashboard_summary_authenticated_with_data(
         sbom_filename="test2.json",
         source="test",
     )
+    second_sbom.ntia_compliance_status = SBOM.NTIAComplianceStatus.PARTIAL
+    second_sbom.ntia_compliance_details = {
+        "status": "partial",
+        "summary": {"errors": 0, "warnings": 1},
+    }
+    second_sbom.ntia_compliance_checked_at = timezone.now()
+    second_sbom.save()
     # Create another product, project, component under the same team
     # (assuming fixtures create them under some default or no team initially)
     Product.objects.create(name="Product 2", team=sample_team_with_owner_member.team)
@@ -1487,6 +1504,12 @@ def test_get_dashboard_summary_authenticated_with_data(
         assert second_latest_upload["component_name"] == sample_component.name
         assert second_latest_upload["sbom_name"] == "Test SBOM 1"
         assert second_latest_upload["sbom_version"] == "1.0"
+
+    summary = data["ntia_compliance_summary"]
+    assert summary["total"] == 2
+    assert summary["counts"]["compliant"] == 1
+    assert summary["counts"]["partial"] == 1
+    assert summary["status"] == "partial"
 
 
 @pytest.mark.django_db
@@ -1940,7 +1963,7 @@ def test_get_dashboard_summary_with_product_filter(
     ProjectComponent.objects.create(project=project2, component=component2)
 
     # Create an SBOM for one of the components in product1
-    SBOM.objects.create(
+    product_sbom = SBOM.objects.create(
         name="Test SBOM",
         version="1.0",
         component=component1a,
@@ -1948,6 +1971,10 @@ def test_get_dashboard_summary_with_product_filter(
         sbom_filename="test.json",
         source="test",
     )
+    product_sbom.ntia_compliance_status = SBOM.NTIAComplianceStatus.COMPLIANT
+    product_sbom.ntia_compliance_details = {"status": "compliant", "summary": {"errors": 0, "warnings": 0}}
+    product_sbom.ntia_compliance_checked_at = timezone.now()
+    product_sbom.save()
 
     url = reverse("api-1:get_dashboard_summary")
     response = client.get(
@@ -1963,6 +1990,11 @@ def test_get_dashboard_summary_with_product_filter(
     assert data["total_projects"] == 2  # project1a, project1b
     assert data["total_components"] == 3  # component1a, component1b, component1c
     assert len(data["latest_uploads"]) == 1  # Only SBOM from product1
+    summary = data["ntia_compliance_summary"]
+    assert summary["total"] == 1
+    assert summary["counts"]["compliant"] == 1
+    assert summary["scope"] == "product"
+    assert str(summary["scope_id"]) == str(product1.id)
 
 
 @pytest.mark.django_db
@@ -1992,7 +2024,7 @@ def test_get_dashboard_summary_with_project_filter(
     ProjectComponent.objects.create(project=project2, component=component2)
 
     # Create an SBOM for one of the components in project1
-    SBOM.objects.create(
+    project_sbom = SBOM.objects.create(
         name="Test SBOM",
         version="1.0",
         component=component1a,
@@ -2000,6 +2032,10 @@ def test_get_dashboard_summary_with_project_filter(
         sbom_filename="test.json",
         source="test",
     )
+    project_sbom.ntia_compliance_status = SBOM.NTIAComplianceStatus.PARTIAL
+    project_sbom.ntia_compliance_details = {"status": "partial", "summary": {"errors": 0, "warnings": 1}}
+    project_sbom.ntia_compliance_checked_at = timezone.now()
+    project_sbom.save()
 
     url = reverse("api-1:get_dashboard_summary")
     response = client.get(
@@ -2015,6 +2051,11 @@ def test_get_dashboard_summary_with_project_filter(
     assert data["total_projects"] == 1  # Just the queried project
     assert data["total_components"] == 2  # component1a, component1b
     assert len(data["latest_uploads"]) == 1  # Only SBOM from project1
+    summary = data["ntia_compliance_summary"]
+    assert summary["total"] == 1
+    assert summary["counts"]["partial"] == 1
+    assert summary["scope"] == "project"
+    assert str(summary["scope_id"]) == str(project1.id)
 
 
 @pytest.mark.django_db

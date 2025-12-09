@@ -369,6 +369,7 @@ class SBOM(models.Model):
         """NTIA compliance status choices."""
 
         COMPLIANT = "compliant", "Compliant"
+        PARTIAL = "partial", "Partially Compliant"
         NON_COMPLIANT = "non_compliant", "Non-Compliant"
         UNKNOWN = "unknown", "Unknown"
 
@@ -454,6 +455,12 @@ class SBOM(models.Model):
             return []
         return self.ntia_compliance_details.get("errors", [])
 
+    def get_ntia_compliance_warnings(self) -> list:
+        """Get NTIA compliance warnings from the details."""
+        if not self.ntia_compliance_details:
+            return []
+        return self.ntia_compliance_details.get("warnings", [])
+
     def get_ntia_compliance_error_count(self) -> int:
         """Get the number of NTIA compliance errors.
 
@@ -461,6 +468,10 @@ class SBOM(models.Model):
             Number of NTIA compliance errors.
         """
         return len(self.get_ntia_compliance_errors())
+
+    def get_ntia_compliance_warning_count(self) -> int:
+        """Get the number of NTIA compliance warnings."""
+        return len(self.get_ntia_compliance_warnings())
 
     def needs_ntia_compliance_check(self) -> bool:
         """Check if the SBOM needs an NTIA compliance check.

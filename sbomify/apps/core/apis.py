@@ -2035,98 +2035,131 @@ def get_dashboard_summary(
 ):
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     # For specific public items, allow unauthenticated access
+    product = None
+    project = None
+    component = None
+    is_authenticated = bool(request.user and request.user.is_authenticated)
+    user_teams_qs = Team.objects.filter(member__user=request.user) if is_authenticated else Team.objects.none()
+
     if product_id:
         try:
             product = Product.objects.get(pk=product_id)
-            if product.is_public:
-                # Allow unauthenticated access for public product stats
-                pass
-            else:
-                # Private product requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not product.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=product.team_id).exists()
+            ):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Product.DoesNotExist:
             return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
     elif project_id:
         try:
             project = Project.objects.get(pk=project_id)
-            if project.is_public:
-                # Allow unauthenticated access for public project stats
-                pass
-            else:
-                # Private project requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not project.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=project.team_id).exists()
+            ):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Project.DoesNotExist:
             return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
-            if component.is_public:
-                # Allow unauthenticated access for public component stats
-                pass
-            else:
-                # Private component requires authentication
-                if not request.user or not request.user.is_authenticated:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
+            if not component.is_public and (
+                not is_authenticated or not user_teams_qs.filter(id=component.team_id).exists()
+            ):
+                return 403, {
+                    "detail": "Authentication required for private items",
+                    "error_code": ErrorCode.UNAUTHORIZED,
+                }
         except Component.DoesNotExist:
             return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
     else:
-        # General dashboard access requires authentication
-        if not request.user or not request.user.is_authenticated:
+        if not is_authenticated:
             return 403, {"detail": "Authentication required.", "error_code": ErrorCode.UNAUTHORIZED}
-
-    # For authenticated users, use their teams; for public access, filter differently
-    if request.user and request.user.is_authenticated:
-        user_teams_qs = Team.objects.filter(member__user=request.user)
-        # Base querysets for the user's teams
-        products_qs = Product.objects.filter(team__in=user_teams_qs)
-        projects_qs = Project.objects.filter(team__in=user_teams_qs)
-        components_qs = Component.objects.filter(team__in=user_teams_qs)
-    else:
-        # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
-        products_qs = Product.objects.none()
-        projects_qs = Project.objects.none()
-        components_qs = Component.objects.none()
 
     # Import SBOM here to avoid circular import
     from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.utils import calculate_ntia_compliance_summary
 
-    latest_sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs).select_related("component")
-
-    # Apply context-specific filtering
     if product_id:
-        # When viewing a product, show projects and components within that product
-        products_qs = products_qs.filter(id=product_id)
-        projects_qs = projects_qs.filter(products__id=product_id)
-        components_qs = components_qs.filter(projects__products__id=product_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
+        products_qs = Product.objects.filter(id=product_id)
+        projects_qs = Project.objects.filter(products__id=product_id).distinct()
+        components_qs = Component.objects.filter(projects__products__id=product_id).distinct()
+        sboms_qs = SBOM.objects.filter(component__projects__products__id=product_id).distinct()
+        summary_scope = ("product", product.id, product.name)
     elif project_id:
-        # When viewing a project, show components within that project
-        projects_qs = projects_qs.filter(id=project_id)
-        components_qs = components_qs.filter(projects__id=project_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
+        products_qs = Product.objects.filter(projects__id=project_id).distinct()
+        projects_qs = Project.objects.filter(id=project_id)
+        components_qs = Component.objects.filter(projects__id=project_id).distinct()
+        sboms_qs = SBOM.objects.filter(component__projects__id=project_id).distinct()
+        summary_scope = ("project", project.id, project.name)
     elif component_id:
-        # When viewing a component, filter SBOMs for that component only
-        components_qs = components_qs.filter(id=component_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component_id=component_id)
+        products_qs = Product.objects.filter(projects__components__id=component_id).distinct()
+        projects_qs = Project.objects.filter(components__id=component_id).distinct()
+        components_qs = Component.objects.filter(id=component_id)
+        sboms_qs = SBOM.objects.filter(component_id=component_id)
+        summary_scope = ("component", component.id, component.name)
+    else:
+        products_qs = Product.objects.filter(team__in=user_teams_qs)
+        projects_qs = Project.objects.filter(team__in=user_teams_qs)
+        components_qs = Component.objects.filter(team__in=user_teams_qs)
+        sboms_qs = SBOM.objects.filter(component__team__in=user_teams_qs)
+        current_team = request.session.get("current_team", {}) if hasattr(request, "session") else {}
+        summary_scope = ("team", current_team.get("key"), current_team.get("name"))
 
-    # Get counts
+    sboms_summary_queryset = sboms_qs.only(
+        "id", "ntia_compliance_status", "ntia_compliance_details", "ntia_compliance_checked_at"
+    ).order_by()
+    ntia_summary = calculate_ntia_compliance_summary(sboms_summary_queryset)
+    ntia_summary.update(
+        {
+            "scope": summary_scope[0],
+            "scope_id": summary_scope[1],
+            "scope_name": summary_scope[2],
+        }
+    )
+
+    # Aggregate vulnerability data from latest scan results
+    from django.db.models import F, OuterRef, Subquery, Sum
+
+    from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+    sbom_ids = list(sboms_summary_queryset.values_list("id", flat=True))
+    if sbom_ids:
+        # Get the latest scan result for each SBOM without DISTINCT ON (SQLite safe)
+        latest_scan_subquery = (
+            VulnerabilityScanResult.objects.filter(sbom_id=OuterRef("sbom_id"))
+            .order_by("-created_at")
+            .values("created_at")[:1]
+        )
+        latest_scan_ids = (
+            VulnerabilityScanResult.objects.filter(sbom_id__in=sbom_ids)
+            .annotate(latest_created_at=Subquery(latest_scan_subquery))
+            .filter(created_at=F("latest_created_at"))
+            .values_list("id", flat=True)
+        )
+        vuln_totals = VulnerabilityScanResult.objects.filter(id__in=latest_scan_ids).aggregate(
+            critical=Sum("critical_vulnerabilities"),
+            high=Sum("high_vulnerabilities"),
+            medium=Sum("medium_vulnerabilities"),
+            low=Sum("low_vulnerabilities"),
+        )
+        ntia_summary["vulnerabilities"] = {
+            "critical": vuln_totals["critical"] or 0,
+            "high": vuln_totals["high"] or 0,
+            "medium": vuln_totals["medium"] or 0,
+            "low": vuln_totals["low"] or 0,
+        }
+
     total_products = products_qs.count()
     total_projects = projects_qs.count()
     total_components = components_qs.count()
 
-    # Get latest uploads
-    latest_sboms_qs = latest_sboms_qs.order_by("-created_at")[:5]
+    latest_sboms_qs = sboms_qs.select_related("component").order_by("-created_at")[:5]
 
     latest_uploads_data = [
         DashboardSBOMUploadInfo(
@@ -2143,6 +2176,7 @@ def get_dashboard_summary(
         total_projects=total_projects,
         total_components=total_components,
         latest_uploads=latest_uploads_data,
+        ntia_compliance_summary=ntia_summary,
     )
 
 
@@ -3482,6 +3516,27 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 log.error(f"Unexpected error checking vulnerability report for SBOM {sbom_id}: {e}")
                 return False
 
+        def get_vulnerability_counts(sbom_id: str) -> dict:
+            """Get vulnerability counts by severity for an SBOM."""
+            try:
+                from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+                # Get the latest scan result for this SBOM
+                latest_result = VulnerabilityScanResult.objects.filter(sbom_id=sbom_id).order_by("-created_at").first()
+
+                if latest_result:
+                    return {
+                        "critical": latest_result.critical_vulnerabilities,
+                        "high": latest_result.high_vulnerabilities,
+                        "medium": latest_result.medium_vulnerabilities,
+                        "low": latest_result.low_vulnerabilities,
+                        "total": latest_result.total_vulnerabilities,
+                    }
+                return None
+            except Exception as e:
+                log.warning(f"Error getting vulnerability counts for SBOM {sbom_id}: {e}")
+                return None
+
         try:
             sboms_queryset = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
             # Apply pagination
@@ -3555,6 +3610,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     },
                     "has_vulnerabilities_report": vuln_status,
                     "releases": releases,
+                    "vulnerability_counts": get_vulnerability_counts(sbom.id),
                 }
             )
 
