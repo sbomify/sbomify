@@ -20,8 +20,6 @@ def pending_invitations_context(request):
 
     from sbomify.apps.teams.models import Invitation
 
-    count = Invitation.objects.filter(
-        email__iexact=request.user.email, expires_at__gt=timezone.now()
-    ).count()
+    count = Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now()).count()
 
     return {"pending_invitations_count": count}

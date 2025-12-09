@@ -1,5 +1,5 @@
-from datetime import timedelta
 import uuid
+from datetime import timedelta
 
 from django.apps import apps
 from django.conf import settings
@@ -201,6 +201,9 @@ class Invitation(models.Model):
     class Meta:
         db_table = apps.get_app_config("teams").label + "_invitations"
         unique_together = ("team", "email")
+        indexes = [
+            models.Index(fields=["email"]),
+        ]
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     token = models.UUIDField(default=uuid.uuid4, unique=True)

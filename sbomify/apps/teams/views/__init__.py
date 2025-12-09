@@ -33,9 +33,10 @@ from sbomify.apps.teams.forms import (
     OnboardingProjectForm,
 )
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace
+from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace  # noqa: F401
 
 log = getLogger(__name__)
+
 
 def _render_workspace_availability_page(
     request: HttpRequest,
@@ -93,6 +94,7 @@ def _render_workspace_availability_page(
         status=HttpResponseForbidden.status_code,
     )
 
+
 from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
     ContactProfileFormView,
     ContactProfileView,
@@ -123,15 +125,20 @@ def team_details(request: HttpRequest, team_key: str):
 @login_required
 @validate_role_in_current_team(["owner"])
 def delete_member(request: HttpRequest, membership_id: int):
+    from sbomify.apps.teams.utils import remove_member_safely
+
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
+        messages.add_message(request, messages.ERROR, "Membership not found")
+        # Return to dashboard as safer default if team unknown, else try referrer?
+        # Since we don't know the team key if membership doesn't exist, dashboard is safe.
+        return redirect("core:dashboard")
 
-    # Verify that there is at least one more owner present for the team
+    # Prevent removing the last owner
     if membership.role == "owner":
-        owner_members = Member.objects.filter(team_id=membership.team_id, role="owner").all()
-        if len(owner_members) == 1:
+        owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+        if owners_count <= 1:
             messages.add_message(
                 request,
                 messages.WARNING,
@@ -139,18 +146,7 @@ def delete_member(request: HttpRequest, membership_id: int):
             )
             return redirect("teams:team_details", team_key=membership.team.key)
 
-    membership.delete()
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Member {membership.user.username} removed from team {membership.team.name}",
-    )
-
-    # If user is deleting his own membership then update session
-    if membership.user_id == request.user.id:
-        request.session["user_teams"] = get_user_teams(request.user)
-
-    return redirect("teams:team_details", team_key=membership.team.key)
+    return remove_member_safely(request, membership)
 
 
 @login_required

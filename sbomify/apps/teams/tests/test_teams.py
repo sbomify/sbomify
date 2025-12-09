@@ -566,9 +566,10 @@ def test_delete_membership(
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
+    # When removing a user from their last workspace, a new personal workspace is created
     assert (
         messages[0].message
-        == f"Member {membership.user.username} removed from team {membership.team.name}"
+        == f"Member {membership.user.username} removed from workspace. A new personal workspace has been created for them."
     )
     with pytest.raises(Member.DoesNotExist):
         Member.objects.get(pk=membership.id)

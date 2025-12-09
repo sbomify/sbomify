@@ -163,9 +163,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
     # Check team capacity
     can_add, error_message = can_add_user_to_team(invitation.team)
     if not can_add:
-        messages.add_message(
-            request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}"
-        )
+        messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
         return redirect("core:settings")
 
     # Create membership in atomic transaction to ensure it's committed

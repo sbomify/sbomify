@@ -4,9 +4,11 @@ import logging
 from collections import defaultdict
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db import transaction
+from django.shortcuts import redirect
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -402,3 +404,98 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     except Exception as e:
         # Cache invalidation failure shouldn't break the flow
         logger.warning(f"Failed to invalidate cache for domain {domain}: {e}")
+
+
+def remove_member_safely(request, membership: Member):
+    """
+    Safely remove a member from a team, handling last-workspace edge cases.
+
+    This function:
+    1. Checks if it's a self-removal vs admin removal.
+    2. Checks if this is the user's last workspace.
+    3. Handles creation of a fallback personal workspace if needed.
+    4. Updates session data accordingly.
+    5. Returns a redirect to the appropriate next page.
+    """
+    removed_user = membership.user
+    removed_team_name = membership.team.display_name
+    removed_team_key = membership.team.key
+    is_self_removal = membership.user_id == request.user.id
+
+    # Check if this is the user's last workspace BEFORE deleting
+    is_last_workspace = Member.objects.filter(user=removed_user).count() == 1
+
+    membership.delete()
+
+    # If this was the user's last workspace, try to create a personal workspace
+    if is_last_workspace:
+        new_team = create_user_team_and_subscription(removed_user)
+
+        # If new team creation succeeded
+        if new_team:
+            if is_self_removal:
+                messages.warning(
+                    request,
+                    f"You have been removed from {removed_team_name}.",
+                )
+                # Update session with the new workspace
+                user_teams = get_user_teams(request.user)
+                request.session["user_teams"] = user_teams
+                request.session["current_team"] = {"key": new_team.key, **user_teams.get(new_team.key, {})}
+                request.session.modified = True
+
+                return redirect("core:dashboard")
+            else:
+                # Owner/admin removed someone else
+                messages.info(
+                    request,
+                    (
+                        f"Member {removed_user.username} removed from workspace. "
+                        "A new personal workspace has been created for them."
+                    ),
+                )
+                return redirect("teams:team_settings", team_key=removed_team_key)
+
+        # If new team creation FAILED (e.g. pending invites exist), handle gracefully
+        else:
+            if is_self_removal:
+                messages.warning(
+                    request,
+                    (
+                        f"You have been removed from {removed_team_name}. "
+                        "Please accept a pending invitation or contact support."
+                    ),
+                )
+                # Clear current team as they have none
+                request.session.pop("current_team", None)
+                request.session["user_teams"] = {}
+                request.session.modified = True
+                # Redirect to a safe place (e.g. pending invitations if we had a page for that, or home)
+                # Since we don't have a dedicated "my invitations" page visible without a workspace easily,
+                # redirecting to dashboard which might show the "create workspace" or "accept invite" state is best.
+                return redirect("core:dashboard")
+            else:
+                messages.info(
+                    request,
+                    f"Member {removed_user.username} removed from workspace.",
+                )
+                return redirect("teams:team_settings", team_key=removed_team_key)
+
+    # Normal removal (user has other workspaces)
+    if is_self_removal:
+        messages.info(request, f"You have left {removed_team_name}.")
+        user_teams = get_user_teams(request.user)
+        request.session["user_teams"] = user_teams
+
+        # Reset current team to another workspace if available, otherwise clear it
+        if user_teams:
+            next_team_key, next_team = next(iter(user_teams.items()))
+            request.session["current_team"] = {"key": next_team_key, **next_team}
+        else:
+            request.session.pop("current_team", None)
+
+        request.session.modified = True
+        return redirect("teams:teams_dashboard")
+    else:
+        messages.info(request, f"Member {removed_user.username} removed from workspace {removed_team_name}")
+        return redirect("teams:team_settings", team_key=removed_team_key)

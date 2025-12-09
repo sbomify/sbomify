@@ -23,10 +23,21 @@ def _accept_pending_invitations(user, request: HttpRequest | None = None) -> lis
     """
     Accept any pending invitations for the user automatically on login.
 
+    Only auto-accepts for NEW users (no existing team memberships).
+    Existing users will see pending invitations in their settings page
+    and can choose to accept or reject them manually.
+
     Returns a list of dicts with accepted invitation metadata (team_key, invitation_id)
     to drive session selection and downstream flows.
     """
     if not user.email:
+        return []
+
+    # Skip auto-accept for existing users who already have workspaces
+    # They will see pending invitations in /settings and can accept/reject manually
+    existing_memberships = Member.objects.filter(user=user).exists()
+    if existing_memberships:
+        logger.info("User %s has existing workspaces; skipping auto-accept for pending invitations", user.username)
         return []
 
     accepted: list[dict] = []
@@ -86,9 +97,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
         # Prefer an explicit default workspace; otherwise fall back to first
         default_team_key = next((key for key, data in user_teams.items() if data.get("is_default_team")), None)
         active_team_key = (
-            (joined_invites[0]["team_key"] if joined_invites else None)
-            or default_team_key
-            or next(iter(user_teams))
+            (joined_invites[0]["team_key"] if joined_invites else None) or default_team_key or next(iter(user_teams))
         )
         request.session["current_team"] = {"key": active_team_key, **user_teams[active_team_key]}
         request.session.modified = True

@@ -8,7 +8,8 @@
         <i class="align-middle fas fa-cog"></i>
         {% if pending_invitations_count > 0 %}
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="font-size: 0.65rem; min-width: 1.35rem;">
+                  style="font-size: 0.65rem;
+                         min-width: 1.35rem">
                 {{ pending_invitations_count }}
                 <span class="visually-hidden">pending invitations</span>
             </span>
@@ -40,7 +41,8 @@
         </span>
         {% if pending_invitations_count > 0 %}
             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="font-size: 0.65rem; min-width: 1.35rem;">
+                  style="font-size: 0.65rem;
+                         min-width: 1.35rem">
                 {{ pending_invitations_count }}
                 <span class="visually-hidden">pending invitations</span>
             </span>
@@ -62,9 +64,7 @@
                         Settings
                     </span>
                     {% if pending_invitations_count > 0 %}
-                        <span class="badge bg-danger ms-2 rounded-pill">
-                            {{ pending_invitations_count }}
-                        </span>
+                        <span class="badge bg-danger ms-2 rounded-pill">{{ pending_invitations_count }}</span>
                     {% endif %}
                 </span>
             </a>

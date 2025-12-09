@@ -116,30 +116,30 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return redirect("teams:team_settings", team_key=team_key)
 
     def _delete_member(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        from sbomify.apps.teams.utils import remove_member_safely
+
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
             return redirect("teams:team_settings", team_key=team_key)
 
+        member_id = form.cleaned_data["member_id"]
         try:
-            membership = Member.objects.get(pk=form.cleaned_data["member_id"], team__key=team_key)
+            membership = Member.objects.get(pk=member_id, team__key=team_key)
         except Member.DoesNotExist:
             messages.error(request, "Member not found")
             return redirect("teams:team_settings", team_key=team_key)
 
         if membership.role == "owner":
-            owner_count = Member.objects.filter(team_id=membership.team_id, role="owner").count()
-            if owner_count == 1:
+            owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+            if owners_count <= 1:
                 messages.warning(
                     request,
                     "Cannot delete the only owner of the workspace. Please assign another owner first.",
                 )
                 return redirect("teams:team_settings", team_key=team_key)
 
-        membership.delete()
-        messages.info(request, f"Member {membership.user.username} removed from workspace {membership.team.name}")
-
-        return redirect("teams:team_settings", team_key=team_key)
+        return remove_member_safely(request, membership)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
         form = DeleteInvitationForm(request.POST)
