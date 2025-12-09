@@ -826,6 +826,8 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     """
     from urllib.parse import urlparse
 
+    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
+
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
     # Note: urlparse requires a scheme to identify hostname, so we add one if missing
@@ -838,10 +840,12 @@ def check_domain_allowed(request: HttpRequest, domain: str):
         # Extract just the hostname (strips port, path, query, etc.)
         domain_normalized = parsed.hostname
         if not domain_normalized:
+            logger.warning(f"On-demand TLS denied: invalid domain format (no hostname extracted): {domain}")
             return 404, None
         domain_normalized = domain_normalized.lower()
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as e:
         # Invalid domain format
+        logger.warning(f"On-demand TLS denied: failed to parse domain '{domain}': {e}")
         return 404, None
 
     # Check if domain is the main application domain
@@ -853,9 +857,11 @@ def check_domain_allowed(request: HttpRequest, domain: str):
             parsed_app = urlparse(app_base_url_input)
             app_domain = parsed_app.hostname
             if app_domain and domain_normalized == app_domain.lower():
+                logger.info(f"On-demand TLS approved: {domain_normalized} (main application domain)")
                 return 200, None
         except (ValueError, AttributeError):
             # Invalid APP_BASE_URL - continue to check custom domains
+            logger.warning(f"Failed to parse APP_BASE_URL: {settings.APP_BASE_URL}")
             pass
 
     # Check if domain exists and belongs to Business/Enterprise team
@@ -864,6 +870,8 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     ).exists()
 
     if is_allowed:
+        logger.info(f"On-demand TLS approved: {domain_normalized} (custom domain)")
         return 200, None
     else:
+        logger.warning(f"On-demand TLS denied: {domain_normalized} (not found in allowed domains)")
         return 404, None
