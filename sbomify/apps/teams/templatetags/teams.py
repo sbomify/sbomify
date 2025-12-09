@@ -1,6 +1,9 @@
-from django import template
+from datetime import timedelta
 
-from sbomify.apps.teams.utils import get_user_teams
+from django import template
+from django.utils import timezone
+
+from sbomify.apps.teams.utils import update_user_teams_session
 
 register = template.Library()
 
@@ -33,10 +36,27 @@ def user_workspaces(context):
     if not request or not hasattr(request, "user") or not request.user.is_authenticated:
         return {}
 
-    user_teams = get_user_teams(request.user)
-    if user_teams != request.session.get("user_teams"):
-        request.session["user_teams"] = user_teams
-        request.session.modified = True
+    user_teams = request.session.get("user_teams")
+    last_checked_raw = request.session.get("user_teams_checked_at")
+    last_checked = None
+    if last_checked_raw:
+        try:
+            last_checked = timezone.datetime.fromisoformat(last_checked_raw)
+            if timezone.is_naive(last_checked):
+                last_checked = timezone.make_aware(last_checked, timezone.utc)
+        except ValueError:
+            last_checked = None
+
+    ttl_seconds = 300
+    needs_refresh = (
+        not user_teams
+        or not request.session.get("user_teams_version")
+        or not last_checked
+        or (timezone.now() - last_checked) > timedelta(seconds=ttl_seconds)
+    )
+
+    if needs_refresh:
+        user_teams = update_user_teams_session(request, request.user)
 
     current_team = request.session.get("current_team") or {}
     current_key = current_team.get("key")
