@@ -223,7 +223,7 @@ def darken_hex(hex_color: str, amount: float = 0.1) -> str:
         b = int(b * 255)
 
         return f"#{r:02x}{g:02x}{b:02x}"
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
         return hex_color
 
 
@@ -255,5 +255,5 @@ def lighten_hex(hex_color: str, amount: float = 0.1) -> str:
         b = int(b * 255)
 
         return f"#{r:02x}{g:02x}{b:02x}"
-    except Exception:
+    except (ValueError, TypeError, OverflowError):
         return hex_color

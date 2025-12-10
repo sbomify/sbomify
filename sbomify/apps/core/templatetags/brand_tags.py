@@ -9,6 +9,10 @@ from sbomify.apps.teams.branding import (
 
 register = template.Library()
 
+# Pre-compute fallback RGB string once to avoid duplicating logic in the filter.
+_fallback_r, _fallback_g, _fallback_b = hex_to_rgb_tuple(DEFAULT_FALLBACK_GRAY)
+DEFAULT_FALLBACK_GRAY_RGB = f"{_fallback_r}, {_fallback_g}, {_fallback_b}"
+
 
 @register.filter
 def hex_to_rgb(hex_color):
@@ -17,12 +21,12 @@ def hex_to_rgb(hex_color):
         # Use centralized logic from branding.py
         # Check if it's a valid hex string first to avoid errors
         if not isinstance(hex_color, str) or not hex_color.startswith("#"):
-            return DEFAULT_FALLBACK_GRAY
+            return DEFAULT_FALLBACK_GRAY_RGB
 
         r, g, b = hex_to_rgb_tuple(hex_color)
         return f"{r}, {g}, {b}"
     except Exception:
-        return DEFAULT_FALLBACK_GRAY
+        return DEFAULT_FALLBACK_GRAY_RGB
 
 
 @register.filter
