@@ -46,7 +46,16 @@ class DynamicHostValidationMiddleware:
         return self.get_response(request)
 
     def get_host_from_request(self, request):
-        """Extract and normalize host from request"""
+        """
+        Extract and normalize the host from the request.
+
+        Normalization performed:
+        - Strips any port from the host (e.g., 'example.com:8000' -> 'example.com')
+        - Converts the host to lowercase
+
+        Returns:
+            str: The normalized, lowercased hostname with any port removed.
+        """
         host = request.get_host().split(":")[0].lower()
         return host
 
@@ -78,7 +87,18 @@ class DynamicHostValidationMiddleware:
         return self._check_custom_domain(host)
 
     def _check_custom_domain(self, host):
-        """Check custom domain with Redis caching"""
+        """
+        Check if a custom domain is allowed, using Redis-backed caching.
+
+        Returns:
+            bool: True if the domain is allowed, False otherwise.
+
+        Caching behavior:
+        - Valid domains are cached for 1 hour (3600 seconds).
+        - Invalid domains are cached for 5 minutes (300 seconds).
+          This minimizes database queries for valid domains and allows
+          quick addition of new domains by using a shorter TTL for invalid ones.
+        """
         from django.core.cache import cache
 
         cache_key = f"allowed_host:{host}"
