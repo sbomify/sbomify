@@ -4,7 +4,9 @@
  */
 
 /* ===== RESET & BASE ===== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -20,15 +22,28 @@ body {
 }
 
 /* ===== TYPOGRAPHY ===== */
-.h1, .h2, .h3, .h4, .h5, .h6,
-h1, h2, h3, h4, h5, h6 {
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: var(--text-title);
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
   margin-bottom: 0.5rem;
 }
 
-p, label, th, td {
+p,
+label,
+th,
+td {
   color: var(--text-primary);
 }
 
@@ -95,6 +110,7 @@ code {
 
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -123,6 +139,7 @@ code {
 
 /* ===== PRINT STYLES ===== */
 @media print {
+
   .sidebar,
   .navbar,
   .btn,
@@ -140,4 +157,10 @@ code {
     background: white !important;
     color: black !important;
   }
+}
+
+/* ===== COMPONENTS ===== */
+.navbar-badge-custom {
+  font-size: 0.65rem;
+  min-width: 1.35rem;
 }

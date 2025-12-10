@@ -202,12 +202,12 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation = Invitation.objects.select_related("team").get(pk=invitation_id)
     except Invitation.DoesNotExist:
         messages.add_message(request, messages.ERROR, "Invitation not found or has already been processed.")
-        return redirect("core:dashboard")
+        return redirect("core:settings")
 
     # Verify invitation belongs to this user
     if (request.user.email or "").lower() != invitation.email.lower():
         messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
-        return redirect("core:dashboard")
+        return redirect("core:settings")
 
     team_name = invitation.team.display_name
 
@@ -215,7 +215,7 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         invitation.delete()
 
     messages.add_message(request, messages.SUCCESS, f"You have declined the invitation to join {team_name}.")
-    return redirect("core:dashboard")
+    return redirect("core:settings")
 
 
 @login_required

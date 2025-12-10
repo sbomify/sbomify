@@ -123,7 +123,6 @@ def team_details(request: HttpRequest, team_key: str):
 
 
 @login_required
-@login_required
 @validate_role_in_current_team(["owner", "admin"])
 def delete_member(request: HttpRequest, membership_id: int):
     from sbomify.apps.teams.utils import remove_member_safely
@@ -248,7 +247,10 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
     # Backward compatibility for legacy numeric invite links
     if invitation is None and invite_token.isdigit():
-        invitation = Invitation.objects.filter(id=int(invite_token)).first()
+        try:
+            invitation = Invitation.objects.filter(id=int(invite_token)).first()
+        except ValueError:
+            pass
 
     if invitation is None:
         # If the invitation was auto-accepted during login, recover using session data
@@ -258,7 +260,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 inv
                 for inv in auto_invites
                 if inv.get("invitation_token") == invite_token
-                or (invite_token.isdigit() and inv.get("invitation_id") == int(invite_token))
+                or (invite_token.isdigit() and str(inv.get("invitation_id")) == invite_token)
             ),
             None,
         )

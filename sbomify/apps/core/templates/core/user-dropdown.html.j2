@@ -7,9 +7,7 @@
             aria-label="User menu (mobile)">
         <i class="align-middle fas fa-cog"></i>
         {% if pending_invitations_count > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="font-size: 0.65rem;
-                         min-width: 1.35rem">
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger navbar-badge-custom">
                 {{ pending_invitations_count }}
                 <span class="visually-hidden">pending invitations</span>
             </span>
@@ -40,9 +38,7 @@
             {% endif %}
         </span>
         {% if pending_invitations_count > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="font-size: 0.65rem;
-                         min-width: 1.35rem">
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger navbar-badge-custom">
                 {{ pending_invitations_count }}
                 <span class="visually-hidden">pending invitations</span>
             </span>
