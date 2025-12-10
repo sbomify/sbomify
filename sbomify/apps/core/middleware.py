@@ -1,9 +1,11 @@
+import ipaddress
 import logging
 
 from django.http import HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
 
 from sbomify.apps.core.utils import get_client_ip
+from sbomify.apps.teams.utils import normalize_host
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,20 @@ class DynamicHostValidationMiddleware:
             ]
         )
 
+        # Parse APP_BASE_URL once at initialization instead of on first request
+        self._app_host = None
+        try:
+            from urllib.parse import urlparse
+
+            from django.conf import settings
+
+            if settings.APP_BASE_URL:
+                self._app_host = urlparse(settings.APP_BASE_URL).hostname
+        except (ImportError, AttributeError, ValueError) as e:
+            # During tests or early startup, settings might not be ready
+            # or APP_BASE_URL might be malformed
+            logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
+
     def __call__(self, request):
         host = self.get_host_from_request(request)
 
@@ -56,35 +72,49 @@ class DynamicHostValidationMiddleware:
         Returns:
             str: The normalized, lowercased hostname with any port removed.
         """
-        host = request.get_host().split(":")[0].lower()
-        return host
+        return normalize_host(request.get_host())
 
     def is_valid_host(self, host):
         """
         Check if host is allowed with three-tier validation:
         1. Static hosts (in-memory set) - instant
-        2. Redis cache - microseconds
-        3. Database query - only on cache miss
+        2. APP_BASE_URL check (parsed once at init) - instant
+        3. Redis cache - microseconds
+        4. Database query - only on cache miss
+
+        Security: IP addresses are only allowed in the static hosts list.
+        Custom domains must be FQDNs, not IPs.
         """
         # Tier 1: Static hosts (O(1) set lookup, no external calls)
+        # These can include IPs for internal/development use
         if host in self.static_hosts:
             return True
 
-        # Tier 2: Check APP_BASE_URL (cached at module load time)
-        if hasattr(self, "_app_host") and host == self._app_host:
+        # Tier 2: Check APP_BASE_URL (parsed once at init, simple comparison)
+        if self._app_host and host == self._app_host:
             return True
-        elif not hasattr(self, "_app_host"):
-            from urllib.parse import urlparse
 
-            from django.conf import settings
-
-            if settings.APP_BASE_URL:
-                self._app_host = urlparse(settings.APP_BASE_URL).hostname
-                if host == self._app_host:
-                    return True
+        # Security check: Reject IP addresses for custom domains
+        # Custom domains must be FQDNs only
+        if self._is_ip_address(host):
+            logger.warning(f"Rejected IP address in Host header: {host}")
+            return False
 
         # Tier 3: Custom domains (Redis cache + DB fallback)
         return self._check_custom_domain(host)
+
+    def _is_ip_address(self, host: str) -> bool:
+        """
+        Check if host is an IP address (IPv4 or IPv6).
+
+        Returns:
+            bool: True if host is an IP address, False otherwise.
+        """
+        try:
+            ipaddress.ip_address(host)
+            return True
+        except ValueError:
+            return False
 
     def _check_custom_domain(self, host):
         """

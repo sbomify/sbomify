@@ -191,3 +191,55 @@ def test_middleware_caching_behavior(client):
     # Second request should hit cache and also work
     response2 = client.get("/.well-known/com.sbomify.domain-check", HTTP_HOST=custom_domain)
     assert response2.status_code == 200
+
+
+def test_normalize_host_handles_ipv6():
+    """Test that normalize_host properly handles IPv6 addresses."""
+    from sbomify.apps.teams.utils import normalize_host
+
+    # IPv6 addresses with ports - extracts correctly without the brackets
+    assert normalize_host("[::1]:8000") == "::1"
+    assert normalize_host("[2001:db8::1]:8000") == "2001:db8::1"
+    # Note: urlparse doesn't normalize IPv6 format, just extracts it
+    assert normalize_host("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:443") == "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+
+    # IPv6 addresses without ports
+    assert normalize_host("[::1]") == "::1"
+    assert normalize_host("[2001:db8::1]") == "2001:db8::1"
+
+    # Regular domains still work
+    assert normalize_host("example.com") == "example.com"
+    assert normalize_host("example.com:8000") == "example.com"
+    assert normalize_host("Example.COM:443") == "example.com"
+
+    # Localhost
+    assert normalize_host("localhost") == "localhost"
+    assert normalize_host("localhost:8000") == "localhost"
+    assert normalize_host("127.0.0.1:8000") == "127.0.0.1"
+
+
+@pytest.mark.django_db
+def test_middleware_rejects_ip_addresses(client):
+    """
+    Test that middleware rejects IP addresses for custom domains.
+
+    Security: Only FQDNs should be allowed as custom domains, not IP addresses.
+    Static hosts (localhost, 127.0.0.1) are allowed for internal use.
+    """
+    from django.core.cache import cache
+
+    # Static IPs should still work (localhost, 127.0.0.1)
+    response = client.get("/", HTTP_HOST="127.0.0.1")
+    assert response.status_code != 400, "Static IP 127.0.0.1 should be allowed"
+
+    # But other IPv4 addresses should be rejected
+    cache.delete("allowed_host:192.168.1.100")
+    response = client.get("/", HTTP_HOST="192.168.1.100")
+    assert response.status_code == 400, "Non-static IPv4 should be rejected"
+    assert b"Invalid host header" in response.content
+
+    # IPv6 addresses should be rejected (except ::1 which is not in our static list currently)
+    cache.delete("allowed_host:2001:db8::1")
+    response = client.get("/", HTTP_HOST="[2001:db8::1]")
+    assert response.status_code == 400, "IPv6 addresses should be rejected"
+    assert b"Invalid host header" in response.content
