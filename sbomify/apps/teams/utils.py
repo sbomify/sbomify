@@ -23,7 +23,12 @@ def normalize_host(host: str) -> str:
     Normalize a host header value to extract just the hostname.
 
     Strips port numbers and converts to lowercase for consistent matching.
-    Used by both DynamicAllowedHosts and domain verification endpoints.
+    Used by DynamicHostValidationMiddleware and domain verification endpoints.
+
+    This function properly handles IPv6 addresses in brackets (e.g., "[::1]:8000").
+
+    Performance: Uses fast path for common case (non-IPv6), falls back to
+    urlparse only for IPv6 addresses in brackets.
 
     Args:
         host: Host header value (may include port, e.g., "example.com:8000")
@@ -38,8 +43,29 @@ def normalize_host(host: str) -> str:
         'example.com'
         >>> normalize_host("APP.EXAMPLE.COM:443")
         'app.example.com'
+        >>> normalize_host("[::1]:8000")
+        '::1'
+        >>> normalize_host("[2001:db8::1]:8000")
+        '2001:db8::1'
     """
-    return host.split(":")[0].lower()
+    # Fast path: Handle common case (non-IPv6) without urlparse overhead
+    # IPv6 addresses in Host headers are always in brackets: [::1]:8000
+    if not host.startswith("["):
+        # Simple split for regular domains/IPv4
+        return host.split(":")[0].lower()
+
+    # Slow path: IPv6 address with brackets - use urlparse for correctness
+    from urllib.parse import urlparse
+
+    # urlparse requires a scheme, so add one temporarily
+    if not host.startswith(("http://", "https://")):
+        host = f"http://{host}"
+
+    parsed = urlparse(host)
+    hostname = parsed.hostname
+
+    # Return lowercase hostname, or fall back to original
+    return hostname.lower() if hostname else host.lower()
 
 
 logger = logging.getLogger(__name__)
@@ -317,6 +343,7 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     Invalidate the cache for a custom domain.
 
     This should be called whenever a domain is added, removed, or validated.
+    Clears the cache used by DynamicHostValidationMiddleware.
 
     Args:
         domain: The domain to invalidate, or None to skip
@@ -327,7 +354,7 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     try:
         from django.core.cache import cache
 
-        cache_key = f"custom_domain:{domain}"
+        cache_key = f"allowed_host:{domain}"
         cache.delete(cache_key)
         logger.debug(f"Invalidated cache for custom domain: {domain}")
     except Exception as e:
