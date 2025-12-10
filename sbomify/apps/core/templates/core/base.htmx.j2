@@ -88,7 +88,7 @@
                 <div class="main">
                     <!-- Top navigation -->
                     {# Include pending invitations count and teams version in cache key so badge/team updates work #}
-                    {% cache 300 'header' request.user.id request.session.current_team.id pending_invitations_count request.session.user_teams_version %}
+                    {% cache 300 'header_v2' request.user.id request.session.current_team.id pending_invitations_count request.session.user_teams_version %}
                     {% include "core/components/topnav.html.j2" %}
                 {% endcache %}
                 <!-- Main content -->
@@ -129,6 +129,9 @@
 {% endblock %}
 <!-- Scripts for HTMX pages -->
 {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+{% block scripts %}{% endblock %}
+</body>
+</html>
 {% block scripts %}{% endblock %}
 </body>
 </html>

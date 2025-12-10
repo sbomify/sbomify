@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django import template
 from django.utils import timezone
@@ -41,7 +41,7 @@ def user_workspaces(context):
     last_checked = None
     if last_checked_raw:
         try:
-            last_checked = timezone.datetime.fromisoformat(last_checked_raw)
+            last_checked = datetime.fromisoformat(last_checked_raw)
             if timezone.is_naive(last_checked):
                 last_checked = timezone.make_aware(last_checked, timezone.utc)
         except ValueError:
