@@ -29,7 +29,9 @@ class ProductDetailsPublicView(View):
 
         status_code, product = get_product(request, resolved_id)
         if status_code != 200:
-            return error_response(request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error")))
+            return error_response(
+                request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
+            )
 
         has_downloadable_content = SBOM.objects.filter(component__projects__products__id=resolved_id).exists()
         team = Team.objects.filter(pk=product.get("team_id")).first()

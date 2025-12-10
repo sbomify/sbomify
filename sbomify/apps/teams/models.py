@@ -136,18 +136,19 @@ class Team(models.Model):
     def public_url(self) -> str | None:
         """
         Return the public URL for this workspace's Trust Center.
-        
+
         Returns:
             URL string if workspace is public and has a key, None otherwise.
-            
+
         Usage:
             In templates: {{ team.public_url }}
             In views: team.public_url
         """
         if not self.key or not self.is_public:
             return None
-        
+
         from django.urls import reverse
+
         return reverse("core:workspace_public", kwargs={"workspace_key": self.key})
 
     def can_be_private(self) -> bool:

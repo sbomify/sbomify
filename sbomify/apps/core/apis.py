@@ -459,8 +459,10 @@ def get_product(request: HttpRequest, product_id: str, include_instance: bool = 
     """
     try:
         # Use select_related to avoid N+1 query when team is accessed later
-        product = Product.objects.prefetch_related("projects", "identifiers", "links").select_related("team").get(
-            pk=product_id
+        product = (
+            Product.objects.prefetch_related("projects", "identifiers", "links")
+            .select_related("team")
+            .get(pk=product_id)
         )
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}

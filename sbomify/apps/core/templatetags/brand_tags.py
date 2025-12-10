@@ -1,4 +1,5 @@
 from django import template
+
 from sbomify.apps.teams.branding import (
     DEFAULT_FALLBACK_GRAY,
     darken_hex,
