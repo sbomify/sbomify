@@ -450,10 +450,18 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
     auth=None,
 )
 @decorate_view(optional_token_auth)
-def get_product(request: HttpRequest, product_id: str):
-    """Get a specific product by ID."""
+def get_product(request: HttpRequest, product_id: str, include_instance: bool = False):
+    """Get a specific product by ID.
+
+    Args:
+        include_instance: When True, return a tuple of (response_dict, product_instance)
+            so callers that need the model object (e.g., for branding) can avoid re-querying.
+    """
     try:
-        product = Product.objects.prefetch_related("projects", "identifiers", "links").get(pk=product_id)
+        # Use select_related to avoid N+1 query when team is accessed later
+        product = Product.objects.prefetch_related("projects", "identifiers", "links").select_related("team").get(
+            pk=product_id
+        )
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
@@ -462,7 +470,8 @@ def get_product(request: HttpRequest, product_id: str):
 
     # If product is public, allow unauthenticated access
     if product.is_public:
-        return 200, _build_item_response(request, product, "product")
+        response_payload = _build_item_response(request, product, "product")
+        return 200, (response_payload, product) if include_instance else response_payload
 
     # For private products, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -471,7 +480,8 @@ def get_product(request: HttpRequest, product_id: str):
     if not verify_item_access(request, product, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(request, product, "product")
+    response_payload = _build_item_response(request, product, "product")
+    return 200, (response_payload, product) if include_instance else response_payload
 
 
 @router.put(

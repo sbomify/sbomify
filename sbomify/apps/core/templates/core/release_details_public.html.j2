@@ -5,6 +5,11 @@
 {% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/release-details-public.css' %}">
+    <style>
+        .meta-item i {
+            color: var(--brand-color) !important;
+        }
+    </style>
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb release 'release' %}
@@ -25,12 +30,12 @@
                     </div>
                     <div class="header-meta">
                         <span class="meta-item">
-                            <i class="fas fa-calendar me-2 text-primary"></i>
+                            <i class="fas fa-calendar me-2"></i>
                             <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                         </span>
                         <span class="meta-divider">•</span>
                         <span class="meta-item">
-                            <i class="fas fa-puzzle-piece me-2 text-primary"></i>
+                            <i class="fas fa-puzzle-piece me-2"></i>
                             <span class="meta-label">{{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}</span>
                         </span>
                     </div>

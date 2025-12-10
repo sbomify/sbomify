@@ -6,6 +6,11 @@
 {% block extra_css %}
     <link rel="stylesheet"
           href="{% static 'css/product-releases-public.css' %}">
+    <style>
+        .meta-item i {
+            color: var(--brand-color) !important;
+        }
+    </style>
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb releases 'releases' %}
@@ -23,7 +28,7 @@
                     </div>
                     <div class="header-meta">
                         <span class="meta-item">
-                            <i class="fas fa-tag me-2 text-primary"></i>
+                            <i class="fas fa-tag me-2"></i>
                             <span class="meta-label">{{ releases|length }} Release{{ releases|length|pluralize }}</span>
                         </span>
                     </div>
