@@ -124,10 +124,11 @@ class DynamicHostValidationMiddleware:
             bool: True if the domain is allowed, False otherwise.
 
         Caching behavior:
-        - Valid domains are cached for 1 hour (3600 seconds).
+        - Valid domains are cached for 24 hours (86400 seconds).
         - Invalid domains are cached for 5 minutes (300 seconds).
-          This minimizes database queries for valid domains and allows
-          quick addition of new domains by using a shorter TTL for invalid ones.
+
+        Cache is explicitly invalidated when domains are added/removed/updated
+        via the API (see invalidate_custom_domain_cache in teams.utils).
         """
         from django.core.cache import cache
 
@@ -143,10 +144,11 @@ class DynamicHostValidationMiddleware:
 
         exists = Team.objects.filter(custom_domain=host).exists()
 
-        # Cache result for 1 hour (valid domains) or 5 min (invalid)
-        # Valid domains cached longer to minimize DB queries
+        # Cache result for 24 hours (valid domains) or 5 min (invalid)
+        # Valid domains cached aggressively since they rarely change
+        # Cache is invalidated explicitly when domains change
         # Invalid domains cached shorter to allow quick addition of new domains
-        ttl = 3600 if exists else 300
+        ttl = 86400 if exists else 300
         cache.set(cache_key, exists, ttl)
 
         return exists
