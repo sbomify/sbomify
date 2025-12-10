@@ -5,10 +5,16 @@ These utilities help generate appropriate URLs based on whether the request
 is on a custom domain or the main app domain.
 """
 
-from django.conf import settings
-from django.http import HttpRequest
+from __future__ import annotations
 
-from sbomify.apps.teams.models import Team
+from typing import TYPE_CHECKING
+
+from django.conf import settings
+from django.db.models import Model
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+
+if TYPE_CHECKING:
+    from sbomify.apps.teams.models import Team
 
 
 def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
@@ -190,3 +196,89 @@ def is_public_url_path(path: str) -> bool:
     ]
 
     return any(path.startswith(prefix) for prefix in public_prefixes)
+
+
+def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"]:
+    """
+    Extract custom domain context from a request.
+
+    Returns:
+        Tuple of (is_custom_domain, team)
+    """
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    team = getattr(request, "custom_domain_team", None) if is_custom_domain else None
+    return is_custom_domain, team
+
+
+def verify_custom_domain_ownership(
+    request: HttpRequest,
+    model_class: type[Model],
+    resource_id: str,
+    team_field: str = "team",
+) -> HttpResponse | None:
+    """
+    Verify that a resource belongs to the custom domain's workspace.
+
+    This function checks if we're on a custom domain and, if so, verifies
+    that the requested resource belongs to that domain's workspace.
+
+    Args:
+        request: The HTTP request
+        model_class: The Django model class to query
+        resource_id: The ID of the resource to verify
+        team_field: The field name that references the Team (default: "team")
+
+    Returns:
+        None if verification passes (or not on custom domain)
+        HttpResponseNotFound if verification fails
+
+    Example:
+        error = verify_custom_domain_ownership(request, Product, product_id)
+        if error:
+            return error_response(request, error)
+    """
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    if not is_custom_domain:
+        return None
+
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+    if not custom_domain_team:
+        return None
+
+    try:
+        resource = model_class.objects.only("id", team_field).get(pk=resource_id)
+        resource_team = getattr(resource, team_field, None)
+        if resource_team != custom_domain_team:
+            return HttpResponseNotFound("Not found")
+    except model_class.DoesNotExist:
+        return HttpResponseNotFound("Not found")
+
+    return None
+
+
+def add_custom_domain_to_context(
+    request: HttpRequest,
+    context: dict,
+    team: "Team | None" = None,
+) -> dict:
+    """
+    Add custom domain context variables to a template context dict.
+
+    Args:
+        request: The HTTP request
+        context: The existing template context dict
+        team: Optional team instance (if already fetched)
+
+    Returns:
+        Updated context dict with is_custom_domain and custom_domain keys
+    """
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
+    context["is_custom_domain"] = is_custom_domain
+
+    if is_custom_domain and team:
+        context["custom_domain"] = getattr(team, "custom_domain", None)
+    else:
+        context["custom_domain"] = None
+
+    return context

@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import ipaddress
 import logging
+from typing import TYPE_CHECKING, Callable
 
-from django.http import HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
 
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
+
+if TYPE_CHECKING:
+    from sbomify.apps.teams.models import Team
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,7 @@ class DynamicHostValidationMiddleware:
     middleware for dynamic validation instead.
     """
 
-    def __init__(self, get_response):
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
         # Static hosts checked in-memory (no cache/DB hit)
         self.static_hosts = frozenset(
@@ -39,7 +45,7 @@ class DynamicHostValidationMiddleware:
         )
 
         # Parse APP_BASE_URL once at initialization instead of on first request
-        self._app_host = None
+        self._app_host: str | None = None
         try:
             from urllib.parse import urlparse
 
@@ -52,7 +58,7 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         host = self.get_host_from_request(request)
 
         if not self.is_valid_host(host):
@@ -61,7 +67,7 @@ class DynamicHostValidationMiddleware:
 
         return self.get_response(request)
 
-    def get_host_from_request(self, request):
+    def get_host_from_request(self, request: HttpRequest) -> str:
         """
         Extract and normalize the host from the request.
 
@@ -74,7 +80,7 @@ class DynamicHostValidationMiddleware:
         """
         return normalize_host(request.get_host())
 
-    def is_valid_host(self, host):
+    def is_valid_host(self, host: str) -> bool:
         """
         Check if host is allowed with three-tier validation:
         1. Static hosts (in-memory set) - instant
@@ -116,7 +122,7 @@ class DynamicHostValidationMiddleware:
         except ValueError:
             return False
 
-    def _check_custom_domain(self, host):
+    def _check_custom_domain(self, host: str) -> bool:
         """
         Check if a custom domain is allowed, using Redis-backed caching.
 
@@ -172,10 +178,10 @@ class CustomDomainContextMiddleware:
     - request.custom_domain_team: Team instance if on custom domain, None otherwise
     """
 
-    def __init__(self, get_response):
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
         # Parse APP_BASE_URL once at initialization
-        self._app_host = None
+        self._app_host: str | None = None
         try:
             from urllib.parse import urlparse
 
@@ -186,7 +192,7 @@ class CustomDomainContextMiddleware:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         host = normalize_host(request.get_host())
 
         # Check if this is a custom domain (not the main app domain)
@@ -195,11 +201,11 @@ class CustomDomainContextMiddleware:
         if is_custom_domain:
             # Fetch the team associated with this custom domain
             team = self._get_team_for_domain(host)
-            request.is_custom_domain = True
-            request.custom_domain_team = team
+            request.is_custom_domain = True  # type: ignore[attr-defined]
+            request.custom_domain_team = team  # type: ignore[attr-defined]
         else:
-            request.is_custom_domain = False
-            request.custom_domain_team = None
+            request.is_custom_domain = False  # type: ignore[attr-defined]
+            request.custom_domain_team = None  # type: ignore[attr-defined]
 
         return self.get_response(request)
 
@@ -236,7 +242,7 @@ class CustomDomainContextMiddleware:
 
         return exists
 
-    def _get_team_for_domain(self, host: str):
+    def _get_team_for_domain(self, host: str) -> "Team | None":
         """
         Get the Team instance associated with a custom domain.
 
