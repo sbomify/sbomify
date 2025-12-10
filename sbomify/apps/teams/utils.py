@@ -23,7 +23,7 @@ def normalize_host(host: str) -> str:
     Normalize a host header value to extract just the hostname.
 
     Strips port numbers and converts to lowercase for consistent matching.
-    Used by both DynamicAllowedHosts and domain verification endpoints.
+    Used by DynamicHostValidationMiddleware and domain verification endpoints.
 
     Args:
         host: Host header value (may include port, e.g., "example.com:8000")
@@ -317,6 +317,7 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     Invalidate the cache for a custom domain.
 
     This should be called whenever a domain is added, removed, or validated.
+    Clears the cache used by DynamicHostValidationMiddleware.
 
     Args:
         domain: The domain to invalidate, or None to skip
@@ -327,7 +328,7 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     try:
         from django.core.cache import cache
 
-        cache_key = f"custom_domain:{domain}"
+        cache_key = f"allowed_host:{domain}"
         cache.delete(cache_key)
         logger.debug(f"Invalidated cache for custom domain: {domain}")
     except Exception as e:

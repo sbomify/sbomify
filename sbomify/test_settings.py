@@ -159,6 +159,7 @@ with open(STATIC_ROOT / "manifest.json", "w") as f:
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
     "sbomify.apps.core.middleware.RealIPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -170,10 +171,9 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-# Configure dynamic ALLOWED_HOSTS for tests
-from sbomify.settings import DynamicAllowedHosts  # noqa: E402
-
-ALLOWED_HOSTS = DynamicAllowedHosts(["testserver", "localhost", "127.0.0.1"])
+# Configure ALLOWED_HOSTS for tests
+# Use wildcard - DynamicHostValidationMiddleware handles validation
+ALLOWED_HOSTS = ["*"]
 
 # Add debug toolbar middleware if DEBUG is True
 if DEBUG:
