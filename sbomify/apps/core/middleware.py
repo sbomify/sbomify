@@ -154,6 +154,124 @@ class DynamicHostValidationMiddleware:
         return exists
 
 
+class CustomDomainContextMiddleware:
+    """
+    Middleware to detect custom domains and attach workspace context to requests.
+
+    This middleware runs after DynamicHostValidationMiddleware, so we know the host
+    is already validated. It checks if the host is a custom domain and attaches
+    the associated Team to the request.
+
+    Performance:
+    - Uses Redis caching similar to DynamicHostValidationMiddleware
+    - Cache hit: microseconds (no DB query)
+    - Cache miss: Single DB query to fetch Team, cached for 24 hours
+
+    Attributes added to request:
+    - request.is_custom_domain: Boolean indicating if on a custom domain
+    - request.custom_domain_team: Team instance if on custom domain, None otherwise
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # Parse APP_BASE_URL once at initialization
+        self._app_host = None
+        try:
+            from urllib.parse import urlparse
+
+            from django.conf import settings
+
+            if settings.APP_BASE_URL:
+                self._app_host = urlparse(settings.APP_BASE_URL).hostname
+        except (ImportError, AttributeError, ValueError) as e:
+            logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
+
+    def __call__(self, request):
+        host = normalize_host(request.get_host())
+
+        # Check if this is a custom domain (not the main app domain)
+        is_custom_domain = self._is_custom_domain(host)
+
+        if is_custom_domain:
+            # Fetch the team associated with this custom domain
+            team = self._get_team_for_domain(host)
+            request.is_custom_domain = True
+            request.custom_domain_team = team
+        else:
+            request.is_custom_domain = False
+            request.custom_domain_team = None
+
+        return self.get_response(request)
+
+    def _is_custom_domain(self, host: str) -> bool:
+        """
+        Check if the host is a custom domain (not the main app domain).
+
+        Returns:
+            bool: True if this is a custom domain, False if it's the main app domain
+        """
+        # If it's the main app host, it's not a custom domain
+        if self._app_host and host == self._app_host:
+            return False
+
+        # Static hosts are not custom domains
+        static_hosts = frozenset(["sbomify-backend", "localhost", "127.0.0.1", "testserver"])
+        if host in static_hosts:
+            return False
+
+        # If we get here, it could be a custom domain
+        # We'll verify by checking if a team exists with this domain
+        from django.core.cache import cache
+
+        cache_key = f"is_custom_domain:{host}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Query database
+        from sbomify.apps.teams.models import Team
+
+        exists = Team.objects.filter(custom_domain=host).exists()
+        cache.set(cache_key, exists, 86400)  # Cache for 24 hours
+
+        return exists
+
+    def _get_team_for_domain(self, host: str):
+        """
+        Get the Team instance associated with a custom domain.
+
+        Uses Redis caching to minimize database queries.
+
+        Returns:
+            Team instance or None if not found
+        """
+        from django.core.cache import cache
+
+        cache_key = f"custom_domain_team:{host}"
+
+        # Try cache first
+        cached_team_id = cache.get(cache_key)
+        if cached_team_id is not None:
+            from sbomify.apps.teams.models import Team
+
+            try:
+                return Team.objects.get(pk=cached_team_id)
+            except Team.DoesNotExist:
+                # Cache is stale, clear it
+                cache.delete(cache_key)
+
+        # Cache miss or stale - query database
+        from sbomify.apps.teams.models import Team
+
+        try:
+            team = Team.objects.get(custom_domain=host)
+            # Cache the team ID for 24 hours
+            cache.set(cache_key, team.pk, 86400)
+            return team
+        except Team.DoesNotExist:
+            return None
+
+
 class RealIPMiddleware(MiddlewareMixin):
     """
     Middleware to correct the REMOTE_ADDR using X-Real-IP header set by Caddy.

@@ -34,22 +34,40 @@ def document_details_private(request: HttpRequest, document_id: str) -> HttpResp
 
 
 def document_details_public(request: HttpRequest, document_id: str) -> HttpResponse:
+    # Check if this is a custom domain request
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
     try:
         document: Document = Document.objects.get(pk=document_id)
     except Document.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Document not found"))
 
+    # If on custom domain, verify the document belongs to this workspace
+    if is_custom_domain and hasattr(request, "custom_domain_team"):
+        if document.component.team != request.custom_domain_team:
+            return error_response(request, HttpResponseNotFound("Document not found"))
+
     if not document.public_access_allowed:
         return error_response(request, HttpResponseForbidden("Document is not public"))
 
-    brand = build_branding_context(document.component.team)
-    workspace_public_url = ""
     team = getattr(document.component, "team", None)
-    team_key = getattr(team, "key", None)
-    if team_key:
-        workspace_public_url = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
-    else:
-        workspace_public_url = reverse("core:workspace_public_current")
+
+    # Don't redirect - always show public content on whichever domain the user is on
+    # Public pages should be accessible on both main domain and custom domain
+
+    brand = build_branding_context(team)
+
+    # Generate workspace URL based on context
+    workspace_public_url = ""
+    if team:
+        if is_custom_domain:
+            workspace_public_url = "/"
+        else:
+            team_key = getattr(team, "key", None)
+            if team_key:
+                workspace_public_url = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
+            else:
+                workspace_public_url = reverse("core:workspace_public_current")
 
     return render(
         request,
@@ -59,6 +77,8 @@ def document_details_public(request: HttpRequest, document_id: str) -> HttpRespo
             "brand": brand,
             "APP_BASE_URL": settings.APP_BASE_URL,
             "workspace_public_url": workspace_public_url,
+            "is_custom_domain": is_custom_domain,
+            "custom_domain": team.custom_domain if is_custom_domain and team else None,
         },
     )
 

@@ -11,7 +11,24 @@ from sbomify.apps.teams.models import Team
 
 
 def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict]:
-    """Resolve a public workspace by explicit key or session fallback for current workspace."""
+    """
+    Resolve a public workspace by explicit key, custom domain, or session fallback.
+
+    On custom domains, the workspace is determined from the domain itself.
+    On main app domain, workspace_key parameter or session is used.
+    """
+    # If on a custom domain, use the team from the custom domain
+    if hasattr(request, "is_custom_domain") and request.is_custom_domain:
+        if hasattr(request, "custom_domain_team") and request.custom_domain_team:
+            team = request.custom_domain_team
+            # Still verify it's public
+            if not team.is_public:
+                return 404, {"detail": "Workspace not found"}
+            return 200, team
+        # Custom domain but no team found (shouldn't happen due to middleware)
+        return 404, {"detail": "Workspace not found"}
+
+    # Standard logic for main app domain
     if workspace_key:
         if workspace_key.isdigit():
             return 404, {"detail": "Workspace not found"}
@@ -93,10 +110,16 @@ class WorkspacePublicView(View):
 
         team = team_or_error
 
+        # Don't redirect - always show public content on whichever domain the user is on
+        # Public pages should be accessible on both main domain and custom domain
+
         brand = build_branding_context(team)
 
         products_data = _list_public_products(team)
         global_artifacts_data = _list_public_global_components(team)
+
+        # Add custom domain context for URL generation in templates
+        is_custom_domain = getattr(request, "is_custom_domain", False)
 
         return render(
             request,
@@ -109,5 +132,7 @@ class WorkspacePublicView(View):
                 },
                 "products": products_data,
                 "global_components": global_artifacts_data,
+                "is_custom_domain": is_custom_domain,
+                "custom_domain": team.custom_domain if is_custom_domain else None,
             },
         )

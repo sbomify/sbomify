@@ -13,6 +13,18 @@ from sbomify.apps.teams.branding import build_branding_context
 
 class ComponentDetailedPublicView(View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
+        # Check if this is a custom domain request
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+
+        # If on custom domain, verify the component belongs to this workspace
+        if is_custom_domain and hasattr(request, "custom_domain_team"):
+            try:
+                component_obj = Component.objects.get(id=component_id)
+                if component_obj.team != request.custom_domain_team:
+                    return error_response(request, HttpResponseNotFound("Component not found"))
+            except Component.DoesNotExist:
+                return error_response(request, HttpResponseNotFound("Component not found"))
+
         status_code, component = get_component(request, component_id)
         if status_code != 200:
             return error_response(
@@ -33,7 +45,12 @@ class ComponentDetailedPublicView(View):
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
         component_obj = getattr(data, "component", None)
-        brand = build_branding_context(getattr(component_obj, "team", None))
+        team = getattr(component_obj, "team", None)
+
+        # Don't redirect - always show public content on whichever domain the user is on
+        # Public pages should be accessible on both main domain and custom domain
+
+        brand = build_branding_context(team)
 
         return render(
             request,
@@ -43,5 +60,7 @@ class ComponentDetailedPublicView(View):
                 "brand": brand,
                 "component": component,
                 "data": data,
+                "is_custom_domain": is_custom_domain,
+                "custom_domain": team.custom_domain if is_custom_domain and team else None,
             },
         )
