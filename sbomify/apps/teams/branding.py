@@ -90,6 +90,24 @@ def hex_to_rgb_tuple(hex_color: str) -> tuple[int, int, int]:
         return (220, 220, 220)
 
 
+def _apply_lightness_transform(hex_color: str, transform: callable) -> str:
+    """Shared RGB↔HLS helper used by lighten_hex/darken_hex."""
+    try:
+        r, g, b = hex_to_rgb_tuple(hex_color)
+        hue, lightness, saturation = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
+
+        lightness = max(0.0, min(1.0, transform(lightness)))
+
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        r = int(r * 255)
+        g = int(g * 255)
+        b = int(b * 255)
+
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except (ValueError, TypeError, OverflowError):
+        return hex_color
+
+
 def build_branding_context(team: "Team | None") -> dict:
     """
     Return a template-friendly branding payload for public views.
@@ -206,25 +224,7 @@ def darken_hex(hex_color: str, amount: float = 0.1) -> str:
     Returns:
         Darkened hex color string
     """
-    try:
-        r, g, b = hex_to_rgb_tuple(hex_color)
-        # Convert RGB (0-255) to HLS (0-1)
-        hue, lightness, saturation = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
-
-        # Reduce lightness
-        lightness = max(0.0, lightness * (1 - amount))
-
-        # Convert back to RGB
-        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
-
-        # Convert back to 0-255 ints
-        r = int(r * 255)
-        g = int(g * 255)
-        b = int(b * 255)
-
-        return f"#{r:02x}{g:02x}{b:02x}"
-    except (ValueError, TypeError, OverflowError):
-        return hex_color
+    return _apply_lightness_transform(hex_color, lambda lightness: lightness * (1 - amount))
 
 
 def lighten_hex(hex_color: str, amount: float = 0.1) -> str:
@@ -238,22 +238,4 @@ def lighten_hex(hex_color: str, amount: float = 0.1) -> str:
     Returns:
         Lightened hex color string
     """
-    try:
-        r, g, b = hex_to_rgb_tuple(hex_color)
-        # Convert RGB (0-255) to HLS (0-1)
-        hue, lightness, saturation = colorsys.rgb_to_hls(r / 255.0, g / 255.0, b / 255.0)
-
-        # Increase lightness
-        lightness = min(1.0, lightness + (1 - lightness) * amount)
-
-        # Convert back to RGB
-        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
-
-        # Convert back to 0-255 ints
-        r = int(r * 255)
-        g = int(g * 255)
-        b = int(b * 255)
-
-        return f"#{r:02x}{g:02x}{b:02x}"
-    except (ValueError, TypeError, OverflowError):
-        return hex_color
+    return _apply_lightness_transform(hex_color, lambda lightness: lightness + (1 - lightness) * amount)
