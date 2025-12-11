@@ -1,5 +1,7 @@
 """Utility code used throughout the app"""
 
+import hashlib
+import json
 import logging
 from collections import defaultdict
 
@@ -75,6 +77,12 @@ User = get_user_model()
 stripe_client = StripeClient()
 
 
+def compute_user_teams_checksum(user_teams: dict | None) -> str:
+    """Deterministic checksum for a user's workspace snapshot."""
+    serialized = json.dumps(user_teams or {}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
 def get_user_teams(user) -> dict:
     """Get all teams for a user.
 
@@ -82,7 +90,7 @@ def get_user_teams(user) -> dict:
         A dictionary mapping team keys to team data
     """
     teams = defaultdict(dict)
-    memberships = Member.objects.filter(user=user).select_related("team").all()
+    memberships = Member.objects.filter(user=user).select_related("team").order_by("team__created_at", "team__id").all()
 
     for membership in memberships:
         teams[membership.team.key] = {
@@ -97,6 +105,25 @@ def get_user_teams(user) -> dict:
         }
 
     return dict(teams)
+
+
+def update_user_teams_session(request, user, user_teams: dict | None = None) -> dict:
+    """Store user teams and a stable checksum on the session, avoiding redundant writes."""
+    teams = user_teams if user_teams is not None else get_user_teams(user)
+    checksum = compute_user_teams_checksum(teams)
+    existing_checksum = request.session.get("user_teams_version")
+    existing_teams = request.session.get("user_teams")
+
+    if existing_checksum == checksum and existing_teams:
+        request.session["user_teams_checked_at"] = timezone.now().isoformat()
+        request.session.modified = True
+        return existing_teams
+
+    request.session["user_teams"] = teams
+    request.session["user_teams_version"] = checksum
+    request.session["user_teams_checked_at"] = timezone.now().isoformat()
+    request.session.modified = True
+    return teams
 
 
 def refresh_current_team_session(request, team: Team) -> None:
