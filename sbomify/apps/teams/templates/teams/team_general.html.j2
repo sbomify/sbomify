@@ -98,22 +98,4 @@ document.addEventListener('alpine:init', () => {
         }
     }));
 });
-
-// Copy button functionality
-document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
-        const value = this.dataset.copyValue;
-        if (!value) return;
-        try {
-            await navigator.clipboard.writeText(value);
-            if (window.showSuccess) {
-                window.showSuccess('Copied to clipboard');
-            }
-        } catch (err) {
-            if (window.showError) {
-                window.showError('Failed to copy');
-            }
-        }
-    });
-});
 </script>

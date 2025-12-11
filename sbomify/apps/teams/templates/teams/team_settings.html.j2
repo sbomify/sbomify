@@ -373,26 +373,8 @@
                 });
             });
 
-            // Visibility copy button (avoid inline JS for CSP)
-            const copyBtn = document.querySelector('.visibility-copy-btn');
-            if (copyBtn) {
-                copyBtn.addEventListener('click', async function(event) {
-                    event.preventDefault();
-                    const url = this.dataset.publicUrl;
-                    if (!url) return;
-
-                    try {
-                        await navigator.clipboard.writeText(url);
-                        if (window.showSuccess) {
-                            window.showSuccess('Public URL copied to clipboard');
-                        }
-                    } catch (err) {
-                        if (window.showError) {
-                            window.showError('Failed to copy URL to clipboard');
-                        }
-                    }
-                });
-            }
+            // Note: Copy button functionality is handled by clipboard-global.ts
+            // which auto-initializes buttons with data-public-url attribute
         });
     </script>
 {% endblock %}
