@@ -6,7 +6,7 @@ from django.views import View
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import TeamGeneralSettingsForm
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import refresh_current_team_session
 
@@ -44,13 +44,9 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         new_name = form.cleaned_data["name"]
 
         # Update the team name directly
+        # Note: Owner permission is already enforced by TeamRoleRequiredMixin
         try:
             team_obj = Team.objects.get(key=team_key)
-
-            # Verify user is owner
-            if not Member.objects.filter(user=request.user, team=team_obj, role="owner").exists():
-                return htmx_error_response("Only owners can update workspace settings")
-
             team_obj.name = new_name
             team_obj.save(update_fields=["name"])
 
