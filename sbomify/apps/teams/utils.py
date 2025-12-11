@@ -115,6 +115,8 @@ def update_user_teams_session(request, user, user_teams: dict | None = None) -> 
     existing_teams = request.session.get("user_teams")
 
     if existing_checksum == checksum and existing_teams:
+        request.session["user_teams_checked_at"] = timezone.now().isoformat()
+        request.session.modified = True
         return existing_teams
 
     request.session["user_teams"] = teams
