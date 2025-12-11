@@ -7,6 +7,7 @@ while ID-based URLs continue to work on the main app domain.
 
 import pytest
 from django.core.cache import cache
+from urllib.parse import urlparse
 
 from sbomify.apps.core.models import Component, Product, Project, Release
 from sbomify.apps.teams.models import Team
@@ -206,7 +207,8 @@ class TestSlugRoutingOnMainDomain:
         response = client.get(f"/public/product/{product_with_slug.id}/")
         # Should redirect to custom domain
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        parsed = urlparse(response.url)
+        assert parsed.netloc == "trust.example.com"
         assert f"/product/{product_with_slug.slug}/" in response.url
 
     def test_project_by_id_on_main_domain(self, client, project_with_slug):
