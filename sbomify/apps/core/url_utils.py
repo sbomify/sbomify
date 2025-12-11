@@ -488,3 +488,50 @@ def resolve_release_identifier(
             return Release.objects.get(pk=identifier, product=product)
         except Release.DoesNotExist:
             return None
+
+
+def resolve_document_identifier(
+    request: HttpRequest,
+    identifier: str,
+) -> "Model | None":
+    """
+    Resolve a document by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the custom domain's team's components. On the main app domain,
+    the identifier is treated as a document ID.
+
+    Args:
+        request: The HTTP request
+        identifier: The document identifier (slug or ID)
+
+    Returns:
+        Document instance or None if not found
+    """
+    from sbomify.apps.documents.models import Document
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    if is_custom_domain and custom_domain_team:
+        # On custom domain: find by slug within the team's public components
+        slug = slugify(identifier, allow_unicode=True)
+
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
+        for document in Document.objects.filter(component__team=custom_domain_team, component__is_public=True):
+            if slugify(document.name, allow_unicode=True) == slug:
+                return document
+
+        # Fallback: try by ID within the team
+        try:
+            return Document.objects.get(pk=identifier, component__team=custom_domain_team)
+        except Document.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID only
+        try:
+            return Document.objects.get(pk=identifier)
+        except Document.DoesNotExist:
+            return None
