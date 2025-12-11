@@ -23,7 +23,7 @@ urlpatterns = [
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
-    path("login", views.keycloak_login, name="keycloak_login"),
+    path("login/", views.keycloak_login, name="keycloak_login"),
     # Product/Project/Component URLs - moved from sboms app
     # Backward compatibility redirects for URLs that now have trailing slashes
     path("products", RedirectView.as_view(pattern_name="core:products_dashboard", permanent=True)),
