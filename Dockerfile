@@ -22,6 +22,7 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
+COPY tailwind.keycloak.config.ts ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
