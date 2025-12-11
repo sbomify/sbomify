@@ -8,6 +8,7 @@ when appropriate, and that URL generation respects custom domains.
 import pytest
 from django.core.cache import cache
 from django.test import Client, override_settings
+from urllib.parse import urlparse
 
 from sbomify.apps.core.models import Product, Project, Component
 from sbomify.apps.teams.models import Team
@@ -94,7 +95,7 @@ class TestPublicPagesOnMainDomain:
 
         # Should redirect to custom domain
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        assert urlparse(response.url).hostname == "trust.example.com"
 
     def test_product_redirects_to_custom_domain(self, client, product_with_custom_domain):
         """Test that product page redirects to custom domain."""
@@ -106,7 +107,7 @@ class TestPublicPagesOnMainDomain:
 
         # Should redirect to custom domain with slug-based URL
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        assert urlparse(response.url).hostname == "trust.example.com"
         assert "/product/" in response.url
 
     def test_no_redirect_without_custom_domain(self, client, product_without_custom_domain):
