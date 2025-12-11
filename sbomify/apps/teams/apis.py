@@ -63,6 +63,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
     invitations_data = [
         InvitationSchema(
             id=invitation.id,
+            token=str(invitation.token),
             email=invitation.email,
             role=invitation.role,
             created_at=invitation.created_at,

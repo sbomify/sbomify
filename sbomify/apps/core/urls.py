@@ -8,6 +8,16 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
     path("settings", views.user_settings, name="settings"),
+    path(
+        "settings/invitations/<int:invitation_id>/accept/",
+        views.accept_user_invitation,
+        name="accept_user_invitation",
+    ),
+    path(
+        "settings/invitations/<int:invitation_id>/reject/",
+        views.reject_user_invitation,
+        name="reject_user_invitation",
+    ),
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
     path("login_error", views.login_error, name="login_error"),

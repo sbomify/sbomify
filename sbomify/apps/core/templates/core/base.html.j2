@@ -81,7 +81,8 @@
                 <!-- Main content area -->
                 <div class="main">
                     <!-- Top navigation -->
-                    {% cache 300 'header' request.user.id %}
+                    {# Include pending invitations count in cache key so badge updates when invitations change #}
+                    {% cache 300 'header' request.user.id pending_invitations_count %}
                     {% include "core/components/topnav.html.j2" %}
                 {% endcache %}
                 <!-- Main content -->
