@@ -103,7 +103,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
         request.session.modified = True
 
     # Fallback safety net: Ensure every user has a team
-    # NOTE: This should rarely be needed now that both adapters create teams during signup.
+    # Note: This should rarely be needed now that both adapters create teams during signup.
     # This exists only for edge cases (manual user creation, data migrations, etc.)
     if not Team.objects.filter(members=user).exists():
         has_pending_invite = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).exists()

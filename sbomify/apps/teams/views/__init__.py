@@ -131,8 +131,7 @@ def delete_member(request: HttpRequest, membership_id: int):
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
         messages.add_message(request, messages.ERROR, "Membership not found")
-        # Return to dashboard as safer default if team unknown, else try referrer?
-        # Since we don't know the team key if membership doesn't exist, dashboard is safe.
+        # Redirect to dashboard if membership not found, as team key is unavailable.
         return redirect("core:dashboard")
 
     # Check if actor is an admin trying to remove an owner
@@ -254,11 +253,11 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
     if invitation is None:
         # If the invitation was auto-accepted during login, recover using session data
-        auto_invites = request.session.get("auto_accepted_invites", [])
+        auto_accepted_invites = request.session.get("auto_accepted_invites", [])
         matched = next(
             (
                 inv
-                for inv in auto_invites
+                for inv in auto_accepted_invites
                 if inv.get("invitation_token") == invite_token
                 or (invite_token.isdigit() and str(inv.get("invitation_id")) == invite_token)
             ),

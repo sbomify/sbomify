@@ -124,45 +124,52 @@ def refresh_current_team_session(request, team: Team) -> None:
     request.session.modified = True
 
 
-def switch_active_workspace(request, team: Team, role: str | None = None) -> dict:
+def switch_active_workspace(request, team: Team, role: str | None = None) -> None:
     """
     Canonical helper to switch the user's active session context.
 
     Updates the user_teams cache and sets the current_team payload in a single place to avoid drift.
     """
-    membership = None
     user = getattr(request, "user", None)
-    if user is not None and getattr(user, "is_authenticated", False):
+    is_authenticated = user is not None and getattr(user, "is_authenticated", False)
+
+    if is_authenticated:
         membership = Member.objects.filter(user=user, team=team).first()
+        effective_role = role or (membership.role if membership else None)
+        is_default_team = membership.is_default_team if membership else None
 
-    effective_role = role or (membership.role if membership else None)
-    is_default_team = membership.is_default_team if membership else None
-
-    user_teams = None
-    existing_entry: dict = {}
-    if user is not None and getattr(user, "is_authenticated", False):
         user_teams = get_user_teams(user)
         existing_entry = user_teams.get(team.key, {})
 
-    team_entry = {
-        "id": team.id,
-        "name": team.name,
-        "role": effective_role or existing_entry.get("role"),
-        "is_default_team": is_default_team if is_default_team is not None else existing_entry.get("is_default_team"),
-        "has_completed_wizard": team.has_completed_wizard,
-        "billing_plan": team.billing_plan,
-        "branding_info": team.branding_info,
-        "is_public": team.is_public,
-    }
+        team_entry = {
+            "id": team.id,
+            "name": team.name,
+            "role": effective_role or existing_entry.get("role"),
+            "is_default_team": is_default_team
+            if is_default_team is not None
+            else existing_entry.get("is_default_team"),
+            "has_completed_wizard": team.has_completed_wizard,
+            "billing_plan": team.billing_plan,
+            "branding_info": team.branding_info,
+            "is_public": team.is_public,
+        }
 
-    if user is not None and getattr(user, "is_authenticated", False):
-        user_teams = user_teams or {}
         user_teams[team.key] = {**existing_entry, **team_entry}
         request.session["user_teams"] = user_teams
+    else:
+        team_entry = {
+            "id": team.id,
+            "name": team.name,
+            "role": role,
+            "is_default_team": None,
+            "has_completed_wizard": team.has_completed_wizard,
+            "billing_plan": team.billing_plan,
+            "branding_info": team.branding_info,
+            "is_public": team.is_public,
+        }
 
     request.session["current_team"] = {"key": team.key, **team_entry}
     request.session.modified = True
-    return team_entry
 
 
 def get_user_default_team(user) -> int:
@@ -557,9 +564,7 @@ def remove_member_safely(request, membership: Member):
                 request.session.pop("current_team", None)
                 request.session["user_teams"] = {}
                 request.session.modified = True
-                # Redirect to a safe place (e.g. pending invitations if we had a page for that, or home)
-                # Since we don't have a dedicated "my invitations" page visible without a workspace easily,
-                # redirecting to dashboard which might show the "create workspace" or "accept invite" state is best.
+                # TODO: Consider redirecting to a dedicated "my invitations" page if/when implemented.
                 return redirect("core:dashboard")
             else:
                 messages.info(
