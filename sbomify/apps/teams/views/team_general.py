@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -9,6 +11,8 @@ from sbomify.apps.teams.forms import TeamGeneralSettingsForm
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import refresh_current_team_session
+
+logger = logging.getLogger(__name__)
 
 
 class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -43,22 +47,25 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         new_name = form.cleaned_data["name"]
 
-        # Update the team name using .update() to avoid redundant fetch
+        # Update the team name with atomicity using select_for_update
         # Note: Owner permission is already enforced by TeamRoleRequiredMixin
         # Note: get_team() above already validated the team exists and user has access
         try:
-            # Use the team dict's key to update (team is a dict from get_team, not ORM object)
-            updated = Team.objects.filter(key=team_key).update(name=new_name)
-            if not updated:
-                return htmx_error_response("Workspace not found")
+            from django.db import transaction
 
-            # Refetch for session refresh (need ORM object)
-            team_obj = Team.objects.get(key=team_key)
+            with transaction.atomic():
+                team_obj = Team.objects.select_for_update().get(key=team_key)
+                team_obj.name = new_name
+                team_obj.save(update_fields=["name"])
+
             refresh_current_team_session(request, team_obj)
 
             return htmx_success_response(
                 "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}
             )
 
-        except Exception as e:
-            return htmx_error_response(f"Failed to update workspace: {str(e)}")
+        except Team.DoesNotExist:
+            return htmx_error_response("Workspace not found")
+        except Exception:
+            logger.exception("Failed to update workspace name for team_key=%s", team_key)
+            return htmx_error_response("Failed to update workspace. Please try again.")
