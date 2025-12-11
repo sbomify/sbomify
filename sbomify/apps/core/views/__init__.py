@@ -56,6 +56,11 @@ logger = logging.getLogger(__name__)
 
 
 def home(request: HttpRequest) -> HttpResponse:
+    # On custom domains, show the workspace Trust Center
+    if getattr(request, "is_custom_domain", False):
+        return WorkspacePublicView.as_view()(request, workspace_key=None)
+
+    # Standard home page behavior
     if request.user.is_authenticated:
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
@@ -68,6 +73,10 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def user_settings(request: HttpRequest) -> HttpResponse:
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Invitation
+
     create_access_token_form = CreateAccessTokenForm()
     context = dict(create_access_token_form=create_access_token_form)
 
@@ -96,7 +105,125 @@ def user_settings(request: HttpRequest) -> HttpResponse:
         for token in access_tokens
     ]
     context["access_tokens"] = access_tokens_data
+
+    # Fetch pending invitations for the user
+    if request.user.email:
+        pending_invitations = (
+            Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now())
+            .select_related("team")
+            .order_by("-created_at")
+        )
+        context["pending_invitations"] = [
+            {
+                "id": inv.id,
+                "token": str(inv.token),
+                "team_name": inv.team.display_name,
+                "role": inv.role,
+                "created_at": inv.created_at,
+                "expires_at": inv.expires_at,
+            }
+            for inv in pending_invitations
+        ]
+    else:
+        context["pending_invitations"] = []
+
     return render(request, "core/settings.html.j2", context)
+
+
+@login_required
+def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResponse:
+    """Accept a pending invitation from user settings."""
+    from django.db import transaction
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Invitation, Member
+    from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, switch_active_workspace
+
+    if request.method != "POST":
+        return error_response(request, HttpResponseBadRequest("Invalid request method"))
+
+    try:
+        invitation = Invitation.objects.select_related("team").get(pk=invitation_id)
+    except Invitation.DoesNotExist:
+        messages.add_message(request, messages.ERROR, "Invitation not found or has already been processed.")
+        return redirect("core:settings")
+
+    # Verify invitation belongs to this user
+    if (request.user.email or "").lower() != invitation.email.lower():
+        messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
+        return redirect("core:settings")
+
+    # Check if expired
+    if invitation.expires_at <= timezone.now():
+        messages.add_message(request, messages.WARNING, "This invitation has expired.")
+        invitation.delete()
+        return redirect("core:settings")
+
+    # Check if already a member
+    if Member.objects.filter(user=request.user, team=invitation.team).exists():
+        messages.add_message(request, messages.INFO, f"You are already a member of {invitation.team.display_name}.")
+        invitation.delete()
+        return redirect("core:settings")
+
+    # Check team capacity
+    can_add, error_message = can_add_user_to_team(invitation.team)
+    if not can_add:
+        messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
+        return redirect("core:settings")
+
+    # Capture team and role before deleting invitation, because the invitation object
+    # will be invalidated after deletion and its attributes will no longer be accessible.
+    team = invitation.team
+    role = invitation.role
+
+    # Create membership in atomic transaction to ensure it's committed
+    with transaction.atomic():
+        has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+        Member.objects.create(
+            user=request.user,
+            team=team,
+            role=role,
+            is_default_team=not has_default_team,
+        )
+        invitation.delete()
+
+    # Refresh user_teams in session and switch to new workspace
+    request.session["user_teams"] = get_user_teams(request.user)
+    switch_active_workspace(request, team, role)
+
+    messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
+
+    return redirect("core:dashboard")
+
+
+@login_required
+def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResponse:
+    """Reject a pending invitation from user settings."""
+    from django.db import transaction
+
+    from sbomify.apps.teams.models import Invitation
+
+    if request.method != "POST":
+        return error_response(request, HttpResponseBadRequest("Invalid request method"))
+
+    try:
+        invitation = Invitation.objects.select_related("team").get(pk=invitation_id)
+    except Invitation.DoesNotExist:
+        messages.add_message(request, messages.ERROR, "Invitation not found or has already been processed.")
+        return redirect("core:settings")
+
+    # Verify invitation belongs to this user
+    if (request.user.email or "").lower() != invitation.email.lower():
+        messages.add_message(request, messages.ERROR, "This invitation is not for your account.")
+        return redirect("core:settings")
+
+    team_name = invitation.team.display_name
+
+    with transaction.atomic():
+        invitation.delete()
+
+    messages.add_message(request, messages.SUCCESS, f"You have declined the invitation to join {team_name}.")
+    return redirect("core:settings")
 
 
 @login_required

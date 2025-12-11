@@ -7,6 +7,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
 {% endcomment %}
 {% load static %}
 {% load django_vite %}
+{% load public_url_tags %}
 {% block title %}sbomify Project: {{ project.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
@@ -30,10 +31,11 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                     {% endif %}
                 </h1>
                 {% if project.has_crud_permissions %}
+                    {% resource_public_absolute_url 'project' project as project_public_url %}
                     <div class="vc-public-status-toggle"
                          data-item-type="project"
                          data-item-id="{{ project.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:project_details_public' project.id %}"
+                         data-public-url="{{ project_public_url }}"
                          data-inline="true"></div>
                 {% endif %}
             </div>

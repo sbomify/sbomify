@@ -45,6 +45,32 @@ class InviteUserForm(forms.Form):
     )
 
 
+class TeamBrandingForm(forms.Form):
+    brand_color = forms.CharField(required=False)
+    accent_color = forms.CharField(required=False)
+    branding_enabled = forms.BooleanField(required=False)
+    icon_pending_deletion = forms.BooleanField(required=False)
+    logo_pending_deletion = forms.BooleanField(required=False)
+    icon = forms.FileField(required=False)
+    logo = forms.FileField(required=False)
+
+
+class TeamGeneralSettingsForm(forms.Form):
+    """Form for updating workspace general settings (name)."""
+
+    name = forms.CharField(
+        max_length=255,
+        min_length=1,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Enter workspace name",
+            }
+        ),
+    )
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 

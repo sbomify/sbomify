@@ -2,6 +2,7 @@
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
+{% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
@@ -22,10 +23,11 @@
                     {% endif %}
                 </h1>
                 {% if component.has_crud_permissions %}
+                    {% resource_public_absolute_url 'component' component as component_public_url %}
                     <div class="vc-public-status-toggle"
                          data-item-type="component"
                          data-item-id="{{ component.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:component_details_public' component.id %}"
+                         data-public-url="{{ component_public_url }}"
                          data-inline="true"></div>
                 {% endif %}
             </div>
@@ -58,7 +60,7 @@
                         </span>
                         <p class="text-muted small mb-0 mt-2">
                             {% if component.is_global %}
-                                Visible on the workspace trust center and not tied to projects.
+                                Visible on the workspace Trust Center and not tied to projects.
                             {% else %}
                                 Restricted to the projects this component is assigned to.
                             {% endif %}
@@ -74,15 +76,17 @@
              data-team-key="{{ request.session.current_team.key }}"
              {% if component.has_crud_permissions %}data-allow-edit{% endif %}></div>
     {% endif %}
-    <!-- Vulnerability Time Series Chart -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-vulnerability-timeseries"
-                 data-team-key="{{ request.session.current_team.key }}"
-                 data-component-id="{{ component.id }}"
-                 data-default-days="30"></div>
+    {% if component.component_type == 'sbom' %}
+        <!-- Vulnerability Time Series Chart -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="vc-vulnerability-timeseries"
+                     data-team-key="{{ request.session.current_team.key }}"
+                     data-component-id="{{ component.id }}"
+                     data-default-days="30"></div>
+            </div>
         </div>
-    </div>
+    {% endif %}
     {% if component.has_crud_permissions %}
         <div class="row">
             <div class="col-12">

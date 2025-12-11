@@ -4,7 +4,9 @@
  */
 
 /* ===== RESET & BASE ===== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -20,15 +22,28 @@ body {
 }
 
 /* ===== TYPOGRAPHY ===== */
-.h1, .h2, .h3, .h4, .h5, .h6,
-h1, h2, h3, h4, h5, h6 {
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: var(--text-title);
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
   margin-bottom: 0.5rem;
 }
 
-p, label, th, td {
+p,
+label,
+th,
+td {
   color: var(--text-primary);
 }
 
@@ -95,6 +110,7 @@ code {
 
 /* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -123,6 +139,7 @@ code {
 
 /* ===== PRINT STYLES ===== */
 @media print {
+
   .sidebar,
   .navbar,
   .btn,
@@ -140,4 +157,33 @@ code {
     background: white !important;
     color: black !important;
   }
+}
+
+/* ===== COMPONENTS ===== */
+.navbar-badge-custom {
+  font-size: 0.65rem;
+  min-width: 1.35rem;
+}
+
+/* Invitation Cards */
+.invitation-card {
+  background: var(--gray-100, #f8f9fa);
+  transition: all 0.2s ease;
+}
+
+.invitation-card:hover {
+  background: var(--bg-primary, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.invitation-info h5 {
+  color: var(--text-title, #2c3e50);
+  font-weight: 600;
+}
+
+.invitation-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

@@ -294,6 +294,7 @@ import PaginationControls from './PaginationControls.vue'
 interface Release {
   id: string
   name: string
+  slug?: string
   description?: string
   is_public: boolean
   is_latest: boolean
@@ -323,15 +324,19 @@ interface PaginationMeta {
 
 interface Props {
   productId: string
+  productSlug?: string
   hasCrudPermissions?: boolean | string
   publicView?: boolean | string
+  isCustomDomain?: boolean | string
   viewAllUrl?: string
   maxReleasesToShow?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  productSlug: '',
   hasCrudPermissions: false,
   publicView: false,
+  isCustomDomain: false,
   viewAllUrl: '',
   maxReleasesToShow: 5
 })
@@ -393,6 +398,13 @@ const isPublicView = computed(() => {
   return props.publicView
 })
 
+const isCustomDomain = computed(() => {
+  if (typeof props.isCustomDomain === 'string') {
+    return props.isCustomDomain === 'true'
+  }
+  return props.isCustomDomain
+})
+
 const hasData = computed(() => releases.value.length > 0)
 
 const displayedReleases = computed(() => {
@@ -445,6 +457,12 @@ const toIsoString = (value: string): string | null => {
 }
 
 const getReleaseUrl = (release: Release): string => {
+  if (isCustomDomain.value) {
+    // On custom domains, use slug-based URLs
+    const productSlug = props.productSlug || props.productId
+    const releaseSlug = release.slug || release.id
+    return `/product/${productSlug}/release/${releaseSlug}/`
+  }
   if (isPublicView.value) {
     return `/public/product/${props.productId}/release/${release.id}/`
   }

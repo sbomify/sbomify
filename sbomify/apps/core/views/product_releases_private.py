@@ -13,6 +13,14 @@ from sbomify.apps.core.schemas import ReleaseCreateSchema
 
 
 class ProductReleasesPrivateView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        # On custom domains, serve public content instead
+        if getattr(request, "is_custom_domain", False):
+            from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView
+
+            return ProductReleasesPublicView.as_view()(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         status_code, product = get_product(request, product_id)
         if status_code != 200:

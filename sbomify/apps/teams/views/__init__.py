@@ -21,6 +21,7 @@ from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.sboms.models import Component, Product, Project
@@ -32,9 +33,67 @@ from sbomify.apps.teams.forms import (
     OnboardingProjectForm,
 )
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import get_user_teams
+from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
 
 log = getLogger(__name__)
+
+
+def _render_workspace_availability_page(
+    request: HttpRequest,
+    team: Team,
+    invitation: Invitation | None,
+    error_message: str,
+) -> HttpResponse:
+    """Render a friendly status page when the workspace is at capacity."""
+
+    plan_key = team.billing_plan or Team.Plan.COMMUNITY
+    plan_label = team.get_billing_plan_display() or getattr(Team.Plan.COMMUNITY, "label", str(Team.Plan.COMMUNITY))
+
+    plan_record = BillingPlan.objects.filter(key=plan_key).first()
+    member_limit: int | None = None
+    if plan_record:
+        plan_label = plan_record.name or plan_label
+        member_limit = plan_record.max_users
+    elif plan_key == Team.Plan.COMMUNITY:
+        member_limit = 1
+
+    owners = (
+        Member.objects.filter(team=team, role="owner")
+        .select_related("user")
+        .order_by("user__first_name", "user__last_name", "user__email")
+    )
+    owner_contacts = [
+        {
+            "name": owner.user.get_full_name() or owner.user.email or owner.user.username,
+            "email": owner.user.email,
+        }
+        for owner in owners
+    ]
+
+    availability = {
+        "team_name": team.display_name,
+        "plan_name": plan_label,
+        "plan_key": plan_key,
+        "member_limit": member_limit,
+        "current_members": Member.objects.filter(team=team).count(),
+        "owner_contacts": owner_contacts,
+    }
+
+    context = {
+        "team": team,
+        "availability": availability,
+        "invitee_email": getattr(invitation, "email", None),
+        "error_message": error_message,
+        "sales_email": getattr(settings, "ENTERPRISE_SALES_EMAIL", "hello@sbomify.com"),
+    }
+
+    return render(
+        request,
+        "teams/workspace_availability.html.j2",
+        context,
+        status=HttpResponseForbidden.status_code,
+    )
+
 
 from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
     ContactProfileFormView,
@@ -42,6 +101,7 @@ from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
 )
 from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_branding import TeamBrandingView  # noqa: F401, E402
+from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySettingsView  # noqa: F401, E402
 
@@ -64,17 +124,32 @@ def team_details(request: HttpRequest, team_key: str):
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+@validate_role_in_current_team(["owner", "admin"])
 def delete_member(request: HttpRequest, membership_id: int):
+    from sbomify.apps.teams.utils import remove_member_safely
+
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
+        messages.add_message(request, messages.ERROR, "Membership not found")
+        # Redirect to dashboard if membership not found, as team key is unavailable.
+        return redirect("core:dashboard")
 
-    # Verify that there is at least one more owner present for the team
+    # Check if actor is an admin trying to remove an owner
+    # We query the actor's membership explicitly to be safe, although session usually has it.
+    actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
+    if actor_membership and actor_membership.role == "admin" and membership.role == "owner":
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Admins cannot remove workspace owners.",
+        )
+        return redirect("teams:team_settings", team_key=membership.team.key)
+
+    # Prevent removing the last owner
     if membership.role == "owner":
-        owner_members = Member.objects.filter(team_id=membership.team_id, role="owner").all()
-        if len(owner_members) == 1:
+        owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+        if owners_count <= 1:
             messages.add_message(
                 request,
                 messages.WARNING,
@@ -82,18 +157,7 @@ def delete_member(request: HttpRequest, membership_id: int):
             )
             return redirect("teams:team_details", team_key=membership.team.key)
 
-    membership.delete()
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Member {membership.user.username} removed from team {membership.team.name}",
-    )
-
-    # If user is deleting his own membership then update session
-    if membership.user_id == request.user.id:
-        request.session["user_teams"] = get_user_teams(request.user)
-
-    return redirect("teams:team_details", team_key=membership.team.key)
+    return remove_member_safely(request, membership)
 
 
 @login_required
@@ -176,24 +240,67 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
 @login_required
 @require_GET
-def accept_invite(request: HttpRequest, invite_id: int) -> HttpResponseNotFound | HttpResponse:
-    log.info(f"Accepting invitation {invite_id}")
-    try:
-        invitation = Invitation.objects.get(id=invite_id)
-    except Invitation.DoesNotExist:
+def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
+    log.info("Accepting invitation %s", invite_token)
+
+    invitation = Invitation.objects.filter(token=invite_token).first()
+
+    # Backward compatibility for legacy numeric invite links
+    if invitation is None and invite_token.isdigit():
+        try:
+            invitation = Invitation.objects.filter(id=int(invite_token)).first()
+        except ValueError:
+            pass
+
+    if invitation is None:
+        # If the invitation was auto-accepted during login, recover using session data
+        auto_accepted_invites = request.session.get("auto_accepted_invites", [])
+        matched = next(
+            (
+                inv
+                for inv in auto_accepted_invites
+                if inv.get("invitation_token") == invite_token
+                or (invite_token.isdigit() and str(inv.get("invitation_id")) == invite_token)
+            ),
+            None,
+        )
+        if not matched:
+            return error_response(request, HttpResponseNotFound("Unknown invitation"))
+
+        # If membership already exists, treat as success and set session context
+        membership = Member.objects.filter(user=request.user, team__key=matched.get("team_key")).first()
+        if membership:
+            switch_active_workspace(request, membership.team, membership.role)
+
+            messages.add_message(
+                request,
+                messages.INFO,
+                f"You have joined {membership.team.name} as {membership.role}",
+            )
+            return redirect("core:dashboard")
+
         return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
     if invitation.has_expired:
         return error_response(request, HttpResponseForbidden("Invitation has expired"))
 
-    if invitation.email != request.user.email:
-        return error_response(request, HttpResponseForbidden("You are not the recipient of this invitation"))
+    if (request.user.email or "").lower() != invitation.email.lower():
+        # Avoid revealing whether an invitation exists for another email
+        return error_response(request, HttpResponseNotFound("Unknown invitation"))
 
     # Check if we already have a membership
     try:
         existing_membership: Member = Member.objects.get(team_id=invitation.team_id, user_id=request.user.id)
         if existing_membership:
-            return error_response(request, HttpResponseForbidden("You are already a member of this team"))
+            switch_active_workspace(request, invitation.team, existing_membership.role)
+
+            messages.add_message(
+                request,
+                messages.INFO,
+                f"You have already joined {invitation.team.name} as {existing_membership.role}",
+            )
+            invitation.delete()
+            return redirect("core:dashboard")
 
     except Member.DoesNotExist:
         pass
@@ -203,12 +310,19 @@ def accept_invite(request: HttpRequest, invite_id: int) -> HttpResponseNotFound 
 
     can_add, error_message = can_add_user_to_team(invitation.team)
     if not can_add:
-        return error_response(request, HttpResponseForbidden(error_message))
+        return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
 
-    membership = Member(team_id=invitation.team_id, user_id=request.user.id, role=invitation.role)
+    # Set default workspace if user does not have one yet (common for invite-only signups)
+    has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
+    membership = Member(
+        team_id=invitation.team_id,
+        user_id=request.user.id,
+        role=invitation.role,
+        is_default_team=not has_default_team,
+    )
     membership.save()
 
-    request.session["user_teams"] = get_user_teams(request.user)
+    update_user_teams_session(request, request.user)
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 

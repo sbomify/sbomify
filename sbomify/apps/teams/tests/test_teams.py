@@ -7,12 +7,16 @@ from urllib.parse import urlencode
 
 import django.contrib.messages as django_messages
 import pytest
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse, HttpResponseRedirect
-from django.test import Client, override_settings
+from django.test import Client, RequestFactory, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
@@ -27,6 +31,7 @@ from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.fixtures import (  # noqa: F401
     guest_user,
     sample_team,
+    sample_team_with_admin_member,
     sample_team_with_guest_member,
     sample_team_with_owner_member,
     sample_user,
@@ -34,6 +39,13 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
 from sbomify.apps.teams.apis import _private_workspace_allowed
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
+from sbomify.apps.teams.utils import (
+    compute_user_teams_checksum,
+    create_user_team_and_subscription,
+    get_user_teams,
+    update_user_teams_session,
+)
+from sbomify.apps.teams.templatetags.teams import user_workspaces
 
 
 @pytest.mark.django_db
@@ -45,6 +57,55 @@ def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # no
     membership = Member.objects.filter(user=sample_user).first()
     assert membership.team.name == "Test's Workspace"
     assert membership.team.key is not None  # nosec
+
+
+@pytest.mark.django_db
+def test_update_user_teams_session_skips_when_checksum_matches(sample_team_with_owner_member: Member):  # noqa: F811
+    request = RequestFactory().get("/")
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+
+    user = sample_team_with_owner_member.user
+    # First call populates session
+    first_teams = update_user_teams_session(request, user)
+    first_timestamp = request.session.get("user_teams_checked_at")
+    request.session.modified = False  # reset flag
+
+    # Second call should skip data update but still refresh the timestamp for TTL
+    result = update_user_teams_session(request, user)
+
+    assert result == first_teams
+    assert request.session["user_teams"] == first_teams
+    assert request.session["user_teams_version"] == compute_user_teams_checksum(first_teams)
+    # Session is modified because timestamp is updated (for TTL reset), but data is unchanged
+    assert request.session.modified is True
+    assert request.session.get("user_teams_checked_at") is not None
+    assert request.session.get("user_teams_checked_at") >= first_timestamp
+
+
+@pytest.mark.django_db
+def test_user_workspaces_refreshes_when_ttl_expires(sample_team_with_owner_member: Member):  # noqa: F811
+    request = RequestFactory().get("/")
+    request.user = sample_team_with_owner_member.user  # Authenticate request
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+
+    user = sample_team_with_owner_member.user
+    context = {"request": request}
+
+    # Seed stale data with an old timestamp and mismatched checksum
+    request.session["user_teams"] = {"stale": {"id": 1}}
+    request.session["user_teams_version"] = "old"
+    request.session["user_teams_checked_at"] = (timezone.now() - timedelta(seconds=400)).isoformat()
+    request.session.save()
+
+    teams = get_user_teams(user)
+
+    refreshed = user_workspaces(context)
+
+    assert refreshed == teams
+    assert request.session["user_teams"] == teams
+    assert request.session["user_teams_version"] == compute_user_teams_checksum(teams)
 
 
 @pytest.mark.django_db
@@ -402,12 +463,13 @@ def test_accept_invitation(
 ):
     test_team_invitation(sample_team_with_owner_member)
 
+    invitation = Invitation.objects.filter(email="guest@example.com").first()
+    assert invitation is not None
+
     # accept_invite
     client = Client()
+    uri = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
     assert client.login(username="guest", password="guest")  # nosec B106
-
-    invitation = Invitation.objects.filter(email="guest@example.com").first()
-    uri = reverse("teams:accept_invite", kwargs={"invite_id": invitation.id})
 
     response: HttpResponse = client.get(uri)
 
@@ -418,6 +480,102 @@ def test_accept_invitation(
 
     assert len(messages) == 1
     assert messages[0].message.startswith("You have joined")
+
+
+@pytest.mark.django_db
+def test_accept_invitation_sets_default_team_and_session(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="invited-user",
+        email="invited-user@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Invited Workspace")
+    invitation = Invitation.objects.create(team=team, email=invited_user.email, role="admin")
+
+    client = Client()
+    assert client.login(username="invited-user", password="secret")
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+
+    membership = Member.objects.get(user=invited_user, team=team)
+    assert membership.is_default_team is True
+
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == invitation.role
+    assert session["user_teams"][team.key]["role"] == invitation.role
+    assert session["user_teams"][team.key]["is_default_team"] is True
+
+
+@pytest.mark.django_db
+def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="pending-invite-user",
+        email="pending-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Host Workspace")
+    Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    created_team = create_user_team_and_subscription(invited_user)
+
+    assert created_team is None
+    assert Member.objects.filter(user=invited_user).count() == 0
+
+
+@pytest.mark.django_db
+def test_pending_invitation_auto_accept_on_login(django_user_model):
+    invited_user = django_user_model.objects.create_user(
+        username="login-invite-user",
+        email="login-invite@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Invited Team")
+    Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    client = Client()
+    assert client.login(username="login-invite-user", password="secret")
+
+    # Session should now reflect the joined workspace
+    session = client.session
+    assert session["current_team"]["key"] == team.key
+    assert session["current_team"]["role"] == "guest"
+
+    membership = Member.objects.get(user=invited_user, team=team)
+    assert membership.is_default_team is True
+    assert not Invitation.objects.filter(email=invited_user.email, team=team).exists()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_workspace_full_status_page(django_user_model):
+    owner = django_user_model.objects.create_user(
+        username="capacity-owner",
+        email="capacity-owner@example.com",
+        password="secret",
+    )
+    invited_user = django_user_model.objects.create_user(
+        username="capacity-guest",
+        email="capacity-guest@example.com",
+        password="secret",
+    )
+
+    team = Team.objects.create(name="Capacity Limited Workspace")
+    Member.objects.create(user=owner, team=team, role="owner", is_default_team=True)
+    invitation = Invitation.objects.create(team=team, email=invited_user.email, role="guest")
+
+    client = Client()
+    assert client.login(username="capacity-guest", password="secret")
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+
+    assert response.status_code == 403
+    assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
+
+    availability = response.context["availability"]
+    assert availability["plan_name"] == Team.Plan.COMMUNITY.label
+    assert availability["member_limit"] == 1
+    assert availability["current_members"] == 1
 
 
 @pytest.mark.django_db
@@ -468,9 +626,10 @@ def test_delete_membership(
     messages = list(get_messages(response.wsgi_request))
 
     assert len(messages) == 1
+    # When removing a user from their last workspace, a new personal workspace is created
     assert (
         messages[0].message
-        == f"Member {membership.user.username} removed from team {membership.team.name}"
+        == f"Member {membership.user.username} removed from workspace. A new personal workspace has been created for them."
     )
     with pytest.raises(Member.DoesNotExist):
         Member.objects.get(pk=membership.id)
@@ -587,7 +746,7 @@ def test_update_visibility_blocks_invalid_billing_plan(
     assert response.url == uri
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("Disabling the trust center is available on Business or Enterprise plans." in str(msg) for msg in messages)
+    assert any("Disabling the Trust Center is available on Business or Enterprise plans." in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -690,7 +849,7 @@ def test_visibility_toggle__community_cannot_be_private(
     assert team_with_community_plan.is_public is True
 
     messages = list(get_messages(response.wsgi_request))
-    assert any("trust center is available on Business or Enterprise plans" in msg.message for msg in messages)
+    assert any("Trust Center is available on Business or Enterprise plans" in msg.message for msg in messages)
 
 
 @pytest.mark.django_db
@@ -738,7 +897,7 @@ def test_visibility_toggle_disallowed_when_billing_disabled(
     team_with_community_plan.refresh_from_db()
     assert team_with_community_plan.is_public is True
     messages = list(get_messages(response.wsgi_request))
-    assert any("trust center is available on Business or Enterprise plans" in str(msg) for msg in messages)
+    assert any("Trust Center is available on Business or Enterprise plans" in str(msg) for msg in messages)
 
 
 @pytest.mark.django_db
@@ -1035,32 +1194,53 @@ def test_branding_schema():
     assert branding_info.accent_color == "blue"
     assert (
         branding_info.brand_icon_url
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     )
     assert (
         branding_info.brand_logo_url
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/logo.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/logo.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
 
     branding_info.prefer_logo_over_icon = False
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/logo.png"
     )
 
+    branding_info.icon = ""
+    assert branding_info.brand_icon_url == ""
+
+    branding_info.icon = "icon.png"
+    assert branding_info.brand_icon_url == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     branding_info.prefer_logo_over_icon = True
     branding_info.logo = ""
     assert (
         branding_info.brand_image
-        == settings.AWS_ENDPOINT_URL_S3 + "/" + settings.AWS_MEDIA_STORAGE_BUCKET_NAME + "/icon.png"
+        == settings.AWS_MEDIA_STORAGE_BUCKET_URL + "/icon.png"
     )
 
     branding_info.icon = ""
     assert branding_info.brand_image == ""
+
+
+def test_branding_schema_uses_bucket_url_over_endpoint():
+    custom_bucket_url = "https://cdn.example.com/media-bucket"
+    branding_info = BrandingInfo(
+        icon="icon.png",
+        logo="logo.png",
+    )
+
+    with override_settings(
+        AWS_MEDIA_STORAGE_BUCKET_URL=custom_bucket_url,
+        AWS_ENDPOINT_URL_S3="http://ignored-endpoint",
+        AWS_MEDIA_STORAGE_BUCKET_NAME="should-not-appear",
+    ):
+        assert branding_info.brand_icon_url == f"{custom_bucket_url}/icon.png"
+        assert branding_info.brand_logo_url == f"{custom_bucket_url}/logo.png"
 
 
 @pytest.mark.django_db
@@ -1472,7 +1652,7 @@ def test_patch_team_private_not_allowed_on_community(authenticated_api_client, s
     )
 
     assert response.status_code == 403
-    assert "trust center" in response.json()["detail"]
+    assert "Trust Center" in response.json()["detail"]
 
     team.refresh_from_db()
     assert team.is_public is True
@@ -1593,3 +1773,149 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     assert isinstance(data["has_completed_wizard"], bool)
     assert isinstance(data["is_public"], bool)
     assert data["billing_plan"] is None or isinstance(data["billing_plan"], str)
+
+
+# ==================== Team General Settings View Tests ====================
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_owner__should_succeed(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that owners can access the general settings view."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 200
+    assert team.name in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_admin__should_fail(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    """Test that admins cannot access the general settings view (owner-only)."""
+    client = Client()
+    team = sample_team_with_admin_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_guest__should_fail(
+    sample_team_with_guest_member: Member,  # noqa: F811
+):
+    """Test that guests cannot access the general settings view."""
+    client = Client()
+    team = sample_team_with_guest_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_team_general_post__update_name_successfully(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that owners can update the workspace name."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    original_name = team.name
+    new_name = "Updated Workspace Name"
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": new_name})
+
+    assert response.status_code == 200
+    # Check HX-Trigger header for HTMX success response
+    assert "HX-Trigger" in response.headers
+
+    # Verify the name was updated in the database
+    team.refresh_from_db()
+    assert team.name == new_name
+    assert team.name != original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__empty_name_should_fail(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that empty workspace name is rejected."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    original_name = team.name
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": ""})
+
+    assert response.status_code == 200
+    # Check for error in HX-Trigger
+    assert "HX-Trigger" in response.headers
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert "messages" in trigger
+    assert trigger["messages"][0]["type"] == "error"
+
+    # Verify the name was not updated
+    team.refresh_from_db()
+    assert team.name == original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__admin_cannot_update_name(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    """Test that admins cannot update the workspace name."""
+    client = Client()
+    team = sample_team_with_admin_member.team
+    original_name = team.name
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": "New Name"})
+
+    # Should be forbidden
+    assert response.status_code == 403
+
+    # Verify the name was not updated
+    team.refresh_from_db()
+    assert team.name == original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__updates_session(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that updating workspace name also updates the session."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    new_name = "Session Updated Name"
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": new_name})
+
+    assert response.status_code == 200
+
+    # Verify session was updated
+    session = client.session
+    assert session["current_team"]["name"] == new_name

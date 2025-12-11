@@ -7,6 +7,7 @@
 
 # Snippet: Common proxy configuration
 (proxy_common) {
+	# Caddy readiness check for Docker
 	@health {
 		path /health
 	}
@@ -66,7 +67,7 @@
 }
 
 # Development: serve on port 80 (catches any hostname)
-http://:80 {
+:80 {
 	log {
 		output stdout
 		format console
@@ -75,3 +76,26 @@ http://:80 {
 
 	import proxy_common
 }
+
+# Development: serve on port 443 (HTTPS)
+:443 {
+	tls internal
+
+	log {
+		output stdout
+		format console
+		level INFO
+	}
+
+	# Security headers (excluding HSTS for dev safety)
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	import proxy_common
+}
+

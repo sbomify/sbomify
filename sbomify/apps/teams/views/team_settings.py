@@ -116,30 +116,39 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return redirect("teams:team_settings", team_key=team_key)
 
     def _delete_member(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        from sbomify.apps.teams.utils import remove_member_safely
+
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
             return redirect("teams:team_settings", team_key=team_key)
 
+        member_id = form.cleaned_data["member_id"]
         try:
-            membership = Member.objects.get(pk=form.cleaned_data["member_id"], team__key=team_key)
+            membership = Member.objects.get(pk=member_id, team__key=team_key)
         except Member.DoesNotExist:
             messages.error(request, "Member not found")
             return redirect("teams:team_settings", team_key=team_key)
 
         if membership.role == "owner":
-            owner_count = Member.objects.filter(team_id=membership.team_id, role="owner").count()
-            if owner_count == 1:
+            # Check if actor is an admin trying to remove an owner
+            actor_membership = Member.objects.filter(user=request.user, team=membership.team).first()
+            if actor_membership and actor_membership.role == "admin":
+                messages.error(
+                    request,
+                    "Admins cannot remove workspace owners.",
+                )
+                return redirect("teams:team_settings", team_key=team_key)
+
+            owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+            if owners_count <= 1:
                 messages.warning(
                     request,
                     "Cannot delete the only owner of the workspace. Please assign another owner first.",
                 )
                 return redirect("teams:team_settings", team_key=team_key)
 
-        membership.delete()
-        messages.info(request, f"Member {membership.user.username} removed from workspace {membership.team.name}")
-
-        return redirect("teams:team_settings", team_key=team_key)
+        return remove_member_safely(request, membership)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
         form = DeleteInvitationForm(request.POST)
@@ -176,7 +185,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         can_set_private = team.can_be_private()
         if desired_visibility is False and not can_set_private:
-            messages.error(request, "Disabling the trust center is available on Business or Enterprise plans.")
+            messages.error(request, "Disabling the Trust Center is available on Business or Enterprise plans.")
             return redirect("teams:team_settings", team_key=team_key)
 
         team.is_public = desired_visibility

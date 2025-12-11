@@ -59,6 +59,7 @@ class InvitationSchema(BaseModel):
     """
 
     id: int
+    token: str
     email: str
     role: str
     created_at: datetime
@@ -91,34 +92,29 @@ class TeamDomainSchema(BaseModel):
 class BrandingInfo(BaseModel):
     icon: str = ""
     logo: str = ""
-    prefer_logo_over_icon: bool | None = None
+    prefer_logo_over_icon: bool = False
+    branding_enabled: bool = False
     brand_color: str = ""
     accent_color: str = ""
 
     @property
     def brand_icon_url(self) -> str:
         if self.icon:
-            return f"{settings.AWS_ENDPOINT_URL_S3}/{settings.AWS_MEDIA_STORAGE_BUCKET_NAME}/{self.icon}"
-
+            return _build_media_url(self.icon)
         return ""
 
     @property
     def brand_logo_url(self) -> str:
-        if self.logo:
-            return f"{settings.AWS_ENDPOINT_URL_S3}/{settings.AWS_MEDIA_STORAGE_BUCKET_NAME}/{self.logo}"
-
-        return ""
+        return _build_media_url(self.logo)
 
     @property
     def brand_image(self) -> str:
-        if self.icon and self.logo:
-            return self.brand_logo_url if self.prefer_logo_over_icon else self.brand_icon_url
-        elif self.icon:
-            return self.brand_icon_url
-        elif self.logo:
+        """Primary brand image for public pages (logo-first, icon as fallback)."""
+        if self.logo:
             return self.brand_logo_url
-        else:
-            return ""
+        if self.icon:
+            return self.brand_icon_url
+        return ""
 
 
 class BrandingInfoWithUrls(BrandingInfo):
@@ -126,10 +122,22 @@ class BrandingInfoWithUrls(BrandingInfo):
     logo_url: str = ""
 
 
+def _build_media_url(key: str) -> str:
+    """Construct a public media URL for branding assets."""
+    if not key:
+        return ""
+
+    bucket_url = getattr(settings, "AWS_MEDIA_STORAGE_BUCKET_URL", None)
+    if bucket_url:
+        return f"{bucket_url.rstrip('/')}/{key.lstrip('/')}"
+    return ""
+
+
 class UpdateTeamBrandingSchema(BaseModel):
     brand_color: str | None = None
     accent_color: str | None = None
     prefer_logo_over_icon: bool = False
+    branding_enabled: bool | None = None
     icon_pending_deletion: bool = False
     logo_pending_deletion: bool = False
 

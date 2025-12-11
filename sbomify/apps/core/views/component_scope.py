@@ -34,7 +34,7 @@ class ComponentScopeView(LoginRequiredMixin, View):
         component.save()
 
         if is_global:
-            messages.success(request, "Component is now workspace-wide and visible on the trust center.")
+            messages.success(request, "Component is now workspace-wide and visible on the Trust Center.")
         else:
             messages.success(request, "Component is now project-scoped.")
 
