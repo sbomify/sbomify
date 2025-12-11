@@ -17,6 +17,7 @@ Including another URLconf
 
 from django.conf import settings
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from sbomify.apps.billing.views import public_enterprise_contact
 from sbomify.apps.core.admin import admin_site
@@ -26,6 +27,8 @@ from .apis import api
 
 urlpatterns = [
     path("admin/", admin_site.urls),
+    # Redirect old accounts/login to our Keycloak login
+    path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),

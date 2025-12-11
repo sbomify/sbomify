@@ -1,0 +1,12 @@
+{% extends "core/base.html.j2" %}
+{% block title %}Sign In | sbomify{% endblock %}
+{% block login_content %}
+    <h1 class="h3 mb-4 text-center">Sign in via Keycloak</h1>
+    <p class="text-center text-muted mb-4">
+        Continue to sbomify using your Keycloak account.
+    </p>
+    <form method="post" action="{% url 'openid_connect_login' 'keycloak' %}" class="d-grid gap-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-lg w-100">Continue with Keycloak</button>
+    </form>
+{% endblock %}
