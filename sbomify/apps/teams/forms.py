@@ -55,6 +55,22 @@ class TeamBrandingForm(forms.Form):
     logo = forms.FileField(required=False)
 
 
+class TeamGeneralSettingsForm(forms.Form):
+    """Form for updating workspace general settings (name)."""
+
+    name = forms.CharField(
+        max_length=255,
+        min_length=1,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Enter workspace name",
+            }
+        ),
+    )
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 

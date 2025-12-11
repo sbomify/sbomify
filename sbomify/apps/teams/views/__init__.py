@@ -101,6 +101,7 @@ from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
 )
 from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_branding import TeamBrandingView  # noqa: F401, E402
+from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F401, E402
 from sbomify.apps.teams.views.vulnerability_settings import VulnerabilitySettingsView  # noqa: F401, E402
 

@@ -50,7 +50,9 @@ def test_workspace_public_page_uses_display_name_for_title():
 
     assert response.status_code == 200
     content = html.unescape(response.content.decode())
-    assert "Aurangzaib's Trust Center" in content
+    # display_name strips "'s Workspace" suffix, so it becomes "Aurangzaib"
+    # Title format is "<name> Trust Center"
+    assert "Aurangzaib Trust Center" in content
     assert "Workspace Trust Center" not in content
 
 
