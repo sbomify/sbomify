@@ -54,12 +54,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import PublicCard from './PublicCard.vue'
 
 interface Project {
   id: string
   name: string
+  slug?: string
   is_public: boolean
   public_url?: string
 }
@@ -68,13 +69,29 @@ interface Props {
   productId?: string
   brandColor?: string
   accentColor?: string
+  isCustomDomain?: boolean | string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   productId: '',
   brandColor: '#dcdcdc',
-  accentColor: '#7c8b9d'
+  accentColor: '#7c8b9d',
+  isCustomDomain: false
 })
+
+const isCustomDomain = computed(() => {
+  if (typeof props.isCustomDomain === 'string') {
+    return props.isCustomDomain === 'true'
+  }
+  return props.isCustomDomain
+})
+
+const getProjectUrl = (project: Project): string => {
+  if (isCustomDomain.value) {
+    return `/project/${project.slug || project.id}/`
+  }
+  return `/public/project/${project.id}/`
+}
 
 const projects = ref<Project[]>([])
 
@@ -88,12 +105,17 @@ onMounted(async () => {
       }
 
       const productData = await response.json()
-      projects.value = (productData.projects || []).map((project: { id: string; name: string; is_public: boolean }) => ({
-        id: project.id,
-        name: project.name,
-        is_public: project.is_public,
-        public_url: project.is_public ? `/public/project/${project.id}/` : ''
-      }))
+      projects.value = (productData.projects || []).map((project: { id: string; name: string; slug?: string; is_public: boolean }) => {
+        const projectData: Project = {
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+          is_public: project.is_public,
+          public_url: ''
+        }
+        projectData.public_url = project.is_public ? getProjectUrl(projectData) : ''
+        return projectData
+      })
     } catch (error) {
       console.error('Failed to load projects data:', error)
     }

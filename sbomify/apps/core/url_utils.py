@@ -86,6 +86,32 @@ def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
     return True
 
 
+def should_redirect_to_clean_url(request: HttpRequest) -> bool:
+    """
+    Check if the request should be redirected from /public/ URL to clean URL.
+
+    On custom domains, URLs should use the clean format (e.g., /product/slug/)
+    instead of the /public/ prefix format (e.g., /public/product/id/).
+
+    Returns True if:
+    - Request is on a custom domain
+    - Request path starts with /public/
+
+    Args:
+        request: The current HTTP request
+
+    Returns:
+        Boolean indicating if redirect to clean URL is needed
+    """
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    if not is_custom_domain:
+        return False
+
+    # Check if the path uses the /public/ prefix
+    path = request.path
+    return path.startswith("/public/")
+
+
 def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     """
     Build a full URL using the team's custom domain.

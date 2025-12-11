@@ -73,7 +73,9 @@
                                 <div class="vc-public-product-projects"
                                      data-product-id="{{ product.id }}"
                                      data-brand-color="{{ brand.primary_color|default:'#4f46e5' }}"
-                                     data-accent-color="{{ brand.secondary_color|default:'#7c8b9d' }}"></div>
+                                     data-accent-color="{{ brand.secondary_color|default:'#7c8b9d' }}"
+                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}">
+                                </div>
                             </div>
                             <div class="product-releases-section">
                                 <div class="vc-product-releases"

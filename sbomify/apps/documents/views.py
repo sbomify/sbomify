@@ -14,6 +14,7 @@ from sbomify.apps.core.url_utils import (
     build_custom_domain_url,
     get_public_path,
     resolve_document_identifier,
+    should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import verify_item_access
@@ -43,7 +44,8 @@ class DocumentDetailsPublicView(View):
             return error_response(request, HttpResponseForbidden("Document is not public"))
 
         # Redirect to custom domain if team has a verified one and we're not already on it
-        if team and should_redirect_to_custom_domain(request, team):
+        # OR redirect from /public/ URL to clean URL on custom domain
+        if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             path = get_public_path("document", document_obj.id, is_custom_domain=True, slug=document_obj.name)
             return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 

@@ -4,7 +4,9 @@ import { RELEASE_DISPLAY, EXPANSION_LIMITS } from '../constants'
 export interface Release {
   id: string
   name: string
+  slug?: string
   product_name: string
+  product_slug?: string
   is_latest: boolean
   is_prerelease: boolean
   is_public: boolean
@@ -12,14 +14,18 @@ export interface Release {
   product?: {
     id: string
     name: string
+    slug?: string
   }
 }
 
 /**
  * Composable for handling release display logic including expansion,
  * URL generation, and filtering
+ *
+ * @param isPublicView - Whether this is a public view
+ * @param isCustomDomain - Whether the request is on a custom domain
  */
-export function useReleaseDisplay(isPublicView = false) {
+export function useReleaseDisplay(isPublicView = false, isCustomDomain = false) {
   // State for expansion tracking
   const expandedReleases = ref<Set<string>>(new Set())
 
@@ -63,6 +69,12 @@ export function useReleaseDisplay(isPublicView = false) {
   const getReleaseUrl = (release: Release): string => {
     const productId = release.product_id || release.product?.id
     if (productId) {
+      if (isCustomDomain) {
+        // On custom domains, use slug-based URLs
+        const productSlug = release.product_slug || release.product?.slug || productId
+        const releaseSlug = release.slug || release.id
+        return `/product/${productSlug}/release/${releaseSlug}/`
+      }
       if (isPublicView) {
         return `/public/product/${productId}/release/${release.id}/`
       }
