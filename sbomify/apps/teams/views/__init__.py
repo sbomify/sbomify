@@ -47,7 +47,7 @@ def _render_workspace_availability_page(
     """Render a friendly status page when the workspace is at capacity."""
 
     plan_key = team.billing_plan or Team.Plan.COMMUNITY
-    plan_label = team.get_billing_plan_display() or Team.Plan.COMMUNITY.label
+    plan_label = team.get_billing_plan_display() or getattr(Team.Plan.COMMUNITY, "label", str(Team.Plan.COMMUNITY))
 
     plan_record = BillingPlan.objects.filter(key=plan_key).first()
     member_limit: int | None = None

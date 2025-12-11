@@ -166,24 +166,26 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
         return redirect("core:settings")
 
+    # Capture team and role before deleting invitation
+    team = invitation.team
+    role = invitation.role
+
     # Create membership in atomic transaction to ensure it's committed
     with transaction.atomic():
         has_default_team = Member.objects.filter(user=request.user, is_default_team=True).exists()
         Member.objects.create(
             user=request.user,
-            team=invitation.team,
-            role=invitation.role,
+            team=team,
+            role=role,
             is_default_team=not has_default_team,
         )
         invitation.delete()
 
     # Refresh user_teams in session and switch to new workspace
     request.session["user_teams"] = get_user_teams(request.user)
-    switch_active_workspace(request, invitation.team, invitation.role)
+    switch_active_workspace(request, team, role)
 
-    messages.add_message(
-        request, messages.SUCCESS, f"You have joined {invitation.team.display_name} as {invitation.role}."
-    )
+    messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
 
     return redirect("core:dashboard")
 

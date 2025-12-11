@@ -383,6 +383,57 @@ def _send_welcome_email(user, team: Team, business_plan: BillingPlan) -> None:
         logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
 
 
+def recover_workspace_session(request):
+    """
+    Handle case where user's session points to a workspace they're no longer a member of.
+
+    This function:
+    1. Refreshes user_teams from database
+    2. Switches to another available workspace if exists
+    3. Creates a personal workspace if needed
+    4. Returns a redirect to the appropriate page
+    """
+    from django.http import HttpResponseForbidden
+
+    from sbomify.apps.core.errors import error_response
+
+    # Get the name of the old workspace before we update the session
+    current_team = request.session.get("current_team", {})
+    old_team_name = current_team.get("name", "the workspace")
+
+    # Refresh user teams from database
+    user_teams = get_user_teams(request.user)
+    request.session["user_teams"] = user_teams
+
+    if user_teams:
+        # User has other workspaces, switch to the first one
+        next_team_key, next_team = next(iter(user_teams.items()))
+        request.session["current_team"] = {"key": next_team_key, **next_team}
+        request.session.modified = True
+        messages.warning(
+            request, f"You have been removed from {old_team_name}. You have been switched to your other workspace."
+        )
+        return redirect("core:dashboard")
+
+    # User has no workspaces at all - create a personal workspace for them
+    new_team = create_user_team_and_subscription(request.user)
+    if new_team:
+        user_teams = get_user_teams(request.user)
+        request.session["user_teams"] = user_teams
+        request.session["current_team"] = {"key": new_team.key, **user_teams.get(new_team.key, {})}
+        request.session.modified = True
+        messages.warning(
+            request,
+            f"You have been removed from {old_team_name}. You have been switched to your new personal workspace.",
+        )
+        return redirect("core:dashboard")
+
+    # Fallback if workspace creation failed
+    request.session.pop("current_team", None)
+    request.session.modified = True
+    return error_response(request, HttpResponseForbidden("You are not a member of any team"))
+
+
 def invalidate_custom_domain_cache(domain: str | None) -> None:
     """
     Invalidate the cache for a custom domain.
@@ -423,7 +474,7 @@ def remove_member_safely(request, membership: Member):
     is_self_removal = membership.user_id == request.user.id
 
     # Check if this is the user's last workspace BEFORE deleting
-    is_last_workspace = Member.objects.filter(user=removed_user).count() == 1
+    is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
 
     membership.delete()
 
@@ -497,5 +548,5 @@ def remove_member_safely(request, membership: Member):
         request.session.modified = True
         return redirect("teams:teams_dashboard")
     else:
-        messages.info(request, f"Member {removed_user.username} removed from workspace {removed_team_name}")
+        messages.info(request, f"Member {removed_user.username} removed from workspace.")
         return redirect("teams:team_settings", team_key=removed_team_key)

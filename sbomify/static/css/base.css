@@ -164,3 +164,26 @@ code {
   font-size: 0.65rem;
   min-width: 1.35rem;
 }
+
+/* Invitation Cards */
+.invitation-card {
+  background: var(--gray-100, #f8f9fa);
+  transition: all 0.2s ease;
+}
+
+.invitation-card:hover {
+  background: var(--bg-primary, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.invitation-info h5 {
+  color: var(--text-title, #2c3e50);
+  font-weight: 600;
+}
+
+.invitation-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

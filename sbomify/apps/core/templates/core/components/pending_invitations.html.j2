@@ -28,7 +28,7 @@
                                 <div class="invitation-actions d-flex gap-2">
                                     <form method="post"
                                           action="{% url 'core:accept_user_invitation' inv.id %}"
-                                          style="display: inline"
+                                          class="d-inline"
                                           hx-boost="false">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-success btn-sm">
@@ -37,7 +37,7 @@
                                     </form>
                                     <form method="post"
                                           action="{% url 'core:reject_user_invitation' inv.id %}"
-                                          style="display: inline"
+                                          class="d-inline"
                                           hx-boost="false">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-outline-danger btn-sm">
@@ -58,23 +58,3 @@
         </div>
     </div>
 </div>
-<style>
-    .invitation-card {
-        background: #f8f9fa;
-        transition: all 0.2s ease;
-    }
-    .invitation-card:hover {
-        background: #fff;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    .invitation-info h5 {
-        color: #2c3e50;
-        font-weight: 600;
-    }
-    .invitation-meta {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-</style>
