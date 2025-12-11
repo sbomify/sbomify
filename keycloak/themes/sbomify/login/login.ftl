@@ -10,44 +10,7 @@
                     <div class="brand-logo">
                         <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
                     </div>
-                    <h1 class="info-title">Your Security Artifact Hub</h1>
-                    <p class="info-tagline">From zero to SBOM hero. Generate, manage, and share SBOMs and compliance documents with your stakeholders.</p>
-                    
-                    <div class="features-list">
-                        <div class="feature-item">
-                            <div class="feature-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                                </svg>
-                            </div>
-                            <div class="feature-text">
-                                <strong>Generate SBOMs</strong>
-                                <span>Build high-quality SBOMs directly in your CI/CD pipeline</span>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <div class="feature-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                </svg>
-                            </div>
-                            <div class="feature-text">
-                                <strong>Trust Center</strong>
-                                <span>Share compliance documents with stakeholders securely</span>
-                            </div>
-                        </div>
-                        <div class="feature-item">
-                            <div class="feature-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                            </div>
-                            <div class="feature-text">
-                                <strong>CRA & NTIA Compliant</strong>
-                                <span>Meet EU Cyber Resilience Act and US requirements</span>
-                            </div>
-                        </div>
-                    </div>
+                    <h1 class="info-title">Sign in to sbomify</h1>
                 </div>
             </div>
 

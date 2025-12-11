@@ -168,3 +168,69 @@ def test_login_page_renders_account_login(client: Client) -> None:
     response = client.get("/login/", follow=False)
     assert response.status_code in (301, 302)
     assert response["Location"].endswith("/accounts/oidc/keycloak/login/")
+
+
+@pytest.mark.django_db
+def test_logout_unauthenticated_user_redirects_to_login(client: Client) -> None:
+    """Unauthenticated user accessing logout should redirect to login page.
+
+    This tests the behavior added to handle unauthenticated users gracefully.
+    """
+    client.logout()  # Ensure no session
+    response = client.get(reverse("core:logout"), follow=False)
+    assert response.status_code == 302
+    # Should redirect to keycloak_login
+    assert "/login" in response["Location"] or "keycloak" in response["Location"].lower()
+
+
+@pytest.mark.django_db
+def test_keycloak_login_rejects_malicious_next_parameter(client: Client) -> None:
+    """Malicious 'next' parameters with external hosts should be rejected.
+
+    The open redirect validation should strip out any next parameter that
+    points to an external domain to prevent open redirect attacks.
+    """
+    client.logout()
+
+    # Test with external URL - should NOT include the next parameter
+    malicious_urls = [
+        "https://evil.com/phishing",
+        "//evil.com/path",
+        "http://attacker.net/steal",
+        "https://evil.com",
+    ]
+
+    for malicious_url in malicious_urls:
+        response = client.get(
+            reverse("core:keycloak_login") + f"?next={malicious_url}",
+            follow=False
+        )
+        assert response.status_code in (301, 302)
+        # The redirect URL should NOT contain the malicious next parameter
+        location = response["Location"]
+        assert malicious_url not in location, f"Malicious URL {malicious_url} should be rejected"
+        # Should just redirect to the base login URL without the next param
+        assert "/accounts/oidc/keycloak/login/" in location
+
+
+@pytest.mark.django_db
+def test_keycloak_login_preserves_valid_next_parameter(client: Client) -> None:
+    """Valid internal 'next' parameters should be preserved.
+
+    The open redirect validation should allow next parameters that point
+    to the same host.
+    """
+    client.logout()
+
+    # Test with valid internal path - should include the next parameter
+    valid_next = "/dashboard/"
+    response = client.get(
+        reverse("core:keycloak_login") + f"?next={valid_next}",
+        follow=False,
+        HTTP_HOST="testserver",
+    )
+    assert response.status_code in (301, 302)
+    location = response["Location"]
+    # The redirect URL should contain the next parameter
+    assert "/accounts/oidc/keycloak/login/" in location
+    assert "next=" in location or "next%3D" in location.lower()
