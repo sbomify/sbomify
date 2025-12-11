@@ -15,7 +15,18 @@ if TYPE_CHECKING:
 
 
 class CustomDomainRequest(Protocol):
-    """Protocol for HttpRequest with custom domain attributes."""
+    """
+    Protocol documenting the custom domain attributes added to HttpRequest by middleware.
+
+    These attributes are dynamically added by CustomDomainContextMiddleware using setattr().
+    To access them safely in views, use getattr() with defaults:
+
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    Note: This protocol is for documentation purposes. Type checkers won't enforce it
+    because we're adding attributes dynamically to Django's HttpRequest.
+    """
 
     is_custom_domain: bool
     custom_domain_team: "Team | None"

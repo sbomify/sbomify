@@ -34,6 +34,11 @@ class Product(models.Model):
     def slug(self) -> str:
         """Generate a URL-safe slug from the product name.
 
+        Note: This is computed on each access rather than cached because:
+        1. Caching could return stale values if name changes
+        2. slugify() overhead is minimal for typical usage
+        3. For high-traffic scenarios, consider adding a database slug field
+
         Returns:
             URL-safe slug string derived from the product name.
         """
@@ -147,6 +152,8 @@ class Project(models.Model):
     @property
     def slug(self) -> str:
         """Generate a URL-safe slug from the project name.
+
+        Note: Computed property - see Product.slug for rationale.
 
         Returns:
             URL-safe slug string derived from the project name.
@@ -341,6 +348,8 @@ class Component(models.Model):
     @property
     def slug(self) -> str:
         """Generate a URL-safe slug from the component name.
+
+        Note: Computed property - see Product.slug for rationale.
 
         Returns:
             URL-safe slug string derived from the component name.

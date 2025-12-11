@@ -243,6 +243,8 @@ class Release(models.Model):
     def slug(self) -> str:
         """Generate a URL-safe slug from the release name.
 
+        Note: Computed property - see Product.slug in sboms/models.py for rationale.
+
         Returns:
             URL-safe slug string derived from the release name.
         """

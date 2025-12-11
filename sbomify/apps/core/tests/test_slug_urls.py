@@ -216,14 +216,16 @@ class TestSlugRoutingOnMainDomain:
         response = client.get(f"/public/project/{project_with_slug.id}/")
         # Should redirect to custom domain
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        parsed = urlparse(response.url)
+        assert parsed.netloc == "trust.example.com"
 
     def test_component_by_id_on_main_domain(self, client, component_with_slug):
         """Test that /public/component/{id}/ redirects to custom domain."""
         response = client.get(f"/public/component/{component_with_slug.id}/")
         # Should redirect to custom domain
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        parsed = urlparse(response.url)
+        assert parsed.netloc == "trust.example.com"
 
 
 class TestProductReleasesSlug:
