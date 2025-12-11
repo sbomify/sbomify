@@ -192,7 +192,8 @@ class TestPublicURLsOnCustomDomain:
 
         # Should redirect to custom domain
         assert response.status_code == 302
-        assert "trust.example.com" in response.url
+        parsed = urlparse(response.url)
+        assert parsed.hostname == "trust.example.com"
 
 
 @pytest.mark.django_db
