@@ -43,7 +43,7 @@ def user_workspaces(context):
         try:
             last_checked = datetime.fromisoformat(last_checked_raw)
             if timezone.is_naive(last_checked):
-                last_checked = timezone.make_aware(last_checked, timezone.utc)
+                last_checked = timezone.make_aware(last_checked, timezone.get_current_timezone())
         except ValueError:
             last_checked = None
 

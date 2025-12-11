@@ -67,15 +67,19 @@ def test_update_user_teams_session_skips_when_checksum_matches(sample_team_with_
     user = sample_team_with_owner_member.user
     # First call populates session
     first_teams = update_user_teams_session(request, user)
+    first_timestamp = request.session.get("user_teams_checked_at")
     request.session.modified = False  # reset flag
 
-    # Second call should be a no-op when checksum matches
+    # Second call should skip data update but still refresh the timestamp for TTL
     result = update_user_teams_session(request, user)
 
     assert result == first_teams
     assert request.session["user_teams"] == first_teams
     assert request.session["user_teams_version"] == compute_user_teams_checksum(first_teams)
-    assert request.session.modified is False
+    # Session is modified because timestamp is updated (for TTL reset), but data is unchanged
+    assert request.session.modified is True
+    assert request.session.get("user_teams_checked_at") is not None
+    assert request.session.get("user_teams_checked_at") >= first_timestamp
 
 
 @pytest.mark.django_db
