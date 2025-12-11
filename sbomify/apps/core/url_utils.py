@@ -329,11 +329,9 @@ def resolve_product_identifier(
         # NOTE: This is O(n) where n = number of public products per team.
         # For teams with many products, consider adding a database slug field with an index.
         # Current approach is acceptable for typical team sizes (< 100 products).
-        for product_id, name in Product.objects.filter(team=custom_domain_team, is_public=True).values_list(
-            "id", "name"
-        ):
-            if slugify(name, allow_unicode=True) == slug:
-                return Product.objects.get(pk=product_id)
+        for product in Product.objects.filter(team=custom_domain_team, is_public=True):
+            if slugify(product.name, allow_unicode=True) == slug:
+                return product
 
         # Fallback: try by ID within the team (for backward compatibility)
         try:
@@ -378,11 +376,9 @@ def resolve_project_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for project_id, name in Project.objects.filter(team=custom_domain_team, is_public=True).values_list(
-            "id", "name"
-        ):
-            if slugify(name, allow_unicode=True) == slug:
-                return Project.objects.get(pk=project_id)
+        for project in Project.objects.filter(team=custom_domain_team, is_public=True):
+            if slugify(project.name, allow_unicode=True) == slug:
+                return project
 
         # Fallback: try by ID within the team
         try:
@@ -427,11 +423,9 @@ def resolve_component_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for component_id, name in Component.objects.filter(team=custom_domain_team, is_public=True).values_list(
-            "id", "name"
-        ):
-            if slugify(name, allow_unicode=True) == slug:
-                return Component.objects.get(pk=component_id)
+        for component in Component.objects.filter(team=custom_domain_team, is_public=True):
+            if slugify(component.name, allow_unicode=True) == slug:
+                return component
 
         # Fallback: try by ID within the team
         try:
@@ -477,9 +471,9 @@ def resolve_release_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for release_id, name in Release.objects.filter(product=product).values_list("id", "name"):
-            if slugify(name, allow_unicode=True) == slug:
-                return Release.objects.get(pk=release_id)
+        for release in Release.objects.filter(product=product):
+            if slugify(release.name, allow_unicode=True) == slug:
+                return release
 
         # Fallback: try by ID within the product
         try:
