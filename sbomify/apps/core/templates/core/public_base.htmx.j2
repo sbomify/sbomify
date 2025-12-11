@@ -451,7 +451,21 @@
                             <a href="{{ trust_center_url }}"
                                class="brand-logo-link"
                                title="Back to Trust Center">
-                            {% endif %}
+                                {% if brand.brand_image %}
+                                    <img src="{{ brand.brand_image }}"
+                                         alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% else %}
+                                    <img src="{% static 'img/sbomify.svg' %}"
+                                         alt="sbomify Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% endif %}
+                            </a>
+                        {% else %}
                             {% if brand.brand_image %}
                                 <img src="{{ brand.brand_image }}"
                                      alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
@@ -465,7 +479,7 @@
                                      width="32"
                                      height="32">
                             {% endif %}
-                            {% if trust_center_url %}</a>{% endif %}
+                        {% endif %}
                     </div>
                     {% block header_content %}{% endblock %}
                 </div>
