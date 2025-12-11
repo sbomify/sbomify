@@ -43,21 +43,22 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         new_name = form.cleaned_data["name"]
 
-        # Update the team name directly
+        # Update the team name using .update() to avoid redundant fetch
         # Note: Owner permission is already enforced by TeamRoleRequiredMixin
+        # Note: get_team() above already validated the team exists and user has access
         try:
-            team_obj = Team.objects.get(key=team_key)
-            team_obj.name = new_name
-            team_obj.save(update_fields=["name"])
+            # Use the team dict's key to update (team is a dict from get_team, not ORM object)
+            updated = Team.objects.filter(key=team_key).update(name=new_name)
+            if not updated:
+                return htmx_error_response("Workspace not found")
 
-            # Update session to reflect the new name
+            # Refetch for session refresh (need ORM object)
+            team_obj = Team.objects.get(key=team_key)
             refresh_current_team_session(request, team_obj)
 
             return htmx_success_response(
                 "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}
             )
 
-        except Team.DoesNotExist:
-            return htmx_error_response("Workspace not found")
         except Exception as e:
             return htmx_error_response(f"Failed to update workspace: {str(e)}")

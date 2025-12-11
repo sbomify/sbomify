@@ -311,8 +311,10 @@ def resource_public_absolute_url(context, resource_type, resource, team=None):
 
     # If custom domain is set and validated, use slug-based URL
     if custom_domain and custom_domain_validated:
-        slug_or_id = resource_slug or resource_id
-        return f"https://{custom_domain}/{resource_type}/{slug_or_id}/"
+        # Custom domains require slugs for proper routing
+        if resource_slug:
+            return f"https://{custom_domain}/{resource_type}/{resource_slug}/"
+        # Fall through to standard URL if no slug available
 
     # Fallback to standard URL with ID
     if team_key:
