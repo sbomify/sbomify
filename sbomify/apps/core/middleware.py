@@ -1,11 +1,36 @@
+from __future__ import annotations
+
 import ipaddress
 import logging
+from typing import TYPE_CHECKING, Callable, Protocol
 
-from django.http import HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
 
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
+
+if TYPE_CHECKING:
+    from sbomify.apps.teams.models import Team
+
+
+class CustomDomainRequest(Protocol):
+    """
+    Protocol documenting the custom domain attributes added to HttpRequest by middleware.
+
+    These attributes are dynamically added by CustomDomainContextMiddleware using setattr().
+    To access them safely in views, use getattr() with defaults:
+
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    Note: This protocol is for documentation purposes. Type checkers won't enforce it
+    because we're adding attributes dynamically to Django's HttpRequest.
+    """
+
+    is_custom_domain: bool
+    custom_domain_team: "Team | None"
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +51,7 @@ class DynamicHostValidationMiddleware:
     middleware for dynamic validation instead.
     """
 
-    def __init__(self, get_response):
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
         # Static hosts checked in-memory (no cache/DB hit)
         self.static_hosts = frozenset(
@@ -39,7 +64,7 @@ class DynamicHostValidationMiddleware:
         )
 
         # Parse APP_BASE_URL once at initialization instead of on first request
-        self._app_host = None
+        self._app_host: str | None = None
         try:
             from urllib.parse import urlparse
 
@@ -52,7 +77,7 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-    def __call__(self, request):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         host = self.get_host_from_request(request)
 
         if not self.is_valid_host(host):
@@ -61,7 +86,7 @@ class DynamicHostValidationMiddleware:
 
         return self.get_response(request)
 
-    def get_host_from_request(self, request):
+    def get_host_from_request(self, request: HttpRequest) -> str:
         """
         Extract and normalize the host from the request.
 
@@ -74,7 +99,7 @@ class DynamicHostValidationMiddleware:
         """
         return normalize_host(request.get_host())
 
-    def is_valid_host(self, host):
+    def is_valid_host(self, host: str) -> bool:
         """
         Check if host is allowed with three-tier validation:
         1. Static hosts (in-memory set) - instant
@@ -116,7 +141,7 @@ class DynamicHostValidationMiddleware:
         except ValueError:
             return False
 
-    def _check_custom_domain(self, host):
+    def _check_custom_domain(self, host: str) -> bool:
         """
         Check if a custom domain is allowed, using Redis-backed caching.
 
@@ -152,6 +177,125 @@ class DynamicHostValidationMiddleware:
         cache.set(cache_key, exists, ttl)
 
         return exists
+
+
+class CustomDomainContextMiddleware:
+    """
+    Middleware to detect custom domains and attach workspace context to requests.
+
+    This middleware runs after DynamicHostValidationMiddleware, so we know the host
+    is already validated. It checks if the host is a custom domain and attaches
+    the associated Team to the request.
+
+    Performance:
+    - Uses Redis caching similar to DynamicHostValidationMiddleware
+    - Cache hit: microseconds (no DB query)
+    - Cache miss: Single DB query to fetch Team, cached for 24 hours
+
+    Attributes added to request:
+    - request.is_custom_domain: Boolean indicating if on a custom domain
+    - request.custom_domain_team: Team instance if on custom domain, None otherwise
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+        # Parse APP_BASE_URL once at initialization
+        self._app_host: str | None = None
+        try:
+            from urllib.parse import urlparse
+
+            from django.conf import settings
+
+            if settings.APP_BASE_URL:
+                self._app_host = urlparse(settings.APP_BASE_URL).hostname
+        except (ImportError, AttributeError, ValueError) as e:
+            logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        host = normalize_host(request.get_host())
+
+        # Check if this is a custom domain (not the main app domain)
+        is_custom_domain = self._is_custom_domain(host)
+
+        # Add custom domain attributes to request (see CustomDomainRequest protocol)
+        # Using setattr to avoid type errors - this is a standard Django middleware pattern
+        if is_custom_domain:
+            team = self._get_team_for_domain(host)
+            setattr(request, "is_custom_domain", True)
+            setattr(request, "custom_domain_team", team)
+        else:
+            setattr(request, "is_custom_domain", False)
+            setattr(request, "custom_domain_team", None)
+
+        return self.get_response(request)
+
+    def _is_custom_domain(self, host: str) -> bool:
+        """
+        Check if the host is a custom domain (not the main app domain).
+
+        Returns:
+            bool: True if this is a custom domain, False if it's the main app domain
+        """
+        # If it's the main app host, it's not a custom domain
+        if self._app_host and host == self._app_host:
+            return False
+
+        # Static hosts are not custom domains
+        static_hosts = frozenset(["sbomify-backend", "localhost", "127.0.0.1", "testserver"])
+        if host in static_hosts:
+            return False
+
+        # If we get here, it could be a custom domain
+        # We'll verify by checking if a team exists with this domain
+        from django.core.cache import cache
+
+        cache_key = f"is_custom_domain:{host}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Query database
+        from sbomify.apps.teams.models import Team
+
+        exists = Team.objects.filter(custom_domain=host).exists()
+        cache.set(cache_key, exists, 86400)  # Cache for 24 hours
+
+        return exists
+
+    def _get_team_for_domain(self, host: str) -> "Team | None":
+        """
+        Get the Team instance associated with a custom domain.
+
+        Uses Redis caching to minimize database queries.
+
+        Returns:
+            Team instance or None if not found
+        """
+        from django.core.cache import cache
+
+        cache_key = f"custom_domain_team:{host}"
+
+        # Try cache first
+        cached_team_id = cache.get(cache_key)
+        if cached_team_id is not None:
+            from sbomify.apps.teams.models import Team
+
+            try:
+                return Team.objects.get(pk=cached_team_id)
+            except Team.DoesNotExist:
+                # Cache is stale, clear it
+                cache.delete(cache_key)
+
+        # Cache miss or stale - query database
+        from sbomify.apps.teams.models import Team
+
+        try:
+            team = Team.objects.get(custom_domain=host)
+            # Cache the team ID for 24 hours
+            cache.set(cache_key, team.pk, 86400)
+            return team
+        except Team.DoesNotExist:
+            return None
 
 
 class RealIPMiddleware(MiddlewareMixin):

@@ -1,6 +1,7 @@
 from django.apps import apps
 from django.core.validators import URLValidator
 from django.db import models
+from django.utils.text import slugify
 
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.teams.models import Team
@@ -28,6 +29,20 @@ class Product(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name}(Team ID: {self.team_id})"
+
+    @property
+    def slug(self) -> str:
+        """Generate a URL-safe slug from the product name.
+
+        Note: This is computed on each access rather than cached because:
+        1. Caching could return stale values if name changes
+        2. slugify() overhead is minimal for typical usage
+        3. For high-traffic scenarios, consider adding a database slug field
+
+        Returns:
+            URL-safe slug string derived from the product name.
+        """
+        return slugify(self.name, allow_unicode=True)
 
 
 class ProductIdentifier(models.Model):
@@ -133,6 +148,17 @@ class Project(models.Model):
 
     def __str__(self) -> str:
         return f"<{self.id}> {self.name}"
+
+    @property
+    def slug(self) -> str:
+        """Generate a URL-safe slug from the project name.
+
+        Note: Computed property - see Product.slug for rationale.
+
+        Returns:
+            URL-safe slug string derived from the project name.
+        """
+        return slugify(self.name, allow_unicode=True)
 
 
 class ProductProject(models.Model):
@@ -318,6 +344,17 @@ class Component(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name}"
+
+    @property
+    def slug(self) -> str:
+        """Generate a URL-safe slug from the component name.
+
+        Note: Computed property - see Product.slug for rationale.
+
+        Returns:
+            URL-safe slug string derived from the component name.
+        """
+        return slugify(self.name, allow_unicode=True)
 
     @property
     def latest_sbom(self) -> "SBOM | None":

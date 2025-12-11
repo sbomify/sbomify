@@ -343,7 +343,8 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     Invalidate the cache for a custom domain.
 
     This should be called whenever a domain is added, removed, or validated.
-    Clears the cache used by DynamicHostValidationMiddleware.
+    Clears all caches used by DynamicHostValidationMiddleware and
+    CustomDomainContextMiddleware.
 
     Args:
         domain: The domain to invalidate, or None to skip
@@ -354,9 +355,17 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
     try:
         from django.core.cache import cache
 
-        cache_key = f"allowed_host:{domain}"
-        cache.delete(cache_key)
-        logger.debug(f"Invalidated cache for custom domain: {domain}")
+        # Cache keys used by various middleware components
+        cache_keys = [
+            f"allowed_host:{domain}",  # DynamicHostValidationMiddleware
+            f"is_custom_domain:{domain}",  # CustomDomainContextMiddleware
+            f"custom_domain_team:{domain}",  # CustomDomainContextMiddleware
+        ]
+
+        for cache_key in cache_keys:
+            cache.delete(cache_key)
+
+        logger.debug(f"Invalidated all caches for custom domain: {domain}")
     except Exception as e:
         # Cache invalidation failure shouldn't break the flow
         logger.warning(f"Failed to invalidate cache for domain {domain}: {e}")

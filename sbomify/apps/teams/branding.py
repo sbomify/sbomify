@@ -15,10 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 def build_branding_context(team: "Team | None") -> dict:
-    """Return a template-friendly branding payload for public views."""
+    """
+    Return a template-friendly branding payload for public views.
+
+    Includes custom domain information for URL generation in templates.
+    """
     default_image = static("img/sbomify.svg")
     if not team:
-        return {"brand_image": default_image, "branding_enabled": False}
+        return {
+            "brand_image": default_image,
+            "branding_enabled": False,
+            "custom_domain": None,
+            "custom_domain_validated": False,
+        }
 
     raw_branding = (getattr(team, "branding_info", {}) or {}).copy()
     try:
@@ -28,10 +37,20 @@ def build_branding_context(team: "Team | None") -> dict:
         branding_info = BrandingInfo()
     name = getattr(team, "display_name", getattr(team, "name", ""))
 
+    # Get custom domain information
+    custom_domain = getattr(team, "custom_domain", None)
+    custom_domain_validated = getattr(team, "custom_domain_validated", False)
+
     branding_enabled_flag = raw_branding.get("branding_enabled", None)
     if branding_enabled_flag is False:
         # Preserve name but fall back to platform defaults for assets/colors.
-        return {"branding_enabled": False, "name": name, "brand_image": default_image}
+        return {
+            "branding_enabled": False,
+            "name": name,
+            "brand_image": default_image,
+            "custom_domain": custom_domain,
+            "custom_domain_validated": custom_domain_validated,
+        }
 
     brand_color = branding_info.brand_color or "#4f46e5"
     accent_color = branding_info.accent_color or "#7c8b9d"
@@ -52,4 +71,7 @@ def build_branding_context(team: "Team | None") -> dict:
         # Legacy aliases used by some templates/components
         "primary_color": brand_color,
         "secondary_color": accent_color,
+        # Custom domain information
+        "custom_domain": custom_domain,
+        "custom_domain_validated": custom_domain_validated,
     }

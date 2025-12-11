@@ -169,7 +169,28 @@ class Team(models.Model):
                 fields.add("is_public")
                 kwargs["update_fields"] = list(fields)
 
+        # Track custom_domain changes for cache invalidation
+        old_custom_domain = None
+        if not is_new:
+            try:
+                old_instance = Team.objects.only("custom_domain").get(pk=self.pk)
+                old_custom_domain = old_instance.custom_domain
+            except Team.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
+
+        # Invalidate cache if custom_domain changed
+        new_custom_domain = self.custom_domain
+        if old_custom_domain != new_custom_domain:
+            from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+            # Invalidate both old and new domains
+            if old_custom_domain:
+                invalidate_custom_domain_cache(old_custom_domain)
+            if new_custom_domain:
+                invalidate_custom_domain_cache(new_custom_domain)
+
         if not is_new or self.key is not None:
             return
 
