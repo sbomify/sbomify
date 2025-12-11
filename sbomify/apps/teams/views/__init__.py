@@ -156,18 +156,6 @@ def delete_member(request: HttpRequest, membership_id: int):
             )
             return redirect("teams:team_details", team_key=membership.team.key)
 
-    membership.delete()
-    messages.add_message(
-        request,
-        messages.INFO,
-        f"Member {membership.user.username} removed from team {membership.team.name}",
-    )
-
-    # If user is deleting his own membership then update session
-    if membership.user_id == request.user.id:
-        update_user_teams_session(request, request.user)
-
-    return redirect("teams:team_details", team_key=membership.team.key)
     return remove_member_safely(request, membership)
 
 
