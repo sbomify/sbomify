@@ -1,5 +1,5 @@
 /*!
- * SBOMify Keycloak Theme - Tailwind CSS Source
+ * sbomify Keycloak Theme - Tailwind CSS Source
  * Compile with: bun run build:keycloak
  */
 
@@ -17,8 +17,8 @@
     /* Surface Colors */
     --sbomify-surface: #f9fbfd;
     --sbomify-surface-2: #ffffff;
-    --sbomify-surface-dark: #0f172a;
-    --sbomify-surface-card: rgba(15, 23, 42, 0.95);
+    --sbomify-surface-dark: #111a2d;
+    --sbomify-surface-card: rgba(14, 22, 38, 0.94);
     --sbomify-contrast: #f8fafc;
     --sbomify-muted: #94a3b8;
     --sbomify-text-title: #f8fafc;
@@ -44,7 +44,10 @@
     .login-pf body,
     body.login-pf,
     body {
-        background: var(--sbomify-surface-dark);
+        background:
+            radial-gradient(circle at 18% 18%, rgba(59, 125, 221, 0.08), transparent 35%),
+            radial-gradient(circle at 82% 8%, rgba(90, 155, 230, 0.06), transparent 30%),
+            var(--sbomify-surface-dark);
         @apply bg-cover bg-fixed min-h-screen antialiased;
         color: var(--sbomify-contrast);
         font-family: var(--sbomify-font);
@@ -71,8 +74,9 @@
     /* Left Panel: Info/Branding */
     .info-panel {
         @apply flex-1 flex items-center justify-center p-12 rounded-2xl;
-        background: #f9fbfd;
-        border-right: 1px solid #dee2e6;
+        background: #f5f7fb;
+        border-right: 1px solid #e4e8ef;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
     }
 
     .info-content {
@@ -110,7 +114,7 @@
 
     .feature-icon {
         @apply shrink-0 w-12 h-12 flex items-center justify-center rounded-xl;
-        background: rgba(59, 125, 221, 0.15);
+        background: rgba(59, 125, 221, 0.14);
         color: var(--sbomify-brand);
     }
 
@@ -131,7 +135,7 @@
     /* Right Panel: Form */
     .form-panel {
         @apply flex-1 flex items-center justify-center p-12;
-        background: var(--sbomify-surface-dark);
+        background: transparent;
         perspective: 1000px;
     }
 
@@ -139,8 +143,8 @@
     .form-card {
         @apply w-full max-w-md p-10 rounded-3xl;
         background: var(--sbomify-surface-card);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow: 0 24px 48px rgba(6, 13, 26, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         backdrop-filter: blur(16px);
     }
 
@@ -163,7 +167,7 @@
         @apply w-full text-base transition-all duration-200 ease-in-out box-border rounded-xl;
         padding: 0.875rem 1rem;
         color: var(--sbomify-contrast);
-        background: rgba(15, 23, 42, 0.5);
+        background: rgba(15, 23, 42, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.1);
         font-family: inherit;
     }

@@ -19,7 +19,7 @@ COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --production
 
 # Copy source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
