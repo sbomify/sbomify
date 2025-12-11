@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -7,7 +7,13 @@ from django.views import View
 from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.url_utils import add_custom_domain_to_context, resolve_component_identifier
+from sbomify.apps.core.url_utils import (
+    add_custom_domain_to_context,
+    build_custom_domain_url,
+    get_public_path,
+    resolve_component_identifier,
+    should_redirect_to_custom_domain,
+)
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -29,6 +35,12 @@ class ComponentDetailsPublicView(View):
             )
 
         team = Team.objects.filter(pk=component.get("team_id")).first()
+
+        # Redirect to custom domain if team has a verified one and we're not already on it
+        if team and should_redirect_to_custom_domain(request, team):
+            path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_obj.slug)
+            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
         context = {

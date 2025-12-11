@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Protocol
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
@@ -12,6 +12,14 @@ from sbomify.apps.teams.utils import normalize_host
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Team
+
+
+class CustomDomainRequest(Protocol):
+    """Protocol for HttpRequest with custom domain attributes."""
+
+    is_custom_domain: bool
+    custom_domain_team: "Team | None"
+
 
 logger = logging.getLogger(__name__)
 
@@ -198,14 +206,15 @@ class CustomDomainContextMiddleware:
         # Check if this is a custom domain (not the main app domain)
         is_custom_domain = self._is_custom_domain(host)
 
+        # Add custom domain attributes to request (see CustomDomainRequest protocol)
+        # Using setattr to avoid type errors - this is a standard Django middleware pattern
         if is_custom_domain:
-            # Fetch the team associated with this custom domain
             team = self._get_team_for_domain(host)
-            request.is_custom_domain = True  # type: ignore[attr-defined]
-            request.custom_domain_team = team  # type: ignore[attr-defined]
+            setattr(request, "is_custom_domain", True)
+            setattr(request, "custom_domain_team", team)
         else:
-            request.is_custom_domain = False  # type: ignore[attr-defined]
-            request.custom_domain_team = None  # type: ignore[attr-defined]
+            setattr(request, "is_custom_domain", False)
+            setattr(request, "custom_domain_team", None)
 
         return self.get_response(request)
 

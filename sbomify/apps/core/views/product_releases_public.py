@@ -1,10 +1,16 @@
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_product, list_all_releases
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.url_utils import add_custom_domain_to_context, resolve_product_identifier
+from sbomify.apps.core.url_utils import (
+    add_custom_domain_to_context,
+    build_custom_domain_url,
+    get_public_path,
+    resolve_product_identifier,
+    should_redirect_to_custom_domain,
+)
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -32,6 +38,11 @@ class ProductReleasesPublicView(View):
             )
 
         team = Team.objects.filter(pk=product.get("team_id")).first()
+
+        # Redirect to custom domain if team has a verified one and we're not already on it
+        if team and should_redirect_to_custom_domain(request, team):
+            path = get_public_path("product_releases", resolved_id, is_custom_domain=True, slug=product_obj.slug)
+            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 
         brand = build_branding_context(team)
 

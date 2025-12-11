@@ -82,29 +82,32 @@ def product_without_custom_domain(db, team_without_custom_domain):
 
 @pytest.mark.django_db
 class TestPublicPagesOnMainDomain:
-    """Test that public pages work on main app domain without redirects."""
+    """Test that public pages redirect to custom domain when team has verified one."""
 
-    def test_workspace_accessible_on_main_domain(self, client, custom_domain_team):
-        """Test that workspace page is accessible on main domain without redirect."""
+    def test_workspace_redirects_to_custom_domain(self, client, custom_domain_team):
+        """Test that workspace page redirects to custom domain."""
         workspace_key = custom_domain_team.key
         response = client.get(
             f"/public/workspace/{workspace_key}/",
             HTTP_HOST="app.sbomify.com"
         )
 
-        # Should serve the page, not redirect
-        assert response.status_code == 200
+        # Should redirect to custom domain
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
 
-    def test_product_accessible_on_main_domain(self, client, product_with_custom_domain):
-        """Test that product page is accessible on main domain without redirect."""
+    def test_product_redirects_to_custom_domain(self, client, product_with_custom_domain):
+        """Test that product page redirects to custom domain."""
         product_id = product_with_custom_domain.id
         response = client.get(
             f"/public/product/{product_id}/",
             HTTP_HOST="app.sbomify.com"
         )
 
-        # Should serve the page, not redirect to custom domain
-        assert response.status_code == 200
+        # Should redirect to custom domain with slug-based URL
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
+        assert "/product/" in response.url
 
     def test_no_redirect_without_custom_domain(self, client, product_without_custom_domain):
         """Test that products without custom domains work normally."""
@@ -114,7 +117,7 @@ class TestPublicPagesOnMainDomain:
             HTTP_HOST="app.sbomify.com"
         )
 
-        # Should serve the page
+        # Should serve the page (no custom domain to redirect to)
         assert response.status_code == 200
 
     def test_works_on_custom_domain(self, client, product_with_custom_domain):
@@ -125,7 +128,7 @@ class TestPublicPagesOnMainDomain:
             HTTP_HOST="trust.example.com"
         )
 
-        # Should serve the page
+        # Should serve the page (already on custom domain)
         assert response.status_code == 200
 
     def test_unvalidated_custom_domain_accessible(self, client, db):
@@ -178,16 +181,17 @@ class TestPublicURLsOnCustomDomain:
         # Should serve content (public URLs work on custom domains)
         assert response.status_code == 200
 
-    def test_main_domain_public_urls_work(self, client, product_with_custom_domain):
-        """Test that /public/* URLs work on main domain."""
+    def test_main_domain_public_urls_redirect(self, client, product_with_custom_domain):
+        """Test that /public/* URLs on main domain redirect to custom domain."""
         product_id = product_with_custom_domain.id
         response = client.get(
             f"/public/product/{product_id}/",
             HTTP_HOST="app.sbomify.com"
         )
 
-        # Should serve the page (not redirect)
-        assert response.status_code == 200
+        # Should redirect to custom domain
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
 
 
 @pytest.mark.django_db

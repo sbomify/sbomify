@@ -5,10 +5,14 @@ These tags check if the current request is on a custom domain and generate
 appropriate URLs accordingly. On custom domains, slug-based URLs are used.
 """
 
+import logging
+
 from django import template
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 
 from sbomify.apps.core.url_utils import get_public_path
+
+logger = logging.getLogger(__name__)
 
 register = template.Library()
 
@@ -125,8 +129,8 @@ def public_url(context, url_name, *args, **kwargs):
     reverse_kwargs = {k: v for k, v in kwargs.items() if not k.endswith("_slug") and k != "slug"}
     try:
         return reverse(url_name, args=args, kwargs=reverse_kwargs)
-    except Exception:
-        # If reverse fails, return empty string
+    except NoReverseMatch:
+        logger.warning("Failed to reverse URL '%s' with args=%s kwargs=%s", url_name, args, reverse_kwargs)
         return ""
 
 

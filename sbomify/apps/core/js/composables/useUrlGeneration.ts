@@ -1,9 +1,9 @@
 /**
  * Composable for centralized URL generation patterns used across the application
- * 
+ *
  * On custom domains, slug-based URLs are used for cleaner, more readable URLs.
  * On the main app domain, ID-based URLs are used for compatibility.
- * 
+ *
  * @param isPublicView - Whether generating URLs for public pages
  * @param isCustomDomain - Whether the current request is on a custom domain
  */
@@ -160,7 +160,7 @@ export function useUrlGeneration(isPublicView = false, isCustomDomain = false) {
     }
     return `/product/${productId}/release/${releaseId}/`
   }
-  
+
   /**
    * Generate URL for workspace/Trust Center page
    */
@@ -173,7 +173,7 @@ export function useUrlGeneration(isPublicView = false, isCustomDomain = false) {
     }
     return `/public/workspace/`
   }
-  
+
   /**
    * Generate URL for product releases page
    * @param productId - Product ID (used on main app domain)
@@ -203,34 +203,4 @@ export function useUrlGeneration(isPublicView = false, isCustomDomain = false) {
     getWorkspaceUrl,
     getProductReleasesUrl
   }
-}
-
-/**
- * Detect if current page is on a custom domain by checking the hostname
- * and comparing it with known patterns.
- * 
- * @returns boolean indicating if on a custom domain
- */
-export function detectCustomDomain(): boolean {
-  if (typeof window === 'undefined') {
-    return false
-  }
-  
-  const hostname = window.location.hostname
-  
-  // Known non-custom-domain hosts
-  const knownHosts = [
-    'sbomify.com',
-    'app.sbomify.com',
-    'localhost',
-    '127.0.0.1',
-    'testserver'
-  ]
-  
-  // Check if hostname matches or ends with known hosts
-  const isKnownHost = knownHosts.some(known => 
-    hostname === known || hostname.endsWith('.' + known)
-  )
-  
-  return !isKnownHost
 }

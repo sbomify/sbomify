@@ -326,8 +326,9 @@ def resolve_product_identifier(
         # Slugify the identifier to normalize it
         slug = slugify(identifier, allow_unicode=True)
 
-        # Performance optimization: fetch only id and name, compute slug in Python
-        # This avoids loading full model instances for each comparison
+        # NOTE: This is O(n) where n = number of public products per team.
+        # For teams with many products, consider adding a database slug field with an index.
+        # Current approach is acceptable for typical team sizes (< 100 products).
         for product_id, name in Product.objects.filter(team=custom_domain_team, is_public=True).values_list(
             "id", "name"
         ):
@@ -376,7 +377,7 @@ def resolve_project_identifier(
         # On custom domain: find by slug within the team
         slug = slugify(identifier, allow_unicode=True)
 
-        # Performance optimization: fetch only id and name, compute slug in Python
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for project_id, name in Project.objects.filter(team=custom_domain_team, is_public=True).values_list(
             "id", "name"
         ):
@@ -425,7 +426,7 @@ def resolve_component_identifier(
         # On custom domain: find by slug within the team
         slug = slugify(identifier, allow_unicode=True)
 
-        # Performance optimization: fetch only id and name, compute slug in Python
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for component_id, name in Component.objects.filter(team=custom_domain_team, is_public=True).values_list(
             "id", "name"
         ):
@@ -475,7 +476,7 @@ def resolve_release_identifier(
         # On custom domain: find by slug within the product's releases
         slug = slugify(identifier, allow_unicode=True)
 
-        # Performance optimization: fetch only id and name, compute slug in Python
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
         for release_id, name in Release.objects.filter(product=product).values_list("id", "name"):
             if slugify(name, allow_unicode=True) == slug:
                 return Release.objects.get(pk=release_id)

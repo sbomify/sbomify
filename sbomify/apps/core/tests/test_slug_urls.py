@@ -199,23 +199,29 @@ class TestSlugRoutingOnCustomDomain:
 
 
 class TestSlugRoutingOnMainDomain:
-    """Test that ID-based URLs still work on main app domain."""
+    """Test that ID-based URLs redirect to custom domain when team has one."""
 
     def test_product_by_id_on_main_domain(self, client, product_with_slug):
-        """Test that /public/product/{id}/ works on main app domain."""
+        """Test that /public/product/{id}/ redirects to custom domain."""
         response = client.get(f"/public/product/{product_with_slug.id}/")
-        assert response.status_code == 200
-        assert product_with_slug.name.encode() in response.content
+        # Should redirect to custom domain
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
+        assert f"/product/{product_with_slug.slug}/" in response.url
 
     def test_project_by_id_on_main_domain(self, client, project_with_slug):
-        """Test that /public/project/{id}/ works on main app domain."""
+        """Test that /public/project/{id}/ redirects to custom domain."""
         response = client.get(f"/public/project/{project_with_slug.id}/")
-        assert response.status_code == 200
+        # Should redirect to custom domain
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
 
     def test_component_by_id_on_main_domain(self, client, component_with_slug):
-        """Test that /public/component/{id}/ works on main app domain."""
+        """Test that /public/component/{id}/ redirects to custom domain."""
         response = client.get(f"/public/component/{component_with_slug.id}/")
-        assert response.status_code == 200
+        # Should redirect to custom domain
+        assert response.status_code == 302
+        assert "trust.example.com" in response.url
 
 
 class TestProductReleasesSlug:
