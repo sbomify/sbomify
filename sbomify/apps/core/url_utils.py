@@ -372,21 +372,14 @@ def resolve_project_identifier(
     custom_domain_team = getattr(request, "custom_domain_team", None)
 
     if is_custom_domain and custom_domain_team:
-        # On custom domain: find by slug within the team
-        slug = slugify(identifier, allow_unicode=True)
-
-        # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for project in Project.objects.filter(team=custom_domain_team, is_public=True):
-            if slugify(project.name, allow_unicode=True) == slug:
-                return project
-
-        # Fallback: try by ID within the team
         try:
-            return Project.objects.get(pk=identifier, team=custom_domain_team)
+            return Project.objects.get(slug=slug, team=custom_domain_team, is_public=True)
         except Project.DoesNotExist:
-            pass
-
-        return None
+            # Fallback: try by ID within the team
+            try:
+                return Project.objects.get(pk=identifier, team=custom_domain_team)
+            except Project.DoesNotExist:
+                return None
     else:
         # On main app: find by ID only
         try:
