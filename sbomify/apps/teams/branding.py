@@ -3,7 +3,7 @@ from __future__ import annotations
 import colorsys
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from django.templatetags.static import static
 from pydantic import ValidationError
@@ -90,7 +90,7 @@ def hex_to_rgb_tuple(hex_color: str) -> tuple[int, int, int]:
         return (220, 220, 220)
 
 
-def _apply_lightness_transform(hex_color: str, transform: callable) -> str:
+def _apply_lightness_transform(hex_color: str, transform: Callable[[float], float]) -> str:
     """Shared RGB↔HLS helper used by lighten_hex/darken_hex."""
     try:
         r, g, b = hex_to_rgb_tuple(hex_color)
