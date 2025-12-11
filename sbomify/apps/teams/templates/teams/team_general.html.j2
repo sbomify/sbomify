@@ -1,9 +1,11 @@
 {% load static %}
 {% load widget_tweaks %}
+{# Store team name as JSON in data attribute for safe Alpine.js initialization #}
 <div class="standard-card">
     <div id="team-general-content"
          class="card settings-card shadow-md"
-         x-data="teamGeneral('{{ team.name|escapejs }}')">
+         data-team-name="{{ team.name }}"
+         x-data="teamGeneral($el.dataset.teamName)">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4 class="card-title mb-0">General Settings</h4>
             <div class="d-flex align-items-center gap-2">
