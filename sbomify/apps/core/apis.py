@@ -1,4 +1,5 @@
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
@@ -80,6 +81,14 @@ from .schemas import (
 )
 
 log = getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ProductLookupResult:
+    """Container for a product API payload plus the ORM instance."""
+
+    payload: dict
+    instance: Product
 
 
 def _serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
@@ -444,19 +453,8 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-@router.get(
-    "/products/{product_id}",
-    response={200: ProductResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
-)
-@decorate_view(optional_token_auth)
-def get_product(request: HttpRequest, product_id: str, include_instance: bool = False):
-    """Get a specific product by ID.
-
-    Args:
-        include_instance: When True, return a tuple of (response_dict, product_instance)
-            so callers that need the model object (e.g., for branding) can avoid re-querying.
-    """
+def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[int, ProductLookupResult | dict]:
+    """Internal helper that returns both serialized payload and ORM instance."""
     try:
         # Use select_related to avoid N+1 query when team is accessed later
         product = (
@@ -470,20 +468,34 @@ def get_product(request: HttpRequest, product_id: str, include_instance: bool = 
     # Ensure latest release exists when users access the product
     _ensure_latest_release_exists(product)
 
-    # If product is public, allow unauthenticated access
-    if product.is_public:
-        response_payload = _build_item_response(request, product, "product")
-        return 200, (response_payload, product) if include_instance else response_payload
-
     # For private products, require authentication and team access
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {
+                "detail": "Authentication required for private items",
+                "error_code": ErrorCode.UNAUTHORIZED,
+            }
 
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response_payload = _build_item_response(request, product, "product")
-    return 200, (response_payload, product) if include_instance else response_payload
+    return 200, ProductLookupResult(payload=response_payload, instance=product)
+
+
+@router.get(
+    "/products/{product_id}",
+    response={200: ProductResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_token_auth)
+def get_product(request: HttpRequest, product_id: str):
+    """Get a specific product by ID."""
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
+
+    return status, result.payload
 
 
 @router.put(
