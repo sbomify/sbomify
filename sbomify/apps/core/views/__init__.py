@@ -56,6 +56,11 @@ logger = logging.getLogger(__name__)
 
 
 def home(request: HttpRequest) -> HttpResponse:
+    # On custom domains, show the workspace Trust Center
+    if getattr(request, "is_custom_domain", False):
+        return WorkspacePublicView.as_view()(request, workspace_key=None)
+
+    # Standard home page behavior
     if request.user.is_authenticated:
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
