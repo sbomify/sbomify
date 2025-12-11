@@ -31,6 +31,7 @@ from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.fixtures import (  # noqa: F401
     guest_user,
     sample_team,
+    sample_team_with_admin_member,
     sample_team_with_guest_member,
     sample_team_with_owner_member,
     sample_user,
@@ -1772,3 +1773,149 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     assert isinstance(data["has_completed_wizard"], bool)
     assert isinstance(data["is_public"], bool)
     assert data["billing_plan"] is None or isinstance(data["billing_plan"], str)
+
+
+# ==================== Team General Settings View Tests ====================
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_owner__should_succeed(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that owners can access the general settings view."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 200
+    assert team.name in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_admin__should_fail(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    """Test that admins cannot access the general settings view (owner-only)."""
+    client = Client()
+    team = sample_team_with_admin_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_team_general_get__when_user_is_guest__should_fail(
+    sample_team_with_guest_member: Member,  # noqa: F811
+):
+    """Test that guests cannot access the general settings view."""
+    client = Client()
+    team = sample_team_with_guest_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
+
+    response: HttpResponse = client.get(uri)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_team_general_post__update_name_successfully(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that owners can update the workspace name."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    original_name = team.name
+    new_name = "Updated Workspace Name"
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": new_name})
+
+    assert response.status_code == 200
+    # Check HX-Trigger header for HTMX success response
+    assert "HX-Trigger" in response.headers
+
+    # Verify the name was updated in the database
+    team.refresh_from_db()
+    assert team.name == new_name
+    assert team.name != original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__empty_name_should_fail(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that empty workspace name is rejected."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    original_name = team.name
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": ""})
+
+    assert response.status_code == 200
+    # Check for error in HX-Trigger
+    assert "HX-Trigger" in response.headers
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert "messages" in trigger
+    assert trigger["messages"][0]["type"] == "error"
+
+    # Verify the name was not updated
+    team.refresh_from_db()
+    assert team.name == original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__admin_cannot_update_name(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    """Test that admins cannot update the workspace name."""
+    client = Client()
+    team = sample_team_with_admin_member.team
+    original_name = team.name
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": "New Name"})
+
+    # Should be forbidden
+    assert response.status_code == 403
+
+    # Verify the name was not updated
+    team.refresh_from_db()
+    assert team.name == original_name
+
+
+@pytest.mark.django_db
+def test_team_general_post__updates_session(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that updating workspace name also updates the session."""
+    client = Client()
+    team = sample_team_with_owner_member.team
+    new_name = "Session Updated Name"
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+    response: HttpResponse = client.post(uri, {"name": new_name})
+
+    assert response.status_code == 200
+
+    # Verify session was updated
+    session = client.session
+    assert session["current_team"]["name"] == new_name

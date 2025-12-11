@@ -2,6 +2,7 @@
 {% load static %}
 {% load django_vite %}
 {% load utils %}
+{% load public_url_tags %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
@@ -23,10 +24,11 @@
                     {% endif %}
                 </h1>
                 {% if product.has_crud_permissions %}
+                    {% resource_public_absolute_url 'product' product as product_public_url %}
                     <div class="vc-public-status-toggle"
                          data-item-type="product"
                          data-item-id="{{ product.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:product_details_public' product.id %}"
+                         data-public-url="{{ product_public_url }}"
                          data-inline="true"></div>
                 {% endif %}
             </div>

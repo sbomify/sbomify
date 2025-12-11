@@ -36,6 +36,7 @@ window.Chart = Chart;
 // Import Vue component mounting utility
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
+import './clipboard-global'; // Clipboard utilities with auto-initialization
 import { eventBus, EVENTS } from './utils';
 import EditableSingleField from './components/EditableSingleField.vue';
 import CopyableValue from './components/CopyableValue.vue';

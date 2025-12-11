@@ -2,9 +2,9 @@
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
-{% block title %}{{ workspace.name }}'s Trust Center{% endblock %}
+{% block title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block meta_description %}
-    Public Trust Center for {{ workspace.name }}: browse public products, releases, and organization-wide compliance artifacts.
+    {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
 {% endblock %}
 {% block extra_css %}
     <style>
@@ -416,7 +416,7 @@
                 <div class="workspace-hero">
                     <div class="workspace-hero-content">
                         <div class="eyebrow">TRUST CENTER</div>
-                        <h1>{{ workspace.name }}'s Trust Center</h1>
+                        <h1>{{ workspace.name }} Trust Center</h1>
                         <p class="workspace-hero-description">
                             Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts.
                         </p>

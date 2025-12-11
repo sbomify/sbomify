@@ -214,3 +214,111 @@ def workspace_public_url(context):
 
     # Fallback: return empty string (logo won't be clickable)
     return ""
+
+
+@register.simple_tag(takes_context=True)
+def trust_center_absolute_url(context, team=None):
+    """
+    Generate the full absolute URL for a workspace's Trust Center.
+
+    This is used for "Copy Public URL" functionality where we need the complete
+    URL including protocol and domain.
+
+    If the team has a validated custom domain, returns https://{custom_domain}/
+    Otherwise, returns {APP_BASE_URL}/public/workspace/{key}
+
+    Usage in templates:
+        {% trust_center_absolute_url team as public_url %}
+        <button data-public-url="{{ public_url }}">Copy URL</button>
+
+    Args:
+        team: Team object or dict with custom_domain, custom_domain_validated, and key
+    """
+    from django.conf import settings
+
+    if not team:
+        # Try to get team from context
+        team = context.get("team")
+
+    if not team:
+        return ""
+
+    # Handle both dict and object access
+    if isinstance(team, dict):
+        custom_domain = team.get("custom_domain")
+        custom_domain_validated = team.get("custom_domain_validated", False)
+        team_key = team.get("key")
+    else:
+        custom_domain = getattr(team, "custom_domain", None)
+        custom_domain_validated = getattr(team, "custom_domain_validated", False)
+        team_key = getattr(team, "key", None)
+
+    # If custom domain is set and validated, use it
+    if custom_domain and custom_domain_validated:
+        return f"https://{custom_domain}/"
+
+    # Fallback to standard URL
+    if team_key:
+        base_url = getattr(settings, "APP_BASE_URL", "")
+        return f"{base_url}/public/workspace/{team_key}"
+
+    return ""
+
+
+@register.simple_tag(takes_context=True)
+def resource_public_absolute_url(context, resource_type, resource, team=None):
+    """
+    Generate the full absolute URL for a public resource (product, project, component).
+
+    This is used for "Copy Public URL" functionality on resource detail pages.
+    Considers custom domains when available.
+
+    If the team has a validated custom domain, returns https://{custom_domain}/{type}/{slug}/
+    Otherwise, returns {APP_BASE_URL}/public/workspace/{key}/{type}/{id}
+
+    Usage in templates:
+        {% resource_public_absolute_url 'product' product team as public_url %}
+        {% resource_public_absolute_url 'component' component as public_url %}
+
+    Args:
+        resource_type: One of 'product', 'project', 'component'
+        resource: The resource object with id, slug, and team attributes
+        team: Optional team object (will be fetched from resource if not provided)
+    """
+    from django.conf import settings
+
+    if not resource:
+        return ""
+
+    # Get team from resource if not provided
+    if not team:
+        team = getattr(resource, "team", None)
+
+    if not team:
+        return ""
+
+    # Get resource identifiers
+    resource_id = getattr(resource, "id", None)
+    resource_slug = getattr(resource, "slug", None)
+
+    if not resource_id:
+        return ""
+
+    # Get team properties
+    custom_domain = getattr(team, "custom_domain", None)
+    custom_domain_validated = getattr(team, "custom_domain_validated", False)
+    team_key = getattr(team, "key", None)
+
+    # If custom domain is set and validated, use slug-based URL
+    if custom_domain and custom_domain_validated:
+        # Custom domains require slugs for proper routing
+        if resource_slug:
+            return f"https://{custom_domain}/{resource_type}/{resource_slug}/"
+        # Fall through to standard URL if no slug available
+
+    # Fallback to standard URL with ID
+    if team_key:
+        base_url = getattr(settings, "APP_BASE_URL", "")
+        return f"{base_url}/public/workspace/{team_key}/{resource_type}/{resource_id}"
+
+    return ""
