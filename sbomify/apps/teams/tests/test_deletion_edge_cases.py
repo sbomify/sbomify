@@ -67,7 +67,7 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) > 0
     # The message should just say "removed from workspace", NOT "new personal workspace created"
-    assert "Member user1 removed from workspace." == str(messages[0])
+    assert str(messages[0]) == "Member user1 removed from workspace."
     assert "personal workspace" not in str(messages[0])
 
 

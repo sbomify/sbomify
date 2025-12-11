@@ -145,9 +145,7 @@ def switch_active_workspace(request, team: Team, role: str | None = None) -> Non
             "id": team.id,
             "name": team.name,
             "role": effective_role or existing_entry.get("role"),
-            "is_default_team": is_default_team
-            if is_default_team is not None
-            else existing_entry.get("is_default_team"),
+            "is_default_team": is_default_team or existing_entry.get("is_default_team"),
             "has_completed_wizard": team.has_completed_wizard,
             "billing_plan": team.billing_plan,
             "branding_info": team.branding_info,
@@ -564,7 +562,7 @@ def remove_member_safely(request, membership: Member):
                 request.session.pop("current_team", None)
                 request.session["user_teams"] = {}
                 request.session.modified = True
-                # TODO: Consider redirecting to a dedicated "my invitations" page if/when implemented.
+                # Consider redirecting to a dedicated "my invitations" page if/when implemented.
                 return redirect("core:dashboard")
             else:
                 messages.info(
