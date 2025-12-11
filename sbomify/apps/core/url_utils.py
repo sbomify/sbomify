@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.urls import reverse
 from django.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -231,8 +232,6 @@ def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
     Returns:
         The workspace public URL string
     """
-    from django.urls import reverse
-
     if not team:
         return ""
 
