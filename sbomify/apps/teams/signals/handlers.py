@@ -14,7 +14,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams
+from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +90,7 @@ def user_logged_in_handler(sender: Model, user: User, request: HttpRequest, **kw
     joined_invites = _accept_pending_invitations(user, request)
 
     # Get user teams and store them in session
-    user_teams = get_user_teams(user)
-    request.session["user_teams"] = user_teams
+    user_teams = update_user_teams_session(request, user)
 
     if request.session.get("current_team", None) is None and user_teams:
         # Prefer an explicit default workspace; otherwise fall back to first

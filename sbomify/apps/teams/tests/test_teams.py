@@ -7,12 +7,16 @@ from urllib.parse import urlencode
 
 import django.contrib.messages as django_messages
 import pytest
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse, HttpResponseRedirect
-from django.test import Client, override_settings
+from django.test import Client, RequestFactory, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import (
@@ -35,7 +39,13 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
 from sbomify.apps.teams.apis import _private_workspace_allowed
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.schemas import BrandingInfo
-from sbomify.apps.teams.utils import create_user_team_and_subscription
+from sbomify.apps.teams.utils import (
+    compute_user_teams_checksum,
+    create_user_team_and_subscription,
+    get_user_teams,
+    update_user_teams_session,
+)
+from sbomify.apps.teams.templatetags.teams import user_workspaces
 
 
 @pytest.mark.django_db
@@ -47,6 +57,55 @@ def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # no
     membership = Member.objects.filter(user=sample_user).first()
     assert membership.team.name == "Test's Workspace"
     assert membership.team.key is not None  # nosec
+
+
+@pytest.mark.django_db
+def test_update_user_teams_session_skips_when_checksum_matches(sample_team_with_owner_member: Member):  # noqa: F811
+    request = RequestFactory().get("/")
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+
+    user = sample_team_with_owner_member.user
+    # First call populates session
+    first_teams = update_user_teams_session(request, user)
+    first_timestamp = request.session.get("user_teams_checked_at")
+    request.session.modified = False  # reset flag
+
+    # Second call should skip data update but still refresh the timestamp for TTL
+    result = update_user_teams_session(request, user)
+
+    assert result == first_teams
+    assert request.session["user_teams"] == first_teams
+    assert request.session["user_teams_version"] == compute_user_teams_checksum(first_teams)
+    # Session is modified because timestamp is updated (for TTL reset), but data is unchanged
+    assert request.session.modified is True
+    assert request.session.get("user_teams_checked_at") is not None
+    assert request.session.get("user_teams_checked_at") >= first_timestamp
+
+
+@pytest.mark.django_db
+def test_user_workspaces_refreshes_when_ttl_expires(sample_team_with_owner_member: Member):  # noqa: F811
+    request = RequestFactory().get("/")
+    request.user = sample_team_with_owner_member.user  # Authenticate request
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+
+    user = sample_team_with_owner_member.user
+    context = {"request": request}
+
+    # Seed stale data with an old timestamp and mismatched checksum
+    request.session["user_teams"] = {"stale": {"id": 1}}
+    request.session["user_teams_version"] = "old"
+    request.session["user_teams_checked_at"] = (timezone.now() - timedelta(seconds=400)).isoformat()
+    request.session.save()
+
+    teams = get_user_teams(user)
+
+    refreshed = user_workspaces(context)
+
+    assert refreshed == teams
+    assert request.session["user_teams"] == teams
+    assert request.session["user_teams_version"] == compute_user_teams_checksum(teams)
 
 
 @pytest.mark.django_db

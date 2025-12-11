@@ -769,7 +769,9 @@ def list_teams(request: HttpRequest):
 
     Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
-    memberships = Member.objects.filter(user=request.user).select_related("team").all()
+    memberships = (
+        Member.objects.filter(user=request.user).select_related("team").order_by("team__created_at", "team__id").all()
+    )
     return 200, [_build_team_response(request, membership.team) for membership in memberships]
 
 

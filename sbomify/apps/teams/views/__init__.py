@@ -33,7 +33,7 @@ from sbomify.apps.teams.forms import (
     OnboardingProjectForm,
 )
 from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace  # noqa: F401
+from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
 
 log = getLogger(__name__)
 
@@ -322,7 +322,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     )
     membership.save()
 
-    switch_active_workspace(request, invitation.team, membership.role)
+    update_user_teams_session(request, request.user)
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 
