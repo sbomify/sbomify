@@ -39,6 +39,7 @@
     html,
     body {
         @apply m-0 p-0 min-h-screen;
+        height: 100%;
     }
 
     .login-pf body,
@@ -54,7 +55,8 @@
     }
 
     .login-pf-page {
-        @apply bg-transparent p-0 min-h-screen;
+        @apply bg-transparent min-h-screen w-full p-8;
+        height: 100%;
     }
 
     /* Hide default Keycloak header when using split layout */
@@ -376,7 +378,7 @@
         @apply rounded-2xl;
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-        background: var(--sbomify-surface-card);
+        background: #f8fafc;
         backdrop-filter: blur(12px);
     }
 
