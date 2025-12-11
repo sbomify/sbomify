@@ -217,6 +217,35 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
         raise ValueError(f"Unknown resource type: {resource_type}")
 
 
+def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
+    """
+    Generate the workspace public URL based on the request context.
+
+    On custom domains, returns "/" (the root).
+    On the main app domain, returns the appropriate workspace public URL.
+
+    Args:
+        request: The HTTP request
+        team: The team to generate the URL for (optional)
+
+    Returns:
+        The workspace public URL string
+    """
+    from django.urls import reverse
+
+    if not team:
+        return ""
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
+    if is_custom_domain:
+        return "/"
+    elif team.key:
+        return reverse("core:workspace_public", kwargs={"workspace_key": team.key})
+    else:
+        return reverse("core:workspace_public_current")
+
+
 def is_public_url_path(path: str) -> bool:
     """
     Check if a URL path is for a public resource.
@@ -544,7 +573,9 @@ def resolve_document_identifier(
         slug = slugify(identifier, allow_unicode=True)
 
         # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for document in Document.objects.filter(component__team=custom_domain_team, component__is_public=True):
+        for document in Document.objects.filter(
+            component__team=custom_domain_team, component__is_public=True, public_access_allowed=True
+        ):
             if slugify(document.name, allow_unicode=True) == slug:
                 return document
 

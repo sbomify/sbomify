@@ -4,7 +4,6 @@ from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
-from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
@@ -13,6 +12,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_public_path,
+    get_workspace_public_url,
     resolve_document_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
@@ -52,15 +52,7 @@ class DocumentDetailsPublicView(View):
         brand = build_branding_context(team)
 
         # Generate workspace URL based on context
-        is_custom_domain = getattr(request, "is_custom_domain", False)
-        workspace_public_url = ""
-        if team:
-            if is_custom_domain:
-                workspace_public_url = "/"
-            elif team.key:
-                workspace_public_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
-            else:
-                workspace_public_url = reverse("core:workspace_public_current")
+        workspace_public_url = get_workspace_public_url(request, team)
 
         context = {
             "document": document_obj,
