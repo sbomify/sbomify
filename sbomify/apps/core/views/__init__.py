@@ -171,7 +171,8 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
         messages.add_message(request, messages.ERROR, f"Cannot join {invitation.team.display_name}: {error_message}")
         return redirect("core:settings")
 
-    # Capture team and role before deletion as the invitation object will be invalidated.
+    # Capture team and role before deleting invitation, because the invitation object
+    # will be invalidated after deletion and its attributes will no longer be accessible.
     team = invitation.team
     role = invitation.role
 
