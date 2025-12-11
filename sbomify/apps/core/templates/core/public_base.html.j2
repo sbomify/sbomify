@@ -4,6 +4,7 @@
 {% load schema_tags %}
 {% load breadcrumb_tags %}
 {% load brand_tags %}
+{% load public_url_tags %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -165,6 +166,23 @@
                 justify-content: center;
                 gap: 1rem;
                 text-align: center;
+            }
+
+            .brand-logo-link {
+                display: inline-flex;
+                text-decoration: none;
+                transition: opacity 0.2s ease, transform 0.2s ease;
+            }
+
+            .brand-logo-link:hover {
+                opacity: 0.85;
+                transform: scale(1.02);
+            }
+
+            .brand-logo-link:focus {
+                outline: 2px solid var(--brand-color);
+                outline-offset: 4px;
+                border-radius: var(--radius-sm);
             }
 
             .brand-logo {
@@ -344,7 +362,7 @@
                     grid-template-columns: 1fr;
                     gap: 2rem;
                 }
-                
+
                 .footer-info {
                     flex-direction: column;
                     gap: 2rem;
@@ -381,7 +399,7 @@
                     flex-direction: column;
                     text-align: center;
                 }
-                
+
                 .footer-branding-section {
                     flex-direction: column;
                     align-items: center;
@@ -491,19 +509,26 @@
             <header class="public-header">
                 <div class="public-header-container">
                     <div class="brand-section">
-                        {% if brand.brand_image %}
-                            <img src="{{ brand.brand_image }}"
-                                 alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
-                                 class="brand-logo"
-                                 width="32"
-                                 height="32">
-                        {% else %}
-                            <img src="{% static 'img/sbomify.svg' %}"
-                                 alt="sbomify Logo"
-                                 class="brand-logo"
-                                 width="32"
-                                 height="32">
-                        {% endif %}
+                        {% workspace_public_url as trust_center_url %}
+                        {% if trust_center_url %}
+                            <a href="{{ trust_center_url }}"
+                               class="brand-logo-link"
+                               title="Back to Trust Center">
+                            {% endif %}
+                            {% if brand.brand_image %}
+                                <img src="{{ brand.brand_image }}"
+                                     alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% else %}
+                                <img src="{% static 'img/sbomify.svg' %}"
+                                     alt="sbomify Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% endif %}
+                            {% if trust_center_url %}</a>{% endif %}
                     </div>
                     {% block header_content %}{% endblock %}
                 </div>

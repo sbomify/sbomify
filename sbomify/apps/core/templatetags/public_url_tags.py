@@ -169,3 +169,48 @@ def get_custom_domain(context):
             if team:
                 return getattr(team, "custom_domain", None)
     return None
+
+
+@register.simple_tag(takes_context=True)
+def workspace_public_url(context):
+    """
+    Generate the workspace (trust center) root URL.
+
+    On custom domains, returns "/" (the root).
+    On main app domain, returns "/public/workspace/{key}/".
+
+    Returns empty string if no valid workspace can be determined.
+
+    Usage in templates:
+        {% workspace_public_url as trust_center_url %}
+        <a href="{{ trust_center_url }}">Trust Center</a>
+    """
+    request = context.get("request")
+    if not request:
+        return ""
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
+    # On custom domains, the root is always the workspace
+    if is_custom_domain:
+        return "/"
+
+    # On main app domain, we need to find the workspace key
+    # First check the brand context (set by build_branding_context)
+    brand = context.get("brand")
+    if brand and isinstance(brand, dict) and brand.get("workspace_key"):
+        try:
+            return reverse("core:workspace_public", kwargs={"workspace_key": brand["workspace_key"]})
+        except NoReverseMatch:
+            pass
+
+    # Check for workspace context variable (used by workspace_public view)
+    workspace = context.get("workspace")
+    if workspace and isinstance(workspace, dict) and workspace.get("key"):
+        try:
+            return reverse("core:workspace_public", kwargs={"workspace_key": workspace["key"]})
+        except NoReverseMatch:
+            pass
+
+    # Fallback: return empty string (logo won't be clickable)
+    return ""

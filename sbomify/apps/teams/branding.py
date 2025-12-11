@@ -27,6 +27,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "branding_enabled": False,
             "custom_domain": None,
             "custom_domain_validated": False,
+            "workspace_key": None,
         }
 
     raw_branding = (getattr(team, "branding_info", {}) or {}).copy()
@@ -41,6 +42,9 @@ def build_branding_context(team: "Team | None") -> dict:
     custom_domain = getattr(team, "custom_domain", None)
     custom_domain_validated = getattr(team, "custom_domain_validated", False)
 
+    # Get workspace key for URL generation
+    workspace_key = getattr(team, "key", None)
+
     branding_enabled_flag = raw_branding.get("branding_enabled", None)
     if branding_enabled_flag is False:
         # Preserve name but fall back to platform defaults for assets/colors.
@@ -50,6 +54,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "brand_image": default_image,
             "custom_domain": custom_domain,
             "custom_domain_validated": custom_domain_validated,
+            "workspace_key": workspace_key,
         }
 
     brand_color = branding_info.brand_color or "#4f46e5"
@@ -74,4 +79,6 @@ def build_branding_context(team: "Team | None") -> dict:
         # Custom domain information
         "custom_domain": custom_domain,
         "custom_domain_validated": custom_domain_validated,
+        # Workspace key for URL generation
+        "workspace_key": workspace_key,
     }
