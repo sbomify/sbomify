@@ -26,7 +26,7 @@ COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile
 
 # Copy source files
 COPY sbomify/apps/core/js/ ./sbomify/apps/core/js/
@@ -38,12 +38,14 @@ COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanni
 
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
+# Copy Keycloak theme sources needed for Tailwind build
+COPY keycloak/ ./keycloak/
 
 # Create additional directories for build scripts
 RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
-# Run the build for production - Vite now outputs to static/dist/
-RUN bun run copy-deps && bun x vite build
+# Run the full build so Keycloak theme CSS is generated too
+RUN bun run build
 
 ### Stage 2: Frontend Development Server
 FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS frontend-dev-server
@@ -194,6 +196,8 @@ COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dis
 # Copy other static files that may have been created during build
 COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
 COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
+# Copy the compiled Keycloak theme CSS built in the JS stage
+COPY --from=js-build-prod /js-build/keycloak/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
 
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes

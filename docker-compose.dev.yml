@@ -39,6 +39,7 @@ services:
       - "${KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     command: start-dev
 
   keycloak-bootstrap:
@@ -51,6 +52,7 @@ services:
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
       KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
+      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
 
   sbomify-minio:
     image: ${MINIO_IMAGE:-minio/minio}
