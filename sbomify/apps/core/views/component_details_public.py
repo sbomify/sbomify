@@ -7,19 +7,22 @@ from django.views import View
 from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.url_utils import add_custom_domain_to_context, verify_custom_domain_ownership
+from sbomify.apps.core.url_utils import add_custom_domain_to_context, resolve_component_identifier
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
 
 class ComponentDetailsPublicView(View):
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        # Verify resource belongs to custom domain's workspace (if on custom domain)
-        ownership_error = verify_custom_domain_ownership(request, Component, component_id)
-        if ownership_error:
-            return error_response(request, ownership_error)
+        # Resolve component by slug (on custom domains) or ID (on main app)
+        component_obj = resolve_component_identifier(request, component_id)
+        if not component_obj:
+            return error_response(request, HttpResponseNotFound("Component not found"))
 
-        status_code, component = get_component(request, component_id)
+        # Use the resolved component's ID for API calls
+        resolved_id = component_obj.id
+
+        status_code, component = get_component(request, resolved_id)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
@@ -34,7 +37,7 @@ class ComponentDetailsPublicView(View):
         }
 
         if component.get("component_type") == Component.ComponentType.SBOM:
-            status_code, sboms_response = list_component_sboms(request, component_id, page=1, page_size=-1)
+            status_code, sboms_response = list_component_sboms(request, resolved_id, page=1, page_size=-1)
             if status_code != 200:
                 return error_response(
                     request, HttpResponse(status=status_code, content=sboms_response.get("detail", "Unknown error"))
@@ -42,7 +45,7 @@ class ComponentDetailsPublicView(View):
             context["sboms_data"] = sboms_response.get("items", [])
 
         elif component.get("component_type") == Component.ComponentType.DOCUMENT:
-            status_code, documents_response = list_component_documents(request, component_id, page=1, page_size=-1)
+            status_code, documents_response = list_component_documents(request, resolved_id, page=1, page_size=-1)
             if status_code != 200:
                 return error_response(
                     request, HttpResponse(status=status_code, content=documents_response.get("detail", "Unknown error"))

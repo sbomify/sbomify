@@ -80,6 +80,7 @@ def _list_public_products(team: Team) -> list[dict]:
         {
             "id": product.id,
             "name": product.name,
+            "slug": product.slug,
             "description": product.description,
             "project_count": product.public_project_count,
         }
@@ -93,6 +94,7 @@ def _list_public_global_components(team: Team) -> list[dict]:
         {
             "id": component.id,
             "name": component.name,
+            "slug": component.slug,
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
         }

@@ -138,7 +138,7 @@ class TestGetPublicPath:
 
     def test_release_without_product_id(self):
         """Test that release without product_id raises ValueError."""
-        with pytest.raises(ValueError, match="product_id is required"):
+        with pytest.raises(ValueError, match="product_id or product_slug is required"):
             get_public_path('release', 'rel123', is_custom_domain=True)
 
 

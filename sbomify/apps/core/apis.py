@@ -183,6 +183,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
     base_response = {
         "id": item.id,
         "name": item.name,
+        "slug": item.slug,
         "team_id": str(item.team_id),
         "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
@@ -197,6 +198,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             {
                 "id": project.id,
                 "name": project.name,
+                "slug": project.slug,
                 "is_public": project.is_public,
             }
             for project in item.projects.all()
@@ -231,6 +233,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             {
                 "id": component.id,
                 "name": component.name,
+                "slug": component.slug,
                 "is_public": component.is_public,
                 "is_global": getattr(component, "is_global", False),
                 "component_type": component.component_type,
@@ -2333,9 +2336,11 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     response = {
         "id": str(release.id),
         "name": release.name,
+        "slug": release.slug,
         "description": release.description or "",
         "product_id": str(release.product.id),
         "product_name": release.product.name,
+        "product_slug": release.product.slug,
         "is_latest": release.is_latest,
         "is_prerelease": release.is_prerelease,
         "is_public": release.product.is_public,  # Inherit from product
@@ -2346,6 +2351,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
         "product": {
             "id": str(release.product.id),
             "name": release.product.name,
+            "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
         # Keep backward compatibility fields

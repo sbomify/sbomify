@@ -2,6 +2,7 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
+{% load public_url_tags %}
 {% block title %}{{ product.name }}{% endblock %}
 {% block extra_css %}
     <style>
@@ -77,9 +78,12 @@
                             <div class="product-releases-section">
                                 <div class="vc-product-releases"
                                      data-product-id="{{ product.id }}"
+                                     data-product-slug="{{ product.slug }}"
                                      data-has-crud-permissions="false"
                                      data-public-view="true"
-                                     data-view-all-url="{% url 'core:product_releases_public' product.id %}"></div>
+                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}"
+                                     data-view-all-url="{% public_url 'core:product_releases_public' product_id=product.id product_slug=product.slug %}">
+                                </div>
                             </div>
                             {% if has_downloadable_content %}
                                 <div class="download-section">

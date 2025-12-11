@@ -2,6 +2,7 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
+{% load public_url_tags %}
 {% block title %}{{ project.name }}{% endblock %}
 {% block meta_description %}
     {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
@@ -82,7 +83,7 @@
                                                                     <div class="component-info">
                                                                         <h6 class="component-name">
                                                                             {% if component.is_public %}
-                                                                                <a href="{% url 'core:component_details_public' component.id %}"
+                                                                                <a href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}"
                                                                                    class="component-link">
                                                                                     {{ component.name }}
                                                                                 </a>

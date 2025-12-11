@@ -1,11 +1,10 @@
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_project
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Project
-from sbomify.apps.core.url_utils import add_custom_domain_to_context, verify_custom_domain_ownership
+from sbomify.apps.core.url_utils import add_custom_domain_to_context, resolve_project_identifier
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
@@ -13,12 +12,15 @@ from sbomify.apps.teams.models import Team
 
 class ProjectDetailsPublicView(View):
     def get(self, request: HttpRequest, project_id: str) -> HttpResponse:
-        # Verify resource belongs to custom domain's workspace (if on custom domain)
-        ownership_error = verify_custom_domain_ownership(request, Project, project_id)
-        if ownership_error:
-            return error_response(request, ownership_error)
+        # Resolve project by slug (on custom domains) or ID (on main app)
+        project_obj = resolve_project_identifier(request, project_id)
+        if not project_obj:
+            return error_response(request, HttpResponseNotFound("Project not found"))
 
-        status_code, project = get_project(request, project_id)
+        # Use the resolved project's ID for API calls
+        resolved_id = project_obj.id
+
+        status_code, project = get_project(request, resolved_id)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=project.get("detail", "Unknown error"))

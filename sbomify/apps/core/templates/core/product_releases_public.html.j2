@@ -1,6 +1,7 @@
 {% extends "core/public_base.htmx.j2" %}
 {% load breadcrumb_tags %}
 {% load static %}
+{% load public_url_tags %}
 {% block title %}{{ product.name }} - Releases{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
@@ -34,7 +35,7 @@
                                 <div class="release-header">
                                     <div class="release-title">
                                         <h3 class="release-name">
-                                            <a href="{% url 'core:release_details_public' product.id release.id %}">{{ release.name }}</a>
+                                            <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}">{{ release.name }}</a>
                                             {% if release.is_latest %}<span class="badge bg-success ms-2">Latest</span>{% endif %}
                                         </h3>
                                         {% if release.description %}<p class="release-description">{{ release.description }}</p>{% endif %}

@@ -2,7 +2,8 @@
 URL generation utilities for custom domain support.
 
 These utilities help generate appropriate URLs based on whether the request
-is on a custom domain or the main app domain.
+is on a custom domain or the main app domain, and resolve resources by slug
+on custom domains.
 """
 
 from __future__ import annotations
@@ -12,8 +13,10 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.utils.text import slugify
 
 if TYPE_CHECKING:
+    from sbomify.apps.core.models import Component, Product, Project, Release
     from sbomify.apps.teams.models import Team
 
 
@@ -110,18 +113,26 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
     """
     Generate the URL path for a public resource.
 
-    On custom domains, paths don't include /public/ prefix.
-    On main app domain, paths include /public/ prefix.
+    On custom domains, paths use slugs and don't include /public/ prefix.
+    On main app domain, paths use IDs and include /public/ prefix.
 
     Args:
         resource_type: Type of resource (product, project, component, document, workspace, release)
-        resource_id: ID of the resource
+        resource_id: ID of the resource (used for main app domain)
         is_custom_domain: Whether the URL is for a custom domain
-        **kwargs: Additional parameters (e.g., product_id for release)
+        **kwargs: Additional parameters:
+            - slug: The slug to use for custom domain URLs
+            - product_id: Required for release URLs (ID on main app)
+            - product_slug: Product slug for release URLs on custom domains
+            - workspace_key: Workspace key for workspace URLs
+            - detailed: Boolean for detailed component view
 
     Returns:
         URL path string
     """
+    # Get slug from kwargs, fall back to resource_id if not provided
+    slug = kwargs.get("slug", resource_id)
+
     if resource_type == "workspace":
         if is_custom_domain:
             return "/"
@@ -134,20 +145,20 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
 
     elif resource_type == "product":
         if is_custom_domain:
-            return f"/product/{resource_id}/"
+            return f"/product/{slug}/"
         return f"/public/product/{resource_id}/"
 
     elif resource_type == "project":
         if is_custom_domain:
-            return f"/project/{resource_id}/"
+            return f"/project/{slug}/"
         return f"/public/project/{resource_id}/"
 
     elif resource_type == "component":
         detailed = kwargs.get("detailed", False)
         if is_custom_domain:
-            path = f"/component/{resource_id}/"
+            path = f"/component/{slug}/"
             if detailed:
-                path = f"/component/{resource_id}/detailed/"
+                path = f"/component/{slug}/detailed/"
         else:
             path = f"/public/component/{resource_id}/"
             if detailed:
@@ -156,21 +167,24 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
 
     elif resource_type == "document":
         if is_custom_domain:
-            return f"/document/{resource_id}/"
+            return f"/document/{slug}/"
         return f"/public/document/{resource_id}/"
 
     elif resource_type == "release":
         product_id = kwargs.get("product_id")
-        if not product_id:
-            raise ValueError("product_id is required for release URLs")
+        product_slug = kwargs.get("product_slug", product_id)
+        release_slug = kwargs.get("release_slug", slug)
+
+        if not product_id and not product_slug:
+            raise ValueError("product_id or product_slug is required for release URLs")
 
         if is_custom_domain:
-            return f"/product/{product_id}/release/{resource_id}/"
+            return f"/product/{product_slug}/release/{release_slug}/"
         return f"/public/product/{product_id}/release/{resource_id}/"
 
     elif resource_type == "product_releases":
         if is_custom_domain:
-            return f"/product/{resource_id}/releases/"
+            return f"/product/{slug}/releases/"
         return f"/public/product/{resource_id}/releases/"
 
     else:
@@ -282,3 +296,200 @@ def add_custom_domain_to_context(
         context["custom_domain"] = None
 
     return context
+
+
+def resolve_product_identifier(
+    request: HttpRequest,
+    identifier: str,
+) -> "Product | None":
+    """
+    Resolve a product by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the custom domain's team. On the main app domain, the identifier
+    is treated as a product ID.
+
+    Args:
+        request: The HTTP request
+        identifier: The product identifier (slug or ID)
+
+    Returns:
+        Product instance or None if not found
+    """
+    from sbomify.apps.core.models import Product
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    if is_custom_domain and custom_domain_team:
+        # On custom domain: find by slug within the team
+        # Slugify the identifier to normalize it
+        slug = slugify(identifier, allow_unicode=True)
+
+        # Performance optimization: fetch only id and name, compute slug in Python
+        # This avoids loading full model instances for each comparison
+        for product_id, name in Product.objects.filter(team=custom_domain_team, is_public=True).values_list(
+            "id", "name"
+        ):
+            if slugify(name, allow_unicode=True) == slug:
+                return Product.objects.get(pk=product_id)
+
+        # Fallback: try by ID within the team (for backward compatibility)
+        try:
+            return Product.objects.get(pk=identifier, team=custom_domain_team)
+        except Product.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID only
+        try:
+            return Product.objects.get(pk=identifier)
+        except Product.DoesNotExist:
+            return None
+
+
+def resolve_project_identifier(
+    request: HttpRequest,
+    identifier: str,
+) -> "Project | None":
+    """
+    Resolve a project by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the custom domain's team. On the main app domain, the identifier
+    is treated as a project ID.
+
+    Args:
+        request: The HTTP request
+        identifier: The project identifier (slug or ID)
+
+    Returns:
+        Project instance or None if not found
+    """
+    from sbomify.apps.core.models import Project
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    if is_custom_domain and custom_domain_team:
+        # On custom domain: find by slug within the team
+        slug = slugify(identifier, allow_unicode=True)
+
+        # Performance optimization: fetch only id and name, compute slug in Python
+        for project_id, name in Project.objects.filter(team=custom_domain_team, is_public=True).values_list(
+            "id", "name"
+        ):
+            if slugify(name, allow_unicode=True) == slug:
+                return Project.objects.get(pk=project_id)
+
+        # Fallback: try by ID within the team
+        try:
+            return Project.objects.get(pk=identifier, team=custom_domain_team)
+        except Project.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID only
+        try:
+            return Project.objects.get(pk=identifier)
+        except Project.DoesNotExist:
+            return None
+
+
+def resolve_component_identifier(
+    request: HttpRequest,
+    identifier: str,
+) -> "Component | None":
+    """
+    Resolve a component by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the custom domain's team. On the main app domain, the identifier
+    is treated as a component ID.
+
+    Args:
+        request: The HTTP request
+        identifier: The component identifier (slug or ID)
+
+    Returns:
+        Component instance or None if not found
+    """
+    from sbomify.apps.core.models import Component
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    if is_custom_domain and custom_domain_team:
+        # On custom domain: find by slug within the team
+        slug = slugify(identifier, allow_unicode=True)
+
+        # Performance optimization: fetch only id and name, compute slug in Python
+        for component_id, name in Component.objects.filter(team=custom_domain_team, is_public=True).values_list(
+            "id", "name"
+        ):
+            if slugify(name, allow_unicode=True) == slug:
+                return Component.objects.get(pk=component_id)
+
+        # Fallback: try by ID within the team
+        try:
+            return Component.objects.get(pk=identifier, team=custom_domain_team)
+        except Component.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID only
+        try:
+            return Component.objects.get(pk=identifier)
+        except Component.DoesNotExist:
+            return None
+
+
+def resolve_release_identifier(
+    request: HttpRequest,
+    product: "Product",
+    identifier: str,
+) -> "Release | None":
+    """
+    Resolve a release by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the product's releases. On the main app domain, the identifier
+    is treated as a release ID and validated to belong to the given product.
+
+    Args:
+        request: The HTTP request
+        product: The product the release belongs to
+        identifier: The release identifier (slug or ID)
+
+    Returns:
+        Release instance or None if not found
+    """
+    from sbomify.apps.core.models import Release
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
+    if is_custom_domain:
+        # On custom domain: find by slug within the product's releases
+        slug = slugify(identifier, allow_unicode=True)
+
+        # Performance optimization: fetch only id and name, compute slug in Python
+        for release_id, name in Release.objects.filter(product=product).values_list("id", "name"):
+            if slugify(name, allow_unicode=True) == slug:
+                return Release.objects.get(pk=release_id)
+
+        # Fallback: try by ID within the product
+        try:
+            return Release.objects.get(pk=identifier, product=product)
+        except Release.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID and validate it belongs to the product
+        try:
+            return Release.objects.get(pk=identifier, product=product)
+        except Release.DoesNotExist:
+            return None

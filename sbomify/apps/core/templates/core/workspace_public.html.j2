@@ -1,6 +1,7 @@
 {% extends "core/public_base.html.j2" %}
 {% load static %}
 {% load django_vite %}
+{% load public_url_tags %}
 {% block title %}{{ workspace.name }}'s Trust Center{% endblock %}
 {% block meta_description %}
     Public Trust Center for {{ workspace.name }}: browse public products, releases, and organization-wide compliance artifacts.
@@ -458,7 +459,7 @@
                                                 <i class="fas fa-tag me-1"></i>Product
                                             </span>
                                             <a class="btn-view"
-                                               href="{% url 'core:product_details_public' product.id %}">
+                                               href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
                                                 View Details <i class="fas fa-arrow-right ms-1"></i>
                                             </a>
                                         </div>
@@ -499,7 +500,7 @@
                                                 Organization-Wide
                                             </span>
                                             <a class="btn-view"
-                                               href="{% url 'core:component_details_public' component.id %}">
+                                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
                                                 View Details <i class="fas fa-arrow-right ms-1"></i>
                                             </a>
                                         </div>

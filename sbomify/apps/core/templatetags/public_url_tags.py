@@ -2,7 +2,7 @@
 Template tags for generating public URLs with custom domain support.
 
 These tags check if the current request is on a custom domain and generate
-appropriate URLs accordingly.
+appropriate URLs accordingly. On custom domains, slug-based URLs are used.
 """
 
 from django import template
@@ -19,11 +19,14 @@ def public_url(context, url_name, *args, **kwargs):
     Generate a public URL with custom domain support.
 
     Usage in templates:
-        {% public_url 'product_details_public' product_id=product.id %}
+        {% public_url 'product_details_public' product_id=product.id slug=product.slug %}
         {% public_url 'workspace_public' workspace_key=workspace.key %}
 
-    On custom domains, returns clean URLs without /public/ prefix.
-    On main app domain, returns standard /public/* URLs.
+    On custom domains, returns slug-based URLs without /public/ prefix.
+    On main app domain, returns standard /public/* URLs with IDs.
+
+    Note: Pass both id and slug when available. On custom domains, slug is used.
+    On main app domain, id is used.
     """
     request = context.get("request")
     is_custom_domain = getattr(request, "is_custom_domain", False) if request else False
@@ -48,45 +51,80 @@ def public_url(context, url_name, *args, **kwargs):
         "core_custom_domain:document_details_public": "document",
     }
 
-    # If on custom domain, use custom URL generation
+    # If on custom domain, use custom URL generation with slugs
     if is_custom_domain:
         resource_type = url_name_to_resource.get(url_name)
+        # Get slug from kwargs, fall back to id if not provided
+        slug = kwargs.get("slug")
 
         if resource_type == "workspace":
             return "/"
         elif resource_type == "product":
             product_id = kwargs.get("product_id")
-            if product_id:
-                return get_public_path("product", product_id, is_custom_domain=True)
+            product_slug = kwargs.get("product_slug") or slug
+            if product_id or product_slug:
+                return get_public_path(
+                    "product", product_id or "", is_custom_domain=True, slug=product_slug or product_id
+                )
         elif resource_type == "project":
             project_id = kwargs.get("project_id")
-            if project_id:
-                return get_public_path("project", project_id, is_custom_domain=True)
+            project_slug = kwargs.get("project_slug") or slug
+            if project_id or project_slug:
+                return get_public_path(
+                    "project", project_id or "", is_custom_domain=True, slug=project_slug or project_id
+                )
         elif resource_type == "component":
             component_id = kwargs.get("component_id")
-            if component_id:
-                return get_public_path("component", component_id, is_custom_domain=True)
+            component_slug = kwargs.get("component_slug") or slug
+            if component_id or component_slug:
+                return get_public_path(
+                    "component", component_id or "", is_custom_domain=True, slug=component_slug or component_id
+                )
         elif resource_type == "component_detailed":
             component_id = kwargs.get("component_id")
-            if component_id:
-                return get_public_path("component", component_id, is_custom_domain=True, detailed=True)
+            component_slug = kwargs.get("component_slug") or slug
+            if component_id or component_slug:
+                return get_public_path(
+                    "component",
+                    component_id or "",
+                    is_custom_domain=True,
+                    slug=component_slug or component_id,
+                    detailed=True,
+                )
         elif resource_type == "product_releases":
             product_id = kwargs.get("product_id")
-            if product_id:
-                return get_public_path("product_releases", product_id, is_custom_domain=True)
+            product_slug = kwargs.get("product_slug") or slug
+            if product_id or product_slug:
+                return get_public_path(
+                    "product_releases", product_id or "", is_custom_domain=True, slug=product_slug or product_id
+                )
         elif resource_type == "release":
             release_id = kwargs.get("release_id")
+            release_slug = kwargs.get("release_slug")
             product_id = kwargs.get("product_id")
-            if release_id and product_id:
-                return get_public_path("release", release_id, is_custom_domain=True, product_id=product_id)
+            product_slug = kwargs.get("product_slug")
+            if (release_id or release_slug) and (product_id or product_slug):
+                return get_public_path(
+                    "release",
+                    release_id or "",
+                    is_custom_domain=True,
+                    product_id=product_id or "",
+                    product_slug=product_slug or product_id,
+                    release_slug=release_slug or release_id,
+                )
         elif resource_type == "document":
             document_id = kwargs.get("document_id")
-            if document_id:
-                return get_public_path("document", document_id, is_custom_domain=True)
+            document_slug = kwargs.get("document_slug") or slug
+            if document_id or document_slug:
+                return get_public_path(
+                    "document", document_id or "", is_custom_domain=True, slug=document_slug or document_id
+                )
 
-    # Fall back to standard Django URL resolution
+    # Fall back to standard Django URL resolution (uses IDs)
+    # Remove slug-related kwargs before passing to reverse
+    reverse_kwargs = {k: v for k, v in kwargs.items() if not k.endswith("_slug") and k != "slug"}
     try:
-        return reverse(url_name, args=args, kwargs=kwargs)
+        return reverse(url_name, args=args, kwargs=reverse_kwargs)
     except Exception:
         # If reverse fails, return empty string
         return ""
