@@ -148,16 +148,17 @@ class TestCustomDomainRouting:
 
         assert response.status_code == 200
 
-    def test_public_urls_work_on_custom_domain(self, client, product_with_custom_domain):
-        """Test that /public/* URLs work on custom domain."""
+    def test_public_urls_redirect_to_clean_urls_on_custom_domain(self, client, product_with_custom_domain):
+        """Test that /public/* URLs redirect to clean URLs on custom domain."""
         product_id = product_with_custom_domain.id
         response = client.get(
             f"/public/product/{product_id}/",
             HTTP_HOST="trust.example.com"
         )
 
-        # Should serve the page (public URLs work everywhere)
-        assert response.status_code == 200
+        # Should redirect to clean URL format
+        assert response.status_code == 302
+        assert "/product/test-product/" in response.url
 
     def test_wrong_workspace_product_returns_404(self, client, db, custom_domain_team):
         """Test that accessing another workspace's product on custom domain returns 404."""

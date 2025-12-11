@@ -11,6 +11,7 @@ from sbomify.apps.core.url_utils import (
     get_public_path,
     resolve_product_identifier,
     resolve_release_identifier,
+    should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.teams.branding import build_branding_context
@@ -41,7 +42,8 @@ class ReleaseDetailsPublicView(View):
         team = getattr(product, "team", None)
 
         # Redirect to custom domain if team has a verified one and we're not already on it
-        if team and should_redirect_to_custom_domain(request, team):
+        # OR redirect from /public/ URL to clean URL on custom domain
+        if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             path = get_public_path(
                 "release",
                 resolved_release_id,

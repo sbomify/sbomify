@@ -5,7 +5,11 @@ from django.views import View
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component, Product
-from sbomify.apps.core.url_utils import build_custom_domain_url, should_redirect_to_custom_domain
+from sbomify.apps.core.url_utils import (
+    build_custom_domain_url,
+    should_redirect_to_clean_url,
+    should_redirect_to_custom_domain,
+)
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
@@ -114,7 +118,8 @@ class WorkspacePublicView(View):
         team = team_or_error
 
         # Redirect to custom domain if team has a verified one and we're not already on it
-        if should_redirect_to_custom_domain(request, team):
+        # OR redirect from /public/ URL to clean URL on custom domain
+        if should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request):
             return HttpResponseRedirect(build_custom_domain_url(team, "/", request.is_secure()))
 
         brand = build_branding_context(team)

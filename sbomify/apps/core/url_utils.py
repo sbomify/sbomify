@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.urls import reverse
 from django.utils.text import slugify
 
 if TYPE_CHECKING:
@@ -84,6 +85,32 @@ def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
     # If we're not on the custom domain and team has one, redirect
     # This covers requests from the main app domain or other domains
     return True
+
+
+def should_redirect_to_clean_url(request: HttpRequest) -> bool:
+    """
+    Check if the request should be redirected from /public/ URL to clean URL.
+
+    On custom domains, URLs should use the clean format (e.g., /product/slug/)
+    instead of the /public/ prefix format (e.g., /public/product/id/).
+
+    Returns True if:
+    - Request is on a custom domain
+    - Request path starts with /public/
+
+    Args:
+        request: The current HTTP request
+
+    Returns:
+        Boolean indicating if redirect to clean URL is needed
+    """
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    if not is_custom_domain:
+        return False
+
+    # Check if the path uses the /public/ prefix
+    path = request.path
+    return path.startswith("/public/")
 
 
 def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
@@ -189,6 +216,33 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
 
     else:
         raise ValueError(f"Unknown resource type: {resource_type}")
+
+
+def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
+    """
+    Generate the workspace public URL based on the request context.
+
+    On custom domains, returns "/" (the root).
+    On the main app domain, returns the appropriate workspace public URL.
+
+    Args:
+        request: The HTTP request
+        team: The team to generate the URL for (optional)
+
+    Returns:
+        The workspace public URL string
+    """
+    if not team:
+        return ""
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+
+    if is_custom_domain:
+        return "/"
+    elif team.key:
+        return reverse("core:workspace_public", kwargs={"workspace_key": team.key})
+    else:
+        return reverse("core:workspace_public_current")
 
 
 def is_public_url_path(path: str) -> bool:
@@ -487,4 +541,53 @@ def resolve_release_identifier(
         try:
             return Release.objects.get(pk=identifier, product=product)
         except Release.DoesNotExist:
+            return None
+
+
+def resolve_document_identifier(
+    request: HttpRequest,
+    identifier: str,
+) -> "Model | None":
+    """
+    Resolve a document by identifier (slug on custom domains, ID otherwise).
+
+    On custom domains, the identifier is treated as a slug and looked up
+    within the custom domain's team's components. On the main app domain,
+    the identifier is treated as a document ID.
+
+    Args:
+        request: The HTTP request
+        identifier: The document identifier (slug or ID)
+
+    Returns:
+        Document instance or None if not found
+    """
+    from sbomify.apps.documents.models import Document
+
+    is_custom_domain = getattr(request, "is_custom_domain", False)
+    custom_domain_team = getattr(request, "custom_domain_team", None)
+
+    if is_custom_domain and custom_domain_team:
+        # On custom domain: find by slug within the team's public components
+        slug = slugify(identifier, allow_unicode=True)
+
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
+        for document in Document.objects.filter(
+            component__team=custom_domain_team, component__is_public=True, public_access_allowed=True
+        ):
+            if slugify(document.name, allow_unicode=True) == slug:
+                return document
+
+        # Fallback: try by ID within the team
+        try:
+            return Document.objects.get(pk=identifier, component__team=custom_domain_team)
+        except Document.DoesNotExist:
+            pass
+
+        return None
+    else:
+        # On main app: find by ID only
+        try:
+            return Document.objects.get(pk=identifier)
+        except Document.DoesNotExist:
             return None

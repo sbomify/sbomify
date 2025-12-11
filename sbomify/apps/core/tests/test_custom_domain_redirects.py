@@ -159,28 +159,32 @@ class TestPublicPagesOnMainDomain:
 
 @pytest.mark.django_db
 class TestPublicURLsOnCustomDomain:
-    """Test that /public/* URLs work on custom domains (serve content without redirect)."""
+    """Test that /public/* URLs redirect to clean URLs on custom domains."""
 
-    def test_public_workspace_works_on_custom_domain(self, client, custom_domain_team):
-        """Test that /public/workspace/* works on custom domain."""
+    def test_public_workspace_redirects_to_clean_url_on_custom_domain(self, client, custom_domain_team):
+        """Test that /public/workspace/* redirects to / on custom domain."""
         response = client.get(
             f"/public/workspace/{custom_domain_team.key}/",
             HTTP_HOST="trust.example.com"
         )
 
-        # Should serve content (public URLs work on custom domains)
-        assert response.status_code == 200
+        # Should redirect to clean URL (/)
+        assert response.status_code == 302
+        assert response.url == "http://trust.example.com/"
 
-    def test_public_product_works_on_custom_domain(self, client, product_with_custom_domain):
-        """Test that /public/product/* works on custom domain."""
+    def test_public_product_redirects_to_clean_url_on_custom_domain(self, client, product_with_custom_domain):
+        """Test that /public/product/* redirects to /product/slug/ on custom domain."""
         product_id = product_with_custom_domain.id
         response = client.get(
             f"/public/product/{product_id}/",
             HTTP_HOST="trust.example.com"
         )
 
-        # Should serve content (public URLs work on custom domains)
-        assert response.status_code == 200
+        # Should redirect to clean URL (/product/slug/)
+        assert response.status_code == 302
+        parsed = urlparse(response.url)
+        assert parsed.hostname == "trust.example.com"
+        assert parsed.path == "/product/test-product/"
 
     def test_main_domain_public_urls_redirect(self, client, product_with_custom_domain):
         """Test that /public/* URLs on main domain redirect to custom domain."""
@@ -190,10 +194,11 @@ class TestPublicURLsOnCustomDomain:
             HTTP_HOST="app.sbomify.com"
         )
 
-        # Should redirect to custom domain
+        # Should redirect to custom domain with clean URL
         assert response.status_code == 302
         parsed = urlparse(response.url)
         assert parsed.hostname == "trust.example.com"
+        assert parsed.path == "/product/test-product/"
 
 
 @pytest.mark.django_db
