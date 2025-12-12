@@ -6,6 +6,8 @@ import Alpine from 'alpinejs';
 interface OnboardingWizardConfig {
     /** Initial email value (pre-filled from user's email) */
     initialEmail: string;
+    /** Initial contact name value (pre-filled from user's full name) */
+    initialContactName: string;
 }
 
 /**
@@ -15,11 +17,13 @@ interface OnboardingWizardConfig {
 export function registerOnboardingWizard() {
     Alpine.data('onboardingWizard', (config: OnboardingWizardConfig) => ({
         companyName: '',
+        contactName: config.initialContactName || '',
         email: config.initialEmail || '',
         website: '',
         isSubmitting: false,
         touched: {
             companyName: false,
+            contactName: false,
             email: false,
             website: false,
         },
@@ -29,6 +33,13 @@ export function registerOnboardingWizard() {
          */
         get isCompanyValid(): boolean {
             return this.companyName.trim().length > 0;
+        },
+
+        /**
+         * Check if contact name is valid (non-empty after trim).
+         */
+        get isContactNameValid(): boolean {
+            return this.contactName.trim().length > 0;
         },
 
         /**
@@ -63,13 +74,19 @@ export function registerOnboardingWizard() {
          * Check if form can be submitted.
          */
         get canSubmit(): boolean {
-            return this.isCompanyValid && this.isEmailValid && this.isWebsiteValid && !this.isSubmitting;
+            return (
+                this.isCompanyValid &&
+                this.isContactNameValid &&
+                this.isEmailValid &&
+                this.isWebsiteValid &&
+                !this.isSubmitting
+            );
         },
 
         /**
          * Mark a field as touched (for showing validation errors).
          */
-        markTouched(field: 'companyName' | 'email' | 'website') {
+        markTouched(field: 'companyName' | 'contactName' | 'email' | 'website') {
             this.touched[field] = true;
         },
 
@@ -77,12 +94,19 @@ export function registerOnboardingWizard() {
          * Get validation state class for a field.
          * Returns 'is-valid' if valid and has content, 'is-invalid' if touched and invalid.
          */
-        getValidationClass(field: 'companyName' | 'email' | 'website'): string {
+        getValidationClass(field: 'companyName' | 'contactName' | 'email' | 'website'): string {
             if (field === 'companyName') {
                 if (this.companyName.trim().length > 0) {
                     return this.isCompanyValid ? 'is-valid' : 'is-invalid';
                 }
                 return this.touched.companyName ? 'is-invalid' : '';
+            }
+
+            if (field === 'contactName') {
+                if (this.contactName.trim().length > 0) {
+                    return this.isContactNameValid ? 'is-valid' : 'is-invalid';
+                }
+                return this.touched.contactName ? 'is-invalid' : '';
             }
 
             if (field === 'email') {
@@ -109,6 +133,7 @@ export function registerOnboardingWizard() {
             if (!this.canSubmit) {
                 // Mark all fields as touched to show validation errors
                 this.touched.companyName = true;
+                this.touched.contactName = true;
                 this.touched.email = true;
                 this.touched.website = true;
                 return false;

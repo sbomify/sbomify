@@ -149,6 +149,17 @@ class OnboardingCompanyForm(forms.Form):
             }
         ),
     )
+    contact_name = forms.CharField(
+        label="Contact Name",
+        max_length=255,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "e.g., Jane Smith",
+            }
+        ),
+    )
     email = forms.EmailField(
         label="Contact Email",
         required=False,

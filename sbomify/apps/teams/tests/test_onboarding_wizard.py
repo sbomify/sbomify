@@ -121,6 +121,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Acme Corporation",
+                "contact_name": "Jane Smith",
                 "email": "security@acme.com",
                 "website": "https://acme.com",
             },
@@ -156,6 +157,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Test Company",
+                "contact_name": "John Doe",
                 "email": "contact@test.com",
                 "website": "https://test.com",
             },
@@ -173,6 +175,12 @@ class TestOnboardingWizard:
         assert profile.email == "contact@test.com"
         assert profile.website_urls == ["https://test.com"]
         assert profile.is_default is True
+
+        # Verify ContactProfileContact was created for NTIA compliance
+        contact = profile.contacts.first()
+        assert contact is not None
+        assert contact.name == "John Doe"
+        assert contact.email == "contact@test.com"
 
     def test_contact_profile_uses_user_email_as_fallback(
         self, client: Client, sample_user, sample_team_with_owner_member
@@ -194,6 +202,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Fallback Email Test",
+                "contact_name": "Test User",
             },
         )
 
@@ -222,6 +231,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Hierarchy Test Corp",
+                "contact_name": "Test Contact",
             },
         )
 
@@ -261,6 +271,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "SBOM Type Test",
+                "contact_name": "SBOM Tester",
             },
         )
 
@@ -299,6 +310,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Keycloak Test",
+                "contact_name": "Keycloak Tester",
             },
         )
 
@@ -328,6 +340,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Summary Test Inc",
+                "contact_name": "Summary Tester",
             },
         )
 
@@ -357,6 +370,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Session Test",
+                "contact_name": "Session Tester",
             },
         )
 
@@ -382,6 +396,7 @@ class TestOnboardingWizard:
         response = client.post(
             reverse("teams:onboarding_wizard"),
             {
+                "contact_name": "Test User",
                 "email": "test@test.com",
             },
         )
@@ -389,6 +404,32 @@ class TestOnboardingWizard:
         # Should stay on the same page with form errors
         assert response.status_code == 200
         assert response.context["form"].errors.get("company_name") is not None
+
+    def test_contact_name_required(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that contact_name is required for NTIA compliance."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # Submit without contact_name
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Test Company",
+                "email": "test@test.com",
+            },
+        )
+
+        # Should stay on the same page with form errors
+        assert response.status_code == 200
+        assert response.context["form"].errors.get("contact_name") is not None
 
     def test_website_is_optional(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
         """Test that website field is optional."""
@@ -408,6 +449,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "No Website Corp",
+                "contact_name": "No Website Tester",
             },
         )
 
@@ -434,6 +476,7 @@ class TestOnboardingWizard:
             reverse("teams:onboarding_wizard"),
             {
                 "company_name": "Invalid URL Test",
+                "contact_name": "Invalid URL Tester",
                 "website": "not-a-valid-url",
             },
         )

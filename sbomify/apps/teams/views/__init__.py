@@ -31,7 +31,14 @@ from sbomify.apps.teams.forms import (
     InviteUserForm,
     OnboardingCompanyForm,
 )
-from sbomify.apps.teams.models import ContactProfile, Invitation, Member, Team, format_workspace_name
+from sbomify.apps.teams.models import (
+    ContactProfile,
+    ContactProfileContact,
+    Invitation,
+    Member,
+    Team,
+    format_workspace_name,
+)
 from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
 
 log = getLogger(__name__)
@@ -433,9 +440,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     with transaction.atomic():
                         # 1. Create default ContactProfile (company = supplier = vendor)
                         website_url = form.cleaned_data.get("website")
+                        contact_name = form.cleaned_data["contact_name"]
                         # Empty, None, or whitespace-only falls back to user email
                         contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
-                        ContactProfile.objects.create(
+                        contact_profile = ContactProfile.objects.create(
                             team=team,
                             name="Default",
                             company=company_name,
@@ -444,6 +452,13 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                             email=contact_email,
                             website_urls=[website_url] if website_url else [],
                             is_default=True,
+                        )
+
+                        # Create the contact person for NTIA compliance
+                        ContactProfileContact.objects.create(
+                            profile=contact_profile,
+                            name=contact_name,
+                            email=contact_email,
                         )
 
                         # 2. Auto-create hierarchy with SBOM component type
@@ -473,7 +488,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         team.has_completed_wizard = True
                         team.save()
 
-                        # 4. Update session
+                        # 4. Update session - refresh user_teams to pick up new team state
+                        update_user_teams_session(request, request.user)
+
+                        # Also update current_team with the latest data
                         request.session["current_team"]["has_completed_wizard"] = True
                         request.session["current_team"]["name"] = team.name
                         request.session["wizard_component_id"] = component.id
@@ -493,8 +511,14 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         "Setup could not be completed due to a conflict. Please try again or contact support.",
                     )
     else:
-        # GET request - show the form with pre-filled email
+        # GET request - show the form with pre-filled data
         initial = {"email": request.user.email}
+
+        # Pre-fill contact name from user's full name if available
+        full_name = request.user.get_full_name()
+        if full_name:
+            initial["contact_name"] = full_name
+
         form = OnboardingCompanyForm(initial=initial)
 
     context = {

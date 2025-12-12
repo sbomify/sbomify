@@ -15,7 +15,7 @@
                            title="Skip for now"></a>
                         <!-- Setup Step -->
                         <div class="card-body p-4 p-md-5"
-                             x-data="onboardingWizard({ initialEmail: '{{ form.email.value|default:''|escapejs }}' })">
+                             x-data="onboardingWizard({ initialEmail: '{{ form.email.value|default:''|escapejs }}', initialContactName: '{{ form.contact_name.value|default:''|escapejs }}' })">
                             <!-- Header with centered icon -->
                             <div class="text-center mb-4">
                                 <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle mb-3"
@@ -73,6 +73,30 @@
                                         </div>
                                     {% endif %}
                                     <div class="form-text text-body-secondary">Identifies you as the supplier. Appears in your Trust Center.</div>
+                                </div>
+                                <!-- Contact Name Field - Floating Label -->
+                                <div class="form-floating mb-4">
+                                    <input type="text"
+                                           class="form-control"
+                                           id="id_contact_name"
+                                           name="contact_name"
+                                           placeholder="e.g., Jane Smith"
+                                           required
+                                           x-model="contactName"
+                                           @blur="markTouched('contactName')"
+                                           :class="getValidationClass('contactName')"
+                                           {% if form.contact_name.value %}value="{{ form.contact_name.value }}"{% endif %}>
+                                    <label for="id_contact_name">
+                                        Contact Name <span class="text-danger">*</span>
+                                    </label>
+                                    {% if form.contact_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.contact_name.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text text-body-secondary">
+                                        Required for NTIA compliance. The person responsible for SBOM inquiries.
+                                    </div>
                                 </div>
                                 <!-- Email Field - Floating Label -->
                                 <div class="form-floating mb-4">
