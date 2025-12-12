@@ -148,9 +148,11 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "Custom Domain" in content
-        assert "Business / Enterprise" in content  # Badge should show
-        assert "available on" in content.lower()
+        assert "Custom Domain Feature" in content
+        # Check for upgrade prompt with billing link (owner sees Upgrade Plan button)
+        assert "Upgrade Plan" in content
+        assert f"/billing/select-plan/{community_team.key}" in content
+        assert "Business and Enterprise plans" in content
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_team_with_domain_shows_verification_status(self, team_with_domain, sample_user):

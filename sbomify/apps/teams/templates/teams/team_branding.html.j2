@@ -295,17 +295,30 @@
                     </div>
                 </div>
             {% else %}
-                <div class="alert alert-secondary mb-0">
-                    <h6 class="alert-heading">
-                        <i class="fas fa-lock me-2"></i>Custom Domain Feature
-                    </h6>
-                    <p class="mb-2">
-                        Custom domains allow you to serve your Trust Center from your own branded URL (e.g., trust.yourcompany.com).
-                    </p>
-                    <p class="mb-0">
-                        This feature is available on <strong>Business</strong> and <strong>Enterprise</strong> plans.
-                        <a href="mailto:sales@sbomify.com" class="alert-link">Contact us</a> to upgrade your plan.
-                    </p>
+                <div class="upgrade-prompt">
+                    <div class="upgrade-content d-flex align-items-center gap-3">
+                        <div class="upgrade-icon">
+                            <i class="fas fa-globe"></i>
+                        </div>
+                        <div class="upgrade-details">
+                            <h6 class="upgrade-title">Custom Domain Feature</h6>
+                            <p class="upgrade-description">
+                                Custom domains allow you to serve your Trust Center from your own branded URL (e.g., trust.yourcompany.com).
+                                This feature is available on Business and Enterprise plans.
+                            </p>
+                            {% if request.session.current_team.role == 'owner' %}
+                                <a href="{% url 'billing:select_plan' team.key %}"
+                                   class="btn btn-primary">
+                                    <i class="fas fa-arrow-up me-2"></i>Upgrade Plan
+                                </a>
+                            {% else %}
+                                <p class="text-muted mb-0 small">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Ask a workspace owner to upgrade the plan.
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             {% endif %}
         </div>
