@@ -55,6 +55,12 @@ jobs:
       - name: Install JS dependencies
         run: bun install
 
+      - name: Install and build Keycloak theme
+        working-directory: keycloak
+        run: |
+          bun install
+          bun run build
+
       - name: Run code quality checks
         run: |
           echo "Running all code quality checks via pre-commit..."
@@ -218,6 +224,12 @@ jobs:
 
       - name: Install JS dependencies
         run: bun install
+
+      - name: Install and build Keycloak theme
+        working-directory: keycloak
+        run: |
+          bun install
+          bun run build
 
       - name: Run Frontend Tests
         run: |

@@ -12,6 +12,20 @@ ARG GIT_REF=""
 ARG VERSION=""
 ARG BUILD_TYPE=""
 
+### Stage 0: Keycloak Theme Build (Fully Independent)
+FROM oven/bun:1.3-debian@sha256:3da1c52799fc527af4c5969876734cbaddbf3e49479c601cfebdb0d7cbcc61b4 AS keycloak-build
+
+WORKDIR /keycloak-build
+
+# Copy Keycloak-specific files only
+COPY keycloak/package.json ./
+COPY keycloak/bun.lock* ./
+COPY keycloak/tailwind.config.ts ./
+COPY keycloak/themes/ ./themes/
+
+# Install Keycloak dependencies and build
+RUN bun install --frozen-lockfile && bun run build
+
 ### Stage 1: Bun JS build for Production Frontend Assets
 FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS js-build-prod
 
@@ -22,7 +36,6 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
-COPY tailwind.keycloak.config.ts ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
 
@@ -39,14 +52,12 @@ COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanni
 
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
-# Copy Keycloak theme sources needed for Tailwind build
-COPY keycloak/ ./keycloak/
 
 # Create additional directories for build scripts
 RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 
-# Run the full build so Keycloak theme CSS is generated too
-RUN bun run build
+# Build main frontend assets (Keycloak is built separately in Stage 0)
+RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
 FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS frontend-dev-server
@@ -197,8 +208,8 @@ COPY --from=js-build-prod /js-build/sbomify/static/dist /code/sbomify/static/dis
 # Copy other static files that may have been created during build
 COPY --from=js-build-prod /js-build/sbomify/static/css /code/sbomify/static/css
 COPY --from=js-build-prod /js-build/sbomify/static/webfonts /code/sbomify/static/webfonts
-# Copy the compiled Keycloak theme CSS built in the JS stage
-COPY --from=js-build-prod /js-build/keycloak/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
+# Copy the compiled Keycloak theme CSS from the separate Keycloak build stage
+COPY --from=keycloak-build /keycloak-build/themes/sbomify/login/resources/css /code/keycloak/themes/sbomify/login/resources/css
 
 # Create directories and run collectstatic as root, then fix permissions
 # Create dedicated directory for Prometheus metrics and ensure /tmp is writable for app processes

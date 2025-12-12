@@ -57,7 +57,7 @@
                     <h2 class="form-title">Create Account</h2>
 
                     <#if messagesPerField.existsError('firstName','lastName','email','username','password','password-confirm')>
-                        <div class="alert alert-error">
+                        <div class="alert alert-error" role="alert" aria-live="polite">
                             ${kcSanitize(messagesPerField.getFirstError('firstName','lastName','email','username','password','password-confirm'))}
                         </div>
                     </#if>
@@ -68,9 +68,10 @@
                             <input type="text" id="firstName" class="form-control" name="firstName" 
                                    value="${(register.formData.firstName!'')}"
                                    autocomplete="given-name" placeholder="Enter your first name" 
-                                   aria-invalid="<#if messagesPerField.existsError('firstName')>true</#if>" />
+                                   aria-invalid="<#if messagesPerField.existsError('firstName')>true</#if>"
+                                   aria-describedby="<#if messagesPerField.existsError('firstName')>firstName-error</#if>" />
                             <#if messagesPerField.existsError('firstName')>
-                                <span class="input-error">${kcSanitize(messagesPerField.get('firstName'))}</span>
+                                <span id="firstName-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('firstName'))}</span>
                             </#if>
                         </div>
 
@@ -79,9 +80,10 @@
                             <input type="text" id="lastName" class="form-control" name="lastName" 
                                    value="${(register.formData.lastName!'')}"
                                    autocomplete="family-name" placeholder="Enter your last name"
-                                   aria-invalid="<#if messagesPerField.existsError('lastName')>true</#if>" />
+                                   aria-invalid="<#if messagesPerField.existsError('lastName')>true</#if>"
+                                   aria-describedby="<#if messagesPerField.existsError('lastName')>lastName-error</#if>" />
                             <#if messagesPerField.existsError('lastName')>
-                                <span class="input-error">${kcSanitize(messagesPerField.get('lastName'))}</span>
+                                <span id="lastName-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('lastName'))}</span>
                             </#if>
                         </div>
 
@@ -90,9 +92,10 @@
                             <input type="email" id="email" class="form-control" name="email" 
                                    value="${(register.formData.email!'')}"
                                    autocomplete="email" placeholder="Enter your email"
-                                   aria-invalid="<#if messagesPerField.existsError('email')>true</#if>" />
+                                   aria-invalid="<#if messagesPerField.existsError('email')>true</#if>"
+                                   aria-describedby="<#if messagesPerField.existsError('email')>email-error</#if>" />
                             <#if messagesPerField.existsError('email')>
-                                <span class="input-error">${kcSanitize(messagesPerField.get('email'))}</span>
+                                <span id="email-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('email'))}</span>
                             </#if>
                         </div>
 
@@ -102,9 +105,10 @@
                                 <input type="text" id="username" class="form-control" name="username" 
                                        value="${(register.formData.username!'')}"
                                        autocomplete="username" placeholder="Choose a username"
-                                       aria-invalid="<#if messagesPerField.existsError('username')>true</#if>" />
+                                       aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
+                                       aria-describedby="<#if messagesPerField.existsError('username')>username-error</#if>" />
                                 <#if messagesPerField.existsError('username')>
-                                    <span class="input-error">${kcSanitize(messagesPerField.get('username'))}</span>
+                                    <span id="username-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('username'))}</span>
                                 </#if>
                             </div>
                         </#if>
@@ -114,9 +118,10 @@
                                 <label for="password" class="form-label">Password *</label>
                                 <input type="password" id="password" class="form-control" name="password" 
                                        autocomplete="new-password" placeholder="Create a password (min 8 chars)"
-                                       aria-invalid="<#if messagesPerField.existsError('password')>true</#if>" />
+                                       aria-invalid="<#if messagesPerField.existsError('password')>true</#if>"
+                                       aria-describedby="<#if messagesPerField.existsError('password')>password-error</#if>" />
                                 <#if messagesPerField.existsError('password')>
-                                    <span class="input-error">${kcSanitize(messagesPerField.get('password'))}</span>
+                                    <span id="password-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('password'))}</span>
                                 </#if>
                             </div>
 
@@ -124,9 +129,10 @@
                                 <label for="password-confirm" class="form-label">Confirm Password *</label>
                                 <input type="password" id="password-confirm" class="form-control" name="password-confirm" 
                                        autocomplete="new-password" placeholder="Confirm your password"
-                                       aria-invalid="<#if messagesPerField.existsError('password-confirm')>true</#if>" />
+                                       aria-invalid="<#if messagesPerField.existsError('password-confirm')>true</#if>"
+                                       aria-describedby="<#if messagesPerField.existsError('password-confirm')>password-confirm-error</#if>" />
                                 <#if messagesPerField.existsError('password-confirm')>
-                                    <span class="input-error">${kcSanitize(messagesPerField.get('password-confirm'))}</span>
+                                    <span id="password-confirm-error" class="input-error" role="alert">${kcSanitize(messagesPerField.get('password-confirm'))}</span>
                                 </#if>
                             </div>
                         </#if>
@@ -138,7 +144,7 @@
                         </#if>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn-submit">Create Account</button>
+                            <button type="submit" class="btn-submit" aria-label="Create Account">Create Account</button>
                         </div>
                     </form>
 
