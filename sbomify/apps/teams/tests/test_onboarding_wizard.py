@@ -12,6 +12,65 @@ from sbomify.apps.teams.models import ContactProfile
 
 
 @pytest.mark.django_db
+class TestDashboardRedirectToOnboarding:
+    """Tests for dashboard redirect to onboarding wizard when not completed."""
+
+    def test_dashboard_redirects_when_wizard_not_completed(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that dashboard redirects to onboarding wizard when has_completed_wizard is False."""
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {
+            "key": sample_team_with_owner_member.team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.get(reverse("core:dashboard"))
+
+        assert response.status_code == 302
+        assert response.url == reverse("teams:onboarding_wizard")
+
+    def test_dashboard_renders_when_wizard_completed(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that dashboard renders normally when has_completed_wizard is True."""
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {
+            "key": sample_team_with_owner_member.team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
+        response = client.get(reverse("core:dashboard"))
+
+        assert response.status_code == 200
+        assert "dashboard" in response.templates[0].name.lower()
+
+    def test_dashboard_defaults_to_completed_when_key_missing(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that dashboard renders normally when has_completed_wizard key is missing (defaults to True)."""
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {
+            "key": sample_team_with_owner_member.team.key,
+            "role": "owner",
+            # Note: has_completed_wizard is intentionally missing
+        }
+        session.save()
+
+        response = client.get(reverse("core:dashboard"))
+
+        # Should NOT redirect - defaults to True (completed)
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
 class TestOnboardingWizard:
     """Tests for the single-step SBOM identity onboarding wizard."""
 
