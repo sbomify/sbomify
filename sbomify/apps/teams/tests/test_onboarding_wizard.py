@@ -213,8 +213,9 @@ class TestOnboardingWizard:
 
     def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
         """Test that Keycloak user metadata is properly used when creating a component."""
-        # Create Keycloak social auth record with metadata
-        SocialAccount.objects.create(
+        # Create Keycloak social auth record with metadata (result intentionally unused;
+        # the record only needs to exist in the database for the view to find it)
+        _ = SocialAccount.objects.create(
             user=sample_user,
             provider="keycloak",
             extra_data={

@@ -390,8 +390,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
     team_key = request.session["current_team"]["key"]
     team = Team.objects.get(key=team_key)
 
-    # URL for SBOM augmentation deep-dive (centralized for maintainability)
-    sbom_augmentation_url = "https://sbomify.com/features/generate-collaborate-analyze/"
+    # URL for SBOM augmentation deep-dive (configurable via settings)
+    sbom_augmentation_url = getattr(
+        settings, "SBOM_AUGMENTATION_URL", "https://sbomify.com/features/generate-collaborate-analyze/"
+    )
 
     # Check for completion step
     step = request.GET.get("step")
@@ -466,11 +468,22 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
 
             except IntegrityError as e:
+                error_str = str(e).lower()
                 log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
+                # Provide specific guidance based on which entity likely caused the conflict
+                if "product" in error_str:
+                    msg = f"A product named '{company_name}' already exists in this workspace."
+                elif "project" in error_str:
+                    msg = "A project named 'Main Project' already exists in this workspace."
+                elif "component" in error_str:
+                    msg = "A component named 'Main Component' already exists in this workspace."
+                elif "contact" in error_str:
+                    msg = "A default contact profile already exists in this workspace."
+                else:
+                    msg = f"Some items for '{company_name}' may already exist in this workspace."
                 messages.warning(
                     request,
-                    f"A workspace with the name '{company_name}' or its associated items may already exist. "
-                    "Try using a different company name, or check your existing products and projects.",
+                    f"{msg} Try using a different company name, or check your existing products and projects.",
                 )
     else:
         # GET request - show the form with pre-filled email
