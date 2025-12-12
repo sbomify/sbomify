@@ -95,8 +95,17 @@ def _private_workspace_allowed(team: Team) -> bool:
 
 
 def _normalize_branding_payload(branding: dict | None) -> dict:
-    # Lightweight copy; rely on schema defaults for missing fields.
-    return (branding or {}).copy()
+    """Normalize branding payload and apply default colors for empty values."""
+    from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
+
+    data = (branding or {}).copy()
+    # Apply defaults for empty or invalid color values
+    # Empty strings or legacy #000000 values should use platform defaults
+    if not data.get("brand_color"):
+        data["brand_color"] = DEFAULT_BRAND_COLOR
+    if not data.get("accent_color"):
+        data["accent_color"] = DEFAULT_ACCENT_COLOR
+    return data
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})

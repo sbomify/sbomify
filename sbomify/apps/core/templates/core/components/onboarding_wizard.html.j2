@@ -1,106 +1,151 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
+{% load django_vite %}
 {% block title %}Set Up Your SBOM Identity - sbomify{% endblock %}
 {% block content %}
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12 col-lg-7 mx-auto">
-                <div class="card shadow-sm border-0">
+    <div class="container-fluid py-4">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-8 col-lg-6 col-xl-5">
+                <div class="card shadow-lg rounded-4 border-0 position-relative">
                     {% if current_step == 'setup' %}
+                        <!-- Close/Skip Button -->
+                        <a href="{% url 'core:dashboard' %}"
+                           class="btn-close position-absolute top-0 end-0 m-3"
+                           aria-label="Skip for now"
+                           title="Skip for now"></a>
                         <!-- Setup Step -->
-                        <div class="card-header bg-white border-0 pb-0">
-                            <div class="card-actions float-end">
-                                <a href="{% url 'core:dashboard' %}"
-                                   class="btn btn-link text-muted"
-                                   title="Skip for now">
-                                    <i class="align-middle fas fa-times"></i>
-                                </a>
-                            </div>
-                            <div class="d-flex align-items-center mb-3">
-                                <div class="bg-primary-subtle rounded-3 p-3 me-3">
-                                    <i class="align-middle text-primary fas fa-building fa-lg"></i>
+                        <div class="card-body p-4 p-md-5"
+                             x-data="onboardingWizard({ initialEmail: '{{ form.email.value|default:''|escapejs }}', initialContactName: '{{ form.contact_name.value|default:''|escapejs }}' })">
+                            <!-- Header with centered icon -->
+                            <div class="text-center mb-4">
+                                <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle mb-3"
+                                     style="width: 64px;
+                                            height: 64px">
+                                    <i class="fas fa-id-card text-primary fa-2x"></i>
                                 </div>
-                                <div>
-                                    <h1 class="h3 mb-1">Set Up Your SBOM Identity</h1>
-                                    <p class="text-muted mb-0">Get started in under a minute</p>
-                                </div>
+                                <h1 class="h3 fw-semibold mb-2">Set Up Your SBOM Identity</h1>
+                                <p class="text-body-secondary mb-0">Get started in under a minute</p>
                             </div>
-                        </div>
-                        <div class="card-body pt-0">
                             <!-- Value Proposition Callout -->
                             <div class="bg-light rounded-3 p-3 mb-4 border-start border-4 border-primary">
-                                <p class="mb-2">
+                                <p class="mb-2 small">
                                     This information identifies you as the <strong>supplier</strong> in your SBOMs
                                     and enables <strong>NTIA compliance</strong>.
                                 </p>
                                 <a href="{{ sbom_augmentation_url }}"
                                    target="_blank"
                                    rel="noopener"
-                                   class="text-primary text-decoration-none">
+                                   class="text-primary text-decoration-none small">
                                     <i class="fas fa-book-open me-1"></i>
                                     Learn about SBOM augmentation
-                                    <i class="fas fa-external-link-alt ms-1 small"></i>
+                                    <i class="fas fa-external-link-alt ms-1" style="font-size: 0.7em;"></i>
                                 </a>
                             </div>
                             <!-- Form -->
                             <form method="post"
                                   action="{% url 'teams:onboarding_wizard' %}"
-                                  class="needs-validation"
-                                  novalidate>
+                                  @submit="handleSubmit()">
                                 {% csrf_token %}
                                 {% if form.non_field_errors %}
-                                    <div class="alert alert-danger bg-danger-subtle border-0 mb-4">
+                                    <div class="alert alert-danger bg-danger-subtle border-0 mb-4"
+                                         role="alert">
                                         {% for error in form.non_field_errors %}{{ error }}{% endfor %}
                                     </div>
                                 {% endif %}
-                                <!-- Company Name Field -->
-                                <div class="mb-4">
-                                    <label class="form-label fw-semibold"
-                                           for="{{ form.company_name.id_for_label }}">
-                                        {{ form.company_name.label }}
-                                        <span class="text-danger">*</span>
+                                <!-- Company Name Field - Floating Label -->
+                                <div class="form-floating mb-4">
+                                    <input type="text"
+                                           class="form-control"
+                                           id="id_company_name"
+                                           name="company_name"
+                                           placeholder="e.g., Acme Corporation"
+                                           required
+                                           x-model="companyName"
+                                           @blur="markTouched('companyName')"
+                                           :class="getValidationClass('companyName')"
+                                           {% if form.company_name.value %}value="{{ form.company_name.value }}"{% endif %}>
+                                    <label for="id_company_name">
+                                        Company / Organization Name <span class="text-danger">*</span>
                                     </label>
-                                    {{ form.company_name }}
                                     {% if form.company_name.errors %}
                                         <div class="invalid-feedback d-block">
                                             {% for error in form.company_name.errors %}{{ error }}{% endfor %}
                                         </div>
                                     {% endif %}
-                                    <div class="form-text">Identifies you as the supplier. Appears in your Trust Center.</div>
+                                    <div class="form-text text-body-secondary">Identifies you as the supplier. Appears in your Trust Center.</div>
                                 </div>
-                                <!-- Email Field -->
-                                <div class="mb-4">
-                                    <label class="form-label fw-semibold" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
-                                    {{ form.email }}
+                                <!-- Contact Name Field - Floating Label -->
+                                <div class="form-floating mb-4">
+                                    <input type="text"
+                                           class="form-control"
+                                           id="id_contact_name"
+                                           name="contact_name"
+                                           placeholder="e.g., Jane Smith"
+                                           required
+                                           x-model="contactName"
+                                           @blur="markTouched('contactName')"
+                                           :class="getValidationClass('contactName')"
+                                           {% if form.contact_name.value %}value="{{ form.contact_name.value }}"{% endif %}>
+                                    <label for="id_contact_name">
+                                        Contact Name <span class="text-danger">*</span>
+                                    </label>
+                                    {% if form.contact_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.contact_name.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text text-body-secondary">
+                                        Required for NTIA compliance. The person responsible for SBOM inquiries.
+                                    </div>
+                                </div>
+                                <!-- Email Field - Floating Label -->
+                                <div class="form-floating mb-4">
+                                    <input type="email"
+                                           class="form-control"
+                                           id="id_email"
+                                           name="email"
+                                           placeholder="security@example.com"
+                                           x-model="email"
+                                           @blur="markTouched('email')"
+                                           :class="getValidationClass('email')"
+                                           {% if form.email.value %}value="{{ form.email.value }}"{% endif %}>
+                                    <label for="id_email">Contact Email</label>
                                     {% if form.email.errors %}
                                         <div class="invalid-feedback d-block">
                                             {% for error in form.email.errors %}{{ error }}{% endfor %}
                                         </div>
                                     {% endif %}
-                                    <div class="form-text">For security inquiries. Embedded in SBOM metadata.</div>
+                                    <div class="form-text text-body-secondary">For security inquiries. Embedded in SBOM metadata.</div>
                                 </div>
-                                <!-- Website Field -->
-                                <div class="mb-4">
-                                    <label class="form-label fw-semibold" for="{{ form.website.id_for_label }}">
-                                        {{ form.website.label }}
-                                        <span class="text-muted fw-normal">(optional)</span>
+                                <!-- Website Field - Floating Label -->
+                                <div class="form-floating mb-4">
+                                    <input type="url"
+                                           class="form-control"
+                                           id="id_website"
+                                           name="website"
+                                           placeholder="https://example.com"
+                                           x-model="website"
+                                           @blur="markTouched('website')"
+                                           :class="getValidationClass('website')"
+                                           {% if form.website.value %}value="{{ form.website.value }}"{% endif %}>
+                                    <label for="id_website">
+                                        Website <span class="text-body-secondary fw-normal">(optional)</span>
                                     </label>
-                                    {{ form.website }}
                                     {% if form.website.errors %}
                                         <div class="invalid-feedback d-block">
                                             {% for error in form.website.errors %}{{ error }}{% endfor %}
                                         </div>
                                     {% endif %}
-                                    <div class="form-text">Added to SBOM external references.</div>
+                                    <div class="form-text text-body-secondary">Added to SBOM external references.</div>
                                 </div>
                                 <!-- Auto-creation Info -->
-                                <div class="bg-info-subtle rounded-3 p-3 mb-4">
-                                    <div class="d-flex">
+                                <div class="bg-info bg-opacity-10 rounded-3 p-3 mb-4">
+                                    <div class="d-flex align-items-start">
                                         <div class="flex-shrink-0">
-                                            <i class="fas fa-magic text-info"></i>
+                                            <i class="fas fa-wand-magic-sparkles text-info"></i>
                                         </div>
                                         <div class="flex-grow-1 ms-3">
-                                            <p class="mb-0 text-body">
+                                            <p class="mb-0 small">
                                                 We'll automatically create your first <strong>product</strong>,
                                                 <strong>project</strong>, and <strong>SBOM component</strong>
                                                 so you can start uploading right away.
@@ -108,18 +153,24 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Submit Button -->
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-lg btn-primary">
-                                        Get Started
+                                <!-- Submit Button with Loading State -->
+                                <button type="submit"
+                                        class="btn btn-lg btn-dark w-100 py-3 rounded-3"
+                                        :disabled="!canSubmit">
+                                    <span x-show="!isSubmitting">
+                                        Create My SBOM Identity
                                         <i class="fas fa-arrow-right ms-2"></i>
-                                    </button>
-                                </div>
+                                    </span>
+                                    <span x-show="isSubmitting" x-cloak>
+                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                        Setting up your workspace...
+                                    </span>
+                                </button>
                             </form>
                         </div>
                     {% else %}
                         <!-- Complete Step -->
-                        <div class="card-body text-center py-5">
+                        <div class="card-body text-center p-4 p-md-5">
                             <!-- Animated Success Icon -->
                             <div class="mb-4">
                                 <div class="success-checkmark">
@@ -131,90 +182,84 @@
                                     </div>
                                 </div>
                             </div>
-                            <h2 class="h3 mb-4">You're All Set!</h2>
+                            <h2 class="h3 fw-semibold mb-4">You're All Set!</h2>
                             <!-- Created Entities Summary -->
-                            <div class="row justify-content-center mb-4">
-                                <div class="col-md-10">
-                                    <p class="text-muted mb-3">We've created everything you need to get started:</p>
-                                    <div class="bg-light rounded-3 p-3 text-start">
-                                        <div class="d-flex align-items-center py-2 border-bottom">
-                                            <i class="fas fa-building text-muted me-3" style="width: 20px;"></i>
-                                            <span class="text-muted me-2">Workspace:</span>
-                                            <strong>{{ company_name }}'s Workspace</strong>
-                                        </div>
-                                        <div class="d-flex align-items-center py-2 border-bottom">
-                                            <i class="fas fa-address-card text-muted me-3" style="width: 20px;"></i>
-                                            <span class="text-muted me-2">Contact Profile:</span>
-                                            <strong>Default profile created</strong>
-                                        </div>
-                                        <div class="d-flex align-items-center py-2 border-bottom">
-                                            <i class="fas fa-cube text-muted me-3" style="width: 20px;"></i>
-                                            <span class="text-muted me-2">Product:</span>
-                                            <strong>{{ company_name }}</strong>
-                                        </div>
-                                        <div class="d-flex align-items-center py-2 border-bottom">
-                                            <i class="fas fa-folder text-muted me-3" style="width: 20px;"></i>
-                                            <span class="text-muted me-2">Project:</span>
-                                            <strong>Main Project</strong>
-                                        </div>
-                                        <div class="d-flex align-items-center py-2">
-                                            <i class="fas fa-puzzle-piece text-muted me-3" style="width: 20px;"></i>
-                                            <span class="text-muted me-2">Component:</span>
-                                            <strong>Main Component</strong>
-                                            <span class="badge bg-primary ms-2">SBOM</span>
-                                        </div>
+                            <div class="mb-4">
+                                <p class="text-body-secondary mb-3">We've created everything you need to get started:</p>
+                                <div class="bg-light rounded-3 p-3 text-start">
+                                    <div class="d-flex align-items-center py-2 border-bottom">
+                                        <i class="fas fa-building text-body-secondary me-3" style="width: 20px;"></i>
+                                        <span class="text-body-secondary me-2 small">Workspace:</span>
+                                        <strong class="small">{{ company_name }}'s Workspace</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center py-2 border-bottom">
+                                        <i class="fas fa-address-card text-body-secondary me-3"
+                                           style="width: 20px"></i>
+                                        <span class="text-body-secondary me-2 small">Contact Profile:</span>
+                                        <strong class="small">Default profile created</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center py-2 border-bottom">
+                                        <i class="fas fa-cube text-body-secondary me-3" style="width: 20px;"></i>
+                                        <span class="text-body-secondary me-2 small">Product:</span>
+                                        <strong class="small">{{ company_name }}</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center py-2 border-bottom">
+                                        <i class="fas fa-folder text-body-secondary me-3" style="width: 20px;"></i>
+                                        <span class="text-body-secondary me-2 small">Project:</span>
+                                        <strong class="small">Main Project</strong>
+                                    </div>
+                                    <div class="d-flex align-items-center py-2">
+                                        <i class="fas fa-puzzle-piece text-body-secondary me-3"
+                                           style="width: 20px"></i>
+                                        <span class="text-body-secondary me-2 small">Component:</span>
+                                        <strong class="small">Main Component</strong>
+                                        <span class="badge bg-primary ms-2">SBOM</span>
                                     </div>
                                 </div>
                             </div>
                             <!-- Next Step Card -->
-                            <div class="row justify-content-center mb-4">
-                                <div class="col-md-10">
-                                    <div class="card border-primary border-2 bg-primary-subtle">
-                                        <div class="card-body p-4">
-                                            <div class="d-flex align-items-start text-start">
-                                                <div class="bg-primary rounded-circle p-2 me-3">
-                                                    <i class="fas fa-cloud-upload-alt text-white"></i>
-                                                </div>
-                                                <div>
-                                                    <h5 class="fw-bold mb-2">Next: Upload Your First SBOM</h5>
-                                                    <p class="text-muted mb-0">Use our GitHub Action or upload manually to start building your SBOM catalog.</p>
-                                                </div>
-                                            </div>
+                            <div class="card border-0 bg-primary bg-opacity-10 mb-4">
+                                <div class="card-body p-4">
+                                    <div class="d-flex align-items-start text-start">
+                                        <div class="bg-primary rounded-circle p-2 me-3 flex-shrink-0">
+                                            <i class="fas fa-cloud-upload-alt text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="fw-bold mb-2">Next: Upload Your First SBOM</h5>
+                                            <p class="text-body-secondary mb-0 small">
+                                                Use our GitHub Action or upload manually to start building your SBOM catalog.
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <!-- Component Types Tip -->
-                            <div class="row justify-content-center mb-4">
-                                <div class="col-md-10">
-                                    <aside role="complementary"
-                                           aria-label="Additional information about component types"
-                                           class="bg-warning-subtle rounded-3 p-3 text-start">
-                                        <div class="d-flex">
-                                            <div class="flex-shrink-0" aria-hidden="true">
-                                                <i class="fas fa-lightbulb text-warning"></i>
-                                            </div>
-                                            <div class="flex-grow-1 ms-3">
-                                                <p class="fw-semibold mb-2">Tip: Components can hold SBOMs or Documents</p>
-                                                <ul class="mb-2 ps-3">
-                                                    <li>
-                                                        <strong>SBOM components:</strong> Software Bill of Materials (CycloneDX, SPDX)
-                                                    </li>
-                                                    <li>
-                                                        <strong>Document components:</strong> SOC 2, ISO 27001, Pen Test Reports, etc.
-                                                    </li>
-                                                </ul>
-                                                <p class="text-muted mb-0 small">
-                                                    Create Document components later for your Trust Center to share compliance artifacts.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </aside>
+                            <aside role="complementary"
+                                   aria-label="Additional information about component types"
+                                   class="bg-warning bg-opacity-10 rounded-3 p-3 mb-4 text-start">
+                                <div class="d-flex align-items-start">
+                                    <div class="flex-shrink-0" aria-hidden="true">
+                                        <i class="fas fa-lightbulb text-warning"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="fw-semibold mb-2 small">Tip: Components can hold SBOMs or Documents</p>
+                                        <ul class="mb-2 ps-3 small">
+                                            <li>
+                                                <strong>SBOM components:</strong> Software Bill of Materials (CycloneDX, SPDX)
+                                            </li>
+                                            <li>
+                                                <strong>Document components:</strong> SOC 2, ISO 27001, Pen Test Reports, etc.
+                                            </li>
+                                        </ul>
+                                        <p class="text-body-secondary mb-0 small">
+                                            Create Document components later for your Trust Center to share compliance artifacts.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+                            </aside>
                             <!-- Primary CTA -->
                             <a href="{% url 'core:component_details' component_id=component_id %}"
-                               class="btn btn-lg btn-primary px-5 mb-3">
+                               class="btn btn-lg btn-dark w-100 py-3 rounded-3 mb-3">
                                 Go to Component
                                 <i class="fas fa-arrow-right ms-2"></i>
                             </a>
@@ -223,10 +268,10 @@
                                 <a href="{{ sbom_augmentation_url }}"
                                    target="_blank"
                                    rel="noopener"
-                                   class="text-muted text-decoration-none">
+                                   class="text-body-secondary text-decoration-none small">
                                     <i class="fas fa-book-open me-1"></i>
                                     Read the SBOM lifecycle guide
-                                    <i class="fas fa-external-link-alt ms-1 small"></i>
+                                    <i class="fas fa-external-link-alt ms-1" style="font-size: 0.7em;"></i>
                                 </a>
                             </div>
                         </div>
@@ -236,8 +281,60 @@
         </div>
     </div>
 {% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/teams/js/main.ts' %}
+{% endblock %}
 {% block styles %}
     <style>
+        /* Form floating label enhancements */
+        .form-floating > .form-control {
+            height: calc(3.5rem + 2px);
+            padding: 1rem 0.75rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-floating > .form-control:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
+        }
+
+        .form-floating > .form-control.is-valid {
+            border-color: var(--bs-success);
+            padding-right: calc(1.5em + 0.75rem);
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='M2.3 6.73.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right calc(0.375em + 0.1875rem) center;
+            background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+        }
+
+        .form-floating > .form-control.is-invalid {
+            border-color: var(--bs-danger);
+            padding-right: calc(1.5em + 0.75rem);
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right calc(0.375em + 0.1875rem) center;
+            background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+        }
+
+        .form-floating > label {
+            padding: 1rem 0.75rem;
+        }
+
+        /* Button hover state */
+        .btn-dark:not(:disabled):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-dark:disabled {
+            opacity: 0.6;
+        }
+
+        /* Card shadow enhancement */
+        .card.shadow-lg {
+            box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.1) !important;
+        }
+
         /* Success Checkmark Animation */
         .success-checkmark {
             width: 80px;
@@ -251,7 +348,7 @@
             position: relative;
             border-radius: 50%;
             box-sizing: content-box;
-            border: 4px solid #28a745;
+            border: 4px solid #198754;
         }
 
         .success-checkmark .check-icon::before {
@@ -282,7 +379,7 @@
 
         .success-checkmark .check-icon .icon-line {
             height: 5px;
-            background-color: #28a745;
+            background-color: #198754;
             display: block;
             border-radius: 2px;
             position: absolute;
@@ -314,7 +411,7 @@
             border-radius: 50%;
             position: absolute;
             box-sizing: content-box;
-            border: 4px solid rgba(40, 167, 69, 0.5);
+            border: 4px solid rgba(25, 135, 84, 0.5);
         }
 
         .success-checkmark .check-icon .icon-fix {
@@ -329,79 +426,30 @@
         }
 
         @keyframes rotate-circle {
-            0% {
-                transform: rotate(-45deg);
-            }
-            5% {
-                transform: rotate(-45deg);
-            }
-            12% {
-                transform: rotate(-405deg);
-            }
-            100% {
-                transform: rotate(-405deg);
-            }
+            0% { transform: rotate(-45deg); }
+            5% { transform: rotate(-45deg); }
+            12% { transform: rotate(-405deg); }
+            100% { transform: rotate(-405deg); }
         }
 
         @keyframes icon-line-tip {
-            0% {
-                width: 0;
-                left: 1px;
-                top: 19px;
-            }
-            54% {
-                width: 0;
-                left: 1px;
-                top: 19px;
-            }
-            70% {
-                width: 50px;
-                left: -8px;
-                top: 37px;
-            }
-            84% {
-                width: 17px;
-                left: 21px;
-                top: 48px;
-            }
-            100% {
-                width: 25px;
-                left: 14px;
-                top: 46px;
-            }
+            0% { width: 0; left: 1px; top: 19px; }
+            54% { width: 0; left: 1px; top: 19px; }
+            70% { width: 50px; left: -8px; top: 37px; }
+            84% { width: 17px; left: 21px; top: 48px; }
+            100% { width: 25px; left: 14px; top: 46px; }
         }
 
         @keyframes icon-line-long {
-            0% {
-                width: 0;
-                right: 46px;
-                top: 54px;
-            }
-            65% {
-                width: 0;
-                right: 46px;
-                top: 54px;
-            }
-            84% {
-                width: 55px;
-                right: 0px;
-                top: 35px;
-            }
-            100% {
-                width: 47px;
-                right: 8px;
-                top: 38px;
-            }
+            0% { width: 0; right: 46px; top: 54px; }
+            65% { width: 0; right: 46px; top: 54px; }
+            84% { width: 55px; right: 0px; top: 35px; }
+            100% { width: 47px; right: 8px; top: 38px; }
         }
 
-        /* Form styling */
-        .form-control:focus {
-            border-color: var(--bs-primary);
-            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
-        }
-
-        .form-text {
-            font-size: 0.875rem;
+        /* Alpine.js cloak */
+        [x-cloak] {
+            display: none !important;
         }
     </style>
 {% endblock %}

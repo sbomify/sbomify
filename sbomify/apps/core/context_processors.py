@@ -22,4 +22,7 @@ def pending_invitations_context(request):
 
     count = Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now()).count()
 
-    return {"pending_invitations_count": count}
+    return {
+        "pending_invitations_count": count,
+        "has_pending_invitations": count > 0,  # Boolean for cache key to avoid key explosion
+    }
