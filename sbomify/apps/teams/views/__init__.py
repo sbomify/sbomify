@@ -411,80 +411,88 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            try:
-                with transaction.atomic():
-                    # 1. Update workspace name (using centralized function for i18n support)
-                    team.name = format_workspace_name(company_name)
+            # Check for existing entities before attempting creation (more reliable than catching IntegrityError)
+            conflicts = []
+            if ContactProfile.objects.filter(team=team, is_default=True).exists():
+                conflicts.append("A default contact profile already exists.")
+            if Product.objects.filter(team=team, name=company_name).exists():
+                conflicts.append(f"A product named '{company_name}' already exists.")
+            if Project.objects.filter(team=team, name="Main Project").exists():
+                conflicts.append("A project named 'Main Project' already exists.")
+            if Component.objects.filter(team=team, name="Main Component").exists():
+                conflicts.append("A component named 'Main Component' already exists.")
 
-                    # 2. Create default ContactProfile (company = supplier = vendor)
-                    website_url = form.cleaned_data.get("website")
-                    # Empty string or None falls back to user email
-                    contact_email = form.cleaned_data.get("email") or request.user.email
-                    ContactProfile.objects.create(
-                        team=team,
-                        name="Default",
-                        company=company_name,
-                        supplier_name=company_name,
-                        vendor=company_name,
-                        email=contact_email,
-                        website_urls=[website_url] if website_url else [],
-                        is_default=True,
-                    )
-
-                    # 3. Auto-create hierarchy with SBOM component type
-                    product = Product.objects.create(name=company_name, team=team)
-                    project = Project.objects.create(name="Main Project", team=team)
-
-                    component_metadata = create_default_component_metadata(
-                        user=request.user, team_id=team.id, custom_metadata=None
-                    )
-
-                    component = Component.objects.create(
-                        name="Main Component",
-                        team=team,
-                        component_type=Component.ComponentType.SBOM,
-                        metadata=component_metadata,
-                    )
-
-                    # Populate native fields with default metadata
-                    populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
-
-                    # Link hierarchy: product -> project -> component
-                    product.projects.add(project)
-                    project.components.add(component)
-
-                    # 4. Mark wizard as completed
-                    team.has_completed_wizard = True
-                    team.save()
-
-                    # 5. Update session
-                    request.session["current_team"]["has_completed_wizard"] = True
-                    request.session["current_team"]["name"] = team.name
-                    request.session["wizard_component_id"] = component.id
-                    request.session["wizard_company_name"] = company_name
-                    request.session.modified = True
-
-                messages.success(request, "Your SBOM identity has been set up!")
-                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-
-            except IntegrityError as e:
-                error_str = str(e).lower()
-                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
-                # Provide specific guidance based on which entity likely caused the conflict
-                if "product" in error_str:
-                    msg = f"A product named '{company_name}' already exists in this workspace."
-                elif "project" in error_str:
-                    msg = "A project named 'Main Project' already exists in this workspace."
-                elif "component" in error_str:
-                    msg = "A component named 'Main Component' already exists in this workspace."
-                elif "contact" in error_str:
-                    msg = "A default contact profile already exists in this workspace."
-                else:
-                    msg = f"Some items for '{company_name}' may already exist in this workspace."
+            if conflicts:
                 messages.warning(
                     request,
-                    f"{msg} Try using a different company name, or check your existing products and projects.",
+                    f"{conflicts[0]} Try using a different company name, or check your existing products and projects.",
                 )
+            else:
+                try:
+                    with transaction.atomic():
+                        # 1. Update workspace name (using centralized function for i18n support)
+                        team.name = format_workspace_name(company_name)
+
+                        # 2. Create default ContactProfile (company = supplier = vendor)
+                        website_url = form.cleaned_data.get("website")
+                        # Empty string or None falls back to user email
+                        contact_email = form.cleaned_data.get("email") or request.user.email
+                        ContactProfile.objects.create(
+                            team=team,
+                            name="Default",
+                            company=company_name,
+                            supplier_name=company_name,
+                            vendor=company_name,
+                            email=contact_email,
+                            website_urls=[website_url] if website_url else [],
+                            is_default=True,
+                        )
+
+                        # 3. Auto-create hierarchy with SBOM component type
+                        product = Product.objects.create(name=company_name, team=team)
+                        project = Project.objects.create(name="Main Project", team=team)
+
+                        component_metadata = create_default_component_metadata(
+                            user=request.user, team_id=team.id, custom_metadata=None
+                        )
+
+                        component = Component.objects.create(
+                            name="Main Component",
+                            team=team,
+                            component_type=Component.ComponentType.SBOM,
+                            metadata=component_metadata,
+                        )
+
+                        # Populate native fields with default metadata
+                        populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+
+                        # Link hierarchy: product -> project -> component
+                        product.projects.add(project)
+                        project.components.add(component)
+
+                        # 4. Mark wizard as completed
+                        team.has_completed_wizard = True
+                        team.save()
+
+                        # 5. Update session
+                        request.session["current_team"]["has_completed_wizard"] = True
+                        request.session["current_team"]["name"] = team.name
+                        request.session["wizard_component_id"] = component.id
+                        request.session["wizard_company_name"] = company_name
+                        request.session.modified = True
+
+                    messages.success(request, "Your SBOM identity has been set up!")
+                    return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
+
+                except IntegrityError as e:
+                    # Fallback for race conditions or unexpected constraint violations
+                    log.warning(
+                        f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}"
+                    )
+                    messages.warning(
+                        request,
+                        "Setup could not be completed due to a conflict. Please try again or contact support.",
+                    )
     else:
         # GET request - show the form with pre-filled email
         initial = {"email": request.user.email}
