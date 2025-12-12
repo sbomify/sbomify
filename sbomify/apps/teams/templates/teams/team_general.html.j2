@@ -89,15 +89,3 @@
         </div>
     </div>
 </div>
-<script>
-document.addEventListener('alpine:init', () => {
-    Alpine.data('teamGeneral', (initialName) => ({
-        originalName: initialName,
-        localName: initialName,
-
-        hasUnsavedChanges() {
-            return this.localName !== this.originalName;
-        }
-    }));
-});
-</script>

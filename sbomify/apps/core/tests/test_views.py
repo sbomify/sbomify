@@ -25,6 +25,13 @@ def test_dashboard_is_only_accessible_when_logged_in(sample_user: AbstractBaseUs
     assert response.status_code == 302
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    # New users are redirected to onboarding wizard - set has_completed_wizard=True to skip
+    session = client.session
+    if "current_team" in session:
+        session["current_team"]["has_completed_wizard"] = True
+        session.save()
+
     response: HttpResponse = client.get(reverse("core:dashboard"))
     assert response.status_code == 200
 

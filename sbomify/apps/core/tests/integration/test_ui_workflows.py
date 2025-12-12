@@ -12,6 +12,15 @@ class TestUIWorkflows:
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
 
+        # Mark wizard as completed to avoid redirect to onboarding
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": True,
+        }
+        session.save()
+
         # Setup billing plan
         BillingPlan.objects.create(
             key="stats_plan",

@@ -19,7 +19,6 @@ from .services import OnboardingEmailService
 from .tasks import (
     process_first_component_sbom_reminders_batch_task,
     queue_welcome_email,
-    queue_first_component_sbom_reminder,
     send_first_component_sbom_email_task,
     send_welcome_email_task,
 )
@@ -475,19 +474,16 @@ class TestOnboardingTasks:
         mail.outbox = []
 
         # Execute task directly (not through Dramatiq)
-        result = send_welcome_email_task(sample_user.id)
+        send_welcome_email_task(sample_user.id)
 
-        assert result["success"] is True
-        assert result["user_id"] == sample_user.id
-        assert result["user_email"] == sample_user.email
         assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [sample_user.email]
 
     def test_send_welcome_email_task_user_not_found(self) -> None:
-        """Test welcome email task with non-existent user."""
-        result = send_welcome_email_task(99999)  # Non-existent user ID
-
-        assert result["success"] is False
-        assert result["error"] == "User not found"
+        """Test welcome email task with non-existent user gracefully exits."""
+        # Should not raise an exception, just log and return
+        send_welcome_email_task(99999)  # Non-existent user ID
+        # No assertion needed - we just verify it doesn't raise
 
     def test_send_first_component_sbom_email_task_success(self) -> None:
         """Test first component/SBOM email task execution."""
@@ -507,10 +503,10 @@ class TestOnboardingTasks:
 
         mail.outbox = []
 
-        result = send_first_component_sbom_email_task(test_user.id)
+        send_first_component_sbom_email_task(test_user.id)
 
-        assert result["success"] is True
         assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [test_user.email]
 
     def test_send_first_component_sbom_email_task_not_eligible(self, sample_user) -> None:
         """Test first component/SBOM email task when user not eligible."""
@@ -519,9 +515,9 @@ class TestOnboardingTasks:
 
         mail.outbox = []
 
-        result = send_first_component_sbom_email_task(test_user.id)
+        send_first_component_sbom_email_task(test_user.id)
 
-        assert result["success"] is False
+        # No email sent when user is not eligible
         assert len(mail.outbox) == 0
 
     @patch("sbomify.apps.onboarding.tasks.send_first_component_sbom_email_task")
@@ -555,10 +551,7 @@ class TestOnboardingTasks:
         # Mock the individual task sending to avoid actual task queue
         mock_task.send.return_value = MagicMock(message_id="test-task-id")
 
-        result = process_first_component_sbom_reminders_batch_task()
-
-        assert result["eligible_users"] == 2
-        assert result["queued_tasks"] == 2
+        process_first_component_sbom_reminders_batch_task()
 
         # Verify the task was called for both eligible users
         assert mock_task.send.call_count == 2
