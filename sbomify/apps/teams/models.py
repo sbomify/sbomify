@@ -11,6 +11,25 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
 
 
+def format_workspace_name(name: str) -> str:
+    """
+    Format a workspace name from a given name/company.
+
+    This function centralizes workspace naming to support future i18n.
+    The possessive format (name's Workspace) may need locale-specific
+    handling for languages that don't use apostrophe-s for possession.
+
+    Args:
+        name: The name to use (company name, user's first name, etc.)
+
+    Returns:
+        A formatted workspace name string
+    """
+    # TODO: Before launching in non-English markets, use django.utils.translation.gettext and
+    # consider locale-specific possessive patterns
+    return f"{name}'s Workspace"
+
+
 def get_team_name_for_user(user) -> str:
     """
     Get the team name for a user based on available information.
@@ -25,7 +44,7 @@ def get_team_name_for_user(user) -> str:
         A human-friendly team name string
     """
     if user.first_name:
-        return f"{user.first_name}'s Workspace"
+        return format_workspace_name(user.first_name)
 
     if hasattr(user, "username") and user.username:
         # Extract clean name from email-based usernames
@@ -48,7 +67,7 @@ def get_team_name_for_user(user) -> str:
         else:
             name = username
 
-        return f"{name}'s Workspace"
+        return format_workspace_name(name)
 
     return "My Workspace"
 
