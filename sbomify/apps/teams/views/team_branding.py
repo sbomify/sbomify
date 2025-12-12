@@ -30,7 +30,7 @@ def get_app_hostname() -> str:
     return parsed.hostname or ""
 
 
-def check_custom_domain_access(billing_plan: str | None) -> bool:
+def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
     """Check if the billing plan allows custom domain feature."""
     plan_key = (billing_plan or "").strip().lower()
     if not plan_key:
@@ -56,7 +56,7 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
         # Custom domain context
-        has_custom_domain_access = check_custom_domain_access(team.billing_plan)
+        has_custom_domain_access = plan_has_custom_domain_access(team.billing_plan)
         app_hostname = get_app_hostname()
 
         return render(

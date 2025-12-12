@@ -7,7 +7,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
-from sbomify.apps.teams.views.team_branding import check_custom_domain_access, get_app_hostname
+from sbomify.apps.teams.views.team_branding import get_app_hostname, plan_has_custom_domain_access
 
 
 class TestGetAppHostname:
@@ -40,39 +40,39 @@ class TestGetAppHostname:
 
 
 @pytest.mark.django_db
-class TestCheckCustomDomainAccess:
-    """Tests for check_custom_domain_access helper function."""
+class TestPlanHasCustomDomainAccess:
+    """Tests for plan_has_custom_domain_access helper function."""
 
     def test_business_plan_has_access(self):
         """Business plan should have custom domain access."""
-        assert check_custom_domain_access("business") is True
+        assert plan_has_custom_domain_access("business") is True
 
     def test_enterprise_plan_has_access(self):
         """Enterprise plan should have custom domain access."""
-        assert check_custom_domain_access("enterprise") is True
+        assert plan_has_custom_domain_access("enterprise") is True
 
     def test_community_plan_no_access(self):
         """Community plan should not have custom domain access."""
-        assert check_custom_domain_access("community") is False
+        assert plan_has_custom_domain_access("community") is False
 
     def test_free_plan_no_access(self):
         """Free plan should not have custom domain access."""
-        assert check_custom_domain_access("free") is False
+        assert plan_has_custom_domain_access("free") is False
 
     def test_empty_plan_no_access(self):
         """Empty/None plan should not have custom domain access."""
-        assert check_custom_domain_access("") is False
-        assert check_custom_domain_access(None) is False
+        assert plan_has_custom_domain_access("") is False
+        assert plan_has_custom_domain_access(None) is False
 
     def test_case_insensitive(self):
         """Plan check should be case insensitive."""
-        assert check_custom_domain_access("BUSINESS") is True
-        assert check_custom_domain_access("Business") is True
-        assert check_custom_domain_access("ENTERPRISE") is True
+        assert plan_has_custom_domain_access("BUSINESS") is True
+        assert plan_has_custom_domain_access("Business") is True
+        assert plan_has_custom_domain_access("ENTERPRISE") is True
 
     def test_whitespace_stripped(self):
         """Plan check should strip whitespace."""
-        assert check_custom_domain_access("  business  ") is True
+        assert plan_has_custom_domain_access("  business  ") is True
 
     def test_billing_plan_model_lookup(self):
         """Should look up BillingPlan model if it exists."""
@@ -83,7 +83,7 @@ class TestCheckCustomDomainAccess:
         )
         # Since has_custom_domain_access is a property that checks key in ["business", "enterprise"]
         # custom plans that aren't in that list should fall back to False
-        assert check_custom_domain_access("custom_paid") is False
+        assert plan_has_custom_domain_access("custom_paid") is False
 
 
 @pytest.mark.django_db
@@ -155,8 +155,8 @@ class TestTeamBrandingViewCustomDomain:
         assert "Business and Enterprise plans" in content
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
-    def test_team_with_domain_shows_verification_status(self, team_with_domain, sample_user):
-        """Team with configured domain should show verification status."""
+    def test_team_with_verified_domain_shows_verified_status(self, team_with_domain, sample_user):
+        """Team with a verified custom domain should show verified status."""
         client = Client()
         setup_authenticated_client_session(client, team_with_domain, sample_user)
 

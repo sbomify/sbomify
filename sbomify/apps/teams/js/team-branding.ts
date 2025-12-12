@@ -26,14 +26,26 @@ interface BrandingInfo {
 
 type FileFields = 'icon' | 'logo';
 
+/**
+ * Configuration for the custom domain Alpine.js component.
+ */
 interface CustomDomainConfig {
+    /** The unique key for the team/workspace */
     teamKey: string;
+    /** The initial custom domain value (empty string if not set) */
     initialDomain: string;
+    /** Whether the domain has been validated */
     isValidated: boolean;
+    /** ISO date string of the last validation check */
     lastCheckedAt: string;
+    /** Whether the user has access to manage the custom domain feature */
     hasAccess: boolean;
 }
 
+/**
+ * Registers the Alpine.js 'customDomain' component for managing custom domain settings.
+ * This component handles domain input, validation status display, and saving/removing domains.
+ */
 export function registerCustomDomain() {
     Alpine.data('customDomain', (config: CustomDomainConfig) => ({
         teamKey: config.teamKey,
