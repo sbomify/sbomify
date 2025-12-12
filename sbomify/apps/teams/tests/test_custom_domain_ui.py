@@ -74,16 +74,24 @@ class TestPlanHasCustomDomainAccess:
         """Plan check should strip whitespace."""
         assert plan_has_custom_domain_access("  business  ") is True
 
-    def test_billing_plan_model_lookup(self):
-        """Should look up BillingPlan model if it exists."""
-        # Create a custom billing plan with domain access
+    def test_billing_plan_model_lookup_custom_plan(self):
+        """Custom plans not in business/enterprise should not have access."""
         BillingPlan.objects.create(
             key="custom_paid",
             name="Custom Paid Plan",
         )
         # Since has_custom_domain_access is a property that checks key in ["business", "enterprise"]
-        # custom plans that aren't in that list should fall back to False
+        # custom plans that aren't in that list should not have access
         assert plan_has_custom_domain_access("custom_paid") is False
+
+    def test_billing_plan_model_lookup_business_plan(self):
+        """Business plan in database should have access via model lookup."""
+        BillingPlan.objects.create(
+            key="business",
+            name="Business Plan",
+        )
+        # The function looks up the model and uses has_custom_domain_access property
+        assert plan_has_custom_domain_access("business") is True
 
 
 @pytest.mark.django_db

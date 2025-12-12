@@ -115,7 +115,8 @@ export function registerCustomDomain() {
                 this.error = '';
 
                 showSuccess('Custom domain saved successfully');
-            } catch {
+            } catch (error) {
+                console.error('Error saving custom domain:', error);
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {
@@ -154,7 +155,8 @@ export function registerCustomDomain() {
                 this.error = '';
 
                 showSuccess('Custom domain removed successfully');
-            } catch {
+            } catch (error) {
+                console.error('Error removing custom domain:', error);
                 this.error = 'Network error. Please try again.';
                 showError(this.error);
             } finally {
