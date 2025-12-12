@@ -33,7 +33,7 @@
                                     This information identifies you as the <strong>supplier</strong> in your SBOMs
                                     and enables <strong>NTIA compliance</strong>.
                                 </p>
-                                <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+                                <a href="{{ sbom_augmentation_url }}"
                                    target="_blank"
                                    rel="noopener"
                                    class="text-primary text-decoration-none">
@@ -187,9 +187,11 @@
                             <!-- Component Types Tip -->
                             <div class="row justify-content-center mb-4">
                                 <div class="col-md-10">
-                                    <div class="bg-warning-subtle rounded-3 p-3 text-start">
+                                    <aside role="complementary"
+                                           aria-label="Component types information"
+                                           class="bg-warning-subtle rounded-3 p-3 text-start">
                                         <div class="d-flex">
-                                            <div class="flex-shrink-0">
+                                            <div class="flex-shrink-0" aria-hidden="true">
                                                 <i class="fas fa-lightbulb text-warning"></i>
                                             </div>
                                             <div class="flex-grow-1 ms-3">
@@ -207,7 +209,7 @@
                                                 </p>
                                             </div>
                                         </div>
-                                    </div>
+                                    </aside>
                                 </div>
                             </div>
                             <!-- Primary CTA -->
@@ -218,7 +220,7 @@
                             </a>
                             <!-- Secondary Link -->
                             <div>
-                                <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+                                <a href="{{ sbom_augmentation_url }}"
                                    target="_blank"
                                    rel="noopener"
                                    class="text-muted text-decoration-none">

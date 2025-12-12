@@ -31,7 +31,7 @@ from sbomify.apps.teams.forms import (
     InviteUserForm,
     OnboardingCompanyForm,
 )
-from sbomify.apps.teams.models import ContactProfile, Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfile, Invitation, Member, Team, format_workspace_name
 from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
 
 log = getLogger(__name__)
@@ -390,6 +390,9 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
     team_key = request.session["current_team"]["key"]
     team = Team.objects.get(key=team_key)
 
+    # URL for SBOM augmentation deep-dive (centralized for maintainability)
+    sbom_augmentation_url = "https://sbomify.com/features/generate-collaborate-analyze/"
+
     # Check for completion step
     step = request.GET.get("step")
     if step == "complete":
@@ -397,6 +400,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
             "current_step": "complete",
             "component_id": request.session.pop("wizard_component_id", None),
             "company_name": request.session.pop("wizard_company_name", ""),
+            "sbom_augmentation_url": sbom_augmentation_url,
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
@@ -407,18 +411,21 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
 
             try:
                 with transaction.atomic():
-                    # 1. Update workspace name
-                    team.name = f"{company_name}'s Workspace"
+                    # 1. Update workspace name (using centralized function for i18n support)
+                    team.name = format_workspace_name(company_name)
 
                     # 2. Create default ContactProfile (company = supplier = vendor)
                     website_url = form.cleaned_data.get("website")
+                    # Use explicit check for email - empty string should fall back to user email
+                    form_email = form.cleaned_data.get("email")
+                    contact_email = form_email if form_email else request.user.email
                     ContactProfile.objects.create(
                         team=team,
                         name="Default",
                         company=company_name,
                         supplier_name=company_name,
                         vendor=company_name,
-                        email=form.cleaned_data.get("email") or request.user.email,
+                        email=contact_email,
                         website_urls=[website_url] if website_url else [],
                         is_default=True,
                     )
@@ -460,11 +467,11 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                 return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
 
             except IntegrityError as e:
-                log.warning(f"IntegrityError during onboarding: {e}")
+                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
                 messages.warning(
                     request,
-                    "Some items could not be created because they already exist. "
-                    "Please contact support if this issue persists.",
+                    f"A workspace with the name '{company_name}' or its associated items may already exist. "
+                    "Try using a different company name, or check your existing products and projects.",
                 )
     else:
         # GET request - show the form with pre-filled email
@@ -474,5 +481,6 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
     context = {
         "form": form,
         "current_step": "setup",
+        "sbom_augmentation_url": sbom_augmentation_url,
     }
     return render(request, "core/components/onboarding_wizard.html.j2", context)
