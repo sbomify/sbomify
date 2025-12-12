@@ -45,11 +45,23 @@ export function registerOnboardingWizard() {
         /**
          * Check if email is valid (empty or valid format).
          * Email is optional, so empty is valid.
+         * Uses browser's native email validation when available.
          */
         get isEmailValid(): boolean {
             if (!this.email || this.email.trim() === '') {
                 return true;
             }
+            // Use browser's native email validation via the input element
+            const emailInput = document.getElementById('id_email') as HTMLInputElement | null;
+            if (emailInput && emailInput.type === 'email') {
+                // Temporarily set the value to check validity
+                const originalValue = emailInput.value;
+                emailInput.value = this.email.trim();
+                const isValid = emailInput.validity.valid;
+                emailInput.value = originalValue;
+                return isValid;
+            }
+            // Fallback to regex if input element not available
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             return emailRegex.test(this.email.trim());
         },

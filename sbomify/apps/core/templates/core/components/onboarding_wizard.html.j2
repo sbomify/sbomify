@@ -107,7 +107,8 @@
                                            placeholder="security@example.com"
                                            x-model="email"
                                            @blur="markTouched('email')"
-                                           :class="getValidationClass('email')">
+                                           :class="getValidationClass('email')"
+                                           {% if form.email.value %}value="{{ form.email.value }}"{% endif %}>
                                     <label for="id_email">Contact Email</label>
                                     {% if form.email.errors %}
                                         <div class="invalid-feedback d-block">
