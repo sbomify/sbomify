@@ -416,9 +416,8 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
 
                     # 2. Create default ContactProfile (company = supplier = vendor)
                     website_url = form.cleaned_data.get("website")
-                    # Use explicit check for email - empty string should fall back to user email
-                    form_email = form.cleaned_data.get("email")
-                    contact_email = form_email if form_email else request.user.email
+                    # Empty string or None falls back to user email
+                    contact_email = form.cleaned_data.get("email") or request.user.email
                     ContactProfile.objects.create(
                         team=team,
                         name="Default",

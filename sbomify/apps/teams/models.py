@@ -25,7 +25,7 @@ def format_workspace_name(name: str) -> str:
     Returns:
         A formatted workspace name string
     """
-    # TODO: For i18n support, use django.utils.translation.gettext and
+    # TODO: Before launching in non-English markets, use django.utils.translation.gettext and
     # consider locale-specific possessive patterns
     return f"{name}'s Workspace"
 
