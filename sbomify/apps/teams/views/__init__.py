@@ -433,8 +433,8 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     with transaction.atomic():
                         # 1. Create default ContactProfile (company = supplier = vendor)
                         website_url = form.cleaned_data.get("website")
-                        # Empty string or None falls back to user email
-                        contact_email = form.cleaned_data.get("email") or request.user.email
+                        # Empty, None, or whitespace-only falls back to user email
+                        contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
                         ContactProfile.objects.create(
                             team=team,
                             name="Default",
