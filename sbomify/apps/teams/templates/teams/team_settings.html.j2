@@ -328,6 +328,8 @@
                 availableTabs.push('billing');
             {% endif %}
 
+            const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');
+
             // Function to activate a tab
             function activateTab(tabName) {
                 // Remove active class from all nav links and tab panes
@@ -377,7 +379,7 @@
 
             // Function to update all active_tab hidden inputs
             function updateActiveTabInputs(tabName) {
-                document.querySelectorAll('input[name="active_tab"]').forEach(input => {
+                activeTabInputs.forEach(input => {
                     input.value = tabName;
                 });
             }

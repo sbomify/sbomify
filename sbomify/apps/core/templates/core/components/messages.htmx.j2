@@ -1,5 +1,11 @@
 <script>
     (function() {
+        // Shared configuration
+        var CONFIG = {
+            RETRY_LIMIT: 100, // Max retries to prevent infinite loop (100 * 50ms = 5s max)
+            RETRY_DELAY_MS: 50 // Check every 50ms if bundle is loaded
+        };
+
         function showMessage(messageType, messageText) {
             let type;
             switch(messageType) {
@@ -33,8 +39,7 @@
         }
 
         {% if messages %}
-        // Max retries to prevent infinite loop if bundle fails to load (100 * 50ms = 5s max)
-        var messageRetries = 100;
+        var messageRetries = CONFIG.RETRY_LIMIT;
         function showMessagesWhenReady() {
             if (window.showToast) {
                 {% for message in messages %}
@@ -42,8 +47,7 @@
                 {% endfor %}
             } else if (messageRetries > 0) {
                 messageRetries--;
-                // Retry after a short delay - bundle may not be loaded yet
-                setTimeout(showMessagesWhenReady, 50);
+                setTimeout(showMessagesWhenReady, CONFIG.RETRY_DELAY_MS);
             }
             // If retries exhausted, silently fail - messages will show on next page load
         }
@@ -56,21 +60,18 @@
         {% endif %}
 
         {% if pending_invitations_count and pending_invitations_count > 0 %}
-        // Show pending invitation notification once per session
-        // Max retries to prevent infinite loop if bundle fails to load
-        var invitationRetries = 100;
+        var invitationRetries = CONFIG.RETRY_LIMIT;
         function showInvitationNotification() {
             if (!window.showToast) {
                 if (invitationRetries > 0) {
                     invitationRetries--;
-                    // Retry after a short delay - bundle may not be loaded yet
-                    setTimeout(showInvitationNotification, 50);
+                    setTimeout(showInvitationNotification, CONFIG.RETRY_DELAY_MS);
                 }
                 return;
             }
             
-            // Use a simple key - show once per session regardless of count changes
-            var storageKey = 'invitation_toast_shown_v1';
+            // Storage key for session consistency.
+            var storageKey = 'session_invitation_toast_shown';
             
             // Only show once per session
             if (!sessionStorage.getItem(storageKey)) {

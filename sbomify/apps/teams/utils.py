@@ -36,12 +36,15 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None):
     Returns:
         HttpResponseRedirect to the team settings page
     """
+    from urllib.parse import quote
+
     from django.shortcuts import redirect
     from django.urls import reverse
 
     base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
     if active_tab and active_tab in ALLOWED_TABS:
-        return redirect(f"{base_url}#{active_tab}")
+        safe_tab = quote(active_tab)
+        return redirect(f"{base_url}#{safe_tab}")
     return redirect(base_url)
 
 
