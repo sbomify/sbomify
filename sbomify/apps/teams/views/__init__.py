@@ -430,13 +430,11 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
             else:
                 try:
                     with transaction.atomic():
-                        # 1. Update workspace name (using centralized function for i18n support)
-                        team.name = format_workspace_name(company_name)
-
-                        # 2. Create default ContactProfile (company = supplier = vendor)
+                        # 1. Create default ContactProfile (company = supplier = vendor)
                         website_url = form.cleaned_data.get("website")
                         # Empty string or None falls back to user email
-                        contact_email = form.cleaned_data.get("email") or request.user.email
+                        email_value = form.cleaned_data.get("email")
+                        contact_email = email_value if email_value else request.user.email
                         ContactProfile.objects.create(
                             team=team,
                             name="Default",
@@ -448,7 +446,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                             is_default=True,
                         )
 
-                        # 3. Auto-create hierarchy with SBOM component type
+                        # 2. Auto-create hierarchy with SBOM component type
                         product = Product.objects.create(name=company_name, team=team)
                         project = Project.objects.create(name="Main Project", team=team)
 
@@ -470,7 +468,8 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         product.projects.add(project)
                         project.components.add(component)
 
-                        # 4. Mark wizard as completed
+                        # 3. Update workspace name and mark wizard as completed
+                        team.name = format_workspace_name(company_name)
                         team.has_completed_wizard = True
                         team.save()
 
