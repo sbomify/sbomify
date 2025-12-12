@@ -19,7 +19,11 @@ from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
 
 def get_app_hostname() -> str:
-    """Extract hostname from APP_BASE_URL for CNAME instructions."""
+    """Extract hostname from APP_BASE_URL for CNAME instructions.
+
+    Returns only the hostname portion, ignoring any port numbers or paths.
+    If APP_BASE_URL is missing a protocol, HTTPS is assumed.
+    """
     app_base_url = getattr(settings, "APP_BASE_URL", "")
     if not app_base_url:
         return ""
