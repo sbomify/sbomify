@@ -2,11 +2,11 @@ import type { Config } from 'tailwindcss'
 
 /**
  * Tailwind CSS configuration for Keycloak theme
- * Separate from main app config to target .ftl templates
+ * Fully self-contained within the keycloak directory
  */
 export default {
     content: [
-        './keycloak/themes/sbomify/login/**/*.ftl',
+        './themes/sbomify/login/**/*.ftl',
     ],
     theme: {
         extend: {
@@ -47,3 +47,4 @@ export default {
     },
     plugins: [],
 } satisfies Config
+

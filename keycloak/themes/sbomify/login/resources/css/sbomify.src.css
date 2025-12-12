@@ -75,7 +75,8 @@
 
     /* Left Panel: Info/Branding */
     .info-panel {
-        @apply flex-1 flex items-center justify-center p-12 rounded-2xl;
+        @apply flex-1 flex items-center justify-center rounded-2xl;
+        padding: 3rem 3rem 4rem 3rem;
         background: #f5f7fb;
         border-right: 1px solid #e4e8ef;
         box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
@@ -86,7 +87,7 @@
     }
 
     .brand-logo {
-        @apply mb-8;
+        @apply mb-6;
     }
 
     .brand-logo img {
@@ -96,18 +97,18 @@
     }
 
     .info-title {
-        @apply text-4xl font-bold m-0 mb-4 leading-tight tracking-tight;
+        @apply text-4xl font-bold m-0 mb-3 leading-tight tracking-tight;
         color: #1f2937;
     }
 
     .info-tagline {
-        @apply text-lg leading-relaxed m-0 mb-10;
+        @apply text-lg leading-relaxed m-0 mb-8;
         color: #6c757d;
     }
 
     /* Features List */
     .features-list {
-        @apply flex flex-col gap-6;
+        @apply flex flex-col gap-6 mb-0;
     }
 
     .feature-item {
@@ -136,14 +137,16 @@
 
     /* Right Panel: Form */
     .form-panel {
-        @apply flex-1 flex items-center justify-center p-12;
+        @apply flex-1 flex items-center justify-center;
+        padding: 3rem 3rem 4rem 3rem;
         background: transparent;
         perspective: 1000px;
     }
 
     /* Form Card */
     .form-card {
-        @apply w-full max-w-md p-10 rounded-3xl;
+        @apply w-full max-w-md rounded-3xl;
+        padding: 2rem 2rem 2.5rem 2rem;
         background: var(--sbomify-surface-card);
         border: 1px solid rgba(255, 255, 255, 0.07);
         box-shadow: 0 24px 48px rgba(6, 13, 26, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -151,23 +154,23 @@
     }
 
     .form-title {
-        @apply text-2xl font-semibold m-0 mb-6 text-center;
+        @apply text-2xl font-semibold m-0 mb-5 text-center;
         color: var(--sbomify-contrast);
     }
 
     /* Form Elements */
     .form-group {
-        @apply mb-5;
+        @apply mb-4;
     }
 
     .form-label {
-        @apply block text-sm font-medium mb-2;
+        @apply block text-sm font-medium mb-1.5;
         color: var(--sbomify-contrast);
     }
 
     .form-control {
         @apply w-full text-base transition-all duration-200 ease-in-out box-border rounded-xl;
-        padding: 0.875rem 1rem;
+        padding: 0.75rem 1rem;
         color: var(--sbomify-contrast);
         background: rgba(15, 23, 42, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -186,7 +189,7 @@
     }
 
     .input-error {
-        @apply block text-sm mt-2;
+        @apply block text-sm mt-1.5;
         color: var(--sbomify-danger);
     }
 
@@ -198,7 +201,7 @@
 
     /* Form Options Row */
     .form-options {
-        @apply flex items-center justify-between mb-6 text-sm;
+        @apply flex items-center justify-between mb-5 text-sm;
     }
 
     .remember-me {
@@ -224,7 +227,7 @@
     /* Submit Button */
     .btn-submit {
         @apply w-full text-base font-semibold text-white border-none cursor-pointer transition-all duration-200 rounded-xl;
-        padding: 0.875rem 1.5rem;
+        padding: 0.75rem 1.5rem;
         background: linear-gradient(135deg, var(--sbomify-brand), #5a9be6);
         box-shadow: 0 8px 20px rgba(59, 125, 221, 0.35);
         font-family: inherit;
@@ -245,9 +248,14 @@
         transform: translateY(0);
     }
 
+    /* Form Actions Container */
+    .form-actions {
+        @apply mt-1;
+    }
+
     /* Alerts */
     .alert {
-        @apply flex items-start gap-3 p-4 mb-6 text-sm rounded-xl;
+        @apply flex items-start gap-3 p-4 mb-5 text-sm rounded-xl;
         background: var(--sbomify-surface-card);
         border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--sbomify-contrast);
@@ -280,7 +288,7 @@
 
     /* Social Login */
     .social-divider {
-        @apply flex items-center my-6 text-xs;
+        @apply flex items-center my-5 text-xs;
         color: var(--sbomify-muted);
     }
 
@@ -296,11 +304,11 @@
     }
 
     .social-providers {
-        @apply flex flex-col gap-3;
+        @apply flex flex-col gap-2.5;
     }
 
     .social-btn {
-        @apply flex items-center justify-center gap-3 p-3 font-medium no-underline transition-all duration-200 rounded-xl;
+        @apply flex items-center justify-center gap-2.5 p-2.5 font-medium no-underline transition-all duration-200 rounded-xl;
         font-size: 0.9375rem;
         color: var(--sbomify-contrast);
         background: rgba(255, 255, 255, 0.05);
@@ -315,7 +323,7 @@
 
     /* Register Link */
     .register-link {
-        @apply text-center mt-6 pt-6;
+        @apply text-center mt-5 pt-5 mb-0;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
         font-size: 0.9375rem;
         color: var(--sbomify-muted);
@@ -434,7 +442,8 @@
         }
 
         .info-panel {
-            @apply p-8 border-r-0;
+            padding: 2rem 2rem 3rem 2rem;
+            border-right: 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
@@ -451,7 +460,7 @@
         }
 
         .form-panel {
-            @apply p-8;
+            padding: 2rem 2rem 3rem 2rem;
         }
 
         .form-card {
@@ -461,7 +470,7 @@
 
     @media (max-width: 576px) {
         .info-panel {
-            @apply p-6;
+            padding: 1.5rem 1.5rem 2.5rem 1.5rem;
         }
 
         .info-title {
@@ -473,11 +482,35 @@
         }
 
         .form-panel {
-            @apply p-6;
+            padding: 1.5rem 1.5rem 2.5rem 1.5rem;
         }
 
         .form-card {
-            @apply p-6;
+            padding: 1.5rem 1.5rem 2rem 1.5rem;
+        }
+
+        .form-group {
+            @apply mb-3.5;
+        }
+
+        .form-title {
+            @apply mb-4;
+        }
+
+        .alert {
+            @apply mb-4;
+        }
+
+        .form-options {
+            @apply mb-4;
+        }
+
+        .social-divider {
+            @apply my-4;
+        }
+
+        .register-link {
+            @apply mt-4 pt-4;
         }
 
         .form-title {

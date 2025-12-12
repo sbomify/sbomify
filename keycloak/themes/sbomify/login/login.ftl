@@ -20,33 +20,43 @@
                     <h2 class="form-title">${msg("loginAccountTitle")}</h2>
                     
                     <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-                        <div class="alert alert-${message.type}">
-                            <#if message.type = 'success'><span class="alert-icon">✓</span></#if>
-                            <#if message.type = 'warning'><span class="alert-icon">⚠</span></#if>
-                            <#if message.type = 'error'><span class="alert-icon">✕</span></#if>
-                            <#if message.type = 'info'><span class="alert-icon">ℹ</span></#if>
+                        <div class="alert alert-${message.type}" role="alert" aria-live="polite">
+                            <#if message.type = 'success'><span class="alert-icon" aria-hidden="true">✓</span></#if>
+                            <#if message.type = 'warning'><span class="alert-icon" aria-hidden="true">⚠</span></#if>
+                            <#if message.type = 'error'><span class="alert-icon" aria-hidden="true">✕</span></#if>
+                            <#if message.type = 'info'><span class="alert-icon" aria-hidden="true">ℹ</span></#if>
                             <span class="alert-text">${kcSanitize(message.summary)}</span>
                         </div>
                     </#if>
 
-                    <form id="kc-form-login" onsubmit="login.disabled = true; return true;" action="${url.loginAction}" method="post">
+                    <form id="kc-form-login" action="${url.loginAction}" method="post" novalidate>
+                        <script>
+                            document.getElementById('kc-form-login').addEventListener('submit', function(e) {
+                                const loginBtn = document.getElementById('kc-login');
+                                if (loginBtn) {
+                                    loginBtn.disabled = true;
+                                }
+                            });
+                        </script>
                         <div class="form-group">
                             <label for="username" class="form-label">
                                 <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>
                             </label>
-                            <input tabindex="1" id="username" class="form-control" name="username" value="${(login.username!'')}" type="text" autofocus autocomplete="off"
+                            <input tabindex="1" id="username" class="form-control" name="username" value="${(login.username!'')}" type="text" autofocus autocomplete="username"
                                    placeholder="Enter your username or email"
-                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>" />
+                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   aria-describedby="<#if messagesPerField.existsError('username','password')>username-error</#if>" />
                             <#if messagesPerField.existsError('username','password')>
-                                <span class="input-error" aria-live="polite">${kcSanitize(messagesPerField.getFirstError('username','password'))}</span>
+                                <span id="username-error" class="input-error" aria-live="polite" role="alert">${kcSanitize(messagesPerField.getFirstError('username','password'))}</span>
                             </#if>
                         </div>
 
                         <div class="form-group">
                             <label for="password" class="form-label">${msg("password")}</label>
-                            <input tabindex="2" id="password" class="form-control" name="password" type="password" autocomplete="off"
+                            <input tabindex="2" id="password" class="form-control" name="password" type="password" autocomplete="current-password"
                                    placeholder="Enter your password"
-                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>" />
+                                   aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
+                                   aria-describedby="<#if messagesPerField.existsError('username','password')>username-error</#if>" />
                         </div>
 
                         <div class="form-options">
@@ -63,7 +73,7 @@
 
                         <div class="form-actions">
                             <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>
-                            <button tabindex="4" class="btn-submit" name="login" id="kc-login" type="submit">
+                            <button tabindex="4" class="btn-submit" name="login" id="kc-login" type="submit" aria-label="${msg("doLogIn")}">
                                 ${msg("doLogIn")}
                             </button>
                         </div>
@@ -75,9 +85,9 @@
                         </div>
                         <div class="social-providers">
                             <#list social.providers as p>
-                                <a id="social-${p.alias}" class="social-btn" href="${p.loginUrl}">
+                                <a id="social-${p.alias}" class="social-btn" href="${p.loginUrl}" aria-label="${msg("doLogIn")} ${kcSanitize(p.displayName!p.alias)}">
                                     <#if p.iconClasses?has_content><i class="${p.iconClasses}" aria-hidden="true"></i></#if>
-                                    <span>${p.displayName!p.alias}</span>
+                                    <span>${kcSanitize(p.displayName!p.alias)}</span>
                                 </a>
                             </#list>
                         </div>
@@ -96,9 +106,9 @@
         <#if social?? && social.providers?? && social.providers?has_content>
             <div class="social-providers-section">
                 <#list social.providers as p>
-                    <a id="social-${p.alias}" class="social-btn" href="${p.loginUrl}">
+                    <a id="social-${p.alias}" class="social-btn" href="${p.loginUrl}" aria-label="${msg("doLogIn")} ${kcSanitize(p.displayName!p.alias)}">
                         <#if p.iconClasses?has_content><i class="${p.iconClasses}" aria-hidden="true"></i></#if>
-                        <span>${p.displayName!p.alias}</span>
+                        <span>${kcSanitize(p.displayName!p.alias)}</span>
                     </a>
                 </#list>
             </div>

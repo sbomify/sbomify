@@ -1,0 +1,15 @@
+{
+  "name": "sbomify-keycloak-theme",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "bun x tailwindcss -c tailwind.config.ts -i themes/sbomify/login/resources/css/sbomify.src.css -o themes/sbomify/login/resources/css/sbomify.css --watch",
+    "build": "bun x tailwindcss -c tailwind.config.ts -i themes/sbomify/login/resources/css/sbomify.src.css -o themes/sbomify/login/resources/css/sbomify.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6"
+  }
+}

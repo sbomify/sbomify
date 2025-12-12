@@ -40,8 +40,6 @@ if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID"
       -s enabled=true \
       -s protocol=openid-connect \
       -s publicClient=false \
-      -s "rootUrl=$APP_BASE_URL" \
-      -s "baseUrl=$APP_BASE_URL" \
       -s 'redirectUris=["*"]' \
       -s 'webOrigins=["*"]' \
       -s standardFlowEnabled=true \
@@ -54,10 +52,8 @@ if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID"
       -s enabled=true \
       -s protocol=openid-connect \
       -s publicClient=false \
-      -s "rootUrl=$APP_BASE_URL" \
-      -s "baseUrl=$APP_BASE_URL" \
-      -s "redirectUris=[\"$APP_BASE_URL/*\"]" \
-      -s "webOrigins=[\"$APP_BASE_URL\"]" \
+      -s 'redirectUris=["http://localhost:8000/*","http://127.0.0.1:8000/*"]' \
+      -s 'webOrigins=["http://localhost:8000","http://127.0.0.1:8000"]' \
       -s standardFlowEnabled=true \
       -s directAccessGrantsEnabled=true \
       -s serviceAccountsEnabled=true \
@@ -65,20 +61,13 @@ if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID"
   fi
 else
   CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q clientId="$CLIENT_ID" --fields id --format csv | tail -n1 | tr -d '"')
-  /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" \
-    -s secret="$CLIENT_SECRET" \
-    -s "rootUrl=$APP_BASE_URL" \
-    -s "baseUrl=$APP_BASE_URL"
+  /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" -s secret="$CLIENT_SECRET"
 
-  # Update redirect URIs based on mode
+  # In dev mode, also update redirect URIs to allow all
   if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
     /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" \
       -s 'redirectUris=["*"]' \
       -s 'webOrigins=["*"]'
-  else
-    /opt/keycloak/bin/kcadm.sh update "clients/$CLIENT_UUID" -r "$REALM" \
-      -s "redirectUris=[\"$APP_BASE_URL/*\"]" \
-      -s "webOrigins=[\"$APP_BASE_URL\"]"
   fi
 fi
 
