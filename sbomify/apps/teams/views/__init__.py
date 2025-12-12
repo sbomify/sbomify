@@ -473,7 +473,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         team.has_completed_wizard = True
                         team.save()
 
-                        # 5. Update session
+                        # 4. Update session
                         request.session["current_team"]["has_completed_wizard"] = True
                         request.session["current_team"]["name"] = team.name
                         request.session["wizard_component_id"] = component.id
