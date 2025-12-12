@@ -114,7 +114,7 @@ class TestTeamBrandingViewCustomDomain:
         team = Team.objects.create(
             name="Domain Team",
             billing_plan="business",
-            custom_domain="sbom.example.com",
+            custom_domain="trust.example.com",
             custom_domain_validated=True,
         )
         team.key = number_to_random_token(team.pk)
@@ -133,9 +133,10 @@ class TestTeamBrandingViewCustomDomain:
 
         content = response.content.decode()
         assert "Custom Domain" in content
-        assert "app.sbomify.io" in content
+        # Check app_hostname appears in the CNAME target instructions
+        assert "<code>app.sbomify.io</code>" in content
         # Check that the upgrade badge is NOT shown (hasAccess should be true)
-        assert 'hasAccess: true' in content
+        assert "hasAccess: true" in content
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_community_team_sees_upgrade_prompt(self, community_team, sample_user):
@@ -161,17 +162,19 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "sbom.example.com" in content
+        # Check domain appears in the Alpine.js initialDomain config
+        assert "initialDomain: 'trust.example.com'" in content
         # Since the domain is validated, isValidated should be true in the JS config
         assert "isValidated: true" in content
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io")
     def test_pending_verification_status(self, sample_user):
         """Team with unverified domain should show pending status."""
+        test_domain = "unverified.example.com"
         team = Team.objects.create(
             name="Pending Team",
             billing_plan="business",
-            custom_domain="pending.example.com",
+            custom_domain=test_domain,
             custom_domain_validated=False,
         )
         team.key = number_to_random_token(team.pk)
@@ -185,7 +188,8 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        assert "pending.example.com" in content
+        # Check domain appears in the Alpine.js initialDomain config
+        assert f"initialDomain: '{test_domain}'" in content
         assert "isValidated: false" in content
 
     @override_settings(APP_BASE_URL="https://app.sbomify.io")

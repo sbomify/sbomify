@@ -1,6 +1,16 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
 
+/**
+ * Get CSRF token from cookies for API requests
+ */
+function getCsrfToken(): string {
+    const csrfCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='));
+    return csrfCookie ? csrfCookie.split('=')[1] : '';
+}
+
 interface BrandingInfo {
     icon: File | null;
     logo: File | null;
@@ -73,6 +83,7 @@ export function registerCustomDomain() {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
                     },
                     body: JSON.stringify({ domain }),
                 });
@@ -111,6 +122,9 @@ export function registerCustomDomain() {
             try {
                 const response = await fetch(`/api/v1/workspaces/${this.teamKey}/domain`, {
                     method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
                 });
 
                 if (!response.ok) {

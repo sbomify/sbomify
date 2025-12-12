@@ -276,13 +276,17 @@
                                         <strong>Type:</strong> CNAME
                                     </div>
                                     <div class="col-md-4">
-                                        <strong>Name:</strong> <code x-text="localDomain ? localDomain.split('.')[0] : 'trust'"></code>
+                                        <strong>Name:</strong> <code x-text="localDomain || 'trust'"></code>
                                     </div>
                                     <div class="col-md-4">
                                         <strong>Target:</strong> <code>{{ app_hostname }}</code>
                                     </div>
                                 </div>
                             </div>
+                            <p class="mb-2 small text-muted">
+                                <i class="fas fa-lightbulb me-1"></i>
+                                <strong>Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <code>trust.example.com</code> in zone <code>example.com</code>, enter <code>trust</code>).
+                            </p>
                             <p class="mb-0 small">
                                 <i class="fas fa-clock me-1"></i>
                                 DNS changes may take up to 48 hours to propagate. Verification happens automatically once the DNS is configured correctly.
