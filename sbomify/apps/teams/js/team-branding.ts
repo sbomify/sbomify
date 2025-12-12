@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import { showSuccess, showError } from '../../core/js/alerts';
 
 interface BrandingInfo {
     icon: File | null;
@@ -14,6 +15,128 @@ interface BrandingInfo {
 }
 
 type FileFields = 'icon' | 'logo';
+
+interface CustomDomainConfig {
+    teamKey: string;
+    initialDomain: string;
+    isValidated: boolean;
+    lastCheckedAt: string;
+    hasAccess: boolean;
+}
+
+export function registerCustomDomain() {
+    Alpine.data('customDomain', (config: CustomDomainConfig) => ({
+        teamKey: config.teamKey,
+        currentDomain: config.initialDomain || '',
+        localDomain: config.initialDomain || '',
+        validated: config.isValidated,
+        lastChecked: config.lastCheckedAt || null,
+        hasAccess: config.hasAccess,
+        isLoading: false,
+        error: '',
+
+        hasUnsavedChanges() {
+            return this.localDomain !== this.currentDomain;
+        },
+
+        canSave() {
+            return this.localDomain.trim() !== '' && this.hasUnsavedChanges();
+        },
+
+        cancelChanges() {
+            this.localDomain = this.currentDomain;
+            this.error = '';
+        },
+
+        formatLastChecked() {
+            if (!this.lastChecked) return 'Never';
+            try {
+                const date = new Date(this.lastChecked);
+                return date.toLocaleString();
+            } catch {
+                return 'Unknown';
+            }
+        },
+
+        async saveDomain() {
+            const domain = this.localDomain.trim();
+            if (!domain) {
+                this.error = 'Please enter a domain';
+                return;
+            }
+
+            this.isLoading = true;
+            this.error = '';
+
+            try {
+                const response = await fetch(`/api/v1/workspaces/${this.teamKey}/domain`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ domain }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    this.error = data.detail || 'Failed to save domain';
+                    showError(this.error);
+                    return;
+                }
+
+                // Update state with response
+                this.currentDomain = data.domain;
+                this.localDomain = data.domain;
+                this.validated = data.validated;
+                this.error = '';
+
+                showSuccess('Custom domain saved successfully');
+            } catch {
+                this.error = 'Network error. Please try again.';
+                showError(this.error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        async removeDomain() {
+            if (!confirm('Are you sure you want to remove the custom domain?')) {
+                return;
+            }
+
+            this.isLoading = true;
+            this.error = '';
+
+            try {
+                const response = await fetch(`/api/v1/workspaces/${this.teamKey}/domain`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    this.error = data.detail || 'Failed to remove domain';
+                    showError(this.error);
+                    return;
+                }
+
+                // Clear state
+                this.currentDomain = '';
+                this.localDomain = '';
+                this.validated = false;
+                this.lastChecked = null;
+                this.error = '';
+
+                showSuccess('Custom domain removed successfully');
+            } catch {
+                this.error = 'Network error. Please try again.';
+                showError(this.error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+    }));
+}
 
 export function registerTeamBranding() {
     Alpine.data('teamBranding', (brandingInfoJson: string) => {
