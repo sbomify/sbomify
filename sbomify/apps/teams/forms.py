@@ -134,6 +134,43 @@ class OnboardingComponentForm(forms.Form):
     )
 
 
+class OnboardingCompanyForm(forms.Form):
+    """Single-step onboarding form for SBOM identity setup."""
+
+    company_name = forms.CharField(
+        label="Company / Organization Name",
+        max_length=255,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "e.g., Acme Corporation",
+                "autofocus": True,
+            }
+        ),
+    )
+    email = forms.EmailField(
+        label="Contact Email",
+        required=False,
+        widget=forms.EmailInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "security@example.com",
+            }
+        ),
+    )
+    website = forms.URLField(
+        label="Website",
+        required=False,
+        widget=forms.URLInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "https://example.com",
+            }
+        ),
+    )
+
+
 class DeleteMemberForm(forms.Form):
     member_id = forms.IntegerField(
         required=True,

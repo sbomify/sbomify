@@ -1,228 +1,384 @@
+"""Tests for the onboarding wizard single-step flow."""
+
 import pytest
+from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib.messages import get_messages
-from django.db import transaction, IntegrityError
 from django.test import Client
 from django.urls import reverse
-from allauth.socialaccount.models import SocialAccount
 
 from sbomify.apps.sboms.models import Component, Product, Project
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import ContactProfile
 
 
 @pytest.mark.django_db
 class TestOnboardingWizard:
-    def test_wizard_requires_login(self, client: Client):
-        """Test that the onboarding wizard requires login."""
+    """Tests for the single-step SBOM identity onboarding wizard."""
+
+    def test_wizard_requires_login(self, client: Client) -> None:
+        """Test that the onboarding wizard requires authentication."""
         response = client.get(reverse("teams:onboarding_wizard"))
         assert response.status_code == 302
         assert response.url.startswith(settings.LOGIN_URL)
 
-    def test_successful_wizard_flow(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test the complete successful flow of the onboarding wizard."""
-        # Login and set session data
+    def test_wizard_shows_setup_form(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that GET request shows the setup form with pre-filled email."""
         client.force_login(sample_user)
         session = client.session
         session["current_team"] = {
             "key": sample_team_with_owner_member.team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
-        session["wizard_step"] = "product"
         session.save()
 
-        # Step 1: Create Product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        response = client.get(reverse("teams:onboarding_wizard"))
+
+        assert response.status_code == 200
+        assert response.context["current_step"] == "setup"
+        assert "form" in response.context
+
+        # Check email is pre-filled
+        form = response.context["form"]
+        assert form.initial.get("email") == sample_user.email
+
+    def test_successful_onboarding_flow(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test the complete successful single-step onboarding flow."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+        original_team_name = team.name
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+            "name": original_team_name,
+        }
+        session.save()
+
+        # Submit company info
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Acme Corporation",
+                "email": "security@acme.com",
+                "website": "https://acme.com",
+            },
+        )
+
+        # Should redirect to complete step
         assert response.status_code == 302
-        assert response.url == reverse("teams:onboarding_wizard")
+        assert "step=complete" in response.url
 
+        # Check success message
         messages = list(get_messages(response.wsgi_request))
-        assert any("Product 'Test Product' created successfully" in str(m) for m in messages)
+        assert any("SBOM identity has been set up" in str(m) for m in messages)
 
-        product = Product.objects.filter(name="Test Product").first()
+        # Verify workspace was renamed
+        team.refresh_from_db()
+        assert team.name == "Acme Corporation's Workspace"
+        assert team.has_completed_wizard is True
+
+    def test_contact_profile_created(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that ContactProfile is created with company=supplier=vendor and is_default=True."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Test Company",
+                "email": "contact@test.com",
+                "website": "https://test.com",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify ContactProfile was created correctly
+        profile = ContactProfile.objects.filter(team=team).first()
+        assert profile is not None
+        assert profile.name == "Default"
+        assert profile.company == "Test Company"
+        assert profile.supplier_name == "Test Company"
+        assert profile.vendor == "Test Company"
+        assert profile.email == "contact@test.com"
+        assert profile.website_urls == ["https://test.com"]
+        assert profile.is_default is True
+
+    def test_contact_profile_uses_user_email_as_fallback(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that ContactProfile uses user email when not provided in form."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # Submit without email
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Fallback Email Test",
+            },
+        )
+
+        assert response.status_code == 302
+
+        profile = ContactProfile.objects.filter(team=team).first()
+        assert profile is not None
+        assert profile.email == sample_user.email
+
+    def test_product_project_component_auto_created(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that Product, Project, and Component are auto-created with correct hierarchy."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Hierarchy Test Corp",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify Product
+        product = Product.objects.filter(team=team, name="Hierarchy Test Corp").first()
         assert product is not None
-        assert product.team == sample_team_with_owner_member.team
 
-        # Step 2: Create Project
-        session = client.session
-        session["wizard_step"] = "project"
-        session.save()
-
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Project"
-        })
-        assert response.status_code == 302
-        assert response.url == reverse("teams:onboarding_wizard")
-
-        messages = list(get_messages(response.wsgi_request))
-        assert any("Project 'Test Project' created successfully" in str(m) for m in messages)
-
-        project = Project.objects.filter(name="Test Project").first()
+        # Verify Project
+        project = Project.objects.filter(team=team, name="Main Project").first()
         assert project is not None
-        assert project.team == sample_team_with_owner_member.team
 
-        # Step 3: Create Component
-        session = client.session
-        session["wizard_step"] = "component"
-        session.save()
-
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Component"
-        })
-        assert response.status_code == 302
-        assert response.url == reverse("teams:onboarding_wizard")
-
-        messages = list(get_messages(response.wsgi_request))
-        assert any("Component 'Test Component' created successfully" in str(m) for m in messages)
-
-        component = Component.objects.filter(name="Test Component").first()
+        # Verify Component with SBOM type
+        component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        assert component.team == sample_team_with_owner_member.team
+        assert component.component_type == Component.ComponentType.SBOM
 
-        # Verify relationships
+        # Verify hierarchy: product -> project -> component
         assert project in product.projects.all()
         assert component in project.components.all()
 
-        # Verify wizard completion
-        team = Team.objects.get(pk=sample_team_with_owner_member.team.pk)
-        assert team.has_completed_wizard is True
+    def test_component_has_sbom_type(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that auto-created component has component_type=SBOM."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
 
-    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member):
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "SBOM Type Test",
+            },
+        )
+
+        assert response.status_code == 302
+
+        component = Component.objects.filter(team=team).first()
+        assert component is not None
+        assert component.component_type == Component.ComponentType.SBOM
+
+    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
         """Test that Keycloak user metadata is properly used when creating a component."""
         # Create Keycloak social auth record with metadata
-        social_account = SocialAccount.objects.create(
+        SocialAccount.objects.create(
             user=sample_user,
             provider="keycloak",
             extra_data={
                 "user_metadata": {
-                    "company": "Acme Corp",
-                    "supplier_url": "https://acme.example.com"
+                    "company": "Keycloak Corp",
+                    "supplier_url": "https://keycloak.example.com",
                 }
-            }
+            },
         )
-        social_account.save()
 
-        # Login and set session data
         client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
         session = client.session
         session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
+            "key": team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
-        session["wizard_step"] = "product"
         session.save()
 
-        # Step 1: Create Product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Keycloak Test",
+            },
+        )
+
         assert response.status_code == 302
 
-        # Step 2: Create Project
-        session = client.session
-        session["wizard_step"] = "project"
-        session.save()
-
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Project"
-        })
-        assert response.status_code == 302
-
-        # Step 3: Create Component
-        session = client.session
-        session["wizard_step"] = "component"
-        session.save()
-
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Component"
-        })
-        assert response.status_code == 302
-
-        # Verify component metadata
-        component = Component.objects.filter(name="Test Component").first()
+        # Verify component has Keycloak metadata
+        component = Component.objects.filter(team=team).first()
         assert component is not None
-        assert component.metadata.get("supplier", {}).get("name") == "Acme Corp"
-        assert component.metadata.get("supplier", {}).get("url") == ["https://acme.example.com"]
+        assert component.metadata.get("supplier", {}).get("name") == "Keycloak Corp"
+        assert component.metadata.get("supplier", {}).get("url") == ["https://keycloak.example.com"]
 
-    def test_duplicate_names(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that duplicate names are handled correctly."""
-        # Login and set session data
+    def test_complete_step_shows_summary(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that completion step shows created entities summary."""
         client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
         session = client.session
         session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
+            "key": team.key,
             "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
-        session["wizard_step"] = "product"
         session.save()
 
-        # Create first product
-        response = client.post(reverse("teams:onboarding_wizard"), {
-            "name": "Test Product"
-        })
+        # First submit the form
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Summary Test Inc",
+            },
+        )
+
+        # Now access the complete step
+        response = client.get(reverse("teams:onboarding_wizard") + "?step=complete")
+
+        assert response.status_code == 200
+        assert response.context["current_step"] == "complete"
+        assert response.context["company_name"] == "Summary Test Inc"
+        assert response.context["component_id"] is not None
+
+    def test_session_updated_after_completion(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that session is properly updated after wizard completion."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+            "name": team.name,
+        }
+        session.save()
+
+        client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Session Test",
+            },
+        )
+
+        # Check session was updated
+        session = client.session
+        assert session["current_team"]["has_completed_wizard"] is True
+        assert session["current_team"]["name"] == "Session Test's Workspace"
+
+    def test_company_name_required(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that company_name is required."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # Submit without company_name
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "email": "test@test.com",
+            },
+        )
+
+        # Should stay on the same page with form errors
+        assert response.status_code == 200
+        assert response.context["form"].errors.get("company_name") is not None
+
+    def test_website_is_optional(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that website field is optional."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        # Submit without website
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "No Website Corp",
+            },
+        )
+
         assert response.status_code == 302
 
-        # Try to create duplicate product
-        session = client.session
-        session["wizard_step"] = "product"  # Make sure we're still on the product step
-        session.save()
+        profile = ContactProfile.objects.filter(team=team).first()
+        assert profile is not None
+        assert profile.website_urls == []
 
-        # Catch IntegrityError and rollback transaction so we can continue assertions
-        try:
-            response = client.post(reverse("teams:onboarding_wizard"), {
-                "name": "Test Product"
-            })
-        except IntegrityError:
-            transaction.set_rollback(True)
-            # Optionally, re-render the form or check for error message in the response
-            return  # Test passes if IntegrityError is raised (duplicate is not allowed)
-        except transaction.TransactionManagementError:
-            # This can happen if the transaction is broken, which is expected after IntegrityError
-            return  # Test passes
-        # If no error, check for error message in the response
-        assert response.status_code == 200
-        assert b"already exists" in response.content or b"duplicate" in response.content
-
-    def test_missing_previous_steps(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that trying to skip steps is handled correctly."""
-        # Login and set session data
+    def test_invalid_website_url(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+        """Test that invalid website URL is rejected."""
         client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
         session = client.session
         session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
+            "key": team.key,
             "role": "owner",
-            "has_completed_wizard": False
-        }
-        session["wizard_step"] = "component"  # Try to jump to last step
-        session.save()
-
-        with transaction.atomic():
-            # Try to create component without previous steps
-            response = client.post(reverse("teams:onboarding_wizard"), {
-                "name": "Test Component"
-            })
-            assert response.status_code == 302
-            messages = list(get_messages(response.wsgi_request))
-            assert any("The product or project from previous steps no longer exists" in str(m) for m in messages)
-
-    def test_invalid_step(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that invalid steps are handled correctly."""
-        # Login and set session data
-        client.force_login(sample_user)
-        session = client.session
-        session["current_team"] = {
-            "key": sample_team_with_owner_member.team.key,
-            "role": "owner",
-            "has_completed_wizard": False
+            "has_completed_wizard": False,
         }
         session.save()
 
-        # Try to access invalid step
-        response = client.get(reverse("teams:onboarding_wizard") + "?step=invalid")
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Invalid URL Test",
+                "website": "not-a-valid-url",
+            },
+        )
+
+        # Should stay on same page with form errors
         assert response.status_code == 200
-        assert "current_step" in response.context
-        assert response.context["current_step"] == "product"  # Should default to first step
+        assert response.context["form"].errors.get("website") is not None

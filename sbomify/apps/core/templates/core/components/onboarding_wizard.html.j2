@@ -1,144 +1,234 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load widget_tweaks %}
-{% block title %}sbomify Onboarding{% endblock %}
+{% block title %}Set Up Your SBOM Identity - sbomify{% endblock %}
 {% block content %}
     <div class="container-fluid">
         <div class="row">
-            <div class="col-12 col-lg-8 mx-auto">
-                <div class="card">
-                    <div class="card-header border-0 pb-0">
-                        <div class="card-actions float-end">
-                            <a href="{% url 'core:dashboard' %}" class="btn btn-link text-muted">
-                                <i class="align-middle fas fa-times"></i>
-                            </a>
-                        </div>
-                        <h1 class="h3 mb-3">Create Your First Component</h1>
-                    </div>
-                    <div class="card-body">
-                        <!-- Step indicators -->
-                        <div class="wizard-steps mb-4">
-                            <div class="progress wizard-progress">
-                                <div class="progress-bar bg-primary"
-                                     role="progressbar"
-                                     style="width: {{ progress }}%"
-                                     aria-valuenow="{{ progress }}"
-                                     aria-valuemin="0"
-                                     aria-valuemax="100"></div>
+            <div class="col-12 col-lg-7 mx-auto">
+                <div class="card shadow-sm border-0">
+                    {% if current_step == 'setup' %}
+                        <!-- Setup Step -->
+                        <div class="card-header bg-white border-0 pb-0">
+                            <div class="card-actions float-end">
+                                <a href="{% url 'core:dashboard' %}"
+                                   class="btn btn-link text-muted"
+                                   title="Skip for now">
+                                    <i class="align-middle fas fa-times"></i>
+                                </a>
                             </div>
-                            <div class="d-flex justify-content-between">
-                                <span class="step {% if current_step == 'product' %} active {% elif current_step in 'project,component,complete' %} completed {% endif %}">Product</span>
-                                <span class="step {% if current_step == 'project' %} active {% elif current_step in 'component,complete' %} completed {% endif %}">Project</span>
-                                <span class="step {% if current_step == 'component' %} active {% elif current_step == 'complete' %} completed {% endif %}">Component</span>
-                                <span class="step {% if current_step == 'complete' %}active{% endif %}">Complete</span>
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="bg-primary-subtle rounded-3 p-3 me-3">
+                                    <i class="align-middle text-primary fas fa-building fa-lg"></i>
+                                </div>
+                                <div>
+                                    <h1 class="h3 mb-1">Set Up Your SBOM Identity</h1>
+                                    <p class="text-muted mb-0">Get started in under a minute</p>
+                                </div>
                             </div>
                         </div>
-                        {% if current_step != 'complete' %}
+                        <div class="card-body pt-0">
+                            <!-- Value Proposition Callout -->
+                            <div class="bg-light rounded-3 p-3 mb-4 border-start border-4 border-primary">
+                                <p class="mb-2">
+                                    This information identifies you as the <strong>supplier</strong> in your SBOMs
+                                    and enables <strong>NTIA compliance</strong>.
+                                </p>
+                                <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+                                   target="_blank"
+                                   rel="noopener"
+                                   class="text-primary text-decoration-none">
+                                    <i class="fas fa-book-open me-1"></i>
+                                    Learn about SBOM augmentation
+                                    <i class="fas fa-external-link-alt ms-1 small"></i>
+                                </a>
+                            </div>
+                            <!-- Form -->
                             <form method="post"
                                   action="{% url 'teams:onboarding_wizard' %}"
                                   class="needs-validation"
                                   novalidate>
                                 {% csrf_token %}
-                                <div class="wizard-step">
-                                    {% if form.non_field_errors %}
-                                        <div class="alert alert-danger bg-danger-subtle border-0">
-                                            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                                {% if form.non_field_errors %}
+                                    <div class="alert alert-danger bg-danger-subtle border-0 mb-4">
+                                        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                                    </div>
+                                {% endif %}
+                                <!-- Company Name Field -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold"
+                                           for="{{ form.company_name.id_for_label }}">
+                                        {{ form.company_name.label }}
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.company_name }}
+                                    {% if form.company_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.company_name.errors %}{{ error }}{% endfor %}
                                         </div>
                                     {% endif %}
-                                    {% for field in form.visible_fields %}
-                                        <div class="mb-4">
-                                            <label class="form-label text-secondary fw-medium"
-                                                   for="{{ field.id_for_label }}">
-                                                {{ field.label }}
-                                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-                                            </label>
-                                            {% if field.help_text %}
-                                                <div class="bg-light border-start border-4 border-primary p-3 mb-3">
-                                                    <div class="d-flex">
-                                                        <div class="flex-shrink-0">
-                                                            <i class="align-middle text-primary fas fa-info-circle"></i>
-                                                        </div>
-                                                        <div class="flex-grow-1 ms-3">{{ field.help_text }}</div>
-                                                    </div>
-                                                </div>
-                                            {% endif %}
-                                            {{ field }}
-                                            {% if field.errors %}
-                                                <div class="invalid-feedback d-block">
-                                                    {% for error in field.errors %}{{ error }}{% endfor %}
-                                                </div>
-                                            {% endif %}
-                                        </div>
-                                    {% endfor %}
-                                    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+                                    <div class="form-text">Identifies you as the supplier. Appears in your Trust Center.</div>
                                 </div>
-                                <div class="d-flex justify-content-between mt-4">
-                                    {% if current_step != 'product' %}
-                                        <a href="?step={% if current_step == 'component' %}project{% else %}product{% endif %}"
-                                           class="btn btn-lg btn-outline-secondary">Previous</a>
-                                    {% else %}
-                                        <!-- Spacer for flex layout alignment -->
-                                        <div class="flex-spacer"></div>
+                                <!-- Email Field -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.email.errors %}{{ error }}{% endfor %}
+                                        </div>
                                     {% endif %}
-                                    <button type="submit" class="btn btn-lg btn-primary px-4">
-                                        {% if current_step == 'component' %}
-                                            Create
-                                        {% else %}
-                                            Next
-                                        {% endif %}
+                                    <div class="form-text">For security inquiries. Embedded in SBOM metadata.</div>
+                                </div>
+                                <!-- Website Field -->
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold" for="{{ form.website.id_for_label }}">
+                                        {{ form.website.label }}
+                                        <span class="text-muted fw-normal">(optional)</span>
+                                    </label>
+                                    {{ form.website }}
+                                    {% if form.website.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.website.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">Added to SBOM external references.</div>
+                                </div>
+                                <!-- Auto-creation Info -->
+                                <div class="bg-info-subtle rounded-3 p-3 mb-4">
+                                    <div class="d-flex">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-magic text-info"></i>
+                                        </div>
+                                        <div class="flex-grow-1 ms-3">
+                                            <p class="mb-0 text-body">
+                                                We'll automatically create your first <strong>product</strong>,
+                                                <strong>project</strong>, and <strong>SBOM component</strong>
+                                                so you can start uploading right away.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Submit Button -->
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-lg btn-primary">
+                                        Get Started
+                                        <i class="fas fa-arrow-right ms-2"></i>
                                     </button>
                                 </div>
                             </form>
-                        {% else %}
-                            <!-- Success step -->
-                            <div class="wizard-step text-center">
-                                <!-- Success icon -->
-                                <div class="mb-5">
-                                    <div class="bg-success-subtle d-inline-flex p-4 rounded-circle">
-                                        <i class="align-middle text-success large-check-icon fas fa-check"></i>
+                        </div>
+                    {% else %}
+                        <!-- Complete Step -->
+                        <div class="card-body text-center py-5">
+                            <!-- Animated Success Icon -->
+                            <div class="mb-4">
+                                <div class="success-checkmark">
+                                    <div class="check-icon">
+                                        <span class="icon-line line-tip"></span>
+                                        <span class="icon-line line-long"></span>
+                                        <div class="icon-circle"></div>
+                                        <div class="icon-fix"></div>
                                     </div>
                                 </div>
-                                <!-- Title -->
-                                <h4 class="mb-4">All Set! Here's What's Next</h4>
-                                <div class="row justify-content-center">
-                                    <div class="col-md-10">
-                                        <!-- Step 1: Metadata -->
-                                        <div class="card bg-light border-0 hover-shadow-sm mb-4">
-                                            <div class="card-body p-4">
-                                                <div class="d-flex align-items-center mb-3">
-                                                    <div class="bg-primary-subtle rounded-circle p-2 me-3">
-                                                        <i class="align-middle text-primary medium-icon fas fa-file-alt"></i>
-                                                    </div>
-                                                    <h5 class="fw-bold mb-0">1. Complete Your Metadata</h5>
+                            </div>
+                            <h2 class="h3 mb-4">You're All Set!</h2>
+                            <!-- Created Entities Summary -->
+                            <div class="row justify-content-center mb-4">
+                                <div class="col-md-10">
+                                    <p class="text-muted mb-3">We've created everything you need to get started:</p>
+                                    <div class="bg-light rounded-3 p-3 text-start">
+                                        <div class="d-flex align-items-center py-2 border-bottom">
+                                            <i class="fas fa-building text-muted me-3" style="width: 20px;"></i>
+                                            <span class="text-muted me-2">Workspace:</span>
+                                            <strong>{{ company_name }}'s Workspace</strong>
+                                        </div>
+                                        <div class="d-flex align-items-center py-2 border-bottom">
+                                            <i class="fas fa-address-card text-muted me-3" style="width: 20px;"></i>
+                                            <span class="text-muted me-2">Contact Profile:</span>
+                                            <strong>Default profile created</strong>
+                                        </div>
+                                        <div class="d-flex align-items-center py-2 border-bottom">
+                                            <i class="fas fa-cube text-muted me-3" style="width: 20px;"></i>
+                                            <span class="text-muted me-2">Product:</span>
+                                            <strong>{{ company_name }}</strong>
+                                        </div>
+                                        <div class="d-flex align-items-center py-2 border-bottom">
+                                            <i class="fas fa-folder text-muted me-3" style="width: 20px;"></i>
+                                            <span class="text-muted me-2">Project:</span>
+                                            <strong>Main Project</strong>
+                                        </div>
+                                        <div class="d-flex align-items-center py-2">
+                                            <i class="fas fa-puzzle-piece text-muted me-3" style="width: 20px;"></i>
+                                            <span class="text-muted me-2">Component:</span>
+                                            <strong>Main Component</strong>
+                                            <span class="badge bg-primary ms-2">SBOM</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Next Step Card -->
+                            <div class="row justify-content-center mb-4">
+                                <div class="col-md-10">
+                                    <div class="card border-primary border-2 bg-primary-subtle">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex align-items-start text-start">
+                                                <div class="bg-primary rounded-circle p-2 me-3">
+                                                    <i class="fas fa-cloud-upload-alt text-white"></i>
                                                 </div>
-                                                <p class="text-muted mb-0">
-                                                    Start by filling out essential information about your component, including licensing and supplier details. This helps establish the foundation for your SBOMs.
+                                                <div>
+                                                    <h5 class="fw-bold mb-2">Next: Upload Your First SBOM</h5>
+                                                    <p class="text-muted mb-0">Use our GitHub Action or upload manually to start building your SBOM catalog.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Component Types Tip -->
+                            <div class="row justify-content-center mb-4">
+                                <div class="col-md-10">
+                                    <div class="bg-warning-subtle rounded-3 p-3 text-start">
+                                        <div class="d-flex">
+                                            <div class="flex-shrink-0">
+                                                <i class="fas fa-lightbulb text-warning"></i>
+                                            </div>
+                                            <div class="flex-grow-1 ms-3">
+                                                <p class="fw-semibold mb-2">Tip: Components can hold SBOMs or Documents</p>
+                                                <ul class="mb-2 ps-3">
+                                                    <li>
+                                                        <strong>SBOM components:</strong> Software Bill of Materials (CycloneDX, SPDX)
+                                                    </li>
+                                                    <li>
+                                                        <strong>Document components:</strong> SOC 2, ISO 27001, Pen Test Reports, etc.
+                                                    </li>
+                                                </ul>
+                                                <p class="text-muted mb-0 small">
+                                                    Create Document components later for your Trust Center to share compliance artifacts.
                                                 </p>
                                             </div>
                                         </div>
-                                        <!-- Step 2: Upload SBOM -->
-                                        <div class="card bg-light border-0 hover-shadow-sm mb-5">
-                                            <div class="card-body p-4">
-                                                <div class="d-flex align-items-center mb-3">
-                                                    <div class="bg-primary-subtle rounded-circle p-2 me-3">
-                                                        <i class="align-middle text-primary medium-icon fas fa-cloud-upload-alt"></i>
-                                                    </div>
-                                                    <h5 class="fw-bold mb-0">2. Upload Your First SBOM</h5>
-                                                </div>
-                                                <p class="text-muted mb-0">
-                                                    Ready to upload your SBOM? Check out the CI/CD integration instructions in the components page to automate your SBOM generation and upload process.
-                                                </p>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
-                                <a href="{% url 'core:component_details' component_id=component_id %}"
-                                   class="btn btn-lg btn-primary px-4">
-                                    View Component
-                                    <i class="align-middle ms-2 fas fa-arrow-right"></i>
+                            </div>
+                            <!-- Primary CTA -->
+                            <a href="{% url 'core:component_details' component_id=component_id %}"
+                               class="btn btn-lg btn-primary px-5 mb-3">
+                                Go to Component
+                                <i class="fas fa-arrow-right ms-2"></i>
+                            </a>
+                            <!-- Secondary Link -->
+                            <div>
+                                <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+                                   target="_blank"
+                                   rel="noopener"
+                                   class="text-muted text-decoration-none">
+                                    <i class="fas fa-book-open me-1"></i>
+                                    Read the SBOM lifecycle guide
+                                    <i class="fas fa-external-link-alt ms-1 small"></i>
                                 </a>
                             </div>
-                        {% endif %}
-                    </div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -146,53 +236,170 @@
 {% endblock %}
 {% block styles %}
     <style>
-        .wizard-steps .progress {
-            margin-bottom: 1rem;
+        /* Success Checkmark Animation */
+        .success-checkmark {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
         }
 
-        .wizard-progress {
-            height: 3px;
-            background-color: var(--bs-gray-200);
-        }
-
-        .large-check-icon {
-            width: 48px;
-            height: 48px;
-        }
-
-        .medium-icon {
-            width: 24px;
-            height: 24px;
-        }
-
-        .wizard-steps .step {
+        .success-checkmark .check-icon {
+            width: 80px;
+            height: 80px;
             position: relative;
-            color: var(--bs-gray-600);
-            font-weight: 500;
-        }
-
-        .wizard-steps .step.active {
-            color: var(--bs-primary);
-        }
-
-        .wizard-steps .step::before {
-            content: '';
-            position: absolute;
-            top: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 10px;
-            height: 10px;
-            background-color: var(--bs-gray-400);
             border-radius: 50%;
+            box-sizing: content-box;
+            border: 4px solid #28a745;
         }
 
-        .wizard-steps .step.active::before {
-            background-color: var(--bs-primary);
+        .success-checkmark .check-icon::before {
+            top: 3px;
+            left: -2px;
+            width: 30px;
+            transform-origin: 100% 50%;
+            border-radius: 100px 0 0 100px;
         }
 
-        .wizard-steps .step.completed::before {
-            background-color: var(--bs-success);
+        .success-checkmark .check-icon::after {
+            top: 0;
+            left: 30px;
+            width: 60px;
+            transform-origin: 0 50%;
+            border-radius: 0 100px 100px 0;
+            animation: rotate-circle 4.25s ease-in;
+        }
+
+        .success-checkmark .check-icon::before,
+        .success-checkmark .check-icon::after {
+            content: '';
+            height: 100px;
+            position: absolute;
+            background: #fff;
+            transform: rotate(-45deg);
+        }
+
+        .success-checkmark .check-icon .icon-line {
+            height: 5px;
+            background-color: #28a745;
+            display: block;
+            border-radius: 2px;
+            position: absolute;
+            z-index: 10;
+        }
+
+        .success-checkmark .check-icon .icon-line.line-tip {
+            top: 46px;
+            left: 14px;
+            width: 25px;
+            transform: rotate(45deg);
+            animation: icon-line-tip 0.75s;
+        }
+
+        .success-checkmark .check-icon .icon-line.line-long {
+            top: 38px;
+            right: 8px;
+            width: 47px;
+            transform: rotate(-45deg);
+            animation: icon-line-long 0.75s;
+        }
+
+        .success-checkmark .check-icon .icon-circle {
+            top: -4px;
+            left: -4px;
+            z-index: 10;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            position: absolute;
+            box-sizing: content-box;
+            border: 4px solid rgba(40, 167, 69, 0.5);
+        }
+
+        .success-checkmark .check-icon .icon-fix {
+            top: 8px;
+            width: 5px;
+            left: 26px;
+            z-index: 1;
+            height: 85px;
+            position: absolute;
+            transform: rotate(-45deg);
+            background-color: #fff;
+        }
+
+        @keyframes rotate-circle {
+            0% {
+                transform: rotate(-45deg);
+            }
+            5% {
+                transform: rotate(-45deg);
+            }
+            12% {
+                transform: rotate(-405deg);
+            }
+            100% {
+                transform: rotate(-405deg);
+            }
+        }
+
+        @keyframes icon-line-tip {
+            0% {
+                width: 0;
+                left: 1px;
+                top: 19px;
+            }
+            54% {
+                width: 0;
+                left: 1px;
+                top: 19px;
+            }
+            70% {
+                width: 50px;
+                left: -8px;
+                top: 37px;
+            }
+            84% {
+                width: 17px;
+                left: 21px;
+                top: 48px;
+            }
+            100% {
+                width: 25px;
+                left: 14px;
+                top: 46px;
+            }
+        }
+
+        @keyframes icon-line-long {
+            0% {
+                width: 0;
+                right: 46px;
+                top: 54px;
+            }
+            65% {
+                width: 0;
+                right: 46px;
+                top: 54px;
+            }
+            84% {
+                width: 55px;
+                right: 0px;
+                top: 35px;
+            }
+            100% {
+                width: 47px;
+                right: 8px;
+                top: 38px;
+            }
+        }
+
+        /* Form styling */
+        .form-control:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
+        }
+
+        .form-text {
+            font-size: 0.875rem;
         }
     </style>
 {% endblock %}

@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -19,6 +19,7 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from sbomify.apps.billing.models import BillingPlan
@@ -28,11 +29,9 @@ from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.decorators import validate_role_in_current_team
 from sbomify.apps.teams.forms import (
     InviteUserForm,
-    OnboardingComponentForm,
-    OnboardingProductForm,
-    OnboardingProjectForm,
+    OnboardingCompanyForm,
 )
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfile, Invitation, Member, Team
 from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
 
 log = getLogger(__name__)
@@ -376,165 +375,104 @@ def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
 
 @login_required
 def onboarding_wizard(request: HttpRequest) -> HttpResponse:
-    """Handle the onboarding wizard for creating a product, project, and component."""
+    """Single-step onboarding wizard for SBOM identity setup.
 
-    # Get the current step from session or query params, defaulting to 'product'
-    current_step = request.GET.get("step") or request.session.get("wizard_step", "product")
+    Collects company information, creates a default ContactProfile,
+    and auto-creates Product, Project, and Component hierarchy.
+    """
+    # Import utility functions for component metadata
+    from sbomify.apps.sboms.utils import (
+        create_default_component_metadata,
+        populate_component_metadata_native_fields,
+    )
 
-    # Validate step
-    if current_step not in ["product", "project", "component", "complete"]:
-        current_step = "product"
+    # Get current team from session
+    team_key = request.session["current_team"]["key"]
+    team = Team.objects.get(key=team_key)
 
-    # Initialize context with common data
-    context = {
-        "current_step": current_step,
-        "progress": {
-            "product": 0,
-            "project": 33,
-            "component": 66,
-            "complete": 100,
-        }[current_step],
-    }
+    # Check for completion step
+    step = request.GET.get("step")
+    if step == "complete":
+        context = {
+            "current_step": "complete",
+            "component_id": request.session.pop("wizard_component_id", None),
+            "company_name": request.session.pop("wizard_company_name", ""),
+        }
+        return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     if request.method == "POST":
-        if current_step == "product":
-            form = OnboardingProductForm(request.POST)
-            if form.is_valid():
-                try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
+        form = OnboardingCompanyForm(request.POST)
+        if form.is_valid():
+            company_name = form.cleaned_data["company_name"]
 
-                    # Create the product
-                    product = Product.objects.create(name=form.cleaned_data["name"], team=team)
-                    # Store product ID in session
-                    request.session["wizard_product_id"] = product.id
-                    # Move to next step
-                    request.session["wizard_step"] = "project"
-                    request.session.modified = True  # Explicitly mark session as modified
-                    messages.success(request, f"Product '{product.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A product with the name '{form.cleaned_data['name']}' already exists in your team."
+            try:
+                with transaction.atomic():
+                    # 1. Update workspace name
+                    team.name = f"{company_name}'s Workspace"
+
+                    # 2. Create default ContactProfile (company = supplier = vendor)
+                    website_url = form.cleaned_data.get("website")
+                    ContactProfile.objects.create(
+                        team=team,
+                        name="Default",
+                        company=company_name,
+                        supplier_name=company_name,
+                        vendor=company_name,
+                        email=form.cleaned_data.get("email") or request.user.email,
+                        website_urls=[website_url] if website_url else [],
+                        is_default=True,
                     )
-        elif current_step == "project":
-            form = OnboardingProjectForm(request.POST)
-            if form.is_valid():
-                try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
 
-                    # Get the product from the previous step
-                    product_id = request.session.get("wizard_product_id")
-                    if not product_id:
-                        messages.error(request, "The product from the previous step no longer exists.")
-                        request.session["wizard_step"] = "product"
-                        return redirect("teams:onboarding_wizard")
-
-                    product = Product.objects.get(id=product_id)
-
-                    # Create the project
-                    project = Project.objects.create(name=form.cleaned_data["name"], team=team)
-
-                    # Store project ID in session
-                    request.session["wizard_project_id"] = project.id
-                    # Move to next step
-                    request.session["wizard_step"] = "component"
-                    request.session.modified = True  # Explicitly mark session as modified
-                    messages.success(request, f"Project '{project.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A project with the name '{form.cleaned_data['name']}' already exists in your team."
-                    )
-                except Product.DoesNotExist:
-                    messages.error(request, "The product from the previous step no longer exists.")
-                    request.session["wizard_step"] = "product"
-                    return redirect("teams:onboarding_wizard")
-        elif current_step == "component":
-            form = OnboardingComponentForm(request.POST)
-            if form.is_valid():
-                try:
-                    # Get current team from session
-                    team_key = request.session["current_team"]["key"]
-                    team = Team.objects.get(key=team_key)
-
-                    # Get the product and project from previous steps
-                    product_id = request.session.get("wizard_product_id")
-                    project_id = request.session.get("wizard_project_id")
-                    if not product_id or not project_id:
-                        messages.error(request, "The product or project from previous steps no longer exists.")
-                        request.session["wizard_step"] = "product"
-                        return redirect("teams:onboarding_wizard")
-
-                    product = Product.objects.get(id=product_id)
-                    project = Project.objects.get(id=project_id)
-
-                    # Build component metadata using utility function
-                    from sbomify.apps.sboms.utils import (
-                        create_default_component_metadata,
-                        populate_component_metadata_native_fields,
-                    )
+                    # 3. Auto-create hierarchy with SBOM component type
+                    product = Product.objects.create(name=company_name, team=team)
+                    project = Project.objects.create(name="Main Project", team=team)
 
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None
                     )
 
-                    # Create the component
                     component = Component.objects.create(
-                        name=form.cleaned_data["name"],
+                        name="Main Component",
                         team=team,
+                        component_type=Component.ComponentType.SBOM,
                         metadata=component_metadata,
                     )
 
                     # Populate native fields with default metadata
                     populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
 
-                    # Link the project to the product
+                    # Link hierarchy: product -> project -> component
                     product.projects.add(project)
-
-                    # Link the component to the project
                     project.components.add(component)
 
-                    # Mark wizard as completed
+                    # 4. Mark wizard as completed
                     team.has_completed_wizard = True
                     team.save()
 
-                    # Update session to reflect completed wizard
+                    # 5. Update session
                     request.session["current_team"]["has_completed_wizard"] = True
+                    request.session["current_team"]["name"] = team.name
+                    request.session["wizard_component_id"] = component.id
+                    request.session["wizard_company_name"] = company_name
                     request.session.modified = True
 
-                    # Clean up session
-                    request.session["wizard_step"] = "complete"
-                    request.session["wizard_component_id"] = component.id
+                messages.success(request, "Your SBOM identity has been set up!")
+                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
 
-                    messages.success(request, f"Component '{component.name}' created successfully.")
-                    return redirect("teams:onboarding_wizard")
-                except IntegrityError:
-                    messages.warning(
-                        request, f"A component with the name '{form.cleaned_data['name']}' already exists in your team."
-                    )
-                except (Product.DoesNotExist, Project.DoesNotExist):
-                    messages.error(request, "The product or project from previous steps no longer exists.")
-                    request.session["wizard_step"] = "product"
-                    return redirect("teams:onboarding_wizard")
+            except IntegrityError as e:
+                log.warning(f"IntegrityError during onboarding: {e}")
+                messages.warning(
+                    request,
+                    "Some items could not be created because they already exist. "
+                    "Please contact support if this issue persists.",
+                )
     else:
-        # GET request - show the appropriate form
-        if current_step == "product":
-            form = OnboardingProductForm()
-        elif current_step == "project":
-            form = OnboardingProjectForm()
-        elif current_step == "component":
-            form = OnboardingComponentForm()
-        elif current_step == "complete":
-            # Show completion page
-            context["component_id"] = request.session.get("wizard_component_id")
-            # Clean up session
-            for key in ["wizard_step", "wizard_product_id", "wizard_project_id", "wizard_component_id"]:
-                request.session.pop(key, None)
-            return render(request, "core/components/onboarding_wizard.html.j2", context)
+        # GET request - show the form with pre-filled email
+        initial = {"email": request.user.email}
+        form = OnboardingCompanyForm(initial=initial)
 
-    context["form"] = form
+    context = {
+        "form": form,
+        "current_step": "setup",
+    }
     return render(request, "core/components/onboarding_wizard.html.j2", context)
