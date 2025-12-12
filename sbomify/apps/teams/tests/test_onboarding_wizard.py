@@ -7,6 +7,7 @@ from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import ContactProfile
 
@@ -484,3 +485,96 @@ class TestOnboardingWizard:
         # Should stay on same page with form errors
         assert response.status_code == 200
         assert response.context["form"].errors.get("website") is not None
+
+    def test_community_plan_creates_public_entities(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that community plan wizard creates public entities."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        # Ensure team is on community plan (cannot be private)
+        team.billing_plan = "community"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Community Corp",
+                "contact_name": "Community Tester",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify all entities are public for community plan
+        product = Product.objects.filter(team=team, name="Community Corp").first()
+        assert product is not None
+        assert product.is_public is True
+
+        project = Project.objects.filter(team=team, name="Main Project").first()
+        assert project is not None
+        assert project.is_public is True
+
+        component = Component.objects.filter(team=team, name="Main Component").first()
+        assert component is not None
+        assert component.is_public is True
+
+    def test_business_plan_creates_private_entities(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ) -> None:
+        """Test that business plan wizard creates private entities."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        # Create and set up business plan for the team
+        BillingPlan.objects.get_or_create(
+            key="business",
+            defaults={
+                "name": "Business",
+                "max_products": 10,
+                "max_projects": 10,
+                "max_components": 10,
+            },
+        )
+        team.billing_plan = "business"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Business Corp",
+                "contact_name": "Business Tester",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify all entities are private for business plan
+        product = Product.objects.filter(team=team, name="Business Corp").first()
+        assert product is not None
+        assert product.is_public is False
+
+        project = Project.objects.filter(team=team, name="Main Project").first()
+        assert project is not None
+        assert project.is_public is False
+
+        component = Component.objects.filter(team=team, name="Main Component").first()
+        assert component is not None
+        assert component.is_public is False

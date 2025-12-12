@@ -467,8 +467,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         )
 
                         # 2. Auto-create hierarchy with SBOM component type
-                        product = Product.objects.create(name=company_name, team=team)
-                        project = Project.objects.create(name="Main Project", team=team)
+                        # Set visibility based on billing plan: community plans must be public
+                        is_public = not team.can_be_private()
+                        product = Product.objects.create(name=company_name, team=team, is_public=is_public)
+                        project = Project.objects.create(name="Main Project", team=team, is_public=is_public)
 
                         component_metadata = create_default_component_metadata(
                             user=request.user, team_id=team.id, custom_metadata=None
@@ -479,6 +481,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                             team=team,
                             component_type=Component.ComponentType.SBOM,
                             metadata=component_metadata,
+                            is_public=is_public,
                         )
 
                         # Populate native fields with default metadata
