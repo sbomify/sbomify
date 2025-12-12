@@ -2755,7 +2755,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit", specifier = ">=1.8.6,<2" },
-    { name = "datamodel-code-generator", extras = ["http"], specifier = ">=0.43.1" },
+    { name = "datamodel-code-generator", extras = ["http"], specifier = ">=0.43.1,<0.44" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<7" },
     { name = "djlint", specifier = ">=1.36.4,<2" },

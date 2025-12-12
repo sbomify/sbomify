@@ -36,6 +36,9 @@ from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, up
 
 log = getLogger(__name__)
 
+# Default URL for SBOM augmentation documentation (can be overridden in settings)
+DEFAULT_SBOM_AUGMENTATION_URL = "https://sbomify.com/features/generate-collaborate-analyze/"
+
 
 def _render_workspace_availability_page(
     request: HttpRequest,
@@ -391,9 +394,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
     team = Team.objects.get(key=team_key)
 
     # URL for SBOM augmentation deep-dive (configurable via settings)
-    sbom_augmentation_url = getattr(
-        settings, "SBOM_AUGMENTATION_URL", "https://sbomify.com/features/generate-collaborate-analyze/"
-    )
+    sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
 
     # Check for completion step
     step = request.GET.get("step")
@@ -411,21 +412,21 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            # Check for existing entities before attempting creation (more reliable than catching IntegrityError)
-            conflicts = []
+            # Check for existing entities before attempting creation (short-circuit on first conflict)
+            conflict_msg = None
             if ContactProfile.objects.filter(team=team, is_default=True).exists():
-                conflicts.append("A default contact profile already exists.")
-            if Product.objects.filter(team=team, name=company_name).exists():
-                conflicts.append(f"A product named '{company_name}' already exists.")
-            if Project.objects.filter(team=team, name="Main Project").exists():
-                conflicts.append("A project named 'Main Project' already exists.")
-            if Component.objects.filter(team=team, name="Main Component").exists():
-                conflicts.append("A component named 'Main Component' already exists.")
+                conflict_msg = "A default contact profile already exists."
+            elif Product.objects.filter(team=team, name=company_name).exists():
+                conflict_msg = f"A product named '{company_name}' already exists."
+            elif Project.objects.filter(team=team, name="Main Project").exists():
+                conflict_msg = "A project named 'Main Project' already exists."
+            elif Component.objects.filter(team=team, name="Main Component").exists():
+                conflict_msg = "A component named 'Main Component' already exists."
 
-            if conflicts:
+            if conflict_msg:
                 messages.warning(
                     request,
-                    f"{conflicts[0]} Try using a different company name, or check your existing products and projects.",
+                    f"{conflict_msg} Try using a different company name, or check your existing products and projects.",
                 )
             else:
                 try:
@@ -433,8 +434,7 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         # 1. Create default ContactProfile (company = supplier = vendor)
                         website_url = form.cleaned_data.get("website")
                         # Empty string or None falls back to user email
-                        email_value = form.cleaned_data.get("email")
-                        contact_email = email_value if email_value else request.user.email
+                        contact_email = form.cleaned_data.get("email") or request.user.email
                         ContactProfile.objects.create(
                             team=team,
                             name="Default",
