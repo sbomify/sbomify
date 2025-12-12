@@ -41,6 +41,7 @@ from sbomify.apps.teams.models import (
 )
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
+    refresh_current_team_session,
     switch_active_workspace,
     update_user_teams_session,
 )  # noqa: F401
@@ -495,9 +496,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         # 4. Update session - refresh user_teams to pick up new team state
                         update_user_teams_session(request, request.user)
 
-                        # Also update current_team with the latest data
-                        request.session["current_team"]["has_completed_wizard"] = True
-                        request.session["current_team"]["name"] = team.name
+                        # Refresh current_team with all the latest team data (including id)
+                        refresh_current_team_session(request, team)
+
+                        # Store wizard completion data for the success page
                         request.session["wizard_component_id"] = component.id
                         request.session["wizard_company_name"] = company_name
                         request.session.modified = True
