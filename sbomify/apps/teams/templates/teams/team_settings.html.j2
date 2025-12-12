@@ -64,6 +64,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="visibility_action" value="update">
                             <input type="hidden" name="is_public" value="false">
+                            <input type="hidden" name="active_tab" id="visibility-active-tab" value="">
                             <div class="form-check form-switch">
                                 <input id="workspace-visibility-toggle"
                                        class="form-check-input"
@@ -369,9 +370,20 @@
                     if (availableTabs.includes(targetTab)) {
                         history.pushState(null, null, `#${targetTab}`);
                         activateTab(targetTab);
+                        updateActiveTabInputs(targetTab);
                     }
                 });
             });
+
+            // Function to update all active_tab hidden inputs
+            function updateActiveTabInputs(tabName) {
+                document.querySelectorAll('input[name="active_tab"]').forEach(input => {
+                    input.value = tabName;
+                });
+            }
+
+            // Initialize active_tab inputs with current tab
+            updateActiveTabInputs(getCurrentTab());
 
             // Note: Copy button functionality is handled by clipboard-global.ts
             // which auto-initializes buttons with data-public-url attribute

@@ -21,6 +21,29 @@ from sbomify.apps.core.utils import number_to_random_token
 
 from .models import Invitation, Member, Team, get_team_name_for_user
 
+# Valid tab names for team settings - used for input validation
+ALLOWED_TABS = frozenset({"members", "billing", "branding", "general", "domains", "api"})
+
+
+def redirect_to_team_settings(team_key: str, active_tab: str | None = None):
+    """
+    Return a redirect response to team settings, optionally with a validated tab anchor.
+
+    Args:
+        team_key: The workspace key to redirect to
+        active_tab: Optional tab name to append as URL fragment (validated against ALLOWED_TABS)
+
+    Returns:
+        HttpResponseRedirect to the team settings page
+    """
+    from django.shortcuts import redirect
+    from django.urls import reverse
+
+    base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
+    if active_tab and active_tab in ALLOWED_TABS:
+        return redirect(f"{base_url}#{active_tab}")
+    return redirect(base_url)
+
 
 def normalize_host(host: str) -> str:
     """
@@ -525,7 +548,7 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
         logger.warning(f"Failed to invalidate cache for domain {domain}: {e}")
 
 
-def remove_member_safely(request, membership: Member):
+def remove_member_safely(request, membership: Member, active_tab: str | None = None):
     """
     Safely remove a member from a team, handling last-workspace edge cases.
 
@@ -573,7 +596,7 @@ def remove_member_safely(request, membership: Member):
                         "A new personal workspace has been created for them."
                     ),
                 )
-                return redirect("teams:team_settings", team_key=removed_team_key)
+                return redirect_to_team_settings(removed_team_key, active_tab)
 
         # If new team creation FAILED (e.g. pending invites exist), handle gracefully
         else:
@@ -596,7 +619,7 @@ def remove_member_safely(request, membership: Member):
                     request,
                     f"Member {removed_user.username} removed from workspace.",
                 )
-                return redirect("teams:team_settings", team_key=removed_team_key)
+                return redirect_to_team_settings(removed_team_key, active_tab)
 
     # Normal removal (user has other workspaces)
     if is_self_removal:
@@ -615,4 +638,4 @@ def remove_member_safely(request, membership: Member):
         return redirect("teams:teams_dashboard")
     else:
         messages.info(request, f"Member {removed_user.username} removed from workspace.")
-        return redirect("teams:team_settings", team_key=removed_team_key)
+        return redirect_to_team_settings(removed_team_key, active_tab)
