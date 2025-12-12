@@ -2,8 +2,10 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import render
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.cache import never_cache
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.apis import get_team
@@ -52,8 +54,16 @@ PLAN_LIMITS = {
 }
 
 
+@method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner", "admin"]
+
+    def _redirect_with_tab(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        """Redirect to team settings, preserving the active tab if provided."""
+        from sbomify.apps.teams.utils import redirect_to_team_settings
+
+        active_tab = request.POST.get("active_tab", "")
+        return redirect_to_team_settings(team_key, active_tab if active_tab else None)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         status_code, team = get_team(request, team_key)
@@ -113,7 +123,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return self._delete_invitation(request, team_key)
 
         messages.error(request, "Invalid request method")
-        return redirect("teams:team_settings", team_key=team_key)
+        return self._redirect_with_tab(request, team_key)
 
     def _delete_member(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import remove_member_safely
@@ -121,14 +131,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         member_id = form.cleaned_data["member_id"]
         try:
             membership = Member.objects.get(pk=member_id, team__key=team_key)
         except Member.DoesNotExist:
             messages.error(request, "Member not found")
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         if membership.role == "owner":
             # Check if actor is an admin trying to remove an owner
@@ -138,7 +148,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     request,
                     "Admins cannot remove workspace owners.",
                 )
-                return redirect("teams:team_settings", team_key=team_key)
+                return self._redirect_with_tab(request, team_key)
 
             owners_count = Member.objects.filter(team=membership.team, role="owner").count()
             if owners_count <= 1:
@@ -146,39 +156,40 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     request,
                     "Cannot delete the only owner of the workspace. Please assign another owner first.",
                 )
-                return redirect("teams:team_settings", team_key=team_key)
+                return self._redirect_with_tab(request, team_key)
 
-        return remove_member_safely(request, membership)
+        active_tab = request.POST.get("active_tab", "")
+        return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
         form = DeleteInvitationForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         try:
             invitation = Invitation.objects.get(pk=form.cleaned_data["invitation_id"], team__key=team_key)
         except Invitation.DoesNotExist:
             messages.error(request, "Invitation not found")
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         invitation_email = invitation.email
         invitation.delete()
         messages.info(request, f"Invitation for {invitation_email} deleted")
 
-        return redirect("teams:team_settings", team_key=team_key)
+        return self._redirect_with_tab(request, team_key)
 
     def _update_visibility(self, request: HttpRequest, team_key: str) -> HttpResponse:
         try:
             team = Team.objects.get(key=team_key)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         membership = Member.objects.filter(user=request.user, team=team).first()
         if not membership or membership.role != "owner":
             messages.error(request, "Only workspace owners can change visibility")
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         visibility_values = request.POST.getlist("is_public")
         desired_visibility = self._parse_checkbox_value(visibility_values, default=team.is_public)
@@ -186,7 +197,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         can_set_private = team.can_be_private()
         if desired_visibility is False and not can_set_private:
             messages.error(request, "Disabling the Trust Center is available on Business or Enterprise plans.")
-            return redirect("teams:team_settings", team_key=team_key)
+            return self._redirect_with_tab(request, team_key)
 
         team.is_public = desired_visibility
         team.save()
@@ -194,7 +205,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Trust center is now {'public' if team.is_public else 'private'}.")
-        return redirect("teams:team_settings", team_key=team_key)
+        return self._redirect_with_tab(request, team_key)
 
     @staticmethod
     def _parse_checkbox_value(values: list[str], default: bool) -> bool:

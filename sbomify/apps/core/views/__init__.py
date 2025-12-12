@@ -23,6 +23,7 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -71,6 +72,7 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     return render(request, "account/login.html.j2")
 
 
+@never_cache
 @login_required
 def user_settings(request: HttpRequest) -> HttpResponse:
     from django.utils import timezone

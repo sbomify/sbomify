@@ -32,7 +32,11 @@ from sbomify.apps.teams.forms import (
     OnboardingCompanyForm,
 )
 from sbomify.apps.teams.models import ContactProfile, Invitation, Member, Team, format_workspace_name
-from sbomify.apps.teams.utils import get_user_teams, switch_active_workspace, update_user_teams_session  # noqa: F401
+from sbomify.apps.teams.utils import (
+    redirect_to_team_settings,
+    switch_active_workspace,
+    update_user_teams_session,
+)  # noqa: F401
 
 log = getLogger(__name__)
 
@@ -229,7 +233,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
             messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
 
-            return redirect("teams:team_details", team_key=team_key)
+            return redirect_to_team_settings(team_key, "members")
 
         # If form has errors, fall through to render the form with errors
         context["invite_user_form"] = invite_user_form
@@ -344,7 +348,7 @@ def delete_invite(request: HttpRequest, invitation_id: int):
     messages.add_message(request, messages.INFO, f"Invitation for {invitation.email} deleted")
     invitation.delete()
 
-    return redirect("teams:team_details", team_key=invitation.team.key)
+    return redirect_to_team_settings(invitation.team.key, "members")
 
 
 @login_required
