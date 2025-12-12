@@ -16,9 +16,11 @@ from django.views.decorators.http import require_http_methods
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.utils import refresh_current_team_session, update_user_teams_session
 from sbomify.logging import getLogger
 
 from . import billing_processing
+from .config import is_billing_enabled
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
 from .stripe_client import StripeClient, StripeError
@@ -440,6 +442,153 @@ def checkout_success(request):
 def checkout_cancel(request):
     """Handle cancelled checkout."""
     return render(request, "billing/checkout_cancel.html.j2")
+
+
+@login_required
+def initial_plan_selection(request: HttpRequest) -> HttpResponse:
+    """
+    Display initial plan selection for new users.
+
+    This is shown immediately after signup, before the onboarding wizard.
+    Unlike select_plan, this has no downgrade checks since it's for fresh signups.
+    """
+    current_team = request.session.get("current_team", {})
+    team_key = current_team.get("key")
+
+    if not team_key:
+        messages.error(request, "No workspace found. Please contact support.")
+        return redirect("core:dashboard")
+
+    team = get_object_or_404(Team, key=team_key)
+
+    # Check if user is team owner
+    if not team.members.filter(member__user=request.user, member__role="owner").exists():
+        messages.error(request, "Only workspace owners can select a plan.")
+        return redirect("core:dashboard")
+
+    # If plan already selected, redirect to wizard or dashboard
+    if team.has_selected_plan:
+        if not team.has_completed_wizard:
+            return redirect("teams:onboarding_wizard")
+        return redirect("core:dashboard")
+
+    if request.method == "POST":
+        plan_key = request.POST.get("plan")
+        billing_period = request.POST.get("billing_period", "monthly")
+
+        try:
+            plan = BillingPlan.objects.get(key=plan_key)
+        except BillingPlan.DoesNotExist:
+            messages.error(request, "Invalid plan selected.")
+            return redirect("billing:initial_plan_selection")
+
+        if plan.key == "community":
+            # Set up community plan
+            team.billing_plan = plan.key
+            team.billing_plan_limits = {
+                "max_products": plan.max_products,
+                "max_projects": plan.max_projects,
+                "max_components": plan.max_components,
+                "subscription_status": "active",
+                "last_updated": timezone.now().isoformat(),
+            }
+            team.has_selected_plan = True
+            team.save()
+
+            # Update session
+            update_user_teams_session(request, request.user)
+            refresh_current_team_session(request, team)
+
+            messages.success(request, f"Welcome to sbomify! You're on the {plan.name} plan.")
+            return redirect("teams:onboarding_wizard")
+
+        elif plan.key == "enterprise":
+            # Redirect to enterprise contact form
+            return redirect("billing:enterprise_contact")
+
+        elif plan.key == "business":
+            # Set up business trial with Stripe if billing is enabled
+            if is_billing_enabled():
+                try:
+                    business_plan = BillingPlan.objects.get(key="business")
+                    customer = stripe_client.create_customer(
+                        email=request.user.email, name=team.name, metadata={"team_key": team.key}
+                    )
+                    subscription = stripe_client.create_subscription(
+                        customer_id=customer.id,
+                        price_id=(
+                            business_plan.stripe_price_monthly_id
+                            if billing_period == "monthly"
+                            else business_plan.stripe_price_annual_id
+                        ),
+                        trial_days=settings.TRIAL_PERIOD_DAYS,
+                        metadata={"team_key": team.key, "plan_key": "business"},
+                    )
+                    team.billing_plan = "business"
+                    team.billing_plan_limits = {
+                        "max_products": business_plan.max_products,
+                        "max_projects": business_plan.max_projects,
+                        "max_components": business_plan.max_components,
+                        "stripe_customer_id": customer.id,
+                        "stripe_subscription_id": subscription.id,
+                        "subscription_status": "trialing",
+                        "is_trial": True,
+                        "trial_end": subscription.trial_end,
+                        "billing_period": billing_period,
+                        "last_updated": timezone.now().isoformat(),
+                    }
+                    team.has_selected_plan = True
+                    team.save()
+
+                    # Update session
+                    update_user_teams_session(request, request.user)
+                    refresh_current_team_session(request, team)
+
+                    messages.success(
+                        request,
+                        f"Welcome to sbomify! Your {settings.TRIAL_PERIOD_DAYS}-day Business trial has started.",
+                    )
+                    return redirect("teams:onboarding_wizard")
+
+                except Exception as e:
+                    logger.error(f"Failed to create trial subscription for team {team.key}: {str(e)}")
+                    messages.error(
+                        request,
+                        "There was an issue setting up your trial. Please try again or select a different plan.",
+                    )
+                    return redirect("billing:initial_plan_selection")
+            else:
+                # Billing disabled - set up business plan without Stripe
+                team.billing_plan = "business"
+                team.billing_plan_limits = {
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+                team.has_selected_plan = True
+                team.save()
+
+                # Update session
+                update_user_teams_session(request, request.user)
+                refresh_current_team_session(request, team)
+
+                messages.success(request, f"Welcome to sbomify! You're on the {plan.name} plan.")
+                return redirect("teams:onboarding_wizard")
+
+    # GET request - render the plan selection page
+    plans = BillingPlan.objects.all().order_by("key")
+
+    return render(
+        request,
+        "billing/initial_plan_selection.html.j2",
+        {
+            "plans": plans,
+            "team": team,
+            "trial_days": getattr(settings, "TRIAL_PERIOD_DAYS", 14),
+        },
+    )
 
 
 @csrf_exempt

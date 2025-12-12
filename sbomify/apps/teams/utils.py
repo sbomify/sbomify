@@ -14,7 +14,7 @@ from django.shortcuts import redirect
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
+from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
@@ -129,6 +129,7 @@ def get_user_teams(user) -> dict:
             "role": membership.role,
             "is_default_team": membership.is_default_team,
             "has_completed_wizard": membership.team.has_completed_wizard,
+            "has_selected_plan": membership.team.has_selected_plan,
             "billing_plan": membership.team.billing_plan,
             "branding_info": membership.team.branding_info,
             "is_public": membership.team.is_public,
@@ -174,6 +175,7 @@ def refresh_current_team_session(request, team: Team) -> None:
         "role": current_team.get("role"),
         "is_default_team": current_team.get("is_default_team"),
         "has_completed_wizard": team.has_completed_wizard,
+        "has_selected_plan": team.has_selected_plan,
         "billing_plan": team.billing_plan,
         "branding_info": team.branding_info,
         "is_public": team.is_public,
@@ -204,6 +206,7 @@ def switch_active_workspace(request, team: Team, role: str | None = None) -> Non
             "role": effective_role or existing_entry.get("role"),
             "is_default_team": is_default_team or existing_entry.get("is_default_team"),
             "has_completed_wizard": team.has_completed_wizard,
+            "has_selected_plan": team.has_selected_plan,
             "billing_plan": team.billing_plan,
             "branding_info": team.branding_info,
             "is_public": team.is_public,
@@ -218,6 +221,7 @@ def switch_active_workspace(request, team: Team, role: str | None = None) -> Non
             "role": role,
             "is_default_team": None,
             "has_completed_wizard": team.has_completed_wizard,
+            "has_selected_plan": team.has_selected_plan,
             "billing_plan": team.billing_plan,
             "branding_info": team.branding_info,
             "is_public": team.is_public,
@@ -342,21 +346,16 @@ def create_user_team_and_subscription(user) -> Team | None:
         logger.warning(f"Created team {team.key} for user {user.username} without billing setup (no email)")
         return team
 
-    # Create team
+    # Create team without billing plan - user will select plan explicitly
     team_name = get_team_name_for_user(user)
     with transaction.atomic():
         team = Team.objects.create(name=team_name)
         team.key = number_to_random_token(team.pk)
+        # has_selected_plan defaults to False, billing_plan defaults to None
         team.save()
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
-    logger.info(f"Created team {team.key} ({team.name}) for user {user.username}")
-
-    # Set up billing plan
-    if is_billing_enabled():
-        _setup_trial_subscription(user, team)
-    else:
-        _setup_community_plan(team)
+    logger.info(f"Created team {team.key} ({team.name}) for user {user.username} - pending plan selection")
 
     return team
 

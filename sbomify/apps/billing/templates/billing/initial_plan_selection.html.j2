@@ -1,0 +1,223 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% load static %}
+{% block title %}Choose Your Plan - sbomify{% endblock %}
+{% block content %}
+    <div class="container-fluid py-4">
+        <div class="row justify-content-center">
+            <div class="col-12 col-xl-10">
+                <!-- Header Section -->
+                <div class="text-center mb-5" x-data="{ billingPeriod: 'monthly' }">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle mb-4"
+                         style="width: 80px;
+                                height: 80px">
+                        <i class="fas fa-rocket text-primary fa-2x"></i>
+                    </div>
+                    <h1 class="h2 fw-bold mb-3">Welcome to sbomify!</h1>
+                    <p class="text-body-secondary mb-4 lead">
+                        Choose the plan that's right for you. Start with a {{ trial_days }}-day free trial on Business.
+                    </p>
+                    <!-- Billing Period Toggle -->
+                    <div class="d-inline-flex align-items-center gap-3 bg-light rounded-pill px-4 py-2 mb-4">
+                        <span class="toggle-label"
+                              :class="{ 'fw-bold text-dark': billingPeriod === 'monthly', 'text-body-secondary': billingPeriod !== 'monthly' }">Monthly</span>
+                        <label class="toggle-switch position-relative"
+                               style="width: 52px;
+                                      height: 28px">
+                            <input type="checkbox"
+                                   class="visually-hidden"
+                                   :checked="billingPeriod === 'annual'"
+                                   @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'">
+                            <span class="toggle-slider position-absolute top-0 start-0 w-100 h-100 rounded-pill"
+                                  :class="billingPeriod === 'annual' ? 'bg-primary' : 'bg-secondary'"
+                                  style="cursor: pointer;
+                                         transition: background-color 0.3s ease">
+                                <span class="toggle-knob position-absolute bg-white rounded-circle"
+                                      style="width: 22px;
+                                             height: 22px;
+                                             top: 3px;
+                                             transition: left 0.3s ease"
+                                      :style="billingPeriod === 'annual' ? 'left: 27px' : 'left: 3px'"></span>
+                            </span>
+                        </label>
+                        <span class="toggle-label"
+                              :class="{ 'fw-bold text-dark': billingPeriod === 'annual', 'text-body-secondary': billingPeriod !== 'annual' }">
+                            Annual
+                            <span class="badge bg-success ms-1">Save 20%</span>
+                        </span>
+                    </div>
+                    <!-- Plan Cards Grid -->
+                    <div class="row g-4 justify-content-center">
+                        {% for plan in plans %}
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <form method="post"
+                                      action="{% url 'billing:initial_plan_selection' %}"
+                                      class="h-100">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="plan" value="{{ plan.key }}">
+                                    <input type="hidden" name="billing_period" :value="billingPeriod">
+                                    <div class="card h-100 plan-card {% if plan.key == 'business' %}plan-card-featured{% endif %} {% if plan.key == 'enterprise' %}plan-card-enterprise{% endif %}">
+                                        {% if plan.key == 'business' %}
+                                            <div class="plan-badge">
+                                                <i class="fas fa-star me-1"></i>
+                                                Most Popular
+                                            </div>
+                                        {% endif %}
+                                        <div class="card-body d-flex flex-column p-4">
+                                            <!-- Plan Name -->
+                                            <h3 class="h4 fw-bold mb-3">{{ plan.name }}</h3>
+                                            <!-- Price -->
+                                            <div class="mb-4">
+                                                {% if plan.key == 'community' %}
+                                                    <div class="d-flex align-items-baseline">
+                                                        <span class="display-5 fw-bold">$0</span>
+                                                        <span class="text-body-secondary ms-2">/forever</span>
+                                                    </div>
+                                                    <p class="text-body-secondary small mb-0">Free for individuals & open source</p>
+                                                {% elif plan.key == 'business' %}
+                                                    <div class="d-flex align-items-baseline">
+                                                        <span class="display-5 fw-bold"
+                                                              x-text="billingPeriod === 'monthly' ? '$199' : '$159'">$199</span>
+                                                        <span class="text-body-secondary ms-2">/month</span>
+                                                    </div>
+                                                    <p class="text-body-secondary small mb-0">
+                                                        <span x-show="billingPeriod === 'annual'" x-cloak>
+                                                            <span class="text-decoration-line-through">$199/mo</span>
+                                                            <span class="text-success fw-medium">Save $480/year</span>
+                                                        </span>
+                                                        <span x-show="billingPeriod === 'monthly'">Billed monthly • {{ trial_days }}-day free trial</span>
+                                                    </p>
+                                                {% elif plan.key == 'enterprise' %}
+                                                    <div class="d-flex align-items-baseline">
+                                                        <span class="display-5 fw-bold">Custom</span>
+                                                    </div>
+                                                    <p class="text-body-secondary small mb-0">Tailored to your organization</p>
+                                                {% endif %}
+                                            </div>
+                                            <!-- Description -->
+                                            <p class="text-body-secondary mb-4">{{ plan.description }}</p>
+                                            <!-- Features List -->
+                                            <ul class="list-unstyled flex-grow-1 mb-4">
+                                                {% if plan.key == 'community' %}
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Unlimited SBOMs, products, projects</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>1 user (owner only)</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Public data only</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Weekly vulnerability scans</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>API access</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Community support</span>
+                                                    </li>
+                                                {% elif plan.key == 'business' %}
+                                                    <li class="d-flex align-items-start mb-2 text-body-secondary fst-italic">
+                                                        <span>Everything in Community, plus:</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Up to 5 team members</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Private components & projects</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>NTIA Minimum Elements check</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Advanced vulnerability scanning</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Priority support</span>
+                                                    </li>
+                                                {% elif plan.key == 'enterprise' %}
+                                                    <li class="d-flex align-items-start mb-2 text-body-secondary fst-italic">
+                                                        <span>Everything in Business, plus:</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Unlimited users</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Custom Dependency Track servers</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Dedicated support & SLA</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Custom integrations</span>
+                                                    </li>
+                                                    <li class="d-flex align-items-start mb-2">
+                                                        <i class="fas fa-check text-success me-2 mt-1"></i>
+                                                        <span>Advanced security features</span>
+                                                    </li>
+                                                {% endif %}
+                                            </ul>
+                                            <!-- CTA Button -->
+                                            <button type="submit"
+                                                    class="btn btn-lg w-100 {% if plan.key == 'business' %}btn-primary{% elif plan.key == 'enterprise' %}btn-outline-dark{% else %}btn-outline-primary{% endif %}">
+                                                {% if plan.key == 'community' %}
+                                                    Get Started Free
+                                                {% elif plan.key == 'business' %}
+                                                    Start Free Trial
+                                                {% elif plan.key == 'enterprise' %}
+                                                    Contact Sales
+                                                {% endif %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <!-- Trust Indicators -->
+                    <div class="mt-5 pt-4 border-top">
+                        <div class="row justify-content-center text-center">
+                            <div class="col-auto">
+                                <div class="d-flex align-items-center gap-2 text-body-secondary">
+                                    <i class="fas fa-lock"></i>
+                                    <span class="small">Secure by design</span>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="d-flex align-items-center gap-2 text-body-secondary">
+                                    <i class="fas fa-shield-alt"></i>
+                                    <span class="small">SOC 2 compliant</span>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="d-flex align-items-center gap-2 text-body-secondary">
+                                    <i class="fas fa-credit-card"></i>
+                                    <span class="small">No credit card required for trial</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block styles %}
+    <link href="{% static 'css/components/initial-plan-selection.css' %}"
+          rel="stylesheet">
+{% endblock %}

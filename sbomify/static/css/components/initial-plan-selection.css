@@ -1,0 +1,163 @@
+/*!
+ * Initial Plan Selection Styles
+ * Modern UI for new user plan selection flow
+ */
+
+/* Plan Card Base Styles */
+.plan-card {
+    border: 2px solid var(--border-color, #e5e7eb);
+    border-radius: var(--radius-xl, 0.75rem);
+    transition: all var(--transition-normal, 0.2s ease);
+    position: relative;
+    overflow: visible;
+}
+
+.plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+    border-color: var(--brand-primary, #3b7ddd);
+}
+
+/* Featured Plan (Business) */
+.plan-card-featured {
+    border-color: var(--brand-primary, #3b7ddd);
+    box-shadow: 0 0 0 1px var(--brand-primary, #3b7ddd);
+}
+
+.plan-card-featured:hover {
+    box-shadow: var(--shadow-xl, 0 10px 15px -3px rgba(0, 0, 0, 0.1)),
+                0 0 0 1px var(--brand-primary, #3b7ddd);
+}
+
+/* Enterprise Plan */
+.plan-card-enterprise {
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    border-color: #a78bfa;
+}
+
+.plan-card-enterprise:hover {
+    border-color: #8b5cf6;
+}
+
+/* Plan Badge */
+.plan-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--brand-primary, #3b7ddd);
+    color: white;
+    padding: 0.375rem 1rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+/* Price Display */
+.display-5 {
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    display: inline-block;
+}
+
+.toggle-slider {
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-knob {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Feature List */
+.plan-card .list-unstyled li {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+}
+
+/* CTA Buttons */
+.plan-card .btn-lg {
+    padding: 0.875rem 1.5rem;
+    font-weight: 600;
+    border-radius: var(--radius-lg, 0.5rem);
+    transition: all var(--transition-normal, 0.2s ease);
+}
+
+.plan-card .btn-primary {
+    background: var(--brand-primary, #3b7ddd);
+    border-color: var(--brand-primary, #3b7ddd);
+}
+
+.plan-card .btn-primary:hover {
+    background: #2f64b1;
+    border-color: #2f64b1;
+    transform: translateY(-1px);
+}
+
+.plan-card .btn-outline-primary:hover,
+.plan-card .btn-outline-dark:hover {
+    transform: translateY(-1px);
+}
+
+/* Trust Indicators */
+.border-top {
+    border-color: var(--border-color, #e5e7eb) !important;
+}
+
+/* Alpine.js cloak */
+[x-cloak] {
+    display: none !important;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 991.98px) {
+    .plan-card-featured {
+        order: -1; /* Show Business plan first on mobile */
+    }
+}
+
+@media (max-width: 767.98px) {
+    .display-5 {
+        font-size: 2rem;
+    }
+
+    .plan-badge {
+        font-size: 0.6875rem;
+        padding: 0.25rem 0.75rem;
+    }
+
+    .toggle-label .badge {
+        display: none;
+    }
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .plan-card,
+    .plan-card .btn-lg,
+    .toggle-slider,
+    .toggle-knob {
+        transition: none;
+    }
+
+    .plan-card:hover {
+        transform: none;
+    }
+}
+
+/* Focus States */
+.plan-card:focus-within {
+    outline: 2px solid var(--brand-primary, #3b7ddd);
+    outline-offset: 2px;
+}
+
+.toggle-switch input:focus + .toggle-slider {
+    outline: 2px solid var(--brand-primary, #3b7ddd);
+    outline-offset: 2px;
+}
+
