@@ -1,0 +1,103 @@
+{% load static %}
+{% load widget_tweaks %}
+{# Store team name as JSON in data attribute for safe Alpine.js initialization #}
+<div class="standard-card">
+    <div id="team-general-content"
+         class="card settings-card shadow-md"
+         data-team-name="{{ team.name }}"
+         x-data="teamGeneral($el.dataset.teamName)">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="card-title mb-0">General Settings</h4>
+            <div class="d-flex align-items-center gap-2">
+                <button x-show="hasUnsavedChanges()"
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @click="$dispatch('refreshTeamGeneral')">
+                    <i class="fas fa-undo me-2"></i> Cancel
+                </button>
+                <button type="submit"
+                        form="team-general-form"
+                        class="btn btn-sm btn-success"
+                        :disabled="!hasUnsavedChanges()">
+                    <i class="fas fa-save me-2"></i>
+                    Save Changes
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <p class="subtitle mb-4">Manage your workspace's basic information.</p>
+            <form id="team-general-form"
+                  method="post"
+                  hx-post="{% url 'teams:team_general' team.key %}"
+                  hx-swap="none">
+                {% csrf_token %}
+                <div class="section-card mb-4">
+                    <div class="section-header">
+                        <h3 class="section-title">Workspace Name</h3>
+                        <p class="section-description">The name displayed across the platform for this workspace.</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="workspace-name" class="form-label">Name</label>
+                                    <input type="text"
+                                           id="workspace-name"
+                                           name="name"
+                                           class="form-control"
+                                           x-model="localName"
+                                           placeholder="Enter workspace name"
+                                           maxlength="255"
+                                           required>
+                                    <small class="form-text text-muted">Maximum 255 characters</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <div class="section-header">
+                        <h3 class="section-title">Workspace Information</h3>
+                        <p class="section-description">Read-only information about this workspace.</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <label class="form-label text-muted mb-1">Workspace Key</label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <code class="bg-light px-2 py-1 rounded">{{ team.key }}</code>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary copy-btn"
+                                                data-copy-value="{{ team.key }}"
+                                                title="Copy workspace key">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <label class="form-label text-muted mb-1">Created</label>
+                                    <div>{{ team.created_at|date:"F j, Y" }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('teamGeneral', (initialName) => ({
+        originalName: initialName,
+        localName: initialName,
+
+        hasUnsavedChanges() {
+            return this.localName !== this.originalName;
+        }
+    }));
+});
+</script>

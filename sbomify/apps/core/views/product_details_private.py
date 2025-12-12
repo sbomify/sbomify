@@ -9,6 +9,14 @@ from sbomify.apps.core.errors import error_response
 
 
 class ProductDetailsPrivateView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        # On custom domains, serve public content instead
+        if getattr(request, "is_custom_domain", False):
+            from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView
+
+            return ProductDetailsPublicView.as_view()(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         status_code, product = get_product(request, product_id)
         if status_code != 200:

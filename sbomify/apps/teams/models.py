@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 
 from django.apps import apps
@@ -8,6 +9,25 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
+
+
+def format_workspace_name(name: str) -> str:
+    """
+    Format a workspace name from a given name/company.
+
+    This function centralizes workspace naming to support future i18n.
+    The possessive format (name's Workspace) may need locale-specific
+    handling for languages that don't use apostrophe-s for possession.
+
+    Args:
+        name: The name to use (company name, user's first name, etc.)
+
+    Returns:
+        A formatted workspace name string
+    """
+    # TODO: Before launching in non-English markets, use django.utils.translation.gettext and
+    # consider locale-specific possessive patterns
+    return f"{name}'s Workspace"
 
 
 def get_team_name_for_user(user) -> str:
@@ -24,7 +44,7 @@ def get_team_name_for_user(user) -> str:
         A human-friendly team name string
     """
     if user.first_name:
-        return f"{user.first_name}'s Workspace"
+        return format_workspace_name(user.first_name)
 
     if hasattr(user, "username") and user.username:
         # Extract clean name from email-based usernames
@@ -47,7 +67,7 @@ def get_team_name_for_user(user) -> str:
         else:
             name = username
 
-        return f"{name}'s Workspace"
+        return format_workspace_name(name)
 
     return "My Workspace"
 
@@ -92,7 +112,7 @@ class Team(models.Model):
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
     is_public = models.BooleanField(
-        default=True, help_text="Controls whether the workspace trust center is publicly accessible."
+        default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )
     billing_plan = models.CharField(max_length=30, null=True, choices=Plan.choices)
     billing_plan_limits = models.JSONField(null=True)  # As enterprise plan can have varying limits
@@ -130,6 +150,25 @@ class Team(models.Model):
             return trimmed[: -len(workspace_suffix)].rstrip(" -–—_:")
 
         return trimmed
+
+    @property
+    def public_url(self) -> str | None:
+        """
+        Return the public URL for this workspace's Trust Center.
+
+        Returns:
+            URL string if workspace is public and has a key, None otherwise.
+
+        Usage:
+            In templates: {{ team.public_url }}
+            In views: team.public_url
+        """
+        if not self.key or not self.is_public:
+            return None
+
+        from django.urls import reverse
+
+        return reverse("core:workspace_public", kwargs={"workspace_key": self.key})
 
     def can_be_private(self) -> bool:
         """
@@ -169,7 +208,28 @@ class Team(models.Model):
                 fields.add("is_public")
                 kwargs["update_fields"] = list(fields)
 
+        # Track custom_domain changes for cache invalidation
+        old_custom_domain = None
+        if not is_new:
+            try:
+                old_instance = Team.objects.only("custom_domain").get(pk=self.pk)
+                old_custom_domain = old_instance.custom_domain
+            except Team.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
+
+        # Invalidate cache if custom_domain changed
+        new_custom_domain = self.custom_domain
+        if old_custom_domain != new_custom_domain:
+            from sbomify.apps.teams.utils import invalidate_custom_domain_cache
+
+            # Invalidate both old and new domains
+            if old_custom_domain:
+                invalidate_custom_domain_cache(old_custom_domain)
+            if new_custom_domain:
+                invalidate_custom_domain_cache(new_custom_domain)
+
         if not is_new or self.key is not None:
             return
 
@@ -200,8 +260,12 @@ class Invitation(models.Model):
     class Meta:
         db_table = apps.get_app_config("teams").label + "_invitations"
         unique_together = ("team", "email")
+        indexes = [
+            models.Index(fields=["email"]),
+        ]
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)

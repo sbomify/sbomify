@@ -9,6 +9,14 @@ from sbomify.apps.core.errors import error_response
 
 
 class ProjectDetailsPrivateView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        # On custom domains, serve public content instead
+        if getattr(request, "is_custom_domain", False):
+            from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView
+
+            return ProjectDetailsPublicView.as_view()(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, project_id: str) -> HttpResponse:
         status_code, project = get_project(request, project_id)
         if status_code != 200:

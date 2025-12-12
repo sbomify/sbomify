@@ -81,13 +81,14 @@
                 <!-- AdminKit-style Layout -->
                 <div class="wrapper">
                     <!-- Sidebar -->
-                    {% cache 300 'sidebar' request.user.id request.session.current_team.id request.resolver_match.url_name %}
+                    {% cache 300 'sidebar' request.user.id request.session.current_team.id request.session.user_teams_version request.resolver_match.url_name %}
                     {% include "core/components/sidebar.html.j2" %}
                 {% endcache %}
                 <!-- Main content area -->
                 <div class="main">
                     <!-- Top navigation -->
-                    {% cache 300 'header' request.user.id request.session.current_team.id %}
+                    {# Include pending invitations count and teams version in cache key so badge/team updates work #}
+                    {% cache 300 'header_with_teams' request.user.id request.session.current_team.id pending_invitations_count request.session.user_teams_version %}
                     {% include "core/components/topnav.html.j2" %}
                 {% endcache %}
                 <!-- Main content -->

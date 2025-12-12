@@ -4,6 +4,7 @@
 {% load schema_tags %}
 {% load breadcrumb_tags %}
 {% load brand_tags %}
+{% load public_url_tags %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -15,7 +16,7 @@
             <meta name="color-scheme" content="light">
             <!-- SEO Meta Tags -->
             <meta name="description"
-                  content="{% block meta_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+                  content="{% block meta_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta name="keywords"
                   content="{% block meta_keywords %}SBOM, Software Bill of Materials, security, compliance, vulnerability management{% endblock %}">
             <meta name="author"
@@ -42,18 +43,18 @@
             <meta property="og:type" content="website">
             <meta property="og:url" content="{{ request.build_absolute_uri }}">
             <meta property="og:title"
-                  content="{% block og_title %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+                  content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="og:description"
-                  content="{% block og_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+                  content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="og:image"
                   content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
             <!-- Twitter -->
             <meta property="twitter:card" content="summary_large_image">
             <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
             <meta property="twitter:title"
-                  content="{% block twitter_title %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+                  content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="twitter:description"
-                  content="{% block twitter_description %}Software Bill of Materials (SBOM) - {% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}{% endblock %}">
+                  content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="twitter:image"
                   content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
             <!-- Fonts -->
@@ -94,6 +95,12 @@
                 --radius-md: 0.5rem;
                 --radius-lg: 0.75rem;
                 --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+                /* Bootstrap Overrides */
+                --bs-primary: var(--accent-color);
+                --bs-primary-rgb: var(--accent-color-rgb);
+                --bs-link-color: var(--accent-color);
+                --bs-link-hover-color: var(--accent-color-dark);
             }
 
             /* Dark mode support based on brand colors */
@@ -165,6 +172,23 @@
                 justify-content: center;
                 gap: 1rem;
                 text-align: center;
+            }
+
+            .brand-logo-link {
+                display: inline-flex;
+                text-decoration: none;
+                transition: opacity 0.2s ease, transform 0.2s ease;
+            }
+
+            .brand-logo-link:hover {
+                opacity: 0.85;
+                transform: scale(1.02);
+            }
+
+            .brand-logo-link:focus {
+                outline: 2px solid var(--brand-color);
+                outline-offset: 4px;
+                border-radius: var(--radius-sm);
             }
 
             .brand-logo {
@@ -301,13 +325,25 @@
                 font-size: 0.875rem;
             }
 
+            .footer-workspace-section {
+                text-align: center;
+                padding-bottom: 1.5rem;
+                border-bottom: 1px solid #e2e8f0;
+                margin-bottom: 1.5rem;
+            }
+
+            .footer-workspace-name {
+                font-size: 1.125rem;
+                font-weight: 600;
+                color: #0f172a;
+            }
+
             .footer-bottom {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 flex-wrap: wrap;
                 gap: 1rem;
-                padding-top: 1.5rem;
             }
 
             .footer-powered {
@@ -344,7 +380,7 @@
                     grid-template-columns: 1fr;
                     gap: 2rem;
                 }
-                
+
                 .footer-info {
                     flex-direction: column;
                     gap: 2rem;
@@ -381,7 +417,7 @@
                     flex-direction: column;
                     text-align: center;
                 }
-                
+
                 .footer-branding-section {
                     flex-direction: column;
                     align-items: center;
@@ -491,18 +527,39 @@
             <header class="public-header">
                 <div class="public-header-container">
                     <div class="brand-section">
-                        {% if brand.brand_image %}
-                            <img src="{{ brand.brand_image }}"
-                                 alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
-                                 class="brand-logo"
-                                 width="32"
-                                 height="32">
+                        {% workspace_public_url as trust_center_url %}
+                        {% if trust_center_url %}
+                            <a href="{{ trust_center_url }}"
+                               class="brand-logo-link"
+                               title="Trust Center Home">
+                                {% if brand.brand_image %}
+                                    <img src="{{ brand.brand_image }}"
+                                         alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% else %}
+                                    <img src="{% static 'img/sbomify.svg' %}"
+                                         alt="sbomify Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% endif %}
+                            </a>
                         {% else %}
-                            <img src="{% static 'img/sbomify.svg' %}"
-                                 alt="sbomify Logo"
-                                 class="brand-logo"
-                                 width="32"
-                                 height="32">
+                            {% if brand.brand_image %}
+                                <img src="{{ brand.brand_image }}"
+                                     alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% else %}
+                                <img src="{% static 'img/sbomify.svg' %}"
+                                     alt="sbomify Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% endif %}
                         {% endif %}
                     </div>
                     {% block header_content %}{% endblock %}
@@ -521,12 +578,19 @@
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
-                        <div class="footer-bottom">
-                            <div class="footer-powered">
-                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
-                                <span class="footer-separator">•</span>
-                                <span>Software transparency platform</span>
+                        {% block footer_branding %}
+                            <div class="footer-workspace-section">
+                                <div class="footer-workspace-name">
+                                    {% if brand.name %}
+                                        {{ brand.name }}
+                                    {% else %}
+                                        sbomify
+                                    {% endif %}
+                                    Trust Center
+                                </div>
                             </div>
+                        {% endblock %}
+                        <div class="footer-bottom">
                             <div class="footer-meta">
                                 <span>© {% now "Y" %}
                                     {% if brand.name %}
@@ -535,6 +599,9 @@
                                         sbomify
                                     {% endif %}
                                 </span>
+                            </div>
+                            <div class="footer-powered">
+                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
                             </div>
                         </div>
                     </div>

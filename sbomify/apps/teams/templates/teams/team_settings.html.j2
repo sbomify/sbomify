@@ -5,6 +5,7 @@
 {% load static %}
 {% load json_extras %}
 {% load teams %}
+{% load public_url_tags %}
 {% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
@@ -29,32 +30,31 @@
             <div class="card-body">
                 <div class="visibility-wrapper">
                     <div class="copy">
-                        <p class="eyebrow">Workspace trust center</p>
-                        <h3 class="title">Enable or disable your trust center</h3>
-                        <p class="description">Control whether your trust center is accessible to visitors.</p>
+                        <p class="eyebrow">Workspace Trust Center</p>
+                        <h3 class="title">Enable or disable your Trust Center</h3>
+                        <p class="description">Control whether your Trust Center is accessible to visitors.</p>
                         <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
                             <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
                             {{ team.is_public|yesno:'Enabled,Disabled' }}
                         </span>
                         {% if team.is_public %}
-                            {% with public_url=APP_BASE_URL|add:'/public/workspace/'|add:team.key %}
-                                <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                                    <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
-                                    <button type="button"
-                                            class="copy-url-btn visibility-copy-btn"
-                                            title="Copy public URL"
-                                            aria-label="Copy public URL"
-                                            data-public-url="{{ public_url }}">
-                                        <i class="fas fa-copy"></i>
-                                        <span class="copy-text">Copy public URL</span>
-                                    </button>
-                                </div>
-                            {% endwith %}
+                            {% trust_center_absolute_url team as public_url %}
+                            <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                                <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
+                                <button type="button"
+                                        class="copy-url-btn visibility-copy-btn"
+                                        title="Copy public URL"
+                                        aria-label="Copy public URL"
+                                        data-public-url="{{ public_url }}">
+                                    <i class="fas fa-copy"></i>
+                                    <span class="copy-text">Copy public URL</span>
+                                </button>
+                            </div>
                         {% endif %}
                         {% if not is_owner %}
                             <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
                         {% elif not can_set_private %}
-                            <div class="text-muted mt-2 small">Disabling the trust center is available on Business or Enterprise plans.</div>
+                            <div class="text-muted mt-2 small">Disabling the Trust Center is available on Business or Enterprise plans.</div>
                         {% endif %}
                     </div>
                     <div class="control">
@@ -220,6 +220,15 @@
     <!-- Navigation Tabs -->
     <div class="settings-nav mb-4">
         <nav class="nav nav-pills nav-fill settings-tabs">
+            {% if request.session.current_team.role == 'owner' %}
+                <a class="nav-link"
+                   data-bs-toggle="pill"
+                   href="#general"
+                   data-tab="general">
+                    <i class="fas fa-sliders-h me-2"></i>
+                    General
+                </a>
+            {% endif %}
             <a class="nav-link"
                data-bs-toggle="pill"
                href="#members"
@@ -263,6 +272,13 @@
     </div>
     <!-- Tab Content -->
     <div class="tab-content settings-content mt-4">
+        {% if request.session.current_team.role == 'owner' %}
+            <div class="tab-pane fade" id="general">
+                <div class="row">
+                    <div class="col-12">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
+                </div>
+            </div>
+        {% endif %}
         <div class="tab-pane fade" id="members">
             <div class="row g-4 g-lg-5">
                 <div class="col-12">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
@@ -302,6 +318,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Get available tabs
             const availableTabs = ['members', 'branding'];
+            {% if request.session.current_team.role == 'owner' %}availableTabs.unshift('general');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('contact-profiles');
             {% endif %}
@@ -333,7 +350,7 @@
             // Function to get the current tab from URL hash
             function getCurrentTab() {
                 const hash = window.location.hash.substring(1); // Remove the #
-                return availableTabs.includes(hash) ? hash : 'members'; // Default to members
+                return availableTabs.includes(hash) ? hash : availableTabs[0]; // Default to first available tab
             }
 
             // Activate tab based on current URL hash
@@ -356,26 +373,8 @@
                 });
             });
 
-            // Visibility copy button (avoid inline JS for CSP)
-            const copyBtn = document.querySelector('.visibility-copy-btn');
-            if (copyBtn) {
-                copyBtn.addEventListener('click', async function(event) {
-                    event.preventDefault();
-                    const url = this.dataset.publicUrl;
-                    if (!url) return;
-
-                    try {
-                        await navigator.clipboard.writeText(url);
-                        if (window.showSuccess) {
-                            window.showSuccess('Public URL copied to clipboard');
-                        }
-                    } catch (err) {
-                        if (window.showError) {
-                            window.showError('Failed to copy URL to clipboard');
-                        }
-                    }
-                });
-            }
+            // Note: Copy button functionality is handled by clipboard-global.ts
+            // which auto-initializes buttons with data-public-url attribute
         });
     </script>
 {% endblock %}

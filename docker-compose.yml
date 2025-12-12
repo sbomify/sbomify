@@ -92,12 +92,15 @@ services:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
     restart: ${CADDY_RESTART_POLICY:-always}
     ports:
-      - "${HTTP_PORT:-8000}:80"
+      - "${BIND_IP:-127.0.0.1}:${HTTP_PORT:-8000}:80"
+      - "${BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
     depends_on:
       - sbomify-backend
     healthcheck:

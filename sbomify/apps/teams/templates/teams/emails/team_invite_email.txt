@@ -9,7 +9,7 @@ Hello!
 has invited you to join their workspace {{ team.name }} as {{ invitation.role }}.
 Please use the link below (copy and open it in browser) to accept the invitation.
 
-{{ base_url }}{% url 'teams:accept_invite' invitation.id %}
+{{ base_url }}{% url 'teams:accept_invite' invitation.token %}
 
 Thanks,
 

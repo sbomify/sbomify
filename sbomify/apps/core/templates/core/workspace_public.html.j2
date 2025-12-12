@@ -1,9 +1,10 @@
 {% extends "core/public_base.html.j2" %}
 {% load static %}
 {% load django_vite %}
-{% block title %}{{ workspace.name }}'s Trust Center{% endblock %}
+{% load public_url_tags %}
+{% block title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block meta_description %}
-    Public trust center for {{ workspace.name }}: browse public products, releases, and organization-wide compliance artifacts.
+    {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
 {% endblock %}
 {% block extra_css %}
     <style>
@@ -67,7 +68,7 @@
     right: -30%;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--brand-color-rgb), 0.08) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -78,7 +79,7 @@
     left: -20%;
     width: 500px;
     height: 500px;
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.06) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(var(--accent-color-rgb), 0.06) 0%, transparent 70%);
     pointer-events: none;
   }
 
@@ -92,24 +93,24 @@
     letter-spacing: 0.2em;
     font-size: 12px;
     font-weight: 700;
-    color: #6366f1;
+    color: var(--brand-color);
     margin-bottom: 12px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+    background: linear-gradient(135deg, rgba(var(--brand-color-rgb), 0.1) 0%, rgba(var(--accent-color-rgb), 0.1) 100%);
     padding: 8px 16px;
     border-radius: 8px;
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(var(--brand-color-rgb), 0.2);
   }
 
   .workspace-hero .eyebrow::before {
     content: '';
     width: 6px;
     height: 6px;
-    background: #6366f1;
+    background: var(--brand-color);
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 8px rgba(var(--brand-color-rgb), 0.6);
   }
 
   .workspace-hero h1 {
@@ -155,7 +156,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%);
+    background: linear-gradient(90deg, var(--brand-color) 0%, var(--accent-color) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
@@ -172,20 +173,20 @@
   }
 
   .meta-chip i {
-    color: #6366f1;
+    color: var(--brand-color);
     font-size: 1.25rem;
     width: 32px;
     height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+    background: linear-gradient(135deg, rgba(var(--brand-color-rgb), 0.1) 0%, rgba(var(--accent-color-rgb), 0.1) 100%);
     border-radius: 8px;
   }
 
   .meta-chip-number {
     font-weight: 700;
-    color: #6366f1;
+    color: var(--brand-color);
     font-size: 1.125rem;
   }
 
@@ -206,13 +207,13 @@
   .section-title {
     color: #0f172a !important;
     font-weight: 700;
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     margin-bottom: 8px;
     letter-spacing: -0.01em;
   }
 
   .section-title i {
-    color: #6366f1;
+    color: var(--brand-color);
   }
 
   .section-subtitle {
@@ -243,7 +244,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%);
+    background: linear-gradient(90deg, var(--brand-color) 0%, var(--accent-color) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
@@ -312,8 +313,8 @@
   }
 
   .badge-workspace {
-    background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
-    color: #6366f1;
+    background: linear-gradient(135deg, rgba(var(--brand-color-rgb), 0.1) 0%, rgba(var(--brand-color-rgb), 0.2) 100%);
+    color: var(--brand-color);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -325,7 +326,7 @@
 
   /* Buttons */
   .btn-view {
-    background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-dark) 100%);
     border: none;
     color: #ffffff;
     padding: 10px 20px;
@@ -333,14 +334,14 @@
     font-weight: 600;
     font-size: 0.875rem;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px -2px rgba(var(--accent-color-rgb), 0.3);
     text-decoration: none;
     display: inline-block;
   }
 
   .btn-view:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 20px -4px rgba(var(--accent-color-rgb), 0.4);
     color: #ffffff;
   }
 
@@ -415,7 +416,7 @@
                 <div class="workspace-hero">
                     <div class="workspace-hero-content">
                         <div class="eyebrow">TRUST CENTER</div>
-                        <h1>{{ workspace.name }}'s Trust Center</h1>
+                        <h1>{{ workspace.name }} Trust Center</h1>
                         <p class="workspace-hero-description">
                             Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts.
                         </p>
@@ -458,7 +459,7 @@
                                                 <i class="fas fa-tag me-1"></i>Product
                                             </span>
                                             <a class="btn-view"
-                                               href="{% url 'core:product_details_public' product.id %}">
+                                               href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
                                                 View Details <i class="fas fa-arrow-right ms-1"></i>
                                             </a>
                                         </div>
@@ -499,7 +500,7 @@
                                                 Organization-Wide
                                             </span>
                                             <a class="btn-view"
-                                               href="{% url 'core:component_details_public' component.id %}">
+                                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
                                                 View Details <i class="fas fa-arrow-right ms-1"></i>
                                             </a>
                                         </div>

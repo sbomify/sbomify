@@ -59,6 +59,7 @@ class InvitationSchema(BaseModel):
     """
 
     id: int
+    token: str
     email: str
     role: str
     created_at: datetime
