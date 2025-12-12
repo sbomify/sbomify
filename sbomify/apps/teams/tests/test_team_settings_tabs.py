@@ -204,11 +204,12 @@ class TestRedirectToTeamSettingsHelper:
         response = redirect_to_team_settings(team_key, "")
         assert "#" not in response.url
 
+    @pytest.mark.django_db
     def test_invalid_team_key_redirects_to_dashboard(self):
-        """Invalid team_key format should redirect to teams dashboard."""
+        """Invalid team_key that doesn't exist should redirect to teams dashboard."""
         invalid_keys = ["abc123", "short", "../../etc/passwd", "<script>", ""]
         for invalid_key in invalid_keys:
             response = redirect_to_team_settings(invalid_key, "members")
-            # Should redirect to teams dashboard when team_key is invalid
+            # Should redirect to teams dashboard when team_key doesn't exist
             assert response.url == "/workspaces/"
 

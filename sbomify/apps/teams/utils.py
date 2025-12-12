@@ -30,25 +30,19 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None):
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
     Args:
-        team_key: The workspace key to redirect to (must be a valid token format)
+        team_key: The workspace key to redirect
         active_tab: Optional tab name to append as URL fragment (validated against ALLOWED_TABS)
 
     Returns:
         HttpResponseRedirect to the team settings page
-
-    Security: Validates team_key format to prevent open redirect vulnerabilities.
     """
     from urllib.parse import quote
 
     from django.shortcuts import redirect
     from django.urls import reverse
 
-    from sbomify.apps.core.utils import token_to_number
-
-    # Validate team_key format to prevent open redirect vulnerabilities
-    try:
-        token_to_number(team_key)
-    except ValueError:
+    # Validate team_key exists to prevent open redirect vulnerabilities
+    if not Team.objects.filter(key=team_key).exists():
         return redirect("teams:teams_dashboard")
 
     base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
