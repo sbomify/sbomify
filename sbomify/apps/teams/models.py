@@ -111,6 +111,7 @@ class Team(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
+    has_selected_plan = models.BooleanField(default=False)
     is_public = models.BooleanField(
         default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )

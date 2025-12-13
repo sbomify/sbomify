@@ -32,6 +32,10 @@ class DashboardView(ValidateWorkspaceMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         current_team = request.session.get("current_team", {})
 
+        # Redirect to plan selection if user hasn't selected a plan yet
+        if not current_team.get("has_selected_plan", True):
+            return redirect("billing:initial_plan_selection")
+
         # Redirect to onboarding wizard if user hasn't completed it yet
         if not current_team.get("has_completed_wizard", True):
             return redirect("teams:onboarding_wizard")
