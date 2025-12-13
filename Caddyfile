@@ -24,8 +24,8 @@
 	}
 
 	# On-demand TLS configuration
+	# Ask Django backend which domains are allowed to get certificates
 	on_demand_tls {
-		# Query internal endpoint for allowed domains
 		ask http://sbomify-backend:8000/api/v1/internal/domains
 	}
 }
@@ -59,7 +59,7 @@
 	}
 	handle @internal_api {
 		@allowed_internal {
-			remote_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
 		}
 		handle @allowed_internal {
 			reverse_proxy sbomify-backend:8000 {
@@ -68,7 +68,9 @@
 				header_down -Server
 			}
 		}
-		respond "Forbidden" 403
+		handle {
+			respond "Forbidden" 403
+		}
 	}
 
 	# Main reverse proxy to Django backend
@@ -103,9 +105,9 @@
 	encode gzip zstd
 }
 
-# Main domain with automatic HTTPS
-{$APP_DOMAIN:localhost} {
-	# Enable on-demand TLS for custom domains
+# HTTPS - All domains (main app + custom domains)
+# Uses on-demand TLS - asks backend which domains are allowed
+https:// {
 	tls {
 		on_demand
 	}
@@ -118,24 +120,18 @@
 
 	# Security headers
 	header {
-		# Prevent clickjacking
 		X-Frame-Options "SAMEORIGIN"
-		# Prevent MIME type sniffing
 		X-Content-Type-Options "nosniff"
-		# Enable XSS protection
 		X-XSS-Protection "1; mode=block"
-		# Referrer policy
 		Referrer-Policy "strict-origin-when-cross-origin"
-		# HSTS (only if using HTTPS)
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		# Don't expose server info
 		-Server
 	}
 
 	import proxy_common
 }
 
-# HTTP fallback (redirect to HTTPS in production)
+# HTTP (port 80) - Handle both Cloudflare Tunnel and direct traffic
 :80 {
 	log {
 		output stdout
@@ -143,14 +139,27 @@
 		level {$LOG_LEVEL:INFO}
 	}
 
-	# Behind HTTPS proxy (Cloudflare, etc.): serve without redirect
-	@already_https {
-		header X-Forwarded-Proto https
+	# Health check endpoints - serve directly without HTTPS redirect
+	# This prevents TLS certificate requests for internal health checks
+	@health path /health
+	handle @health {
+		log_skip
+		respond "OK" 200
 	}
 
-	# Serve behind HTTPS proxy directly
-	handle @already_https {
-		# Add security headers for proxied HTTPS
+	@django_health path /UuPha8mu/*
+	handle @django_health {
+		log_skip
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+		}
+	}
+
+	# Serve directly if already behind HTTPS proxy (Cloudflare Tunnel)
+	@behind_https_proxy header X-Forwarded-Proto https
+	handle @behind_https_proxy {
 		header {
 			X-Frame-Options "SAMEORIGIN"
 			X-Content-Type-Options "nosniff"
@@ -159,14 +168,49 @@
 			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 			-Server
 		}
-		import proxy_common
+
+		# Internal API endpoints - block external access
+		@internal_api path /api/v1/internal/*
+		handle @internal_api {
+			@allowed_internal client_ip 172.16.0.0/12 10.0.0.0/8 192.168.0.0/16
+			handle @allowed_internal {
+				reverse_proxy sbomify-backend:8000 {
+					header_up X-Real-IP {remote_host}
+					header_up Host {host}
+					header_down -Server
+				}
+			}
+			handle {
+				respond "Forbidden" 403
+			}
+		}
+
+		# Main reverse proxy to Django backend
+		reverse_proxy sbomify-backend:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+			header_down -Server
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 30s
+				read_timeout 0
+				write_timeout 0
+			}
+			health_uri /UuPha8mu/
+			health_interval 10s
+			health_timeout 3s
+			health_status 200
+			lb_try_duration 60s
+			lb_try_interval 100ms
+			fail_duration 30s
+			max_fails 5
+		}
+
+		encode gzip zstd
 	}
 
-	# Production: redirect HTTP to HTTPS (only if not already HTTPS)
-	@http {
-		protocol http
-	}
-	handle @http {
+	# Otherwise redirect to HTTPS (for public domain names)
+	handle {
 		redir https://{host}{uri} permanent
 	}
 }

@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import os
 from pathlib import Path
-from urllib.parse import urlparse
 
 import dj_database_url
 import sentry_sdk
@@ -62,69 +61,12 @@ else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 # Local development mode (separate from DEBUG for security)
-# Only use wildcard ALLOWED_HOSTS when explicitly in local dev environment
 LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
-if LOCAL_DEV:
-    # In local development, allow any hostname for flexibility (local IPs, custom /etc/hosts, etc.)
-    ALLOWED_HOSTS = ["*"]
-else:
-    # Production/deployed environments - only allow explicitly configured hostnames
-    # Docker internal hostname for container-to-container communication
-    ALLOWED_HOSTS = ["sbomify-backend"]
-
-    # Append APP_BASE_URL hostname if defined (required for production)
-    if os.environ.get("APP_BASE_URL", False):
-        ALLOWED_HOSTS.append(urlparse(os.environ.get("APP_BASE_URL")).netloc)
-
-
-class DynamicAllowedHosts(list):
-    """
-    A custom list for ALLOWED_HOSTS that lazily checks the database for custom domains.
-
-    This avoids setting ALLOWED_HOSTS=['*'] while supporting dynamic CNAMEs.
-    Domain validation happens at the API level when domains are added.
-    """
-
-    def __contains__(self, host: str) -> bool:
-        """Check if host is allowed (either static or a validated custom domain)."""
-        # 1. Check static ALLOWED_HOSTS first (fast path)
-        if super().__contains__(host):
-            return True
-
-        # 2. Check DB for custom domains with caching
-        # Import inside method to avoid AppRegistryNotReady error during startup
-        try:
-            from django.core.cache import cache
-
-            from sbomify.apps.teams.models import Team
-            from sbomify.apps.teams.utils import normalize_host
-
-            # Normalize host (strip port and lowercase)
-            # Note: DB never contains ports (validated/sanitized at API level),
-            # but Django may pass Host header with port included
-            hostname = normalize_host(host)
-
-            # Try cache first (5 minute TTL)
-            cache_key = f"custom_domain:{hostname}"
-            cached_result = cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-
-            # Cache miss - query DB
-            exists = Team.objects.filter(custom_domain=hostname).exists()
-
-            # Cache the result for 5 minutes
-            cache.set(cache_key, exists, 300)
-
-            return exists
-        except Exception:
-            # During migrations or early startup, DB/cache might not be ready
-            return False
-
-
-# Replace the static list with our dynamic wrapper
-ALLOWED_HOSTS = DynamicAllowedHosts(ALLOWED_HOSTS)
+# ALLOWED_HOSTS set to wildcard - actual host validation done in middleware
+# Django 4.0+ requires ALLOWED_HOSTS to be a plain list/tuple
+# Use DynamicHostValidationMiddleware for dynamic custom domain validation
+ALLOWED_HOSTS = ["*"]
 
 AUTH_USER_MODEL = "core.User"
 
@@ -171,6 +113,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
+    "sbomify.apps.core.middleware.CustomDomainContextMiddleware",
     "sbomify.apps.core.middleware.RealIPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -226,6 +170,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "sbomify.apps.core.context_processors.version_context",
+                "sbomify.apps.core.context_processors.pending_invitations_context",
             ],
         },
     },

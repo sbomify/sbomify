@@ -4,7 +4,6 @@ Dramatiq tasks for onboarding email processing.
 
 import dramatiq
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from sbomify.logging import getLogger
@@ -21,48 +20,31 @@ logger = getLogger(__name__)
     wait=wait_exponential(multiplier=1, min=1, max=10),
     stop=stop_after_attempt(3),
 )
-def send_welcome_email_task(user_id: int) -> dict:
+def send_welcome_email_task(user_id: int) -> None:
     """
     Send welcome email to a user.
 
     Args:
         user_id: ID of the user to send welcome email to
-
-    Returns:
-        Dictionary with task results
     """
     try:
         user = User.objects.get(id=user_id)
-        logger.info(f"[TASK_send_welcome_email] Starting for user {user.email}")
+    except User.DoesNotExist:
+        # User doesn't exist - log warning and exit without retry
+        logger.warning(f"[TASK_send_welcome_email] User with ID {user_id} not found, skipping")
+        return
 
+    logger.info(f"[TASK_send_welcome_email] Starting for user {user.email}")
+
+    try:
         success = OnboardingEmailService.send_welcome_email(user)
-
-        result = {
-            "user_id": user_id,
-            "user_email": user.email,
-            "success": success,
-            "timestamp": timezone.now().isoformat(),
-        }
 
         if success:
             logger.info(f"[TASK_send_welcome_email] Successfully sent welcome email to {user.email}")
         else:
             logger.warning(f"[TASK_send_welcome_email] Failed to send welcome email to {user.email}")
-
-        return result
-
-    except User.DoesNotExist:
-        error_msg = f"[TASK_send_welcome_email] User with ID {user_id} not found"
-        logger.error(error_msg)
-        return {
-            "user_id": user_id,
-            "success": False,
-            "error": "User not found",
-            "timestamp": timezone.now().isoformat(),
-        }
     except Exception as e:
-        error_msg = f"[TASK_send_welcome_email] Error for user {user_id}: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[TASK_send_welcome_email] Error for user {user_id}: {str(e)}")
         raise  # Re-raise for retry mechanism
 
 
@@ -72,7 +54,7 @@ def send_welcome_email_task(user_id: int) -> dict:
     wait=wait_exponential(multiplier=1, min=1, max=10),
     stop=stop_after_attempt(3),
 )
-def send_first_component_sbom_email_task(user_id: int) -> dict:
+def send_first_component_sbom_email_task(user_id: int) -> None:
     """
     Send first component & SBOM reminder email to a user.
 
@@ -82,55 +64,35 @@ def send_first_component_sbom_email_task(user_id: int) -> dict:
 
     Args:
         user_id: ID of the user to send reminder email to
-
-    Returns:
-        Dictionary with task results
     """
     try:
         user = User.objects.get(id=user_id)
-        logger.info(f"[TASK_send_first_component_sbom] Starting for user {user.email}")
+    except User.DoesNotExist:
+        # User doesn't exist - log warning and exit without retry
+        logger.warning(f"[TASK_send_first_component_sbom] User with ID {user_id} not found, skipping")
+        return
 
+    logger.info(f"[TASK_send_first_component_sbom] Starting for user {user.email}")
+
+    try:
         success = OnboardingEmailService.send_first_component_sbom_email(user)
-
-        result = {
-            "user_id": user_id,
-            "user_email": user.email,
-            "success": success,
-            "timestamp": timezone.now().isoformat(),
-        }
 
         if success:
             logger.info(f"[TASK_send_first_component_sbom] Successfully sent reminder to {user.email}")
         else:
             logger.info(f"[TASK_send_first_component_sbom] Reminder not needed for {user.email}")
-
-        return result
-
-    except User.DoesNotExist:
-        error_msg = f"[TASK_send_first_component_sbom] User with ID {user_id} not found"
-        logger.error(error_msg)
-        return {
-            "user_id": user_id,
-            "success": False,
-            "error": "User not found",
-            "timestamp": timezone.now().isoformat(),
-        }
     except Exception as e:
-        error_msg = f"[TASK_send_first_component_sbom] Error for user {user_id}: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[TASK_send_first_component_sbom] Error for user {user_id}: {str(e)}")
         raise  # Re-raise for retry mechanism
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
-def process_first_component_sbom_reminders_batch_task() -> dict:
+def process_first_component_sbom_reminders_batch_task() -> None:
     """
     Process first component & SBOM reminders for all eligible users.
 
     This task finds all users who should receive either component creation
     or SBOM upload reminders and queues individual email tasks for them.
-
-    Returns:
-        Dictionary with batch processing results
     """
     try:
         logger.info("[TASK_process_first_component_sbom_reminders] Starting batch processing")
@@ -152,51 +114,33 @@ def process_first_component_sbom_reminders_batch_task() -> dict:
                     f"[TASK_process_first_component_sbom_reminders] Failed to queue task for user {user.id}: {e}"
                 )
 
-        result = {
-            "eligible_users": user_count,
-            "queued_tasks": queued_tasks,
-            "timestamp": timezone.now().isoformat(),
-        }
-
         logger.info(
             f"[TASK_process_first_component_sbom_reminders] Completed: {queued_tasks}/{user_count} tasks queued"
         )
-        return result
 
     except Exception as e:
-        error_msg = f"[TASK_process_first_component_sbom_reminders] Batch processing error: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[TASK_process_first_component_sbom_reminders] Batch processing error: {str(e)}")
         raise
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=600000)
-def process_all_onboarding_reminders_task() -> dict:
+def process_all_onboarding_reminders_task() -> None:
     """
     Process all onboarding reminder emails.
 
     This is a master task that processes first component/SBOM reminders.
     It's designed to be run on a schedule (e.g., daily via cron or periodic task).
-
-    Returns:
-        Dictionary with overall processing results
     """
     try:
         logger.info("[TASK_process_all_onboarding_reminders] Starting comprehensive onboarding email processing")
 
         # Process first component/SBOM reminders
-        reminder_result = process_first_component_sbom_reminders_batch_task.send_with_options(args=(), delay=0)
-
-        result = {
-            "first_component_sbom_task_id": reminder_result.message_id,
-            "timestamp": timezone.now().isoformat(),
-        }
+        process_first_component_sbom_reminders_batch_task.send_with_options(args=(), delay=0)
 
         logger.info("[TASK_process_all_onboarding_reminders] Successfully queued all reminder processing tasks")
-        return result
 
     except Exception as e:
-        error_msg = f"[TASK_process_all_onboarding_reminders] Error: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"[TASK_process_all_onboarding_reminders] Error: {str(e)}")
         raise
 
 

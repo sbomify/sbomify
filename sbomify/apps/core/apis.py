@@ -1,4 +1,5 @@
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
@@ -80,6 +81,14 @@ from .schemas import (
 )
 
 log = getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ProductLookupResult:
+    """Container for a product API payload plus the ORM instance."""
+
+    payload: dict
+    instance: Product
 
 
 def _serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
@@ -183,6 +192,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
     base_response = {
         "id": item.id,
         "name": item.name,
+        "slug": item.slug,
         "team_id": str(item.team_id),
         "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
@@ -197,6 +207,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             {
                 "id": project.id,
                 "name": project.name,
+                "slug": project.slug,
                 "is_public": project.is_public,
             }
             for project in item.projects.all()
@@ -231,6 +242,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             {
                 "id": component.id,
                 "name": component.name,
+                "slug": component.slug,
                 "is_public": component.is_public,
                 "is_global": getattr(component, "is_global", False),
                 "component_type": component.component_type,
@@ -441,6 +453,36 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
+def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[int, ProductLookupResult | dict]:
+    """Internal helper that returns both serialized payload and ORM instance."""
+    try:
+        # Use select_related to avoid N+1 query when team is accessed later
+        product = (
+            Product.objects.prefetch_related("projects", "identifiers", "links")
+            .select_related("team")
+            .get(pk=product_id)
+        )
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # Ensure latest release exists when users access the product
+    _ensure_latest_release_exists(product)
+
+    # For private products, require authentication and team access
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {
+                "detail": "Authentication required for private items",
+                "error_code": ErrorCode.UNAUTHORIZED,
+            }
+
+        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    response_payload = _build_item_response(request, product, "product")
+    return 200, ProductLookupResult(payload=response_payload, instance=product)
+
+
 @router.get(
     "/products/{product_id}",
     response={200: ProductResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
@@ -449,26 +491,11 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
 @decorate_view(optional_token_auth)
 def get_product(request: HttpRequest, product_id: str):
     """Get a specific product by ID."""
-    try:
-        product = Product.objects.prefetch_related("projects", "identifiers", "links").get(pk=product_id)
-    except Product.DoesNotExist:
-        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
 
-    # Ensure latest release exists when users access the product
-    _ensure_latest_release_exists(product)
-
-    # If product is public, allow unauthenticated access
-    if product.is_public:
-        return 200, _build_item_response(request, product, "product")
-
-    # For private products, require authentication and team access
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
-
-    if not verify_item_access(request, product, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    return 200, _build_item_response(request, product, "product")
+    return status, result.payload
 
 
 @router.put(
@@ -2333,9 +2360,11 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
     response = {
         "id": str(release.id),
         "name": release.name,
+        "slug": release.slug,
         "description": release.description or "",
         "product_id": str(release.product.id),
         "product_name": release.product.name,
+        "product_slug": release.product.slug,
         "is_latest": release.is_latest,
         "is_prerelease": release.is_prerelease,
         "is_public": release.product.is_public,  # Inherit from product
@@ -2346,6 +2375,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
         "product": {
             "id": str(release.product.id),
             "name": release.product.name,
+            "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
         # Keep backward compatibility fields
@@ -3631,7 +3661,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,
-                        "created_at": document.created_at.isoformat(),
+                        "created_at": document.created_at,
                     },
                     "releases": releases,
                 }

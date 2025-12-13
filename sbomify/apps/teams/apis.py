@@ -63,6 +63,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> dict:
     invitations_data = [
         InvitationSchema(
             id=invitation.id,
+            token=str(invitation.token),
             email=invitation.email,
             role=invitation.role,
             created_at=invitation.created_at,
@@ -94,8 +95,17 @@ def _private_workspace_allowed(team: Team) -> bool:
 
 
 def _normalize_branding_payload(branding: dict | None) -> dict:
-    # Lightweight copy; rely on schema defaults for missing fields.
-    return (branding or {}).copy()
+    """Normalize branding payload and apply default colors for empty values."""
+    from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
+
+    data = (branding or {}).copy()
+    # Apply defaults for empty or invalid color values
+    # Empty strings or legacy #000000 values should use platform defaults
+    if not data.get("brand_color"):
+        data["brand_color"] = DEFAULT_BRAND_COLOR
+    if not data.get("accent_color"):
+        data["accent_color"] = DEFAULT_ACCENT_COLOR
+    return data
 
 
 @router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
@@ -589,7 +599,7 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema):
             team.name = payload.name
             if payload.is_public is not None:
                 if payload.is_public is False and not _private_workspace_allowed(team):
-                    return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
+                    return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
                 team.is_public = payload.is_public
             team.save()
 
@@ -634,7 +644,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema):
             update_data = payload.model_dump(exclude_unset=True)
             desired_visibility = update_data.get("is_public")
             if desired_visibility is False and not _private_workspace_allowed(team):
-                return 403, {"detail": "Disabling the trust center is available on Business or Enterprise plans."}
+                return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()
@@ -768,7 +778,9 @@ def list_teams(request: HttpRequest):
 
     Note: Returns workspace data. Internal identifiers retain legacy naming for compatibility.
     """
-    memberships = Member.objects.filter(user=request.user).select_related("team").all()
+    memberships = (
+        Member.objects.filter(user=request.user).select_related("team").order_by("team__created_at", "team__id").all()
+    )
     return 200, [_build_team_response(request, membership.team) for membership in memberships]
 
 
@@ -811,7 +823,9 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     - Return 200 OK if the domain is recognized and should get a certificate
     - Return 404 (or any non-200) if the domain should NOT get a certificate
 
-    Only domains from teams with Business or Enterprise plans are allowed.
+    Allowed domains:
+    - Main application domain (APP_BASE_URL)
+    - Custom domains from teams with Business or Enterprise plans
 
     Security: This endpoint MUST be blocked from external access at the proxy level.
     See Caddyfile configuration for access restrictions.
@@ -823,6 +837,8 @@ def check_domain_allowed(request: HttpRequest, domain: str):
         200 OK if domain is allowed, 404 if not allowed
     """
     from urllib.parse import urlparse
+
+    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
 
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
@@ -836,11 +852,29 @@ def check_domain_allowed(request: HttpRequest, domain: str):
         # Extract just the hostname (strips port, path, query, etc.)
         domain_normalized = parsed.hostname
         if not domain_normalized:
+            logger.warning(f"On-demand TLS denied: invalid domain format (no hostname extracted): {domain}")
             return 404, None
         domain_normalized = domain_normalized.lower()
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError) as e:
         # Invalid domain format
+        logger.warning(f"On-demand TLS denied: failed to parse domain '{domain}': {e}")
         return 404, None
+
+    # Check if domain is the main application domain
+    if settings.APP_BASE_URL:
+        try:
+            app_base_url_input = settings.APP_BASE_URL.strip()
+            if not app_base_url_input.startswith(("http://", "https://")):
+                app_base_url_input = f"http://{app_base_url_input}"
+            parsed_app = urlparse(app_base_url_input)
+            app_domain = parsed_app.hostname
+            if app_domain and domain_normalized == app_domain.lower():
+                logger.info(f"On-demand TLS approved: {domain_normalized} (main application domain)")
+                return 200, None
+        except (ValueError, AttributeError):
+            # Invalid APP_BASE_URL - continue to check custom domains
+            logger.warning(f"Failed to parse APP_BASE_URL: {settings.APP_BASE_URL}")
+            pass
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(
@@ -848,6 +882,8 @@ def check_domain_allowed(request: HttpRequest, domain: str):
     ).exists()
 
     if is_allowed:
+        logger.info(f"On-demand TLS approved: {domain_normalized} (custom domain)")
         return 200, None
     else:
+        logger.warning(f"On-demand TLS denied: {domain_normalized} (not found in allowed domains)")
         return 404, None

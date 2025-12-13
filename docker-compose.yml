@@ -66,6 +66,8 @@ services:
         BUILD_ENV: ${BUILD_ENV:-production}
     pull_policy: ${SBOMIFY_PULL_POLICY:-always}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
@@ -90,12 +92,15 @@ services:
     image: ${CADDY_IMAGE:-caddy:2-alpine}
     restart: ${CADDY_RESTART_POLICY:-always}
     ports:
-      - "${HTTP_PORT:-8000}:80"
+      - "${BIND_IP:-127.0.0.1}:${HTTP_PORT:-8000}:80"
+      - "${BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
     depends_on:
       - sbomify-backend
     healthcheck:
@@ -129,6 +134,8 @@ services:
       args:
         BUILD_ENV: ${BUILD_ENV:-production}
     restart: ${SBOMIFY_RESTART_POLICY:-always}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
@@ -139,7 +146,7 @@ services:
         "manage.py",
         "rundramatiq",
         "-p",
-        "${DRAMATIQ_PROCESSES:-2}",
+        "${DRAMATIQ_PROCESSES:-1}",
         "-t",
         "${DRAMATIQ_THREADS:-4}"
       ]

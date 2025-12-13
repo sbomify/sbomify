@@ -2,6 +2,7 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
+{% load public_url_tags %}
 {% block title %}{{ project.name }}{% endblock %}
 {% block meta_description %}
     {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
@@ -18,9 +19,9 @@
         gap: 6px;
         padding: 6px 12px;
         border-radius: 999px;
-        background: #eef2ff;
-        border: 1px solid #e0e7ff;
-        color: #475569;
+        background: rgba(var(--brand-color-rgb), 0.05);
+        border: 1px solid rgba(var(--brand-color-rgb), 0.1);
+        color: var(--brand-color);
         font-weight: 600;
       }
       .meta-row {
@@ -28,6 +29,9 @@
         gap: 10px;
         flex-wrap: wrap;
         margin-top: 8px;
+      }
+      .title-icon {
+        color: var(--brand-color);
       }
     </style>
 {% endblock %}
@@ -82,7 +86,7 @@
                                                                     <div class="component-info">
                                                                         <h6 class="component-name">
                                                                             {% if component.is_public %}
-                                                                                <a href="{% url 'core:component_details_public' component.id %}"
+                                                                                <a href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}"
                                                                                    class="component-link">
                                                                                     {{ component.name }}
                                                                                 </a>

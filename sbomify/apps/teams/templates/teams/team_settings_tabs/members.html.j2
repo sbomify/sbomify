@@ -52,7 +52,7 @@
     </div>
 </div>
 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove Member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove Member" %}
+    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove Member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove Member" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
 {% endif %}
 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
     <div class="card shadow-md">
@@ -118,5 +118,5 @@
             {% endif %}
         </div>
     </div>
-    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Cancel Invitation" message_text="Are you sure you want to cancel the invitation for" warning_text="This action will immediately cancel the invitation and the user will no longer be able to join the workspace using this invite." form_action=request.path form=delete_invitation_form submit_text="Cancel Invitation" %}
+    {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Cancel Invitation" message_text="Are you sure you want to cancel the invitation for" warning_text="This action will immediately cancel the invitation and the user will no longer be able to join the workspace using this invite." form_action=request.path form=delete_invitation_form submit_text="Cancel Invitation" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
 {% endif %}

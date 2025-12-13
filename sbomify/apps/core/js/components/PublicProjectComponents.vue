@@ -54,12 +54,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import PublicCard from './PublicCard.vue'
 
 interface Component {
   id: string
   name: string
+  slug?: string
   component_type: string
   is_public: boolean
   public_url?: string
@@ -69,13 +70,29 @@ interface Props {
   projectId?: string
   brandColor?: string
   accentColor?: string
+  isCustomDomain?: boolean | string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   projectId: '',
   brandColor: '#dcdcdc',
-  accentColor: '#7c8b9d'
+  accentColor: '#7c8b9d',
+  isCustomDomain: false
 })
+
+const isCustomDomain = computed(() => {
+  if (typeof props.isCustomDomain === 'string') {
+    return props.isCustomDomain === 'true'
+  }
+  return props.isCustomDomain
+})
+
+const getComponentUrl = (component: Component): string => {
+  if (isCustomDomain.value) {
+    return `/component/${component.slug || component.id}/`
+  }
+  return `/public/component/${component.id}/`
+}
 
 const components = ref<Component[]>([])
 
@@ -89,13 +106,18 @@ onMounted(async () => {
       }
 
       const projectData = await response.json()
-      components.value = (projectData.components || []).map((component: { id: string; name: string; component_type: string; is_public: boolean }) => ({
-        id: component.id,
-        name: component.name,
-        component_type: component.component_type,
-        is_public: component.is_public,
-        public_url: component.is_public ? `/public/component/${component.id}/` : ''
-      }))
+      components.value = (projectData.components || []).map((component: { id: string; name: string; slug?: string; component_type: string; is_public: boolean }) => {
+        const componentData: Component = {
+          id: component.id,
+          name: component.name,
+          slug: component.slug,
+          component_type: component.component_type,
+          is_public: component.is_public,
+          public_url: ''
+        }
+        componentData.public_url = component.is_public ? getComponentUrl(componentData) : ''
+        return componentData
+      })
     } catch (error) {
       console.error('Failed to load components data:', error)
     }
