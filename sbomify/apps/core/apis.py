@@ -3661,7 +3661,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,
-                        "created_at": document.created_at.isoformat(),
+                        "created_at": document.created_at,
                     },
                     "releases": releases,
                 }
