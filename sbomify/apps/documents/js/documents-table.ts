@@ -23,7 +23,7 @@ interface DocumentItem {
 
 export function registerDocumentsTable() {
   Alpine.data('documentsTable', (componentId: string, documentsDataJson: string) => {
-    const allDocuments = JSON.parse(documentsDataJson) as DocumentItem[]
+    const allDocuments: DocumentItem[] = JSON.parse(documentsDataJson)
 
     return {
       componentId,

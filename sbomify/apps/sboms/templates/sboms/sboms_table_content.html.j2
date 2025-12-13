@@ -39,7 +39,7 @@
                             <span>{{ sbom.sbom.version|truncatechars:20 }}</span>
                         </td>
                         <td {% if not is_public_view %}data-label="NTIA Compliant"{% endif %}>
-                            {% include 'core/components/ntia_compliance_badge.html.j2' with status=sbom.sbom.ntia_compliance_status|default:'unknown' compliance_details=sbom.sbom.ntia_compliance_details|default:None %}
+                            {% include 'core/components/ntia_compliance_badge.html.j2' with status=sbom.sbom.ntia_compliance_status|default:'unknown' compliance_details=sbom.sbom.ntia_compliance_details is_public_view=is_public_view team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
                         </td>
                         <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ sbom.sbom.created_at|date:"M d, Y" }}</td>
                         <td {% if not is_public_view %}data-label="Releases"{% endif %}>
@@ -81,4 +81,3 @@
     </div>
     {% include 'core/components/pagination_controls.html.j2' %}
 {% endif %}
-

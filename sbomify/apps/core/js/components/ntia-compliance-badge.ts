@@ -16,22 +16,15 @@ export function registerNtiaComplianceBadge() {
   Alpine.data('ntiaComplianceBadge', (
     status: 'compliant' | 'non_compliant' | 'unknown',
     complianceDetailsJson: string,
-    isPublicView: boolean,
     teamBillingPlan: string,
-    teamKey: string
   ) => {
-    const complianceDetails: ComplianceDetails = complianceDetailsJson 
-      ? JSON.parse(complianceDetailsJson) 
-      : {}
-
+    const complianceDetails: ComplianceDetails = JSON.parse(complianceDetailsJson);
+ 
     return {
       status,
       complianceDetails,
-      isPublicView,
       teamBillingPlan,
-      teamKey,
       showDetailsModal: false,
-      expandedIssues: [] as number[],
 
       get complianceErrors(): ComplianceError[] {
         return this.complianceDetails?.errors || []
@@ -45,47 +38,56 @@ export function registerNtiaComplianceBadge() {
         return this.complianceDetails?.error_count || this.complianceErrors.length
       },
 
-      toggleIssue(index: number): void {
-        const currentIndex = this.expandedIssues.indexOf(index)
-        if (currentIndex > -1) {
-          this.expandedIssues.splice(currentIndex, 1)
-        } else {
-          this.expandedIssues.push(index)
+      getBadgeClasses(): string {
+        switch (this.status) {
+          case 'compliant':
+            return 'bg-success-subtle text-success compliant-badge'
+          case 'non_compliant':
+            return 'bg-warning-subtle text-warning'
+          case 'unknown':
+            if (this.isNtiaAvailable) {
+              return 'bg-info-subtle text-info ntia-checking'
+            }
+            return 'bg-secondary-subtle text-secondary'
+          default:
+            return ''
         }
       },
 
-      isIssueExpanded(index: number): boolean {
-        return this.expandedIssues.includes(index)
+      getBadgeIconClass(): string {
+        switch (this.status) {
+          case 'compliant':
+            return 'fas fa-award'
+          case 'non_compliant':
+            return 'fas fa-exclamation-triangle'
+          case 'unknown':
+            if (this.isNtiaAvailable) {
+              return 'fas fa-clock fa-pulse'
+            }
+            return 'fas fa-lock'
+          default:
+            return ''
+        }
       },
 
-      getUnknownBadgeClasses(): string {
-        if (this.isNtiaAvailable) {
-          return 'bg-info-subtle text-info ntia-checking'
+      getBadgeText(): string {
+        switch (this.status) {
+          case 'compliant':
+            return 'Compliant'
+          case 'non_compliant':
+            return 'Not Compliant'
+          case 'unknown':
+            if (this.isNtiaAvailable) {
+              return 'Checking...'
+            }
+            return 'Upgrade Required'
+          default:
+            return ''
         }
-        return 'bg-secondary-subtle text-secondary'
       },
 
-      getUnknownIconClass(): string {
-        if (this.isNtiaAvailable) {
-          return 'fas fa-clock fa-pulse'
-        }
-        return 'fas fa-lock'
-      },
-
-      getUnknownStatusText(): string {
-        if (this.isNtiaAvailable) {
-          return 'Checking...'
-        }
-        return 'Upgrade Required'
-      },
-
-      handleUnknownBadgeClick(): void {
-        if (!this.isNtiaAvailable) {
-          const upgradePath = this.teamKey 
-            ? `/billing/select-plan/${this.teamKey}` 
-            : '/billing/select-plan/'
-          window.location.href = upgradePath
-        }
+      isBadgeClickable(): boolean {
+        return this.status === 'non_compliant' || (this.status === 'unknown' && !this.isNtiaAvailable)
       },
 
       getTooltipText(): string {
@@ -104,18 +106,12 @@ export function registerNtiaComplianceBadge() {
         }
       },
 
-      init() {
-        // Initialize Bootstrap tooltips
-        this.$nextTick(() => {
-          const tooltipElements = this.$el.querySelectorAll('[data-bs-toggle="tooltip"]')
-          if (window.bootstrap?.Tooltip) {
-            Array.from(tooltipElements).forEach(el => {
-              new window.bootstrap.Tooltip(el)
-            })
-          }
-        })
-      }
+      initModal(element: HTMLElement): void {
+        element.style.display = 'block'
+        if (element.parentElement !== document.body) {
+          document.body.appendChild(element)
+        }
+      },
     }
   })
 }
-

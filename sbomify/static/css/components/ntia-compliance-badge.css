@@ -276,8 +276,15 @@
 }
 
 /* Modal styling improvements */
-.modal {
-  z-index: 1060;
+.ntia-compliance-modal {
+  display: block;
+  background-color: rgba(0, 0, 0, 0.5);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1055;
 }
 
 .modal-backdrop {
@@ -358,3 +365,14 @@
   }
 }
 
+body.ntia-modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+
+.ntia-compliance-badge .modal-dialog-scrollable .modal-body {
+  overflow-y: auto;
+}

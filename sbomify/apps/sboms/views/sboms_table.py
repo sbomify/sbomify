@@ -49,9 +49,7 @@ class SbomsTableView(LoginRequiredMixin, View):
         if not form.is_valid():
             return htmx_error_response(form.errors.as_text())
 
-        sbom_id = form.cleaned_data["sbom_id"]
-
-        status_code, result = delete_sbom(request, sbom_id)
+        status_code, result = delete_sbom(request, form.cleaned_data["sbom_id"])
         if status_code != 204:
             return htmx_error_response(result.get("detail", "Failed to delete SBOM"))
 

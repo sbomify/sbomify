@@ -2,8 +2,9 @@ from django.urls import path
 from django.urls.resolvers import URLPattern
 from django.views.generic import RedirectView
 
-from . import views
 from sbomify.apps.sboms.views.sboms_table import SbomsTableView
+
+from . import views
 
 app_name = "sboms"
 urlpatterns: list[URLPattern] = [
