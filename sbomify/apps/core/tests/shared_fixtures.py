@@ -9,13 +9,14 @@ from typing import Any, Dict, Generator
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
-from django.test import Client
+from django.test import Client, TestCase
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
+from sbomify.apps.sboms.tests.test_views import setup_test_session
 from sbomify.apps.teams.models import Member, Team
 
 # ============================================================================
@@ -234,7 +235,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
 
 @pytest.fixture
 def authenticated_web_client(
-    sample_user: AbstractBaseUser,
+    sample_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
 ) -> Generator[Client, Any, None]:
     """
@@ -256,8 +257,8 @@ def authenticated_web_client(
 
 @pytest.fixture
 def team_with_multiple_members(
-    sample_user: AbstractBaseUser,
-    guest_user: AbstractBaseUser,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    guest_user: AbstractBaseUser,  # noqa: F811
     team_with_business_plan: Team,  # noqa: F811
 ) -> Generator[Team, Any, None]:
     """
@@ -270,6 +271,22 @@ def team_with_multiple_members(
     Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
     yield team_with_business_plan
+
+
+@pytest.mark.django_db
+class AuthenticationTestCase(TestCase):
+    @pytest.fixture(autouse=True)
+    def setup_user(self, sample_user):  # noqa: F811
+        self.user = sample_user
+
+    def setUp(self) -> None:
+        if not hasattr(self, "user"):
+            raise AttributeError("self.user must be set by pytest fixture")
+        if not hasattr(self, "team"):
+            raise AttributeError("self.team must be set by pytest fixture")
+
+        self.client.force_login(self.user)
+        setup_test_session(self.client, self.team, self.user)
 
 
 # ============================================================================

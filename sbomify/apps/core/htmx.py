@@ -14,7 +14,7 @@ def htmx_response(
         trigger_data.update(triggers)
     response["HX-Trigger"] = json.dumps(trigger_data)
 
-    if content:
+    if content is not None:
         if isinstance(content, dict):
             content = json.dumps(content).encode("utf-8")
         response.content = content
