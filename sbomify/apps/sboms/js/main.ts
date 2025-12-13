@@ -20,7 +20,6 @@ import CiCdInfo from './components/CiCdInfo.vue'
 import SbomUpload from './components/SbomUpload.vue'
 import SbomMetadataCard from './components/SbomMetadataCard.vue'
 import SbomActionsCard from './components/SbomActionsCard.vue'
-import NTIAComplianceBadge from './components/NTIAComplianceBadge.vue'
 
 mountVueComponent('vc-editable-single-field', EditableSingleField)
 mountVueComponent('vc-licenses-editor', LicensesEditor)
@@ -29,4 +28,3 @@ mountVueComponent('vc-sbom-upload', SbomUpload)
 mountVueComponent('vc-sbom-metadata-card', SbomMetadataCard)
 
 mountVueComponent('vc-sbom-actions-card', SbomActionsCard)
-mountVueComponent('vc-ntia-compliance-badge', NTIAComplianceBadge)

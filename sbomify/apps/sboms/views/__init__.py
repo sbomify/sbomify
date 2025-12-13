@@ -28,49 +28,6 @@ from sbomify.apps.teams.branding import build_branding_context
 logger = logging.getLogger(__name__)
 
 
-def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
-    try:
-        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    if not sbom.public_access_allowed:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    brand = build_branding_context(sbom.component.team)
-
-    return render(
-        request,
-        "sboms/sbom_details_public.html.j2",
-        {
-            "sbom": sbom,
-            "brand": brand,
-            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
-        },
-    )
-
-
-@login_required
-def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
-    try:
-        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    if not verify_item_access(request, sbom, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    return render(
-        request,
-        "sboms/sbom_details_private.html.j2",
-        {
-            "sbom": sbom,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
-        },
-    )
-
-
 @login_required
 def sbom_vulnerabilities(request: HttpRequest, sbom_id: str) -> HttpResponse:
     """
