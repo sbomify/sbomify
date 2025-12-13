@@ -9,6 +9,10 @@ class CreateAccessTokenForm(forms.Form):
     description = forms.CharField(max_length=255)
 
 
+class TogglePublicStatusForm(forms.Form):
+    is_public = forms.BooleanField(required=False)
+
+
 class SupportContactForm(forms.Form):
     """Form for general support contact inquiries."""
 

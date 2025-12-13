@@ -2,6 +2,7 @@
 {% load cache %}
 {% load schema_tags %}
 {% load django_vite %}
+{% load django_htmx %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
@@ -129,6 +130,7 @@
 {% endblock %}
 <!-- Scripts for HTMX pages -->
 {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+{% htmx_script %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -31,12 +31,8 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                     {% endif %}
                 </h1>
                 {% if project.has_crud_permissions %}
-                    {% resource_public_absolute_url 'project' project as project_public_url %}
-                    <div class="vc-public-status-toggle"
-                         data-item-type="project"
-                         data-item-id="{{ project.id }}"
-                         data-public-url="{{ project_public_url }}"
-                         data-inline="true"></div>
+                    {% url 'core:project_details_public' project.id as project_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='project' item_id=project.id public_url=project_public_url is_public=project.is_public %}
                 {% endif %}
             </div>
         </div>
