@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import { showSuccess, showError } from '../alerts'
+import { showSuccess, showError } from '../alerts';
 
 interface PublicStatusToggleParams {
   itemType: string
