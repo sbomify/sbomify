@@ -1,6 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load widget_tweaks %}
 {% load static %}
+{% load django_htmx %}
 {% load django_vite %}
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
@@ -121,11 +122,16 @@
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ documents_data|json_script:"documents-data" }}
-                <div class="vc-documents-table"
-                     data-documents-data-element-id="documents-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}">
+                <div id="documents-table-container"
+                     hx-get="{% url 'documents:documents_table' component.id %}"
+                     hx-trigger="load, refreshDocumentsTable from:body"
+                     hx-swap="innerHTML">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading documents...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -145,6 +151,7 @@
     {% endif %}
 {% endblock %}
 {% block scripts %}
+    {% htmx_script %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
     {% if component.component_type == 'sbom' %}

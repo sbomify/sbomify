@@ -1,5 +1,6 @@
 {% extends "core/public_base.htmx.j2" %}
 {% load breadcrumb_tags %}
+{% load django_htmx %}
 {% load django_vite %}
 {% load static %}
 {% block title %}{{ component.name }}{% endblock %}
@@ -90,13 +91,18 @@
                                                      data-component-id="{{ component.id }}"
                                                      data-has-crud-permissions="false"
                                                      data-team-billing-plan="{{ team_billing_plan }}"></div>
-                                            {% elif component.component_type == 'document' and documents_data %}
-                                                {{ documents_data|json_script:"documents-data" }}
-                                                <div class="vc-documents-table"
-                                                     data-is-public-view="true"
-                                                     data-documents-data-element-id="documents-data"
-                                                     data-component-id="{{ component.id }}"
-                                                     data-has-crud-permissions="false"></div>
+                                            {% elif component.component_type == 'document' %}
+                                                <div id="documents-table-container"
+                                                     hx-get="{% url 'documents:documents_table_public' component.id %}"
+                                                     hx-trigger="load, refreshDocumentsTable from:body"
+                                                     hx-swap="innerHTML">
+                                                    <div class="text-center py-4">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">Loading...</span>
+                                                        </div>
+                                                        <p class="mt-2 text-muted">Loading documents...</p>
+                                                    </div>
+                                                </div>
                                             {% endif %}
                                         </div>
                                     </div>
@@ -110,6 +116,7 @@
     </div>
 {% endblock %}
 {% block scripts %}
+    {% htmx_script %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}

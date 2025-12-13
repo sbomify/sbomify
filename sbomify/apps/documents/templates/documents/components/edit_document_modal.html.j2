@@ -1,0 +1,76 @@
+<div class="modal fade"
+     id="edit-document-modal"
+     tabindex="-1"
+     aria-labelledby="editDocumentModalLabel"
+     aria-hidden="true"
+     data-bs-backdrop="static"
+     style="display: none">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editDocumentModalLabel">Edit Document</h5>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <form hx-post="{% url 'documents:documents_table' component_id %}"
+                  hx-swap="none">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="_method" value="PATCH">
+                    <input type="hidden" name="document_id" x-model="editForm.document_id">
+                    <div class="mb-3">
+                        <label for="edit-document-name" class="form-label">
+                            Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="edit-document-name"
+                               name="name"
+                               x-model="editForm.name"
+                               required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-version" class="form-label">
+                            Version <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="edit-document-version"
+                               name="version"
+                               x-model="editForm.version"
+                               required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-type" class="form-label">
+                            Document Type <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select"
+                                id="edit-document-type"
+                                name="document_type"
+                                x-model="editForm.document_type"
+                                required>
+                            <option value="">Select a type...</option>
+                            {% for value, label in document_type_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-document-description" class="form-label">Description</label>
+                        <textarea class="form-control"
+                                  id="edit-document-description"
+                                  name="description"
+                                  rows="3"
+                                  x-model="editForm.description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" data-bs-dismiss="modal">
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

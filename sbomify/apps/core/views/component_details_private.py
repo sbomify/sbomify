@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.apis import get_component, list_component_documents, list_component_sboms
+from sbomify.apps.core.apis import get_component, list_component_sboms
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Component
 
@@ -46,13 +46,9 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
             context["sboms_data"] = sboms_response.get("items", [])
 
         elif component.get("component_type") == Component.ComponentType.DOCUMENT:
-            status_code, documents_response = list_component_documents(request, component_id, page=1, page_size=-1)
-            if status_code != 200:
-                return error_response(
-                    request, HttpResponse(status=status_code, content=documents_response.get("detail", "Unknown error"))
-                )
-            context["documents_data"] = documents_response.get("items", [])
-
+            # Documents table is loaded via HTMX from DocumentsTableView
+            # No need to load documents data here
+            pass
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 

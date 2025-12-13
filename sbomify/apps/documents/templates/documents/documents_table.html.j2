@@ -1,0 +1,23 @@
+{% load static %}
+{% load json_extras %}
+<link rel="stylesheet"
+      href="{% static 'css/components/documents-table.css' %}">
+<div x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
+    {% if not is_public_view %}
+        <div class="standard-card mt-3">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Documents</h4>
+                </div>
+                <div class="card-body">{% include 'documents/documents_table_content.html.j2' %}</div>
+            </div>
+        </div>
+    {% else %}
+        <div class="mt-3">{% include 'documents/documents_table_content.html.j2' %}</div>
+    {% endif %}
+    {% if has_crud_permissions %}
+        {% include 'documents/components/edit_document_modal.html.j2' %}
+        {% url 'documents:documents_table' component_id as delete_url %}
+        {% include 'components/modals/delete_modal.html.j2' with modal_id='delete-document-modal' modal_title='Delete Document' message_text='Are you sure you want to delete' warning_text='This action cannot be undone. The document will be permanently removed.' form_action=delete_url form=delete_form submit_text='Delete Document' use_htmx=True %}
+    {% endif %}
+</div>

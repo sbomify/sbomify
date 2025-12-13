@@ -1,0 +1,74 @@
+{% load static %}
+{% if not documents %}
+    <div class="text-center text-muted py-4">
+        <i class="fas fa-file-alt fa-3x mb-3"></i>
+        <p>No documents found for this component.</p>
+    </div>
+{% else %}
+    <div class="data-table">
+        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Artifact Type</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Version</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Releases</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for document in documents %}
+                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
+                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
+                            <a href="{% if is_public_view %}{% url 'documents:document_details_public' document.document.id %}{% else %}{% url 'documents:document_details' document.document.id %}{% endif %}"
+                               title="Details"
+                               class="icon-link">{{ document.document.name }}</a>
+                        </td>
+                        <td {% if not is_public_view %}data-label="Artifact Type"{% endif %}>Document</td>
+                        <td {% if not is_public_view %}data-label="Type"{% endif %}>
+                            <span class="badge bg-warning-subtle text-warning">{{ document.document.document_type_display|default:"Document" }}</span>
+                        </td>
+                        <td {% if not is_public_view %}data-label="Version"{% endif %}
+                            title="{{ document.document.version }}">
+                            <span>{{ document.document.version|truncatechars:20 }}</span>
+                        </td>
+                        <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ document.document.created_at|date:"M d, Y" }}</td>
+                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
+                            {% include 'documents/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
+                        </td>
+                        <td {% if not is_public_view %}data-label="Actions"{% endif %}>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'documents:document_download' document.document.id %}"
+                                   title="Download"
+                                   class="btn btn-outline-primary btn-sm action-btn">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                {% if has_crud_permissions %}
+                                    <button class="btn btn-sm btn-outline-secondary action-btn"
+                                            title="Edit Document"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#edit-document-modal"
+                                            @click="editDocument('{{ document.document.id }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger action-btn"
+                                            title="Delete Document"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#delete-document-modal"
+                                            data-display-name="{{ document.document.name|escapejs }}"
+                                            data-form-document_id="{{ document.document.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'core/components/pagination_controls.html.j2' %}
+{% endif %}

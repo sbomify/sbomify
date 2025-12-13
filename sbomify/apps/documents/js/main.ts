@@ -1,9 +1,18 @@
-import 'vite/modulepreload-polyfill'
-import '../../core/js/layout-interactions'
+import 'vite/modulepreload-polyfill';
+import '../../core/js/layout-interactions';
+import Alpine from 'alpinejs';
+import { registerDocumentsTable } from './documents-table';
+import { registerReleaseList } from './release-list';
 
-import mountVueComponent from '../../core/js/common_vue'
-import DocumentUpload from './components/DocumentUpload.vue'
-import DocumentsTable from './components/DocumentsTable.vue'
+document.addEventListener('alpine:init', () => {
+    registerDocumentsTable();
+    registerReleaseList();
+});
 
-mountVueComponent('vc-document-upload', DocumentUpload)
-mountVueComponent('vc-documents-table', DocumentsTable)
+Alpine.start();
+
+
+import mountVueComponent from '../../core/js/common_vue';
+import DocumentUpload from './components/DocumentUpload.vue';
+
+mountVueComponent('vc-document-upload', DocumentUpload);

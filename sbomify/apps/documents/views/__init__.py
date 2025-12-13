@@ -18,9 +18,9 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.views.documents_table import DocumentsTableView  # noqa: F401
 from sbomify.apps.teams.branding import build_branding_context
-
-from .models import Document
 
 logger = logging.getLogger(__name__)
 
