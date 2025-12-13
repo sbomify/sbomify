@@ -2,12 +2,30 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.core.utils import number_to_random_token
+from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.utils import get_user_teams
+
 
 @pytest.mark.django_db
 class TestBaseTemplate:
     def test_base_template_components(self, client: Client, sample_user, ensure_billing_plans):
         """Test that base template components are rendered correctly"""
         client.login(username=sample_user.username, password="test")  # nosec B106
+
+        # Create team with wizard completed to avoid redirect
+        team = Team.objects.create(name="Test Team", has_completed_wizard=True)
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        Member.objects.create(user=sample_user, team=team, role="owner", is_default_team=True)
+
+        # Set up session with completed wizard
+        user_teams = get_user_teams(sample_user)
+        session = client.session
+        session["user_teams"] = user_teams
+        session["current_team"] = {"key": team.key, **user_teams[team.key]}
+        session.save()
+
         response = client.get(reverse("core:dashboard"))
 
         content = response.content.decode()
@@ -32,10 +50,6 @@ class TestBaseTemplate:
 
     def test_sidebar_active_states(self, client: Client, sample_user, ensure_billing_plans):
         """Test that sidebar active states are set correctly"""
-        from sbomify.apps.teams.models import Team, Member
-        from sbomify.apps.teams.utils import get_user_teams
-        from sbomify.apps.core.utils import number_to_random_token
-
         client.login(username=sample_user.username, password="test")  # nosec B106
 
         # Ensure the user has a team with completed wizard

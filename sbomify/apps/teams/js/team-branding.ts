@@ -1,4 +1,15 @@
 import Alpine from 'alpinejs';
+import { showSuccess, showError } from '../../core/js/alerts';
+
+/**
+ * Get CSRF token from cookies for API requests
+ */
+function getCsrfToken(): string {
+    const csrfCookie = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='));
+    return csrfCookie ? csrfCookie.split('=')[1] : '';
+}
 
 interface BrandingInfo {
     icon: File | null;
@@ -14,6 +25,146 @@ interface BrandingInfo {
 }
 
 type FileFields = 'icon' | 'logo';
+
+/**
+ * Configuration for the custom domain Alpine.js component.
+ */
+interface CustomDomainConfig {
+    /** The unique key for the team/workspace */
+    teamKey: string;
+    /** The initial custom domain value (empty string if not set) */
+    initialDomain: string;
+    /** Whether the domain has been validated */
+    isValidated: boolean;
+    /** ISO date string of the last validation check */
+    lastCheckedAt: string;
+    /** Whether the user has access to manage the custom domain feature */
+    hasAccess: boolean;
+}
+
+/**
+ * Registers the Alpine.js 'customDomain' component for managing custom domain settings.
+ * This component handles domain input, validation status display, and saving/removing domains.
+ */
+export function registerCustomDomain() {
+    Alpine.data('customDomain', (config: CustomDomainConfig) => ({
+        teamKey: config.teamKey,
+        currentDomain: config.initialDomain || '',
+        localDomain: config.initialDomain || '',
+        validated: config.isValidated,
+        lastChecked: config.lastCheckedAt || null,
+        hasAccess: config.hasAccess,
+        isLoading: false,
+        error: '',
+
+        hasUnsavedChanges() {
+            return this.localDomain !== this.currentDomain;
+        },
+
+        canSave() {
+            return this.localDomain.trim() !== '' && this.hasUnsavedChanges();
+        },
+
+        cancelChanges() {
+            this.localDomain = this.currentDomain;
+            this.error = '';
+        },
+
+        formatLastChecked() {
+            if (!this.lastChecked) return 'Never';
+            try {
+                const date = new Date(this.lastChecked);
+                return date.toLocaleString();
+            } catch {
+                return 'Unknown';
+            }
+        },
+
+        async saveDomain() {
+            const domain = this.localDomain.trim();
+            if (!domain) {
+                this.error = 'Please enter a domain';
+                return;
+            }
+
+            this.isLoading = true;
+            this.error = '';
+
+            try {
+                const response = await fetch(`/api/v1/workspaces/${this.teamKey}/domain`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ domain }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    this.error = data.detail || 'Failed to save domain';
+                    showError(this.error);
+                    return;
+                }
+
+                // Update state with response
+                this.currentDomain = data.domain;
+                this.localDomain = data.domain;
+                this.validated = data.validated;
+                this.error = '';
+
+                showSuccess('Custom domain saved successfully');
+            } catch (error) {
+                console.error('Error saving custom domain:', error);
+                this.error = 'Network error. Please try again.';
+                showError(this.error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        async removeDomain() {
+            if (!confirm('Are you sure you want to remove the custom domain?')) {
+                return;
+            }
+
+            this.isLoading = true;
+            this.error = '';
+
+            try {
+                const response = await fetch(`/api/v1/workspaces/${this.teamKey}/domain`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    this.error = data.detail || 'Failed to remove domain';
+                    showError(this.error);
+                    return;
+                }
+
+                // Clear state
+                this.currentDomain = '';
+                this.localDomain = '';
+                this.validated = false;
+                this.lastChecked = null;
+                this.error = '';
+
+                showSuccess('Custom domain removed successfully');
+            } catch (error) {
+                console.error('Error removing custom domain:', error);
+                this.error = 'Network error. Please try again.';
+                showError(this.error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+    }));
+}
 
 export function registerTeamBranding() {
     Alpine.data('teamBranding', (brandingInfoJson: string) => {

@@ -10,6 +10,14 @@ from sbomify.apps.core.models import Component
 
 
 class ComponentDetailsPrivateView(LoginRequiredMixin, View):
+    def dispatch(self, request, *args, **kwargs):
+        # On custom domains, serve public content instead
+        if getattr(request, "is_custom_domain", False):
+            from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView
+
+            return ComponentDetailsPublicView.as_view()(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
         status_code, component = get_component(request, component_id)
         if status_code != 200:

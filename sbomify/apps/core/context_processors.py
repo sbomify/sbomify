@@ -9,3 +9,20 @@ def version_context(request):
         app_version = None  # Don't show version if package not found
 
     return {"app_version": app_version}
+
+
+def pending_invitations_context(request):
+    """Add pending invitations count to template context."""
+    if not request.user.is_authenticated:
+        return {}
+
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Invitation
+
+    count = Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now()).count()
+
+    return {
+        "pending_invitations_count": count,
+        "has_pending_invitations": count > 0,  # Boolean for cache key to avoid key explosion
+    }

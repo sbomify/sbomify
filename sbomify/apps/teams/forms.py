@@ -55,6 +55,22 @@ class TeamBrandingForm(forms.Form):
     logo = forms.FileField(required=False)
 
 
+class TeamGeneralSettingsForm(forms.Form):
+    """Form for updating workspace general settings (name)."""
+
+    name = forms.CharField(
+        max_length=255,
+        min_length=1,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Enter workspace name",
+            }
+        ),
+    )
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 
@@ -114,6 +130,54 @@ class OnboardingComponentForm(forms.Form):
         help_text=(
             "Components are the individual building blocks that make up your project. These can be libraries, "
             "microservices, firmware modules, or any other distinct piece of software."
+        ),
+    )
+
+
+class OnboardingCompanyForm(forms.Form):
+    """Single-step onboarding form for SBOM identity setup."""
+
+    company_name = forms.CharField(
+        label="Company / Organization Name",
+        max_length=255,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "e.g., Acme Corporation",
+                "autofocus": True,
+            }
+        ),
+    )
+    contact_name = forms.CharField(
+        label="Contact Name",
+        max_length=255,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "e.g., Jane Smith",
+            }
+        ),
+    )
+    email = forms.EmailField(
+        label="Contact Email",
+        required=False,
+        widget=forms.EmailInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "security@example.com",
+            }
+        ),
+    )
+    website = forms.URLField(
+        label="Website",
+        required=False,
+        widget=forms.URLInput(
+            attrs={
+                "class": "form-control form-control-lg",
+                "placeholder": "https://example.com",
+            }
         ),
     )
 

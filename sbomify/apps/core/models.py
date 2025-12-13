@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 from sbomify.apps.core.utils import generate_id
 
@@ -237,6 +238,17 @@ class Release(models.Model):
 
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
+
+    @property
+    def slug(self) -> str:
+        """Generate a URL-safe slug from the release name.
+
+        Note: Computed property - see Product.slug in sboms/models.py for rationale.
+
+        Returns:
+            URL-safe slug string derived from the release name.
+        """
+        return slugify(self.name, allow_unicode=True)
 
     def clean(self):
         """Ensure only one latest release per product and valid release dates."""

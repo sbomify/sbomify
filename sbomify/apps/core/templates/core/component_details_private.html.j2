@@ -3,6 +3,7 @@
 {% load static %}
 {% load django_htmx %}
 {% load django_vite %}
+{% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
@@ -23,10 +24,11 @@
                     {% endif %}
                 </h1>
                 {% if component.has_crud_permissions %}
+                    {% resource_public_absolute_url 'component' component as component_public_url %}
                     <div class="vc-public-status-toggle"
                          data-item-type="component"
                          data-item-id="{{ component.id }}"
-                         data-public-url="{{ APP_BASE_URL }}{% url 'core:component_details_public' component.id %}"
+                         data-public-url="{{ component_public_url }}"
                          data-inline="true"></div>
                 {% endif %}
             </div>
@@ -59,7 +61,7 @@
                         </span>
                         <p class="text-muted small mb-0 mt-2">
                             {% if component.is_global %}
-                                Visible on the workspace trust center and not tied to projects.
+                                Visible on the workspace Trust Center and not tied to projects.
                             {% else %}
                                 Restricted to the projects this component is assigned to.
                             {% endif %}

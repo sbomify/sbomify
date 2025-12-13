@@ -75,7 +75,7 @@ urlpatterns: list[URLPattern] = [
     path("", views.WorkspacesDashboardView.as_view(), name="teams_dashboard"),
     path("switch/<team_key>/", views.switch_team, name="switch_team"),
     path("invite/<team_key>/", views.invite, name="invite_user"),
-    path("accept_invite/<invite_id>/", views.accept_invite, name="accept_invite"),
+    path("accept_invite/<invite_token>/", views.accept_invite, name="accept_invite"),
     path("<membership_id>/leave", views.delete_member, name="team_membership_delete"),
     path("<invitation_id>/uninvite", views.delete_invite, name="team_invitation_delete"),
     path("onboarding/", views.onboarding_wizard, name="onboarding_wizard"),
@@ -106,6 +106,11 @@ urlpatterns: list[URLPattern] = [
         "<team_key>/branding",
         views.TeamBrandingView.as_view(),
         name="team_branding",
+    ),
+    path(
+        "<team_key>/general",
+        views.TeamGeneralView.as_view(),
+        name="team_general",
     ),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),

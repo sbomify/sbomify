@@ -1,5 +1,11 @@
 <script>
     (function() {
+        // Shared configuration
+        var CONFIG = {
+            RETRY_LIMIT: 100, // Max retries to prevent infinite loop (100 * 50ms = 5s max)
+            RETRY_DELAY_MS: 50 // Check every 50ms if bundle is loaded
+        };
+
         function showMessage(messageType, messageText) {
             let type;
             switch(messageType) {
@@ -33,11 +39,61 @@
         }
 
         {% if messages %}
-        document.addEventListener('DOMContentLoaded', function() {
-            {% for message in messages %}
-            showMessage('{{ message.level_tag }}', '{{ message|escapejs }}');
-            {% endfor %}
-        });
+        var messageRetries = CONFIG.RETRY_LIMIT;
+        function showMessagesWhenReady() {
+            if (window.showToast) {
+                {% for message in messages %}
+                showMessage('{{ message.level_tag }}', '{{ message|escapejs }}');
+                {% endfor %}
+            } else if (messageRetries > 0) {
+                messageRetries--;
+                setTimeout(showMessagesWhenReady, CONFIG.RETRY_DELAY_MS);
+            }
+            // If retries exhausted, silently fail - messages will show on next page load
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', showMessagesWhenReady);
+        } else {
+            showMessagesWhenReady();
+        }
+        {% endif %}
+
+        {% if pending_invitations_count and pending_invitations_count > 0 %}
+        var invitationRetries = CONFIG.RETRY_LIMIT;
+        function showInvitationNotification() {
+            if (!window.showToast) {
+                if (invitationRetries > 0) {
+                    invitationRetries--;
+                    setTimeout(showInvitationNotification, CONFIG.RETRY_DELAY_MS);
+                }
+                return;
+            }
+            
+            // Storage key for session consistency.
+            var storageKey = 'session_invitation_toast_shown';
+            
+            // Only show once per session
+            if (!sessionStorage.getItem(storageKey)) {
+                var count = {{ pending_invitations_count }};
+                var message = count === 1 
+                    ? 'You have a workspace invitation! Check your settings to accept it.'
+                    : 'You have ' + count + ' workspace invitations! Check your settings to accept them.';
+                
+                window.showToast({
+                    title: 'Workspace Invitation',
+                    message: message,
+                    type: 'info'
+                });
+                sessionStorage.setItem(storageKey, 'shown');
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', showInvitationNotification);
+        } else {
+            showInvitationNotification();
+        }
         {% endif %}
 
         document.body.addEventListener('messages', function(event) {

@@ -165,3 +165,162 @@
         </div>
     </div>
 </div>
+{# Custom Domain Section - Outside branding form, uses separate API #}
+<div class="standard-card mt-4"
+     x-data="customDomain({ teamKey: '{{ team.key }}', initialDomain: '{{ team.custom_domain|default:''|escapejs }}', isValidated: {{ team.custom_domain_validated|yesno:'true,false' }}, lastCheckedAt: '{{ team.custom_domain_last_checked_at|date:'c'|default:'' }}', hasAccess: {{ has_custom_domain_access|yesno:'true,false' }} })">
+    <div class="card settings-card shadow-md">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <h4 class="card-title mb-0">Custom Domain</h4>
+                {% if not has_custom_domain_access %}<span class="badge bg-secondary">Business / Enterprise</span>{% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2" x-show="hasAccess">
+                <button x-show="hasUnsavedChanges() && !isLoading"
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @click="cancelChanges()">
+                    <i class="fas fa-undo me-2"></i> Cancel
+                </button>
+                <button x-show="hasUnsavedChanges() && !isLoading"
+                        type="button"
+                        class="btn btn-sm btn-success"
+                        @click="saveDomain()"
+                        :disabled="!canSave()">
+                    <i class="fas fa-save me-2"></i>
+                    Save Domain
+                </button>
+                <button x-show="currentDomain && !hasUnsavedChanges() && !isLoading"
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        @click="removeDomain()">
+                    <i class="fas fa-trash me-2"></i>
+                    Remove Domain
+                </button>
+                <span x-show="isLoading" class="text-muted">
+                    <i class="fas fa-spinner fa-spin me-1"></i> Saving...
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if has_custom_domain_access %}
+                <p class="subtitle mb-4">Configure a custom domain for your Trust Center to use your own branded URL.</p>
+                <div class="section-card">
+                    <div class="section-header">
+                        <h3 class="section-title">Domain Configuration</h3>
+                        <p class="section-description">Enter a custom domain for your Trust Center (e.g., trust.yourcompany.com)</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="custom-domain-input" class="form-label">Custom Domain</label>
+                                    <input type="text"
+                                           id="custom-domain-input"
+                                           class="form-control"
+                                           x-model="localDomain"
+                                           placeholder="trust.yourcompany.com"
+                                           :class="{ 'is-invalid': error }">
+                                    <div class="invalid-feedback" x-text="error"></div>
+                                    <small class="form-text text-muted">Enter a subdomain (e.g., trust.example.com). Do not include http:// or https://</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Verification Status</label>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <template x-if="!currentDomain">
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-minus-circle me-1"></i>
+                                                No domain configured
+                                            </span>
+                                        </template>
+                                        <template x-if="currentDomain && validated">
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>
+                                                Verified
+                                            </span>
+                                        </template>
+                                        <template x-if="currentDomain && !validated">
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="fas fa-clock me-1"></i>
+                                                Pending verification
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <template x-if="currentDomain && lastChecked">
+                                        <small class="form-text text-muted">
+                                            Last checked: <span x-text="formatLastChecked()"></span>
+                                        </small>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <div class="section-header">
+                        <h3 class="section-title">Setup Instructions</h3>
+                        <p class="section-description">Follow these steps to configure your custom domain.</p>
+                    </div>
+                    <div class="section-content">
+                        <div class="alert alert-info mb-0">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-info-circle me-2"></i>DNS Configuration Required
+                            </h6>
+                            <p class="mb-2">
+                                To use a custom domain, create a <strong>CNAME</strong> record in your DNS provider:
+                            </p>
+                            <div class="bg-light p-3 rounded mb-3">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <strong>Type:</strong> CNAME
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Name:</strong> <code x-text="localDomain || 'trust'"></code>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Target:</strong> <code>{{ app_hostname }}</code>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="mb-2 small text-muted">
+                                <i class="fas fa-lightbulb me-1"></i>
+                                <strong>Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <code>trust.example.com</code> in zone <code>example.com</code>, enter <code>trust</code>).
+                            </p>
+                            <p class="mb-0 small">
+                                <i class="fas fa-clock me-1"></i>
+                                DNS changes may take up to 48 hours to propagate. Verification happens automatically once the DNS is configured correctly.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="upgrade-prompt">
+                    <div class="upgrade-content d-flex align-items-center gap-3">
+                        <div class="upgrade-icon">
+                            <i class="fas fa-globe"></i>
+                        </div>
+                        <div class="upgrade-details">
+                            <h6 class="upgrade-title">Custom Domain Feature</h6>
+                            <p class="upgrade-description">
+                                Custom domains allow you to serve your Trust Center from your own branded URL (e.g., trust.yourcompany.com).
+                                This feature is available on Business and Enterprise plans.
+                            </p>
+                            {% if request.session.current_team.role == 'owner' %}
+                                <a href="{% url 'billing:select_plan' team.key %}"
+                                   class="btn btn-primary">
+                                    <i class="fas fa-arrow-up me-2"></i>Upgrade Plan
+                                </a>
+                            {% else %}
+                                <p class="text-muted mb-0 small">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Ask a workspace owner to upgrade the plan.
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

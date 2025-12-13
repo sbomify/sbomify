@@ -15,9 +15,9 @@
     gap: 6px;
     padding: 6px 12px;
     border-radius: 999px;
-    background: #eef2ff;
-    border: 1px solid #e0e7ff;
-    color: #475569;
+    background: rgba(var(--brand-color-rgb), 0.05);
+    border: 1px solid rgba(var(--brand-color-rgb), 0.1);
+    color: var(--brand-color);
     font-weight: 600;
   }
   .meta-row {
@@ -25,6 +25,9 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 8px;
+  }
+  .title-icon {
+    color: var(--brand-color);
   }
     </style>
 {% endblock %}
@@ -37,6 +40,14 @@
             <div class="content-container">
                 <div class="public-page-header">
                     <div class="page-header-content">
+                        {% if workspace_public_url and component.is_global %}
+                            <div class="mb-2">
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   href="{{ workspace_public_url }}">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to Trust Center
+                                </a>
+                            </div>
+                        {% endif %}
                         <p class="eyebrow text-muted mb-1">Public component</p>
                         <h1 class="page-title">
                             <i class="fas fa-cube title-icon"></i>

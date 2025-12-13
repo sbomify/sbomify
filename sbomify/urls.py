@@ -13,6 +13,11 @@ Class-based views
 Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+
+Custom Domain Routing:
+When a request comes through a custom domain (detected by CustomDomainContextMiddleware),
+custom domain URL patterns are included to provide clean URLs without /public/ prefix.
+The views check request.is_custom_domain to determine appropriate behavior.
 """
 
 from django.conf import settings
@@ -29,6 +34,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
+    # Standard URLs (includes /public/* patterns and private pages)
     path("", include("sbomify.apps.core.urls")),
     # Keep the legacy prefix but avoid clashing namespaces with the primary teams URLs
     path("workspace/", include(("sbomify.apps.teams.urls", "teams"), namespace="teams-legacy")),
