@@ -23,12 +23,8 @@
                     {% endif %}
                 </h1>
                 {% if component.has_crud_permissions %}
-                    {% resource_public_absolute_url 'component' component as component_public_url %}
-                    <div class="vc-public-status-toggle"
-                         data-item-type="component"
-                         data-item-id="{{ component.id }}"
-                         data-public-url="{{ component_public_url }}"
-                         data-inline="true"></div>
+                    {% url 'core:component_details_public' component.id as component_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=component.is_public %}
                 {% endif %}
             </div>
         </div>

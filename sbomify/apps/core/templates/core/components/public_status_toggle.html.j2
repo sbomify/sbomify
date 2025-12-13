@@ -1,0 +1,46 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/public-status-toggle.css' %}">
+<div class="public-status-container inline-mode">
+    <div class="public-status-widget inline-widget"
+         x-data="publicStatusToggle({ itemType: '{{ item_type|escapejs }}', itemId: '{{ item_id|escapejs }}', publicUrl: '{{ public_url|escapejs }}', isPublic: {{ is_public|yesno:'true,false' }} })">
+        <div class="inline-status-controls">
+            <div class="status-indicator"
+                 :class="{ public: isPublic, private: !isPublic }">
+                <i :class="statusIcon"></i>
+                <span class="status-text" x-text="statusText"></span>
+                <span x-show="showInheritanceNote" class="inheritance-note">(inherited from product)</span>
+            </div>
+            <div class="toggle-switch" :class="{ loading: isLoading }">
+                <form hx-post="{% url 'core:toggle_public_status' item_type item_id %}"
+                      hx-trigger="change"
+                      hx-swap="none"
+                      @htmx:before-request="beforeRequestHandler()"
+                      @htmx:after-request="afterRequestHandler($event)">
+                    {% csrf_token %}
+                    <input :id="'toggle-' + itemId"
+                           class="toggle-input"
+                           type="checkbox"
+                           name="is_public"
+                           :checked="isPublic"
+                           :disabled="isLoading"
+                           @change="togglePublicStatus()" />
+                    <label :for="'toggle-' + itemId" class="toggle-slider">
+                        <span class="toggle-handle"></span>
+                    </label>
+                </form>
+                <div x-show="isLoading" class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+            </div>
+            <button x-show="isPublic"
+                    type="button"
+                    class="copy-url-btn"
+                    title="Copy public URL"
+                    @click="copyToClipboard()">
+                <i class="fas fa-copy"></i>
+                <span class="copy-text">Copy URL</span>
+            </button>
+        </div>
+    </div>
+</div>

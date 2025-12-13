@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from django.views.generic import RedirectView
 
 from . import views
@@ -129,6 +129,11 @@ urlpatterns = [
         "public/product/<str:product_id>/release/<str:release_id>/",
         views.ReleaseDetailsPublicView.as_view(),
         name="release_details_public",
+    ),
+    re_path(
+        r"^toggle-public-status/(?P<item_type>component|product|project)/(?P<item_id>[^/]+)/$",
+        views.TogglePublicStatusView.as_view(),
+        name="toggle_public_status",
     ),
     # Download URLs
     path(
