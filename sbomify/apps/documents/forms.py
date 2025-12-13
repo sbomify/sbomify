@@ -16,7 +16,7 @@ class DocumentEditForm(forms.Form):
         max_length=255,
     )
     document_type = forms.ChoiceField(
-        required=False,
+        required=True,
         choices=Document.DocumentType.choices,
     )
     description = forms.CharField(
