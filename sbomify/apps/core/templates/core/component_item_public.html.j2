@@ -2,12 +2,12 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
-{% block title %}{{ data.name }}{% endblock %}
+{% block title %}{{ item.name }}{% endblock %}
 {% block meta_description %}
     {% if component.component_type == 'sbom' %}
-        {{ data.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
+        {{ item.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
     {% elif component.component_type == 'document' %}
-        {{ data.name }} - Document file. Download and view this document.
+        {{ item.name }} - Document file. Download and view this document.
     {% endif %}
 {% endblock %}
 {% block extra_css %}
@@ -45,7 +45,7 @@
                         <p class="eyebrow text-muted mb-1">Public {{ component.component_type_display }}</p>
                         <h1 class="page-title">
                             <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} title-icon"></i>
-                            {{ data.name }}
+                            {{ item.name }}
                         </h1>
                         <div class="page-subtitle">
                             <small class="component-link">
@@ -61,29 +61,29 @@
                                 {% if component.component_type == 'sbom' %}
                                     <span class="meta-chip">
                                         <i class="fas fa-tag"></i>
-                                        {% if data.format == 'cyclonedx' %}
+                                        {% if item.format == 'cyclonedx' %}
                                             CycloneDX
-                                        {% elif data.format == 'spdx' %}
+                                        {% elif item.format == 'spdx' %}
                                             SPDX
                                         {% else %}
-                                            {{ data.format|upper }}
+                                            {{ item.format|upper }}
                                         {% endif %}
-                                        {{ data.format_version }}
+                                        {{ item.format_version }}
                                     </span>
-                                    {% if data.version %}
+                                    {% if item.version %}
                                         <span class="meta-chip">
                                             <i class="fas fa-code-branch"></i>
-                                            <span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                            <span class="version-display" title="{{ item.version }}">{{ item.version }}</span>
                                         </span>
                                     {% endif %}
                                 {% elif component.component_type == 'document' %}
                                     <span class="meta-chip">
-                                        <i class="fas fa-tag"></i>{{ data.document_type|default:"Document" }}
+                                        <i class="fas fa-tag"></i>{{ item.document_type|default:"Document" }}
                                     </span>
-                                    {% if data.version %}
+                                    {% if item.version %}
                                         <span class="meta-chip">
                                             <i class="fas fa-code-branch"></i>
-                                            <span class="version-display" title="{{ data.version }}">{{ data.version }}</span>
+                                            <span class="version-display" title="{{ item.version }}">{{ item.version }}</span>
                                         </span>
                                     {% endif %}
                                 {% endif %}
@@ -105,7 +105,7 @@
                                         <div class="card-body">
                                             <div class="text-center">
                                                 <p class="text-muted mb-3">Download this {{ component.component_type_display }} file</p>
-                                                <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' data.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' data.id %} {% endif %}"
+                                                <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' item.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' item.id %} {% endif %}"
                                                    class="btn btn-primary download-btn">
                                                     <i class="fas fa-download me-2"></i>
                                                     Download {{ component.component_type_display }}

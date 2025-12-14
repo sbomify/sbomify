@@ -22,7 +22,7 @@
                 {% for document in documents %}
                     <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
                         <td {% if not is_public_view %}data-label="Name"{% endif %}>
-                            <a href="{% if is_public_view %}{% url 'documents:document_details_public' document.document.id %}{% else %}{% url 'documents:document_details' document.document.id %}{% endif %}"
+                            <a href="{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id=document.document.id %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id=document.document.id %}{% endif %}"
                                title="Details"
                                class="icon-link">{{ document.document.name }}</a>
                         </td>

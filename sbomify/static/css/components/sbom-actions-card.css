@@ -1,68 +1,3 @@
-<template>
-  <StandardCard
-    title="SBOM Actions"
-    info-icon="fas fa-cogs"
-    shadow="sm"
-    :collapsible="true"
-    :default-expanded="true"
-    storage-key="sbom-actions"
-  >
-    <div class="actions-grid">
-      <div class="action-item">
-        <div class="action-icon download-icon">
-          <i class="fas fa-download"></i>
-        </div>
-        <div class="action-content">
-          <h6 class="action-title">Download SBOM</h6>
-          <p class="action-description">Get the complete SBOM file in its original format</p>
-          <a :href="downloadUrl" class="btn btn-primary btn-action">
-            <i class="fas fa-download me-2"></i>
-            Download File
-          </a>
-        </div>
-      </div>
-
-      <div class="action-item">
-        <div class="action-icon vulnerability-icon">
-          <i class="fas fa-shield-alt"></i>
-        </div>
-        <div class="action-content">
-          <h6 class="action-title">Vulnerability Analysis</h6>
-          <p class="action-description">View vulnerability scan results, security insights, and trends from automatic weekly scans</p>
-          <a :href="vulnerabilitiesUrl" class="btn btn-warning btn-action">
-            <i class="fas fa-shield-alt me-2"></i>
-            View Vulnerability Report
-          </a>
-        </div>
-      </div>
-    </div>
-
-
-  </StandardCard>
-</template>
-
-<script setup lang="ts">
-import { computed } from 'vue'
-import StandardCard from '../../../core/js/components/StandardCard.vue'
-
-interface Props {
-  sbomId: string
-}
-
-// ScanResult interface removed - manual scanning no longer needed
-
-const props = defineProps<Props>()
-
-// Computed URLs
-const downloadUrl = computed(() => `/api/v1/sboms/${props.sbomId}/download`)
-const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities`)
-
-
-
-// Manual scan functionality removed - vulnerability scans now run weekly automatically
-</script>
-
-<style scoped>
 .actions-grid {
   display: flex;
   flex-direction: column;
@@ -247,4 +182,4 @@ const vulnerabilitiesUrl = computed(() => `/sbom/${props.sbomId}/vulnerabilities
     font-size: 1rem;
   }
 }
-</style>
+

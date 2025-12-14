@@ -1,0 +1,81 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/document-metadata-card.css' %}">
+<div class="standard-card mt-3">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <div class="header-content">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Document Metadata
+                </h4>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="metadata-content">
+                <div class="metadata-item">
+                    <div class="metadata-label">
+                        <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                        Uploaded On
+                    </div>
+                    <div class="metadata-value">{{ item.created_at|date:"F d, Y \a\t g:i A" }}</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">
+                        <i class="fas fa-source-branch me-2 text-primary"></i>
+                        Source
+                    </div>
+                    <div class="metadata-value">
+                        <span class="badge bg-info-subtle text-info">{{ item.source_display }}</span>
+                    </div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">
+                        <i class="fas fa-file-alt me-2 text-primary"></i>
+                        Type
+                    </div>
+                    <div class="metadata-value">
+                        <span class="badge bg-info-subtle text-info">{{ item.document_type|default:"Document" }}</span>
+                    </div>
+                </div>
+                {% if item.content_type %}
+                    <div class="metadata-item">
+                        <div class="metadata-label">
+                            <i class="fas fa-file me-2 text-primary"></i>
+                            Content Type
+                        </div>
+                        <div class="metadata-value">{{ item.content_type }}</div>
+                    </div>
+                {% endif %}
+                {% if item.file_size %}
+                    <div class="metadata-item">
+                        <div class="metadata-label">
+                            <i class="fas fa-weight me-2 text-primary"></i>
+                            File Size
+                        </div>
+                        <div class="metadata-value">{{ item.file_size|filesizeformat }}</div>
+                    </div>
+                {% endif %}
+                {% if item.version %}
+                    <div class="metadata-item">
+                        <div class="metadata-label">
+                            <i class="fas fa-tag me-2 text-primary"></i>
+                            Version
+                        </div>
+                        <div class="metadata-value">
+                            <span class="version-display" title="{{ item.version }}">{{ item.version }}</span>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="metadata-item">
+                    <div class="metadata-label">
+                        <i class="fas fa-fingerprint me-2 text-primary"></i>
+                        Document ID
+                    </div>
+                    <div class="metadata-value">
+                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID: "|add:item.id|add:" (click to copy)" %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

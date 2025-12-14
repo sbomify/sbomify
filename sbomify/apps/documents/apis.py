@@ -197,6 +197,7 @@ def get_document(request: HttpRequest, document_id: str):
         "created_at": document.created_at,
         "source": document.source,
         "component_id": document.component.id,
+        "component_name": document.component.name,
         "document_type": document.document_type,
         "description": document.description,
         "content_type": document.content_type,

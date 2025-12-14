@@ -45,8 +45,6 @@ def public_url(context, url_name, *args, **kwargs):
         "core_custom_domain:project_details_public": "project",
         "core:component_details_public": "component",
         "core_custom_domain:component_details_public": "component",
-        "core:component_detailed_public": "component_detailed",
-        "core_custom_domain:component_detailed_public": "component_detailed",
         "core:product_releases_public": "product_releases",
         "core_custom_domain:product_releases_public": "product_releases",
         "core:release_details_public": "release",
@@ -83,17 +81,6 @@ def public_url(context, url_name, *args, **kwargs):
             if component_id or component_slug:
                 return get_public_path(
                     "component", component_id or "", is_custom_domain=True, slug=component_slug or component_id
-                )
-        elif resource_type == "component_detailed":
-            component_id = kwargs.get("component_id")
-            component_slug = kwargs.get("component_slug") or slug
-            if component_id or component_slug:
-                return get_public_path(
-                    "component",
-                    component_id or "",
-                    is_custom_domain=True,
-                    slug=component_slug or component_id,
-                    detailed=True,
                 )
         elif resource_type == "product_releases":
             product_id = kwargs.get("product_id")

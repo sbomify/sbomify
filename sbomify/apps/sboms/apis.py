@@ -21,6 +21,7 @@ from .models import SBOM, Component, Product, Project
 from .schemas import (
     ComponentMetaData,
     CycloneDXSupportedVersion,
+    SBOMResponseSchema,
     SBOMUploadRequest,
     SPDXPackage,
     cdx15,
@@ -331,6 +332,42 @@ def get_cyclonedx_component_metadata(
 
 
 # Moved dashboard summary endpoint to core API at /api/v1/dashboard/summary
+
+
+@router.get(
+    "/{sbom_id}",
+    response={200: SBOMResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public SBOMs
+)
+def get_sbom(request: HttpRequest, sbom_id: str):
+    """Get a specific SBOM by ID."""
+    try:
+        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return 404, {"detail": "SBOM not found"}
+
+    # For public SBOMs, allow access without authentication
+    # For private SBOMs, verify access permissions
+    if not sbom.component.is_public:
+        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
+            return 403, {"detail": "Forbidden"}
+
+    return 200, {
+        "id": str(sbom.id),
+        "name": sbom.name,
+        "version": sbom.version,
+        "format": sbom.format,
+        "format_version": sbom.format_version,
+        "sbom_filename": sbom.sbom_filename,
+        "created_at": sbom.created_at,
+        "source": sbom.source,
+        "component_id": str(sbom.component.id),
+        "component_name": sbom.component.name,
+        "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", "unknown"),
+        "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
+        "ntia_compliance_checked_at": getattr(sbom, "ntia_compliance_checked_at", None),
+        "source_display": sbom.source_display,
+    }
 
 
 @router.get(
