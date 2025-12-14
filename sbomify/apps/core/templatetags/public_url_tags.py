@@ -49,8 +49,6 @@ def public_url(context, url_name, *args, **kwargs):
         "core_custom_domain:product_releases_public": "product_releases",
         "core:release_details_public": "release",
         "core_custom_domain:release_details_public": "release",
-        "documents:document_details_public": "document",
-        "core_custom_domain:document_details_public": "document",
     }
 
     # If on custom domain, use custom URL generation with slugs
