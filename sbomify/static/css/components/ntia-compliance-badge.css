@@ -287,10 +287,6 @@
   z-index: 1055;
 }
 
-.modal-backdrop {
-  z-index: 1055;
-}
-
 .modal-lg {
   max-width: 850px;
 }
