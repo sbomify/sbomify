@@ -23,7 +23,6 @@ from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.views.sboms_table import SbomsTableView  # noqa: F401
-from sbomify.apps.teams.branding import build_branding_context
 
 logger = logging.getLogger(__name__)
 
