@@ -161,37 +161,3 @@
   margin: -0.5rem -0.5rem -0.5rem auto;
 }
 
-/* Pagination Controls Styles */
-.pagination-controls {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e9ecef;
-}
-
-.pagination-controls .page-link {
-  border: none;
-  background: none;
-  color: #6c757d;
-  padding: 0.375rem 0.75rem;
-  transition: all 0.15s ease-in-out;
-}
-
-.pagination-controls .page-link:hover:not(:disabled) {
-  background-color: #e9ecef;
-  color: #495057;
-}
-
-.pagination-controls .page-item.active .page-link {
-  background-color: #007bff;
-  color: white;
-}
-
-.pagination-controls .page-item.disabled .page-link {
-  color: #6c757d;
-  cursor: not-allowed;
-}
-
-.pagination-controls .form-select-sm {
-  min-width: 60px;
-}
-

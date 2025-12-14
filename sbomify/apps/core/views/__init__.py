@@ -46,6 +46,7 @@ from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # 
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView  # noqa: F401, E402
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 

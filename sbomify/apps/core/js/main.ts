@@ -13,6 +13,7 @@ import {
 } from 'chart.js';
 import Alpine from 'alpinejs';
 import { registerCopyableValue } from './components/copyable-value';
+import { registerPublicStatusToggle } from './components/public-status-toggle';
 
 // Register Chart.js components
 Chart.register(
@@ -46,7 +47,6 @@ import SiteNotifications from './components/SiteNotifications.vue';
 import StandardCard from './components/StandardCard.vue';
 import PlanCard from './components/PlanCard.vue';
 import AccessTokensList from './components/AccessTokensList.vue';
-import PublicStatusToggle from './components/PublicStatusToggle.vue';
 import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
 import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
 import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
@@ -71,6 +71,7 @@ import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 // Initialize Alpine.js micro-interactions (copyable values, etc.)
 document.addEventListener('alpine:init', () => {
   registerCopyableValue();
+  registerPublicStatusToggle();
 });
 window.Alpine = Alpine;
 Alpine.start();
@@ -84,7 +85,6 @@ mountVueComponent('vc-site-notifications', SiteNotifications);
 mountVueComponent('vc-standard-card', StandardCard);
 mountVueComponent('vc-plan-card', PlanCard);
 mountVueComponent('vc-access-tokens-list', AccessTokensList);
-mountVueComponent('vc-public-status-toggle', PublicStatusToggle);
 mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
 mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
 mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);

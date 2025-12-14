@@ -24,12 +24,8 @@
                     {% endif %}
                 </h1>
                 {% if product.has_crud_permissions %}
-                    {% resource_public_absolute_url 'product' product as product_public_url %}
-                    <div class="vc-public-status-toggle"
-                         data-item-type="product"
-                         data-item-id="{{ product.id }}"
-                         data-public-url="{{ product_public_url }}"
-                         data-inline="true"></div>
+                    {% url 'core:product_details_public' product.id as product_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='product' item_id=product.id public_url=product_public_url is_public=product.is_public %}
                 {% endif %}
             </div>
         </div>
