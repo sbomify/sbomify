@@ -144,17 +144,18 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
         uri, form_data, content_type="application/x-www-form-urlencoded"
     )
 
-    assert response.status_code == 302
-    assert response.url == reverse("teams:teams_dashboard")
-    messages = list(get_messages(response.wsgi_request))
-
-    assert len(messages) == 1
-    assert messages[0].message == "Workspace New Test Team created successfully"
-
     team = Team.objects.filter(name="New Test Team").first()
     assert team is not None  # nosec
     assert team.key is not None  # nosec
     assert len(team.key) > 0  # nosec
+
+    assert response.status_code == 302
+    assert response.url == reverse("teams:switch_team", kwargs={"team_key": team.key})
+
+    messages = list(get_messages(response.wsgi_request))
+
+    assert len(messages) == 1
+    assert messages[0].message == "Workspace New Test Team created successfully"
 
 
 

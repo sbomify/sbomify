@@ -58,7 +58,7 @@ class WorkspacesDashboardView(LoginRequiredMixin, View):
             f"Workspace {form.instance.name} created successfully",
         )
 
-        return redirect("teams:teams_dashboard")
+        return redirect("teams:switch_team", team_key=form.instance.key)
 
     def _patch(self, request: HttpRequest) -> HttpResponse:
         form = UpdateTeamForm(request.POST)

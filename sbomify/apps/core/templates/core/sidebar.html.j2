@@ -53,11 +53,28 @@
                 {% if request.session.current_team and request.session.current_team.key %}
                     <li class="sidebar-item {% if 'teams:team_settings' in current_view_name %}active{% endif %}">
                         <a class="sidebar-link"
-                           href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}">
+                           href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}"
+                           data-bs-toggle="tooltip"
+                           title="Workspace settings">
                             <i class="align-middle fas fa-cog"></i> <span class="align-middle pt-1">Settings</span>
                         </a>
                     </li>
                 {% endif %}
+                {% with sidebar_team=request.session.current_team|default:current_team %}
+                    {% if sidebar_team %}
+                        <li class="sidebar-item sidebar-current-workspace">
+                            <div class="sidebar-current-workspace-card">
+                                <div class="sidebar-current-workspace-icon">
+                                    <i class="align-middle fas fa-briefcase" aria-hidden="true"></i>
+                                </div>
+                                <div class="sidebar-current-workspace-info">
+                                    <span class="sidebar-current-workspace-label">Current workspace</span>
+                                    <span class="sidebar-current-workspace-name">{{ sidebar_team.name }}</span>
+                                </div>
+                            </div>
+                        </li>
+                    {% endif %}
+                {% endwith %}
             </ul>
         {% endwith %}
     </div>

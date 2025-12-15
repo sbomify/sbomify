@@ -1,4 +1,5 @@
 {% load static %}
+{% load teams %}
 {# Modern Accessible Sidebar with Bootstrap 5.3 #}
 <nav id="sidebar"
      class="sidebar js-sidebar"
@@ -72,6 +73,140 @@
                         </a>
                     </li>
                 {% endif %}
+                {# Current Workspace Switcher at the bottom #}
+                {% load teams %}
+                {% user_workspaces as available_workspaces %}
+                {% url 'teams:teams_dashboard' as teams_dashboard_url %}
+                {% with sidebar_team=request.session.current_team %}
+                    {% if sidebar_team and current_workspace_key %}
+                        <li class="sidebar-item sidebar-current-workspace"
+                            x-data="workspaceSwitcher()"
+                            data-current-workspace="{{ current_workspace_key }}"
+                            data-current-view="{{ current_view_name }}"
+                            data-switch-url="/workspaces/switch/"
+                            data-teams-dashboard-url="{{ teams_dashboard_url }}"
+                            @keydown.escape.window="closeModal()"
+                            @keydown="handleKeydown($event)"
+                            role="region"
+                            aria-label="Workspace switcher">
+                            {# Compact Workspace Button #}
+                            <button type="button"
+                                    class="sidebar-workspace-trigger"
+                                    @click="toggleModal()"
+                                    aria-label="Switch workspace"
+                                    aria-haspopup="dialog"
+                                    :aria-expanded="open">
+                                <span class="workspace-avatar workspace-avatar-{{ sidebar_team.name|avatar_color_index }}">
+                                    {{ sidebar_team.name|workspace_initials }}
+                                </span>
+                                <span class="workspace-trigger-name">{{ sidebar_team.name|workspace_display }}</span>
+                                <i class="fas fa-chevron-right workspace-trigger-chevron"
+                                   aria-hidden="true"></i>
+                            </button>
+                            {# Workspace Switcher Modal #}
+                            <div class="workspace-modal-backdrop"
+                                 x-show="open"
+                                 x-cloak
+                                 x-transition:enter="fade-enter"
+                                 x-transition:enter-start="fade-enter-start"
+                                 x-transition:enter-end="fade-enter-end"
+                                 x-transition:leave="fade-leave"
+                                 x-transition:leave-start="fade-leave-start"
+                                 x-transition:leave-end="fade-leave-end"
+                                 @click.self="closeModal()"
+                                 role="dialog"
+                                 aria-modal="true"
+                                 aria-labelledby="workspace-modal-title"
+                                 :aria-hidden="!open">
+                                <div class="workspace-modal" @click.stop>
+                                    <div class="workspace-modal-header">
+                                        <div class="workspace-modal-title-wrapper">
+                                            <h5 class="workspace-modal-title" id="workspace-modal-title">Select Workspace</h5>
+                                            <button type="button"
+                                                    class="workspace-modal-help"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-placement="top"
+                                                    title="Switch between your workspaces"
+                                                    aria-label="Help">
+                                                <i class="fas fa-question-circle"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="workspace-modal-search">
+                                        <i class="fas fa-search" aria-hidden="true"></i>
+                                        <input type="text"
+                                               x-model="search"
+                                               @input="debouncedSearch()"
+                                               placeholder="Search Workspaces"
+                                               class="workspace-search-input"
+                                               aria-label="Search workspaces"
+                                               aria-describedby="workspace-search-help">
+                                        <span id="workspace-search-help" class="visually-hidden">Type to filter workspaces. Use arrow keys to navigate, Enter to select.</span>
+                                    </div>
+                                    <div class="workspace-modal-list"
+                                         role="listbox"
+                                         aria-label="Available workspaces">
+                                        {% if available_workspaces %}
+                                            {% for t_key, t_info in available_workspaces.items %}
+                                                {% if t_key and t_info.name %}
+                                                    <label class="workspace-option"
+                                                           data-workspace-key="{{ t_key }}"
+                                                           x-show="isVisible('{{ t_info.name|escapejs }}')"
+                                                           :class="{ 'workspace-option-selected': selected === '{{ t_key|escapejs }}', 'workspace-option-active': currentWorkspace === '{{ t_key|escapejs }}' }"
+                                                           @click="selected = '{{ t_key|escapejs }}'"
+                                                           role="option"
+                                                           :aria-selected="selected === '{{ t_key|escapejs }}'">
+                                                        <input type="radio"
+                                                               name="workspace"
+                                                               value="{{ t_key }}"
+                                                               x-model="selected"
+                                                               {% if current_workspace_key == t_key %}checked{% endif %}
+                                                               class="visually-hidden"
+                                                               :aria-checked="selected === '{{ t_key|escapejs }}'">
+                                                        <span class="workspace-avatar workspace-avatar-{{ t_info.name|avatar_color_index }}">
+                                                            {{ t_info.name|workspace_initials }}
+                                                        </span>
+                                                        <span class="workspace-option-name">{{ t_info.name|workspace_display }}</span>
+                                                        <i class="fas fa-check workspace-option-check"
+                                                           x-show="selected === '{{ t_key|escapejs }}'"
+                                                           aria-hidden="true"></i>
+                                                    </label>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <div class="workspace-empty-state" role="status" aria-live="polite">
+                                                <p class="text-muted text-center py-4">No workspaces available</p>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="workspace-modal-footer">
+                                        <button type="button"
+                                                class="btn btn-outline-primary workspace-btn-new"
+                                                @click="openNewWorkspaceModal()"
+                                                :disabled="isSwitching">New Workspace</button>
+                                        <div class="workspace-modal-actions">
+                                            <button type="button"
+                                                    class="btn btn-link workspace-btn-cancel"
+                                                    @click="closeModal()"
+                                                    :disabled="isSwitching">Cancel</button>
+                                            <button type="button"
+                                                    class="btn btn-primary workspace-btn-switch"
+                                                    @click="switchWorkspace()"
+                                                    :disabled="selected === currentWorkspace || isSwitching"
+                                                    aria-label="Switch to selected workspace">
+                                                <span x-show="!isSwitching">Switch</span>
+                                                <span x-show="isSwitching"
+                                                      class="spinner-border spinner-border-sm"
+                                                      role="status"
+                                                      aria-hidden="true"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    {% endif %}
+                {% endwith %}
             </ul>
         {% endwith %}
     </div>

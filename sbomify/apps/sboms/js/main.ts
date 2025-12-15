@@ -1,17 +1,15 @@
 import 'vite/modulepreload-polyfill'
 import '../../core/js/layout-interactions'
-import Alpine from 'alpinejs'
 import { registerSbomsTable } from './sboms-table'
 import { registerReleaseList } from '../../core/js/components/release-list'
 import { registerNtiaComplianceBadge } from '../../core/js/components/ntia-compliance-badge'
+import { initializeAlpine } from '../../core/js/alpine-init'
 
-document.addEventListener('alpine:init', () => {
-  registerSbomsTable()
-  registerReleaseList()
-  registerNtiaComplianceBadge()
-});
+registerSbomsTable()
+registerReleaseList()
+registerNtiaComplianceBadge()
 
-Alpine.start();
+initializeAlpine()
 
 import mountVueComponent from '../../core/js/common_vue'
 import EditableSingleField from '../../core/js/components/EditableSingleField.vue'

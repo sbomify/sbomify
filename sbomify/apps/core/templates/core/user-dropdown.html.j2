@@ -2,6 +2,7 @@
     <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none position-relative"
             type="button"
             data-bs-toggle="dropdown"
+            title="Settings"
             aria-expanded="false"
             aria-haspopup="true"
             aria-label="User menu (mobile)">
@@ -53,7 +54,9 @@
         <li role="presentation">
             <a class="dropdown-item"
                href="{% url 'core:settings' %}"
-               role="menuitem">
+               role="menuitem"
+               data-bs-toggle="tooltip"
+               title="Account settings">
                 <span class="d-flex align-items-center justify-content-between">
                     <span class="d-flex align-items-center">
                         <i class="align-middle me-2 fas fa-cog"></i>

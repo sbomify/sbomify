@@ -10,7 +10,8 @@
             aria-label="Open navigation menu">
         <span class="hamburger" aria-hidden="true"></span>
     </button>
-    {% include "teams/team_selection_dropdown.html.j2" %}
+    {# Spacer to push user dropdown to the right #}
+    <div class="flex-grow-1"></div>
     <div class="navbar-collapse collapse">
         <ul class="navbar-nav navbar-align">
             {% include "core/user-dropdown.html.j2" %}
