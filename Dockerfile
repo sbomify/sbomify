@@ -4,6 +4,14 @@ ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.0.2
 ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
+# Build metadata arguments (passed from CI/CD)
+ARG BUILD_DATE=""
+ARG GIT_COMMIT=""
+ARG GIT_COMMIT_SHORT=""
+ARG GIT_REF=""
+ARG VERSION=""
+ARG BUILD_TYPE=""
+
 ### Stage 1: Bun JS build for Production Frontend Assets
 FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS js-build-prod
 
@@ -155,6 +163,27 @@ CMD ["uv", "run", "uvicorn", "sbomify.asgi:application", \
 # This is the default final stage if no target is specified.
 FROM python-dependencies AS python-app-prod
 
+# Re-declare build metadata ARGs (required in each stage that uses them)
+ARG BUILD_DATE=""
+ARG GIT_COMMIT=""
+ARG GIT_COMMIT_SHORT=""
+ARG GIT_REF=""
+ARG VERSION=""
+ARG BUILD_TYPE=""
+
+# OCI Image Spec labels for container metadata
+LABEL org.opencontainers.image.title="sbomify" \
+      org.opencontainers.image.description="Your Security Artifact Hub - Generate, manage, and share SBOMs and compliance documents" \
+      org.opencontainers.image.url="https://github.com/sbomify/sbomify" \
+      org.opencontainers.image.source="https://github.com/sbomify/sbomify" \
+      org.opencontainers.image.vendor="sbomify" \
+      org.opencontainers.image.licenses="Apache-2.0 WITH Commons-Clause-1.0" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.ref.name="${GIT_REF}" \
+      com.sbomify.build.type="${BUILD_TYPE}"
+
 WORKDIR /code
 
 # Copy the osv-scanner binary from the go-builder stage
@@ -176,11 +205,18 @@ RUN mkdir -p /var/lib/dramatiq-prometheus /code/staticfiles /tmp/.cache && \
     chmod 755 /tmp && \
     chmod 755 /tmp/.cache
 
-# Set environment variables for Prometheus metrics and UV cache
+# Set environment variables for Prometheus metrics, UV cache, and build metadata
+# Build metadata is exposed at runtime for version display in the application
 ENV PROMETHEUS_MULTIPROC_DIR=/var/lib/dramatiq-prometheus \
     UV_CACHE_DIR=/tmp/.cache/uv \
     HOME=/tmp \
-    UV_NO_SYNC=1
+    UV_NO_SYNC=1 \
+    SBOMIFY_BUILD_DATE="${BUILD_DATE}" \
+    SBOMIFY_GIT_COMMIT="${GIT_COMMIT}" \
+    SBOMIFY_GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT}" \
+    SBOMIFY_GIT_REF="${GIT_REF}" \
+    SBOMIFY_VERSION="${VERSION}" \
+    SBOMIFY_BUILD_TYPE="${BUILD_TYPE}"
 
 # Switch to non-root user
 USER nobody

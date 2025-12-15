@@ -12,12 +12,38 @@
                            rel="noopener">
                             <strong>sbomify</strong>
                         </a>
-                        {% if app_version %}
-                            <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
-                               class="version-tag"
-                               target="_blank"
-                               rel="noopener"
-                               title="View release notes">v{{ app_version }}</a>
+                        {% if request.user.is_authenticated %}
+                            {% if build_type == 'release' and app_version %}
+                                {# Release build: show version with link to release notes #}
+                                <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
+                                   class="version-tag"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="View release notes">v{{ app_version }}</a>
+                                {% if git_commit %}
+                                    <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
+                                       class="commit-tag"
+                                       target="_blank"
+                                       rel="noopener"
+                                       title="View commit {{ git_commit }}">{{ git_commit }}</a>
+                                {% endif %}
+                            {% elif git_commit %}
+                                {# Development/branch build: show branch @ commit #}
+                                <span class="version-tag dev-build"
+                                      title="Development build from {{ git_ref }}">
+                                    {% if git_ref %}{{ git_ref }} @{% endif %}
+                                    <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
+                                       target="_blank"
+                                       rel="noopener">{{ git_commit }}</a>
+                                </span>
+                            {% elif app_version %}
+                                {# Fallback: just show version (local development) #}
+                                <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
+                                   class="version-tag"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="View release notes">v{{ app_version }}</a>
+                            {% endif %}
                         {% endif %}
                     </div>
                     <div class="copyright-text">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>
@@ -34,7 +60,7 @@
         </div>
     </footer>
 {% else %}
-    {% cache 3600 'footer' app_version %}
+    {% cache 3600 'footer' app_version build_type request.user.is_authenticated %}
     <footer class="modern-footer">
         <div class="container-fluid">
             <div class="footer-content">
@@ -46,12 +72,38 @@
                            rel="noopener">
                             <strong>sbomify</strong>
                         </a>
-                        {% if app_version %}
-                            <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
-                               class="version-tag"
-                               target="_blank"
-                               rel="noopener"
-                               title="View release notes">v{{ app_version }}</a>
+                        {% if request.user.is_authenticated %}
+                            {% if build_type == 'release' and app_version %}
+                                {# Release build: show version with link to release notes #}
+                                <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
+                                   class="version-tag"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="View release notes">v{{ app_version }}</a>
+                                {% if git_commit %}
+                                    <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
+                                       class="commit-tag"
+                                       target="_blank"
+                                       rel="noopener"
+                                       title="View commit {{ git_commit }}">{{ git_commit }}</a>
+                                {% endif %}
+                            {% elif git_commit %}
+                                {# Development/branch build: show branch @ commit #}
+                                <span class="version-tag dev-build"
+                                      title="Development build from {{ git_ref }}">
+                                    {% if git_ref %}{{ git_ref }} @{% endif %}
+                                    <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
+                                       target="_blank"
+                                       rel="noopener">{{ git_commit }}</a>
+                                </span>
+                            {% elif app_version %}
+                                {# Fallback: just show version (local development) #}
+                                <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
+                                   class="version-tag"
+                                   target="_blank"
+                                   rel="noopener"
+                                   title="View release notes">v{{ app_version }}</a>
+                            {% endif %}
                         {% endif %}
                     </div>
                     <div class="copyright-text">© {% now "Y" %} sbomify, ltd. All rights reserved.</div>
