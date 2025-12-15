@@ -53,8 +53,8 @@ class ComponentItemPublicView(View):
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
-        data_component_obj = getattr(item, "component", None)
-        team = getattr(data_component_obj, "team", None)
+        item_component = getattr(item, "component", None)
+        team = getattr(item_component, "team", None)
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
