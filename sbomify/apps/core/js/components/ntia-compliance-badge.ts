@@ -19,7 +19,7 @@ export function registerNtiaComplianceBadge() {
     teamBillingPlan: string,
   ) => {
     const complianceDetails: ComplianceDetails = JSON.parse(complianceDetailsJson);
- 
+
     return {
       status,
       complianceDetails,
