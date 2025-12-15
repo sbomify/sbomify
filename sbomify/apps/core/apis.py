@@ -1512,7 +1512,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def get_component(request: HttpRequest, component_id: str):
+def get_component(request: HttpRequest, component_id: str, return_instance: bool = False):
     """Get a specific component by ID."""
     try:
         component = Component.objects.prefetch_related("sbom_set").get(pk=component_id)
@@ -1521,7 +1521,8 @@ def get_component(request: HttpRequest, component_id: str):
 
     # If component is public, allow unauthenticated access
     if component.is_public:
-        return 200, _build_item_response(request, component, "component")
+        response = component if return_instance else _build_item_response(request, component, "component")
+        return 200, response
 
     # For private components, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -1530,7 +1531,8 @@ def get_component(request: HttpRequest, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(request, component, "component")
+    response = component if return_instance else _build_item_response(request, component, "component")
+    return 200, response
 
 
 @router.put(

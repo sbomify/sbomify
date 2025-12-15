@@ -278,11 +278,11 @@ class TestNTIAComplianceIntegration:
             check_sbom_ntia_compliance(sbom_id)
 
             # Test private SBOM detail page loads
-            private_detail_response = client.get(f"/component/{component.id}/detailed/")
+            private_detail_response = client.get(f"/components/{component.id}/sboms/{sbom_id}/")
             assert private_detail_response.status_code == 200
 
             # Test public SBOM detail page loads
-            public_detail_response = client.get(f"/public/component/{component.id}/detailed/")
+            public_detail_response = client.get(f"/public/components/{component.id}/sboms/{sbom_id}/")
             assert public_detail_response.status_code == 200
 
     def test_signal_triggered_compliance_check(self, component, compliant_cyclonedx_sbom):

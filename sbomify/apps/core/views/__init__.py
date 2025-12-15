@@ -28,10 +28,9 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
-from sbomify.apps.core.views.component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_item import ComponentItemPublicView, ComponentItemView  # noqa: F401, E402
 from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: F401, E402
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402

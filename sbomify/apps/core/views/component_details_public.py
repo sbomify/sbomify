@@ -3,9 +3,8 @@ from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpRes
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.apis import get_component, list_component_sboms
+from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Component
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
@@ -47,22 +46,6 @@ class ComponentDetailsPublicView(View):
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
         }
-
-        if component.get("component_type") == Component.ComponentType.SBOM:
-            status_code, sboms_response = list_component_sboms(request, resolved_id, page=1, page_size=-1)
-            if status_code != 200:
-                return error_response(
-                    request, HttpResponse(status=status_code, content=sboms_response.get("detail", "Unknown error"))
-                )
-            context["sboms_data"] = sboms_response.get("items", [])
-
-        elif component.get("component_type") == Component.ComponentType.DOCUMENT:
-            # Documents table is loaded via HTMX from DocumentsTableView
-            # No need to load documents data here
-            pass
-
-        else:
-            return error_response(request, HttpResponseNotFound("Unknown component type"))
 
         brand = build_branding_context(team)
 

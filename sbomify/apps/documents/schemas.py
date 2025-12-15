@@ -20,6 +20,7 @@ class DocumentResponseSchema(BaseModel):
     created_at: datetime
     source: Optional[str]
     component_id: str
+    component_name: str
     document_type: str
     description: str
     content_type: str

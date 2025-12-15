@@ -1,6 +1,5 @@
 {% extends "core/public_base.htmx.j2" %}
 {% load breadcrumb_tags %}
-{% load django_htmx %}
 {% load django_vite %}
 {% load static %}
 {% block title %}{{ component.name }}{% endblock %}
@@ -120,7 +119,6 @@
     </div>
 {% endblock %}
 {% block scripts %}
-    {% htmx_script %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}

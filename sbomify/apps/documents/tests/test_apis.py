@@ -13,7 +13,7 @@ from sbomify.apps.core.tests.shared_fixtures import authenticated_api_client, ge
 from sbomify.apps.core.tests.s3_fixtures import create_documents_api_mock
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Member 
 
 from ..models import Document
 

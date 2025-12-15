@@ -1,0 +1,62 @@
+.metadata-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.metadata-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metadata-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+}
+
+.metadata-value {
+  font-size: 0.9rem;
+  color: #374151;
+  display: flex;
+  align-items: center;
+}
+
+.font-monospace {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  background: #f1f5f9;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.font-monospace:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.version-display {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+@media (max-width: 768px) {
+  .metadata-content {
+    gap: 0.75rem;
+  }
+
+  .metadata-item {
+    gap: 0.125rem;
+  }
+}
+

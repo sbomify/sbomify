@@ -80,19 +80,9 @@ urlpatterns = [
     ),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path(
-        "component/<str:component_id>/detailed/",
-        views.ComponentDetailedPrivateView.as_view(),
-        name="component_detailed",
-    ),
-    path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",
-    ),
-    path(
-        "public/component/<str:component_id>/detailed/",
-        views.ComponentDetailedPublicView.as_view(),
-        name="component_detailed_public",
     ),
     path(
         "public/workspace/<str:workspace_key>/",
@@ -154,4 +144,14 @@ urlpatterns = [
     # Support contact pages
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
+    re_path(
+        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        views.ComponentItemView.as_view(),
+        name="component_item",
+    ),
+    re_path(
+        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        views.ComponentItemPublicView.as_view(),
+        name="component_item_public",
+    ),
 ]
