@@ -60,7 +60,7 @@
         </div>
     </footer>
 {% else %}
-    {% cache 3600 'footer' app_version git_commit request.user.is_authenticated %}
+    {% cache 3600 'footer' app_version build_type request.user.is_authenticated %}
     <footer class="modern-footer">
         <div class="container-fluid">
             <div class="footer-content">
