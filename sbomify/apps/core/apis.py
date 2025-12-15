@@ -143,20 +143,27 @@ PRIVATE_ITEMS_UPGRADE_MESSAGE = (
 
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
-    """Get the current user's team ID from the session or fall back to user's first team."""
+    """Get the current user's workspace ID from the session or fall back to user's default workspace."""
     from sbomify.apps.core.utils import get_team_id_from_session
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Member
+    from sbomify.apps.teams.utils import get_user_default_team
 
-    # First try session-based team (for web UI)
+    # First try session-based workspace (for web UI)
     team_id = get_team_id_from_session(request)
     if team_id:
         return team_id
 
-    # Fall back to user's first team (for API calls with bearer tokens)
+    # Fall back to user's default workspace (for API calls with bearer tokens)
     if request.user and request.user.is_authenticated:
-        first_team = Team.objects.filter(member__user=request.user).first()
-        if first_team:
-            return str(first_team.id)
+        # Try to get the user's default workspace first
+        default_team_id = get_user_default_team(request.user)
+        if default_team_id:
+            return str(default_team_id)
+
+        # If no default workspace is set, fall back to first workspace
+        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        if first_membership:
+            return str(first_membership.team.id)
 
     return None
 
