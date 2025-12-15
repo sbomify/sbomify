@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpRes
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.apis import get_component
+from sbomify.apps.core.apis import _build_item_response, get_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
@@ -30,7 +30,7 @@ class ComponentItemPublicView(View):
         resolved_id = component_obj.id
         component_slug = component_obj.slug
 
-        status_code, component = get_component(request, resolved_id)
+        status_code, component = get_component(request, resolved_id, return_instance=True)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
@@ -53,24 +53,23 @@ class ComponentItemPublicView(View):
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
-        item_component = getattr(item, "component", None)
-        team = getattr(item_component, "team", None)
-
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
-        if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
+        if component.team and (
+            should_redirect_to_custom_domain(request, component.team) or should_redirect_to_clean_url(request)
+        ):
             path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_slug, detailed=True)
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
 
-        brand = build_branding_context(team)
+        brand = build_branding_context(component.team)
 
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "brand": brand,
             "item": item,
-            "component": component,
+            "component": _build_item_response(request, component, "component"),
         }
-        add_custom_domain_to_context(request, context, team)
+        add_custom_domain_to_context(request, context, component.team)
 
         return render(request, "core/component_item_public.html.j2", context)
 
