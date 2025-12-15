@@ -214,7 +214,7 @@ def create_documents_views_mock(mocker: MockerFixture, scenario: str = "success"
     Returns:
         Mock S3Client instance configured for the scenario
     """
-    mock_s3_client = mocker.patch("sbomify.apps.documents.views.S3Client")
+    mock_s3_client = mocker.patch("sbomify.apps.documents.views.document_download.S3Client")
     mock_instance = MagicMock()
     mock_s3_client.return_value = mock_instance
 

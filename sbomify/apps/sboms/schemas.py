@@ -25,6 +25,23 @@ class SBOMUploadRequest(Schema):
     id: str
 
 
+class SBOMResponseSchema(BaseModel):
+    id: str
+    name: str
+    version: str
+    format: str
+    format_version: str
+    sbom_filename: str
+    created_at: datetime
+    source: str | None
+    component_id: str
+    component_name: str
+    ntia_compliance_status: str
+    ntia_compliance_details: dict
+    ntia_compliance_checked_at: datetime | None
+    source_display: str
+
+
 class DashboardSBOMUploadInfo(Schema):
     component_name: str
     sbom_name: str

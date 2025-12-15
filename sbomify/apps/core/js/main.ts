@@ -40,7 +40,6 @@ import './alerts-global'; // Ensure alerts are available globally
 import './clipboard-global'; // Clipboard utilities with auto-initialization
 import { eventBus, EVENTS } from './utils';
 import EditableSingleField from './components/EditableSingleField.vue';
-import CopyableValue from './components/CopyableValue.vue';
 import ConfirmAction from './components/ConfirmAction.vue';
 import CopyToken from './components/CopyToken.vue';
 import SiteNotifications from './components/SiteNotifications.vue';
@@ -57,8 +56,6 @@ import ExportDataCard from './components/ExportDataCard.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 import ItemsListTable from './components/ItemsListTable.vue';
 import PublicCard from './components/PublicCard.vue';
-import PublicPageLayout from './components/PublicPageLayout.vue';
-import PublicProjectComponents from './components/PublicProjectComponents.vue';
 import PublicProductProjects from './components/PublicProductProjects.vue';
 import PublicDownloadCard from './components/PublicDownloadCard.vue';
 import ProductIdentifiers from './components/ProductIdentifiers.vue';
@@ -78,7 +75,6 @@ Alpine.start();
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
-mountVueComponent('vc-copyable-value', CopyableValue);
 mountVueComponent('vc-confirm-action', ConfirmAction);
 mountVueComponent('vc-copy-token', CopyToken);
 mountVueComponent('vc-site-notifications', SiteNotifications);
@@ -95,8 +91,6 @@ mountVueComponent('vc-export-data-card', ExportDataCard);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 mountVueComponent('vc-items-list-table', ItemsListTable);
 mountVueComponent('vc-public-card', PublicCard);
-mountVueComponent('vc-public-page-layout', PublicPageLayout);
-mountVueComponent('vc-public-project-components', PublicProjectComponents);
 mountVueComponent('vc-public-product-projects', PublicProductProjects);
 mountVueComponent('vc-public-download-card', PublicDownloadCard);
 mountVueComponent('vc-product-identifiers', ProductIdentifiers);

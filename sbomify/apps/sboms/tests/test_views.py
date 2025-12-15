@@ -218,7 +218,6 @@ def test_details_page_only_accessible_when_logged_in(
         reverse("core:product_details", kwargs={"product_id": sample_product.id}),
         reverse("core:project_details", kwargs={"project_id": sample_project.id}),
         reverse("core:component_details", kwargs={"component_id": sample_component.id}),
-        reverse("sboms:sbom_details", kwargs={"sbom_id": sample_sbom.id}),
     ]
 
     # Test unauthenticated access
@@ -262,7 +261,6 @@ def test_public_pages_accessibility(
         reverse("core:product_details_public", kwargs={"product_id": sample_product.id}),
         reverse("core:project_details_public", kwargs={"project_id": sample_project.id}),
         reverse("core:component_details_public", kwargs={"component_id": sample_component.id}),
-        reverse("sboms:sbom_details_public", kwargs={"sbom_id": sample_sbom.id}),
     ]
 
     client = Client()
@@ -284,7 +282,6 @@ def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
         reverse("core:product_details", kwargs={"product_id": -1}),
         reverse("core:project_details", kwargs={"project_id": -1}),
         reverse("core:component_details", kwargs={"component_id": -1}),
-        reverse("sboms:sbom_details", kwargs={"sbom_id": -1}),
     ]
 
     client = Client()

@@ -1,0 +1,88 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% load static %}
+{% load django_vite %}
+{% block title %}{{ component.component_type_display }}: {{ item.name }}{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/component-detailed-private.css' %}">
+{% endblock %}
+{% block content %}
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    <i class="fas {% if item_type == 'sboms' %}fa-file-code{% elif item_type == 'documents' %}fa-file-alt{% endif %} me-3 text-primary"></i>
+                    {{ item.name }}
+                </h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item">
+                            <a href="{% url 'core:component_details' item.component_id %}">{{ item.component_name }}</a>
+                        </li>
+                        <li class="breadcrumb-item active" aria-current="page">Detailed View</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-cube me-2 text-primary"></i>
+                <span class="meta-label">Component</span>
+            </span>
+            <span class="meta-divider">•</span>
+            {% if item_type == 'sboms' %}
+                <span class="meta-item">
+                    <span class="meta-label">Format:</span>
+                    <span class="badge bg-success-subtle text-success ms-1">
+                        {% if item.format == 'cyclonedx' %}
+                            CycloneDX
+                        {% elif item.format == 'spdx' %}
+                            SPDX
+                        {% else %}
+                            {{ item.format|upper }}
+                        {% endif %}
+                        {{ item.format_version }}
+                    </span>
+                </span>
+                {% if item.version %}
+                    <span class="meta-divider">•</span>
+                    <span class="meta-item">
+                        <span class="meta-label">Version:</span>
+                        <span class="ms-1 version-display" title="{{ item.version }}">{{ item.version }}</span>
+                    </span>
+                {% endif %}
+            {% elif item_type == 'documents' %}
+                <span class="meta-item">
+                    <span class="meta-label">Type:</span>
+                    <span class="badge bg-info-subtle text-info ms-1">{{ item.document_type|default:"Document" }}</span>
+                </span>
+                {% if item.version %}
+                    <span class="meta-divider">•</span>
+                    <span class="meta-item">
+                        <span class="meta-label">Version:</span>
+                        <span class="ms-1 version-display" title="{{ item.version }}">{{ item.version }}</span>
+                    </span>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% if item_type == 'sboms' %}
+        <div class="row">
+            <div class="col-12 col-lg-5">{% include 'sboms/components/sbom_metadata_card.html.j2' with item=item %}</div>
+            <div class="col-12 col-lg-7">{% include 'sboms/components/sbom_actions_card.html.j2' with item=item %}</div>
+        </div>
+    {% elif item_type == 'documents' %}
+        <div class="row">
+            <div class="col-12 col-lg-8">{% include 'documents/components/document_metadata_card.html.j2' with item=item %}</div>
+            <div class="col-12 col-lg-4">{% include 'documents/components/document_actions_card.html.j2' with item=item %}</div>
+        </div>
+    {% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% if item_type == 'sboms' %}
+        {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+    {% elif item_type == 'documents' %}
+        {% vite_asset 'sbomify/apps/documents/js/main.ts' %}
+    {% endif %}
+{% endblock %}

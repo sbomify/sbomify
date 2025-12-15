@@ -4,29 +4,27 @@
       href="{% static 'css/components/ntia-compliance-badge.css' %}">
 <div class="ntia-compliance-badge-wrapper">
     <div x-data="ntiaComplianceBadge('{{ status|escapejs }}', '{{ compliance_details|jsonify|escapejs }}', '{{ team_billing_plan|default:""|escapejs }}')">
-        {% if not is_public_view %}
-            {% if status == 'unknown' and team_billing_plan == 'community' %}
-                <a href="{% url 'billing:select_plan' team_key %}"
-                   class="badge d-flex align-items-center gap-1 text-decoration-none"
-                   :class="getBadgeClasses()"
-                   data-bs-toggle="tooltip"
-                   data-bs-placement="top"
-                   :title="getTooltipText()">
-                    <i :class="getBadgeIconClass()"></i>
-                    <span x-text="getBadgeText()"></span>
-                </a>
-            {% else %}
-                <div class="badge d-flex align-items-center gap-1"
-                     :class="getBadgeClasses()"
-                     data-bs-toggle="tooltip"
-                     data-bs-placement="top"
-                     :title="getTooltipText()"
-                     :style="isBadgeClickable() ? 'cursor: pointer' : ''"
-                     @click="isBadgeClickable() ? showDetailsModal = true : null">
-                    <i :class="getBadgeIconClass()"></i>
-                    <span x-text="getBadgeText()"></span>
-                </div>
-            {% endif %}
+        {% if status == 'unknown' and team_billing_plan == 'community' %}
+            <a href="{% url 'billing:select_plan' team_key %}"
+               class="badge d-flex align-items-center gap-1 text-decoration-none"
+               :class="getBadgeClasses()"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               :title="getTooltipText()">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </a>
+        {% else %}
+            <div class="badge d-flex align-items-center gap-1"
+                 :class="getBadgeClasses()"
+                 data-bs-toggle="tooltip"
+                 data-bs-placement="top"
+                 :title="getTooltipText()"
+                 :style="isBadgeClickable() ? 'cursor: pointer' : ''"
+                 @click="isBadgeClickable() ? showDetailsModal = true : null">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </div>
         {% endif %}
         <template x-if="showDetailsModal">
             <div class="modal fade show ntia-compliance-modal"
