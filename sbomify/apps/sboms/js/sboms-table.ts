@@ -38,7 +38,7 @@ interface SbomItem {
 
 export function registerSbomsTable() {
   Alpine.data('sbomsTable', (componentId: string, sbomsDataJson: string) => {
-    const allSboms = JSON.parse(sbomsDataJson) as SbomItem[]
+    const allSboms: SbomItem[] = JSON.parse(sbomsDataJson)
 
     return {
       componentId,
