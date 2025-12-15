@@ -21,58 +21,10 @@ from django.shortcuts import redirect, render
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.apps.teams.branding import build_branding_context
-
-# from .decorators import validate_role_in_current_team
-from .models import SBOM
+from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.views.sboms_table import SbomsTableView  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-
-# Product/Project/Component views moved to core app
-
-
-def sbom_details_public(request: HttpRequest, sbom_id: str) -> HttpResponse:
-    try:
-        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    if not sbom.public_access_allowed:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    brand = build_branding_context(sbom.component.team)
-
-    return render(
-        request,
-        "sboms/sbom_details_public.html.j2",
-        {
-            "sbom": sbom,
-            "brand": brand,
-            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
-        },
-    )
-
-
-@login_required
-def sbom_details_private(request: HttpRequest, sbom_id: str) -> HttpResponse:
-    try:
-        sbom: SBOM = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("SBOM not found"))
-
-    if not verify_item_access(request, sbom, ["guest", "owner", "admin"]):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    return render(
-        request,
-        "sboms/sbom_details_private.html.j2",
-        {
-            "sbom": sbom,
-            "APP_BASE_URL": settings.APP_BASE_URL,
-            "team_billing_plan": getattr(sbom.component.team, "billing_plan", "community"),
-        },
-    )
 
 
 @login_required
@@ -267,17 +219,11 @@ def sbom_download(request: HttpRequest, sbom_id: str) -> HttpResponse:
     return response
 
 
-# Product/Project SBOM downloads moved to core app
-
-
 @login_required
 def sbom_upload_cyclonedx(request: HttpRequest) -> HttpResponse:
     # Implementation of sbom_upload_cyclonedx view
     # This is a placeholder and should be replaced with the actual implementation
     return JsonResponse({"detail": "SBOM uploaded successfully", "supplier": None}, status=201)
-
-
-# Component metadata view moved to core app
 
 
 @login_required

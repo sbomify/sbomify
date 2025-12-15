@@ -2,6 +2,8 @@ from django.urls import path
 from django.urls.resolvers import URLPattern
 from django.views.generic import RedirectView
 
+from sbomify.apps.sboms.views.sboms_table import SbomsTableView
+
 from . import views
 
 app_name = "sboms"
@@ -84,5 +86,17 @@ urlpatterns: list[URLPattern] = [
         "sbom/<str:sbom_id>/vulnerabilities",
         views.sbom_vulnerabilities,
         name="sbom_vulnerabilities",
+    ),
+    path(
+        "component/<str:component_id>/sboms/",
+        SbomsTableView.as_view(),
+        name="sboms_table",
+        kwargs={"is_public_view": False},
+    ),
+    path(
+        "public/component/<str:component_id>/sboms/",
+        SbomsTableView.as_view(),
+        name="sboms_table_public",
+        kwargs={"is_public_view": True},
     ),
 ]

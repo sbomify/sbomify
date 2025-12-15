@@ -36,7 +36,7 @@
                         </td>
                         <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ document.document.created_at|date:"M d, Y" }}</td>
                         <td {% if not is_public_view %}data-label="Releases"{% endif %}>
-                            {% include 'documents/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
+                            {% include 'core/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
                         </td>
                         <td {% if not is_public_view %}data-label="Actions"{% endif %}>
                             <div class="d-flex gap-2">

@@ -103,13 +103,17 @@
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ sboms_data|json_script:"sboms-data" }}
-                <div class="vc-sboms-table"
-                     data-sboms-data-element-id="sboms-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}"
-                     data-team-key="{{ current_team.key|default:'' }}"
-                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                <div id="sboms-table-container"
+                     hx-get="{% url 'sboms:sboms_table' component.id %}"
+                     hx-trigger="load, refreshSbomsTable from:body"
+                     hx-swap="innerHTML">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading SBOMs...</p>
+                    </div>
+                </div>
             </div>
         </div>
     {% elif component.component_type == 'document' %}

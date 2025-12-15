@@ -2,7 +2,7 @@ import 'vite/modulepreload-polyfill';
 import '../../core/js/layout-interactions';
 import Alpine from 'alpinejs';
 import { registerDocumentsTable } from './documents-table';
-import { registerReleaseList } from './release-list';
+import { registerReleaseList } from '../../core/js/components/release-list';
 
 document.addEventListener('alpine:init', () => {
     registerDocumentsTable();

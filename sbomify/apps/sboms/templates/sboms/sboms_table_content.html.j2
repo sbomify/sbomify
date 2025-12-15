@@ -1,0 +1,83 @@
+{% load static %}
+{% if not sboms %}
+    <div class="text-center text-muted py-4">
+        <i class="fas fa-file-code fa-3x mb-3"></i>
+        <p>No SBOMs found for this component.</p>
+    </div>
+{% else %}
+    <div class="data-table">
+        <table class="table{% if not is_public_view %} dashboard-table{% endif %}">
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Artifact Type</th>
+                    <th scope="col">Format</th>
+                    <th scope="col">Version</th>
+                    <th scope="col">NTIA Compliant</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Releases</th>
+                    {% if not is_public_view %}<th scope="col">Vulnerabilities</th>{% endif %}
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sbom in sboms %}
+                    <tr x-show="isVisible({{ forloop.counter0 }})" style="display: none;">
+                        <td {% if not is_public_view %}data-label="Name"{% endif %}>
+                            <a href="{% if is_public_view %}{% url 'sboms:sbom_details_public' sbom.sbom.id %}{% else %}{% url 'sboms:sbom_details' sbom.sbom.id %}{% endif %}"
+                               title="Details"
+                               class="icon-link">{{ sbom.sbom.name }}</a>
+                        </td>
+                        <td {% if not is_public_view %}data-label="Artifact Type"{% endif %}>SBOM</td>
+                        <td {% if not is_public_view %}data-label="Format"{% endif %}>
+                            <span class="badge bg-success-subtle text-success">
+                                {{ sbom.sbom.format_display|default:sbom.sbom.format|upper }} {{ sbom.sbom.format_version }}
+                            </span>
+                        </td>
+                        <td {% if not is_public_view %}data-label="Version"{% endif %}
+                            title="{{ sbom.sbom.version }}">
+                            <span>{{ sbom.sbom.version|truncatechars:20 }}</span>
+                        </td>
+                        <td {% if not is_public_view %}data-label="NTIA Compliant"{% endif %}>
+                            {% include 'core/components/ntia_compliance_badge.html.j2' with status=sbom.sbom.ntia_compliance_status|default:'unknown' compliance_details=sbom.sbom.ntia_compliance_details is_public_view=is_public_view team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
+                        </td>
+                        <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ sbom.sbom.created_at|date:"M d, Y" }}</td>
+                        <td {% if not is_public_view %}data-label="Releases"{% endif %}>
+                            {% include 'core/components/release_list.html.j2' with releases=sbom.releases document_id=sbom.sbom.id is_public_view=is_public_view %}
+                        </td>
+                        {% if not is_public_view %}
+                            <td data-label="Vulnerabilities">
+                                <a href="{% url 'sboms:sbom_vulnerabilities' sbom.sbom.id %}"
+                                   title="Vulnerabilities"
+                                   class="btn btn-sm btn-outline-warning action-btn{% if not sbom.has_vulnerabilities_report %} disabled{% endif %}">
+                                    <i class="fas fa-shield-alt me-1"></i> View
+                                </a>
+                            </td>
+                        {% endif %}
+                        <td {% if not is_public_view %}data-label="Actions"{% endif %}>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'sboms:sbom_download' sbom.sbom.id %}"
+                                   title="Download"
+                                   class="btn btn-outline-primary btn-sm action-btn">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                {% if has_crud_permissions %}
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger action-btn"
+                                            title="Delete SBOM"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#delete-sbom-modal"
+                                            data-display-name="{{ sbom.sbom.name|escapejs }}"
+                                            data-form-sbom_id="{{ sbom.sbom.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include 'core/components/pagination_controls.html.j2' %}
+{% endif %}

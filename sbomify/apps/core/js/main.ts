@@ -68,8 +68,6 @@ import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
 import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
 import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
-import ReleaseList from './components/ReleaseList.vue';
-
 // Initialize Alpine.js micro-interactions (copyable values, etc.)
 document.addEventListener('alpine:init', () => {
   registerCopyableValue();
@@ -107,8 +105,6 @@ mountVueComponent('vc-product-releases', ProductReleases);
 mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
 mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
 mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
-
-mountVueComponent('vc-release-list', ReleaseList);
 
 // Declare global variables
 declare global {
