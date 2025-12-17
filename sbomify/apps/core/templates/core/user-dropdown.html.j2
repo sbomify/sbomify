@@ -1,20 +1,5 @@
-<li class="nav-item dropdown">
-    <button class="nav-icon dropdown-toggle btn btn-link border-0 bg-transparent d-inline-block d-sm-none position-relative"
-            type="button"
-            data-bs-toggle="dropdown"
-            title="Settings"
-            aria-expanded="false"
-            aria-haspopup="true"
-            aria-label="User menu (mobile)">
-        <i class="align-middle fas fa-cog"></i>
-        {% if pending_invitations_count > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger navbar-badge-custom">
-                {{ pending_invitations_count }}
-                <span class="visually-hidden">pending invitations</span>
-            </span>
-        {% endif %}
-    </button>
-    <button class="nav-link dropdown-toggle btn btn-link border-0 bg-transparent d-none d-sm-inline-flex align-items-center position-relative"
+<div class="dropdown">
+    <button class="btn-user-avatar dropdown-toggle"
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
@@ -22,28 +7,15 @@
             aria-label="User menu">
         {% if request.session.user_photo %}
             <img src="{{ request.session.user_photo }}"
-                 class="avatar img-fluid rounded-circle me-2"
+                 class="user-avatar-img"
                  alt="{{ request.user.get_full_name|default:request.user.username }}"
                  width="32"
                  height="32" />
         {% else %}
-            <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center user-avatar-placeholder me-2">
-                <i class="fas fa-user text-white" aria-hidden="true"></i>
-            </div>
+            {% load teams %}
+            <div class="user-avatar-placeholder">{{ request.user|user_initials }}</div>
         {% endif %}
-        <span class="text-dark">
-            {% if request.user.first_name %}
-                {{ request.user.first_name }} {{ request.user.last_name }}
-            {% else %}
-                {{ request.user.username }}
-            {% endif %}
-        </span>
-        {% if pending_invitations_count > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger navbar-badge-custom">
-                {{ pending_invitations_count }}
-                <span class="visually-hidden">pending invitations</span>
-            </span>
-        {% endif %}
+        <i class="fas fa-chevron-down user-avatar-chevron" aria-hidden="true"></i>
     </button>
     <ul class="dropdown-menu dropdown-menu-end shadow-sm" role="menu">
         <li role="presentation">
@@ -80,4 +52,4 @@
             </a>
         </li>
     </ul>
-</li>
+</div>

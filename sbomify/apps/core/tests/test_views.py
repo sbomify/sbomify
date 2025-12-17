@@ -41,6 +41,12 @@ def test_access_token_creation(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
+    # Ensure no current_team is set in session
+    session = client.session
+    if "current_team" in session:
+        del session["current_team"]
+    session.save()
+
     uri = reverse("core:settings")
     form_data = urlencode({"description": "Test Token"})
     response = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
@@ -97,6 +103,12 @@ def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: A
     # Create token with guest user
     client = Client()
     assert client.login(username="guest", password="guest")
+
+    # Ensure no current_team is set in session
+    session = client.session
+    if "current_team" in session:
+        del session["current_team"]
+    session.save()
 
     # Properly format form data and set content type
     form_data = urlencode({"description": "Guest Token"})

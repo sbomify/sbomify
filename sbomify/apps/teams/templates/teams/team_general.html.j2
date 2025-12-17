@@ -55,37 +55,44 @@
                         </div>
                     </div>
                 </div>
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3 class="section-title">Workspace Information</h3>
-                        <p class="section-description">Read-only information about this workspace.</p>
-                    </div>
-                    <div class="section-content">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="info-item">
-                                    <label class="form-label text-muted mb-1">Workspace Key</label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <code class="bg-light px-2 py-1 rounded">{{ team.key }}</code>
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-secondary copy-btn"
-                                                data-copy-value="{{ team.key }}"
-                                                title="Copy workspace key">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="info-item">
-                                    <label class="form-label text-muted mb-1">Created</label>
-                                    <div>{{ team.created_at|date:"F j, Y" }}</div>
-                                </div>
-                            </div>
+            </form>
+            <div class="section-card mb-4">
+                <div class="section-header">
+                    <h3 class="section-title">Default Workspace</h3>
+                    <p class="section-description">Set this as your default workspace when you log in.</p>
+                </div>
+                <div class="section-content">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                        <div>
+                            {% if is_default_team %}
+                                <span class="badge bg-success-subtle text-success">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    This is your default workspace
+                                </span>
+                            {% else %}
+                                <span class="text-muted">This workspace is not set as your default.</span>
+                            {% endif %}
                         </div>
+                        {% if not is_default_team %}
+                            <form method="post"
+                                  hx-post="{% url 'teams:team_general' team.key %}"
+                                  hx-swap="none">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="set_default">
+                                <button type="submit" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-star me-2"></i>
+                                    Make Default
+                                </button>
+                            </form>
+                        {% endif %}
                     </div>
                 </div>
-            </form>
+            </div>
+            <div class="vc-team-danger-zone mt-4"
+                 data-team-key="{{ team.key }}"
+                 data-team-name="{{ team.name }}"
+                 data-is-default-team="{{ is_default_team|yesno:'true,false' }}"
+                 data-csrf-token="{{ csrf_token }}"></div>
         </div>
     </div>
 </div>

@@ -26,7 +26,6 @@ from django.urls import reverse
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
@@ -45,12 +44,13 @@ from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # 
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.search import SearchView  # noqa: F401, E402
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView  # noqa: F401, E402
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 
 from ..errors import error_response
-from ..forms import CreateAccessTokenForm, SupportContactForm
+from ..forms import SupportContactForm
 from ..models import Component, Product, Project
 
 logger = logging.getLogger(__name__)
@@ -72,18 +72,68 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     return render(request, "account/login.html.j2")
 
 
-@never_cache
-@login_required
-def user_settings(request: HttpRequest) -> HttpResponse:
+def _get_pending_invitations(user) -> list[dict]:
+    """Helper function to get pending invitations for a user."""
     from django.utils import timezone
 
     from sbomify.apps.teams.models import Invitation
 
-    create_access_token_form = CreateAccessTokenForm()
-    context = dict(create_access_token_form=create_access_token_form)
+    if not user.email:
+        return []
 
+    pending_invitations = (
+        Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now())
+        .select_related("team")
+        .order_by("-created_at")
+    )
+    return [
+        {
+            "id": inv.id,
+            "token": str(inv.token),
+            "team_name": inv.team.display_name,
+            "role": inv.role,
+            "created_at": inv.created_at,
+            "expires_at": inv.expires_at,
+        }
+        for inv in pending_invitations
+    ]
+
+
+def _get_access_tokens(user) -> list[dict]:
+    """Helper function to get access tokens for a user."""
+    access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
+    return [
+        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        for token in access_tokens_qs
+    ]
+
+
+def _build_settings_context(user, form=None, new_token=None) -> dict:
+    """Helper function to build context for settings page."""
+    from sbomify.apps.core.forms import CreateAccessTokenForm
+
+    context = {
+        "create_access_token_form": form or CreateAccessTokenForm(),
+        "pending_invitations": _get_pending_invitations(user),
+        "access_tokens": _get_access_tokens(user),
+    }
+    if new_token:
+        context["new_encoded_access_token"] = new_token
+    return context
+
+
+@never_cache
+@login_required
+def user_settings(request: HttpRequest) -> HttpResponse:
+    """Redirect to workspace tokens settings or show pending invitations if no workspace."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.core.forms import CreateAccessTokenForm
+
+    # Handle POST requests for token creation
     if request.method == "POST":
+        current_team = request.session.get("current_team")
         form = CreateAccessTokenForm(request.POST)
+
         if form.is_valid():
             access_token_str = create_personal_access_token(request.user)
             token = AccessToken(
@@ -92,42 +142,36 @@ def user_settings(request: HttpRequest) -> HttpResponse:
                 description=form.cleaned_data["description"],
             )
             token.save()
+            messages.success(request, "New access token created")
 
-            context["new_encoded_access_token"] = access_token_str
-            messages.add_message(
-                request,
-                messages.INFO,
-                "New access token created",
-            )
+            # If user has a current workspace, redirect to team tokens after creation
+            if current_team and current_team.get("key"):
+                return redirect("teams:team_tokens", team_key=current_team["key"])
 
-    access_tokens = AccessToken.objects.filter(user=request.user).only("id", "description", "created_at").all()
-    # Serialize access tokens for Vue component
-    access_tokens_data = [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
-        for token in access_tokens
-    ]
-    context["access_tokens"] = access_tokens_data
+            # Prepare context for rendering (users without current workspace - backward compatibility)
+            context = _build_settings_context(request.user, new_token=access_token_str)
+            return render(request, "core/settings.html.j2", context)
+        else:
+            # Invalid form - render with errors
+            context = _build_settings_context(request.user, form=form)
+            return render(request, "core/settings.html.j2", context)
 
-    # Fetch pending invitations for the user
-    if request.user.email:
-        pending_invitations = (
-            Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now())
-            .select_related("team")
-            .order_by("-created_at")
+    # Check if user has a current workspace - if so, redirect to tokens tab
+    current_team = request.session.get("current_team")
+    if current_team and current_team.get("key"):
+        return redirect("teams:team_settings", team_key=current_team["key"])
+
+    # If no current workspace, show pending invitations only (backward compatibility)
+    context = _build_settings_context(request.user)
+
+    # If no pending invitations and no workspace, redirect to teams dashboard
+    if not context.get("pending_invitations"):
+        messages.add_message(
+            request,
+            messages.INFO,
+            "Please select a workspace to access token settings.",
         )
-        context["pending_invitations"] = [
-            {
-                "id": inv.id,
-                "token": str(inv.token),
-                "team_name": inv.team.display_name,
-                "role": inv.role,
-                "created_at": inv.created_at,
-                "expires_at": inv.expires_at,
-            }
-            for inv in pending_invitations
-        ]
-    else:
-        context["pending_invitations"] = []
+        return redirect("teams:teams_dashboard")
 
     return render(request, "core/settings.html.j2", context)
 

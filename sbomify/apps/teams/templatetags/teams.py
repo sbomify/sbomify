@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import re
 from datetime import datetime, timedelta
@@ -113,6 +114,60 @@ def workspace_initials(name: str | None) -> str:
         return first_letter + second_letter
 
 
+@register.filter
+def user_initials(user) -> str:
+    """
+    Generate user initials for avatar display using the same logic as workspace_initials.
+    - If user has first_name and last_name: first letter of each
+    - If user has only first_name: first 2 letters
+    - If user has only username: apply workspace_initials logic to username
+    - Fallback: "U"
+    """
+    if not user:
+        return "U"
+
+    # Try to get full name
+    first_name = getattr(user, "first_name", None) or ""
+    last_name = getattr(user, "last_name", None) or ""
+
+    # If we have both first and last name, use first letter of each
+    if first_name.strip() and last_name.strip():
+        return (first_name[0] + last_name[0]).upper()
+
+    # If we have only first name, use first 2 letters
+    if first_name.strip():
+        name = first_name.strip()
+        return name[:2].upper() if len(name) >= 2 else name.upper()
+
+    # Fall back to username and apply workspace_initials logic
+    username = getattr(user, "username", None) or ""
+    if username:
+        # Extract clean name from email-based usernames
+        if "@" in username:
+            name = username.split("@")[0]
+        elif "." in username:
+            name = username.split(".")[0]
+        else:
+            name = username
+
+        name = name.strip()
+        words = name.split()
+
+        if len(words) == 0:
+            return "U"
+        elif len(words) == 1:
+            word = words[0]
+            return word[:2].upper() if len(word) >= 2 else word.upper()
+        else:
+            first_word = words[0]
+            second_word = words[1]
+            first_letter = first_word[0].upper() if first_word else ""
+            second_letter = second_word[0].upper() if second_word else ""
+            return first_letter + second_letter
+
+    return "U"
+
+
 @register.simple_tag
 def current_member(members):
     if not members:
@@ -156,8 +211,12 @@ def user_workspaces(context):
         if _validate_workspace_key(key):
             validated_teams[key] = team_data
         else:
-            key_preview = key[:20] if len(key) > 20 else key
-            logger.warning("Invalid workspace key format detected and filtered: %s...", key_preview)
+            # Log hash instead of actual key to prevent information leakage
+            key_hash = hashlib.sha256(key.encode()).hexdigest()[:16]
+            logger.warning(
+                "Invalid workspace key format detected and filtered: hash=%s",
+                key_hash,
+            )
 
     user_teams = validated_teams
 

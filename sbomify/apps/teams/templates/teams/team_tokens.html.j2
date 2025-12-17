@@ -1,0 +1,102 @@
+{% load widget_tweaks %}
+{% load form_helpers %}
+{% load json_extras %}
+<div id="team-tokens-content" class="standard-card">
+    <div class="card settings-card shadow-md">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Personal Access Tokens</h4>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">
+                Personal access tokens are used to authenticate API requests to sbomify. Use these tokens to access the API programmatically.
+            </p>
+            <!-- Token Generation Card -->
+            <div class="mb-4">
+                <h5 class="mb-3">Generate New Token</h5>
+                <form method="post"
+                      id="tokenGenerationForm"
+                      hx-post="{% url 'teams:team_tokens' team.key %}"
+                      hx-target="#team-tokens-content"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {% for field in create_access_token_form %}
+                            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field|add_class:'form-control' }}
+                            {% for error in field.errors %}<div class="text-danger mt-1">{{ error }}</div>{% endfor %}
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>
+                            Generate Token
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                onclick="document.getElementById('tokenGenerationForm').reset();">
+                            <i class="fas fa-times me-2"></i>
+                            Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <!-- New Token Display Card (only shown when a new token is created) -->
+            {% if new_encoded_access_token %}
+                <div class="mb-4">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Make sure to copy your personal access token now. You won't be able to see it again!
+                    </div>
+                    <div class="token-display-container">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0">Personal Access Token</label>
+                            <div class="vc-copy-token"></div>
+                        </div>
+                        <div id="access-token"
+                             class="form-control bg-light font-monospace"
+                             readonly>{{ new_encoded_access_token }}</div>
+                    </div>
+                </div>
+            {% endif %}
+            <!-- Personal Access Tokens List Card -->
+            <div>
+                <h5 class="mb-3">Your Personal Access Tokens</h5>
+                {{ access_tokens|json_script:"access-tokens-data" }}
+                <div class="vc-access-tokens-list"
+                     data-tokens-data-element-id="access-tokens-data"
+                     data-csrf-token="{{ csrf_token }}"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    .token-display-container {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 1rem;
+    }
+
+    .font-monospace {
+        font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        font-size: 0.875rem;
+        letter-spacing: 0.025em;
+    }
+
+    .bg-light {
+        background-color: #f8f9fa !important;
+    }
+
+    .alert {
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid transparent;
+        border-radius: 0.375rem;
+    }
+
+    .alert-warning {
+        color: #856404;
+        background-color: #fff3cd;
+        border-color: #ffecb5;
+    }
+</style>

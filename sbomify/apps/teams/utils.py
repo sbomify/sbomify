@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 from collections import defaultdict
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib import messages
@@ -105,6 +106,50 @@ def normalize_host(host: str) -> str:
 logger = logging.getLogger(__name__)
 User = get_user_model()
 stripe_client = StripeClient()
+
+
+def get_app_hostname() -> str:
+    """Extract hostname from APP_BASE_URL setting.
+
+    Returns only the hostname portion, ignoring any port numbers or paths.
+    If APP_BASE_URL is missing a protocol, HTTPS is assumed (secure default).
+    """
+    app_base_url = getattr(settings, "APP_BASE_URL", "").strip()
+    if not app_base_url:
+        return ""
+    # Add protocol if missing for urlparse to work correctly
+    if not app_base_url.startswith(("http://", "https://")):
+        app_base_url = f"https://{app_base_url}"
+    try:
+        parsed = urlparse(app_base_url)
+        hostname = parsed.hostname or ""
+        # Handle localhost case
+        if hostname == "localhost":
+            return "localhost"
+        return hostname
+    except (ValueError, AttributeError):
+        return ""
+
+
+def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
+    """Check if the billing plan allows custom domain feature."""
+    if not billing_plan:
+        return False
+
+    plan_key = str(billing_plan).strip().lower()
+    if not plan_key:
+        return False
+
+    # Business and Enterprise plans have access
+    if plan_key in ("business", "enterprise"):
+        return True
+
+    # Check if it's a BillingPlan in the database with custom domain access
+    try:
+        plan = BillingPlan.objects.get(key=plan_key)
+        return getattr(plan, "has_custom_domain_access", False)
+    except BillingPlan.DoesNotExist:
+        return False
 
 
 def compute_user_teams_checksum(user_teams: dict | None) -> str:

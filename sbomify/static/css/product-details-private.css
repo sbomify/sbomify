@@ -110,6 +110,10 @@
 }
 
 @media (max-width: 768px) {
+    .page-header {
+        padding: 1.25rem 1rem;
+    }
+
     .title-section {
         flex-direction: column;
         align-items: flex-start;
@@ -123,6 +127,59 @@
     .header-meta {
         flex-wrap: wrap;
         gap: 0.75rem;
+    }
+
+    .header-stats {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .header-stats .stat-badge {
+        padding: 0.625rem 1rem !important;
+        font-size: 0.875rem;
+        gap: 0.5rem !important;
+    }
+
+    .header-stats .stat-badge i {
+        font-size: 1.125rem !important;
+        color: #64748b !important;
+    }
+
+    .header-stats .stat-badge .stat-number {
+        font-weight: 700 !important;
+        font-size: 1.5rem !important;
+        color: #1e293b !important;
+        line-height: 1.2 !important;
+    }
+
+    .header-stats .stat-badge .stat-label {
+        font-size: 0.875rem !important;
+        color: #64748b !important;
+        font-weight: 400 !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-stats {
+        gap: 0.5rem;
+    }
+
+    .header-stats .stat-badge {
+        padding: 0.5rem 0.875rem !important;
+        font-size: 0.8125rem;
+        gap: 0.5rem !important;
+    }
+
+    .header-stats .stat-badge i {
+        font-size: 1rem !important;
+    }
+
+    .header-stats .stat-badge .stat-number {
+        font-size: 1.375rem !important;
+    }
+
+    .header-stats .stat-badge .stat-label {
+        font-size: 0.8125rem !important;
     }
 }
 

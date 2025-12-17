@@ -480,7 +480,7 @@ const searchQuery = ref('')
 const filterType = ref('')
 const filterComponent = ref('')
 const currentPage = ref(1)
-const itemsPerPage = 50
+const itemsPerPage = ref(50)
 
 // Artifacts Table State
 const artifactsSearchQuery = ref('')
@@ -543,12 +543,12 @@ const filteredArtifacts = computed(() => {
 })
 
 const totalPages = computed(() => {
-  return Math.ceil(filteredArtifacts.value.length / itemsPerPage)
+  return Math.ceil(filteredArtifacts.value.length / itemsPerPage.value)
 })
 
 const paginatedArtifacts = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  const end = start + itemsPerPage
+  const start = (currentPage.value - 1) * itemsPerPage.value
+  const end = start + itemsPerPage.value
   return filteredArtifacts.value.slice(start, end)
 })
 

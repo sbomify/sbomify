@@ -112,6 +112,16 @@ urlpatterns: list[URLPattern] = [
         views.TeamGeneralView.as_view(),
         name="team_general",
     ),
+    path(
+        "<team_key>/custom-domain",
+        views.TeamCustomDomainView.as_view(),
+        name="team_custom_domain",
+    ),
+    path(
+        "<team_key>/tokens",
+        views.TeamTokensView.as_view(),
+        name="team_tokens",
+    ),
     # Main team settings (unified interface) - must come after specific patterns
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

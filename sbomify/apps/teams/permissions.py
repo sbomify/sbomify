@@ -9,6 +9,10 @@ class TeamRoleRequiredMixin(AccessMixin):
     allowed_roles: list[str] = []
 
     def dispatch(self, request, *args, **kwargs):
+        # Check authentication first - let LoginRequiredMixin handle redirect if not authenticated
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
         current_team = request.session.get("current_team", {})
 
         team_key = current_team.get("key", None)
