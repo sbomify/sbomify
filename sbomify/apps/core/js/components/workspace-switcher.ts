@@ -102,6 +102,7 @@ export function registerWorkspaceSwitcher(): void {
                     clearTimeout(this.searchTimeout);
                 }
                 this.searchTimeout = setTimeout(() => {
+                    this.updateFilteredWorkspaces();
                 }, SEARCH_DEBOUNCE_MS);
             },
 

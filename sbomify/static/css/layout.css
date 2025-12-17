@@ -329,8 +329,15 @@ body {
 
 /* Override Bootstrap's --z-fixed CSS variable when modal is open */
 /* This ensures any element using var(--z-fixed) will be below the backdrop */
-body.workspace-modal-open,
-body.workspace-modal-open * {
+body.workspace-modal-open {
+  --z-fixed: 1020;
+}
+
+body.workspace-modal-open .navbar,
+body.workspace-modal-open .sidebar,
+body.workspace-modal-open .main,
+body.workspace-modal-open .wrapper,
+body.workspace-modal-open .content {
   --z-fixed: 1020;
 }
 
@@ -350,36 +357,21 @@ body.workspace-modal-open nav.navbar {
   transition: filter 0.2s ease;
 }
 
-/* Ensure parent containers are also below modal for backdrop-filter to work */
-body.workspace-modal-open .main {
-  z-index: 1015 !important;
-  position: relative !important;
-}
-
-/* Ensure content is below modal backdrop */
+/* Ensure wrapper, main, and content are below modal backdrop */
+body.workspace-modal-open .wrapper,
+body.workspace-modal-open .main,
 body.workspace-modal-open .content {
   z-index: 1 !important;
   position: relative !important;
 }
 
-/* Ensure wrapper and main are below modal */
-body.workspace-modal-open .wrapper,
-body.workspace-modal-open .main {
-  z-index: 1 !important;
-  position: relative !important;
-}
-
 /* Ensure sidebar doesn't create stacking context that traps modal */
+/* Sidebar needs higher z-index than main but below modal backdrop (1200) */
 body.workspace-modal-open .sidebar {
-  z-index: 1 !important;
+  z-index: 1010 !important;
   transform: none !important;
   opacity: 1 !important;
   filter: none !important;
-}
-
-/* Ensure sidebar is also below modal */
-body.workspace-modal-open .sidebar {
-  z-index: 1010 !important;
 }
 
 /* Workspace Modal */

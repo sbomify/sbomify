@@ -298,12 +298,12 @@ function initializeDropdowns() {
     const clickedDropdown = target.closest('.dropdown');
     const clickedToggle = target.closest('[data-bs-toggle="dropdown"]');
     const clickedDropdownItem = target.closest('.dropdown-item');
-    
+
     // If clicked on a dropdown item, let Bootstrap handle it naturally
     if (clickedDropdownItem) {
       return;
     }
-    
+
     // If clicked outside any dropdown, close all open dropdowns
     if (!clickedDropdown && !clickedToggle) {
       const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');

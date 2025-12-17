@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime, timedelta
 
@@ -7,6 +8,7 @@ from django.utils import timezone
 from sbomify.apps.teams.utils import update_user_teams_session
 
 register = template.Library()
+logger = logging.getLogger(__name__)
 
 # Shared constants for workspace suffix handling
 WORKSPACE_SUFFIX = "'s Workspace"
@@ -150,15 +152,12 @@ def user_workspaces(context):
         user_teams = update_user_teams_session(request, request.user)
 
     validated_teams = {}
-    import logging
-
-    logger = logging.getLogger(__name__)
     for key, team_data in (user_teams or {}).items():
         if _validate_workspace_key(key):
             validated_teams[key] = team_data
         else:
             key_preview = key[:20] if len(key) > 20 else key
-            logger.warning(f"Invalid workspace key format detected and filtered: {key_preview}...")
+            logger.warning("Invalid workspace key format detected and filtered: %s...", key_preview)
 
     user_teams = validated_teams
 

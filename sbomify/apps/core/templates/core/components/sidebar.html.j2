@@ -40,11 +40,6 @@
                         <i class="align-middle fas fa-tachometer-alt"></i> <span class="align-middle">Dashboard</span>
                     </a>
                 </li>
-                <li class="sidebar-item {% if current_view_name == 'teams:teams_dashboard' %}active{% endif %}">
-                    <a class="sidebar-link" href="{% url 'teams:teams_dashboard' %}">
-                        <i class="align-middle fas fa-users"></i> <span class="align-middle">Workspace</span>
-                    </a>
-                </li>
                 <li class="sidebar-item {% if 'core:product' in current_view_name %}active{% endif %}">
                     <a class="sidebar-link" href="{% url 'core:products_dashboard' %}">
                         <i class="align-middle fas fa-cube"></i> <span class="align-middle">Products</span>
@@ -74,7 +69,6 @@
                     </li>
                 {% endif %}
                 {# Current Workspace Switcher at the bottom #}
-                {% load teams %}
                 {% user_workspaces as available_workspaces %}
                 {% url 'teams:teams_dashboard' as teams_dashboard_url %}
                 {% with sidebar_team=request.session.current_team %}
