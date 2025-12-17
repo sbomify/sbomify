@@ -65,7 +65,7 @@
                     <form id="kc-register-form" action="${url.registrationAction}" method="post">
                         <div class="form-group">
                             <label for="firstName" class="form-label">First Name *</label>
-                            <input type="text" id="firstName" class="form-control" name="firstName" 
+                            <input tabindex="1" type="text" id="firstName" class="form-control" name="firstName" 
                                    value="${(register.formData.firstName!'')}"
                                    autocomplete="given-name" placeholder="Enter your first name" 
                                    aria-invalid="<#if messagesPerField.existsError('firstName')>true</#if>"
@@ -77,7 +77,7 @@
 
                         <div class="form-group">
                             <label for="lastName" class="form-label">Last Name *</label>
-                            <input type="text" id="lastName" class="form-control" name="lastName" 
+                            <input tabindex="2" type="text" id="lastName" class="form-control" name="lastName" 
                                    value="${(register.formData.lastName!'')}"
                                    autocomplete="family-name" placeholder="Enter your last name"
                                    aria-invalid="<#if messagesPerField.existsError('lastName')>true</#if>"
@@ -89,7 +89,7 @@
 
                         <div class="form-group">
                             <label for="email" class="form-label">Email *</label>
-                            <input type="email" id="email" class="form-control" name="email" 
+                            <input tabindex="3" type="email" id="email" class="form-control" name="email" 
                                    value="${(register.formData.email!'')}"
                                    autocomplete="email" placeholder="Enter your email"
                                    aria-invalid="<#if messagesPerField.existsError('email')>true</#if>"
@@ -102,7 +102,7 @@
                         <#if !realm.registrationEmailAsUsername>
                             <div class="form-group">
                                 <label for="username" class="form-label">Username *</label>
-                                <input type="text" id="username" class="form-control" name="username" 
+                                <input tabindex="4" type="text" id="username" class="form-control" name="username" 
                                        value="${(register.formData.username!'')}"
                                        autocomplete="username" placeholder="Choose a username"
                                        aria-invalid="<#if messagesPerField.existsError('username')>true</#if>"
@@ -116,7 +116,7 @@
                         <#if passwordRequired??>
                             <div class="form-group">
                                 <label for="password" class="form-label">Password *</label>
-                                <input type="password" id="password" class="form-control" name="password" 
+                                <input tabindex="5" type="password" id="password" class="form-control" name="password" 
                                        autocomplete="new-password" placeholder="Create a password (min 8 chars)"
                                        aria-invalid="<#if messagesPerField.existsError('password')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('password')>password-error</#if>" />
@@ -127,7 +127,7 @@
 
                             <div class="form-group">
                                 <label for="password-confirm" class="form-label">Confirm Password *</label>
-                                <input type="password" id="password-confirm" class="form-control" name="password-confirm" 
+                                <input tabindex="6" type="password" id="password-confirm" class="form-control" name="password-confirm" 
                                        autocomplete="new-password" placeholder="Confirm your password"
                                        aria-invalid="<#if messagesPerField.existsError('password-confirm')>true</#if>"
                                        aria-describedby="<#if messagesPerField.existsError('password-confirm')>password-confirm-error</#if>" />
@@ -144,13 +144,13 @@
                         </#if>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn-submit" aria-label="Create Account">Create Account</button>
+                            <button tabindex="7" type="submit" class="btn-submit" aria-label="Create Account">Create Account</button>
                         </div>
                     </form>
 
                     <div class="register-link">
                         <span>Already have an account?</span>
-                        <a href="${url.loginUrl}">Log In</a>
+                        <a tabindex="8" href="${url.loginUrl}">Log In</a>
                     </div>
                 </div>
             </div>
