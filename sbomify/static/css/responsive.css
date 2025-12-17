@@ -1234,7 +1234,6 @@
   .sidebar-large {
     width: 300px;
   }
-
   /* Large screen dashboard grid */
   .dashboard-large {
     display: grid;
@@ -1278,7 +1277,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-
   .sidebar,
   .main,
   .card,

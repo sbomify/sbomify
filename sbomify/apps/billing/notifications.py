@@ -77,7 +77,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
 
     # If billing_plan is None or empty string, show upgrade notification
     if not billing_plan or (isinstance(billing_plan, str) and not billing_plan.strip()):
-        logger.warning("Returning upgrade notification for team (billing_plan is None/empty)")
+        logger.debug("Returning upgrade notification for team (billing_plan is None/empty)")
         return NotificationSchema(
             id=f"community_upgrade_{team.key}",
             type="community_upgrade",
@@ -89,7 +89,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
 
     # If billing_plan is "community", show upgrade notification
     if isinstance(billing_plan, str) and billing_plan.strip().lower() == "community":
-        logger.warning("Returning upgrade notification for team (billing_plan is 'community')")
+        logger.debug("Returning upgrade notification for team (billing_plan is 'community')")
         return NotificationSchema(
             id=f"community_upgrade_{team.key}",
             type="community_upgrade",
@@ -107,14 +107,14 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     notifications: list[NotificationSchema] = []
 
     if "current_team" not in request.session:
-        logger.warning("No current_team in session, skipping notifications")
+        logger.debug("No current_team in session, skipping notifications")
         return notifications
 
     team_key = request.session["current_team"]["key"]
-    logger.warning("get_notifications called for team")
+    logger.debug("get_notifications called for team")
     try:
         team = Team.objects.get(key=team_key)
-        logger.warning("Checking notifications for team")
+        logger.debug("Checking notifications for team")
 
         # Check if user is a member of this team
         from sbomify.apps.teams.models import Member
@@ -123,12 +123,12 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
 
         if not user_member:
             # User is not a member, don't show notifications
-            logger.warning("User is not a member of team")
+            logger.debug("User is not a member of team")
             return notifications
 
         # Check if user is workspace owner
         is_owner = user_member.role == "owner"
-        logger.warning("User is %s owner of team", "not" if not is_owner else "")
+        logger.debug("User is %s owner of team", "not" if not is_owner else "")
 
         # Only run billing-specific checks if billing is enabled
         if is_billing_enabled():
@@ -137,22 +137,22 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
                 for check in [check_billing_plan_exists, check_billing_info_missing, check_payment_status]:
                     if notification := check(team):
                         notifications.append(notification)
-                        logger.warning(f"Added notification: {notification.type}")
+                        logger.debug("Added notification: %s", notification.type)
 
         # Upgrade notification shown to all users (if on community plan or no plan)
         # This check runs regardless of billing being enabled/disabled
         upgrade_notification = check_community_upgrade(team)
-        logger.warning("check_community_upgrade result: %s", upgrade_notification is not None)
+        logger.debug("check_community_upgrade result: %s", upgrade_notification is not None)
         if upgrade_notification:
             notifications.append(upgrade_notification)
-            logger.warning("Added upgrade notification for team")
+            logger.debug("Added upgrade notification for team")
         else:
-            logger.warning("No upgrade notification for team")
+            logger.debug("No upgrade notification for team")
 
     except Team.DoesNotExist:
-        logger.warning("Workspace not found when checking billing notifications")
+        logger.debug("Workspace not found when checking billing notifications")
     except Exception as e:
         logger.exception("Error checking notifications for team: %s", str(e))
 
-    logger.warning("Returning %d notifications for team", len(notifications))
+    logger.debug("Returning %d notifications for team", len(notifications))
     return notifications

@@ -147,14 +147,14 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         team_key,
                     )
                 except Team.DoesNotExist:
-                    logger.error(f"Target workspace {target_team_key} not found after deletion")
+                    logger.error("Target workspace %s not found after deletion", target_team_key)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
                     request.session["current_team"] = {"key": target_team_key, **target_team_data}
                     request.session.modified = True
                     request.session.save()
                 except Exception as e:
-                    logger.error(f"Error switching workspace after deletion: {e}", exc_info=True)
+                    logger.error("Error switching workspace after deletion: %s", e, exc_info=True)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
                     request.session["current_team"] = {"key": target_team_key, **target_team_data}
@@ -162,7 +162,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     request.session.save()
             else:
                 # No workspaces left - this shouldn't happen if validation is correct
-                logger.warning(f"User {request.user.id} has no workspaces after deleting {team_key}")
+                logger.warning("User %s has no workspaces after deleting %s", request.user.id, team_key)
                 request.session.pop("current_team", None)
                 request.session.modified = True
                 request.session.save()

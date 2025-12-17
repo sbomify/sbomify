@@ -211,8 +211,6 @@ def user_workspaces(context):
         if _validate_workspace_key(key):
             validated_teams[key] = team_data
         else:
-            key_preview = key[:20] if len(key) > 20 else key
-            logger.warning("Invalid workspace key format detected and filtered: %s...", key_preview)
             # Log hash instead of actual key to prevent information leakage
             key_hash = hashlib.sha256(key.encode()).hexdigest()[:16]
             logger.warning(

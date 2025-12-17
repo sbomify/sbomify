@@ -718,7 +718,6 @@
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
-    transform: none;
   }
 
   .version-display {
