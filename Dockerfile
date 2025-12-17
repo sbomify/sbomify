@@ -13,7 +13,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS js-build-prod
+FROM oven/bun:1.3-debian@sha256:b5cf5ca5dc3e2a02d805802ba089401c4beabf597daabbf35a17b8e82dc2f7bc AS js-build-prod
 
 WORKDIR /js-build
 
@@ -46,7 +46,7 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 RUN bun run copy-deps && bun x vite build
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.3-debian@sha256:9d9504d425a8b85c5cf162c1c354f9403e15583e0f3e1de3750ce3723d3e89ac AS frontend-dev-server
+FROM oven/bun:1.3-debian@sha256:b5cf5ca5dc3e2a02d805802ba089401c4beabf597daabbf35a17b8e82dc2f7bc AS frontend-dev-server
 
 WORKDIR /app-frontend
 
