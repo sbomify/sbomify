@@ -1,15 +1,13 @@
 import 'vite/modulepreload-polyfill';
 import '../../core/js/layout-interactions';
-import Alpine from 'alpinejs';
 import { registerDocumentsTable } from './documents-table';
 import { registerReleaseList } from '../../core/js/components/release-list';
+import { initializeAlpine } from '../../core/js/alpine-init';
 
-document.addEventListener('alpine:init', () => {
-    registerDocumentsTable();
-    registerReleaseList();
-});
+registerDocumentsTable();
+registerReleaseList();
 
-Alpine.start();
+initializeAlpine();
 
 
 import mountVueComponent from '../../core/js/common_vue';

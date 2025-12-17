@@ -11,9 +11,11 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import * as bootstrap from 'bootstrap';
 import Alpine from 'alpinejs';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
+import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 
 // Register Chart.js components
 Chart.register(
@@ -30,10 +32,12 @@ declare global {
   interface Window {
     Chart: typeof Chart;
     Alpine: typeof Alpine;
+    bootstrap: typeof bootstrap;
   }
 }
 
 window.Chart = Chart;
+window.bootstrap = bootstrap;
 // Import Vue component mounting utility
 import mountVueComponent from './common_vue';
 import './alerts-global'; // Ensure alerts are available globally
@@ -65,13 +69,12 @@ import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
 import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
 import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
-// Initialize Alpine.js micro-interactions (copyable values, etc.)
-document.addEventListener('alpine:init', () => {
-  registerCopyableValue();
-  registerPublicStatusToggle();
-});
-window.Alpine = Alpine;
-Alpine.start();
+registerCopyableValue();
+registerPublicStatusToggle();
+registerWorkspaceSwitcher();
+
+import { initializeAlpine } from './alpine-init';
+initializeAlpine();
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -113,4 +116,4 @@ window.eventBus = eventBus;
 window.EVENTS = EVENTS;
 
 // Export something to make TypeScript happy
-export {};
+export { };

@@ -11,40 +11,28 @@ declare global {
 
 const win = window as Window & { __sbomifyLayoutInitialized?: boolean };
 
-/**
- * Workspace switching functionality
- */
 function initializeWorkspaceSelector() {
-  document.addEventListener('click', function(event) {
+  document.addEventListener('click', function (event) {
     const target = event.target as HTMLElement;
     const workspaceButton = target.closest('[data-workspace-key]') as HTMLElement;
 
     if (workspaceButton && workspaceButton.tagName === 'BUTTON') {
       const workspaceKey = workspaceButton.getAttribute('data-workspace-key');
-      const workspaceName = workspaceButton.getAttribute('data-workspace-name');
 
       if (workspaceKey) {
-        console.log('Switching to workspace:', workspaceName, 'Key:', workspaceKey);
-
         if (!/^[a-zA-Z0-9_-]+$/.test(workspaceKey)) {
-          console.error('Invalid workspace key format:', workspaceKey);
           return;
         }
 
         const switchUrl = `/workspaces/switch/${encodeURIComponent(workspaceKey)}/`;
         const currentPath = window.location.pathname;
         const targetUrl = `${switchUrl}?next=${encodeURIComponent(currentPath)}`;
-
-        console.log('Redirecting to:', targetUrl);
         window.location.href = targetUrl;
       }
     }
   });
 }
 
-/**
- * Sidebar functionality with enhanced mobile and keyboard support
- */
 function initializeSidebar() {
   const sidebar = document.getElementById('sidebar');
   const main = document.querySelector('.main');
@@ -52,7 +40,6 @@ function initializeSidebar() {
   const sidebarClose = document.querySelector('.js-sidebar-close');
 
   if (!sidebar || !main || !sidebarToggle) {
-    console.warn('Sidebar elements not found');
     return;
   }
 
@@ -93,19 +80,19 @@ function initializeSidebar() {
     }
   }
 
-  sidebarToggleEl.addEventListener('click', function(e) {
+  sidebarToggleEl.addEventListener('click', function (e) {
     e.preventDefault();
     toggleSidebar();
   });
 
   if (sidebarClose) {
-    sidebarClose.addEventListener('click', function(e) {
+    sidebarClose.addEventListener('click', function (e) {
       e.preventDefault();
       closeSidebar();
     });
   }
 
-  mainEl.addEventListener('click', function(e) {
+  mainEl.addEventListener('click', function (e) {
     if (sidebarOpen && mainEl.classList.contains('sidebar-mobile-show')) {
       const target = e.target as HTMLElement;
 
@@ -115,7 +102,7 @@ function initializeSidebar() {
     }
   });
 
-  document.addEventListener('keydown', function(e) {
+  document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && sidebarOpen) {
       closeSidebar();
       sidebarToggleEl.focus();
@@ -127,7 +114,7 @@ function initializeSidebar() {
     }
   });
 
-  window.addEventListener('resize', function() {
+  window.addEventListener('resize', function () {
     if (window.innerWidth > 991.98 && sidebarOpen) {
       closeSidebar();
     }
@@ -136,11 +123,11 @@ function initializeSidebar() {
   let touchStartX = 0;
   let touchEndX = 0;
 
-  document.addEventListener('touchstart', function(e) {
+  document.addEventListener('touchstart', function (e) {
     touchStartX = e.changedTouches[0].screenX;
   }, { passive: true });
 
-  document.addEventListener('touchend', function(e) {
+  document.addEventListener('touchend', function (e) {
     touchEndX = e.changedTouches[0].screenX;
     handleSwipe();
   }, { passive: true });
@@ -161,8 +148,6 @@ function initializeSidebar() {
   sidebarToggleEl.setAttribute('aria-expanded', 'false');
   sidebarToggleEl.setAttribute('aria-label', 'Open navigation menu');
   sidebarToggleEl.setAttribute('aria-controls', 'sidebar');
-
-  console.log('Sidebar functionality initialized');
 }
 
 /**
@@ -175,7 +160,7 @@ function initializeSidebarKeyboardNavigation() {
   const sidebarLinks = sidebar.querySelectorAll('.sidebar-link');
 
   sidebarLinks.forEach((link, index) => {
-    link.addEventListener('keydown', function(e) {
+    link.addEventListener('keydown', function (e) {
       const keyboardEvent = e as KeyboardEvent;
       const currentIndex = index;
       let targetIndex = -1;
@@ -204,14 +189,175 @@ function initializeSidebarKeyboardNavigation() {
       }
     });
   });
-
-  console.log('Sidebar keyboard navigation initialized');
 }
 
 function initializeTooltips() {
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.map((tooltipTriggerEl) => {
-    return new bootstrap.Tooltip(tooltipTriggerEl);
+  // Initialize tooltips with data-bs-toggle="tooltip" (but not on dropdown toggles)
+  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  tooltipTriggerList.forEach((tooltipTriggerEl) => {
+    const el = tooltipTriggerEl as HTMLElement;
+    // Skip if this element is a dropdown toggle
+    if (el.getAttribute('data-bs-toggle') === 'dropdown') {
+      return;
+    }
+
+    const tooltip = new bootstrap.Tooltip(el, {
+      trigger: 'hover focus',
+    });
+
+    // Hide tooltip on click (but don't prevent default behavior)
+    el.addEventListener('click', () => {
+      tooltip.hide();
+    }, { passive: true });
+  });
+
+  // Initialize tooltips on elements with title attribute (but exclude dropdown toggles)
+  const titleTooltipElements = document.querySelectorAll('[title]:not([data-bs-toggle="tooltip"])');
+  titleTooltipElements.forEach((element) => {
+    // Skip if this element is a dropdown toggle
+    if (element.getAttribute('data-bs-toggle') === 'dropdown') {
+      return;
+    }
+
+    // Only initialize if it's a button, link, or has a title and isn't already a tooltip
+    if (element instanceof HTMLElement && element.title) {
+      const tooltip = new bootstrap.Tooltip(element, {
+        trigger: 'hover focus',
+      });
+
+      // Hide tooltip on click (but don't prevent default behavior)
+      element.addEventListener('click', () => {
+        tooltip.hide();
+      }, { passive: true });
+
+      // Hide tooltip on mouseleave (ensure it disappears when mouse moves away)
+      element.addEventListener('mouseleave', () => {
+        tooltip.hide();
+      });
+    }
+  });
+
+  // Special handling for dropdown toggles with tooltips - hide tooltip when dropdown opens/closes
+  const dropdownToggles = document.querySelectorAll('[data-bs-toggle="dropdown"][title]');
+  dropdownToggles.forEach((toggle) => {
+    if (toggle instanceof HTMLElement && toggle.title) {
+      const tooltip = new bootstrap.Tooltip(toggle, {
+        trigger: 'hover focus',
+      });
+
+      // Hide tooltip when dropdown is shown or hidden
+      toggle.addEventListener('show.bs.dropdown', () => {
+        tooltip.hide();
+      });
+
+      toggle.addEventListener('shown.bs.dropdown', () => {
+        tooltip.hide();
+      });
+
+      // Hide tooltip on mouseleave
+      toggle.addEventListener('mouseleave', () => {
+        tooltip.hide();
+      });
+    }
+  });
+}
+
+function initializeDropdowns() {
+  const dropdownToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+  dropdownToggles.forEach((toggle) => {
+    if (!bootstrap.Dropdown.getInstance(toggle)) {
+      new bootstrap.Dropdown(toggle, {
+        display: 'dynamic',
+      });
+
+      toggle.addEventListener('show.bs.dropdown', () => {
+        const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+        allToggles.forEach((otherToggle) => {
+          if (otherToggle !== toggle) {
+            const otherInstance = bootstrap.Dropdown.getInstance(otherToggle);
+            if (otherInstance) {
+              otherInstance.hide();
+            }
+          }
+        });
+      });
+
+      toggle.addEventListener('shown.bs.dropdown', () => {
+        toggle.setAttribute('aria-expanded', 'true');
+      });
+
+      toggle.addEventListener('hidden.bs.dropdown', () => {
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    }
+  });
+
+  // Handle click outside to close dropdowns
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const clickedDropdown = target.closest('.dropdown');
+    const clickedToggle = target.closest('[data-bs-toggle="dropdown"]');
+    const clickedDropdownItem = target.closest('.dropdown-item');
+
+    // If clicked on a dropdown item, let Bootstrap handle it naturally
+    if (clickedDropdownItem) {
+      return;
+    }
+
+    // If clicked outside any dropdown, close all open dropdowns
+    if (!clickedDropdown && !clickedToggle) {
+      const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+      allToggles.forEach((toggle) => {
+        const dropdownInstance = bootstrap.Dropdown.getInstance(toggle);
+        if (dropdownInstance) {
+          const dropdownElement = toggle.closest('.dropdown');
+          if (dropdownElement) {
+            const dropdownMenu = dropdownElement.querySelector('.dropdown-menu');
+            if (dropdownMenu && dropdownMenu.classList.contains('show')) {
+              dropdownInstance.hide();
+            }
+          }
+        }
+      });
+    }
+  });
+
+  // Handle Escape key to close dropdowns
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      const allToggles = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+      allToggles.forEach((toggle) => {
+        const dropdownInstance = bootstrap.Dropdown.getInstance(toggle);
+        if (dropdownInstance) {
+          const dropdownElement = toggle.closest('.dropdown');
+          if (dropdownElement) {
+            const dropdownMenu = dropdownElement.querySelector('.dropdown-menu');
+            if (dropdownMenu && dropdownMenu.classList.contains('show')) {
+              dropdownInstance.hide();
+              (toggle as HTMLElement).focus();
+            }
+          }
+        }
+      });
+    }
+  });
+}
+
+function initializeDropdownAriaState() {
+  document.addEventListener('hidden.bs.dropdown', (event) => {
+    const target = event.target as HTMLElement;
+    let toggle: HTMLElement | null = null;
+
+    if (target.getAttribute('data-bs-toggle') === 'dropdown') {
+      toggle = target;
+    } else {
+      toggle = target.querySelector('[data-bs-toggle="dropdown"]') as HTMLElement;
+    }
+
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.blur();
+    }
   });
 }
 
@@ -236,8 +382,9 @@ function startLayoutInitialization() {
   initializeSidebar();
   initializeSidebarKeyboardNavigation();
   initializeTooltips();
+  initializeDropdowns();
+  initializeDropdownAriaState();
   initializeModalFocusHandlers();
-  console.log('Layout interactions initialized');
 }
 
 if (!win.__sbomifyLayoutInitialized) {
@@ -251,4 +398,4 @@ if (!win.__sbomifyLayoutInitialized) {
   }
 }
 
-export {};
+export { };

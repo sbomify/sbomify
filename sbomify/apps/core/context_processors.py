@@ -50,3 +50,15 @@ def pending_invitations_context(request):
         "pending_invitations_count": count,
         "has_pending_invitations": count > 0,  # Boolean for cache key to avoid key explosion
     }
+
+
+def global_modals_context(request):
+    """Add global modals forms to template context."""
+    if not request.user.is_authenticated:
+        return {}
+
+    from sbomify.apps.teams.forms import AddTeamForm
+
+    return {
+        "add_workspace_form": AddTeamForm(),
+    }

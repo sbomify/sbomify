@@ -1,3 +1,20 @@
+import * as bootstrap from 'bootstrap';
 import './layout-interactions';
 import './alerts-global';
 import './clipboard-global';
+import { registerWorkspaceSwitcher } from './components/workspace-switcher';
+import { registerCopyableValue } from './components/copyable-value';
+import { initializeAlpine } from './alpine-init';
+
+registerCopyableValue();
+registerWorkspaceSwitcher();
+initializeAlpine();
+
+// Expose bootstrap globally
+declare global {
+    interface Window {
+        bootstrap: typeof bootstrap;
+    }
+}
+
+window.bootstrap = bootstrap;
