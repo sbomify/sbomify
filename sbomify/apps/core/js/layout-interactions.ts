@@ -192,14 +192,10 @@ function initializeSidebarKeyboardNavigation() {
 }
 
 function initializeTooltips() {
-  // Initialize tooltips with data-bs-toggle="tooltip" (but not on dropdown toggles)
+  // Initialize tooltips with data-bs-toggle="tooltip"
   const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
   tooltipTriggerList.forEach((tooltipTriggerEl) => {
     const el = tooltipTriggerEl as HTMLElement;
-    // Skip if this element is a dropdown toggle
-    if (el.getAttribute('data-bs-toggle') === 'dropdown') {
-      return;
-    }
 
     const tooltip = new bootstrap.Tooltip(el, {
       trigger: 'hover focus',
@@ -211,14 +207,9 @@ function initializeTooltips() {
     }, { passive: true });
   });
 
-  // Initialize tooltips on elements with title attribute (but exclude dropdown toggles)
-  const titleTooltipElements = document.querySelectorAll('[title]:not([data-bs-toggle="tooltip"])');
+  // Initialize tooltips on elements with title attribute (but exclude dropdown toggles and elements already with tooltip)
+  const titleTooltipElements = document.querySelectorAll('[title]:not([data-bs-toggle="tooltip"]):not([data-bs-toggle="dropdown"])');
   titleTooltipElements.forEach((element) => {
-    // Skip if this element is a dropdown toggle
-    if (element.getAttribute('data-bs-toggle') === 'dropdown') {
-      return;
-    }
-
     // Only initialize if it's a button, link, or has a title and isn't already a tooltip
     if (element instanceof HTMLElement && element.title) {
       const tooltip = new bootstrap.Tooltip(element, {

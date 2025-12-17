@@ -48,6 +48,7 @@ import StandardCard from './StandardCard.vue'
 import DeleteConfirmationModal from './DeleteConfirmationModal.vue'
 import $axios from '../utils'
 import { showSuccess, showError } from '../alerts'
+import { useUrlGeneration } from '../composables/useUrlGeneration'
 
 const props = defineProps<{
   sbomId: string
@@ -55,6 +56,8 @@ const props = defineProps<{
   componentId: string
   csrfToken: string
 }>()
+
+const { getComponentUrl } = useUrlGeneration(false, false)
 
 const showConfirmModal = ref(false)
 
@@ -72,7 +75,7 @@ const handleDeleteConfirm = async (): Promise<void> => {
 
     if (response.status === 204) {
       showSuccess('SBOM deleted successfully!')
-      window.location.href = `/component/${props.componentId}/`
+      window.location.href = getComponentUrl(props.componentId)
     }
   } catch (error) {
     console.error('Error deleting SBOM:', error)
