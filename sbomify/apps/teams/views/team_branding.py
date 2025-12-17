@@ -1,12 +1,8 @@
-from urllib.parse import urlparse
-
-from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
     get_team,
@@ -16,46 +12,7 @@ from sbomify.apps.teams.apis import (
 from sbomify.apps.teams.forms import TeamBrandingForm
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
-
-
-def get_app_hostname() -> str:
-    """Extract hostname from APP_BASE_URL setting."""
-    app_base_url = getattr(settings, "APP_BASE_URL", "").strip()
-    if not app_base_url:
-        return ""
-
-    # Add protocol if missing
-    if not app_base_url.startswith(("http://", "https://")):
-        app_base_url = f"http://{app_base_url}"
-
-    try:
-        parsed = urlparse(app_base_url)
-        hostname = parsed.hostname or ""
-        # Handle localhost case
-        if hostname == "localhost":
-            return "localhost"
-        return hostname
-    except (ValueError, AttributeError):
-        return ""
-
-
-def plan_has_custom_domain_access(plan: str | None) -> bool:
-    """Check if a billing plan has custom domain access."""
-    if not plan:
-        return False
-
-    plan_str = str(plan).strip().lower()
-
-    # Business and Enterprise plans have access
-    if plan_str in ("business", "enterprise"):
-        return True
-
-    # Check if it's a BillingPlan in the database with custom domain access
-    try:
-        billing_plan = BillingPlan.objects.get(key=plan_str)
-        return getattr(billing_plan, "has_custom_domain_access", False)
-    except BillingPlan.DoesNotExist:
-        return False
+from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
 class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):

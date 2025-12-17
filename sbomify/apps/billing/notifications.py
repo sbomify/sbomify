@@ -74,13 +74,10 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
     """Check if community plan user should upgrade to paid plan"""
     # Show upgrade notification if billing_plan is None or "community"
     billing_plan = team.billing_plan
-    logger.warning(
-        f"check_community_upgrade: team={team.key}, billing_plan={repr(billing_plan)}, type={type(billing_plan)}"
-    )
 
     # If billing_plan is None or empty string, show upgrade notification
     if not billing_plan or (isinstance(billing_plan, str) and not billing_plan.strip()):
-        logger.warning(f"Returning upgrade notification for team {team.key} (billing_plan is None/empty)")
+        logger.warning("Returning upgrade notification for team (billing_plan is None/empty)")
         return NotificationSchema(
             id=f"community_upgrade_{team.key}",
             type="community_upgrade",
@@ -92,7 +89,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
 
     # If billing_plan is "community", show upgrade notification
     if isinstance(billing_plan, str) and billing_plan.strip().lower() == "community":
-        logger.warning(f"Returning upgrade notification for team {team.key} (billing_plan is 'community')")
+        logger.warning("Returning upgrade notification for team (billing_plan is 'community')")
         return NotificationSchema(
             id=f"community_upgrade_{team.key}",
             type="community_upgrade",
@@ -114,10 +111,10 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return notifications
 
     team_key = request.session["current_team"]["key"]
-    logger.warning(f"get_notifications called for team_key={team_key}, user={request.user.id}")
+    logger.warning("get_notifications called for team")
     try:
         team = Team.objects.get(key=team_key)
-        logger.warning(f"Checking notifications for team {team.key}, billing_plan: {repr(team.billing_plan)}")
+        logger.warning("Checking notifications for team")
 
         # Check if user is a member of this team
         from sbomify.apps.teams.models import Member
@@ -126,12 +123,12 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
 
         if not user_member:
             # User is not a member, don't show notifications
-            logger.warning(f"User {request.user.id} is not a member of team {team.key}")
+            logger.warning("User is not a member of team")
             return notifications
 
         # Check if user is workspace owner
         is_owner = user_member.role == "owner"
-        logger.warning(f"User {request.user.id} is {'owner' if is_owner else 'not owner'} of team {team.key}")
+        logger.warning("User is %s owner of team", "not" if not is_owner else "")
 
         # Only run billing-specific checks if billing is enabled
         if is_billing_enabled():
@@ -145,17 +142,17 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         # Upgrade notification shown to all users (if on community plan or no plan)
         # This check runs regardless of billing being enabled/disabled
         upgrade_notification = check_community_upgrade(team)
-        logger.warning(f"check_community_upgrade result for team {team.key}: {upgrade_notification is not None}")
+        logger.warning("check_community_upgrade result: %s", upgrade_notification is not None)
         if upgrade_notification:
             notifications.append(upgrade_notification)
-            logger.warning(f"Added upgrade notification for team {team.key} (billing_plan: {repr(team.billing_plan)})")
+            logger.warning("Added upgrade notification for team")
         else:
-            logger.warning(f"No upgrade notification for team {team.key} (billing_plan: {repr(team.billing_plan)})")
+            logger.warning("No upgrade notification for team")
 
     except Team.DoesNotExist:
-        logger.warning(f"Workspace {team_key} not found when checking billing notifications")
+        logger.warning("Workspace not found when checking billing notifications")
     except Exception as e:
-        logger.exception(f"Error checking notifications for team {team_key}: {str(e)}")
+        logger.exception("Error checking notifications for team: %s", str(e))
 
-    logger.warning(f"Returning {len(notifications)} notifications for team {team_key}")
+    logger.warning("Returning %d notifications for team", len(notifications))
     return notifications

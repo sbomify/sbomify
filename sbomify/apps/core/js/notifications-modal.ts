@@ -154,7 +154,6 @@ async function fetchNotifications(): Promise<void> {
 
     const data = await response.json();
     notifications = Array.isArray(data) ? data : [];
-    console.log('Fetched notifications:', notifications);
     renderNotifications();
   } catch (error) {
     console.error('Error fetching notifications:', error);

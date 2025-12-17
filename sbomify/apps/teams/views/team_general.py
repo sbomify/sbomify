@@ -141,8 +141,10 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     switch_active_workspace(request, target_team)
 
                     logger.info(
-                        f"Switched to {'default' if default_team_key else 'first available'} "
-                        f"workspace {target_team_key} after deleting {team_key}"
+                        "Switched to %s workspace %s after deleting %s",
+                        "default" if default_team_key else "first available",
+                        target_team_key,
+                        team_key,
                     )
                 except Team.DoesNotExist:
                     logger.error(f"Target workspace {target_team_key} not found after deletion")
