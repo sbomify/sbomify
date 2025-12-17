@@ -176,9 +176,8 @@ MIDDLEWARE = [
 # Use wildcard - DynamicHostValidationMiddleware handles validation
 ALLOWED_HOSTS = ["*"]
 
-# Add debug toolbar middleware if DEBUG is True
-if DEBUG:
-    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+# Disable debug toolbar in tests to avoid djdt namespace error
+DEBUG = False
 
 SITE_URL = "http://testserver"
 

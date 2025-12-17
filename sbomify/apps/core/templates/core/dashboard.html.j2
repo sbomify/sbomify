@@ -5,49 +5,28 @@
 {% block extra_styles %}
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'css/components/stat-card.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block dashboard_content %}
     <div class="dashboard">
         <h3 class="page-title">Dashboard</h3>
-        <div class="dashboard-stats">
-            <div class="container-fluid p-0">
-                <div class="row">
-                    {% for key, value in data.items %}
-                        <div class="col-md-4">
-                            <div class="standard-card mt-3">
-                                <div class="card stats-card shadow-sm">
-                                    <div class="card-header">
-                                        <div class="header-content">
-                                            <h4 class="card-title mb-0">Total {{ key|title }}</h4>
-                                        </div>
-                                    </div>
-                                    <div class="card-body text-center">
-                                        <div class="stat-content">
-                                            <div class="stat-display">
-                                                <div class="stat-value">
-                                                    <span class="display-4 stat-number text-dark-emphasis">{{ value }}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
         <div class="row mt-4">
             <div class="col-12">
-                <div class="vc-vulnerability-timeseries"
-                     data-team-key="{{ current_team.key }}"
-                     data-default-days="30"
-                     data-show-product-filter="true"></div>
+                <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading vulnerability trends...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-    {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
 {% endblock %}

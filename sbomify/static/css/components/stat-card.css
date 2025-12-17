@@ -1,18 +1,18 @@
 .stat-content {
-  padding: 0.5rem 0;
+  padding: 0.25rem 0;
 }
 
 .stat-loading {
-  padding: 2rem 0;
+  padding: 1rem 0;
 }
 
 .stat-error {
-  padding: 1rem 0;
-  font-size: 0.9rem;
+  padding: 0.75rem 0;
+  font-size: 0.85rem;
 }
 
 .stat-display {
-  min-height: 80px;
+  min-height: 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -24,10 +24,11 @@
   align-items: baseline;
   justify-content: center;
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .stat-number {
+  font-size: 2rem;
   font-weight: 700;
   line-height: 1;
   color: var(--text-title);
@@ -85,6 +86,26 @@
 
 .text-dark-emphasis {
   color: var(--text-title) !important;
+}
+
+/* Compact stat card variant */
+.stats-card-compact {
+  border-radius: 8px;
+}
+
+.stats-card-compact .stat-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stats-card-compact .stat-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-title);
+  line-height: 1.2;
 }
 
 @media (max-width: 768px) {

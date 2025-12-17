@@ -38,7 +38,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
         </div>
         <div class="header-meta">
             <span class="meta-item">
-                <i class="fas fa-project-diagram me-2 text-primary"></i>
+                <i class="fas fa-folder me-2 text-primary"></i>
                 <span class="meta-label">Project</span>
             </span>
             <span class="meta-divider">•</span>
@@ -46,33 +46,12 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                 {% include 'core/components/copyable-value.html.j2' with value=project.id title="Project ID: "|add:project.id|add:" (click to copy)" %}
             </span>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="container-fluid p-0">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="standard-card mt-3">
-                            <div class="card stats-card shadow-sm">
-                                <div class="card-header">
-                                    <div class="header-content">
-                                        <h4 class="card-title mb-0">Components in Project</h4>
-                                    </div>
-                                </div>
-                                <div class="card-body text-center">
-                                    <div class="stat-content">
-                                        <div class="stat-display">
-                                            <div class="stat-value">
-                                                <span class="display-4 stat-number text-dark-emphasis">{{ dashboard_summary.total_components|default:0 }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="header-stats">
+            <span class="stat-badge">
+                <i class="fas fa-puzzle-piece"></i>
+                <span class="stat-number">{{ dashboard_summary.total_components|default:0 }}</span>
+                <span class="stat-label">Components</span>
+            </span>
         </div>
     </div>
     <div class="row mt-3">

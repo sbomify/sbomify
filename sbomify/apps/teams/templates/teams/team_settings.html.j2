@@ -76,9 +76,6 @@
                                 <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
                             </div>
                             <button type="submit" class="visually-hidden">Save visibility</button>
-                            <small class="text-muted hint">
-                                {% if can_set_private %}Toggle anytime.{% endif %}
-                            </small>
                         </form>
                     </div>
                 </div>
@@ -172,11 +169,6 @@
             padding-left: 0;
         }
 
-        .workspace-visibility-card .hint {
-            display: block;
-            margin-top: 0.5rem;
-            font-size: 0.8rem;
-        }
 
         .workspace-visibility-card .visibility-copy-btn {
             display: inline-flex;

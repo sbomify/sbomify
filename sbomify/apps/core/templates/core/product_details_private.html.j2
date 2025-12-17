@@ -39,41 +39,17 @@
                 {% include 'core/components/copyable-value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
             </span>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="container-fluid p-0">
-                <div class="row">
-                    {% for key in "projects,components"|split:"," %}
-                        <div class="col-md-4">
-                            <div class="standard-card mt-3">
-                                <div class="card stats-card shadow-sm">
-                                    <div class="card-header">
-                                        <div class="header-content">
-                                            <h4 class="card-title mb-0">{{ key|title }} in Product</h4>
-                                        </div>
-                                    </div>
-                                    <div class="card-body text-center">
-                                        <div class="stat-content">
-                                            <div class="stat-display">
-                                                <div class="stat-value">
-                                                    <span class="display-4 stat-number text-dark-emphasis">
-                                                        {% if key == "projects" %}
-                                                            {{ dashboard_summary.total_projects|default:0 }}
-                                                        {% elif key == "components" %}
-                                                            {{ dashboard_summary.total_components|default:0 }}
-                                                        {% endif %}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
+        <div class="header-stats">
+            <span class="stat-badge">
+                <i class="fas fa-folder"></i>
+                <span class="stat-number">{{ dashboard_summary.total_projects|default:0 }}</span>
+                <span class="stat-label">Projects</span>
+            </span>
+            <span class="stat-badge">
+                <i class="fas fa-puzzle-piece"></i>
+                <span class="stat-number">{{ dashboard_summary.total_components|default:0 }}</span>
+                <span class="stat-label">Components</span>
+            </span>
         </div>
     </div>
     <div class="row mt-3">

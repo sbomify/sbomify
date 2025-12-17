@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
-from sbomify.apps.vulnerability_scanning.views import VulnerabilityScansView
+from sbomify.apps.vulnerability_scanning.views_scans import VulnerabilityScansView
 
 from . import views
 

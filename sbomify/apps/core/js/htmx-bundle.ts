@@ -4,9 +4,11 @@ import './alerts-global';
 import './clipboard-global';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerCopyableValue } from './components/copyable-value';
+import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { initializeAlpine } from './alpine-init';
 
 registerCopyableValue();
+registerPublicStatusToggle();
 registerWorkspaceSwitcher();
 initializeAlpine();
 
