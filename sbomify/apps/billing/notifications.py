@@ -102,7 +102,6 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
         )
 
-    logger.warning(f"No upgrade notification for team {team.key} (billing_plan='{billing_plan}')")
     return None
 
 
