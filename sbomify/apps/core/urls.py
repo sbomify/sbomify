@@ -144,6 +144,7 @@ urlpatterns = [
     # Support contact pages
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
+    path("search/", views.SearchView.as_view(), name="search"),
     re_path(
         r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
         views.ComponentItemView.as_view(),

@@ -19,32 +19,43 @@ from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
 
 def get_app_hostname() -> str:
-    """Extract hostname from APP_BASE_URL for CNAME instructions.
-
-    Returns only the hostname portion, ignoring any port numbers or paths.
-    If APP_BASE_URL is missing a protocol, HTTPS is assumed.
-    """
-    app_base_url = getattr(settings, "APP_BASE_URL", "")
+    """Extract hostname from APP_BASE_URL setting."""
+    app_base_url = getattr(settings, "APP_BASE_URL", "").strip()
     if not app_base_url:
         return ""
-    # Add protocol if missing for urlparse to work correctly
+
+    # Add protocol if missing
     if not app_base_url.startswith(("http://", "https://")):
-        app_base_url = f"https://{app_base_url}"
-    parsed = urlparse(app_base_url)
-    return parsed.hostname or ""
+        app_base_url = f"http://{app_base_url}"
 
-
-def plan_has_custom_domain_access(billing_plan: str | None) -> bool:
-    """Check if the billing plan allows custom domain feature."""
-    plan_key = (billing_plan or "").strip().lower()
-    if not plan_key:
-        return False
     try:
-        plan = BillingPlan.objects.get(key=plan_key)
-        return plan.has_custom_domain_access
+        parsed = urlparse(app_base_url)
+        hostname = parsed.hostname or ""
+        # Handle localhost case
+        if hostname == "localhost":
+            return "localhost"
+        return hostname
+    except (ValueError, AttributeError):
+        return ""
+
+
+def plan_has_custom_domain_access(plan: str | None) -> bool:
+    """Check if a billing plan has custom domain access."""
+    if not plan:
+        return False
+
+    plan_str = str(plan).strip().lower()
+
+    # Business and Enterprise plans have access
+    if plan_str in ("business", "enterprise"):
+        return True
+
+    # Check if it's a BillingPlan in the database with custom domain access
+    try:
+        billing_plan = BillingPlan.objects.get(key=plan_str)
+        return getattr(billing_plan, "has_custom_domain_access", False)
     except BillingPlan.DoesNotExist:
-        # Fallback for unknown plans - only business/enterprise allowed
-        return plan_key in ["business", "enterprise"]
+        return False
 
 
 class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -59,9 +70,19 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
-        # Custom domain context
-        has_custom_domain_access = plan_has_custom_domain_access(team.billing_plan)
-        app_hostname = get_app_hostname()
+        # Prepare custom domain context for the template/JavaScript
+        has_access = plan_has_custom_domain_access(team.billing_plan)
+        custom_domain = team.custom_domain or ""
+        is_validated = team.custom_domain_validated if custom_domain else False
+        last_checked_at = team.custom_domain_last_checked_at.isoformat() if team.custom_domain_last_checked_at else ""
+
+        custom_domain_config = {
+            "teamKey": team.key,
+            "initialDomain": custom_domain,
+            "isValidated": is_validated,
+            "lastCheckedAt": last_checked_at,
+            "hasAccess": has_access,
+        }
 
         return render(
             request,
@@ -69,8 +90,8 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             {
                 "team": team,
                 "branding_info": branding_info,
-                "has_custom_domain_access": has_custom_domain_access,
-                "app_hostname": app_hostname,
+                "custom_domain_config": custom_domain_config,
+                "app_hostname": get_app_hostname(),
             },
         )
 

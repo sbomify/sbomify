@@ -11,40 +11,54 @@ from .utils import get_notifications
 
 @pytest.fixture
 def notification_request():
-    """Create a test request"""
+    """Create a test request with session"""
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.test import RequestFactory
+
     factory = RequestFactory()
-    return factory.get("/")
+    request = factory.get("/")
+    
+    # Add session middleware to the request
+    middleware = SessionMiddleware(lambda req: None)
+    middleware.process_request(request)
+    request.session.save()
+    
+    return request
 
 
 def mock_notification_provider(request):
     """Mock notification provider for testing"""
-    return {
-        "id": "test_notification",
-        "type": "test",
-        "message": "Test notification",
-        "severity": "info",
-        "created_at": datetime.utcnow().isoformat(),
-        "action_url": "/test/url/"
-    }
+    from .schemas import NotificationSchema
+    
+    return NotificationSchema(
+        id="test_notification",
+        type="test",
+        message="Test notification",
+        severity="info",
+        created_at=datetime.utcnow().isoformat(),
+        action_url="/test/url/"
+    )
 
 
 def mock_list_provider(request):
     """Mock provider that returns a list"""
+    from .schemas import NotificationSchema
+    
     return [
-        {
-            "id": "test_1",
-            "type": "test",
-            "message": "Test 1",
-            "severity": "info",
-            "created_at": datetime.utcnow().isoformat(),
-        },
-        {
-            "id": "test_2",
-            "type": "test",
-            "message": "Test 2",
-            "severity": "warning",
-            "created_at": datetime.utcnow().isoformat(),
-        }
+        NotificationSchema(
+            id="test_1",
+            type="test",
+            message="Test 1",
+            severity="info",
+            created_at=datetime.utcnow().isoformat(),
+        ),
+        NotificationSchema(
+            id="test_2",
+            type="test",
+            message="Test 2",
+            severity="warning",
+            created_at=datetime.utcnow().isoformat(),
+        )
     ]
 
 
@@ -63,10 +77,10 @@ class TestNotifications:
         notifications = get_notifications(notification_request)
 
         assert len(notifications) == 1
-        assert notifications[0]["id"] == "test_notification"
-        assert notifications[0]["type"] == "test"
-        assert notifications[0]["severity"] == "info"
-        assert notifications[0]["action_url"] == "/test/url/"
+        assert notifications[0].id == "test_notification"
+        assert notifications[0].type == "test"
+        assert notifications[0].severity == "info"
+        assert notifications[0].action_url == "/test/url/"
 
     def test_multiple_notifications(self, notification_request, settings):
         """Test getting multiple notifications from a provider"""
@@ -74,8 +88,8 @@ class TestNotifications:
         notifications = get_notifications(notification_request)
 
         assert len(notifications) == 2
-        assert notifications[0]["id"] == "test_1"
-        assert notifications[1]["id"] == "test_2"
+        assert notifications[0].id == "test_1"
+        assert notifications[1].id == "test_2"
 
     def test_provider_error(self, notification_request, settings):
         """Test handling provider errors gracefully"""

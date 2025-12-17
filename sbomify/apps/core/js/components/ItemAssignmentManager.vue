@@ -13,7 +13,7 @@
           </template>
 
           <!-- Search for assigned items -->
-          <div class="mb-3 border-bottom pb-3">
+          <div class="search-container mb-3 border-bottom pb-3">
             <div class="input-group">
               <span class="input-group-text">
                 <i class="fas fa-search text-muted"></i>
@@ -48,16 +48,16 @@
               >
                 <div class="d-flex align-items-center">
                   <div class="flex-grow-1 me-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 class="mb-1">
+                    <div class="item-header-wrapper d-flex justify-content-between align-items-center">
+                      <div class="item-name-wrapper">
+                        <h6 class="mb-1 text-break">
                           <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
                             {{ item.name }}
                           </a>
                         </h6>
                         <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 item-badges">
                       <span v-if="item.is_public" class="badge bg-success-subtle text-success">
                         <i class="fas fa-globe me-1"></i>Public
                       </span>
@@ -99,7 +99,7 @@
           </template>
 
           <!-- Search for available items -->
-          <div class="mb-3 border-bottom pb-3">
+          <div class="search-container mb-3 border-bottom pb-3">
             <div class="input-group">
               <span class="input-group-text">
                 <i class="fas fa-search text-muted"></i>
@@ -147,16 +147,16 @@
               >
                 <div class="d-flex align-items-center">
                   <div class="flex-grow-1 me-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 class="mb-1">
+                    <div class="item-header-wrapper d-flex justify-content-between align-items-center">
+                      <div class="item-name-wrapper">
+                        <h6 class="mb-1 text-break">
                           <a :href="getItemUrl(item)" class="text-decoration-none text-primary" @click.stop>
                             {{ item.name }}
                           </a>
                         </h6>
                         <small v-if="item.version" class="text-muted version-display" :title="item.version">{{ item.version }}</small>
                       </div>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 item-badges">
                       <span v-if="item.is_public" class="badge bg-success-subtle text-success">
                         <i class="fas fa-globe me-1"></i>Public
                       </span>
@@ -487,7 +487,153 @@
   /* Responsive improvements */
   @media (max-width: 991.98px) {
     .col-lg-6 {
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .item-assignment-manager .row {
+      margin-left: 0;
+      margin-right: 0;
+    }
+
+    .item-assignment-manager .row > [class*="col-"] {
+      padding-left: 0;
+      padding-right: 0;
+      margin-bottom: 1.5rem;
+    }
+
+    .item-assignment-manager .row > [class*="col-"]:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Search bar mobile styles - unified single input field */
+    .search-container {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 10 !important;
+      background: #ffffff !important;
+      margin-bottom: 1rem !important;
+      padding: 1rem 0 !important;
+      padding-bottom: 1rem !important;
+      border-bottom: 1px solid #dee2e6 !important;
+    }
+
+    .search-container .input-group {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      width: 100% !important;
+      align-items: stretch !important;
+      position: relative !important;
+    }
+
+    .search-container .input-group-text {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      bottom: 0 !important;
+      z-index: 2 !important;
+      background: transparent !important;
+      border: none !important;
+      border-right: none !important;
+      border-radius: 0.375rem 0 0 0.375rem !important;
+      padding: 0.5rem 0.75rem !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 40px !important;
+      width: auto !important;
+      pointer-events: none !important;
+    }
+
+    .search-container .input-group-text i {
+      color: #6c757d !important;
+      font-size: 0.875rem !important;
+      display: block !important;
+      line-height: 1 !important;
+    }
+
+    .search-container .form-control {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      width: 100% !important;
+      border: 1px solid #ced4da !important;
+      border-radius: 0.375rem !important;
+      padding: 0.5rem 0.75rem 0.5rem 2.75rem !important;
+      font-size: 0.875rem !important;
+      line-height: 1.5 !important;
+      height: auto !important;
+      min-height: 38px !important;
+      background: #ffffff !important;
+      color: #212529 !important;
+    }
+
+    .search-container .form-control::placeholder {
+      color: #6c757d !important;
+      opacity: 1 !important;
+    }
+
+    .search-container .form-control:focus {
+      border-color: #86b7fe !important;
+      box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+      outline: 0 !important;
+      z-index: 1 !important;
+      background: #ffffff !important;
+    }
+
+    /* Ensure card body allows sticky positioning */
+    .item-assignment-manager :deep(.card-body) {
+      position: relative !important;
+      overflow: visible !important;
+    }
+
+    .assigned-items-container,
+    .available-items-container {
+      max-height: 300px;
+      min-height: 150px;
+    }
+
+    .item-card {
+      padding: 0.875rem;
+      min-height: 44px;
+    }
+
+    .item-header-wrapper {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 0.5rem;
+    }
+
+    .item-badges {
+      flex-wrap: wrap;
+      gap: 0.375rem;
+    }
+    
+    .item-name-wrapper {
+      width: 100%;
+    }
+
+    .add-item-btn,
+    .remove-item-btn {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      min-height: 36px;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .item-card {
+      padding: 0.75rem;
+    }
+
+    .assigned-items-container,
+    .available-items-container {
+      max-height: 250px;
+    }
+
+    .item-badges {
+      gap: 0.25rem;
     }
   }
 
@@ -571,6 +717,7 @@
   .remove-item-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none;
     transform: none;
   }
 

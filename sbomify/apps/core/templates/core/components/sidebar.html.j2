@@ -161,6 +161,11 @@
                                                             {{ t_info.name|workspace_initials }}
                                                         </span>
                                                         <span class="workspace-option-name">{{ t_info.name|workspace_display }}</span>
+                                                        {% if t_info.is_default_team %}
+                                                            <i class="fas fa-star workspace-option-star"
+                                                               aria-hidden="true"
+                                                               title="Default workspace"></i>
+                                                        {% endif %}
                                                         <i class="fas fa-check workspace-option-check"
                                                            x-show="selected === '{{ t_key|escapejs }}'"
                                                            aria-hidden="true"></i>

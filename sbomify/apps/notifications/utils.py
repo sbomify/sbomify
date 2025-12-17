@@ -16,6 +16,9 @@ def get_notifications(request):
     notifications = []
     providers = getattr(settings, "NOTIFICATION_PROVIDERS", [])
 
+    # Get dismissed notification IDs from session (excluding upgrade notifications)
+    dismissed_ids = set(request.session.get("dismissed_notifications", []))
+
     for provider_path in providers:
         try:
             # Split into module path and function name
@@ -26,12 +29,25 @@ def get_notifications(request):
             provider_func = getattr(module, func_name)
 
             # Get notifications from this provider
-            provider_notifications = provider_func(request)
-            if provider_notifications:
-                if isinstance(provider_notifications, list):
-                    notifications.extend(provider_notifications)
-                else:
-                    notifications.append(provider_notifications)
+            try:
+                provider_notifications = provider_func(request)
+                if provider_notifications:
+                    if isinstance(provider_notifications, list):
+                        for notification in provider_notifications:
+                            # Don't filter out upgrade notifications (they can't be dismissed)
+                            is_upgrade = notification.type == "community_upgrade"
+                            is_dismissed = notification.id in dismissed_ids
+                            if is_upgrade or not is_dismissed:
+                                notifications.append(notification)
+                    else:
+                        # Single notification
+                        is_upgrade = provider_notifications.type == "community_upgrade"
+                        is_dismissed = provider_notifications.id in dismissed_ids
+                        if is_upgrade or not is_dismissed:
+                            notifications.append(provider_notifications)
+            except Exception as e:
+                logger.exception(f"Exception in provider {provider_path}: {str(e)}")
+                raise
 
         except Exception as e:
             logger.error(f"Error getting notifications from provider {provider_path}: {str(e)}")

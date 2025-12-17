@@ -10,11 +10,355 @@
             aria-label="Open navigation menu">
         <span class="hamburger" aria-hidden="true"></span>
     </button>
-    {# Spacer to push user dropdown to the right #}
+    {# Search Bar #}
+    <div class="navbar-search">
+        <div class="search-input-wrapper">
+            <i class="fas fa-search search-icon" aria-hidden="true"></i>
+            <input type="search"
+                   id="navbar-search-input"
+                   class="search-input"
+                   placeholder="Search products, projects, components..."
+                   aria-label="Search"
+                   autocomplete="off">
+            <div id="search-results-dropdown"
+                 class="search-results-dropdown"
+                 style="display: none"></div>
+        </div>
+    </div>
+    {# Spacer to push actions to the right #}
     <div class="flex-grow-1"></div>
-    <div class="navbar-collapse collapse">
-        <ul class="navbar-nav navbar-align">
-            {% include "core/user-dropdown.html.j2" %}
-        </ul>
+    {# Action Buttons #}
+    <div class="navbar-actions d-flex align-items-center">
+        {# New Button Dropdown #}
+        <div class="dropdown">
+            <button type="button"
+                    class="btn-new dropdown-toggle"
+                    id="newItemDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    aria-label="Create new item">
+                <i class="fas fa-plus" aria-hidden="true"></i>
+                <span>New</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end new-item-dropdown"
+                aria-labelledby="newItemDropdown">
+                <li>
+                    <a class="dropdown-item"
+                       href="#"
+                       data-bs-toggle="modal"
+                       data-bs-target="#newProductModal">
+                        <i class="fas fa-cube me-2"></i>
+                        <span>Product</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item"
+                       href="#"
+                       data-bs-toggle="modal"
+                       data-bs-target="#newProjectModal">
+                        <i class="fas fa-folder me-2"></i>
+                        <span>Project</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item"
+                       href="#"
+                       data-bs-toggle="modal"
+                       data-bs-target="#newComponentModal">
+                        <i class="fas fa-puzzle-piece me-2"></i>
+                        <span>Component</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        {# Notifications #}
+        <button type="button"
+                class="btn btn-icon btn-notifications position-relative"
+                aria-label="Notifications"
+                data-bs-toggle="modal"
+                data-bs-target="#notificationsModal"
+                aria-expanded="false"
+                aria-haspopup="true">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <span id="notifications-badge"
+                  class="position-absolute badge rounded-pill bg-danger notification-badge"
+                  style="display: none;
+                         top: 0.125rem;
+                         right: 0.125rem;
+                         transform: none">
+                <span class="notifications-count">0</span>
+                <span class="visually-hidden">unread notifications</span>
+            </span>
+        </button>
+        {# Help/Support Dropdown #}
+        <div class="dropdown">
+            <button type="button"
+                    class="btn btn-icon btn-help dropdown-toggle"
+                    id="helpDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    aria-label="Help and support">
+                <i class="fas fa-question-circle" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end help-dropdown"
+                aria-labelledby="helpDropdown">
+                <li>
+                    <a class="dropdown-item" href="{% url 'core:support_contact' %}">
+                        <i class="fas fa-envelope me-2"></i>
+                        <span>Contact Support</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item"
+                       href="https://sbomify.com/"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        <i class="fas fa-book me-2"></i>
+                        <span>Getting Started</span>
+                        <i class="fas fa-external-link-alt ms-2 small" aria-hidden="true"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        {# User Dropdown #}
+        <div class="navbar-user-dropdown">{% include "core/user-dropdown.html.j2" %}</div>
     </div>
 </nav>
+{# Create Modals - Only show if user has CRUD permissions #}
+{% with current_team=request.session.current_team %}
+    {% if current_team %}
+        {% if current_team.role == "owner" or current_team.role == "admin" %}
+            {# New Product Modal #}
+            <div id="newProductModal"
+                 class="modal fade"
+                 data-bs-backdrop="static"
+                 tabindex="-1"
+                 aria-labelledby="newProductModalLabel"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0">
+                        <div class="modal-header border-bottom-0 pb-0">
+                            <h4 id="newProductModalLabel" class="modal-title text-secondary">Add Product</h4>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pt-3">
+                            <form id="newProductForm"
+                                  method="post"
+                                  action="{% url 'core:products_dashboard' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-medium" for="newProductName">
+                                        Name
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input id="newProductName"
+                                           name="name"
+                                           type="text"
+                                           class="form-control form-control-lg"
+                                           required />
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label text-secondary fw-medium"
+                                           for="newProductDescription">Description (Optional)</label>
+                                    <textarea id="newProductDescription"
+                                              name="description"
+                                              class="form-control"
+                                              rows="3"
+                                              placeholder="Describe your product..."></textarea>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary px-4">Create Product</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# New Project Modal #}
+            <div id="newProjectModal"
+                 class="modal fade"
+                 data-bs-backdrop="static"
+                 tabindex="-1"
+                 aria-labelledby="newProjectModalLabel"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0">
+                        <div class="modal-header border-bottom-0 pb-0">
+                            <h4 id="newProjectModalLabel" class="modal-title text-secondary">Add Project</h4>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pt-3">
+                            <form id="newProjectForm"
+                                  method="post"
+                                  action="{% url 'core:projects_dashboard' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-medium" for="newProjectName">
+                                        Name
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input id="newProjectName"
+                                           name="name"
+                                           type="text"
+                                           class="form-control form-control-lg"
+                                           required />
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary px-4">Create Project</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# New Component Modal #}
+            <div id="newComponentModal"
+                 class="modal fade"
+                 data-bs-backdrop="static"
+                 tabindex="-1"
+                 aria-labelledby="newComponentModalLabel"
+                 aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0">
+                        <div class="modal-header border-bottom-0 pb-0">
+                            <h4 id="newComponentModalLabel" class="modal-title text-secondary">Add Component</h4>
+                            <button type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body pt-3">
+                            <form id="newComponentForm"
+                                  method="post"
+                                  action="{% url 'core:components_dashboard' %}">
+                                {% csrf_token %}
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-medium" for="newComponentName">
+                                        Name
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input id="newComponentName"
+                                           name="name"
+                                           type="text"
+                                           class="form-control form-control-lg"
+                                           required />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-medium" for="newComponentType">
+                                        Type
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <select id="newComponentType"
+                                            name="component_type"
+                                            class="form-select form-select-lg"
+                                            required>
+                                        <option value="sbom">SBOM</option>
+                                        <option value="document">Document</option>
+                                    </select>
+                                    <div class="form-text">Choose the type of component you're creating</div>
+                                </div>
+                                <div class="mb-4" id="newComponentGlobalToggleGroup">
+                                    <div class="form-check form-switch">
+                                        <input id="newComponentIsGlobal"
+                                               name="is_global"
+                                               class="form-check-input"
+                                               type="checkbox"
+                                               role="switch">
+                                        <label class="form-check-label text-secondary fw-medium"
+                                               for="newComponentIsGlobal">
+                                            Workspace-wide component (documents only)
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary px-4">Create Component</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script>
+        // Handle component type change to show/hide global toggle
+        (function() {
+            const typeSelect = document.getElementById('newComponentType');
+            const globalToggle = document.getElementById('newComponentIsGlobal');
+            const globalGroup = document.getElementById('newComponentGlobalToggleGroup');
+            
+            if (typeSelect && globalToggle && globalGroup) {
+                function updateGlobalToggleVisibility() {
+                    if (typeSelect.value === 'document') {
+                        globalGroup.style.display = 'block';
+                    } else {
+                        globalGroup.style.display = 'none';
+                        globalToggle.checked = false;
+                    }
+                }
+                
+                typeSelect.addEventListener('change', updateGlobalToggleVisibility);
+                updateGlobalToggleVisibility();
+            }
+        })();
+            </script>
+        {% endif %}
+    {% endif %}
+{% endwith %}
+{# Notifications Modal - Slides from left #}
+<div class="modal fade notifications-modal"
+     id="notificationsModal"
+     tabindex="-1"
+     aria-labelledby="notificationsModalLabel"
+     aria-hidden="true"
+     data-bs-backdrop="true">
+    <div class="modal-dialog modal-dialog-slide-left">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="notificationsModalLabel">Notifications</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button"
+                            class="btn btn-link text-muted p-0"
+                            id="clearAllNotifications"
+                            style="display: none">Clear all</button>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0">
+                <div id="notifications-loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="notifications-list" class="notifications-list">
+                    <!-- Notifications will be loaded here -->
+                </div>
+                <div id="notifications-empty"
+                     class="text-center py-5"
+                     style="display: none">
+                    <i class="fas fa-bell-slash text-muted mb-2" style="font-size: 2rem;"></i>
+                    <p class="text-muted mb-0">No notifications</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

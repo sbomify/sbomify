@@ -1,5 +1,7 @@
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
+import './navbar-search';
+import './notifications-modal';
 
 // Chart.js - make available globally for admin dashboard and vulnerability trends
 import {
@@ -83,6 +85,7 @@ import ProductLinks from './components/ProductLinks.vue';
 import ProductReleases from './components/ProductReleases.vue';
 import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
 import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
+import TeamDangerZone from './components/TeamDangerZone.vue';
 import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
 registerCopyableValue();
@@ -118,7 +121,39 @@ mountVueComponent('vc-product-links', ProductLinks);
 mountVueComponent('vc-product-releases', ProductReleases);
 mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
 mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
+mountVueComponent('vc-team-danger-zone', TeamDangerZone);
 mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
+
+// Re-mount Vue components after HTMX content swaps
+document.body.addEventListener('htmx:afterSwap', () => {
+  mountVueComponent('vc-editable-single-field', EditableSingleField);
+  mountVueComponent('vc-confirm-action', ConfirmAction);
+  mountVueComponent('vc-copy-token', CopyToken);
+  mountVueComponent('vc-site-notifications', SiteNotifications);
+  mountVueComponent('vc-standard-card', StandardCard);
+  mountVueComponent('vc-plan-card', PlanCard);
+  mountVueComponent('vc-access-tokens-list', AccessTokensList);
+  mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
+  mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
+  mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
+  mountVueComponent('vc-danger-zone', DangerZone);
+  mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
+  mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+  mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
+  mountVueComponent('vc-export-data-card', ExportDataCard);
+  mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
+  mountVueComponent('vc-items-list-table', ItemsListTable);
+  mountVueComponent('vc-public-card', PublicCard);
+  mountVueComponent('vc-public-product-projects', PublicProductProjects);
+  mountVueComponent('vc-public-download-card', PublicDownloadCard);
+  mountVueComponent('vc-product-identifiers', ProductIdentifiers);
+  mountVueComponent('vc-product-links', ProductLinks);
+  mountVueComponent('vc-product-releases', ProductReleases);
+  mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
+  mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
+  mountVueComponent('vc-team-danger-zone', TeamDangerZone);
+  mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
+});
 
 // Declare global variables
 declare global {
