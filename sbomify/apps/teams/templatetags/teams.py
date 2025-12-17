@@ -1,4 +1,5 @@
 import logging
+import hashlib
 import re
 from datetime import datetime, timedelta
 
@@ -212,6 +213,12 @@ def user_workspaces(context):
         else:
             key_preview = key[:20] if len(key) > 20 else key
             logger.warning("Invalid workspace key format detected and filtered: %s...", key_preview)
+            # Log hash instead of actual key to prevent information leakage
+            key_hash = hashlib.sha256(key.encode()).hexdigest()[:16]
+            logger.warning(
+                "Invalid workspace key format detected and filtered: hash=%s",
+                key_hash,
+            )
 
     user_teams = validated_teams
 

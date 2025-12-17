@@ -247,7 +247,6 @@
 
 /* Mobile-first table styling */
 @media (max-width: 767.98px) {
-
   /* Convert tables to card layout on mobile */
   .dashboard-table {
     border: none;
@@ -775,7 +774,6 @@
 
 /* Very small mobile devices (phones in portrait) */
 @media (max-width: 480px) {
-
   /* Ultra-compact mobile layout */
   .content {
     padding: 0.75rem 0.5rem !important;
@@ -960,7 +958,6 @@
 
 /* ===== IPHONE SE AND VERY SMALL DEVICES (320px) ===== */
 @media (max-width: 375px) {
-
   /* Ultra-compact navbar for iPhone SE */
   .navbar {
     padding: 0.5rem 0.75rem !important;
@@ -1115,7 +1112,6 @@
 
 /* ===== MOBILE EMPTY STATE AND GENERAL OPTIMIZATIONS (ALL MOBILE) ===== */
 @media (max-width: 767.98px) {
-
   /* Better empty state layout */
   .dashboard-empty {
     padding: 2rem 1rem !important;
@@ -1202,7 +1198,6 @@
 /* ===== TABLET OPTIMIZATIONS ===== */
 
 @media (min-width: 768px) and (max-width: 1199.98px) {
-
   /* Tablet-specific dashboard layout */
   .dashboard-tablet {
     display: grid;
@@ -1235,7 +1230,6 @@
 /* ===== LARGE SCREEN ENHANCEMENTS ===== */
 
 @media (min-width: 1200px) {
-
   /* Enhanced sidebar for large screens */
   .sidebar-large {
     width: 300px;
@@ -1277,7 +1271,6 @@
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
@@ -1318,7 +1311,6 @@
 /* ===== PRINT OPTIMIZATIONS ===== */
 
 @media print {
-
   .sidebar,
   .navbar,
   .sidebar-toggle,
