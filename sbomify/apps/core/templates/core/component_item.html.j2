@@ -5,6 +5,8 @@
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/component-detailed-private.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content %}
     <div class="page-header mb-4">
@@ -19,7 +21,14 @@
                         <li class="breadcrumb-item">
                             <a href="{% url 'core:component_details' item.component_id %}">{{ item.component_name }}</a>
                         </li>
-                        <li class="breadcrumb-item active" aria-current="page">Detailed View</li>
+                        <li class="breadcrumb-item active" aria-current="page">
+                            {% if item_type == 'sboms' %}
+                                SBOM
+                            {% else %}
+                                Document
+                            {% endif %}
+                            Details
+                        </li>
                     </ol>
                 </nav>
             </div>
@@ -67,9 +76,74 @@
         </div>
     </div>
     {% if item_type == 'sboms' %}
+        <!-- Vulnerability Summary Section -->
+        {% if vulnerability_summary %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card shadow-sm border-0 vulnerability-summary-card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="rounded-circle p-3 vulnerability-summary-icon">
+                                        <i class="fas fa-shield-alt fa-lg text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-1">Vulnerability Scan Summary</h5>
+                                        <small class="text-muted">
+                                            Last scanned: {{ vulnerability_summary.scan_date|date:"M d, Y H:i" }}
+                                            <span class="badge bg-info-subtle text-info ms-2">{{ vulnerability_summary.provider|upper }}</span>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <div class="vulnerability-stat-box total">
+                                        <div class="fs-4 fw-bold">{{ vulnerability_summary.total }}</div>
+                                        <small class="text-muted">Total</small>
+                                    </div>
+                                    {% if vulnerability_summary.critical > 0 %}
+                                        <div class="vulnerability-stat-box bg-danger-subtle">
+                                            <div class="fs-4 fw-bold text-danger">{{ vulnerability_summary.critical }}</div>
+                                            <small class="text-danger">Critical</small>
+                                        </div>
+                                    {% endif %}
+                                    {% if vulnerability_summary.high > 0 %}
+                                        <div class="vulnerability-stat-box bg-warning-subtle">
+                                            <div class="fs-4 fw-bold text-warning">{{ vulnerability_summary.high }}</div>
+                                            <small class="text-warning">High</small>
+                                        </div>
+                                    {% endif %}
+                                    {% if vulnerability_summary.medium > 0 %}
+                                        <div class="vulnerability-stat-box bg-info-subtle">
+                                            <div class="fs-4 fw-bold text-info">{{ vulnerability_summary.medium }}</div>
+                                            <small class="text-info">Medium</small>
+                                        </div>
+                                    {% endif %}
+                                    {% if vulnerability_summary.low > 0 %}
+                                        <div class="vulnerability-stat-box bg-secondary-subtle">
+                                            <div class="fs-4 fw-bold text-secondary">{{ vulnerability_summary.low }}</div>
+                                            <small class="text-secondary">Low</small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
         <div class="row">
             <div class="col-12 col-lg-5">{% include 'sboms/components/sbom_metadata_card.html.j2' with item=item %}</div>
             <div class="col-12 col-lg-7">{% include 'sboms/components/sbom_actions_card.html.j2' with item=item %}</div>
+        </div>
+        <!-- Danger Zone Vue Component -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="vc-sbom-danger-zone"
+                     data-sbom-id="{{ item.id }}"
+                     data-sbom-name="{{ item.name }}"
+                     data-component-id="{{ component_id }}"
+                     data-csrf-token="{{ csrf_token }}"></div>
+            </div>
         </div>
     {% elif item_type == 'documents' %}
         <div class="row">

@@ -1,12 +1,19 @@
 import 'vite/modulepreload-polyfill';
 import './layout-interactions';
 
-// Chart.js - make available globally for admin dashboard
+// Chart.js - make available globally for admin dashboard and vulnerability trends
 import {
   Chart,
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  LineController,
+  BarController,
+  DoughnutController,
+  Filler,
   Title,
   Tooltip,
   Legend,
@@ -16,12 +23,20 @@ import Alpine from 'alpinejs';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
+import '../../vulnerability_scanning/js/vulnerability-chart';
 
 // Register Chart.js components
 Chart.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  LineController,
+  BarController,
+  DoughnutController,
+  Filler,
   Title,
   Tooltip,
   Legend
@@ -56,6 +71,7 @@ import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue'
 import DangerZone from './components/DangerZone.vue';
 import ProjectDangerZone from './components/ProjectDangerZone.vue';
 import ProductDangerZone from './components/ProductDangerZone.vue';
+import SbomDangerZone from './components/SbomDangerZone.vue';
 import ExportDataCard from './components/ExportDataCard.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 import ItemsListTable from './components/ItemsListTable.vue';
@@ -90,6 +106,7 @@ mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
 mountVueComponent('vc-danger-zone', DangerZone);
 mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
 mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
 mountVueComponent('vc-export-data-card', ExportDataCard);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 mountVueComponent('vc-items-list-table', ItemsListTable);

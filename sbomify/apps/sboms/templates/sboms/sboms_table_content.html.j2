@@ -10,14 +10,11 @@
             <thead>
                 <tr>
                     <th scope="col">Name</th>
-                    <th scope="col">Artifact Type</th>
                     <th scope="col">Format</th>
                     <th scope="col">Version</th>
                     {% if not is_public_view %}<th scope="col">NTIA Compliant</th>{% endif %}
                     <th scope="col">Created</th>
                     <th scope="col">Releases</th>
-                    {% if not is_public_view %}<th scope="col">Vulnerabilities</th>{% endif %}
-                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -28,7 +25,6 @@
                                title="Details"
                                class="icon-link">{{ sbom.sbom.name }}</a>
                         </td>
-                        <td {% if not is_public_view %}data-label="Artifact Type"{% endif %}>SBOM</td>
                         <td {% if not is_public_view %}data-label="Format"{% endif %}>
                             <span class="badge bg-success-subtle text-success">
                                 {{ sbom.sbom.format_display|default:sbom.sbom.format|upper }} {{ sbom.sbom.format_version }}
@@ -46,35 +42,6 @@
                         <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ sbom.sbom.created_at|date:"M d, Y" }}</td>
                         <td {% if not is_public_view %}data-label="Releases"{% endif %}>
                             {% include 'core/components/release_list.html.j2' with releases=sbom.releases document_id=sbom.sbom.id is_public_view=is_public_view %}
-                        </td>
-                        {% if not is_public_view %}
-                            <td data-label="Vulnerabilities">
-                                <a href="{% url 'sboms:sbom_vulnerabilities' sbom.sbom.id %}"
-                                   title="Vulnerabilities"
-                                   class="btn btn-sm btn-outline-warning action-btn{% if not sbom.has_vulnerabilities_report %} disabled{% endif %}">
-                                    <i class="fas fa-shield-alt me-1"></i> View
-                                </a>
-                            </td>
-                        {% endif %}
-                        <td {% if not is_public_view %}data-label="Actions"{% endif %}>
-                            <div class="d-flex gap-2">
-                                <a href="{% url 'sboms:sbom_download' sbom.sbom.id %}"
-                                   title="Download"
-                                   class="btn btn-outline-primary btn-sm action-btn">
-                                    <i class="fas fa-download"></i>
-                                </a>
-                                {% if has_crud_permissions %}
-                                    <button type="button"
-                                            class="btn btn-sm btn-outline-danger action-btn"
-                                            title="Delete SBOM"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#delete-sbom-modal"
-                                            data-display-name="{{ sbom.sbom.name|escapejs }}"
-                                            data-form-sbom_id="{{ sbom.sbom.id }}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                {% endif %}
-                            </div>
                         </td>
                     </tr>
                 {% endfor %}

@@ -17,6 +17,7 @@ from sbomify.apps.core.url_utils import (
 from sbomify.apps.documents.apis import get_document
 from sbomify.apps.sboms.apis import get_sbom
 from sbomify.apps.teams.branding import build_branding_context
+from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
 
 
 class ComponentItemPublicView(View):
@@ -82,12 +83,33 @@ class ComponentItemView(LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
+        vulnerability_summary = None
+
         if item_type == "sboms":
             status_code, item = get_sbom(request, item_id)
             if status_code != 200:
                 return error_response(
                     request, HttpResponse(status=status_code, content=item.get("detail", "Unknown error"))
                 )
+            # Get latest vulnerability scan for this SBOM
+            # Use component_id from item to ensure team access (defense in depth)
+            component_id_from_item = item.get("component_id") or component_id
+            latest_scan = (
+                VulnerabilityScanResult.objects.filter(sbom_id=item_id, sbom__component_id=component_id_from_item)
+                .select_related("sbom__component")
+                .order_by("-created_at")
+                .first()
+            )
+            if latest_scan:
+                vulnerability_summary = {
+                    "total": latest_scan.total_vulnerabilities,
+                    "critical": latest_scan.critical_vulnerabilities,
+                    "high": latest_scan.high_vulnerabilities,
+                    "medium": latest_scan.medium_vulnerabilities,
+                    "low": latest_scan.low_vulnerabilities,
+                    "provider": latest_scan.provider,
+                    "scan_date": latest_scan.created_at,
+                }
 
         elif item_type == "documents":
             status_code, item = get_document(request, item_id)
@@ -106,5 +128,7 @@ class ComponentItemView(LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
+                "component_id": component_id,
+                "vulnerability_summary": vulnerability_summary,
             },
         )

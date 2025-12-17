@@ -40,7 +40,7 @@
                         {% for sbom in sboms %}
                             <tr>
                                 <td>
-                                    <a href="{% url 'sboms:sbom_details' sbom.id %}"
+                                    <a href="{% url 'core:component_item' component_id=sbom.component_id item_type='sboms' item_id=sbom.id %}"
                                        title="Details"
                                        class="icon-link">{{ sbom.name }}</a>
                                 </td>
