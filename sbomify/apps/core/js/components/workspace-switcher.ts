@@ -262,17 +262,25 @@ export function registerWorkspaceSwitcher(): void {
                 });
 
                 // Return focus to trigger button after modal is closed
-                if (this.$nextTick) {
-                    this.$nextTick(() => {
-                        const triggerButton = el.querySelector('.sidebar-workspace-trigger') as HTMLButtonElement;
-                        if (triggerButton) {
-                            triggerButton.focus();
-                        } else {
-                            // If trigger button is not available, blur everything
-                            if (document.activeElement && document.activeElement instanceof HTMLElement) {
-                                document.activeElement.blur();
-                            }
+                // Use requestAnimationFrame as a fallback if $nextTick is not available
+                const focusRestore = () => {
+                    const triggerButton = el.querySelector('.sidebar-workspace-trigger') as HTMLButtonElement;
+                    if (triggerButton) {
+                        triggerButton.focus();
+                    } else {
+                        // If trigger button is not available, blur everything
+                        if (document.activeElement && document.activeElement instanceof HTMLElement) {
+                            document.activeElement.blur();
                         }
+                    }
+                };
+
+                if (this.$nextTick && typeof this.$nextTick === 'function') {
+                    this.$nextTick(focusRestore);
+                } else {
+                    // Fallback to requestAnimationFrame for focus restoration
+                    requestAnimationFrame(() => {
+                        setTimeout(focusRestore, 0);
                     });
                 }
             },

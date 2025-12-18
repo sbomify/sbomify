@@ -839,37 +839,39 @@ const loadArtifacts = async () => {
       component_id: string
       component_name: string
       [key: string]: unknown // Allow other properties but ensure required ones are typed
-    }) => {
+    }): Artifact | null => {
       if (artifact.artifact_type === 'sbom') {
         const sbomId = artifact.sbom_id
         return {
-          id: artifact.id,
-          sbom: {
-            id: sbomId || '',
-            name: artifact.artifact_name,
-            format: artifact.sbom_format,
-            format_version: artifact.sbom_format_version,
-            version: artifact.sbom_version,
-            created_at: artifact.created_at,
-            component: {
-              id: artifact.component_id,
-              name: artifact.component_name
+            id: artifact.id,
+            sbom: {
+              id: sbomId || '',
+              name: artifact.artifact_name,
+              // Ensure required string fields are always populated
+              format: artifact.sbom_format ?? 'unknown',
+              format_version: artifact.sbom_format_version ?? 'unknown',
+              version: artifact.sbom_version,
+              created_at: artifact.created_at,
+              component: {
+                id: artifact.component_id,
+                name: artifact.component_name
             }
           }
         }
       } else if (artifact.artifact_type === 'document') {
         const documentId = artifact.document_id
         return {
-          id: artifact.id,
-          document: {
-            id: documentId || '',
-            name: artifact.artifact_name,
-            document_type: artifact.document_type,
-            version: artifact.document_version,
-            created_at: artifact.created_at,
-            component: {
-              id: artifact.component_id,
-              name: artifact.component_name
+            id: artifact.id,
+            document: {
+              id: documentId || '',
+              name: artifact.artifact_name,
+              // Default to a placeholder when API omits the type
+              document_type: artifact.document_type ?? 'unknown',
+              version: artifact.document_version,
+              created_at: artifact.created_at,
+              component: {
+                id: artifact.component_id,
+                name: artifact.component_name
             }
           }
         }
