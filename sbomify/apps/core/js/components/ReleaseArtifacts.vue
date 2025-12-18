@@ -409,6 +409,7 @@ import { showError, showSuccess } from '../alerts'
 import { isAxiosError } from 'axios'
 import StandardCard from './StandardCard.vue'
 import PaginationControls from './PaginationControls.vue'
+import { useUrlGeneration } from '../composables/useUrlGeneration'
 
 interface Artifact {
   id: string
@@ -464,6 +465,25 @@ const props = withDefaults(defineProps<Props>(), {
   hasCrudPermissions: false,
   isLatestRelease: false
 })
+
+// Detect if we're on a public view or custom domain from the current URL
+const isPublicView = window.location.pathname.includes('/public/')
+
+const getIsCustomDomain = () => {
+  // Check if we're on a custom domain (not the main app domain)
+  // This is a simple heuristic - in production, this might need to be more sophisticated
+  const hostname = window.location.hostname
+  // Exclude localhost and main app domains
+  return !hostname.includes('localhost') && !hostname.includes('.sbomify')
+}
+const isCustomDomain = getIsCustomDomain()
+
+// Use URL generation composable
+// Note: These values are based on window.location which doesn't change during component lifecycle
+const { getSbomDetailUrl, getDocumentDetailUrl, getComponentUrl: getComponentUrlFromComposable } = useUrlGeneration(
+  isPublicView,
+  isCustomDomain
+)
 
 // State
 const artifacts = ref<Artifact[]>([])
@@ -724,15 +744,26 @@ const getComponentName = (artifact: Artifact): string => {
 
 const getComponentUrl = (artifact: Artifact): string => {
   const componentId = artifact.sbom?.component.id || artifact.document?.component.id
-  return `/component/${componentId}/`
+  if (!componentId) return '#'
+  return getComponentUrlFromComposable(componentId)
 }
 
 const getArtifactUrl = (artifact: Artifact): string => {
   if (artifact.sbom) {
-    return `/component/${artifact.sbom.component.id}/detailed/`
+    const sbomId = artifact.sbom.id
+    const componentId = artifact.sbom.component?.id
+    if (!sbomId || !componentId) {
+      return '#'
+    }
+    return getSbomDetailUrl(sbomId, componentId)
   }
   if (artifact.document) {
-    return `/component/${artifact.document.component.id}/detailed/`
+    const documentId = artifact.document.id
+    const componentId = artifact.document.component?.id
+    if (!documentId || !componentId) {
+      return '#'
+    }
+    return getDocumentDetailUrl(documentId, componentId)
   }
   return '#'
 }
@@ -793,12 +824,28 @@ const loadArtifacts = async () => {
     const artifactsData = Array.isArray(response.data) ? response.data : response.data.items || []
 
     // Transform the response to match expected format
-    artifacts.value = artifactsData.map((artifact: Record<string, string>) => {
+    artifacts.value = artifactsData.map((artifact: {
+      id: string
+      artifact_type: string
+      sbom_id?: string
+      document_id?: string
+      artifact_name: string
+      sbom_format?: string
+      sbom_format_version?: string
+      sbom_version?: string
+      document_type?: string
+      document_version?: string
+      created_at: string
+      component_id: string
+      component_name: string
+      [key: string]: unknown // Allow other properties but ensure required ones are typed
+    }) => {
       if (artifact.artifact_type === 'sbom') {
+        const sbomId = artifact.sbom_id
         return {
           id: artifact.id,
           sbom: {
-            id: artifact.id,
+            id: sbomId || '',
             name: artifact.artifact_name,
             format: artifact.sbom_format,
             format_version: artifact.sbom_format_version,
@@ -810,11 +857,12 @@ const loadArtifacts = async () => {
             }
           }
         }
-      } else {
+      } else if (artifact.artifact_type === 'document') {
+        const documentId = artifact.document_id
         return {
           id: artifact.id,
           document: {
-            id: artifact.id,
+            id: documentId || '',
             name: artifact.artifact_name,
             document_type: artifact.document_type,
             version: artifact.document_version,
@@ -825,8 +873,10 @@ const loadArtifacts = async () => {
             }
           }
         }
+      } else {
+        return null
       }
-    })
+    }).filter((artifact: Artifact | null): artifact is Artifact => artifact !== null)
   } catch (err) {
     console.error('Error loading artifacts:', err)
     error.value = 'Failed to load artifacts'

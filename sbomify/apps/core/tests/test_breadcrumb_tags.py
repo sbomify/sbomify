@@ -26,7 +26,7 @@ class TestBreadcrumbTags:
         # Test the breadcrumb template tag
         template = Template("""
             {% load breadcrumb_tags %}
-            {% breadcrumb component 'component' detailed=True %}
+            {% breadcrumb component 'component' %}
         """)
 
         context = Context({'component': component})
@@ -62,7 +62,7 @@ class TestBreadcrumbTags:
         # Test the breadcrumb template tag
         template = Template("""
             {% load breadcrumb_tags %}
-            {% breadcrumb component 'component' detailed=True %}
+            {% breadcrumb component 'component' %}
         """)
 
         context = Context({'component': component})
@@ -97,7 +97,7 @@ class TestBreadcrumbTags:
         # Test the breadcrumb template tag
         template = Template("""
             {% load breadcrumb_tags %}
-            {% breadcrumb component 'component' detailed=True %}
+            {% breadcrumb component 'component' %}
         """)
 
         context = Context({'component': component})

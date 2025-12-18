@@ -421,6 +421,8 @@ class ReleaseArtifactSchema(BaseModel):
     component_id: str
     component_name: str
     created_at: str
+    sbom_id: str | None = Field(None, description="ID of the SBOM artifact (only for sbom type)")
+    document_id: str | None = Field(None, description="ID of the Document artifact (only for document type)")
     sbom_format: str | None = None
     sbom_format_version: str | None = None
     sbom_version: str | None = None

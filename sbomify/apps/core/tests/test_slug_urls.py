@@ -339,11 +339,16 @@ class TestUrlGeneration:
         url = get_public_path("component", "comp123", is_custom_domain=True, slug="my-component")
         assert url == "/component/my-component/"
 
-    def test_component_detailed_url_with_slug(self):
-        """Test detailed component URL generation with slug on custom domain."""
+    def test_component_item_url_with_slug(self):
+        """Test component item URL generation with slug on custom domain."""
         from sbomify.apps.core.url_utils import get_public_path
 
         url = get_public_path(
-            "component", "comp123", is_custom_domain=True, slug="my-component", detailed=True
+            "component",
+            "comp123",
+            is_custom_domain=True,
+            slug="my-component",
+            item_type="sboms",
+            item_id="sbom123",
         )
-        assert url == "/component/my-component/detailed/"
+        assert url == "/components/my-component/sboms/sbom123/"

@@ -59,7 +59,14 @@ class ComponentItemPublicView(View):
         if component.team and (
             should_redirect_to_custom_domain(request, component.team) or should_redirect_to_clean_url(request)
         ):
-            path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_slug, detailed=True)
+            path = get_public_path(
+                "component",
+                resolved_id,
+                is_custom_domain=True,
+                slug=component_slug,
+                item_type=item_type,
+                item_id=item_id,
+            )
             return HttpResponseRedirect(build_custom_domain_url(component.team, path, request.is_secure()))
 
         brand = build_branding_context(component.team)

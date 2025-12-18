@@ -36,4 +36,12 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
             "team_billing_plan": billing_plan,
         }
 
-        return render(request, "core/component_details_private.html.j2", context)
+        component_type = component.get("component_type")
+        if component_type == "sbom":
+            template_name = "core/component_details_private_sbom.html.j2"
+        elif component_type == "document":
+            template_name = "core/component_details_private_document.html.j2"
+        else:
+            template_name = "core/component_details_private.html.j2"
+
+        return render(request, template_name, context)

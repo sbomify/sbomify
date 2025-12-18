@@ -2784,6 +2784,7 @@ def list_release_artifacts(
                 artifacts.append(
                     {
                         "id": str(artifact.id),
+                        "sbom_id": str(artifact.sbom.id),
                         "artifact_type": "sbom",
                         "artifact_name": artifact.sbom.name,
                         "component_id": str(artifact.sbom.component.id),
@@ -2800,6 +2801,7 @@ def list_release_artifacts(
                 artifacts.append(
                     {
                         "id": str(artifact.id),
+                        "document_id": str(artifact.document.id),
                         "artifact_type": "document",
                         "artifact_name": artifact.document.name,
                         "component_id": str(artifact.document.component.id),
