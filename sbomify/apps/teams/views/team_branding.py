@@ -12,7 +12,6 @@ from sbomify.apps.teams.apis import (
 from sbomify.apps.teams.forms import TeamBrandingForm
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
-from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
 class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -27,28 +26,12 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
-        # Prepare custom domain context for the template/JavaScript
-        has_access = plan_has_custom_domain_access(team.billing_plan)
-        custom_domain = team.custom_domain or ""
-        is_validated = team.custom_domain_validated if custom_domain else False
-        last_checked_at = team.custom_domain_last_checked_at.isoformat() if team.custom_domain_last_checked_at else ""
-
-        custom_domain_config = {
-            "teamKey": team.key,
-            "initialDomain": custom_domain,
-            "isValidated": is_validated,
-            "lastCheckedAt": last_checked_at,
-            "hasAccess": has_access,
-        }
-
         return render(
             request,
             "teams/team_branding.html.j2",
             {
                 "team": team,
                 "branding_info": branding_info,
-                "custom_domain_config": custom_domain_config,
-                "app_hostname": get_app_hostname(),
             },
         )
 
