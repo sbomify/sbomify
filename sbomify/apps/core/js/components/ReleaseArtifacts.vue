@@ -850,12 +850,16 @@ const loadArtifacts = async () => {
               // Ensure required string fields are always populated
               format: (() => {
                 const format = artifact.sbom_format
-                if (!format) console.warn(`Missing SBOM format for artifact ${artifact.id}`)
+                if (!format) {
+                  if (import.meta.env.DEV) console.warn(`Missing SBOM format for artifact ${artifact.id}`)
+                }
                 return format ?? 'unknown'
               })(),
               format_version: (() => {
                 const version = artifact.sbom_format_version
-                if (!version) console.warn(`Missing SBOM format version for artifact ${artifact.id}`)
+                if (!version) {
+                  if (import.meta.env.DEV) console.warn(`Missing SBOM format version for artifact ${artifact.id}`)
+                }
                 return version ?? 'unknown'
               })(),
               version: artifact.sbom_version,
@@ -876,7 +880,9 @@ const loadArtifacts = async () => {
               // Default to a placeholder when API omits the type
               document_type: (() => {
                 const type = artifact.document_type
-                if (!type) console.warn(`Missing document type for artifact ${artifact.id}`)
+                if (!type) {
+                  if (import.meta.env.DEV) console.warn(`Missing document type for artifact ${artifact.id}`)
+                }
                 return type ?? 'unknown'
               })(),
               version: artifact.document_version,

@@ -2795,6 +2795,7 @@ def list_release_artifacts(
                         "sbom_version": artifact.sbom.version or "",
                         "document_type": None,
                         "document_version": None,
+                        "component_slug": artifact.sbom.component.slug,
                     }
                 )
             elif artifact.document:
@@ -2811,6 +2812,7 @@ def list_release_artifacts(
                         "sbom_version": None,
                         "document_type": artifact.document.document_type,
                         "document_version": artifact.document.version or "",
+                        "component_slug": artifact.document.component.slug,
                     }
                 )
 
@@ -2978,6 +2980,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": artifact.sbom.version or "",
                 "document_type": None,
                 "document_version": None,
+                "component_slug": artifact.sbom.component.slug,
             }
         except Exception as e:
             log.error(f"Error processing SBOM: {e}")
@@ -3011,6 +3014,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": None,
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
+                "component_slug": artifact.document.component.slug,
             }
         except Exception as e:
             log.error(f"Error processing document: {e}")

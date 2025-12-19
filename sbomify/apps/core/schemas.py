@@ -428,6 +428,7 @@ class ReleaseArtifactSchema(BaseModel):
     sbom_version: str | None = None
     document_type: str | None = None
     document_version: str | None = None
+    component_slug: str | None = None
 
 
 class AvailableArtifactSchema(BaseModel):
@@ -716,3 +717,4 @@ class ReleaseArtifactAddResponseSchema(BaseModel):
     sbom_version: str | None = None
     document_type: str | None = None
     document_version: str | None = None
+    component_slug: str | None = None
