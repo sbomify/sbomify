@@ -1,0 +1,530 @@
+/*!
+ * sbomify Keycloak Theme - Tailwind CSS Source
+ * Compile with: bun run build:keycloak
+ */
+
+/* ===== CUSTOM CSS VARIABLES (must be before @tailwind base) ===== */
+:root {
+    /* Brand Colors */
+    --sbomify-brand: #3b7ddd;
+    --sbomify-brand-hover: #2f64b1;
+    --sbomify-brand-rgb: 59, 125, 221;
+    --sbomify-accent: #7c8b9d;
+    --sbomify-success: #1cbb8c;
+    --sbomify-danger: #dc3545;
+    --sbomify-warning: #fcb92c;
+
+    /* Surface Colors */
+    --sbomify-surface: #f9fbfd;
+    --sbomify-surface-2: #ffffff;
+    --sbomify-surface-dark: #111a2d;
+    --sbomify-surface-card: rgba(14, 22, 38, 0.94);
+    --sbomify-contrast: #f8fafc;
+    --sbomify-muted: #94a3b8;
+    --sbomify-text-title: #f8fafc;
+    --sbomify-border: rgba(255, 255, 255, 0.1);
+
+    /* Fonts */
+    --sbomify-font: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* ===== BASE STYLES ===== */
+@layer base {
+
+    html,
+    body {
+        @apply m-0 p-0 min-h-screen;
+        height: 100%;
+    }
+
+    .login-pf body,
+    body.login-pf,
+    body {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(59, 125, 221, 0.08), transparent 35%),
+            radial-gradient(circle at 82% 8%, rgba(90, 155, 230, 0.06), transparent 30%),
+            var(--sbomify-surface-dark);
+        @apply bg-cover bg-fixed min-h-screen antialiased;
+        color: var(--sbomify-contrast);
+        font-family: var(--sbomify-font);
+    }
+
+    .login-pf-page {
+        @apply bg-transparent min-h-screen w-full p-8;
+        height: 100%;
+    }
+
+    /* Hide default Keycloak header when using split layout */
+    #kc-header {
+        @apply hidden;
+    }
+}
+
+/* ===== COMPONENT STYLES ===== */
+@layer components {
+
+    /* 2-Column Split Layout */
+    .login-split-layout {
+        @apply flex min-h-screen w-full;
+    }
+
+    /* Left Panel: Info/Branding */
+    .info-panel {
+        @apply flex-1 flex items-center justify-center rounded-2xl;
+        padding: 3rem 3rem 4rem 3rem;
+        background: #f5f7fb;
+        border-right: 1px solid #e4e8ef;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    .info-content {
+        @apply max-w-md;
+    }
+
+    .brand-logo {
+        @apply mb-6;
+    }
+
+    .brand-logo img {
+        @apply block;
+        width: 156px;
+        height: 80px;
+    }
+
+    .info-title {
+        @apply text-4xl font-bold m-0 mb-3 leading-tight tracking-tight;
+        color: #1f2937;
+    }
+
+    .info-tagline {
+        @apply text-lg leading-relaxed m-0 mb-8;
+        color: #6c757d;
+    }
+
+    /* Features List */
+    .features-list {
+        @apply flex flex-col gap-6 mb-0;
+    }
+
+    .feature-item {
+        @apply flex items-start gap-4;
+    }
+
+    .feature-icon {
+        @apply shrink-0 w-12 h-12 flex items-center justify-center rounded-xl;
+        background: rgba(59, 125, 221, 0.14);
+        color: var(--sbomify-brand);
+    }
+
+    .feature-text {
+        @apply flex flex-col gap-1;
+    }
+
+    .feature-text strong {
+        @apply text-base font-semibold;
+        color: #1f2937;
+    }
+
+    .feature-text span {
+        @apply text-sm leading-relaxed;
+        color: #6c757d;
+    }
+
+    /* Right Panel: Form */
+    .form-panel {
+        @apply flex-1 flex items-center justify-center;
+        padding: 3rem 3rem 4rem 3rem;
+        background: transparent;
+        perspective: 1000px;
+    }
+
+    /* Form Card */
+    .form-card {
+        @apply w-full max-w-md rounded-3xl;
+        padding: 2rem 2rem 2.5rem 2rem;
+        background: var(--sbomify-surface-card);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow: 0 24px 48px rgba(6, 13, 26, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(16px);
+    }
+
+    .form-title {
+        @apply text-2xl font-semibold m-0 mb-5 text-center;
+        color: var(--sbomify-contrast);
+    }
+
+    /* Form Elements */
+    .form-group {
+        @apply mb-4;
+    }
+
+    .form-label {
+        @apply block text-sm font-medium mb-1.5;
+        color: var(--sbomify-contrast);
+    }
+
+    .form-control {
+        @apply w-full text-base transition-all duration-200 ease-in-out box-border rounded-xl;
+        padding: 0.75rem 1rem;
+        color: var(--sbomify-contrast);
+        background: rgba(15, 23, 42, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: inherit;
+    }
+
+    .form-control::placeholder {
+        color: var(--sbomify-muted);
+    }
+
+    .form-control:focus {
+        @apply outline-none;
+        border-color: var(--sbomify-brand);
+        box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.25);
+        background: rgba(15, 23, 42, 0.65);
+    }
+
+    .input-error {
+        @apply block text-sm mt-1.5;
+        color: var(--sbomify-danger);
+    }
+
+    .input-invalid,
+    .form-control.input-invalid {
+        border-color: var(--sbomify-danger) !important;
+        box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2) !important;
+    }
+
+    /* Form Options Row */
+    .form-options {
+        @apply flex items-center justify-between mb-5 text-sm;
+    }
+
+    .remember-me {
+        @apply flex items-center gap-2;
+        color: var(--sbomify-muted);
+    }
+
+    .remember-me input[type="checkbox"] {
+        @apply w-4 h-4;
+        accent-color: var(--sbomify-brand);
+    }
+
+    .forgot-password {
+        @apply no-underline transition-colors duration-200;
+        color: var(--sbomify-brand);
+    }
+
+    .forgot-password:hover {
+        @apply underline;
+        color: #5a9be6;
+    }
+
+    /* Submit Button */
+    .btn-submit {
+        @apply w-full text-base font-semibold text-white border-none cursor-pointer transition-all duration-200 rounded-xl;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--sbomify-brand), #5a9be6);
+        box-shadow: 0 8px 20px rgba(59, 125, 221, 0.35);
+        font-family: inherit;
+    }
+
+    .btn-submit:hover {
+        background: linear-gradient(135deg, var(--sbomify-brand-hover), #4a8bd6);
+        box-shadow: 0 12px 28px rgba(59, 125, 221, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .btn-submit:focus {
+        outline: 2px solid var(--sbomify-brand);
+        outline-offset: 2px;
+    }
+
+    .btn-submit:active {
+        transform: translateY(0);
+    }
+
+    /* Form Actions Container */
+    .form-actions {
+        @apply mt-1;
+    }
+
+    /* Alerts */
+    .alert {
+        @apply flex items-start gap-3 p-4 mb-5 text-sm rounded-xl;
+        background: var(--sbomify-surface-card);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--sbomify-contrast);
+    }
+
+    .alert-icon {
+        @apply shrink-0 font-bold;
+    }
+
+    .alert-error,
+    .alert-danger {
+        border-color: rgba(220, 53, 69, 0.3);
+        background: rgba(220, 53, 69, 0.15);
+    }
+
+    .alert-success {
+        border-color: rgba(28, 187, 140, 0.3);
+        background: rgba(28, 187, 140, 0.15);
+    }
+
+    .alert-warning {
+        border-color: rgba(252, 185, 44, 0.3);
+        background: rgba(252, 185, 44, 0.15);
+    }
+
+    .alert-info {
+        border-color: rgba(59, 125, 221, 0.3);
+        background: rgba(59, 125, 221, 0.15);
+    }
+
+    /* Social Login */
+    .social-divider {
+        @apply flex items-center my-5 text-xs;
+        color: var(--sbomify-muted);
+    }
+
+    .social-divider::before,
+    .social-divider::after {
+        @apply flex-1 h-px;
+        content: "";
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .social-divider span {
+        @apply px-4;
+    }
+
+    .social-providers {
+        @apply flex flex-col gap-2.5;
+    }
+
+    .social-btn {
+        @apply flex items-center justify-center gap-2.5 p-2.5 font-medium no-underline transition-all duration-200 rounded-xl;
+        font-size: 0.9375rem;
+        color: var(--sbomify-contrast);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .social-btn:hover {
+        @apply no-underline;
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Register Link */
+    .register-link {
+        @apply text-center mt-5 pt-5 mb-0;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 0.9375rem;
+        color: var(--sbomify-muted);
+    }
+
+    .register-link a {
+        @apply font-medium no-underline ml-1;
+        color: var(--sbomify-brand);
+    }
+
+    .register-link a:hover {
+        @apply underline;
+    }
+
+
+    /* Flip Card Animation */
+    .flip-card {
+        @apply w-full max-w-md relative;
+        height: 720px;
+    }
+
+    .flip-card-inner {
+        @apply relative w-full h-full;
+        transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-style: preserve-3d;
+    }
+
+    .flip-card.flipped .flip-card-inner {
+        transform: rotateY(180deg);
+    }
+
+    .flip-card-front,
+    .flip-card-back {
+        @apply absolute w-full h-full;
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+    }
+
+    .flip-card-front {
+        @apply z-10;
+    }
+
+    .flip-card-back {
+        transform: rotateY(180deg);
+    }
+
+    .flip-card-front .form-card,
+    .flip-card-back .form-card {
+        @apply h-full overflow-y-auto;
+    }
+
+    /* Legacy Keycloak Compat */
+    #kc-page-title {
+        @apply font-semibold;
+        color: var(--sbomify-contrast);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-pf {
+        @apply rounded-2xl;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        background: #f8fafc;
+        backdrop-filter: blur(12px);
+    }
+
+    .pf-c-button.pf-m-primary,
+    .btn-primary {
+        @apply text-white font-medium border-none transition-all duration-200 rounded-xl;
+        background: linear-gradient(135deg, var(--sbomify-brand), #5a9be6);
+        padding: 0.75rem 1.5rem;
+        box-shadow: 0 8px 20px rgba(59, 125, 221, 0.35);
+    }
+
+    .pf-c-button.pf-m-primary:hover,
+    .btn-primary:hover {
+        background: linear-gradient(135deg, var(--sbomify-brand-hover), #4a8bd6);
+        box-shadow: 0 12px 28px rgba(59, 125, 221, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .login-pf-page .form-control {
+        @apply p-3 rounded-xl;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(15, 23, 42, 0.5);
+        color: var(--sbomify-contrast);
+    }
+
+    .login-pf-page .form-control:focus {
+        border-color: var(--sbomify-brand);
+        box-shadow: 0 0 0 3px rgba(59, 125, 221, 0.25);
+    }
+
+    .login-pf-page a {
+        @apply no-underline;
+        color: var(--sbomify-brand);
+    }
+
+    .login-pf-page a:hover {
+        @apply underline;
+        color: #5a9be6;
+    }
+
+    .login-pf-page label {
+        @apply font-medium;
+        color: var(--sbomify-contrast);
+    }
+
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@layer utilities {
+    @media (max-width: 992px) {
+        .login-split-layout {
+            @apply flex-col;
+        }
+
+        .info-panel {
+            padding: 2rem 2rem 3rem 2rem;
+            border-right: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .info-content {
+            @apply max-w-full text-center;
+        }
+
+        .info-title {
+            @apply text-3xl;
+        }
+
+        .features-list {
+            @apply hidden;
+        }
+
+        .form-panel {
+            padding: 2rem 2rem 3rem 2rem;
+        }
+
+        .form-card {
+            @apply max-w-full;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .info-panel {
+            padding: 1.5rem 1.5rem 2.5rem 1.5rem;
+        }
+
+        .info-title {
+            @apply text-2xl;
+        }
+
+        .info-tagline {
+            @apply text-base mb-6;
+        }
+
+        .form-panel {
+            padding: 1.5rem 1.5rem 2.5rem 1.5rem;
+        }
+
+        .form-card {
+            padding: 1.5rem 1.5rem 2rem 1.5rem;
+        }
+
+        .form-group {
+            @apply mb-3.5;
+        }
+
+        .form-title {
+            @apply mb-4;
+        }
+
+        .alert {
+            @apply mb-4;
+        }
+
+        .form-options {
+            @apply mb-4;
+        }
+
+        .social-divider {
+            @apply my-4;
+        }
+
+        .register-link {
+            @apply mt-4 pt-4;
+        }
+
+        .form-title {
+            @apply text-2xl;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+        .btn-submit,
+        .form-control,
+        .social-btn,
+        a {
+            @apply transition-none;
+        }
+    }
+}

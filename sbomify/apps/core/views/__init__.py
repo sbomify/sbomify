@@ -3,6 +3,7 @@ import logging
 import tempfile
 import typing
 from pathlib import Path
+from urllib.parse import urlencode, urljoin
 
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
@@ -23,6 +24,7 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
@@ -68,8 +70,32 @@ def home(request: HttpRequest) -> HttpResponse:
 
 
 def keycloak_login(request: HttpRequest) -> HttpResponse:
-    """Render the Allauth default login page on /login."""
-    return render(request, "account/login.html.j2")
+    """Send the user directly to the Keycloak login flow handled by Allauth.
+
+    We bypass the bespoke login template so that users always land on the
+    native Keycloak login screen. The Allauth provider view builds the correct
+    OIDC authorize URL (including callback and state) for us.
+    """
+
+    login_path = reverse("openid_connect_login", args=["keycloak"])
+    next_param = request.GET.get("next")
+
+    # Validate next parameter to prevent open redirect attacks
+    if next_param and url_has_allowed_host_and_scheme(
+        next_param,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        login_path = f"{login_path}?{urlencode({'next': next_param})}"
+
+    # Use APP_BASE_URL when provided so redirects work behind proxies/custom domains.
+    absolute_login_url = (
+        urljoin(settings.APP_BASE_URL.rstrip("/") + "/", login_path.lstrip("/"))
+        if getattr(settings, "APP_BASE_URL", None)
+        else login_path
+    )
+
+    return redirect(absolute_login_url)
 
 
 def _get_pending_invitations(user) -> list[dict]:
@@ -293,14 +319,42 @@ def delete_access_token(request: HttpRequest, token_id: int):
     return redirect(reverse("core:settings"))
 
 
-@login_required
 def logout(request: HttpRequest) -> HttpResponse:
+    """Log the user out of both Django and Keycloak.
+
+    If the user is not authenticated, simply redirect to the login page.
+    """
+    if not request.user.is_authenticated:
+        # User is already logged out, redirect to login
+        return redirect(reverse("core:keycloak_login"))
+
     django_logout(request)
-    # Redirect to Keycloak logout page
-    redirect_url = (
-        f"{settings.KEYCLOAK_SERVER_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
-        f"?redirect_uri={settings.APP_BASE_URL}"
+    # Redirect to Keycloak logout endpoint and then straight into its login page.
+    # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
+    base_url = (
+        settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
+        if hasattr(settings, "KEYCLOAK_PUBLIC_URL")
+        else settings.KEYCLOAK_SERVER_URL.rstrip("/")
     )
+    realm = settings.KEYCLOAK_REALM
+    client_id = settings.KEYCLOAK_CLIENT_ID
+
+    # Where Keycloak should send the user after logout: our login entrypoint,
+    # which immediately redirects back into the Keycloak auth flow.
+    login_path = reverse("openid_connect_login", args=["keycloak"])
+    login_redirect = (
+        urljoin(settings.APP_BASE_URL.rstrip("/") + "/", login_path.lstrip("/"))
+        if getattr(settings, "APP_BASE_URL", None)
+        else request.build_absolute_uri(login_path)
+    )
+
+    logout_query = urlencode(
+        {
+            "client_id": client_id,
+            "post_logout_redirect_uri": login_redirect,
+        }
+    )
+    redirect_url = f"{base_url}/realms/{realm}/protocol/openid-connect/logout?{logout_query}"
     return redirect(redirect_url)
 
 
