@@ -2,6 +2,7 @@ import * as bootstrap from 'bootstrap';
 import './layout-interactions';
 import './alerts-global';
 import './clipboard-global';
+import './navbar-search';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';

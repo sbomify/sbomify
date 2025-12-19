@@ -7,7 +7,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
-from sbomify.apps.teams.views.team_branding import get_app_hostname, plan_has_custom_domain_access
+from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
 class TestGetAppHostname:
@@ -136,7 +136,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/branding")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -152,7 +152,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, community_team, sample_user)
 
-        response = client.get(f"/workspaces/{community_team.key}/branding")
+        response = client.get(f"/workspaces/{community_team.key}/custom-domain")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -168,7 +168,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, team_with_domain, sample_user)
 
-        response = client.get(f"/workspaces/{team_with_domain.key}/branding")
+        response = client.get(f"/workspaces/{team_with_domain.key}/custom-domain")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -194,7 +194,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, team, sample_user)
 
-        response = client.get(f"/workspaces/{team.key}/branding")
+        response = client.get(f"/workspaces/{team.key}/custom-domain")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -208,7 +208,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/branding")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
         assert response.status_code == 200
 
         content = response.content.decode()

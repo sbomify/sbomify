@@ -161,39 +161,6 @@
                         </div>
                     </div>
                 </div>
-                {% if custom_domain_config %}
-                    <div class="section-card">
-                        <div class="section-header">
-                            <h3 class="section-title">Custom Domain</h3>
-                            <p class="section-description">
-                                {% if custom_domain_config.hasAccess %}
-                                    Configure a custom domain for your workspace's Trust Center.
-                                {% else %}
-                                    Custom Domain Feature
-                                {% endif %}
-                            </p>
-                        </div>
-                        <div class="section-content"
-                             x-data="customDomain({ teamKey: '{{ custom_domain_config.teamKey }}', initialDomain: '{{ custom_domain_config.initialDomain }}', isValidated: {{ custom_domain_config.isValidated|yesno:"true,false" }}, lastCheckedAt: '{{ custom_domain_config.lastCheckedAt }}', hasAccess: {{ custom_domain_config.hasAccess|yesno:"true,false" }} })">
-                            {% if custom_domain_config.hasAccess %}
-                                <div class="custom-domain-field">
-                                    <label class="field-label">Custom Domain</label>
-                                    <p class="field-hint">
-                                        Point your domain's CNAME record to <code>{{ app_hostname }}</code>
-                                    </p>
-                                    <!-- Custom domain input and controls would go here -->
-                                </div>
-                            {% else %}
-                                <div class="alert alert-info">
-                                    <h5>Upgrade Plan</h5>
-                                    <p>Business and Enterprise plans support custom domains for your Trust Center.</p>
-                                    <a href="{% url 'billing:select_plan' team.key %}"
-                                       class="btn btn-primary">Upgrade Plan</a>
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endif %}
             </form>
         </div>
     </div>
