@@ -848,8 +848,16 @@ const loadArtifacts = async () => {
               id: sbomId || '',
               name: artifact.artifact_name,
               // Ensure required string fields are always populated
-              format: artifact.sbom_format ?? 'unknown',
-              format_version: artifact.sbom_format_version ?? 'unknown',
+              format: (() => {
+                const format = artifact.sbom_format
+                if (!format) console.warn(`Missing SBOM format for artifact ${artifact.id}`)
+                return format ?? 'unknown'
+              })(),
+              format_version: (() => {
+                const version = artifact.sbom_format_version
+                if (!version) console.warn(`Missing SBOM format version for artifact ${artifact.id}`)
+                return version ?? 'unknown'
+              })(),
               version: artifact.sbom_version,
               created_at: artifact.created_at,
               component: {
@@ -866,7 +874,11 @@ const loadArtifacts = async () => {
               id: documentId || '',
               name: artifact.artifact_name,
               // Default to a placeholder when API omits the type
-              document_type: artifact.document_type ?? 'unknown',
+              document_type: (() => {
+                const type = artifact.document_type
+                if (!type) console.warn(`Missing document type for artifact ${artifact.id}`)
+                return type ?? 'unknown'
+              })(),
               version: artifact.document_version,
               created_at: artifact.created_at,
               component: {

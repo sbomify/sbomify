@@ -118,6 +118,7 @@ export function registerWorkspaceSwitcher(): void {
                 this.open = !this.open;
 
                 if (!this.open && wasOpen) {
+                    // Only cleanup/restore focus when transitioning from Open to Closed
                     this.selected = this.currentWorkspace;
                     this.search = '';
                     this.cleanupFocus();
@@ -279,9 +280,7 @@ export function registerWorkspaceSwitcher(): void {
                     this.$nextTick(focusRestore);
                 } else {
                     // Fallback to requestAnimationFrame for focus restoration
-                    requestAnimationFrame(() => {
-                        setTimeout(focusRestore, 0);
-                    });
+                    requestAnimationFrame(focusRestore);
                 }
             },
 
