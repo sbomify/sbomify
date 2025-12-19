@@ -298,7 +298,7 @@ body {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 9999 !important;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -309,9 +309,17 @@ body {
   isolation: isolate;
 }
 
+/* Show backdrop when Alpine.js has initialized and set style to display: flex */
+/* Only match when style attribute exists AND doesn't contain display: none */
+.workspace-modal-backdrop[style]:not([style*="display: none"]):not([style*="display:none"]) {
+  display: flex !important;
+}
+
 /* Hide backdrop when Alpine.js x-show is false or before Alpine initializes */
+/* Alpine.js x-show adds style="display: none !important" when false */
 .workspace-modal-backdrop[x-cloak],
-.workspace-modal-backdrop[style*="display: none"] {
+.workspace-modal-backdrop[style*="display: none"],
+.workspace-modal-backdrop[style*="display:none"] {
   display: none !important;
 }
 

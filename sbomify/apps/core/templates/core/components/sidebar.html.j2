@@ -99,8 +99,8 @@
                             </button>
                             {# Workspace Switcher Modal #}
                             <div class="workspace-modal-backdrop"
-                                 x-show="open"
                                  x-cloak
+                                 :style="open ? 'display: flex;' : 'display: none;'"
                                  x-transition:enter="fade-enter"
                                  x-transition:enter-start="fade-enter-start"
                                  x-transition:enter-end="fade-enter-end"
@@ -111,7 +111,8 @@
                                  role="dialog"
                                  aria-modal="true"
                                  aria-labelledby="workspace-modal-title"
-                                 :aria-hidden="!open">
+                                 :aria-hidden="!open"
+                                 :tabindex="open ? 0 : -1">
                                 <div class="workspace-modal" @click.stop>
                                     <div class="workspace-modal-header">
                                         <div class="workspace-modal-title-wrapper">

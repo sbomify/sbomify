@@ -29,6 +29,7 @@ interface WorkspaceSwitcherData {
     handleKeydown: (event: KeyboardEvent) => void;
     updateFilteredWorkspaces: () => void;
     debouncedSearch: () => void;
+    cleanupFocus: () => void;
     destroy: () => void;
 }
 
@@ -76,10 +77,7 @@ export function registerWorkspaceSwitcher(): void {
                                 }
                             });
                         } else if (!isOpen) {
-                            const triggerButton = el.querySelector('.sidebar-workspace-trigger') as HTMLButtonElement;
-                            if (triggerButton) {
-                                triggerButton.focus();
-                            }
+                            this.cleanupFocus();
                         }
                     });
                 }
@@ -115,20 +113,28 @@ export function registerWorkspaceSwitcher(): void {
 
             toggleModal(this: WorkspaceSwitcherData): void {
                 if (this.isSwitching) return;
+
+                const wasOpen = this.open;
                 this.open = !this.open;
-                if (!this.open) {
+
+                if (!this.open && wasOpen) {
+                    // Only cleanup/restore focus when transitioning from Open to Closed
                     this.selected = this.currentWorkspace;
                     this.search = '';
+                    this.cleanupFocus();
                 }
+
                 this.updateBodyClass();
             },
 
             closeModal(this: WorkspaceSwitcherData): void {
                 if (this.isSwitching) return;
+
                 this.open = false;
                 this.selected = this.currentWorkspace;
                 this.search = '';
                 this.updateBodyClass();
+                this.cleanupFocus();
             },
 
             handleKeydown(this: WorkspaceSwitcherData, event: KeyboardEvent): void {
@@ -237,6 +243,45 @@ export function registerWorkspaceSwitcher(): void {
                         }
                     }
                 }, MODAL_TRANSITION_DELAY_MS);
+            },
+
+            cleanupFocus(this: WorkspaceSwitcherData): void {
+                const el = this.$el;
+
+                // Remove focus from any focused element inside the modal
+                const activeElement = document.activeElement as HTMLElement;
+                if (activeElement && el.contains(activeElement)) {
+                    activeElement.blur();
+                }
+
+                // Blur all focusable elements in the modal
+                const focusableElements = el.querySelectorAll(
+                    'input, button, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'
+                );
+                focusableElements.forEach((element) => {
+                    (element as HTMLElement).blur();
+                });
+
+                // Return focus to trigger button after modal is closed
+                // Use requestAnimationFrame as a fallback if $nextTick is not available
+                const focusRestore = () => {
+                    const triggerButton = el.querySelector('.sidebar-workspace-trigger') as HTMLButtonElement;
+                    if (triggerButton) {
+                        triggerButton.focus();
+                    } else {
+                        // If trigger button is not available, blur everything
+                        if (document.activeElement && document.activeElement instanceof HTMLElement) {
+                            document.activeElement.blur();
+                        }
+                    }
+                };
+
+                if (this.$nextTick && typeof this.$nextTick === 'function') {
+                    this.$nextTick(focusRestore);
+                } else {
+                    // Fallback to requestAnimationFrame for focus restoration
+                    requestAnimationFrame(focusRestore);
+                }
             },
 
             destroy(this: WorkspaceSwitcherData) {

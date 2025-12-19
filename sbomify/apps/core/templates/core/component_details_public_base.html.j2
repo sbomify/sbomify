@@ -1,0 +1,101 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
+{% block title %}{{ component.name }}{% endblock %}
+{% block meta_description %}
+    {{ component.name }} - {{ component.component_type_display }} component.
+    {% block meta_description_suffix %}{% endblock %}
+{% endblock %}
+{% block extra_css %}
+    <style>
+  .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(var(--brand-color-rgb), 0.05);
+    border: 1px solid rgba(var(--brand-color-rgb), 0.1);
+    color: var(--brand-color);
+    font-weight: 600;
+  }
+  .meta-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .title-icon {
+    color: var(--brand-color);
+  }
+    </style>
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb component 'component' %}
+{% endblock %}
+{% block content %}
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        {% if workspace_public_url and component.is_global %}
+                            <div class="mb-2">
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   href="{{ workspace_public_url }}">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to Trust Center
+                                </a>
+                            </div>
+                        {% endif %}
+                        <p class="eyebrow text-muted mb-1">Public component</p>
+                        <h1 class="page-title">
+                            <i class="fas fa-cube title-icon"></i>
+                            {{ component.name }}
+                        </h1>
+                        <div class="meta-row">
+                            <span class="meta-chip">
+                                <i class="fas fa-tag"></i>
+                                {{ component.component_type_display }}
+                            </span>
+                            {% if component.is_global %}
+                                <span class="meta-chip">
+                                    <i class="fas fa-building"></i>
+                                    Workspace-wide
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="component-content">
+                            <div class="public-card-wrapper public-card--default">
+                                <div class="standard-card mt-4">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <div class="header-content">
+                                                <h4 class="card-title mb-0">{{ component.component_type_display }} items</h4>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="augmentation-notice d-flex align-items-center mb-3">
+                                                {% block table_icon %}{% endblock %}
+                                                <span class="text-muted">{{ component.component_type_display }} items for this component</span>
+                                            </div>
+                                            {% block table_section %}{% endblock %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% block scripts_additional %}{% endblock %}
+{% endblock %}

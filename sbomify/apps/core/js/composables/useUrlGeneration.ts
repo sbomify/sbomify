@@ -19,12 +19,12 @@ export function useUrlGeneration(isPublicView = false, isCustomDomain = false) {
     // For the new URL structure, we need the component ID/slug
     if (componentId) {
       if (isCustomDomain) {
-        return `/component/${componentSlug || componentId}/detailed/`
+        return `/components/${componentSlug || componentId}/documents/${documentId}/`
       }
       if (isPublicView) {
-        return `/public/component/${componentId}/detailed/`
+        return `/public/components/${componentId}/documents/${documentId}/`
       }
-      return `/component/${componentId}/detailed/`
+      return `/components/${componentId}/documents/${documentId}/`
     }
 
     // Fallback to document URLs if component ID not available
@@ -67,12 +67,12 @@ export function useUrlGeneration(isPublicView = false, isCustomDomain = false) {
     // For the new URL structure, we need the component ID/slug
     if (componentId) {
       if (isCustomDomain) {
-        return `/component/${componentSlug || componentId}/detailed/`
+        return `/components/${componentSlug || componentId}/sboms/${sbomId}/`
       }
       if (isPublicView) {
-        return `/public/component/${componentId}/detailed/`
+        return `/public/components/${componentId}/sboms/${sbomId}/`
       }
-      return `/component/${componentId}/detailed/`
+      return `/components/${componentId}/sboms/${sbomId}/`
     }
 
     // Fallback to old URLs if component ID not available
