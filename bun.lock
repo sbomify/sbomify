@@ -10,7 +10,7 @@
         "@types/js-cookie": "^3.0.6",
         "@types/node": "^25.0.0",
         "@vitejs/plugin-vue": "^6.0.1",
-        "alpinejs": "3.15.2",
+        "alpinejs": "3.15.3",
         "axios": "^1.13.2",
         "bootstrap": "^5.3.8",
         "chart.js": "^4.5.1",
@@ -476,7 +476,7 @@
 
     "alien-signals": ["alien-signals@3.0.0", "", {}, "sha512-JHoRJf18Y6HN4/KZALr3iU+0vW9LKG+8FMThQlbn4+gv8utsLIkwpomjElGPccGeNwh0FI2HN6BLnyFLo6OyLQ=="],
 
-    "alpinejs": ["alpinejs@3.15.2", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-2kYF2aG+DTFkE6p0rHG5XmN4VEb6sO9b02aOdU4+i8QN6rL0DbRZQiypDE1gBcGO65yDcqMz5KKYUYgMUxgNkw=="],
+    "alpinejs": ["alpinejs@3.15.3", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-fSI6F5213FdpMC4IWaup92KhuH3jBX0VVqajRJ6cOTCy1cL6888KyXdGO+seAAkn+g6fnrxBqQEx6gRpQ5EZoQ=="],
 
     "ansi-regex": ["ansi-regex@6.1.0", "", {}, "sha512-7HSX4QQb4CspciLpVFwyRe79O3xsIZDDLER21kERQ71oaPodF8jL725AgJMFAYbooIqolJoRLuM81SpeUkpkvA=="],
 

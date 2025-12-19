@@ -637,7 +637,7 @@ wheels = [
 
 [[package]]
 name = "datamodel-code-generator"
-version = "0.43.1"
+version = "0.45.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
@@ -651,9 +651,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "tomli", marker = "python_full_version < '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/89/424f0d73f96bc461f89fe9a60755c86692cabeab8dd5e8227e154fb0a403/datamodel_code_generator-0.43.1.tar.gz", hash = "sha256:269af3f81b89f6aa70118edd0d68a74164ae615827c46d71462c2e96441e40ae", size = 518833, upload-time = "2025-12-12T07:03:28.81Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/45/993fb3f7f4005bfa167fa94929e5737c8f574dc77fb1a4ebca359a106b56/datamodel_code_generator-0.45.0.tar.gz", hash = "sha256:a493add7a59e5a9c1620deb508694bc84e2e2ca80da4bb58a75262a28b9b2c84", size = 554380, upload-time = "2025-12-19T00:13:13.157Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/91/5e/afad23a916a5e9979e0626c34ecedbd00284305ae5525cef2dbbdfddacd7/datamodel_code_generator-0.43.1-py3-none-any.whl", hash = "sha256:5b2a1c47c6940d441e7394765affce614fadb627853370a385953c718137ead5", size = 173009, upload-time = "2025-12-12T07:03:27.223Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/15/b9b64a3576c3ac230c8f69806f32937364f837cda4facaa9b6d09dafd872/datamodel_code_generator-0.45.0-py3-none-any.whl", hash = "sha256:1c7065d3c9ebff7a0c967f2282e0472be971c721593c7e9cbe3f374f378749b8", size = 182003, upload-time = "2025-12-19T00:13:10.422Z" },
 ]
 
 [package.optional-dependencies]
@@ -729,16 +729,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/52/94/75d7f8c59e061d1b6
 
 [[package]]
 name = "django-anymail"
-version = "13.1"
+version = "14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
+    { name = "idna" },
     { name = "requests" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/a5/258d7b7bc1b0ca91791c25c704fa4c2d500727d0c3e29843c182f9f9c4be/django_anymail-13.1.tar.gz", hash = "sha256:b51783176f8a8382e958808151551558e4a46d1375fbc343742d1ebd06ce8e9e", size = 96518, upload-time = "2025-09-03T20:00:21.071Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/cb/25aa288f7ce37331d0ebe0321f3a3079add297b037d6d4b4b363bf080e0b/django_anymail-14.0.tar.gz", hash = "sha256:ca42e52da62d2c96ce92412f9d68ef6d2067d96a384096b6e932d6a247e9fd61", size = 106257, upload-time = "2025-12-18T01:36:07.944Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c9/ba/d34a011cb8da04ed4a7c60b9a7aa25eed61348d1f6113af66ba725b56ae4/django_anymail-13.1-py3-none-any.whl", hash = "sha256:63e48402ec8258f17640eb73c8c64141f16d2f8ae7d448d0fb1c66e82b7cbcf6", size = 134063, upload-time = "2025-09-03T20:00:19.427Z" },
+    { url = "https://files.pythonhosted.org/packages/81/83/6d92a06dba4ef471aa1bbbe2e1461103800beea6a4bf95ac5f3d0f21e167/django_anymail-14.0-py3-none-any.whl", hash = "sha256:98e5575bcff231952a92117b7d0a4dd37fab582333a343de302d415a31dc72b1", size = 146119, upload-time = "2025-12-18T01:36:06.612Z" },
 ]
 
 [package.optional-dependencies]
@@ -2722,7 +2724,7 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=3.0.1,<4" },
     { name = "django", specifier = ">=5.2.6,<6" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },
-    { name = "django-anymail", extras = ["sendgrid"], specifier = "~=13.1" },
+    { name = "django-anymail", extras = ["sendgrid"], specifier = "~=14.0" },
     { name = "django-dramatiq", specifier = ">=0.15.0" },
     { name = "django-extensions", specifier = "~=4.1" },
     { name = "django-health-check", specifier = ">=3.20.0,<4" },
@@ -2755,7 +2757,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit", specifier = ">=1.8.6,<2" },
-    { name = "datamodel-code-generator", extras = ["http"], specifier = ">=0.43.1,<0.44" },
+    { name = "datamodel-code-generator", extras = ["http"], specifier = "~=0.44" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<7" },
     { name = "djlint", specifier = ">=1.36.4,<2" },
