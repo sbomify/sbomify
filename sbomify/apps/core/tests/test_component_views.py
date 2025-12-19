@@ -110,4 +110,4 @@ class TestComponentDetailsViews:
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})
         response = self.client.get(url)
-        assert response.status_code == 403 
+        assert response.status_code == 403
