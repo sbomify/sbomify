@@ -186,13 +186,14 @@ jobs:
           # Sync tests
           uv run pytest --tb=short -v -m "not anyio" ${{ matrix.test-group.path }} | tee test_results.txt
           PYTEST_EXIT_CODE_SYNC=${PIPESTATUS[0]}
+          [[ $PYTEST_EXIT_CODE_SYNC -eq 5 ]] && PYTEST_EXIT_CODE_SYNC=0
 
           # Async tests
           uv run pytest --tb=short -v -m "anyio" ${{ matrix.test-group.path }} | tee -a test_results.txt
           PYTEST_EXIT_CODE_ASYNC=${PIPESTATUS[0]}
+          [[ $PYTEST_EXIT_CODE_ASYNC -eq 5 ]] && PYTEST_EXIT_CODE_ASYNC=0
 
           PYTEST_EXIT_CODE=$((PYTEST_EXIT_CODE_SYNC || PYTEST_EXIT_CODE_ASYNC))
-          [[ $PYTEST_EXIT_CODE -eq 5 ]] && PYTEST_EXIT_CODE=0
 
           # Add summary to GitHub
           echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
