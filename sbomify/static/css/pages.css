@@ -56,40 +56,111 @@
   gap: var(--spacing-md);
 }
 
+.settings-layout {
+  min-height: 500px;
+  display: flex;
+  flex-direction: row;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.settings-nav-col {
+  flex: 0 0 240px;
+  min-width: 0;
+}
+
+.settings-content-col {
+  flex: 1;
+  min-width: 0;
+}
+
 .settings-nav {
   background: var(--white);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 0.5rem;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  width: 100%;
+}
+
+.settings-nav-vertical {
+  position: sticky;
+  top: calc(var(--topnav-height, 60px) + 1rem);
+  width: 100%;
+}
+
+.settings-nav-vertical .settings-tabs {
+  gap: 0;
+  border-bottom: none;
 }
 
 .settings-tabs .nav-link {
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   color: var(--gray-600);
   font-weight: var(--font-weight-medium);
-  padding: 0.75rem var(--spacing-lg);
-  transition: all var(--transition-normal);
+  padding: 0.875rem 1rem;
+  transition: all 0.15s ease;
   border: none;
+  border-left: 3px solid transparent;
   background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  text-align: left;
+  margin-bottom: 0.125rem;
+  position: relative;
+}
+
+.settings-tabs .nav-link:first-child {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
+
+.settings-tabs .nav-link:last-child {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.settings-tabs .nav-link i {
+  width: 1.25rem;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+  opacity: 0.7;
 }
 
 .settings-tabs .nav-link:hover {
-  background: var(--gray-200);
+  background: var(--gray-100);
   color: var(--gray-800);
+  border-left-color: var(--gray-300);
+}
+
+.settings-tabs .nav-link:hover i {
+  opacity: 1;
 }
 
 .settings-tabs .nav-link.active {
-  background: var(--gray-50);
-  color: var(--text-title);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--border-color);
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--brand-primary);
+  border-left-color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.settings-tabs .nav-link.active i {
+  opacity: 1;
+  color: var(--brand-primary);
+}
+
+.settings-tabs .nav-link.active:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--brand-primary);
 }
 
 .settings-content {
   min-height: 400px;
-  padding: 0 0.5rem;
+  padding: 0;
   overflow-x: hidden;
+  flex: 1;
 }
 
 /* ===== INVITE PAGES ===== */
@@ -381,6 +452,19 @@
   font-size: 1.1rem;
 }
 
+.danger-zone {
+  border: 1px solid #fecaca;
+  background: linear-gradient(135deg, #fef2f2, #fff);
+}
+
+.danger-zone .section-header {
+  border-bottom-color: #fecaca;
+}
+
+.danger-zone .section-title {
+  color: #dc2626;
+}
+
 /* ===== RESPONSIVE PAGES ===== */
 @media (max-width: 991.98px) {
   .item-title {
@@ -391,17 +475,63 @@
     font-size: 1rem;
   }
 
+  .settings-layout {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .settings-nav-col {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .settings-nav-vertical {
+    position: static;
+  }
+
+  .settings-nav-vertical .settings-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .settings-nav-vertical .settings-tabs .nav-link {
+    flex: 0 0 auto;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0.5rem;
+  }
+
+  .settings-nav-vertical .settings-tabs .nav-link.active {
+    border-left: none;
+    border-bottom-color: var(--brand-primary);
+  }
+
   .settings-content {
     padding: 0 0.25rem;
   }
 }
 
 @media (max-width: 768px) {
+  .page-header {
+    padding: 1.5rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+
   .item-title {
-    font-size: 2rem;
+    font-size: 1.75rem;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+
+  .item-title i {
+    font-size: 1.5rem;
+  }
+
+  .item-subtitle {
+    font-size: 0.9375rem;
+    margin-top: 0.5rem;
   }
 
   .header-main {
@@ -414,14 +544,39 @@
     justify-content: flex-start;
   }
 
-  .settings-tabs {
-    flex-direction: column;
-    gap: 0.25rem;
+  .settings-layout {
+    gap: 1rem;
+    margin: 0 -0.5rem;
+  }
+
+  .settings-nav-col {
+    width: 100%;
+    padding: 0 0.5rem;
+  }
+
+  .settings-nav {
+    padding: 0.5rem;
   }
 
   .settings-tabs .nav-link {
-    text-align: center;
-    padding: 0.625rem var(--spacing-md);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    gap: 0.625rem;
+    min-height: 44px;
+  }
+
+  .settings-tabs .nav-link span {
+    display: inline;
+  }
+
+  .settings-tabs .nav-link i {
+    font-size: 1rem;
+    min-width: 1.25rem;
+  }
+
+  .settings-content-col {
+    width: 100%;
+    padding: 0 0.5rem;
   }
 
   .settings-content {
@@ -431,51 +586,198 @@
   .releases-display {
     gap: 0.375rem;
   }
+
+  /* Workspace visibility card mobile styles */
+  .workspace-visibility-card .visibility-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+  }
+
+  .workspace-visibility-card .copy {
+    flex: 1 1 100%;
+  }
+
+  .workspace-visibility-card .control {
+    min-width: 100%;
+    text-align: left;
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 1rem;
+  }
+
+  .workspace-visibility-card .form-switch {
+    justify-content: flex-start;
+  }
+
+  .workspace-visibility-card .title {
+    font-size: 1.125rem;
+  }
+
+  .workspace-visibility-card .description {
+    font-size: 0.875rem;
+  }
+
+  .workspace-visibility-card code {
+    font-size: 0.75rem;
+    word-break: break-all;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .workspace-visibility-card .visibility-copy-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.625rem 1rem;
+  }
 }
 
 @media (max-width: 576px) {
   .page-header {
-    padding: 1.25rem;
+    padding: 1.25rem 0.875rem;
     border-radius: var(--radius-lg);
     margin: 0 -0.5rem var(--spacing-md) -0.5rem;
-  }
-
-  .item-title {
-    font-size: 1.75rem;
-  }
-
-  .item-subtitle {
-    font-size: 0.9rem;
-  }
-
-  .settings-nav {
-    border-radius: var(--radius-lg);
-    padding: 0.25rem;
-    margin: 0 -0.5rem;
-  }
-
-  .settings-tabs .nav-link {
-    padding: 0.5rem 0.75rem;
-    font-size: var(--font-size-sm);
-  }
-
-  .settings-content {
-    margin: 0 -0.5rem;
-    padding: 0 0.5rem;
-  }
-}
-
-@media (max-width: 375px) {
-  .page-header {
-    padding: var(--spacing-md);
   }
 
   .item-title {
     font-size: 1.5rem;
   }
 
+  .item-title i {
+    font-size: 1.25rem;
+  }
+
+  .item-subtitle {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .settings-layout {
+    margin: 0 -0.5rem;
+    gap: 0.875rem;
+  }
+
+  .settings-nav-col {
+    padding: 0 0.5rem;
+  }
+
+  .settings-nav {
+    border-radius: var(--radius-lg);
+    padding: 0.5rem;
+    margin: 0;
+  }
+
+  .settings-tabs {
+    gap: 0.375rem;
+  }
+
+  .settings-tabs .nav-link {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8125rem;
+    gap: 0.5rem;
+    min-height: 44px;
+    flex: 1 1 auto;
+    min-width: calc(50% - 0.1875rem);
+  }
+
+  .settings-tabs .nav-link i {
+    font-size: 0.9375rem;
+  }
+
+  .settings-content-col {
+    padding: 0 0.5rem;
+  }
+
+  .settings-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Workspace visibility card small mobile */
+  .workspace-visibility-card .card-body {
+    padding: 1rem 0.875rem;
+  }
+
+  .workspace-visibility-card .title {
+    font-size: 1rem;
+  }
+
+  .workspace-visibility-card .control {
+    padding: 0.875rem;
+    margin-top: 0.875rem;
+  }
+
+  .workspace-visibility-card .form-check-input {
+    width: 2.5rem;
+    height: 1.375rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    padding: 1rem 0.75rem;
+  }
+
+  .item-title {
+    font-size: 1.375rem;
+  }
+
+  .item-title i {
+    font-size: 1.125rem;
+  }
+
+  .item-subtitle {
+    font-size: 0.8125rem;
+  }
+
+  .settings-tabs .nav-link {
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+    min-width: calc(50% - 0.25rem);
+    gap: 0.375rem;
+  }
+
+  .settings-tabs .nav-link span {
+    font-size: 0.75rem;
+  }
+
+  .settings-tabs .nav-link i {
+    font-size: 0.875rem;
+  }
+
+  .workspace-visibility-card .card-body {
+    padding: 0.875rem 0.75rem;
+  }
+
+  .workspace-visibility-card .title {
+    font-size: 0.9375rem;
+  }
+
+  .workspace-visibility-card .description {
+    font-size: 0.8125rem;
+  }
+
+  .workspace-visibility-card .control {
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 375px) {
+  .page-header {
+    padding: 0.875rem 0.625rem;
+  }
+
+  .item-title {
+    font-size: 1.25rem;
+  }
+
   .settings-tabs .nav-link {
     padding: 0.5rem;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
+    min-width: 100%;
+  }
+
+  .settings-tabs .nav-link span {
+    display: inline;
   }
 }

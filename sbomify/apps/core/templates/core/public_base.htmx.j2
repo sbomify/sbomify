@@ -68,6 +68,7 @@
             <link href="{% static 'css/base.css' %}" rel="stylesheet">
             <link href="{% static 'css/layout.css' %}" rel="stylesheet">
             <link href="{% static 'css/components.css' %}" rel="stylesheet">
+            <link href="{% static 'css/responsive.css' %}" rel="stylesheet">
             <link href="{% static 'css/pages.css' %}" rel="stylesheet">
             <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
             <link href="{% static 'css/components/download-card.css' %}"
@@ -529,13 +530,7 @@
                         {% endblock %}
                         <div class="footer-bottom">
                             <div class="footer-meta">
-                                <span>© {% now "Y" %}
-                                    {% if brand.name %}
-                                        {{ brand.name }}
-                                    {% else %}
-                                        sbomify
-                                    {% endif %}
-                                </span>
+                                <span>© {% now "Y" %} sbomify</span>
                             </div>
                             <div class="footer-powered">
                                 <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>

@@ -1,13 +1,14 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load widget_tweaks %}
 {% load static %}
-{% load django_htmx %}
 {% load django_vite %}
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/component-details-private.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content %}
     <div class="page-header mb-4">
@@ -77,10 +78,16 @@
         <!-- Vulnerability Time Series Chart -->
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-vulnerability-timeseries"
-                     data-team-key="{{ request.session.current_team.key }}"
-                     data-component-id="{{ component.id }}"
-                     data-default-days="30"></div>
+                <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?component_id={{ component.id }}&hide_recent_scans=true"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading vulnerability trends...</p>
+                    </div>
+                </div>
             </div>
         </div>
     {% endif %}
@@ -103,13 +110,17 @@
         {% endif %}
         <div class="row mt-3">
             <div class="col-12">
-                {{ sboms_data|json_script:"sboms-data" }}
-                <div class="vc-sboms-table"
-                     data-sboms-data-element-id="sboms-data"
-                     data-component-id="{{ component.id }}"
-                     data-has-crud-permissions="{% if component.has_crud_permissions %}true{% else %}false{% endif %}"
-                     data-team-key="{{ current_team.key|default:'' }}"
-                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                <div id="sboms-table-container"
+                     hx-get="{% url 'sboms:sboms_table' component.id %}"
+                     hx-trigger="load, refreshSbomsTable from:body"
+                     hx-swap="innerHTML">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading SBOMs...</p>
+                    </div>
+                </div>
             </div>
         </div>
     {% elif component.component_type == 'document' %}
@@ -151,9 +162,7 @@
     {% endif %}
 {% endblock %}
 {% block scripts %}
-    {% htmx_script %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
-    {% vite_asset 'sbomify/apps/vulnerability_scanning/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
     {% elif component.component_type == 'document' %}

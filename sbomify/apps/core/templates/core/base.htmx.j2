@@ -128,6 +128,13 @@
         </div>
     {% endif %}
 {% endblock %}
+<!-- Global Modals -->
+<div id="global-modal-container">
+    {% if add_workspace_form %}
+        {% url 'teams:teams_dashboard' as teams_dashboard_url %}
+        {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
+    {% endif %}
+</div>
 <!-- Scripts for HTMX pages -->
 {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
 {% htmx_script %}

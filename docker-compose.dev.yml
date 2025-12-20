@@ -29,7 +29,7 @@ x-dev-env: &dev-env
 
 services:
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     restart: ${KEYCLOAK_RESTART_POLICY:-always}
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
@@ -39,10 +39,11 @@ services:
       - "${KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     command: start-dev
 
   keycloak-bootstrap:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.1.4}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     depends_on:
       - keycloak
     volumes:
@@ -51,6 +52,7 @@ services:
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
       KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
+      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
 
   sbomify-minio:
     image: ${MINIO_IMAGE:-minio/minio}

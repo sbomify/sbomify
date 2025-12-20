@@ -1,0 +1,124 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
+{% block title %}{{ item.name }}{% endblock %}
+{% block meta_description %}
+    {% if component.component_type == 'sbom' %}
+        {{ item.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
+    {% elif component.component_type == 'document' %}
+        {{ item.name }} - Document file. Download and view this document.
+    {% endif %}
+{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet"
+          href="{% static 'css/component-detailed-public.css' %}">
+    <style>
+      .meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #eef2ff;
+        border: 1px solid #e0e7ff;
+        color: #475569;
+        font-weight: 600;
+      }
+      .meta-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+    </style>
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb component 'component' %}
+{% endblock %}
+{% block content %}
+    <div class="public-page-layout">
+        <div class="content-wrapper">
+            <div class="content-container">
+                <div class="public-page-header">
+                    <div class="page-header-content">
+                        <p class="eyebrow text-muted mb-1">Public {{ component.component_type_display }}</p>
+                        <h1 class="page-title">
+                            <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} title-icon"></i>
+                            {{ item.name }}
+                        </h1>
+                        <div class="page-subtitle">
+                            <small class="component-link">
+                                <i class="fas fa-cube me-1"></i>
+                                <a href="{% url 'core:component_details_public' component.id %}"
+                                   class="component-breadcrumb-link">{{ component.name }}</a>
+                            </small>
+                            <div class="meta-row">
+                                <span class="meta-chip">
+                                    <i class="fas fa-tag"></i>
+                                    {{ component.component_type_display }}
+                                </span>
+                                {% if component.component_type == 'sbom' %}
+                                    <span class="meta-chip">
+                                        <i class="fas fa-tag"></i>
+                                        {% if item.format == 'cyclonedx' %}
+                                            CycloneDX
+                                        {% elif item.format == 'spdx' %}
+                                            SPDX
+                                        {% else %}
+                                            {{ item.format|upper }}
+                                        {% endif %}
+                                        {{ item.format_version }}
+                                    </span>
+                                    {% if item.version %}
+                                        <span class="meta-chip">
+                                            <i class="fas fa-code-branch"></i>
+                                            <span class="version-display" title="{{ item.version }}">{{ item.version }}</span>
+                                        </span>
+                                    {% endif %}
+                                {% elif component.component_type == 'document' %}
+                                    <span class="meta-chip">
+                                        <i class="fas fa-tag"></i>{{ item.document_type|default:"Document" }}
+                                    </span>
+                                    {% if item.version %}
+                                        <span class="meta-chip">
+                                            <i class="fas fa-code-branch"></i>
+                                            <span class="version-display" title="{{ item.version }}">{{ item.version }}</span>
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="public-main-content">
+                    <div class="content-section">
+                        <div class="component-detailed-content">
+                            <div class="component-download-section">
+                                <div class="standard-card mt-3">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <div class="header-content">
+                                                <h4 class="card-title mb-0">Download {{ component.component_type_display }}</h4>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="text-center">
+                                                <p class="text-muted mb-3">Download this {{ component.component_type_display }} file</p>
+                                                <a href="{% if component.component_type == 'sbom' %} {% url 'sboms:sbom_download' item.id %} {% elif component.component_type == 'document' %} {% url 'documents:document_download' item.id %} {% endif %}"
+                                                   class="btn btn-primary download-btn">
+                                                    <i class="fas fa-download me-2"></i>
+                                                    Download {{ component.component_type_display }}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

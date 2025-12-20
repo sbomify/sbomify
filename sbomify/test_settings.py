@@ -176,9 +176,8 @@ MIDDLEWARE = [
 # Use wildcard - DynamicHostValidationMiddleware handles validation
 ALLOWED_HOSTS = ["*"]
 
-# Add debug toolbar middleware if DEBUG is True
-if DEBUG:
-    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+# Run tests without Django Debug Toolbar middleware to avoid djdt namespace errors.
+# (Debug Toolbar middleware is not included in the MIDDLEWARE list above.)
 
 SITE_URL = "http://testserver"
 

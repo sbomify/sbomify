@@ -91,10 +91,16 @@ class TestGetPublicPath:
         path = get_public_path('component', 'comp123', is_custom_domain=True)
         assert path == '/component/comp123/'
 
-    def test_component_detailed_path_custom_domain(self):
-        """Test component detailed path on custom domain."""
-        path = get_public_path('component', 'comp123', is_custom_domain=True, detailed=True)
-        assert path == '/component/comp123/detailed/'
+    def test_component_item_path_custom_domain(self):
+        """Test component item path on custom domain."""
+        path = get_public_path(
+            'component', 
+            'comp123', 
+            is_custom_domain=True, 
+            item_type='sboms',
+            item_id='sbom1'
+        )
+        assert path == '/components/comp123/sboms/sbom1/'
 
     def test_component_path_main_domain(self):
         """Test component path on main domain."""

@@ -22,6 +22,7 @@ The views check request.is_custom_domain to determine appropriate behavior.
 
 from django.conf import settings
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from sbomify.apis import api
 from sbomify.apps.billing.views import public_enterprise_contact
@@ -30,6 +31,8 @@ from sbomify.apps.teams.urls import domain_check
 
 urlpatterns = [
     path("admin/", admin_site.urls),
+    # Redirect old accounts/login to our Keycloak login
+    path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", public_enterprise_contact, name="public_enterprise_contact"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
@@ -41,6 +44,7 @@ urlpatterns = [
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),
+    path("", include("sbomify.apps.vulnerability_scanning.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]

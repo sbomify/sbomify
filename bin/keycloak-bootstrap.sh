@@ -7,6 +7,7 @@ CLIENT_ID="${KEYCLOAK_CLIENT_ID}"
 ADMIN_USER="${KC_BOOTSTRAP_ADMIN_USERNAME}"
 ADMIN_PASS="${KC_BOOTSTRAP_ADMIN_PASSWORD}"
 CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET}"
+APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:8000}"
 
 # Wait for Keycloak REST API to be ready
 until /opt/keycloak/bin/kcadm.sh config credentials --server "$KC_URL" --realm master --user "$ADMIN_USER" --password "$ADMIN_PASS"; do
@@ -26,6 +27,9 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
   /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s sslRequired=NONE
   echo "SSL requirement disabled for development"
 fi
+
+# Ensure the realm uses the bundled sbomify login theme for branding.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s "loginTheme=sbomify"
 
 # Create client if it doesn't exist
 if ! /opt/keycloak/bin/kcadm.sh get clients -r "$REALM" -q "clientId=$CLIENT_ID" | grep -q '"id"'; then

@@ -21,7 +21,14 @@ const notifications = ref<Notification[]>([])
 const processedNotifications = ref<Set<string>>(new Set())
 
 // Process notifications and show them using SweetAlert2
-const processNotifications = (newNotifications: Notification[]) => {
+// Only show modals for new notifications that appear after initial page load
+// Don't show modals on initial dashboard load - users can check notifications via the bell icon
+const processNotifications = (newNotifications: Notification[], isInitialLoad: boolean = false) => {
+  // Skip showing modals on initial page load
+  if (isInitialLoad) {
+    return
+  }
+
   newNotifications.forEach(notification => {
     // Skip if we've already processed this notification
     if (processedNotifications.value.has(notification.id)) {
@@ -76,26 +83,44 @@ const processNotifications = (newNotifications: Notification[]) => {
   })
 }
 
-const fetchNotifications = async () => {
+const fetchNotifications = async (isInitialLoad: boolean = false) => {
   try {
     const response = await axios.get('/api/v1/notifications/')
+    const oldNotifications = [...notifications.value]
     notifications.value = response.data
-    processNotifications(notifications.value)
+    
+    // Only process notifications if not initial load
+    if (!isInitialLoad) {
+      // Find new notifications that weren't in the old list
+      const newItems = notifications.value.filter(
+        newItem => !oldNotifications.some(oldItem => oldItem.id === newItem.id)
+      )
+      if (newItems.length > 0) {
+        processNotifications(newItems, false)
+      }
+    } else {
+      // On initial load, just mark all notifications as processed without showing modals
+      notifications.value.forEach(notification => {
+        processedNotifications.value.add(notification.id)
+      })
+    }
   } catch (error) {
     console.error('Failed to fetch notifications:', error)
   }
 }
 
 onMounted(() => {
-  fetchNotifications()
-  // Refresh notifications every 5 minutes
-  setInterval(fetchNotifications, 5 * 60 * 1000)
+  // Initial load - don't show modals
+  fetchNotifications(true)
+  // Refresh notifications every 5 minutes - these will show modals if new
+  setInterval(() => fetchNotifications(false), 5 * 60 * 1000)
 })
 
 // Watch for changes in notifications and process new ones
+// This handles notifications that appear after initial load
 watch(notifications, (newNotifications, oldNotifications) => {
   if (oldNotifications.length === 0 && newNotifications.length > 0) {
-    // Initial load already processed in fetchNotifications
+    // Initial load already processed in fetchNotifications - don't show modals
     return
   }
 
@@ -105,7 +130,8 @@ watch(notifications, (newNotifications, oldNotifications) => {
   )
 
   if (newItems.length > 0) {
-    processNotifications(newItems)
+    // Show modals for new notifications that appear after initial load
+    processNotifications(newItems, false)
   }
 })
 </script>

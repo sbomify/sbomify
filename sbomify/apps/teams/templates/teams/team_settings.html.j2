@@ -16,9 +16,6 @@
                 </h1>
                 <p class="item-subtitle">Manage {{ team.name }} configuration, members, and preferences</p>
             </div>
-            <div class="header-actions">
-                {% include 'core/components/copyable-value.html.j2' with value=team.key title="Workspace Key: "|add:team.key|add:" (click to copy)" %}
-            </div>
         </div>
     </div>
     <div class="mb-4">
@@ -76,9 +73,6 @@
                                 <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
                             </div>
                             <button type="submit" class="visually-hidden">Save visibility</button>
-                            <small class="text-muted hint">
-                                {% if can_set_private %}Toggle anytime.{% endif %}
-                            </small>
                         </form>
                     </div>
                 </div>
@@ -172,11 +166,6 @@
             padding-left: 0;
         }
 
-        .workspace-visibility-card .hint {
-            display: block;
-            margin-top: 0.5rem;
-            font-size: 0.8rem;
-        }
 
         .workspace-visibility-card .visibility-copy-btn {
             display: inline-flex;
@@ -212,102 +201,187 @@
         }
 
         @media (max-width: 768px) {
+            .workspace-visibility-card .visibility-wrapper {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 1.5rem;
+            }
+
+            .workspace-visibility-card .copy {
+                flex: 1 1 100%;
+            }
+
             .workspace-visibility-card .control {
+                min-width: 100%;
                 text-align: left;
+                padding: 1rem;
+                border-top: 1px solid #e5e7eb;
+                margin-top: 1rem;
+            }
+
+            .workspace-visibility-card .form-switch {
+                justify-content: flex-start;
+            }
+
+            .workspace-visibility-card .title {
+                font-size: 1.125rem;
+            }
+
+            .workspace-visibility-card .description {
+                font-size: 0.875rem;
+            }
+
+            .workspace-visibility-card code {
+                font-size: 0.75rem;
+                word-break: break-all;
+                display: block;
+                margin-bottom: 0.5rem;
+            }
+
+            .workspace-visibility-card .visibility-copy-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 0.625rem 1rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .workspace-visibility-card .card-body {
+                padding: 1rem 0.875rem;
+            }
+
+            .workspace-visibility-card .title {
+                font-size: 1rem;
+            }
+
+            .workspace-visibility-card .control {
+                padding: 0.875rem;
+                margin-top: 0.875rem;
+            }
+
+            .workspace-visibility-card .form-check-input {
+                width: 2.5rem;
+                height: 1.375rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .workspace-visibility-card .card-body {
+                padding: 0.875rem 0.75rem;
+            }
+
+            .workspace-visibility-card .title {
+                font-size: 0.9375rem;
+            }
+
+            .workspace-visibility-card .description {
+                font-size: 0.8125rem;
+            }
+
+            .workspace-visibility-card .control {
+                padding: 0.75rem;
             }
         }
     </style>
-    <!-- Navigation Tabs -->
-    <div class="settings-nav mb-4">
-        <nav class="nav nav-pills nav-fill settings-tabs">
-            {% if request.session.current_team.role == 'owner' %}
-                <a class="nav-link"
-                   data-bs-toggle="pill"
-                   href="#general"
-                   data-tab="general">
-                    <i class="fas fa-sliders-h me-2"></i>
-                    General
-                </a>
-            {% endif %}
-            <a class="nav-link"
-               data-bs-toggle="pill"
-               href="#members"
-               data-tab="members">
-                <i class="fas fa-users me-2"></i>
-                Members
-            </a>
-            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                <a class="nav-link"
-                   data-bs-toggle="pill"
-                   href="#branding"
-                   data-tab="branding">
-                    <i class="fas fa-palette me-2"></i>
-                    Branding
-                </a>
-                <a class="nav-link"
-                   data-bs-toggle="pill"
-                   href="#contact-profiles"
-                   data-tab="contact-profiles">
-                    <i class="fas fa-address-book me-2"></i>
-                    Contact Profiles
-                </a>
-            {% endif %}
-            {% if request.session.current_team.role == 'owner' %}
-                <a class="nav-link"
-                   data-bs-toggle="pill"
-                   href="#integrations"
-                   data-tab="integrations">
-                    <i class="fas fa-plug me-2"></i>
-                    Integrations
-                </a>
-                <a class="nav-link"
-                   data-bs-toggle="pill"
-                   href="#billing"
-                   data-tab="billing">
-                    <i class="fas fa-credit-card me-2"></i>
-                    Billing
-                </a>
-            {% endif %}
-        </nav>
-    </div>
-    <!-- Tab Content -->
-    <div class="tab-content settings-content mt-4">
-        {% if request.session.current_team.role == 'owner' %}
-            <div class="tab-pane fade" id="general">
-                <div class="row">
-                    <div class="col-12">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
-                </div>
-            </div>
-        {% endif %}
-        <div class="tab-pane fade" id="members">
-            <div class="row g-4 g-lg-5">
-                <div class="col-12">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
+    <div class="settings-layout">
+        <!-- Vertical Navigation Tabs -->
+        <div class="settings-nav-col">
+            <div class="settings-nav settings-nav-vertical">
+                <nav class="nav nav-pills flex-column settings-tabs">
+                    {% if request.session.current_team.role == 'owner' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#general"
+                           data-tab="general">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>General</span>
+                        </a>
+                    {% endif %}
+                    <a class="nav-link"
+                       data-bs-toggle="pill"
+                       href="#members"
+                       data-tab="members">
+                        <i class="fas fa-users"></i>
+                        <span>Members</span>
+                    </a>
+                    <a class="nav-link"
+                       data-bs-toggle="pill"
+                       href="#tokens"
+                       data-tab="tokens">
+                        <i class="fas fa-key"></i>
+                        <span>Tokens</span>
+                    </a>
+                    {% if request.session.current_team.role == 'owner' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#custom-domain"
+                           data-tab="custom-domain">
+                            <i class="fas fa-globe"></i>
+                            <span>Custom Domain</span>
+                        </a>
+                    {% endif %}
+                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#contact-profiles"
+                           data-tab="contact-profiles">
+                            <i class="fas fa-address-book"></i>
+                            <span>Contact Profiles</span>
+                        </a>
+                    {% endif %}
+                    {% if request.session.current_team.role == 'owner' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#integrations"
+                           data-tab="integrations">
+                            <i class="fas fa-plug"></i>
+                            <span>Integrations</span>
+                        </a>
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#billing"
+                           data-tab="billing">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Billing</span>
+                        </a>
+                    {% endif %}
+                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#branding"
+                           data-tab="branding">
+                            <i class="fas fa-palette"></i>
+                            <span>Branding</span>
+                        </a>
+                    {% endif %}
+                </nav>
             </div>
         </div>
-        <div class="tab-pane fade" id="branding">
-            <div class="row">
-                <div class="col-12">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
+        <!-- Tab Content -->
+        <div class="settings-content-col">
+            <div class="tab-content settings-content">
+                {% if request.session.current_team.role == 'owner' %}
+                    <div class="tab-pane fade" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
+                {% endif %}
+                <div class="tab-pane fade" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
+                <div class="tab-pane fade" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
+                {% if request.session.current_team.role == 'owner' %}
+                    <div class="tab-pane fade" id="custom-domain">{% include "teams/team_settings_tabs/custom_domain.html.j2" %}</div>
+                {% endif %}
+                {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                    <div class="tab-pane fade" id="contact-profiles">
+                        {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
+                    </div>
+                {% endif %}
+                {% if request.session.current_team.role == 'owner' %}
+                    <div class="tab-pane fade" id="integrations">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
+                    <div class="tab-pane fade" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
+                {% endif %}
+                {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                    <div class="tab-pane fade" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
+                {% endif %}
             </div>
         </div>
-        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-            <div class="tab-pane fade" id="contact-profiles">
-                <div class="row">
-                    <div class="col-12">{% include "teams/team_settings_tabs/contact_profiles.html.j2" %}</div>
-                </div>
-            </div>
-        {% endif %}
-        {% if request.session.current_team.role == 'owner' %}
-            <div class="tab-pane fade" id="integrations">
-                <div class="row">
-                    <div class="col-12">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="billing">
-                <div class="row">
-                    <div class="col-12">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
-                </div>
-            </div>
-        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}
@@ -316,14 +390,18 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Get available tabs
-            const availableTabs = ['members', 'branding'];
+            const availableTabs = ['members', 'tokens'];
             {% if request.session.current_team.role == 'owner' %}availableTabs.unshift('general');{% endif %}
+            {% if request.session.current_team.role == 'owner' %}availableTabs.push('custom-domain');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('contact-profiles');
             {% endif %}
             {% if request.session.current_team.role == 'owner' %}
                 availableTabs.push('integrations');
                 availableTabs.push('billing');
+            {% endif %}
+            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                availableTabs.push('branding');
             {% endif %}
 
             const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');

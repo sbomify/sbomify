@@ -113,6 +113,6 @@
             </div>
         </div>
     </div>
-    {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form_action=request.path form=add_form submit_text="Add Workspace" icon="fa-plus" %}
+    {# add-workspace modal is already included globally in base templates; avoid duplicating IDs #}
     {% include "components/modals/delete_modal.html.j2" with modal_id="delete-workspace-modal" modal_title="Delete Workspace" message_text="Are you sure you want to delete the workspace" warning_text="This action cannot be undone and will permanently remove the workspace and all associated data from the system." form_action=request.path form=delete_form submit_text="Delete Workspace" %}
 {% endblock %}

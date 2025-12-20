@@ -19,20 +19,7 @@
   pointer-events: none;
 }
 
-.modal {
-  display: block;
-}
 
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1040;
-  width: 100vw;
-  height: 100vh;
-  background-color: #000;
-  opacity: 0.5;
-}
 
 .version-display {
   display: inline-block;
@@ -106,14 +93,7 @@
   box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
 }
 
-/* Edit Modal Styling */
-.modal {
-  z-index: 1055;
-}
 
-.modal-backdrop {
-  z-index: 1050;
-}
 
 .modal-content {
   border-radius: 0.5rem;
@@ -160,4 +140,3 @@
   padding: 0.5rem 0.5rem;
   margin: -0.5rem -0.5rem -0.5rem auto;
 }
-

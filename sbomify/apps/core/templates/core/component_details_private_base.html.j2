@@ -1,0 +1,78 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% load widget_tweaks %}
+{% load static %}
+{% load django_vite %}
+{% load public_url_tags %}
+{% block title %}sbomify Component: {{ component.name }}{% endblock %}
+{% block extra_styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/component-details-private.css' %}">
+    {% block extra_styles_additional %}{% endblock %}
+{% endblock %}
+{% block content %}
+    <div class="page-header mb-4">
+        <div class="header-main mb-3">
+            <div class="title-section">
+                <h1 class="item-title">
+                    {% if component.has_crud_permissions %}
+                        <span class="vc-editable-single-field"
+                              data-item-type="component"
+                              data-item-id="{{ component.id }}"
+                              data-item-value="{{ component.name }}"></span>
+                    {% else %}
+                        {{ component.name }}
+                    {% endif %}
+                </h1>
+                {% if component.has_crud_permissions %}
+                    {% url 'core:component_details_public' component.id as component_public_url %}
+                    {% include 'core/components/public_status_toggle.html.j2' with item_type='component' item_id=component.id public_url=component_public_url is_public=component.is_public %}
+                {% endif %}
+            </div>
+        </div>
+        <div class="header-meta">
+            <span class="meta-item">
+                <i class="fas fa-cube me-2 text-primary"></i>
+                <span class="meta-label">Component</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                <i class="fas fa-tag me-2 text-info"></i>
+                <span class="meta-label">{{ component.component_type_display }}</span>
+            </span>
+            <span class="meta-divider">•</span>
+            <span class="meta-item">
+                {% include 'core/components/copyable-value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
+            </span>
+        </div>
+        {% block header_after_meta %}{% endblock %}
+    </div>
+    {% block content_after_header %}{% endblock %}
+    {% if component.has_crud_permissions %}
+        <div class="row">
+            <div class="col-12">
+                <div class="vc-ci-cd-info"
+                     data-component-id="{{ component.id }}"
+                     data-component-name="{{ component.name }}"></div>
+            </div>
+        </div>
+    {% endif %}
+    {% block upload_section %}{% endblock %}
+    {% block table_section %}{% endblock %}
+    {% if component.has_crud_permissions %}
+        <div class="row mt-3">
+            <div class="col-12">
+                {{ request.session.user_teams|json_script:"user-workspaces-data" }}
+                <div class="vc-danger-zone"
+                     data-component-id="{{ component.id }}"
+                     data-component-name="{{ component.name }}"
+                     data-is-owner="{% if is_owner %} true {% else %} false {% endif %}"
+                     data-user-workspaces-element-id="user-workspaces-data"
+                     data-csrf-token="{{ csrf_token }}"></div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    {% block scripts_additional %}{% endblock %}
+{% endblock %}

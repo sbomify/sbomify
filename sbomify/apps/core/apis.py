@@ -143,20 +143,27 @@ PRIVATE_ITEMS_UPGRADE_MESSAGE = (
 
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
-    """Get the current user's team ID from the session or fall back to user's first team."""
+    """Get the current user's workspace ID from the session or fall back to user's default workspace."""
     from sbomify.apps.core.utils import get_team_id_from_session
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Member
+    from sbomify.apps.teams.utils import get_user_default_team
 
-    # First try session-based team (for web UI)
+    # First try session-based workspace (for web UI)
     team_id = get_team_id_from_session(request)
     if team_id:
         return team_id
 
-    # Fall back to user's first team (for API calls with bearer tokens)
+    # Fall back to user's default workspace (for API calls with bearer tokens)
     if request.user and request.user.is_authenticated:
-        first_team = Team.objects.filter(member__user=request.user).first()
-        if first_team:
-            return str(first_team.id)
+        # Try to get the user's default workspace first
+        default_team_id = get_user_default_team(request.user)
+        if default_team_id:
+            return str(default_team_id)
+
+        # If no default workspace is set, fall back to first workspace
+        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        if first_membership:
+            return str(first_membership.team.id)
 
     return None
 
@@ -1512,7 +1519,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
     tags=["Components"],
 )
 @decorate_view(optional_token_auth)
-def get_component(request: HttpRequest, component_id: str):
+def get_component(request: HttpRequest, component_id: str, return_instance: bool = False):
     """Get a specific component by ID."""
     try:
         component = Component.objects.prefetch_related("sbom_set").get(pk=component_id)
@@ -1521,7 +1528,8 @@ def get_component(request: HttpRequest, component_id: str):
 
     # If component is public, allow unauthenticated access
     if component.is_public:
-        return 200, _build_item_response(request, component, "component")
+        response = component if return_instance else _build_item_response(request, component, "component")
+        return 200, response
 
     # For private components, require authentication and team access
     if not request.user or not request.user.is_authenticated:
@@ -1530,7 +1538,8 @@ def get_component(request: HttpRequest, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    return 200, _build_item_response(request, component, "component")
+    response = component if return_instance else _build_item_response(request, component, "component")
+    return 200, response
 
 
 @router.put(
@@ -2775,6 +2784,7 @@ def list_release_artifacts(
                 artifacts.append(
                     {
                         "id": str(artifact.id),
+                        "sbom_id": str(artifact.sbom.id),
                         "artifact_type": "sbom",
                         "artifact_name": artifact.sbom.name,
                         "component_id": str(artifact.sbom.component.id),
@@ -2785,12 +2795,14 @@ def list_release_artifacts(
                         "sbom_version": artifact.sbom.version or "",
                         "document_type": None,
                         "document_version": None,
+                        "component_slug": artifact.sbom.component.slug,
                     }
                 )
             elif artifact.document:
                 artifacts.append(
                     {
                         "id": str(artifact.id),
+                        "document_id": str(artifact.document.id),
                         "artifact_type": "document",
                         "artifact_name": artifact.document.name,
                         "component_id": str(artifact.document.component.id),
@@ -2800,6 +2812,7 @@ def list_release_artifacts(
                         "sbom_version": None,
                         "document_type": artifact.document.document_type,
                         "document_version": artifact.document.version or "",
+                        "component_slug": artifact.document.component.slug,
                     }
                 )
 
@@ -2967,6 +2980,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": artifact.sbom.version or "",
                 "document_type": None,
                 "document_version": None,
+                "component_slug": artifact.sbom.component.slug,
             }
         except Exception as e:
             log.error(f"Error processing SBOM: {e}")
@@ -3000,6 +3014,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": None,
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
+                "component_slug": artifact.document.component.slug,
             }
         except Exception as e:
             log.error(f"Error processing document: {e}")
@@ -3579,7 +3594,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                         "format": sbom.format,
                         "format_version": sbom.format_version,
                         "version": sbom.version,
-                        "created_at": sbom.created_at.isoformat(),
+                        "created_at": sbom.created_at,
                         "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", None),
                         "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
                     },

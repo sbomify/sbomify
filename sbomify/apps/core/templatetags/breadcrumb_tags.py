@@ -7,7 +7,7 @@ register = template.Library()
 
 
 @register.inclusion_tag("core/components/breadcrumb.html.j2", takes_context=True)
-def breadcrumb(context, item, item_type, detailed=False):
+def breadcrumb(context, item, item_type):
     """Generate breadcrumb navigation for public pages.
 
     Args:

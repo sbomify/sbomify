@@ -1,6 +1,5 @@
 {% extends "core/public_base.htmx.j2" %}
 {% load breadcrumb_tags %}
-{% load django_htmx %}
 {% load django_vite %}
 {% load static %}
 {% block title %}{{ component.name }}{% endblock %}
@@ -83,14 +82,18 @@
                                                 <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% endif %} me-2"></i>
                                                 <span class="text-muted">{{ component.component_type_display }}s for this component</span>
                                             </div>
-                                            {% if component.component_type == 'sbom' and sboms_data %}
-                                                {{ sboms_data|json_script:"sboms-data" }}
-                                                <div class="vc-sboms-table"
-                                                     data-is-public-view="true"
-                                                     data-sboms-data-element-id="sboms-data"
-                                                     data-component-id="{{ component.id }}"
-                                                     data-has-crud-permissions="false"
-                                                     data-team-billing-plan="{{ team_billing_plan }}"></div>
+                                            {% if component.component_type == 'sbom' %}
+                                                <div id="sboms-table-container"
+                                                     hx-get="{% url 'sboms:sboms_table_public' component.id %}"
+                                                     hx-trigger="load, refreshSbomsTable from:body"
+                                                     hx-swap="innerHTML">
+                                                    <div class="text-center py-4">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">Loading...</span>
+                                                        </div>
+                                                        <p class="mt-2 text-muted">Loading SBOMs...</p>
+                                                    </div>
+                                                </div>
                                             {% elif component.component_type == 'document' %}
                                                 <div id="documents-table-container"
                                                      hx-get="{% url 'documents:documents_table_public' component.id %}"
@@ -116,7 +119,6 @@
     </div>
 {% endblock %}
 {% block scripts %}
-    {% htmx_script %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if component.component_type == 'sbom' %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}

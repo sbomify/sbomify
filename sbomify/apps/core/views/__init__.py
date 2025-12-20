@@ -3,6 +3,7 @@ import logging
 import tempfile
 import typing
 from pathlib import Path
+from urllib.parse import urlencode, urljoin
 
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
@@ -23,15 +24,14 @@ from django.http import (
 )
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import token_to_number, verify_item_access
-from sbomify.apps.core.views.component_detailed_private import ComponentDetailedPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.component_detailed_public import ComponentDetailedPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.component_item import ComponentItemPublicView, ComponentItemView  # noqa: F401, E402
 from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: F401, E402
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
@@ -46,12 +46,13 @@ from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView  # 
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView  # noqa: F401, E402
+from sbomify.apps.core.views.search import SearchView  # noqa: F401, E402
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView  # noqa: F401, E402
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView  # noqa: F401, E402
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
 
 from ..errors import error_response
-from ..forms import CreateAccessTokenForm, SupportContactForm
+from ..forms import SupportContactForm
 from ..models import Component, Product, Project
 
 logger = logging.getLogger(__name__)
@@ -69,22 +70,96 @@ def home(request: HttpRequest) -> HttpResponse:
 
 
 def keycloak_login(request: HttpRequest) -> HttpResponse:
-    """Render the Allauth default login page on /login."""
-    return render(request, "account/login.html.j2")
+    """Send the user directly to the Keycloak login flow handled by Allauth.
+
+    We bypass the bespoke login template so that users always land on the
+    native Keycloak login screen. The Allauth provider view builds the correct
+    OIDC authorize URL (including callback and state) for us.
+    """
+
+    login_path = reverse("openid_connect_login", args=["keycloak"])
+    next_param = request.GET.get("next")
+
+    # Validate next parameter to prevent open redirect attacks
+    if next_param and url_has_allowed_host_and_scheme(
+        next_param,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        login_path = f"{login_path}?{urlencode({'next': next_param})}"
+
+    # Use APP_BASE_URL when provided so redirects work behind proxies/custom domains.
+    absolute_login_url = (
+        urljoin(settings.APP_BASE_URL.rstrip("/") + "/", login_path.lstrip("/"))
+        if getattr(settings, "APP_BASE_URL", None)
+        else login_path
+    )
+
+    return redirect(absolute_login_url)
+
+
+def _get_pending_invitations(user) -> list[dict]:
+    """Helper function to get pending invitations for a user."""
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Invitation
+
+    if not user.email:
+        return []
+
+    pending_invitations = (
+        Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now())
+        .select_related("team")
+        .order_by("-created_at")
+    )
+    return [
+        {
+            "id": inv.id,
+            "token": str(inv.token),
+            "team_name": inv.team.display_name,
+            "role": inv.role,
+            "created_at": inv.created_at,
+            "expires_at": inv.expires_at,
+        }
+        for inv in pending_invitations
+    ]
+
+
+def _get_access_tokens(user) -> list[dict]:
+    """Helper function to get access tokens for a user."""
+    access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
+    return [
+        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        for token in access_tokens_qs
+    ]
+
+
+def _build_settings_context(user, form=None, new_token=None) -> dict:
+    """Helper function to build context for settings page."""
+    from sbomify.apps.core.forms import CreateAccessTokenForm
+
+    context = {
+        "create_access_token_form": form or CreateAccessTokenForm(),
+        "pending_invitations": _get_pending_invitations(user),
+        "access_tokens": _get_access_tokens(user),
+    }
+    if new_token:
+        context["new_encoded_access_token"] = new_token
+    return context
 
 
 @never_cache
 @login_required
 def user_settings(request: HttpRequest) -> HttpResponse:
-    from django.utils import timezone
+    """Redirect to workspace tokens settings or show pending invitations if no workspace."""
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.core.forms import CreateAccessTokenForm
 
-    from sbomify.apps.teams.models import Invitation
-
-    create_access_token_form = CreateAccessTokenForm()
-    context = dict(create_access_token_form=create_access_token_form)
-
+    # Handle POST requests for token creation
     if request.method == "POST":
+        current_team = request.session.get("current_team")
         form = CreateAccessTokenForm(request.POST)
+
         if form.is_valid():
             access_token_str = create_personal_access_token(request.user)
             token = AccessToken(
@@ -93,42 +168,36 @@ def user_settings(request: HttpRequest) -> HttpResponse:
                 description=form.cleaned_data["description"],
             )
             token.save()
+            messages.success(request, "New access token created")
 
-            context["new_encoded_access_token"] = access_token_str
-            messages.add_message(
-                request,
-                messages.INFO,
-                "New access token created",
-            )
+            # If user has a current workspace, redirect to team tokens after creation
+            if current_team and current_team.get("key"):
+                return redirect("teams:team_tokens", team_key=current_team["key"])
 
-    access_tokens = AccessToken.objects.filter(user=request.user).only("id", "description", "created_at").all()
-    # Serialize access tokens for Vue component
-    access_tokens_data = [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
-        for token in access_tokens
-    ]
-    context["access_tokens"] = access_tokens_data
+            # Prepare context for rendering (users without current workspace - backward compatibility)
+            context = _build_settings_context(request.user, new_token=access_token_str)
+            return render(request, "core/settings.html.j2", context)
+        else:
+            # Invalid form - render with errors
+            context = _build_settings_context(request.user, form=form)
+            return render(request, "core/settings.html.j2", context)
 
-    # Fetch pending invitations for the user
-    if request.user.email:
-        pending_invitations = (
-            Invitation.objects.filter(email__iexact=request.user.email, expires_at__gt=timezone.now())
-            .select_related("team")
-            .order_by("-created_at")
+    # Check if user has a current workspace - if so, redirect to tokens tab
+    current_team = request.session.get("current_team")
+    if current_team and current_team.get("key"):
+        return redirect("teams:team_settings", team_key=current_team["key"])
+
+    # If no current workspace, show pending invitations only (backward compatibility)
+    context = _build_settings_context(request.user)
+
+    # If no pending invitations and no workspace, redirect to teams dashboard
+    if not context.get("pending_invitations"):
+        messages.add_message(
+            request,
+            messages.INFO,
+            "Please select a workspace to access token settings.",
         )
-        context["pending_invitations"] = [
-            {
-                "id": inv.id,
-                "token": str(inv.token),
-                "team_name": inv.team.display_name,
-                "role": inv.role,
-                "created_at": inv.created_at,
-                "expires_at": inv.expires_at,
-            }
-            for inv in pending_invitations
-        ]
-    else:
-        context["pending_invitations"] = []
+        return redirect("teams:teams_dashboard")
 
     return render(request, "core/settings.html.j2", context)
 
@@ -250,14 +319,42 @@ def delete_access_token(request: HttpRequest, token_id: int):
     return redirect(reverse("core:settings"))
 
 
-@login_required
 def logout(request: HttpRequest) -> HttpResponse:
+    """Log the user out of both Django and Keycloak.
+
+    If the user is not authenticated, simply redirect to the login page.
+    """
+    if not request.user.is_authenticated:
+        # User is already logged out, redirect to login
+        return redirect(reverse("core:keycloak_login"))
+
     django_logout(request)
-    # Redirect to Keycloak logout page
-    redirect_url = (
-        f"{settings.KEYCLOAK_SERVER_URL}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
-        f"?redirect_uri={settings.APP_BASE_URL}"
+    # Redirect to Keycloak logout endpoint and then straight into its login page.
+    # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
+    base_url = (
+        settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
+        if hasattr(settings, "KEYCLOAK_PUBLIC_URL")
+        else settings.KEYCLOAK_SERVER_URL.rstrip("/")
     )
+    realm = settings.KEYCLOAK_REALM
+    client_id = settings.KEYCLOAK_CLIENT_ID
+
+    # Where Keycloak should send the user after logout: our login entrypoint,
+    # which immediately redirects back into the Keycloak auth flow.
+    login_path = reverse("openid_connect_login", args=["keycloak"])
+    login_redirect = (
+        urljoin(settings.APP_BASE_URL.rstrip("/") + "/", login_path.lstrip("/"))
+        if getattr(settings, "APP_BASE_URL", None)
+        else request.build_absolute_uri(login_path)
+    )
+
+    logout_query = urlencode(
+        {
+            "client_id": client_id,
+            "post_logout_redirect_uri": login_redirect,
+        }
+    )
+    redirect_url = f"{base_url}/realms/{realm}/protocol/openid-connect/logout?{logout_query}"
     return redirect(redirect_url)
 
 

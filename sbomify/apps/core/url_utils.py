@@ -152,7 +152,8 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
             - product_id: Required for release URLs (ID on main app)
             - product_slug: Product slug for release URLs on custom domains
             - workspace_key: Workspace key for workspace URLs
-            - detailed: Boolean for detailed component view
+            - item_type: Type of artifact (sboms or documents)
+            - item_id: ID of the artifact
 
     Returns:
         URL path string
@@ -181,15 +182,19 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
         return f"/public/project/{resource_id}/"
 
     elif resource_type == "component":
-        detailed = kwargs.get("detailed", False)
+        item_type = kwargs.get("item_type")
+        item_id = kwargs.get("item_id")
+
         if is_custom_domain:
-            path = f"/component/{slug}/"
-            if detailed:
-                path = f"/component/{slug}/detailed/"
+            if item_type and item_id:
+                path = f"/components/{slug}/{item_type}/{item_id}/"
+            else:
+                path = f"/component/{slug}/"
         else:
-            path = f"/public/component/{resource_id}/"
-            if detailed:
-                path = f"/public/component/{resource_id}/detailed/"
+            if item_type and item_id:
+                path = f"/public/components/{resource_id}/{item_type}/{item_id}/"
+            else:
+                path = f"/public/component/{resource_id}/"
         return path
 
     elif resource_type == "document":

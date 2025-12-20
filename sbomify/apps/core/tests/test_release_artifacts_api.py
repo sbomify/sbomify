@@ -130,3 +130,23 @@ class TestReleaseArtifactsAPI(TestCase):
 
         self.assertIsNotNone(empty_artifact)
         self.assertEqual(empty_artifact["sbom_version"], "")  # Should be empty string for None version
+
+    def test_component_slug_in_response(self):
+        """Test that component_slug is included in release artifact response."""
+        # Make API request
+        request = self.factory.get(f'/api/v1/releases/{self.release.id}/artifacts?mode=existing&page=1&page_size=15')
+        request.user = None
+
+        response_data = list_release_artifacts(request, str(self.release.id), mode='existing')
+
+        self.assertIsInstance(response_data, dict)
+        self.assertIn("items", response_data)
+        
+        artifact = response_data["items"][0]
+        # Component should have a slug (it's auto-generated from name)
+        # Since we didn't specify slug in setUp, we expect it to be derived from name "test-component"
+        # However, checking if the field exists is the key here
+        self.assertIn("component_slug", artifact)
+        # We can also check that it's a string given the component has a name
+        # Depending on how logic works, it might be None if component has no slug, 
+        # but in our test we want to ensure the field is present.

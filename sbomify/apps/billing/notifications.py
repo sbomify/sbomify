@@ -70,31 +70,89 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
     return None
 
 
+def check_community_upgrade(team: Team) -> NotificationSchema | None:
+    """Check if community plan user should upgrade to paid plan"""
+    # Show upgrade notification if billing_plan is None or "community"
+    billing_plan = team.billing_plan
+
+    # If billing_plan is None or empty string, show upgrade notification
+    if not billing_plan or (isinstance(billing_plan, str) and not billing_plan.strip()):
+        logger.debug("Returning upgrade notification for team (billing_plan is None/empty)")
+        return NotificationSchema(
+            id=f"community_upgrade_{team.key}",
+            type="community_upgrade",
+            message="Upgrade to a paid plan to unlock more features and remove limitations.",
+            severity="info",
+            created_at=datetime.utcnow().isoformat(),
+            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+        )
+
+    # If billing_plan is "community", show upgrade notification
+    if isinstance(billing_plan, str) and billing_plan.strip().lower() == "community":
+        logger.debug("Returning upgrade notification for team (billing_plan is 'community')")
+        return NotificationSchema(
+            id=f"community_upgrade_{team.key}",
+            type="community_upgrade",
+            message="Upgrade to a paid plan to unlock more features and remove limitations.",
+            severity="info",
+            created_at=datetime.utcnow().isoformat(),
+            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+        )
+
+    return None
+
+
 def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     """Main notification provider for billing app - handles all billing-related notifications"""
     notifications: list[NotificationSchema] = []
 
-    # Skip all billing notifications if billing is disabled
-    if not is_billing_enabled():
-        return notifications
-
     if "current_team" not in request.session:
+        logger.debug("No current_team in session, skipping notifications")
         return notifications
 
     team_key = request.session["current_team"]["key"]
+    logger.debug("get_notifications called for team")
     try:
         team = Team.objects.get(key=team_key)
+        logger.debug("Checking notifications for team")
 
-        # Only show billing notifications to workspace owners
-        if not team.members.filter(member__user=request.user, member__role="owner").exists():
+        # Check if user is a member of this team
+        from sbomify.apps.teams.models import Member
+
+        user_member = Member.objects.filter(team=team, user=request.user).first()
+
+        if not user_member:
+            # User is not a member, don't show notifications
+            logger.debug("User is not a member of team")
             return notifications
 
-        # Run all billing checks
-        for check in [check_billing_plan_exists, check_billing_info_missing, check_payment_status]:
-            if notification := check(team):
-                notifications.append(notification)
+        # Check if user is workspace owner
+        is_owner = user_member.role == "owner"
+        logger.debug("User is %s owner of team", "not" if not is_owner else "")
+
+        # Only run billing-specific checks if billing is enabled
+        if is_billing_enabled():
+            # Run billing checks - upgrade notification shown to all users, others only to owners
+            if is_owner:
+                for check in [check_billing_plan_exists, check_billing_info_missing, check_payment_status]:
+                    if notification := check(team):
+                        notifications.append(notification)
+                        logger.debug("Added notification: %s", notification.type)
+
+        # Upgrade notification shown to all users (if on community plan or no plan)
+        # This check runs regardless of billing being enabled/disabled
+        upgrade_notification = check_community_upgrade(team)
+        logger.debug("check_community_upgrade result: %s", upgrade_notification is not None)
+        if upgrade_notification:
+            notifications.append(upgrade_notification)
+            logger.debug("Added upgrade notification for team")
+        else:
+            logger.debug("No upgrade notification for team")
 
     except Team.DoesNotExist:
-        logger.warning(f"Workspace {team_key} not found when checking billing notifications")
+        logger.debug("Workspace not found when checking billing notifications")
+    except Exception as e:
+        logger.exception("Error checking notifications for team: %s", str(e))
 
+    logger.debug("Returning %d notifications for team", len(notifications))
     return notifications

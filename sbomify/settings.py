@@ -171,6 +171,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "sbomify.apps.core.context_processors.version_context",
                 "sbomify.apps.core.context_processors.pending_invitations_context",
+                "sbomify.apps.core.context_processors.global_modals_context",
             ],
         },
     },
@@ -430,6 +431,7 @@ SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
 SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_STORE_TOKENS = True
+SOCIALACCOUNT_LOGIN_ON_GET = True  # Auto-redirect to Keycloak on GET request to login
 SOCIALACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomSocialAccountAdapter"
 
 # Modern AllAuth configuration

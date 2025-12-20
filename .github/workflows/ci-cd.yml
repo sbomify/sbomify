@@ -55,6 +55,12 @@ jobs:
       - name: Install JS dependencies
         run: bun install
 
+      - name: Install and build Keycloak theme
+        working-directory: keycloak
+        run: |
+          bun install
+          bun run build
+
       - name: Run code quality checks
         run: |
           echo "Running all code quality checks via pre-commit..."
@@ -244,6 +250,12 @@ jobs:
       - name: Install JS dependencies
         run: bun install
 
+      - name: Install and build Keycloak theme
+        working-directory: keycloak
+        run: |
+          bun install
+          bun run build
+
       - name: Run Frontend Tests
         run: |
           echo "## Frontend Test Results" >> $GITHUB_STEP_SUMMARY
@@ -268,7 +280,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
@@ -309,6 +321,39 @@ jobs:
           echo "docker_hub_image_id=$DOCKER_HUB_IMAGE_ID" >> $GITHUB_OUTPUT
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
+      - name: Extract build metadata for OCI labels
+        id: build_meta
+        run: |
+          # Git commit SHA (full and short)
+          GIT_COMMIT="${{ github.sha }}"
+          GIT_COMMIT_SHORT=$(echo "$GIT_COMMIT" | cut -c1-7)
+
+          # Build timestamp in RFC 3339 format
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Determine version and ref type
+          if [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
+            VERSION=$(echo "${{ github.ref }}" | sed -e 's,refs/tags/,,')
+            GIT_REF="${VERSION}"
+            BUILD_TYPE="release"
+          elif [[ "${{ github.ref }}" == "refs/heads/"* ]]; then
+            BRANCH=$(echo "${{ github.ref }}" | sed -e 's,refs/heads/,,')
+            VERSION="${BRANCH}-${GIT_COMMIT_SHORT}"
+            GIT_REF="${BRANCH}"
+            BUILD_TYPE="branch"
+          else
+            VERSION="${GIT_COMMIT_SHORT}"
+            GIT_REF="${{ github.ref }}"
+            BUILD_TYPE="other"
+          fi
+
+          echo "git_commit=$GIT_COMMIT" >> $GITHUB_OUTPUT
+          echo "git_commit_short=$GIT_COMMIT_SHORT" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "git_ref=$GIT_REF" >> $GITHUB_OUTPUT
+          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+
       - name: Build and push to registries
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         id: build
@@ -318,10 +363,29 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ steps.build_meta.outputs.build_date }}
+            GIT_COMMIT=${{ steps.build_meta.outputs.git_commit }}
+            GIT_COMMIT_SHORT=${{ steps.build_meta.outputs.git_commit_short }}
+            GIT_REF=${{ steps.build_meta.outputs.git_ref }}
+            VERSION=${{ steps.build_meta.outputs.version }}
+            BUILD_TYPE=${{ steps.build_meta.outputs.build_type }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.build_meta.outputs.build_date }}
+            org.opencontainers.image.revision=${{ steps.build_meta.outputs.git_commit }}
+            org.opencontainers.image.version=${{ steps.build_meta.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=sbomify
+            org.opencontainers.image.description=Your Security Artifact Hub - Generate, manage, and share SBOMs and compliance documents
+            org.opencontainers.image.licenses=Apache-2.0 WITH Commons-Clause-1.0
+            org.opencontainers.image.vendor=sbomify
+            org.opencontainers.image.ref.name=${{ steps.build_meta.outputs.git_ref }}
+            com.sbomify.build.type=${{ steps.build_meta.outputs.build_type }}
 
       - name: Attest GitHub Container Registry image
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ steps.meta.outputs.github_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -329,7 +393,7 @@ jobs:
 
       - name: Attest Docker Hub image
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-name: ${{ steps.meta.outputs.docker_hub_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -375,7 +439,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload backend SBOM
-        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
+        uses: sbomify/github-action@8275b4990dc8baf2991d7605ea24c7bb358ee44f # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
@@ -390,12 +454,12 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
       - name: Upload container SBOM
-        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
+        uses: sbomify/github-action@8275b4990dc8baf2991d7605ea24c7bb358ee44f # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: iVajxXMIqqyi
@@ -410,12 +474,12 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
       - name: Upload frontend SBOM
-        uses: sbomify/github-action@c34242c23d6df06a646c680abb1793fb334621bf # master
+        uses: sbomify/github-action@8275b4990dc8baf2991d7605ea24c7bb358ee44f # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
@@ -430,6 +494,6 @@ jobs:
 
       - name: Attest
         if: ${{ success() }}
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/frontend.cdx.json'

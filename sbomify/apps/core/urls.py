@@ -23,7 +23,7 @@ urlpatterns = [
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
-    path("login", views.keycloak_login, name="keycloak_login"),
+    path("login/", views.keycloak_login, name="keycloak_login"),
     # Product/Project/Component URLs - moved from sboms app
     # Backward compatibility redirects for URLs that now have trailing slashes
     path("products", RedirectView.as_view(pattern_name="core:products_dashboard", permanent=True)),
@@ -80,19 +80,9 @@ urlpatterns = [
     ),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path(
-        "component/<str:component_id>/detailed/",
-        views.ComponentDetailedPrivateView.as_view(),
-        name="component_detailed",
-    ),
-    path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",
-    ),
-    path(
-        "public/component/<str:component_id>/detailed/",
-        views.ComponentDetailedPublicView.as_view(),
-        name="component_detailed_public",
     ),
     path(
         "public/workspace/<str:workspace_key>/",
@@ -154,4 +144,15 @@ urlpatterns = [
     # Support contact pages
     path("support/contact/", views.support_contact, name="support_contact"),
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
+    path("search/", views.SearchView.as_view(), name="search"),
+    re_path(
+        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        views.ComponentItemView.as_view(),
+        name="component_item",
+    ),
+    re_path(
+        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        views.ComponentItemPublicView.as_view(),
+        name="component_item_public",
+    ),
 ]

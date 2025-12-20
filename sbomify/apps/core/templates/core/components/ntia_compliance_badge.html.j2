@@ -1,0 +1,137 @@
+{% load static %}
+{% load json_extras %}
+<link rel="stylesheet"
+      href="{% static 'css/components/ntia-compliance-badge.css' %}">
+<div class="ntia-compliance-badge-wrapper">
+    <div x-data="ntiaComplianceBadge('{{ status|escapejs }}', '{{ compliance_details|jsonify|escapejs }}', '{{ team_billing_plan|default:""|escapejs }}')">
+        {% if status == 'unknown' and team_billing_plan == 'community' %}
+            <a href="{% url 'billing:select_plan' team_key %}"
+               class="badge d-flex align-items-center gap-1 text-decoration-none"
+               :class="getBadgeClasses()"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               :title="getTooltipText()">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </a>
+        {% else %}
+            <div class="badge d-flex align-items-center gap-1"
+                 :class="getBadgeClasses()"
+                 data-bs-toggle="tooltip"
+                 data-bs-placement="top"
+                 :title="getTooltipText()"
+                 :style="isBadgeClickable() ? 'cursor: pointer' : ''"
+                 @click="isBadgeClickable() ? showDetailsModal = true : null">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </div>
+        {% endif %}
+        <template x-if="showDetailsModal">
+            <div class="modal fade show ntia-compliance-modal"
+                 tabindex="-1"
+                 @click.self="showDetailsModal = false"
+                 x-init="initModal($el)">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-shield-exclamation text-warning me-2"></i>
+                                NTIA Compliance Issues
+                            </h5>
+                            <button type="button" class="btn-close" @click="showDetailsModal = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-warning d-flex align-items-start">
+                                <i class="fas fa-exclamation-triangle me-3 mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>This SBOM does not meet NTIA minimum elements requirements.</strong>
+                                    <br>
+                                    Please review the issues below and consider using our GitHub Actions module to generate compliant SBOMs.
+                                </div>
+                            </div>
+                            {% if compliance_details.errors %}
+                                <div class="mb-4">
+                                    <div class="section-header mb-3">
+                                        <h6 class="section-title">
+                                            <i class="fas fa-exclamation-circle me-2"></i>
+                                            Issues Found ({{ compliance_details.errors|length }})
+                                        </h6>
+                                    </div>
+                                    <div class="ntia-issues-list">
+                                        {% for error in compliance_details.errors %}
+                                            <div class="ntia-issue-item mb-3">
+                                                <div class="ntia-issue-header"
+                                                     data-bs-toggle="collapse"
+                                                     data-bs-target="#ntia-error-{{ forloop.counter0 }}"
+                                                     aria-expanded="false"
+                                                     aria-controls="ntia-error-{{ forloop.counter0 }}"
+                                                     role="button">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                                        <span class="ntia-issue-field">{{ error.field }}:</span>
+                                                        <span class="ntia-issue-message ms-2">{{ error.message }}</span>
+                                                        <i class="fas fa-chevron-down ms-auto transition-transform collapse-icon"></i>
+                                                    </div>
+                                                </div>
+                                                <div id="ntia-error-{{ forloop.counter0 }}"
+                                                     class="collapse ntia-issue-body">
+                                                    <div class="ntia-suggestion">
+                                                        <i class="fas fa-lightbulb text-info me-2"></i>
+                                                        <strong>Suggestion:</strong> <span>{{ error.suggestion }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                            <div class="alert alert-info">
+                                <div class="section-header-info mb-3">
+                                    <h6 class="section-title-info">
+                                        <i class="fas fa-lightbulb me-2"></i>
+                                        How to Fix This
+                                    </h6>
+                                </div>
+                                <ul class="mb-0 fix-suggestions">
+                                    <li class="mb-2">
+                                        <strong>Use our <a href="https://github.com/sbomify/github-action"
+    target="_blank"
+    rel="noopener"
+    class="text-decoration-none">GitHub Actions module</a></strong> for automated SBOM generation
+                                    </li>
+                                    <li class="mb-2">
+                                        <strong>Ensure your SBOM includes all 7 NTIA minimum elements:</strong>
+                                        <ul class="mt-2 ntia-elements-list">
+                                            <li>Supplier name</li>
+                                            <li>Component name</li>
+                                            <li>Version of the component</li>
+                                            <li>Other unique identifiers (PURL, CPE, etc.)</li>
+                                            <li>Dependency relationships</li>
+                                            <li>Author of SBOM data</li>
+                                            <li>Timestamp</li>
+                                        </ul>
+                                    </li>
+                                    <li>
+                                        <strong>Validate your SBOM</strong> before uploading using SBOM validation tools
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    @click="showDetailsModal = false">Close</button>
+                            <a href="https://github.com/sbomify/github-action"
+                               target="_blank"
+                               rel="noopener"
+                               class="btn btn-primary">
+                                <i class="fab fa-github me-2"></i>
+                                View GitHub Action
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
