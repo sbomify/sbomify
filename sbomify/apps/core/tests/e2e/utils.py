@@ -40,7 +40,7 @@ def diff_images(
 def assert_screenshot(
     new_image_path: str | Path,
     original_image_path: str | Path,
-    threshold: float = 0.01,  # Ideally 0.0, but we have to run tests through Docker environment
+    threshold: float = 0.0,  # Ideally 0.0, but we have to run tests through Docker environment
 ) -> None:
     with tempfile.NamedTemporaryFile(
         dir=DIFF_DIR.as_posix(),
