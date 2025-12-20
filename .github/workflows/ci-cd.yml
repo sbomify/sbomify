@@ -162,7 +162,7 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          uv run playwright install --with-deps webkit
+          uv run playwright install --with-deps chromium
 
       - name: Setup test environment
         run: |

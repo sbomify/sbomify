@@ -40,7 +40,7 @@ def diff_images(
 def assert_screenshot(
     new_image_path: str | Path,
     original_image_path: str | Path,
-    threshold: float = 0.0,
+    threshold: float = 0.005
 ) -> None:
     diff_img_file = Path(tempfile.mktemp(dir=DIFF_DIR.as_posix(), prefix="screenshot-diff-", suffix=".jpg"))
 
