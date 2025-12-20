@@ -180,10 +180,10 @@ jobs:
           echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
           echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
 
-          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }} -m "not anyio" | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "Test count: $(uv run pytest --collect-only --quiet -m "not anyio" ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }} -m "anyio" | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "Test count: $(uv run pytest --collect-only --quiet -m "anyio" ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Run tests for this specific group and capture exit code properly
