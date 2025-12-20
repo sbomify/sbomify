@@ -42,7 +42,7 @@ Frontend logic is minimized. Complexity moves to the server.
 
 **Example path:**
 
-* `sbomify/static/css/components/[component-name].css`
+- `sbomify/static/css/components/[component-name].css`
 
 **Include in template:**
 
@@ -57,7 +57,7 @@ Frontend logic is minimized. Complexity moves to the server.
 
 **Example path:**
 
-* `sbomify/apps/{app}/templates/[component].html.j2`
+- `sbomify/apps/{app}/templates/[component].html.j2`
 
 ---
 
@@ -65,12 +65,12 @@ Frontend logic is minimized. Complexity moves to the server.
 
 **Rules:**
 
-* Class-based views only.
-* Use API/service functions for all data access.
+- Class-based views only.
+- Use API/service functions for all data access.
 
 **Example path:**
 
-* `sbomify/apps/{app}/views/[component].py`
+- `sbomify/apps/{app}/views/[component].py`
 
 ---
 
@@ -80,7 +80,7 @@ Frontend logic is minimized. Complexity moves to the server.
 
 **Example path:**
 
-* `sbomify/apps/{app}/js/[component].ts`
+- `sbomify/apps/{app}/js/[component].ts`
 
 ### 5.2 State Initialization
 
@@ -110,7 +110,7 @@ get isEmpty() {
 
 **Example:**
 
-* `sbomify/apps/{app}/js/main.ts`
+- `sbomify/apps/{app}/js/main.ts`
 
 **In Django templates**, connect via `vite_asset` in the `scripts` block:
 
@@ -126,6 +126,6 @@ get isEmpty() {
 
 **Rules:**
 
-* Validation handled by Django Forms.
-* Submission via HTMX.
-* Client-side behavior via Alpine.js only.
+- Validation handled by Django Forms.
+- Submission via HTMX.
+- Client-side behavior via Alpine.js only.
