@@ -36,7 +36,7 @@ def browser_type_launch_args() -> dict[str, Any]:
 
 @pytest.fixture(scope="session")
 def browser(playwright: Playwright, browser_type_launch_args: dict[str, Any]) -> Generator[Browser, Any, None]:
-    browser_instance = playwright.chromium.launch(**browser_type_launch_args)
+    browser_instance = playwright.webkit.launch(**browser_type_launch_args)
     yield browser_instance
     browser_instance.close()
 
