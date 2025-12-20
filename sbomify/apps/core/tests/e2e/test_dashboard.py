@@ -1,27 +1,13 @@
-from typing import Any, Generator
-
 import pytest
 from playwright.sync_api import Page
 
-from sbomify.apps.core.models import Component, Product, Project
-
-
-@pytest.fixture
-def dashboard_test_data(
-    team_with_business_plan,
-) -> Generator[dict[str, Any], Any, None]:
-    team = team_with_business_plan
-
-    products = [Product.objects.create(name=f"Test Product {i}", team=team) for i in range(3)]
-    projects = [Project.objects.create(name=f"Test Project {i}", team=team) for i in range(5)]
-    components = [Component.objects.create(name=f"Test Component {i}", team=team) for i in range(7)]
-
-    yield {
-        "products": products,
-        "projects": projects,
-        "components": components,
-        "team": team,
-    }
+from sbomify.apps.core.tests.e2e.fixtures import (  # noqa: F401
+    dashboard_components,
+    dashboard_products,
+    dashboard_projects,
+    dashboard_sboms,
+    dashboard_scan_results,
+)
 
 
 @pytest.mark.django_db
@@ -31,7 +17,11 @@ class TestDashboardSnapshot:
         self,
         authenticated_page: Page,
         live_server,
-        dashboard_test_data: dict,
+        dashboard_products,  # noqa: F811
+        dashboard_projects,  # noqa: F811
+        dashboard_components,  # noqa: F811
+        dashboard_sboms,  # noqa: F811
+        dashboard_scan_results,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:
