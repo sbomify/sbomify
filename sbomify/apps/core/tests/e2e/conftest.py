@@ -103,7 +103,7 @@ class SnapshotMixin:
         self,
         new_image_path: str | Any,
         original_image_path: str | Any,
-        threshold: float = 0.0,
+        threshold: float = 0.005,  # (0.5%) Ideally 0.0, but we have to run tests through Docker environment
     ) -> None:
         _assert_screenshot(new_image_path, original_image_path, threshold)
 
