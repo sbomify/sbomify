@@ -209,3 +209,6 @@ keycloak-data/
 ~/keycloak-data/
 ~/keycloak-postgres-data/
 keycloak-postgres-data/
+
+# E2E test diff images
+**/tests/e2e/__diffs__/*.jpg
