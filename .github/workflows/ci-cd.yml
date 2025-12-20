@@ -180,15 +180,18 @@ jobs:
           echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
           echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
 
-          echo "Test count: $(uv run pytest --collect-only --quiet -m "not anyio" ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "Test count: $(uv run pytest --collect-only --quiet -m "anyio" ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          # Sync tests
+          uv run pytest --tb=short -v -m "not anyio" ${{ matrix.test-group.path }} | tee test_results_sync.txt
+          PYTEST_EXIT_CODE_SYNC=${PIPESTATUS[0]}
 
-          # Run tests for this specific group and capture exit code properly
-          uv run pytest --tb=short -v ${{ matrix.test-group.path }} | tee test_results.txt
-          PYTEST_EXIT_CODE=${PIPESTATUS[0]}
+          # Async tests
+          uv run pytest --tb=short -v -m "anyio" ${{ matrix.test-group.path }} | tee test_results_async.txt
+          PYTEST_EXIT_CODE_ASYNC=${PIPESTATUS[0]}
+
+          PYTEST_EXIT_CODE=$((PYTEST_EXIT_CODE_SYNC || PYTEST_EXIT_CODE_ASYNC))
 
           # Add summary to GitHub
           echo "### Test Summary:" >> $GITHUB_STEP_SUMMARY
