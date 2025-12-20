@@ -23,11 +23,10 @@ The views check request.is_custom_domain to determine appropriate behavior.
 from django.conf import settings
 from django.urls import include, path
 
+from sbomify.apis import api
 from sbomify.apps.billing.views import public_enterprise_contact
 from sbomify.apps.core.admin import admin_site
 from sbomify.apps.teams.urls import domain_check
-
-from .apis import api
 
 urlpatterns = [
     path("admin/", admin_site.urls),

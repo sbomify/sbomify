@@ -74,7 +74,7 @@ APP_BASE_URL = "http://localhost:8001"
 
 # Static files configuration
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [BASE_DIR / "sbomify" / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Add WhiteNoise compression for test similarity
