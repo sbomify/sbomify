@@ -1,6 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.teams.models import Member
@@ -28,4 +28,13 @@ class ValidateWorkspaceMixin:
 
 class DashboardView(ValidateWorkspaceMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, "core/dashboard.html.j2", {})
+        current_team = request.session.get("current_team", {})
+
+        if not current_team.get("has_completed_wizard", True):
+            return redirect("teams:onboarding_wizard")
+
+        context = {
+            "current_team": current_team,
+        }
+
+        return render(request, "core/dashboard.html.j2", context)

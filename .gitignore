@@ -209,7 +209,6 @@ keycloak-data/
 ~/keycloak-data/
 ~/keycloak-postgres-data/
 keycloak-postgres-data/
-
 .cursor
 
 # E2E test diff images
