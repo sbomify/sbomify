@@ -175,6 +175,7 @@ jobs:
           uv run python manage.py collectstatic --noinput
 
       - name: Run ${{ matrix.test-group.name }}
+        id: run_tests
         run: |
           echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
           echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
@@ -205,6 +206,17 @@ jobs:
             echo "Tests failed in ${{ matrix.test-group.name }}"
             exit 1
           fi
+
+      - name: Upload e2e test diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@50769540e739f93b2b5d4828c2e789e03e1c13a9 # v4.4.3
+        with:
+          name: e2e-test-diffs-${{ matrix.test-group.name }}
+          path: |
+            sbomify/apps/*/tests/e2e/__diffs__/**/*.jpg
+            sbomify/apps/*/tests/e2e/__diffs__/**/*.png
+          retention-days: 1
+          if-no-files-found: ignore
 
   frontend-tests:
     name: Frontend Tests
