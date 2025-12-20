@@ -178,7 +178,11 @@ jobs:
         run: |
           echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY
           echo "Running tests in: ${{ matrix.test-group.path }}" >> $GITHUB_STEP_SUMMARY
-          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }} | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+
+          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }} --ignore=${{ matrix.test-group.path }}e2e | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "Test count: $(uv run pytest --collect-only --quiet ${{ matrix.test-group.path }}e2e | grep '::test_' | wc -l)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Run tests for this specific group and capture exit code properly

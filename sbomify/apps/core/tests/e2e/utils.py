@@ -84,7 +84,7 @@ def take_screenshot(
     if path:
         output_path = path
     else:
-        output_path = DIFF_DIR / f"{name}-current.jpg"
+        output_path = DIFF_DIR / f"{name}.jpg"
 
     page.screenshot(path=output_path.as_posix(), full_page=True, type="jpeg", quality=85)
 
