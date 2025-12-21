@@ -1,6 +1,6 @@
 ---
 services:
-  sbomify-test-db:
+  test-db:
     image: ${POSTGRES_IMAGE:-postgres:17-alpine}
     restart: "no"
     environment:
