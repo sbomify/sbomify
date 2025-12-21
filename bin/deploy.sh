@@ -1,18 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-DOCKER_IMAGE="${DOCKER_IMAGE:-sbomifyhub/sbomify}"
-DOCKER_TAG="${DOCKER_TAG:-latest}"
+SBOMIFY_IMAGE="${SBOMIFY_IMAGE:-sbomifyhub/sbomify}"
+SBOMIFY_TAG="${SBOMIFY_TAG:-latest}"
 
 echo "=== Deploying sbomify ==="
 echo ""
 
 # Pull image
-echo "Pulling ${DOCKER_IMAGE}:${DOCKER_TAG}..."
-docker pull -q "${DOCKER_IMAGE}:${DOCKER_TAG}" > /dev/null
+echo "Pulling ${SBOMIFY_IMAGE}:${SBOMIFY_TAG}..."
+docker pull -q "${SBOMIFY_IMAGE}:${SBOMIFY_TAG}" > /dev/null
 
 # Get digest
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${DOCKER_IMAGE}:${DOCKER_TAG}" | cut -d'@' -f2)
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${SBOMIFY_IMAGE}:${SBOMIFY_TAG}" | cut -d'@' -f2)
 
 # Verify with cosign if available
 if command -v cosign &> /dev/null; then
@@ -32,7 +32,7 @@ if command -v cosign &> /dev/null; then
         --type https://slsa.dev/provenance/v1 \
         --certificate-identity-regexp "^https://github.com/sbomify/sbomify/.*" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-        "${DOCKER_IMAGE}@${DIGEST}" > /dev/null 2>&1; then
+        "${SBOMIFY_IMAGE}@${DIGEST}" > /dev/null 2>&1; then
         echo "✓ Signature verified"
     else
         echo "✗ Signature verification failed"
