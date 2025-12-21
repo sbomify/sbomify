@@ -29,6 +29,8 @@ def diff_images(
     if not original_path.exists():
         raise FileNotFoundError(f"Original image not found: {original_path}")
 
+    diff_img_file = Path(diff_img_file)
+
     return diffimg_diff(
         new_path.as_posix(),
         original_path.as_posix(),
@@ -38,8 +40,8 @@ def diff_images(
 
 
 def assert_screenshot(
-    new_image_path: str | Path,
-    original_image_path: str | Path,
+    baseline_image_path: str | Path,
+    current_image_path: str | Path,
     threshold: float = 0.0,
     delete_diff_images: bool = True,
 ) -> None:
@@ -49,12 +51,12 @@ def assert_screenshot(
         suffix=".jpg",
         delete=False,
     ) as tmp_file:
-        diff_img_file = Path(tmp_file.name)
+        diff_img_file = tmp_file.name
 
     image_diff = round(
         diff_images(
-            new_image_path,
-            original_image_path,
+            baseline_image_path,
+            current_image_path,
             diff_img_file=diff_img_file,
         ),
         3,
@@ -67,8 +69,8 @@ def assert_screenshot(
     )
 
     if delete_diff_images:
-        diff_img_file.unlink()
-        new_image_path.unlink()
+        Path(diff_img_file).unlink()
+        Path(current_image_path).unlink()
 
 
 def get_or_create_baseline_screenshot(page: Page, name: str, width: int) -> Path:
