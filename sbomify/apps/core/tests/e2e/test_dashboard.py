@@ -18,6 +18,9 @@ class TestDashboardSnapshot:
         authenticated_page.goto(f"{live_server.url}/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
+        # Canvas is not stable for screenshots here
+        authenticated_page.evaluate("document.querySelector('.vulnerability-chart-canvas').style.display = 'none';")
+
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
 

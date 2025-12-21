@@ -1,12 +1,13 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Generator
 
 import pytest
-from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, ProductProject, Project, ProjectComponent, Release
 from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
 from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
+
+START_DATE = datetime(2025, 12, 1, tzinfo=timezone.utc)
 
 
 @pytest.fixture
@@ -178,7 +179,7 @@ def dashboard_scan_results(
     dashboard_sboms, vulnerability_scan_factory
 ) -> Generator[list[VulnerabilityScanResult], None, None]:
     scan_results = []
-    start_date = timezone.now() - timedelta(days=29)
+    start_date = START_DATE - timedelta(days=29)
     providers = ["osv", "dependency_track"]
 
     for day_offset in range(30):

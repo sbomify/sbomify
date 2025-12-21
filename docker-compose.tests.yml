@@ -17,5 +17,16 @@ services:
       timeout: 2s
       retries: 10
 
+  chromium:
+    image: zenika/alpine-chrome:124
+    command: ["chromium-browser", "--headless", "--disable-gpu", "--no-sandbox", "--remote-debugging-address=0.0.0.0", "--remote-debugging-port=9222"]
+    network_mode: host
+    shm_size: '2g'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9222/json/version || exit 1"]
+      interval: 2s
+      retries: 10
+      timeout: 2s
+
 volumes:
   sbomify_test_postgres_data:

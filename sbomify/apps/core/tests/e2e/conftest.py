@@ -3,6 +3,7 @@ from typing import Any, Generator
 from urllib.parse import urlparse
 
 import pytest
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
@@ -28,16 +29,8 @@ def playwright() -> Generator[Playwright, Any, None]:
 
 
 @pytest.fixture(scope="session")
-def browser_type_launch_args() -> dict[str, Any]:
-    return {
-        "headless": True,
-        "slow_mo": 0,
-    }
-
-
-@pytest.fixture(scope="session")
 def browser(playwright: Playwright, browser_type_launch_args: dict[str, Any]) -> Generator[Browser, Any, None]:
-    browser_instance = playwright.chromium.launch(**browser_type_launch_args)
+    browser_instance = playwright.chromium.connect_over_cdp(settings.PLAYWRIGHT_CDP_ENDPOINT)
     yield browser_instance
     browser_instance.close()
 
@@ -104,7 +97,7 @@ class SnapshotMixin:
         self,
         baseline_image_path: str | Path,
         current_image_path: str | Path,
-        threshold: float = 0.01,  # (1%) Ideally 0.0, but we have to run tests through Docker environment
+        threshold: float = 0.0,
     ) -> None:
         _assert_screenshot(baseline_image_path, current_image_path, threshold)
 

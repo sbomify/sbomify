@@ -135,3 +135,4 @@ CACHES = {
 }
 
 TESTING = True
+PLAYWRIGHT_CDP_ENDPOINT = os.environ.get("PLAYWRIGHT_CDP_ENDPOINT", "http://localhost:9222")
