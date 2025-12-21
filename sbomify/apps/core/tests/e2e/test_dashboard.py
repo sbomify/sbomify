@@ -17,10 +17,6 @@ class TestDashboardSnapshot:
         self,
         authenticated_page: Page,
         live_server,
-        dashboard_products,  # noqa: F811
-        dashboard_projects,  # noqa: F811
-        dashboard_components,  # noqa: F811
-        dashboard_sboms,  # noqa: F811
         dashboard_scan_results,  # noqa: F811
         snapshot,
         width: int,
