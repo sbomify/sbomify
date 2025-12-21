@@ -1,22 +1,59 @@
 #!/bin/bash
+set -e
 
-# Check if ImageMagick is installed
-if ! command -v convert &> /dev/null; then
-    echo "ImageMagick is required. Please install it first."
+# Generate all favicon formats from the source SVG using ImageMagick
+# Requires: ImageMagick (convert command)
+
+SOURCE="sbomify/static/img/logo-circle.svg"
+OUTPUT="sbomify/static/img/favicons"
+
+# Check if ImageMagick is installed (v7 uses 'magick', v6 uses 'convert')
+if command -v magick &> /dev/null; then
+    CONVERT="magick"
+elif command -v convert &> /dev/null; then
+    CONVERT="convert"
+else
+    echo "Error: ImageMagick is required. Please install it first."
+    echo "  macOS: brew install imagemagick"
+    echo "  Ubuntu/Debian: apt-get install imagemagick"
+    exit 1
+fi
+
+# Check if source file exists
+if [ ! -f "$SOURCE" ]; then
+    echo "Error: Source file not found: $SOURCE"
     exit 1
 fi
 
 # Create output directory if it doesn't exist
-mkdir -p static/img/favicons
+mkdir -p "$OUTPUT"
 
-# Generate different sizes
-convert static/img/logo-circle.png -resize 16x16 static/img/favicons/favicon-16x16.png
-convert static/img/logo-circle.png -resize 32x32 static/img/favicons/favicon-32x32.png
-convert static/img/logo-circle.png -resize 180x180 static/img/favicons/apple-touch-icon.png
-convert static/img/logo-circle.png -resize 192x192 static/img/favicons/android-chrome-192x192.png
-convert static/img/logo-circle.png -resize 512x512 static/img/favicons/android-chrome-512x512.png
+echo "Generating favicons from $SOURCE..."
 
-# Copy SVG version
-cp static/img/logo-circle.svg static/img/favicons/favicon.svg
+# PNG sizes for various purposes
+echo "  - favicon-16x16.png (modern browsers)"
+$CONVERT -background none "$SOURCE" -resize 16x16 "$OUTPUT/favicon-16x16.png"
 
-echo "Favicons generated successfully!"
+echo "  - favicon-32x32.png (modern browsers)"
+$CONVERT -background none "$SOURCE" -resize 32x32 "$OUTPUT/favicon-32x32.png"
+
+echo "  - apple-touch-icon.png (iOS home screen, 180x180)"
+$CONVERT -background none "$SOURCE" -resize 180x180 "$OUTPUT/apple-touch-icon.png"
+
+echo "  - android-chrome-192x192.png (Android/PWA)"
+$CONVERT -background none "$SOURCE" -resize 192x192 "$OUTPUT/android-chrome-192x192.png"
+
+echo "  - android-chrome-512x512.png (Android/PWA splash)"
+$CONVERT -background none "$SOURCE" -resize 512x512 "$OUTPUT/android-chrome-512x512.png"
+
+# Multi-size ICO file for classic browser support
+echo "  - favicon.ico (classic browsers, multi-size: 16,32,48)"
+$CONVERT -background none "$SOURCE" -define icon:auto-resize=16,32,48 "$OUTPUT/favicon.ico"
+
+# Copy SVG for modern browsers that support it
+echo "  - favicon.svg (scalable)"
+cp "$SOURCE" "$OUTPUT/favicon.svg"
+
+echo ""
+echo "Favicons generated successfully in $OUTPUT/"
+ls -la "$OUTPUT/"
