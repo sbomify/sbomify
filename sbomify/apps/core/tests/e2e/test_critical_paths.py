@@ -163,14 +163,15 @@ class TestCriticalPaths:
         content = response.content.decode()
         # The redirect goes to team_tokens which shows the token in a JSON script tag
         # The token description should be in the JSON data: {"id":"...","description":"Test Token",...}
-        assert "Test Token" in content, \
-            f"'Test Token' not found in content. Looking for token in team_tokens template. " \
+        assert "Test Token" in content, (
+            f"'Test Token' not found in content. Looking for token in team_tokens template. "
             f"Content preview: {content[:1000] if len(content) > 1000 else content}"
+        )
 
         # Verify token appears in list - redirects to team_tokens
         response = client.get(reverse("core:settings"), follow=True)
         assert response.status_code == 200
-        
+
         # Tokens are lazy loaded via HTMX, so we need to fetch the tokens endpoint
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 200
@@ -208,7 +209,7 @@ class TestCriticalPaths:
         if "current_team" in session:
             del session["current_team"]
         session.save()
-        
+
         response = client.get(reverse("core:settings"))
         # Settings page shows pending invitations or redirects, so check for either
         content = response.content.decode()
@@ -216,7 +217,7 @@ class TestCriticalPaths:
         if response.status_code == 200:
             # If it renders, it should have settings-related content
             assert "Personal Access Tokens" in content or "sbomify Settings" in content
-        
+
         # Now set current team for other tests
         session = client.session
         session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}

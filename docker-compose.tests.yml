@@ -1,0 +1,21 @@
+---
+services:
+  sbomify-test-db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: "no"
+    environment:
+      POSTGRES_USER: ${TEST_DATABASE_USER:-sbomify_test}
+      POSTGRES_PASSWORD: ${TEST_DATABASE_PASSWORD:-sbomify_test}
+      POSTGRES_DB: ${TEST_DATABASE_NAME:-sbomify_test}
+    ports:
+      - "${TEST_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - sbomify_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DATABASE_USER:-sbomify_test}"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  sbomify_test_postgres_data:
