@@ -231,6 +231,13 @@ jobs:
             echo "Tests failed in ${{ matrix.test-group.name }}"
             exit 1
           fi
+      
+      - name: Upload E2E Test Diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-diffs
+          path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
 
   frontend-tests:
     name: Frontend Tests
