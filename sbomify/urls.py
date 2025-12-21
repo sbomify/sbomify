@@ -30,6 +30,8 @@ from sbomify.apps.core.admin import admin_site
 from sbomify.apps.teams.urls import domain_check
 
 urlpatterns = [
+    # Favicon redirect for browsers requesting /favicon.ico at root
+    path("favicon.ico", RedirectView.as_view(url="/static/img/favicons/favicon.ico", permanent=True)),
     path("admin/", admin_site.urls),
     # Redirect old accounts/login to our Keycloak login
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
