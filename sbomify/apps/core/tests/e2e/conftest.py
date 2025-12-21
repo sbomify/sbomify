@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Generator
 from urllib.parse import urlparse
 
@@ -101,16 +102,16 @@ class SnapshotMixin:
 
     def assert_screenshot(
         self,
-        new_image_path: str | Any,
-        original_image_path: str | Any,
+        new_image_path: str | Path,
+        original_image_path: str | Path,
         threshold: float = 0.01,  # (1%) Ideally 0.0, but we have to run tests through Docker environment
     ) -> None:
         _assert_screenshot(new_image_path, original_image_path, threshold)
 
-    def get_or_create_baseline_screenshot(self, page: Page, width: int) -> Any:
+    def get_or_create_baseline_screenshot(self, page: Page, width: int) -> Path:
         return _get_or_create_baseline_screenshot(page, self.test_name, width)
 
-    def take_screenshot(self, page: Page, width: int) -> Any:
+    def take_screenshot(self, page: Page, width: int) -> Path:
         return _take_screenshot(page, self.test_name, width)
 
 
