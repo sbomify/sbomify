@@ -87,20 +87,22 @@ def take_screenshot(
     name: str,
     width: int,
     path: Path | None = None,
-    wait_timeout: float = 0.25,
+    wait_timeout: float = 0.5,
 ) -> Path:
     page.set_viewport_size({"width": width, "height": BROWSER_HEIGHT})
-
     # Wait for the page height to be stable
     page.wait_for_timeout(int(wait_timeout * 1000))
+
     page.set_viewport_size({"width": width, "height": page.evaluate("document.body.parentNode.scrollHeight")})
+    # Wait for the page height to be stable
+    page.wait_for_timeout(int(wait_timeout * 1000))
 
     if path:
         output_path = path
     else:
         output_path = DIFF_DIR / f"{name}.jpg"
 
-    page.screenshot(path=output_path.as_posix(), type="jpeg")
+    page.screenshot(path=output_path.as_posix(), type="jpeg", full_page=True)
 
     page.set_viewport_size({"width": BROWSER_WIDTH, "height": BROWSER_HEIGHT})
 
