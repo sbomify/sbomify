@@ -41,6 +41,7 @@ def assert_screenshot(
     new_image_path: str | Path,
     original_image_path: str | Path,
     threshold: float = 0.0,
+    delete_diff_images: bool = True,
 ) -> None:
     with tempfile.NamedTemporaryFile(
         dir=DIFF_DIR.as_posix(),
@@ -65,7 +66,9 @@ def assert_screenshot(
         f"See the image diff by: {diff_img_file}"
     )
 
-    diff_img_file.unlink()
+    if delete_diff_images:
+        diff_img_file.unlink()
+        new_image_path.unlink()
 
 
 def get_or_create_baseline_screenshot(page: Page, name: str, width: int) -> Path:
