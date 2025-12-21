@@ -399,6 +399,79 @@ uv run coverage report
 
 Test coverage must be at least 80% to pass CI checks.
 
+### E2E Snapshot (Screenshot) Tests
+
+The project includes end-to-end snapshot tests that capture screenshots of the UI and compare them against baseline images. This helps ensure visual consistency across different screen sizes and after code changes.
+
+#### Writing Snapshot Tests
+
+Here's an abstract example of how to write a snapshot test:
+
+```python
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestYourPageSnapshot:
+    def test_your_page_snapshot(
+        self,
+        authenticated_page,
+        live_server,
+        your_test_fixtures,  # noqa: F811
+        snapshot,
+        width: int,
+    ) -> None:
+        # Navigate to the page you want to test
+        authenticated_page.goto(f"{live_server.url}/your-page")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        # Get or create baseline screenshot (stored in __snapshots__)
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        
+        # Take current screenshot
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        # Compare screenshots
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+```
+
+**Key components:**
+
+- Use `@pytest.mark.django_db` to enable database access
+- Use `@pytest.mark.parametrize("width", [...])` to test multiple screen sizes
+- Inject the `authenticated_page` fixture for browser automation
+- Inject the `snapshot` fixture for screenshot management
+- Use `get_or_create_baseline_screenshot()` to get the baseline (creates it if missing)
+- Use `take_screenshot()` to capture the current state
+- Use `assert_screenshot()` to compare them
+
+#### Working with Snapshot Tests
+
+**New Tests**
+When you write a new snapshot test, it will automatically create baseline screenshots in the `__snapshots__` directory (located at `sbomify/apps/<APP_NAME>/tests/e2e/__snapshots__/`). Simply run the test and verify that the generated screenshots look correct.
+
+**Existing Tests - Passing**
+If the test already exists and passes, everything is working as expected. No action needed.
+
+**Existing Tests - Failing**
+If a test fails, check the `__diffs__` directory (located at `sbomify/apps/<APP_NAME>/tests/e2e/__diffs__/`) to see what changed. The diff images show the differences between the baseline and current screenshots.
+
+**Updating Outdated Snapshots**
+If the diff screenshot in `__diffs__` shows that the new visual state is correct (i.e., the baseline snapshot is outdated), you need to update the baseline:
+
+1. Delete the outdated snapshot file from `__snapshots__`
+2. Re-run the test - it will automatically recreate the baseline screenshot with the current state
+
+**Example:**
+
+```bash
+# Delete outdated snapshot
+rm sbomify/apps/<APP_NAME>/tests/e2e/__snapshots__/test_your_page_snapshot[1920].jpg
+
+# Re-run the test to create new baseline
+uv run pytest sbomify/apps/<APP_NAME>/tests/e2e/test_your_page.py::TestYourPageSnapshot::test_your_page_snapshot
+```
+
+For a real-world example, see `sbomify/apps/core/tests/e2e/test_dashboard.py`.
+
 ### Test Data Management
 
 The application includes management commands to help set up and manage test data in your development environment:
