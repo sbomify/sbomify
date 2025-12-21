@@ -434,6 +434,7 @@ class TestYourPageSnapshot:
 ```
 
 **Key components:**
+
 - Use `@pytest.mark.django_db` to enable database access
 - Use `@pytest.mark.parametrize("width", [...])` to test multiple screen sizes
 - Inject the `authenticated_page` fixture for browser automation
@@ -460,6 +461,7 @@ If the diff screenshot in `__diffs__` shows that the new visual state is correct
 2. Re-run the test - it will automatically recreate the baseline screenshot with the current state
 
 **Example:**
+
 ```bash
 # Delete outdated snapshot
 rm sbomify/apps/<APP_NAME>/tests/e2e/__snapshots__/test_your_page_snapshot[1920].jpg
