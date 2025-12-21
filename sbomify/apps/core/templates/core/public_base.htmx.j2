@@ -1,5 +1,6 @@
 {% load static %}
 {% load django_vite %}
+{% load django_htmx %}
 {% load cache %}
 {% load schema_tags %}
 {% load breadcrumb_tags %}
@@ -543,5 +544,6 @@
         </div>
         {% block scripts %}{% endblock %}
         {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+        {% htmx_script %}
     </body>
 </html>
