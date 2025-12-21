@@ -68,7 +68,7 @@ def assert_screenshot(
     diff_img_file.unlink()
 
 
-def get_or_create_baseline_screenshot(page: Page, name: str, width) -> Path:
+def get_or_create_baseline_screenshot(page: Page, name: str, width: int) -> Path:
     baseline_path = BASELINE_DIR / f"{name}.jpg"
 
     if baseline_path.exists():
