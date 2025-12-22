@@ -41,5 +41,5 @@
             </div>
         </div>
     </div>
-    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete SBOM' message='Are you sure you want to delete the SBOM' item_name=sbom_name warning_message='This action cannot be undone and will permanently remove the SBOM from the system.' confirm_text='Delete SBOM' hx_url='/api/v1/sbom/'|add:sbom_id hx_method='delete' hx_target='none' hx_swap='none' on_success="window.location.href = '/component/' + '{{ component_id }}'" %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete SBOM' message='Are you sure you want to delete the SBOM' item_name=sbom_name warning_message='This action cannot be undone and will permanently remove the SBOM from the system.' confirm_text='Delete SBOM' hx_url='/api/v1/sbom/'|add:sbom_id hx_method='delete' success_message='SBOM deleted successfully!' on_success="window.location.href = '/component/"|add:component_id|add:"'" %}
 </div>
