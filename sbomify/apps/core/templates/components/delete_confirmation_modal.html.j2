@@ -39,19 +39,91 @@
                 <button type="button"
                         class="delete-modal-button delete-modal-button--secondary"
                         @click="{{ modal_id }} = false">{{ cancel_text|default:'Cancel' }}</button>
-                <button type="button" class="delete-modal-button delete-modal-button--danger" {% if hx_url %} @click=" fetch('{{ hx_url }}', { method: '{{ hx_method|default:'DELETE'|upper }}', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '' }, credentials: 'same-origin' }).then(response => { {{ modal_id }} = false; if (response.ok) { if (window.showSuccess) { window.showSuccess('{{ success_message|default:'Deleted successfully!' }}'); } else { alert('{{ success_message|default:'Deleted successfully!' }}'); }
-                    {% if on_success %}{{ on_success }}{% endif %}
-                    } else { console.error('Delete failed:', response.status); if (window.showError) { window.showError('Failed to delete. Please try again.'); } else { alert('Failed to delete. Please try again.'); } } }).catch(error => { {{ modal_id }} = false; console.error('Delete error:', error); if (window.showError) { window.showError('An error occurred. Please try again.'); } else { alert('An error occurred. Please try again.'); } }); "
-                {% elif confirm_callback %}
-                    @click="{{ confirm_callback }}"
-                {% endif %}
-                >
-                <i class="fas fa-trash me-2"></i>
-                {{ confirm_text|default:'Delete' }}
+                <script>
+                if (!window.getDeleteModalData) {
+                    window.getDeleteModalData = function(config) {
+                        return {
+                            isLoading: false,
+                            async handleDelete() {
+                                if (this.isLoading) return;
+                                this.isLoading = true;
+
+                                const csrfToken = config.csrfToken || (document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '');
+
+                                try {
+                                    const response = await fetch(config.hxUrl, {
+                                        method: config.hxMethod || 'DELETE',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRFToken': csrfToken
+                                        },
+                                        credentials: 'same-origin'
+                                    });
+
+                                    this[config.modalId] = false;
+
+                                    if (response.ok) {
+                                        if (window.showSuccess) {
+                                            window.showSuccess(config.successMessage);
+                                        } else {
+                                            alert(config.successMessage);
+                                        }
+                                        if (config.onSuccess) {
+                                            try {
+                                                new Function(config.onSuccess)();
+                                            } catch (e) {
+                                                console.error('Error executing success callback:', e);
+                                            }
+                                        }
+                                    } else {
+                                        console.error('Delete failed:', response.status);
+                                        if (window.showError) {
+                                            window.showError('Failed to delete. Please try again.');
+                                        } else {
+                                            alert('Failed to delete. Please try again.');
+                                        }
+                                    }
+                                } catch (error) {
+                                    this[config.modalId] = false;
+                                    console.error('Delete error:', error);
+                                    if (window.showError) {
+                                        window.showError('An error occurred. Please try again.');
+                                    } else {
+                                        alert('An error occurred. Please try again.');
+                                    }
+                                } finally {
+                                    this.isLoading = false;
+                                }
+                            }
+                        };
+                    };
+                }
+                </script>
+                {# djlint:off #}
+            <button type="button" 
+                    class="delete-modal-button delete-modal-button--danger"
+                    {% if hx_url %}
+                    x-data="window.getDeleteModalData({
+                        modalId: '{{ modal_id }}',
+                        hxUrl: '{{ hx_url }}',
+                        hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
+                        successMessage: '{{ success_message|default:'Deleted successfully!' }}',
+                        csrfToken: '{{ csrf_token }}',
+                        onSuccess: '{% if on_success %}{{ on_success|escapejs }}{% endif %}'
+                    })"
+                    @click="handleDelete()"
+                    :disabled="isLoading"
+            {% elif confirm_callback %}
+                @click="{{ confirm_callback }}"
+            {% endif %}
+            >
+            <i class="fas fa-trash me-2"></i>
+            {{ confirm_text|default:'Delete' }}
             </button>
+                {# djlint:on #}
+            </div>
         </div>
     </div>
-</div>
 </template>
 <style>
 /* Modern Delete Modal Styles - mirroring Vue component styles */
