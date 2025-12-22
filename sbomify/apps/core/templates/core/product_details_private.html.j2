@@ -107,10 +107,7 @@
     {% if product.has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-product-danger-zone"
-                     data-product-id="{{ product.id }}"
-                     data-product-name="{{ product.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include 'components/product_danger_zone.html.j2' with product_id=product.id product_name=product.name %}
             </div>
         </div>
     {% endif %}

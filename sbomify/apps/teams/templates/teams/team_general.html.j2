@@ -88,11 +88,7 @@
                     </div>
                 </div>
             </div>
-            <div class="vc-team-danger-zone mt-4"
-                 data-team-key="{{ team.key }}"
-                 data-team-name="{{ team.name }}"
-                 data-is-default-team="{{ is_default_team|yesno:'true,false' }}"
-                 data-csrf-token="{{ csrf_token }}"></div>
+            {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
         </div>
     </div>
 </div>

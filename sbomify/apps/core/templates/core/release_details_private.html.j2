@@ -123,11 +123,7 @@
     {% if release.has_crud_permissions and not release.is_latest %}
         <div class="row mt-4">
             <div class="col-12">
-                <div class="vc-release-danger-zone"
-                     data-release-id="{{ release.id }}"
-                     data-product-id="{{ release.product.id }}"
-                     data-release-name="{{ release.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include 'components/release_danger_zone.html.j2' with release_id=release.id product_id=release.product.id release_name=release.name %}
             </div>
         </div>
     {% endif %}
