@@ -11,7 +11,7 @@ def anyio_backend():
 
 
 @pytest.mark.anyio
-async def test_asgi_lifespan_startup_shutdown() -> None:
+async def test_asgi_lifespan_startup_shutdown(anyio_backend) -> None:
     """Test that ASGI application handles lifespan startup and shutdown events."""
     sent_messages = []
 
