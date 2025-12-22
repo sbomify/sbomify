@@ -2,6 +2,9 @@
     <div x-show="{{ modal_id }}"
          class="delete-modal-overlay"
          tabindex="-1"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="delete-modal-title-{{ modal_id }}"
          @click="{{ modal_id }} = false"
          @keydown.escape.window="{{ modal_id }} = false"
          x-transition:enter="transition ease-out duration-150"
@@ -16,7 +19,7 @@
                 <div class="delete-modal-icon">
                     <i class="fas fa-exclamation-triangle"></i>
                 </div>
-                <h3 class="delete-modal-title">{{ title|default:'Confirm Delete' }}</h3>
+                <h3 id="delete-modal-title-{{ modal_id }}" class="delete-modal-title">{{ title|default:'Confirm Delete' }}</h3>
                 <button type="button"
                         class="delete-modal-close"
                         @click="{{ modal_id }} = false">

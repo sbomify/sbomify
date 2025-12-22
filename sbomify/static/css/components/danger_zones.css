@@ -1,6 +1,11 @@
 /* Danger Zone Shared Styles */
 /* Extracted from DangerZone.vue and sub-components */
 
+/* Utility classes */
+.cursor-pointer {
+    cursor: pointer;
+}
+
 /* Section Layout */
 .danger-section {
     padding: 1.5rem;
@@ -12,15 +17,15 @@
     transition: all 0.2s ease;
 }
 
-.danger-section:last-child {
+.dangerzone-card .danger-section:last-child {
     border-bottom: none;
-    border-radius: 0 0 0.75rem 0.75rem !important;
+    border-radius: 0 0 0.75rem 0.75rem;
     overflow: hidden;
     margin-bottom: -2px;
 }
 
-.danger-section:first-child:last-child {
-    border-radius: 0 0 0.75rem 0.75rem !important;
+.dangerzone-card .danger-section:first-child:last-child {
+    border-radius: 0 0 0.75rem 0.75rem;
     overflow: hidden;
     margin-bottom: -2px;
 }
@@ -39,9 +44,9 @@
     border-bottom-color: #ef4444;
 }
 
-.delete-section:last-child,
-.transfer-section:last-child {
-    border-radius: 0 0 0.75rem 0.75rem !important;
+.dangerzone-card .delete-section:last-child,
+.dangerzone-card .transfer-section:last-child {
+    border-radius: 0 0 0.75rem 0.75rem;
     overflow: hidden;
     margin-bottom: -2px;
 }
