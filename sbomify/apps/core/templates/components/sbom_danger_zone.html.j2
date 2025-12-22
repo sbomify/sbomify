@@ -1,9 +1,8 @@
 {% load static %}
-<div x-data="{ showDeleteModal: false }">
+<div x-data="{ showDeleteModal: false, isExpanded: false, toggle() { this.isExpanded = !this.isExpanded; } }">
     <!-- Standard Card Structure Inlined -->
     <div class="standard-card mt-3">
-        <div class="card dangerzone-card shadow-sm"
-             x-data="{ isExpanded: false, toggle() { this.isExpanded = !this.isExpanded; } }">
+        <div class="card dangerzone-card shadow-sm">
             <div class="card-header collapsible-header"
                  @click="toggle()"
                  style="cursor: pointer">
