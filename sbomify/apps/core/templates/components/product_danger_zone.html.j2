@@ -39,5 +39,5 @@
             </div>
         </div>
     </div>
-    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Product' message='Are you sure you want to delete the product' item_name=product_name warning_message='This action cannot be undone and will permanently remove the product from the system.' confirm_text='Delete Product' hx_url='/api/v1/products/'|add:product_id hx_method='delete' success_message='Product deleted successfully!' on_success="window.location.href = '/products/'" %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Product' message='Are you sure you want to delete the product' item_name=product_name warning_message='This action cannot be undone and will permanently remove the product from the system.' confirm_text='Delete Product' hx_url='/api/v1/products/'|add:product_id hx_method='delete' success_message='Product deleted successfully!' on_success="window.location.href = '/products/'"|escapejs %}
 </div>

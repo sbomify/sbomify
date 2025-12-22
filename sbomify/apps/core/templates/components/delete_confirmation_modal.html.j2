@@ -109,7 +109,7 @@
                         hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
                         successMessage: '{{ success_message|default:'Deleted successfully!' }}',
                         csrfToken: '{{ csrf_token }}',
-                        onSuccess: '{% if on_success %}{{ on_success|escapejs }}{% endif %}'
+                        onSuccess: '{% if on_success %}{{ on_success|safe }}{% endif %}'
                     })"
                     @click="handleDelete()"
                     :disabled="isLoading"
