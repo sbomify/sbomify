@@ -379,6 +379,12 @@ You can create a token under **Administration → Access Management** in your De
 
 ### Running test cases
 
+Before running tests, you need to up docker-compose.tests.yml:
+
+```bash
+docker compose -f docker-compose.tests.yml up -d
+```
+
 Run the tests using Django's test profile:
 
 ```bash
@@ -402,6 +408,19 @@ Test coverage must be at least 80% to pass CI checks.
 ### E2E Snapshot (Screenshot) Tests
 
 The project includes end-to-end snapshot tests that capture screenshots of the UI and compare them against baseline images. This helps ensure visual consistency across different screen sizes and after code changes.
+
+#### Prerequisites for E2E Tests
+
+Before running e2e snapshot tests, you need to:
+
+**Build JavaScript assets and collect static files:**
+
+```bash
+bun run build
+uv run python manage.py collectstatic --noinput
+```
+
+This ensures that all static assets (JavaScript, CSS) are up-to-date before taking screenshots.
 
 #### Writing Snapshot Tests
 

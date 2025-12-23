@@ -41,9 +41,13 @@ if "allauth" not in INSTALLED_APPS:
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",  # Use in-memory SQLite for faster tests
-        "ATOMIC_REQUESTS": True,
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("TEST_DATABASE_NAME", "sbomify_test"),
+        "USER": os.environ.get("TEST_DATABASE_USER", "sbomify_test"),
+        "PASSWORD": os.environ.get("TEST_DATABASE_PASSWORD", "sbomify_test"),
+        "HOST": os.environ.get("TEST_DATABASE_HOST", "localhost"),
+        "PORT": os.environ.get("TEST_DATABASE_PORT", "5433"),
+        "ATOMIC_REQUESTS": False,
     }
 }
 
@@ -90,71 +94,10 @@ DJANGO_VITE = {
         "dev_mode": False,  # Always False for tests
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(STATIC_ROOT / "manifest.json"),
+        "manifest_path": str(BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"),
+        "static_url_prefix": "dist/",
     }
 }
-
-# Ensure staticfiles directory exists
-STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-
-# Create manifest in the static directory
-manifest = {
-    "sbomify/apps/core/js/main.ts": {
-        "file": "assets/main.js",
-        "src": "sbomify/apps/core/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/main.css"]
-    },
-    "sbomify/apps/teams/js/main.ts": {
-        "file": "assets/teams.js",
-        "src": "sbomify/apps/teams/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/teams.css"]
-    },
-    "sbomify/apps/billing/js/main.ts": {
-        "file": "assets/billing.js",
-        "src": "sbomify/apps/billing/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/billing.css"]
-    },
-    "sbomify/apps/core/js/django-messages.ts": {
-        "file": "assets/django-messages.js",
-        "src": "sbomify/apps/core/js/django-messages.ts",
-        "isEntry": True
-    },
-    "sbomify/apps/core/js/alerts-global.ts": {
-        "file": "assets/alerts-global.js",
-        "src": "sbomify/apps/core/js/alerts-global.ts",
-        "isEntry": True
-    },
-    "sbomify/apps/sboms/js/main.ts": {
-        "file": "assets/sboms.js",
-        "src": "sbomify/apps/sboms/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/sboms.css"]
-    },
-    "sbomify/apps/vulnerability_scanning/js/main.ts": {
-        "file": "assets/vulnerability_scanning.js",
-        "src": "sbomify/apps/vulnerability_scanning/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/vulnerability_scanning.css"]
-    },
-    "sbomify/apps/documents/js/main.ts": {
-        "file": "assets/documents.js",
-        "src": "sbomify/apps/documents/js/main.ts",
-        "isEntry": True,
-        "css": ["assets/documents.css"]
-    },
-    "sbomify/apps/core/js/htmx-bundle.ts": {
-        "file": "assets/htmx-bundle.js",
-        "src": "sbomify/apps/core/js/htmx-bundle.ts",
-        "isEntry": True,
-    }
-}
-
-# Create manifest file in the static directory
-with open(STATIC_ROOT / "manifest.json", "w") as f:
-    json.dump(manifest, f)
 
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
@@ -192,3 +135,4 @@ CACHES = {
 }
 
 TESTING = True
+PLAYWRIGHT_CDP_ENDPOINT = os.environ.get("PLAYWRIGHT_CDP_ENDPOINT", "http://localhost:9222")

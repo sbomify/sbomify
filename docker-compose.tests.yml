@@ -1,0 +1,32 @@
+---
+services:
+  test-db:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    restart: "no"
+    environment:
+      POSTGRES_USER: ${TEST_DATABASE_USER:-sbomify_test}
+      POSTGRES_PASSWORD: ${TEST_DATABASE_PASSWORD:-sbomify_test}
+      POSTGRES_DB: ${TEST_DATABASE_NAME:-sbomify_test}
+    ports:
+      - "${TEST_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - sbomify_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DATABASE_USER:-sbomify_test}"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  chromium:
+    image: zenika/alpine-chrome:124
+    command: ["chromium-browser", "--headless", "--disable-gpu", "--no-sandbox", "--remote-debugging-address=0.0.0.0", "--remote-debugging-port=9222"]
+    network_mode: host
+    shm_size: '2g'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9222/json/version || exit 1"]
+      interval: 2s
+      retries: 10
+      timeout: 2s
+
+volumes:
+  sbomify_test_postgres_data:

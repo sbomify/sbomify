@@ -29,6 +29,8 @@ def diff_images(
     if not original_path.exists():
         raise FileNotFoundError(f"Original image not found: {original_path}")
 
+    diff_img_file = Path(diff_img_file)
+
     return diffimg_diff(
         new_path.as_posix(),
         original_path.as_posix(),
@@ -38,9 +40,10 @@ def diff_images(
 
 
 def assert_screenshot(
-    new_image_path: str | Path,
-    original_image_path: str | Path,
+    baseline_image_path: str | Path,
+    current_image_path: str | Path,
     threshold: float = 0.0,
+    delete_diff_images: bool = True,
 ) -> None:
     with tempfile.NamedTemporaryFile(
         dir=DIFF_DIR.as_posix(),
@@ -48,12 +51,12 @@ def assert_screenshot(
         suffix=".jpg",
         delete=False,
     ) as tmp_file:
-        diff_img_file = Path(tmp_file.name)
+        diff_img_file = tmp_file.name
 
     image_diff = round(
         diff_images(
-            new_image_path,
-            original_image_path,
+            baseline_image_path,
+            current_image_path,
             diff_img_file=diff_img_file,
         ),
         3,
@@ -65,7 +68,9 @@ def assert_screenshot(
         f"See the image diff by: {diff_img_file}"
     )
 
-    diff_img_file.unlink()
+    if delete_diff_images:
+        Path(diff_img_file).unlink()
+        Path(current_image_path).unlink()
 
 
 def get_or_create_baseline_screenshot(page: Page, name: str, width: int) -> Path:
@@ -82,17 +87,22 @@ def take_screenshot(
     name: str,
     width: int,
     path: Path | None = None,
+    wait_timeout: float = 0.5,
 ) -> Path:
-    height = page.evaluate("document.body.parentNode.scrollHeight")
+    page.set_viewport_size({"width": width, "height": BROWSER_HEIGHT})
+    # Wait for the page height to be stable
+    page.wait_for_timeout(int(wait_timeout * 1000))
 
-    page.set_viewport_size({"width": width, "height": height})
+    page.set_viewport_size({"width": width, "height": page.evaluate("document.body.parentNode.scrollHeight")})
+    # Wait for the page height to be stable
+    page.wait_for_timeout(int(wait_timeout * 1000))
 
     if path:
         output_path = path
     else:
         output_path = DIFF_DIR / f"{name}.jpg"
 
-    page.screenshot(path=output_path.as_posix(), full_page=True, type="jpeg", quality=85)
+    page.screenshot(path=output_path.as_posix(), type="jpeg", full_page=True)
 
     page.set_viewport_size({"width": BROWSER_WIDTH, "height": BROWSER_HEIGHT})
 
