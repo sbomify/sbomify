@@ -29,9 +29,7 @@
 {% block upload_section %}
     {% if component.has_crud_permissions %}
         <div class="row mt-3">
-            <div class="col-12">
-                <div class="vc-sbom-upload" data-component-id="{{ component.id }}"></div>
-            </div>
+            <div class="col-12">{% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}</div>
         </div>
     {% endif %}
 {% endblock %}

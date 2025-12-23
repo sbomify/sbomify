@@ -1,0 +1,69 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/standard-card.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/sbom-upload.css' %}">
+<div class="standard-card mt-3"
+     x-data="{ expanded: localStorage.getItem('sbom-upload-expanded') !== 'false', ...sbomUpload('{{ component_id }}') }"
+     x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
+    <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
+        <div class="card-header collapsible-header"
+             @click="expanded = !expanded"
+             style="cursor: pointer">
+            <div class="header-content">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-upload me-2"></i>Upload SBOM File
+                </h4>
+                <div class="header-actions">
+                    <i class="fas fa-info-circle text-muted me-2"
+                       data-bs-toggle="tooltip"
+                       data-bs-placement="top"
+                       title="Recommended: Use the CI/CD Integration section for automated SBOM uploads. Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available."></i>
+                    <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </div>
+            </div>
+        </div>
+        <div class="card-body collapse" :class="{ 'show': expanded }">
+            <!-- Info Notice -->
+            <div class="augmentation-notice mb-3">
+                <i class="fas fa-info-circle me-2 text-primary"></i>
+                <strong>Recommended:</strong> Use the CI/CD Integration section below for automated SBOM uploads. Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available.
+            </div>
+            <!-- Upload Area -->
+            <div class="sbom-upload-area"
+                 :class="{ 'drag-over': isDragOver, 'uploading': isUploading }"
+                 @drop.prevent="handleDrop($event)"
+                 @dragover.prevent="isDragOver = true"
+                 @dragleave="isDragOver = false"
+                 @dragenter.prevent>
+                <!-- Default state -->
+                <template x-if="!isUploading">
+                    <div class="sbom-upload-content">
+                        <div class="sbom-upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <p class="sbom-upload-text">
+                            <strong>Drop your SBOM file here</strong> or
+                            <label class="sbom-upload-link">
+                                <input type="file"
+                                       accept=".json,.spdx,.cdx"
+                                       style="display: none"
+                                       @change="handleFileSelect($event)">
+                                click to browse
+                            </label>
+                        </p>
+                        <p class="sbom-upload-hint">Supports CycloneDX (.json, .cdx) and SPDX (.json, .spdx) formats</p>
+                    </div>
+                </template>
+                <!-- Uploading state -->
+                <template x-if="isUploading">
+                    <div class="sbom-upload-progress">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Uploading...</span>
+                        </div>
+                        <p class="mt-2">Uploading and processing SBOM...</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
