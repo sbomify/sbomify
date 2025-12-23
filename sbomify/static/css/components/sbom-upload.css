@@ -56,3 +56,8 @@
 .sbom-upload-progress {
     color: #6c757d;
 }
+
+/* Collapsible header styling */
+.sbom-upload-header {
+    cursor: pointer;
+}

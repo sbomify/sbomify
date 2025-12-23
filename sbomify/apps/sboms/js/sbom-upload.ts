@@ -2,6 +2,7 @@ import Alpine from 'alpinejs'
 import { showSuccess, showError } from '../../core/js/alerts'
 
 interface SbomUploadState {
+    expanded: boolean
     isDragOver: boolean
     isUploading: boolean
     componentId: string
@@ -14,6 +15,7 @@ interface SbomUploadState {
 
 export function registerSbomUpload(): void {
     Alpine.data('sbomUpload', (componentId: string): SbomUploadState => ({
+        expanded: true,
         isDragOver: false,
         isUploading: false,
         componentId: componentId,
@@ -26,6 +28,11 @@ export function registerSbomUpload(): void {
             }
 
             // Check file type
+            // We use OR logic (type OR extension) because browsers report MIME types inconsistently:
+            // - Some browsers report .spdx/.cdx files as 'text/plain' or 'application/octet-stream'
+            // - Some fail to detect the type at all for custom extensions
+            // - JSON files typically report correctly as 'application/json'
+            // By accepting either a valid MIME type OR a valid extension, we ensure cross-browser compatibility.
             const allowedTypes = ['application/json', 'text/plain']
             const allowedExtensions = ['.json', '.spdx', '.cdx']
             const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
@@ -59,14 +66,21 @@ export function registerSbomUpload(): void {
                     }
                 })
 
-                const data = await response.json()
+                // Safely parse JSON - server might return HTML error page for 5xx errors
+                let data: Record<string, unknown>
+                try {
+                    data = await response.json()
+                } catch {
+                    data = {}
+                }
 
                 if (response.ok) {
                     showSuccess('SBOM uploaded successfully! Please refresh the page to see the new SBOM.')
                 } else {
-                    showError(data.detail || 'Upload failed')
+                    showError((data.detail as string) || 'Upload failed')
                 }
-            } catch {
+            } catch (error) {
+                console.error('SBOM upload error:', error)
                 showError('Network error occurred. Please try again.')
             } finally {
                 this.isUploading = false
@@ -89,6 +103,8 @@ export function registerSbomUpload(): void {
             if (files && files.length > 0) {
                 this.uploadFile(files[0])
             }
+            // Reset input value to allow re-uploading the same file
+            target.value = ''
         },
 
         getCsrfToken(): string {

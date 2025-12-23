@@ -3,12 +3,11 @@
       href="{% static 'css/components/standard-card.css' %}">
 <link rel="stylesheet" href="{% static 'css/components/sbom-upload.css' %}">
 <div class="standard-card mt-3"
-     x-data="{ expanded: localStorage.getItem('sbom-upload-expanded') !== 'false', ...sbomUpload('{{ component_id }}') }"
-     x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
+     x-data="sbomUpload('{{ component_id }}')"
+     x-init="expanded = localStorage.getItem('sbom-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
     <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
-        <div class="card-header collapsible-header"
-             @click="expanded = !expanded"
-             style="cursor: pointer">
+        <div class="card-header collapsible-header sbom-upload-header"
+             @click="expanded = !expanded">
             <div class="header-content">
                 <h4 class="card-title mb-0">
                     <i class="fas fa-upload me-2"></i>Upload SBOM File
@@ -31,10 +30,16 @@
             <!-- Upload Area -->
             <div class="sbom-upload-area"
                  :class="{ 'drag-over': isDragOver, 'uploading': isUploading }"
+                 role="button"
+                 aria-label="Upload SBOM file by dropping or clicking"
+                 :aria-busy="isUploading"
+                 tabindex="0"
                  @drop.prevent="handleDrop($event)"
                  @dragover.prevent="isDragOver = true"
                  @dragleave="isDragOver = false"
-                 @dragenter.prevent>
+                 @dragenter.prevent
+                 @keydown.enter="$refs.fileInput.click()"
+                 @keydown.space.prevent="$refs.fileInput.click()">
                 <!-- Default state -->
                 <template x-if="!isUploading">
                     <div class="sbom-upload-content">
@@ -45,8 +50,9 @@
                             <strong>Drop your SBOM file here</strong> or
                             <label class="sbom-upload-link">
                                 <input type="file"
+                                       x-ref="fileInput"
                                        accept=".json,.spdx,.cdx"
-                                       style="display: none"
+                                       class="visually-hidden"
                                        @change="handleFileSelect($event)">
                                 click to browse
                             </label>
