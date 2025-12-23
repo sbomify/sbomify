@@ -31,8 +31,18 @@ def project_factory(team_with_business_plan):
 
 @pytest.fixture
 def component_factory(team_with_business_plan):
-    def _create(name="Component", component_type=Component.ComponentType.SBOM, project=None):
-        comp = Component.objects.create(name=name, team=team_with_business_plan, component_type=component_type)
+    def _create(
+        name: str = "Component",
+        component_type: str = Component.ComponentType.SBOM,
+        project: Project | None = None,
+        is_public: bool = False,
+    ) -> Component:
+        comp = Component.objects.create(
+            name=name,
+            team=team_with_business_plan,
+            component_type=component_type,
+            is_public=is_public,
+        )
         if project:
             ProjectComponent.objects.create(project=project, component=comp)
         return comp
@@ -267,3 +277,41 @@ def product_details(product_factory, project_factory) -> Generator[Product, None
 @pytest.fixture
 def empty_product_details(product_factory) -> Generator[Product, None, None]:
     yield product_factory("Empty Product")
+
+
+@pytest.fixture
+def project_details(project_factory, component_factory, sbom_factory) -> Generator[Project, None, None]:
+    project = project_factory("Test Project Details", is_public=True)
+
+    project_sbom_component = component_factory(
+        "Project SBOM Component",
+        Component.ComponentType.SBOM,
+        project=project,
+    )
+    sbom_factory(project_sbom_component, name="project-sbom.json", version="1.0.0")
+
+    component_factory(
+        "Project Document Component",
+        Component.ComponentType.DOCUMENT,
+        project=project,
+        is_public=True,
+    )
+
+    sbom_component = component_factory(
+        "SBOM Component",
+        Component.ComponentType.SBOM,
+        is_public=True,
+    )
+    sbom_factory(sbom_component, name="sbom.json", version="1.0.1")
+
+    component_factory(
+        "Document Component",
+        Component.ComponentType.DOCUMENT,
+    )
+
+    yield project
+
+
+@pytest.fixture
+def empty_project_details(project_factory) -> Generator[Project, None, None]:
+    yield project_factory("Empty Project", is_public=True)
