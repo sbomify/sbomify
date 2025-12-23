@@ -267,3 +267,35 @@ def product_details(product_factory, project_factory) -> Generator[Product, None
 @pytest.fixture
 def empty_product_details(product_factory) -> Generator[Product, None, None]:
     yield product_factory("Empty Product")
+
+
+@pytest.fixture
+def project_details(project_factory, component_factory, sbom_factory) -> Generator[Project, None, None]:
+    project = project_factory("Test Project Details", is_public=True)
+
+    sbom_component = component_factory(
+        "Project SBOM Component",
+        Component.ComponentType.SBOM,
+        project=project,
+    )
+    # Extra SBOM component linked to the same project to increase variety
+    extra_sbom_component = component_factory(
+        "Extra Project SBOM Component",
+        Component.ComponentType.SBOM,
+        project=project,
+    )
+    component_factory(
+        "Project Document Component",
+        Component.ComponentType.DOCUMENT,
+        project=project,
+    )
+
+    sbom_factory(sbom_component, name="project-sbom.json", version="1.0.0")
+    sbom_factory(extra_sbom_component, name="project-sbom-extra.json", version="1.0.1")
+
+    yield project
+
+
+@pytest.fixture
+def empty_project_details(project_factory) -> Generator[Project, None, None]:
+    yield project_factory("Empty Project", is_public=True)
