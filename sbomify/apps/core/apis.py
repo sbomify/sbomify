@@ -956,7 +956,7 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
 
     except IntegrityError:
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists in this team"),
+            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product"),
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:
@@ -1053,7 +1053,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
 
     except IntegrityError:
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists in this team")
+            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product")
         }
     except Exception as e:
         log.error(f"Error updating product link {link_id}: {e}")
@@ -1138,7 +1138,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 
     except IntegrityError:
         return 400, {
-            "detail": "One or more links already exist in this team",
+            "detail": "One or more links already exist for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
     except Exception as e:

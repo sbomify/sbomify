@@ -2892,7 +2892,7 @@ def test_product_link_validation(
         team=sample_team_with_owner_member.team,
     )
 
-    # Test unique constraint within team
+    # Test unique constraint within product
     link1 = ProductLink.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
@@ -2902,7 +2902,7 @@ def test_product_link_validation(
         description="Unique URL",
     )
 
-    # Creating another link with same type and URL in same team should fail
+    # Creating another link with same type and URL for same product should fail
     # Use separate atomic block for this test to handle the rollback
     with pytest.raises(IntegrityError):
         with transaction.atomic():
@@ -2923,6 +2923,41 @@ def test_product_link_validation(
         title="Support",
         url="https://different.example.com",
         description="Different URL",
+    )
+
+    assert link1.id != link2.id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_product_link_allows_duplicate_across_products(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """Test that links can be duplicated across different products in the same team."""
+    import uuid
+    unique_suffix = str(uuid.uuid4())[:8]
+    team = sample_team_with_owner_member.team
+
+    product1 = Product.objects.create(name=f"Product 1 {unique_suffix}", team=team)
+    product2 = Product.objects.create(name=f"Product 2 {unique_suffix}", team=team)
+
+    link_type = "website"
+    url = f"https://example-{unique_suffix}.com"
+
+    link1 = ProductLink.objects.create(
+        product=product1,
+        team=team,
+        link_type=link_type,
+        title="Main Website",
+        url=url
+    )
+
+    # This should succeed now (previously failed)
+    link2 = ProductLink.objects.create(
+        product=product2,
+        team=team,
+        link_type=link_type,
+        title="Main Website",
+        url=url
     )
 
     assert link1.id != link2.id

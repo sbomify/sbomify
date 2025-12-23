@@ -107,7 +107,7 @@ class ProductLink(models.Model):
 
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_product_links"
-        unique_together = ("team", "link_type", "url")
+        unique_together = ("product", "link_type", "url")
         ordering = ["link_type", "title"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
