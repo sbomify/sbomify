@@ -10,12 +10,11 @@ class TestDashboardSnapshot:
     def test_dashboard_snapshot(
         self,
         authenticated_page: Page,
-        live_server,
         dashboard_scan_results,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/dashboard")
+        authenticated_page.goto("/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Canvas is not stable for screenshots here

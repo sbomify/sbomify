@@ -135,4 +135,5 @@ CACHES = {
 }
 
 TESTING = True
+PLAYWRIGHT_DJANGO_HOST = os.environ.get("PLAYWRIGHT_DJANGO_HOST", "host.docker.internal")
 PLAYWRIGHT_CDP_ENDPOINT = os.environ.get("PLAYWRIGHT_CDP_ENDPOINT", "http://localhost:9222")
