@@ -3,7 +3,6 @@
 from django.db import migrations
 
 
-
 def drop_legacy_constraint(apps, schema_editor):
     """
     Conditionally drop the legacy unique constraint on (team, link_type, url).
@@ -11,22 +10,48 @@ def drop_legacy_constraint(apps, schema_editor):
     """
     model = apps.get_model("sboms", "ProductLink")
     db_table = model._meta.db_table
-    
+    quote_name = schema_editor.connection.ops.quote_name
+
     # Introspection to find the constraint
     with schema_editor.connection.cursor() as cursor:
         constraints = schema_editor.connection.introspection.get_constraints(cursor, db_table)
-        
+
     for name, details in constraints.items():
         # Check for unique constraint on the specific columns
         # Note: 'team_id' is the column name for the 'team' ForeignKey
         if details['unique'] and set(details['columns']) == {'team_id', 'link_type', 'url'}:
             # Found the legacy constraint! Drop it.
             if schema_editor.connection.vendor == 'sqlite':
-                schema_editor.execute(f"DROP INDEX {name}")
+                schema_editor.execute(f"DROP INDEX {quote_name(name)}")
             elif schema_editor.connection.vendor == 'postgresql':
-                schema_editor.execute(f"ALTER TABLE {db_table} DROP CONSTRAINT {name}")
+                schema_editor.execute(
+                    f"ALTER TABLE {quote_name(db_table)} DROP CONSTRAINT {quote_name(name)}"
+                )
             return
 
+
+def restore_legacy_constraint(apps, schema_editor):
+    """
+    Reverse of drop_legacy_constraint: recreate the legacy unique constraint on (team, link_type, url).
+    """
+    model = apps.get_model("sboms", "ProductLink")
+    db_table = model._meta.db_table
+    columns_to_check = {'team_id', 'link_type', 'url'}
+
+    with schema_editor.connection.cursor() as cursor:
+        constraints = schema_editor.connection.introspection.get_constraints(cursor, db_table)
+
+    for name, details in constraints.items():
+        if details['unique'] and set(details['columns']) == columns_to_check:
+            # Already exists
+            return
+
+    # Create the legacy constraint
+    schema_editor.alter_unique_together(
+        model,
+        set(),  # old
+        {('team', 'link_type', 'url')}  # new (legacy)
+    )
 
 
 def ensure_new_constraint(apps, schema_editor):
@@ -37,10 +62,10 @@ def ensure_new_constraint(apps, schema_editor):
     model = apps.get_model("sboms", "ProductLink")
     db_table = model._meta.db_table
     columns_to_check = {'product_id', 'link_type', 'url'}
-    
+
     with schema_editor.connection.cursor() as cursor:
         constraints = schema_editor.connection.introspection.get_constraints(cursor, db_table)
-        
+
     for name, details in constraints.items():
         if details['unique'] and set(details['columns']) == columns_to_check:
             # Already exists
@@ -49,9 +74,32 @@ def ensure_new_constraint(apps, schema_editor):
     # Create it
     schema_editor.alter_unique_together(
         model,
-        set(), # old
-        {('product', 'link_type', 'url')} # new
+        set(),  # old
+        {('product', 'link_type', 'url')}  # new
     )
+
+
+def drop_new_constraint(apps, schema_editor):
+    """
+    Reverse of ensure_new_constraint: drop the new unique constraint on (product, link_type, url).
+    """
+    model = apps.get_model("sboms", "ProductLink")
+    db_table = model._meta.db_table
+    quote_name = schema_editor.connection.ops.quote_name
+
+    with schema_editor.connection.cursor() as cursor:
+        constraints = schema_editor.connection.introspection.get_constraints(cursor, db_table)
+
+    for name, details in constraints.items():
+        if details['unique'] and set(details['columns']) == {'product_id', 'link_type', 'url'}:
+            # Found the new constraint! Drop it.
+            if schema_editor.connection.vendor == 'sqlite':
+                schema_editor.execute(f"DROP INDEX {quote_name(name)}")
+            elif schema_editor.connection.vendor == 'postgresql':
+                schema_editor.execute(
+                    f"ALTER TABLE {quote_name(db_table)} DROP CONSTRAINT {quote_name(name)}"
+                )
+            return
 
 
 class Migration(migrations.Migration):
@@ -70,7 +118,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
-                migrations.RunPython(drop_legacy_constraint, reverse_code=migrations.RunPython.noop),
+                migrations.RunPython(drop_legacy_constraint, reverse_code=restore_legacy_constraint),
             ],
         ),
         # Step 2: Add the new constraint (State Only + Conditional DB Creation).
@@ -82,7 +130,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
-                migrations.RunPython(ensure_new_constraint, reverse_code=migrations.RunPython.noop),
+                migrations.RunPython(ensure_new_constraint, reverse_code=drop_new_constraint),
             ],
         ),
     ]
