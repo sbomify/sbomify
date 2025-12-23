@@ -31,8 +31,18 @@ def project_factory(team_with_business_plan):
 
 @pytest.fixture
 def component_factory(team_with_business_plan):
-    def _create(name="Component", component_type=Component.ComponentType.SBOM, project=None):
-        comp = Component.objects.create(name=name, team=team_with_business_plan, component_type=component_type)
+    def _create(
+        name: str = "Component",
+        component_type: str = Component.ComponentType.SBOM,
+        project: Project | None = None,
+        is_public: bool = False,
+    ) -> Component:
+        comp = Component.objects.create(
+            name=name,
+            team=team_with_business_plan,
+            component_type=component_type,
+            is_public=is_public,
+        )
         if project:
             ProjectComponent.objects.create(project=project, component=comp)
         return comp
@@ -273,25 +283,31 @@ def empty_product_details(product_factory) -> Generator[Product, None, None]:
 def project_details(project_factory, component_factory, sbom_factory) -> Generator[Project, None, None]:
     project = project_factory("Test Project Details", is_public=True)
 
-    sbom_component = component_factory(
+    project_sbom_component = component_factory(
         "Project SBOM Component",
         Component.ComponentType.SBOM,
         project=project,
     )
-    # Extra SBOM component linked to the same project to increase variety
-    extra_sbom_component = component_factory(
-        "Extra Project SBOM Component",
-        Component.ComponentType.SBOM,
-        project=project,
-    )
+    sbom_factory(project_sbom_component, name="project-sbom.json", version="1.0.0")
+
     component_factory(
         "Project Document Component",
         Component.ComponentType.DOCUMENT,
         project=project,
+        is_public=True,
     )
 
-    sbom_factory(sbom_component, name="project-sbom.json", version="1.0.0")
-    sbom_factory(extra_sbom_component, name="project-sbom-extra.json", version="1.0.1")
+    sbom_component = component_factory(
+        "SBOM Component",
+        Component.ComponentType.SBOM,
+        is_public=True,
+    )
+    sbom_factory(sbom_component, name="sbom.json", version="1.0.1")
+
+    component_factory(
+        "Document Component",
+        Component.ComponentType.DOCUMENT,
+    )
 
     yield project
 
