@@ -29,7 +29,7 @@ def playwright() -> Generator[Playwright, Any, None]:
 
 
 @pytest.fixture(scope="session")
-def browser(playwright: Playwright, browser_type_launch_args: dict[str, Any]) -> Generator[Browser, Any, None]:
+def browser(playwright: Playwright) -> Generator[Browser, Any, None]:
     browser_instance = playwright.chromium.connect_over_cdp(settings.PLAYWRIGHT_CDP_ENDPOINT)
     yield browser_instance
     browser_instance.close()
