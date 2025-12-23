@@ -433,13 +433,12 @@ class TestYourPageSnapshot:
     def test_your_page_snapshot(
         self,
         authenticated_page,
-        live_server,
         your_test_fixtures,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:
         # Navigate to the page you want to test
-        authenticated_page.goto(f"{live_server.url}/your-page")
+        authenticated_page.goto("/your-page")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Get or create baseline screenshot (stored in __snapshots__)
