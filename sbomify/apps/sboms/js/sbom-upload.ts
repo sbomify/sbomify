@@ -62,11 +62,7 @@ export function registerSbomUpload(): void {
                 const data = await response.json()
 
                 if (response.ok) {
-                    showSuccess('SBOM uploaded successfully!')
-                    // Refresh the page after 2 seconds to show the new SBOM
-                    setTimeout(() => {
-                        window.location.reload()
-                    }, 2000)
+                    showSuccess('SBOM uploaded successfully! Please refresh the page to see the new SBOM.')
                 } else {
                     showError(data.detail || 'Upload failed')
                 }
