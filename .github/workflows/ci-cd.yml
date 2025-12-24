@@ -173,6 +173,10 @@ jobs:
       - name: Build JS assets
         run: bun run build
 
+      - name: Start Docker Compose
+        run: |
+          docker compose -f docker-compose.tests.yml up -d --build
+
       - name: Collect static files
         run: |
           docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run python manage.py collectstatic --noinput" || true

@@ -36,6 +36,7 @@ services:
       target: python-dependencies
       args:
         BUILD_ENV: tests
+    command: ["tail", "-f", "/dev/null"]
     environment:
       TEST_DATABASE_HOST: 172.25.0.10
       TEST_DATABASE_PORT: 5432
@@ -45,12 +46,6 @@ services:
       PLAYWRIGHT_DJANGO_HOST: 172.25.0.12
       PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
-      DEBUG: "True"
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_dummy_key_for_ci}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-pk_test_dummy_key_for_ci}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_dummy_key_for_ci}
-      STRIPE_ENDPOINT_SECRET: ${STRIPE_ENDPOINT_SECRET:-whsec_dummy_key_for_ci}
-      DJANGO_TEST: "true"
     volumes:
       - ./sbomify:/code/sbomify
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
