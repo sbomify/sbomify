@@ -42,8 +42,6 @@ class ComponentDetailsPrivateView(LoginRequiredMixin, View):
         elif component_type == "document":
             template_name = "core/component_details_private_document.html.j2"
         else:
-            return error_response(
-                request, HttpResponse(status=400, content="Invalid component type")
-            )
+            return error_response(request, HttpResponse(status=400, content="Invalid component type"))
 
         return render(request, template_name, context)
