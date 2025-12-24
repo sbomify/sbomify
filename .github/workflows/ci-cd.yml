@@ -177,10 +177,6 @@ jobs:
         run: |
           docker compose -f docker-compose.tests.yml up -d
 
-      # - name: Collect static files
-      #   run: |
-      #     docker compose -f docker-compose.tests.yml exec -T tests sh -c "uv run python manage.py collectstatic --noinput" || true
-
       - name: Run ${{ matrix.test-group.name }}
         run: |
           echo "## ${{ matrix.test-group.name }} Results" >> $GITHUB_STEP_SUMMARY

@@ -413,11 +413,10 @@ The project includes end-to-end snapshot tests that capture screenshots of the U
 
 Before running e2e snapshot tests, you need to:
 
-**Build JavaScript assets and collect static files:**
+**Build JavaScript assets:**
 
 ```bash
 bun run build
-uv run python manage.py collectstatic --noinput
 ```
 
 This ensures that all static assets (JavaScript, CSS) are up-to-date before taking screenshots.
@@ -452,7 +451,7 @@ class TestYourPageSnapshot:
 ```
 
 **Key components:**
-
+ 
 - Use `@pytest.mark.django_db` to enable database access
 - Use `@pytest.mark.parametrize("width", [...])` to test multiple screen sizes
 - Inject the `authenticated_page` fixture for browser automation
@@ -460,6 +459,22 @@ class TestYourPageSnapshot:
 - Use `get_or_create_baseline_screenshot()` to get the baseline (creates it if missing)
 - Use `take_screenshot()` to capture the current state
 - Use `assert_screenshot()` to compare them
+
+#### Running E2E Snapshot Tests
+
+After building assets, you can use the dedicated E2E docker-compose stack to run snapshot tests:
+
+```bash
+# Start the test stack (database, chromium, and tests container)
+docker compose -f docker-compose.tests.yml up -d
+
+# Run all E2E snapshot tests inside the tests container
+docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/<APP>/tests/e2e/
+
+# Run a single E2E snapshot test (example)
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  sbomify/apps/<APP>/tests/e2e/test_your_page.py::TestYourPageSnapshot::test_your_page_snapshot[1920]
+```
 
 #### Working with Snapshot Tests
 
