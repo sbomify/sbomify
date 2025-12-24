@@ -451,7 +451,7 @@ class TestYourPageSnapshot:
 ```
 
 **Key components:**
- 
+
 - Use `@pytest.mark.django_db` to enable database access
 - Use `@pytest.mark.parametrize("width", [...])` to test multiple screen sizes
 - Inject the `authenticated_page` fixture for browser automation
