@@ -34,12 +34,12 @@
                  aria-label="Upload SBOM file by dropping or clicking"
                  :aria-busy="isUploading"
                  tabindex="0"
-                 @drop.prevent="handleDrop($event)"
-                 @dragover.prevent="isDragOver = true"
-                 @dragleave="isDragOver = false"
+                 @drop.prevent="!isUploading && handleDrop($event)"
+                 @dragover.prevent="!isUploading && (isDragOver = true)"
+                 @dragleave="!isUploading && (isDragOver = false)"
                  @dragenter.prevent
-                 @keydown.enter="$refs.fileInput.click()"
-                 @keydown.space.prevent="$refs.fileInput.click()">
+                 @keydown.enter="!isUploading && $refs.fileInput && $refs.fileInput.click()"
+                 @keydown.space.prevent="!isUploading && $refs.fileInput && $refs.fileInput.click()">
                 <!-- Default state -->
                 <template x-if="!isUploading">
                     <div class="sbom-upload-content">
