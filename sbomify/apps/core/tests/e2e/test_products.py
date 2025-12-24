@@ -10,12 +10,11 @@ class TestProductsListSnapshot:
     def test_products_list_snapshot(
         self,
         authenticated_page: Page,
-        live_server,
         dashboard,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/products/")
+        authenticated_page.goto("/products/")
         authenticated_page.wait_for_load_state("networkidle")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
@@ -30,12 +29,11 @@ class TestProductDetailsSnapshot:
     def test_product_details_snapshot(
         self,
         authenticated_page: Page,
-        live_server,
         product_details,
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/product/{product_details.id}/")
+        authenticated_page.goto(f"/product/{product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(".vc-product-danger-zone h4").click()
@@ -48,12 +46,11 @@ class TestProductDetailsSnapshot:
     def test_product_details_snapshot__when_empty(
         self,
         authenticated_page: Page,
-        live_server,
         empty_product_details,
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/product/{empty_product_details.id}/")
+        authenticated_page.goto(f"/product/{empty_product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(".vc-product-danger-zone h4").click()
@@ -70,12 +67,11 @@ class TestProductPublicDetailsSnapshot:
     def test_product_public_details_snapshot(
         self,
         authenticated_page: Page,
-        live_server,
         product_details,
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/public/product/{product_details.id}/")
+        authenticated_page.goto(f"/public/product/{product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
@@ -86,12 +82,11 @@ class TestProductPublicDetailsSnapshot:
     def test_product_public_details_snapshot__when_empty(
         self,
         authenticated_page: Page,
-        live_server,
         empty_product_details,
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/public/product/{empty_product_details.id}/")
+        authenticated_page.goto(f"/public/product/{empty_product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)

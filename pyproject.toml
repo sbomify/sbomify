@@ -90,6 +90,8 @@ env = [
     "DEFAULT_FROM_EMAIL=test@example.com",
     "SENDGRID_API_KEY=invalid-key",
     "DJANGO_ALLOW_ASYNC_UNSAFE=1",  # Required for Playwright e2e tests - allows sync Django ORM operations in async context
+    # Bind Django live test server on all interfaces so the Chromium container can access it via host.docker.internal
+    "DJANGO_LIVE_TEST_SERVER_ADDRESS=0.0.0.0:0",
 ]
 
 addopts = "--nomigrations"

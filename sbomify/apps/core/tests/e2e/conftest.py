@@ -50,8 +50,14 @@ def browser(playwright: Playwright) -> Generator[Browser, Any, None]:
     browser_instance.close()
 
 
+@pytest.fixture
+def browser_base_url(live_server) -> str:
+    original_hostname = urlparse(live_server.url).hostname
+    return live_server.url.replace(original_hostname, getattr(settings, "PLAYWRIGHT_DJANGO_HOST", original_hostname))
+
+
 def setup_browser_session(
-    live_server,
+    browser_base_url: str,
     sample_user: AbstractBaseUser,
     team_with_business_plan,
 ) -> dict[str, Any]:
@@ -65,7 +71,7 @@ def setup_browser_session(
     return {
         "name": "sessionid",
         "value": session.session_key,
-        "domain": urlparse(live_server.url).hostname,
+        "domain": urlparse(browser_base_url).hostname,
         "path": "/",
         "httpOnly": True,
         "secure": False,
@@ -76,18 +82,18 @@ def setup_browser_session(
 @pytest.fixture
 def browser_context(
     browser: Browser,
-    live_server,
+    browser_base_url: str,
     sample_user: AbstractBaseUser,
     team_with_business_plan,
 ) -> Generator[BrowserContext, Any, None]:
     context = browser.new_context(
-        base_url=live_server.url,
+        base_url=browser_base_url,
         viewport={"width": BROWSER_WIDTH, "height": BROWSER_HEIGHT},
         device_scale_factor=1,
         reduced_motion="reduce",
     )
 
-    session_cookie = setup_browser_session(live_server, sample_user, team_with_business_plan)
+    session_cookie = setup_browser_session(browser_base_url, sample_user, team_with_business_plan)
     context.add_cookies([session_cookie])
 
     yield context

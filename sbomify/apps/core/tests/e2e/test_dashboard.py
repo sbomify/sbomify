@@ -10,12 +10,11 @@ class TestDashboardSnapshot:
     def test_dashboard_snapshot(
         self,
         authenticated_page: Page,
-        live_server,
         dashboard,
         snapshot,
         width: int,
     ) -> None:
-        authenticated_page.goto(f"{live_server.url}/dashboard")
+        authenticated_page.goto("/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)

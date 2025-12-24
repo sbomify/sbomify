@@ -4,6 +4,7 @@ import ipaddress
 import logging
 from typing import TYPE_CHECKING, Callable, Protocol
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.utils.deprecation import MiddlewareMixin
 
@@ -53,22 +54,25 @@ class DynamicHostValidationMiddleware:
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
+
         # Static hosts checked in-memory (no cache/DB hit)
-        self.static_hosts = frozenset(
-            [
-                "sbomify-backend",
-                "localhost",
-                "127.0.0.1",
-                "testserver",
-            ]
-        )
+        static_hosts: set[str] = {
+            "sbomify-backend",
+            "localhost",
+            "127.0.0.1",
+            "testserver",
+        }
+
+        playwright_host = getattr(settings, "PLAYWRIGHT_DJANGO_HOST", None)
+        if getattr(settings, "TESTING", False) and playwright_host:
+            static_hosts.add(playwright_host)
+
+        self.static_hosts = frozenset(static_hosts)
 
         # Parse APP_BASE_URL once at initialization instead of on first request
         self._app_host: str | None = None
         try:
             from urllib.parse import urlparse
-
-            from django.conf import settings
 
             if settings.APP_BASE_URL:
                 self._app_host = urlparse(settings.APP_BASE_URL).hostname
