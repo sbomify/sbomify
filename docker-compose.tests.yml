@@ -1,21 +1,21 @@
 ---
 services:
-  test-db:
-    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
-    restart: "no"
+  db:
+    image: postgres:17-alpine
     environment:
-      POSTGRES_USER: ${TEST_DATABASE_USER:-sbomify_test}
-      POSTGRES_PASSWORD: ${TEST_DATABASE_PASSWORD:-sbomify_test}
-      POSTGRES_DB: ${TEST_DATABASE_NAME:-sbomify_test}
-    ports:
-      - "${TEST_POSTGRES_PORT:-5433}:5432"
+      POSTGRES_USER: sbomify_test
+      POSTGRES_PASSWORD: sbomify_test
+      POSTGRES_DB: sbomify_test
     volumes:
       - sbomify_test_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TEST_DATABASE_USER:-sbomify_test}"]
+      test: ["CMD-SHELL", "pg_isready -U sbomify_test"]
       interval: 2s
       timeout: 2s
       retries: 10
+    networks:
+      testnet:
+        ipv4_address: 172.25.0.10
 
   chromium:
     image: zenika/alpine-chrome:124
@@ -26,10 +26,43 @@ services:
       interval: 2s
       retries: 10
       timeout: 2s
-    ports:
-      - "9222:9222"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      testnet:
+        ipv4_address: 172.25.0.11
+
+  tests:
+    build:
+      context: .
+      target: python-dependencies
+      args:
+        BUILD_ENV: tests
+    command: ["tail", "-f", "/dev/null"]
+    environment:
+      TEST_DATABASE_HOST: 172.25.0.10
+      TEST_DATABASE_PORT: 5432
+      TEST_DATABASE_USER: sbomify_test
+      TEST_DATABASE_PASSWORD: sbomify_test
+      TEST_DATABASE_NAME: sbomify_test
+      PLAYWRIGHT_DJANGO_HOST: 172.25.0.12
+      PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
+      DJANGO_SETTINGS_MODULE: sbomify.test_settings
+    volumes:
+      - ./sbomify:/code/sbomify:ro
+      - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
+      - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
+    depends_on:
+      - chromium
+      - db
+    networks:
+      testnet:
+        ipv4_address: 172.25.0.12
 
 volumes:
   sbomify_test_postgres_data:
+
+networks:
+  testnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
