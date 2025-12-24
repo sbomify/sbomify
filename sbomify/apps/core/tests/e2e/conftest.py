@@ -13,7 +13,7 @@ from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
-    team_with_business_plan, # noqa: F401
+    team_with_business_plan,  # noqa: F401
 )
 from sbomify.apps.core.tests.e2e.utils import (
     assert_screenshot as _assert_screenshot,
