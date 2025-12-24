@@ -1,17 +1,19 @@
 from pathlib import Path
 from typing import Any, Generator
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
+from freezegun import freeze_time
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
-    team_with_business_plan,
+    team_with_business_plan,  # noqa: F401
 )
 from sbomify.apps.core.tests.e2e.utils import (
     assert_screenshot as _assert_screenshot,
@@ -20,6 +22,19 @@ from sbomify.apps.core.tests.e2e.utils import (
     BROWSER_WIDTH,
     BROWSER_HEIGHT,
 )
+
+
+@pytest.fixture(autouse=True)
+def freeze_all_time() -> Generator[None, None, None]:
+    with freeze_time("2020-01-01 00:00:00"):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def sbomify_app_version() -> Generator[None, None, None]:
+    with patch("sbomify.apps.core.context_processors.version") as mock_version:
+        mock_version.return_value = "1.0.0"
+        yield
 
 
 @pytest.fixture(scope="session")

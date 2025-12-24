@@ -1,213 +1,124 @@
-from datetime import datetime, timedelta, timezone
+import hashlib
+from datetime import timedelta
 from typing import Generator
 
 import pytest
+from django.utils import timezone
 
-from sbomify.apps.core.models import Component, Product, ProductProject, Project, ProjectComponent, Release
-from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
-from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
-
-START_DATE = datetime(2025, 12, 1, tzinfo=timezone.utc)
-
-
-@pytest.fixture
-def product_factory(team_with_business_plan):
-    def _create(name="Product", is_public=True):
-        return Product.objects.create(name=name, team=team_with_business_plan, is_public=is_public)
-
-    return _create
+from sbomify.apps.core.models import Component, Product, Project, Release
+from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
+from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 
 @pytest.fixture
-def project_factory(team_with_business_plan):
-    def _create(name="Project", is_public=True, product=None):
-        proj = Project.objects.create(name=name, team=team_with_business_plan, is_public=is_public)
-        if product:
-            ProductProject.objects.create(product=product, project=proj)
-        return proj
+def dashboard(
+    product_factory,
+    project_factory,
+    component_factory,
+    sbom_factory,
+    vulnerability_scan_factory,
+) -> Generator[dict[str, list], None, None]:
+    data = {}
 
-    return _create
-
-
-@pytest.fixture
-def component_factory(team_with_business_plan):
-    def _create(
-        name: str = "Component",
-        component_type: str = Component.ComponentType.SBOM,
-        project: Project | None = None,
-        is_public: bool = False,
-    ) -> Component:
-        comp = Component.objects.create(
-            name=name,
-            team=team_with_business_plan,
-            component_type=component_type,
-            is_public=is_public,
-        )
-        if project:
-            ProjectComponent.objects.create(project=project, component=comp)
-        return comp
-
-    return _create
-
-
-@pytest.fixture
-def sbom_factory():
-    def _create(component, name="test-sbom.json", version="1.0.0"):
-        return SBOM.objects.create(
-            name=name,
-            component=component,
-            format="cyclonedx",
-            format_version="1.5",
-            version=version,
-            sbom_filename=name,
-            source="test",
-        )
-
-    return _create
-
-
-@pytest.fixture
-def vulnerability_scan_factory():
-    def _create(sbom, provider="osv", scan_date=None, critical=1, high=2, medium=3, low=1):
-        total = critical + high + medium + low
-        result = VulnerabilityScanResult.objects.create(
-            sbom=sbom,
-            provider=provider,
-            scan_trigger="upload",
-            vulnerability_count={"total": total, "critical": critical, "high": high, "medium": medium, "low": low},
-            findings=[],
-            scan_metadata={"provider": provider, "scan_type": "comprehensive"},
-            total_vulnerabilities=total,
-            critical_vulnerabilities=critical,
-            high_vulnerabilities=high,
-            medium_vulnerabilities=medium,
-            low_vulnerabilities=low,
-        )
-        if scan_date:
-            VulnerabilityScanResult.objects.filter(id=result.id).update(created_at=scan_date)
-            result.refresh_from_db()
-        return result
-
-    return _create
-
-
-@pytest.fixture
-def simple_product(product_factory):
-    return product_factory("Simple Product")
-
-
-@pytest.fixture
-def simple_project(project_factory, simple_product):
-    return project_factory("Simple Project", product=simple_product)
-
-
-@pytest.fixture
-def simple_component(component_factory, simple_project):
-    return component_factory("Simple SBOM Component", Component.ComponentType.SBOM, project=simple_project)
-
-
-@pytest.fixture
-def simple_sbom(sbom_factory, simple_component):
-    return sbom_factory(simple_component)
-
-
-@pytest.fixture
-def simple_scan(vulnerability_scan_factory, simple_sbom):
-    return vulnerability_scan_factory(simple_sbom)
-
-
-@pytest.fixture
-def dashboard_products(product_factory) -> Generator[list[Product], None, None]:
+    # -----------------------
+    # Products
+    # -----------------------
     products = [product_factory(f"Test Product {i}", is_public=(i % 2 == 0)) for i in range(5)]
-    yield products
+    data["products"] = products
 
-
-@pytest.fixture
-def dashboard_projects(dashboard_products, project_factory) -> Generator[list[Project], None, None]:
+    # -----------------------
+    # Projects
+    # -----------------------
     projects = []
-
     # Product 0: 2 projects
-    for i in range(2):
-        projects.append(
-            project_factory(f"Product 0 Project {i}", is_public=(i % 2 == 0), product=dashboard_products[0])
-        )
-
+    projects.extend(
+        [project_factory(f"Product 0 Project {i}", is_public=(i % 2 == 0), product=products[0]) for i in range(2)]
+    )
     # Product 1: 1 project
-    projects.append(project_factory("Product 1 Project", is_public=False, product=dashboard_products[1]))
-
+    projects.append(project_factory("Product 1 Project", is_public=False, product=products[1]))
     # Product 2: 3 projects
-    for i in range(3):
-        projects.append(
-            project_factory(f"Product 2 Project {i}", is_public=(i % 2 == 0), product=dashboard_products[2])
-        )
+    projects.extend(
+        [project_factory(f"Product 2 Project {i}", is_public=(i % 2 == 0), product=products[2]) for i in range(3)]
+    )
+    # Products 3 and 4: no projects
+    data["projects"] = projects
 
-    # Products 3 and 4: No projects
-
-    yield projects
-
-
-@pytest.fixture
-def dashboard_components(dashboard_projects, component_factory) -> Generator[list[Component], None, None]:
+    # -----------------------
+    # Components
+    # -----------------------
     components = []
 
     # Project 0: 2 SBOM components
     for i in range(2):
-        components.append(
-            component_factory(f"SBOM Component {i}", Component.ComponentType.SBOM, project=dashboard_projects[0])
-        )
+        args = {"project": projects[0], "is_public": True} if i % 2 == 0 else {}
+        components.append(component_factory(f"SBOM Component {i}", Component.ComponentType.SBOM, **args))
 
     # Project 1: 1 SBOM + 1 Document
+    sbom_comp = component_factory("Private SBOM Component", Component.ComponentType.SBOM, project=projects[1])
+    sbom_factory(sbom_comp, name="private-sbom.json", version="1.0.0")
+    components.append(sbom_comp)
     components.append(
-        component_factory("Private SBOM Component", Component.ComponentType.SBOM, project=dashboard_projects[1])
-    )
-    components.append(
-        component_factory("Private Document Component", Component.ComponentType.DOCUMENT, project=dashboard_projects[1])
+        component_factory("Private Document Component", Component.ComponentType.DOCUMENT, project=projects[1])
     )
 
-    # Project 4: 4 components (mix)
+    # Project 4: 4 components (mixed types)
     for i in range(4):
-        ctype = Component.ComponentType.SBOM if i % 2 == 0 else Component.ComponentType.DOCUMENT
-        components.append(component_factory(f"Large Project Component {i}", ctype, project=dashboard_projects[4]))
+        args = {"project": projects[4]}
+        if i % 2 == 0:
+            args.update({"project": None, "is_public": True})
+        if i % 3 == 0:
+            args.update({"is_global": True})
+        components.append(component_factory(f"Large Project Component {i}", **args))
 
-    # Projects 2 and 3: no components
+    data["components"] = components
 
-    yield components
-
-
-@pytest.fixture
-def dashboard_sboms(dashboard_components, sbom_factory) -> Generator[list[SBOM], None, None]:
+    # -----------------------
+    # SBOMs for components
+    # -----------------------
     sboms = [
         sbom_factory(c, name=f"sbom-{i}.json", version=f"1.0.{i}")
-        for i, c in enumerate(dashboard_components)
+        for i, c in enumerate(components)
         if c.component_type == Component.ComponentType.SBOM
     ]
-    yield sboms
+    data["sboms"] = sboms
 
-
-@pytest.fixture
-def dashboard_scan_results(
-    dashboard_sboms, vulnerability_scan_factory
-) -> Generator[list[VulnerabilityScanResult], None, None]:
+    # -----------------------
+    # Vulnerability Scan Results
+    # -----------------------
     scan_results = []
-    start_date = START_DATE - timedelta(days=29)
+    start_date = timezone.now() - timedelta(days=29)
     providers = ["osv", "dependency_track"]
 
     for day_offset in range(30):
-        scan_date = start_date + timedelta(days=day_offset)
+        created_at = start_date + timedelta(days=day_offset)
         scans_per_day = 1 if day_offset % 2 == 0 else 2
 
         for scan_idx in range(scans_per_day):
-            sbom = dashboard_sboms[scan_idx % len(dashboard_sboms)]
+            sbom = sboms[scan_idx % len(sboms)]
             provider = providers[scan_idx % len(providers)]
-            result = vulnerability_scan_factory(sbom, provider=provider, scan_date=scan_date)
+            result = vulnerability_scan_factory(sbom, provider=provider, created_at=created_at)
             scan_results.append(result)
 
-    yield scan_results
+    data["scan_results"] = scan_results
+
+    yield data
+
+
+# -----------------------
+# Test Products
+# -----------------------
+@pytest.fixture
+def empty_product_details(product_factory) -> Generator[Product, None, None]:
+    name = "Empty Product"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    yield product_factory(name=name, _id=_id)
 
 
 @pytest.fixture
 def product_details(product_factory, project_factory) -> Generator[Product, None, None]:
-    product = product_factory("Test Product Details")
+    name = "Test Product Details"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    product = product_factory(name=name, _id=_id)
 
     project_factory("Project 1", is_public=True, product=product)
     project_factory("Project 2", is_public=False, product=product)
@@ -274,14 +185,21 @@ def product_details(product_factory, project_factory) -> Generator[Product, None
     yield product
 
 
+# -----------------------
+# Test Projects
+# -----------------------
 @pytest.fixture
-def empty_product_details(product_factory) -> Generator[Product, None, None]:
-    yield product_factory("Empty Product")
+def empty_project_details(project_factory) -> Generator[Project, None, None]:
+    name = "Empty Project"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    yield project_factory(name=name, _id=_id, is_public=True)
 
 
 @pytest.fixture
 def project_details(project_factory, component_factory, sbom_factory) -> Generator[Project, None, None]:
-    project = project_factory("Test Project Details", is_public=True)
+    name = "Test Project Details"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    project = project_factory(name=name, _id=_id, is_public=True)
 
     project_sbom_component = component_factory(
         "Project SBOM Component",
@@ -312,6 +230,61 @@ def project_details(project_factory, component_factory, sbom_factory) -> Generat
     yield project
 
 
+# -----------------------
+# Test Components
+# -----------------------
 @pytest.fixture
-def empty_project_details(project_factory) -> Generator[Project, None, None]:
-    yield project_factory("Empty Project", is_public=True)
+def sbom_component_details(
+    component_factory,
+    project_factory,
+    product_factory,
+    component_author_factory,
+    component_license_factory,
+    vulnerability_scan_factory,
+    sbom_factory,
+):
+    project = project_factory("Test Project", product=product_factory("Test Product"))
+
+    name = "Test SBOM Component"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    component = component_factory(
+        name=name,
+        _id=_id,
+        component_type=Component.ComponentType.SBOM,
+        project=project,
+        supplier_urls=["https://example.com/supplier"],
+        metadata={"source": "e2e-fixture"},
+    )
+
+    # Attach a couple of authors
+    component_author_factory(component, name="Alice Example", email="alice@example.com", order=0)
+    component_author_factory(component, name="Bob Example", email="bob@example.com", order=1)
+
+    # Attach an SPDX license
+    component_license_factory(component, license_id="MIT", order=0)
+
+    # Attach a SBOM and one vulnerability scan
+    sbom = sbom_factory(component, name="simple-sbom.json", version="1.0.0")
+    vulnerability_scan_factory(sbom, provider="osv")
+
+    return component
+
+
+@pytest.fixture
+def document_component_details(component_factory, project_factory, product_factory, document_factory):
+    project = project_factory("Test Project", product=product_factory("Test Product"))
+
+    name = "Test Document Component"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    component = component_factory(
+        name=name,
+        _id=_id,
+        component_type=Component.ComponentType.DOCUMENT,
+        project=project,
+        supplier_urls=["https://example.com/supplier"],
+        metadata={"source": "e2e-fixture"},
+    )
+
+    document_factory(component, name="simple-document.pdf", version="1.0.0")
+
+    return component

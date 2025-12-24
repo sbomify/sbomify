@@ -53,13 +53,10 @@ def assert_screenshot(
     ) as tmp_file:
         diff_img_file = tmp_file.name
 
-    image_diff = round(
-        diff_images(
-            baseline_image_path,
-            current_image_path,
-            diff_img_file=diff_img_file,
-        ),
-        3,
+    image_diff = diff_images(
+        baseline_image_path,
+        current_image_path,
+        diff_img_file=diff_img_file,
     )
 
     assert image_diff <= threshold, (

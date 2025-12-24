@@ -10,7 +10,7 @@ class TestProjectsListSnapshot:
     def test_projects_list_snapshot(
         self,
         authenticated_page: Page,
-        dashboard_components,  # noqa: F811
+        dashboard,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:
