@@ -288,3 +288,71 @@ def document_component_details(component_factory, project_factory, product_facto
     document_factory(component, name="simple-document.pdf", version="1.0.0")
 
     return component
+
+
+# -----------------------
+# Test Releases
+# -----------------------
+@pytest.fixture
+def product_with_releases(product_factory, release_factory) -> Generator[Product, None, None]:
+    name = "Product With Releases"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    product = product_factory(name=name, _id=_id, is_public=True)
+
+    release_factory(product, name="v1.0.0", description="Initial release", is_latest=False, is_prerelease=False)
+    release_factory(product, name="v1.1.0", description="Minor update", is_latest=True, is_prerelease=False)
+    release_factory(product, name="v2.0.0-beta", description="Beta release", is_latest=False, is_prerelease=True)
+
+    yield product
+
+
+@pytest.fixture
+def empty_release_details(product_factory, release_factory) -> Generator[Release, None, None]:
+    product = product_factory(name="Test Product", is_public=True)
+    name = "v1.0.0"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    release = release_factory(product=product, name=name, _id=_id)
+    yield release
+
+
+@pytest.fixture
+def release_details(
+    product_factory,
+    release_factory,
+    component_factory,
+    sbom_factory,
+    document_factory,
+    release_artifact_factory,
+) -> Generator[Release, None, None]:
+    product = product_factory(name="Test Product", is_public=True)
+
+    name = "v1.0.0"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    release = release_factory(
+        product=product,
+        name=name,
+        _id=_id,
+        description="Test release description",
+        is_latest=False,
+        is_prerelease=False,
+    )
+
+    # Create SBOM component and SBOM
+    sbom_component = component_factory(
+        name="Release SBOM Component",
+        component_type=Component.ComponentType.SBOM,
+        is_public=True,
+    )
+    sbom = sbom_factory(sbom_component, name="release-sbom.json", version="1.0.0")
+    release_artifact_factory(release, sbom=sbom)
+
+    # Create Document component and Document
+    document_component = component_factory(
+        name="Release Document Component",
+        component_type=Component.ComponentType.DOCUMENT,
+        is_public=True,
+    )
+    document = document_factory(document_component, name="release-document.pdf", version="1.0.0")
+    release_artifact_factory(release, document=document)
+
+    yield release

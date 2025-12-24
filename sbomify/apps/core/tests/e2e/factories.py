@@ -3,7 +3,15 @@ from typing import Optional
 
 import pytest
 
-from sbomify.apps.core.models import Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.core.models import (
+    Component,
+    Product,
+    ProductProject,
+    Project,
+    ProjectComponent,
+    Release,
+    ReleaseArtifact,
+)
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense
@@ -182,5 +190,43 @@ def vulnerability_scan_factory():
             VulnerabilityScanResult.objects.filter(id=result.id).update(created_at=created_at)
             result.refresh_from_db()
         return result
+
+    return _create
+
+
+@pytest.fixture
+def release_factory():
+    def _create(
+        product: Product,
+        name: str = "v1.0.0",
+        description: str = "",
+        is_latest: bool = False,
+        is_prerelease: bool = False,
+        _id: str | None = None,
+    ) -> Release:
+        return Release.objects.create(
+            id=_id or generate_id(),
+            product=product,
+            name=name,
+            description=description,
+            is_latest=is_latest,
+            is_prerelease=is_prerelease,
+        )
+
+    return _create
+
+
+@pytest.fixture
+def release_artifact_factory():
+    def _create(
+        release: Release,
+        sbom: SBOM | None = None,
+        document: Document | None = None,
+    ) -> ReleaseArtifact:
+        return ReleaseArtifact.objects.create(
+            release=release,
+            sbom=sbom,
+            document=document,
+        )
 
     return _create
