@@ -218,7 +218,7 @@ jobs:
       
       - name: Upload E2E Test Diffs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-test-diffs
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
