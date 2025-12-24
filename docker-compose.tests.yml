@@ -47,7 +47,7 @@ services:
       PLAYWRIGHT_CDP_ENDPOINT: http://172.25.0.11:9222
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
     volumes:
-      - ./sbomify:/code/sbomify
+      - ./sbomify:/code/sbomify:ro
       - ./sbomify/apps/core/tests/e2e/__diffs__:/code/sbomify/apps/core/tests/e2e/__diffs__
       - ./sbomify/apps/core/tests/e2e/__snapshots__:/code/sbomify/apps/core/tests/e2e/__snapshots__
     depends_on:
