@@ -37,7 +37,7 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(".vc-sbom-upload h4").click()
-        authenticated_page.locator(".vc-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
@@ -55,7 +55,7 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.wait_for_load_state("networkidle")
 
         authenticated_page.locator(".vc-document-upload h4").click()
-        authenticated_page.locator(".vc-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
