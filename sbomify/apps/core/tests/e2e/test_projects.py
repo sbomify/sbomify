@@ -11,7 +11,7 @@ class TestProjectsListSnapshot:
         self,
         authenticated_page: Page,
         live_server,
-        dashboard_components,  # noqa: F811
+        dashboard,  # noqa: F811
         snapshot,
         width: int,
     ) -> None:

@@ -70,6 +70,8 @@ class ComponentDetailsPublicView(View):
         elif component_type == "document":
             template_name = "core/component_details_public_document.html.j2"
         else:
-            template_name = "core/component_details_public.html.j2"
+            return error_response(
+                request, HttpResponse(status=400, content="Invalid component type")
+            )
 
         return render(request, template_name, context)
