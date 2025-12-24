@@ -45,6 +45,9 @@ export function registerSbomUpload(): void {
         },
 
         async uploadFile(file: File): Promise<void> {
+            // Reset drag state in case upload was triggered during drag
+            this.isDragOver = false
+
             const validationError = this.validateFile(file)
             if (validationError) {
                 showError(validationError)
@@ -91,6 +94,11 @@ export function registerSbomUpload(): void {
             event.preventDefault()
             this.isDragOver = false
 
+            // Prevent concurrent uploads
+            if (this.isUploading) {
+                return
+            }
+
             const files = event.dataTransfer?.files
             if (files && files.length > 0) {
                 this.uploadFile(files[0])
@@ -99,6 +107,13 @@ export function registerSbomUpload(): void {
 
         handleFileSelect(event: Event): void {
             const target = event.target as HTMLInputElement
+
+            // Prevent concurrent uploads
+            if (this.isUploading) {
+                target.value = ''
+                return
+            }
+
             const files = target.files
             if (files && files.length > 0) {
                 this.uploadFile(files[0])
