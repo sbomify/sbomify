@@ -75,5 +75,5 @@
             </div>
         </div>
     </div>
-    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Component' message='Are you sure you want to delete the component' item_name=component_name warning_message='This action cannot be undone and will permanently remove the component from the system.' confirm_text='Delete Component' hx_url='/api/v1/components/'|add:component_id hx_method='delete' success_message='Component deleted successfully!' on_success="window.location.href = '/components/'"|escapejs %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Component' message='Are you sure you want to delete the component' item_name=component_name warning_message='This action cannot be undone and will permanently remove the component from the system.' confirm_text='Delete Component' hx_url='/api/v1/components/'|add:component_id hx_method='delete' success_message='Component deleted successfully!' redirect_url='/components/' %}
 </div>

@@ -39,5 +39,5 @@
             </div>
         </div>
     </div>
-    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Release' message='Are you sure you want to delete the release' item_name=release_name warning_message='This action cannot be undone and will permanently remove the release from the system.' confirm_text='Delete Release' hx_url='/api/v1/releases/'|add:release_id hx_method='delete' success_message='Release deleted successfully!' on_success="window.location.href = '/releases/'"|escapejs %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Release' message='Are you sure you want to delete the release' item_name=release_name warning_message='This action cannot be undone and will permanently remove the release from the system.' confirm_text='Delete Release' hx_url='/api/v1/releases/'|add:release_id hx_method='delete' success_message='Release deleted successfully!' redirect_url='/releases/' %}
 </div>

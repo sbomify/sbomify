@@ -68,12 +68,8 @@
                                         } else {
                                             alert(config.successMessage);
                                         }
-                                        if (config.onSuccess) {
-                                            try {
-                                                new Function(config.onSuccess)();
-                                            } catch (e) {
-                                                console.error('Error executing success callback:', e);
-                                            }
+                                        if (config.redirectUrl) {
+                                            window.location.href = config.redirectUrl;
                                         }
                                     } else {
                                         console.error('Delete failed:', response.status);
@@ -109,7 +105,7 @@
                         hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
                         successMessage: '{{ success_message|default:'Deleted successfully!' }}',
                         csrfToken: '{{ csrf_token }}',
-                        onSuccess: '{% if on_success %}{{ on_success|safe }}{% endif %}'
+                        redirectUrl: '{{ redirect_url|default:'' }}'
                     })"
                     @click="handleDelete()"
                     :disabled="isLoading"
@@ -125,166 +121,3 @@
         </div>
     </div>
 </template>
-<style>
-/* Modern Delete Modal Styles - mirroring Vue component styles */
-.delete-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1050;
-  padding: 1rem;
-}
-
-.delete-modal {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow: hidden;
-}
-
-.delete-modal-header {
-  padding: 1.5rem 1.5rem 1rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  position: relative;
-}
-
-.delete-modal-icon {
-  flex-shrink: 0;
-  width: 3rem;
-  height: 3rem;
-  background: #fef2f2;
-  border: 2px solid #fecaca;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #dc2626;
-  font-size: 1.25rem;
-}
-
-.delete-modal-title {
-  flex: 1;
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #111827;
-  line-height: 1.4;
-  padding-top: 0.25rem;
-}
-
-.delete-modal-close {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  background: none;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
-  font-size: 1rem;
-  line-height: 1;
-  transition: all 0.15s ease;
-}
-
-.delete-modal-close:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.delete-modal-body {
-  padding: 0 1.5rem 1.5rem;
-}
-
-.delete-modal-message {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-  color: #374151;
-  line-height: 1.5;
-}
-
-.delete-modal-name {
-  font-weight: 600;
-  color: #111827;
-  word-break: break-all;
-}
-
-.delete-modal-warning {
-  margin: 0;
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-.delete-modal-footer {
-  padding: 1.5rem;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
-.delete-modal-button {
-  padding: 0.625rem 1.25rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 80px;
-}
-
-.delete-modal-button--secondary {
-  background: #ffffff;
-  color: #374151;
-  border-color: #d1d5db;
-}
-
-.delete-modal-button--secondary:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.delete-modal-button--danger {
-  background: #dc2626;
-  color: #ffffff;
-}
-
-.delete-modal-button--danger:hover {
-  background: #b91c1c;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .delete-modal {
-    background: #1f2937;
-    color: #f9fafb;
-  }
-  .delete-modal-title { color: #f9fafb; }
-  .delete-modal-name { color: #e5e7eb; }
-  .delete-modal-close { color: #9ca3af; }
-  .delete-modal-close:hover { background: #374151; color: #d1d5db; }
-  .delete-modal-message { color: #d1d5db; }
-  .delete-modal-warning { color: #9ca3af; }
-  .delete-modal-footer { background: #111827; border-top-color: #374151; }
-  .delete-modal-button--secondary { background: #374151; color: #e5e7eb; border-color: #4b5563; }
-  .delete-modal-button--secondary:hover { background: #4b5563; border-color: #6b7280; }
-}
-</style>
