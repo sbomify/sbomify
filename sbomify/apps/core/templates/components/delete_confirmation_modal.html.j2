@@ -1,5 +1,7 @@
 <template x-teleport="body">
     <div x-show="{{ modal_id }}"
+         x-ref="modalOverlay"
+         x-init=" const modalId = '{{ modal_id }}'; const overlay = $el; let wasVisible = false;  // Watch for visibility changes using IntersectionObserver const observer = new IntersectionObserver((entries) => { const isVisible = entries[0].isIntersecting || window.getComputedStyle(overlay).display !== 'none';  if (isVisible && !wasVisible) { // Modal just opened wasVisible = true; window.handleModalOpen(overlay, modalId); } else if (!isVisible && wasVisible) { // Modal just closed wasVisible = false; window.handleModalClose(modalId); } }, { threshold: 0, root: null });  // Also watch for style changes (Alpine.js x-show uses display: none) const styleObserver = new MutationObserver(() => { const isVisible = window.getComputedStyle(overlay).display !== 'none';  if (isVisible && !wasVisible) { wasVisible = true; window.handleModalOpen(overlay, modalId); } else if (!isVisible && wasVisible) { wasVisible = false; window.handleModalClose(modalId); } });  styleObserver.observe(overlay, { attributes: true, attributeFilter: ['style'], subtree: false });  observer.observe(overlay);  // Initial check setTimeout(() => { const isVisible = window.getComputedStyle(overlay).display !== 'none'; if (isVisible) { wasVisible = true; window.handleModalOpen(overlay, modalId); } }, 150); "
          class="delete-modal-overlay"
          tabindex="-1"
          role="dialog"
@@ -7,6 +9,7 @@
          aria-labelledby="delete-modal-title-{{ modal_id }}"
          @click="{{ modal_id }} = false"
          @keydown.escape.window="{{ modal_id }} = false"
+         @keydown.tab.prevent="window.handleTabKey($event, '{{ modal_id }}')"
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
@@ -22,7 +25,9 @@
                 <h3 id="delete-modal-title-{{ modal_id }}" class="delete-modal-title">{{ title|default:'Confirm Delete' }}</h3>
                 <button type="button"
                         class="delete-modal-close"
-                        @click="{{ modal_id }} = false">
+                        @click="{{ modal_id }} = false"
+                        x-ref="closeButton"
+                        aria-label="Close modal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -38,17 +43,244 @@
             <div class="delete-modal-footer">
                 <button type="button"
                         class="delete-modal-button delete-modal-button--secondary"
-                        @click="{{ modal_id }} = false">{{ cancel_text|default:'Cancel' }}</button>
+                        @click="{{ modal_id }} = false"
+                        x-ref="cancelButton">{{ cancel_text|default:'Cancel' }}</button>
                 <script>
+                // Focus trapping utilities for modal accessibility
+                if (!window.modalFocusTrap) {
+                    window.modalFocusTrap = {
+                        // Store the element that triggered the modal
+                        triggerElements: {},
+                        
+                        // Get all focusable elements within a container
+                        getFocusableElements(container) {
+                            const focusableSelectors = [
+                                'a[href]',
+                                'button:not([disabled])',
+                                'textarea:not([disabled])',
+                                'input:not([disabled])',
+                                'select:not([disabled])',
+                                '[tabindex]:not([tabindex="-1"])'
+                            ].join(', ');
+                            
+                            return Array.from(container.querySelectorAll(focusableSelectors))
+                                .filter(el => {
+                                    // Filter out elements that are not visible
+                                    const style = window.getComputedStyle(el);
+                                    return style.display !== 'none' && 
+                                           style.visibility !== 'hidden' && 
+                                           !el.hasAttribute('disabled');
+                                });
+                        },
+                        
+                        // Handle Tab key navigation with focus trapping
+                        handleTabKey(event, modalElement, modalId) {
+                            // Find the modal content (not the overlay)
+                            const modalContent = modalElement.querySelector('.delete-modal');
+                            if (!modalContent) {
+                                event.preventDefault();
+                                return;
+                            }
+                            
+                            const focusableElements = this.getFocusableElements(modalContent);
+                            
+                            if (focusableElements.length === 0) {
+                                event.preventDefault();
+                                return;
+                            }
+                            
+                            const firstElement = focusableElements[0];
+                            const lastElement = focusableElements[focusableElements.length - 1];
+                            const currentElement = document.activeElement;
+                            
+                            // Check if current focus is within the modal
+                            if (!modalContent.contains(currentElement)) {
+                                // Focus is outside modal, move to first element
+                                event.preventDefault();
+                                firstElement.focus();
+                                return;
+                            }
+                            
+                            // If Shift+Tab on first element, move to last
+                            if (event.shiftKey && currentElement === firstElement) {
+                                event.preventDefault();
+                                lastElement.focus();
+                            }
+                            // If Tab on last element, move to first
+                            else if (!event.shiftKey && currentElement === lastElement) {
+                                event.preventDefault();
+                                firstElement.focus();
+                            }
+                        },
+                        
+                        // Handle modal opening - focus first element and store trigger
+                        handleModalOpen(modalElement, modalId) {
+                            // Store the currently focused element as the trigger
+                            if (document.activeElement && 
+                                document.activeElement !== document.body && 
+                                !modalElement.contains(document.activeElement)) {
+                                this.triggerElements[modalId] = document.activeElement;
+                            }
+                            
+                            // Find the modal content (not the overlay)
+                            const modalContent = modalElement.querySelector('.delete-modal');
+                            if (!modalContent) return;
+                            
+                            // Get focusable elements
+                            const focusableElements = this.getFocusableElements(modalContent);
+                            
+                            if (focusableElements.length > 0) {
+                                // Prefer focusing the close button, then cancel button, then first available
+                                const closeButton = modalContent.querySelector('.delete-modal-close');
+                                const cancelButton = modalContent.querySelector('.delete-modal-button--secondary');
+                                
+                                let elementToFocus = null;
+                                if (closeButton && focusableElements.includes(closeButton)) {
+                                    elementToFocus = closeButton;
+                                } else if (cancelButton && focusableElements.includes(cancelButton)) {
+                                    elementToFocus = cancelButton;
+                                } else {
+                                    elementToFocus = focusableElements[0];
+                                }
+                                
+                                // Focus the selected element
+                                setTimeout(() => {
+                                    elementToFocus.focus();
+                                }, 50);
+                            } else {
+                                // If no focusable elements, focus the modal content itself
+                                modalContent.setAttribute('tabindex', '-1');
+                                setTimeout(() => {
+                                    modalContent.focus();
+                                }, 50);
+                            }
+                        },
+                        
+                        // Handle modal closing - return focus to trigger element
+                        handleModalClose(modalId) {
+                            const triggerElement = this.triggerElements[modalId];
+                            if (triggerElement && triggerElement.focus) {
+                                // Use setTimeout to ensure modal is fully closed before focusing
+                                setTimeout(() => {
+                                    try {
+                                        triggerElement.focus();
+                                    } catch (e) {
+                                        // Element might not be focusable anymore, ignore
+                                        console.warn('Could not return focus to trigger element:', e);
+                                    }
+                                }, 100);
+                            }
+                            // Clean up
+                            delete this.triggerElements[modalId];
+                        }
+                    };
+                }
+                
+                // Make functions available globally for Alpine.js
+                if (typeof window.handleTabKey === 'undefined') {
+                    window.handleTabKey = function(event, modalId) {
+                        const modalElement = event.currentTarget;
+                        window.modalFocusTrap.handleTabKey(event, modalElement, modalId);
+                    };
+                }
+                
+                if (typeof window.handleModalOpen === 'undefined') {
+                    window.handleModalOpen = function(modalElement, modalId) {
+                        window.modalFocusTrap.handleModalOpen(modalElement, modalId);
+                    };
+                }
+                
+                if (typeof window.handleModalClose === 'undefined') {
+                    window.handleModalClose = function(modalId) {
+                        window.modalFocusTrap.handleModalClose(modalId);
+                    };
+                }
+                </script>
+                <script>
+                /**
+                 * Ensure showSuccess and showError functions are always available.
+                 * 
+                 * These functions are normally provided by alerts-global.ts which is loaded
+                 * via main.ts or htmx-bundle.ts. However, to ensure they're always available
+                 * even if those scripts haven't loaded yet, we provide fallback implementations.
+                 * 
+                 * The primary implementation uses SweetAlert2 for styled notifications and
+                 * is defined in: sbomify/apps/core/js/alerts-global.ts
+                 * 
+                 * If the functions aren't available, we fall back to browser alert() dialogs.
+                 */
+                if (typeof window.showSuccess === 'undefined') {
+                    window.showSuccess = function(message) {
+                        console.log('[Success]', message);
+                        alert(message);
+                    };
+                }
+                
+                if (typeof window.showError === 'undefined') {
+                    window.showError = function(message) {
+                        console.error('[Error]', message);
+                        alert(message);
+                    };
+                }
+                
                 if (!window.getDeleteModalData) {
                     window.getDeleteModalData = function(config) {
                         return {
                             isLoading: false,
+                            getCsrfToken() {
+                                // Priority 1: Use token passed from Django template
+                                if (config.csrfToken && config.csrfToken.trim()) {
+                                    return config.csrfToken.trim();
+                                }
+
+                                // Priority 2: Try to get from meta tag (if Django provides it)
+                                const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                                if (metaToken && metaToken.trim()) {
+                                    return metaToken.trim();
+                                }
+
+                                // Priority 3: Fallback to cookie parsing with better error handling
+                                try {
+                                    if (!document.cookie) {
+                                        console.warn('No cookies available');
+                                        return '';
+                                    }
+
+                                    const cookies = document.cookie.split(';');
+                                    for (let i = 0; i < cookies.length; i++) {
+                                        const cookie = cookies[i].trim();
+                                        // Handle both 'csrftoken=' and 'csrftoken =' (with spaces)
+                                        if (cookie.startsWith('csrftoken')) {
+                                            const parts = cookie.split('=');
+                                            if (parts.length >= 2) {
+                                                // Join all parts after the first '=' in case the token contains '='
+                                                const token = parts.slice(1).join('=');
+                                                if (token && token.trim()) {
+                                                    return decodeURIComponent(token.trim());
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Error parsing CSRF token from cookies:', error);
+                                }
+
+                                return '';
+                            },
                             async handleDelete() {
                                 if (this.isLoading) return;
                                 this.isLoading = true;
 
-                                const csrfToken = config.csrfToken || (document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '');
+                                const csrfToken = this.getCsrfToken();
+                                
+                                if (!csrfToken) {
+                                    this.isLoading = false;
+                                    this[config.modalId] = false;
+                                    const errorMsg = 'Security error: Missing CSRF token. Please reload the page and try again.';
+                                    console.error(errorMsg);
+                                    window.showError(errorMsg);
+                                    return;
+                                }
 
                                 try {
                                     const response = await fetch(config.hxUrl, {
@@ -63,30 +295,18 @@
                                     this[config.modalId] = false;
 
                                     if (response.ok) {
-                                        if (window.showSuccess) {
-                                            window.showSuccess(config.successMessage);
-                                        } else {
-                                            alert(config.successMessage);
-                                        }
+                                        window.showSuccess(config.successMessage);
                                         if (config.redirectUrl) {
                                             window.location.href = config.redirectUrl;
                                         }
                                     } else {
                                         console.error('Delete failed:', response.status);
-                                        if (window.showError) {
-                                            window.showError('Failed to delete. Please try again.');
-                                        } else {
-                                            alert('Failed to delete. Please try again.');
-                                        }
+                                        window.showError('Failed to delete. Please try again.');
                                     }
                                 } catch (error) {
                                     this[config.modalId] = false;
                                     console.error('Delete error:', error);
-                                    if (window.showError) {
-                                        window.showError('An error occurred. Please try again.');
-                                    } else {
-                                        alert('An error occurred. Please try again.');
-                                    }
+                                    window.showError('An error occurred. Please try again.');
                                 } finally {
                                     this.isLoading = false;
                                 }
@@ -98,6 +318,7 @@
                 {# djlint:off #}
             <button type="button" 
                     class="delete-modal-button delete-modal-button--danger"
+                    x-ref="deleteButton"
                     {% if hx_url %}
                     x-data="window.getDeleteModalData({
                         modalId: '{{ modal_id }}',
@@ -109,12 +330,19 @@
                     })"
                     @click="handleDelete()"
                     :disabled="isLoading"
+                    :class="{ 'opacity-75': isLoading, 'cursor-not-allowed': isLoading }"
             {% elif confirm_callback %}
                 @click="{{ confirm_callback }}"
             {% endif %}
             >
+            {% if hx_url %}
+            <i class="fas fa-spinner fa-spin me-2" x-show="isLoading" style="display: none;"></i>
+            <i class="fas fa-trash me-2" x-show="!isLoading"></i>
+            <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
+            {% else %}
             <i class="fas fa-trash me-2"></i>
             {{ confirm_text|default:'Delete' }}
+            {% endif %}
             </button>
                 {# djlint:on #}
             </div>

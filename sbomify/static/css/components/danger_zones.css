@@ -223,18 +223,58 @@
         font-size: 1rem;
     }
 
-    .input-group {
+    .danger-section .input-group {
         flex-direction: column;
         gap: 0.75rem;
+        width: 100%;
     }
 
-    .modern-select {
-        min-width: unset;
+    .danger-section .input-group .modern-select,
+    .danger-section .input-group select.form-select.modern-select {
+        min-width: unset !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        flex: none;
     }
 
     .transfer-btn,
     .delete-btn {
         width: 100%;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .danger-section {
+        padding: 0.75rem;
+    }
+
+    .section-header {
+        flex-wrap: wrap;
+    }
+
+    .section-content {
+        width: 100%;
+    }
+
+    .section-title {
+        font-size: 1rem;
+    }
+
+    .section-description {
+        font-size: 0.8125rem;
+    }
+
+    .danger-section .input-group .modern-select,
+    .danger-section .input-group select.form-select.modern-select {
+        padding: 0.625rem 2.5rem 0.625rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .modern-btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
     }
 }
 

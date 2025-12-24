@@ -39,5 +39,6 @@
             </div>
         </div>
     </div>
-    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Project' message='Are you sure you want to delete the project' item_name=project_name warning_message='This action cannot be undone and will permanently remove the project from the system.' confirm_text='Delete Project' hx_url='/api/v1/projects/'|add:project_id hx_method='delete' success_message='Project deleted successfully!' redirect_url='/projects/' %}
+    {% url 'api-1:delete_project' project_id=project_id as delete_project_url %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Project' message='Are you sure you want to delete the project' item_name=project_name warning_message='This action cannot be undone and will permanently remove the project from the system.' confirm_text='Delete Project' hx_url=delete_project_url hx_method='delete' success_message='Project deleted successfully!' redirect_url='/projects/' %}
 </div>
