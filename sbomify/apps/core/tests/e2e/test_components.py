@@ -36,7 +36,7 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{sbom_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-sbom-upload h4").click()
+        authenticated_page.locator(".sbom-upload-header").click()
         authenticated_page.locator(".vc-danger-zone h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
