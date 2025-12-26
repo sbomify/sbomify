@@ -314,7 +314,8 @@ jobs:
         if: failure()
         run: sudo chown -R $USER:$USER sbomify/apps/*/tests/e2e/__diffs__ 2>/dev/null || true
 
-      - if: failure()
+      - name: Upload E2E Test Diffs
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: e2e-test-diffs-${{ matrix.test-group.name }}
