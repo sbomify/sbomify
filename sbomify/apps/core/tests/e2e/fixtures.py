@@ -243,7 +243,13 @@ def sbom_component_details(
     vulnerability_scan_factory,
     sbom_factory,
 ):
-    project = project_factory("Test Project", product=product_factory("Test Product"))
+    product_name = "Test SBOM Product"
+    product_id = hashlib.md5(product_name.encode()).hexdigest()[:12]
+    product = product_factory(name=product_name, _id=product_id)
+
+    project_name = "Test SBOM Project"
+    project_id = hashlib.md5(project_name.encode()).hexdigest()[:12]
+    project = project_factory(project_name, product=product, _id=project_id)
 
     name = "Test SBOM Component"
     _id = hashlib.md5(name.encode()).hexdigest()[:12]
@@ -272,7 +278,13 @@ def sbom_component_details(
 
 @pytest.fixture
 def document_component_details(component_factory, project_factory, product_factory, document_factory):
-    project = project_factory("Test Project", product=product_factory("Test Product"))
+    product_name = "Test Document Product"
+    product_id = hashlib.md5(product_name.encode()).hexdigest()[:12]
+    product = product_factory(name=product_name, _id=product_id)
+
+    project_name = "Test Document Project"
+    project_id = hashlib.md5(project_name.encode()).hexdigest()[:12]
+    project = project_factory(project_name, product=product, _id=project_id)
 
     name = "Test Document Component"
     _id = hashlib.md5(name.encode()).hexdigest()[:12]

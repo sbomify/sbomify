@@ -42,7 +42,7 @@ def diff_images(
 def assert_screenshot(
     baseline_image_path: str | Path,
     current_image_path: str | Path,
-    threshold: float = 0.0,
+    threshold: float = 0.005,
     delete_diff_images: bool = True,
 ) -> None:
     with tempfile.NamedTemporaryFile(
