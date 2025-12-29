@@ -11,14 +11,9 @@
             <div class="header-content">
                 <h4 class="card-title mb-0">
                     <i class="fas fa-upload me-2"></i>Upload SBOM File
+                    <i class="fas ms-2"
+                       :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                 </h4>
-                <div class="header-actions">
-                    <i class="fas fa-info-circle text-muted me-2"
-                       data-bs-toggle="tooltip"
-                       data-bs-placement="top"
-                       title="Recommended: Use the CI/CD Integration section for automated SBOM uploads. Manual uploads are useful for one-time uploads, testing, or when automated workflows aren't available."></i>
-                    <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                </div>
             </div>
         </div>
         <div class="card-body collapse" :class="{ 'show': expanded }">

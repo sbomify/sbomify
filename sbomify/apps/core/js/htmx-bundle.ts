@@ -6,12 +6,30 @@ import './navbar-search';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
+import { registerSbomUpload } from '../../sboms/js/sbom-upload';
+import { registerDocumentUpload } from '../../documents/js/document-upload';
 import { initializeAlpine } from './alpine-init';
 
 registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();
+registerSbomUpload();
+registerDocumentUpload();
 initializeAlpine();
+
+// Listen for successful document uploads and reload the page
+window.addEventListener('document-uploaded', () => {
+    setTimeout(() => {
+        window.location.reload();
+    }, 1500);
+});
+
+// Listen for successful SBOM uploads and reload the page
+window.addEventListener('sbom-uploaded', () => {
+    setTimeout(() => {
+        window.location.reload();
+    }, 1500);
+});
 
 // Expose bootstrap globally
 declare global {

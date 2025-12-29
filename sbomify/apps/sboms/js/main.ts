@@ -3,13 +3,10 @@ import '../../core/js/layout-interactions'
 import { registerSbomsTable } from './sboms-table'
 import { registerReleaseList } from '../../core/js/components/release-list'
 import { registerNtiaComplianceBadge } from '../../core/js/components/ntia-compliance-badge'
-import { registerSbomUpload } from './sbom-upload'
 import { initializeAlpine } from '../../core/js/alpine-init'
-
 registerSbomsTable()
 registerReleaseList()
 registerNtiaComplianceBadge()
-registerSbomUpload()
 
 initializeAlpine()
 

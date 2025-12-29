@@ -1,0 +1,170 @@
+/* StandardCard styles matching Vue component */
+.document-upload-wrapper .standard-card {
+    margin-bottom: 1rem;
+}
+
+.document-upload-wrapper .card {
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.document-upload-wrapper .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.document-upload-wrapper .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.document-upload-wrapper .collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.document-upload-wrapper .card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.document-upload-wrapper .card-body {
+    padding: 1.25rem;
+}
+
+.document-upload-wrapper .card-collapsed .card-header {
+    border-radius: 0.5rem;
+    border-bottom: none;
+}
+
+.document-upload-wrapper .collapse {
+    display: none;
+}
+
+.document-upload-wrapper .collapse.show {
+    display: block;
+}
+
+/* Info Notice - matching augmentation-notice from Vue */
+.document-upload-wrapper .augmentation-notice {
+    font-size: 0.9rem;
+    background: #f8fafc;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border-left: 3px solid #4f46e5;
+}
+
+.document-upload-wrapper .augmentation-notice i {
+    font-size: 1rem;
+}
+
+/* Upload area styles */
+.upload-area {
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    background-color: #f8fafc;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #94a3b8;
+    background-color: #f1f5f9;
+}
+
+.upload-area.drag-over {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.upload-area.file-selected {
+    border-color: #22c55e;
+    background-color: #f0fdf4;
+    cursor: default;
+}
+
+.upload-area.uploading {
+    border-color: #22c55e;
+    background-color: #f0fdf4;
+    cursor: not-allowed;
+}
+
+.upload-content {
+    color: #64748b;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-link {
+    color: #3b82f6;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.upload-link:hover {
+    color: #2563eb;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin-bottom: 0;
+}
+
+.file-selected-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.file-icon {
+    font-size: 2rem;
+    color: #22c55e;
+}
+
+.file-info {
+    flex-grow: 1;
+    text-align: left;
+}
+
+.file-name {
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+
+.file-size {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 0;
+}
+
+.upload-progress {
+    color: #16a34a;
+}
+
+.document-upload-wrapper .form-text {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
