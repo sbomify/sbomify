@@ -1,10 +1,12 @@
 import 'vite/modulepreload-polyfill'
 import '../../core/js/layout-interactions'
 import { registerSbomsTable } from './sboms-table'
+import { registerSbomUpload } from './sbom-upload'
 import { registerReleaseList } from '../../core/js/components/release-list'
 import { registerNtiaComplianceBadge } from '../../core/js/components/ntia-compliance-badge'
 import { initializeAlpine } from '../../core/js/alpine-init'
 registerSbomsTable()
+registerSbomUpload()
 registerReleaseList()
 registerNtiaComplianceBadge()
 
