@@ -83,6 +83,8 @@ services:
     depends_on:
       sbomify-db:
         condition: service_healthy
+      sbomify-redis:
+        condition: service_healthy
       sbomify-migrations:
         condition: service_completed_successfully
 
