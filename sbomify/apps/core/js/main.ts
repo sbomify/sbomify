@@ -92,7 +92,6 @@ import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();
-registerWorkspaceSwitcher();
 registerSbomUpload();
 
 import { initializeAlpine } from './alpine-init';
