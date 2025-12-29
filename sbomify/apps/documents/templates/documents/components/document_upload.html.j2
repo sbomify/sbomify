@@ -1,0 +1,164 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/document-upload.css' %}">
+<div class="document-upload-wrapper"
+     x-data="documentUpload('{{ component_id }}')"
+     x-cloak>
+    <div class="standard-card mt-3">
+        <div class="card shadow-sm" :class="{ 'card-collapsed': !isExpanded }">
+            <div class="card-header collapsible-header"
+                 @click="toggleExpanded()"
+                 style="cursor: pointer">
+                <div class="header-content">
+                    <h4 class="card-title mb-0">
+                        Upload Document File
+                        <i class="fas ms-2"
+                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    </h4>
+                </div>
+            </div>
+            <div class="card-body"
+                 :class="{ 'collapse': !isExpanded, 'show': isExpanded }">
+                <div class="augmentation-notice d-flex align-items-center mb-3">
+                    <i class="fas fa-info-circle me-2" style="color: #4f46e5;"></i>
+                    <span class="text-muted">
+                        <strong>Document Upload:</strong> Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload.
+                    </span>
+                </div>
+                <div class="mb-3">
+                    <label for="document-version" class="form-label">
+                        Version <span class="text-danger">*</span>
+                    </label>
+                    <input id="document-version"
+                           x-model="documentVersion"
+                           type="text"
+                           class="form-control"
+                           placeholder="e.g., 1.0, v2.1, latest"
+                           required>
+                    <div class="form-text">Specify the version of this document</div>
+                </div>
+                <div class="mb-3">
+                    <label for="document-type" class="form-label">Document Type</label>
+                    <select id="document-type" x-model="documentType" class="form-select">
+                        <option value="">Select document type (optional)</option>
+                        <optgroup label="Technical Documentation">
+                            <option value="specification">Specification</option>
+                            <option value="manual">Manual</option>
+                            <option value="readme">README</option>
+                            <option value="documentation">Documentation</option>
+                            <option value="build-instructions">Build Instructions</option>
+                            <option value="configuration">Configuration</option>
+                        </optgroup>
+                        <optgroup label="Legal and Compliance">
+                            <option value="license">License</option>
+                            <option value="compliance">Compliance</option>
+                            <option value="evidence">Evidence</option>
+                        </optgroup>
+                        <optgroup label="Release Information">
+                            <option value="changelog">Changelog</option>
+                            <option value="release-notes">Release Notes</option>
+                        </optgroup>
+                        <optgroup label="Security Documents">
+                            <option value="security-advisory">Security Advisory</option>
+                            <option value="vulnerability-report">Vulnerability Report</option>
+                            <option value="threat-model">Threat Model</option>
+                            <option value="risk-assessment">Risk Assessment</option>
+                            <option value="pentest-report">Penetration Test Report</option>
+                        </optgroup>
+                        <optgroup label="Analysis Reports">
+                            <option value="static-analysis">Static Analysis Report</option>
+                            <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                            <option value="quality-metrics">Quality Metrics</option>
+                            <option value="maturity-report">Maturity Report</option>
+                            <option value="report">Report</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                            <option value="other">Other</option>
+                        </optgroup>
+                    </select>
+                    <div class="form-text">
+                        Select the type of document you're uploading. This helps with SBOM generation and compliance.
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="document-description" class="form-label">Description</label>
+                    <textarea id="document-description"
+                              x-model="documentDescription"
+                              class="form-control"
+                              rows="3"
+                              placeholder="Brief description of this document (optional)"></textarea>
+                </div>
+                <div class="upload-area"
+                     :class="{ 'drag-over': isDragOver, 'file-selected': selectedFile && !isUploading }"
+                     @drop.prevent="handleDrop($event)"
+                     @dragover.prevent="isDragOver = true"
+                     @dragleave.prevent="isDragOver = false"
+                     @dragenter.prevent>
+                    <template x-if="!selectedFile && !isUploading">
+                        <div class="upload-content">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <p class="upload-text">
+                                <strong>Drop your document file here</strong> or
+                                <label class="upload-link">
+                                    <input type="file"
+                                           accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml"
+                                           style="display: none"
+                                           @change="handleFileSelect($event)">
+                                    click to browse
+                                </label>
+                            </p>
+                            <p class="upload-hint">Supports PDF, Word, text, markdown, and other document formats (max 50MB)</p>
+                        </div>
+                    </template>
+                    <template x-if="selectedFile && !isUploading">
+                        <div class="file-selected-content">
+                            <div class="file-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="file-info">
+                                <p class="file-name" x-text="selectedFile.name"></p>
+                                <p class="file-size" x-text="formatFileSize(selectedFile.size)"></p>
+                            </div>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    title="Remove file"
+                                    @click="clearSelectedFile()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </template>
+                    <template x-if="isUploading">
+                        <div class="upload-progress">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Uploading...</span>
+                            </div>
+                            <p class="mt-2">Uploading and processing document...</p>
+                        </div>
+                    </template>
+                </div>
+                <template x-if="selectedFile && !isUploading">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-3">
+                        <div class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Review your document details and click "Save Document" to upload.
+                        </div>
+                        <div class="d-grid gap-2 d-sm-flex justify-content-sm-end w-100 w-md-auto">
+                            <button type="button"
+                                    class="btn btn-outline-secondary order-1 order-sm-0"
+                                    @click="clearSelectedFile()">Cancel</button>
+                            <button type="button"
+                                    class="btn btn-primary"
+                                    :disabled="!isFormValid"
+                                    @click="saveDocument()">
+                                <i class="fas fa-save me-1"></i>
+                                Save Document
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>

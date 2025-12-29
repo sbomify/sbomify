@@ -54,7 +54,7 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{document_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-document-upload h4").click()
+        authenticated_page.locator(".document-upload-wrapper h4").click()
         authenticated_page.locator(".dangerzone-card h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)

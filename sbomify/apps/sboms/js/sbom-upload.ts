@@ -1,5 +1,6 @@
-import Alpine from 'alpinejs'
+import Alpine from '../../core/js/alpine-init'
 import { showSuccess, showError } from '../../core/js/alerts'
+import { getCsrfToken } from '../../core/js/csrf'
 
 interface SbomUploadState {
     expanded: boolean
@@ -10,7 +11,6 @@ interface SbomUploadState {
     handleFileSelect: (event: Event) => void
     validateFile: (file: File) => string | null
     uploadFile: (file: File) => Promise<void>
-    getCsrfToken: () => string
 }
 
 export function registerSbomUpload(): void {
@@ -65,7 +65,7 @@ export function registerSbomUpload(): void {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': this.getCsrfToken()
+                        'X-CSRFToken': getCsrfToken()
                     }
                 })
 
@@ -78,12 +78,12 @@ export function registerSbomUpload(): void {
                 }
 
                 if (response.ok) {
-                    showSuccess('SBOM uploaded successfully! Please refresh the page to see the new SBOM.')
+                    showSuccess('SBOM uploaded successfully! Reloading page...')
+                    window.dispatchEvent(new CustomEvent('sbom-uploaded'))
                 } else {
                     showError((data.detail as string) || 'Upload failed')
                 }
-            } catch (error) {
-                console.error('SBOM upload error:', error)
+            } catch {
                 showError('Network error occurred. Please try again.')
             } finally {
                 this.isUploading = false
@@ -120,19 +120,6 @@ export function registerSbomUpload(): void {
             }
             // Reset input value to allow re-uploading the same file
             target.value = ''
-        },
-
-        getCsrfToken(): string {
-            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-            if (!token) {
-                // Fallback to cookie method
-                const cookieValue = document.cookie
-                    .split('; ')
-                    .find(row => row.startsWith('csrftoken='))
-                    ?.split('=')[1]
-                return cookieValue || ''
-            }
-            return token
         }
     }))
 }
