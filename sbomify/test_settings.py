@@ -35,6 +35,24 @@ from django.conf import settings as django_settings
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
 
+# Override django_dramatiq settings to use StubBroker
+# This prevents django_dramatiq from attempting to connect to Redis during tests
+# This MUST come after the settings import to properly override the Redis settings
+DRAMATIQ_BROKER = {
+    "BROKER": "dramatiq.brokers.stub.StubBroker",
+    "OPTIONS": {},
+    "MIDDLEWARE": [
+        "dramatiq.middleware.Callbacks",
+        "dramatiq.middleware.Retries",
+        "dramatiq.middleware.TimeLimit",
+    ],
+}
+
+DRAMATIQ_RESULT_BACKEND = {
+    "BACKEND": "dramatiq.results.backends.stub.StubBackend",
+    "BACKEND_OPTIONS": {},
+}
+
 # Ensure allauth apps are included in INSTALLED_APPS
 if "allauth" not in INSTALLED_APPS:
     INSTALLED_APPS.extend(["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"])
