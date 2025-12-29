@@ -118,7 +118,7 @@ class SnapshotMixin:
         self,
         baseline_image_path: str | Path,
         current_image_path: str | Path,
-        threshold: float = 0.005,
+        threshold: float = 0.0,
     ) -> None:
         _assert_screenshot(baseline_image_path, current_image_path, threshold)
 
