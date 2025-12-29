@@ -36,6 +36,15 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{sbom_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
+        sbom_upload_area = authenticated_page.locator(".sbom-upload-area")
+        sbom_upload_header = authenticated_page.locator(".sbom-upload-header")
+        try:
+            is_expanded = sbom_upload_area.count() > 0 and sbom_upload_area.is_visible()
+        except Exception:
+            is_expanded = False
+        if not is_expanded:
+            sbom_upload_header.click()
+        sbom_upload_area.wait_for(state="visible")
         authenticated_page.locator(".sbom-upload-header").click()
         authenticated_page.locator(".dangerzone-card h4").click()
 
