@@ -45,6 +45,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
+        "django_dramatiq.middleware.DbConnectionsMiddleware",
     ],
 }
 
