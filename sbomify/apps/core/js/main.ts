@@ -87,7 +87,6 @@ import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();
-registerWorkspaceSwitcher();
 registerSbomUpload();
 registerDeleteModal();
 
