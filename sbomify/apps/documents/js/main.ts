@@ -7,4 +7,4 @@ import { initializeAlpine } from '../../core/js/alpine-init';
 registerDocumentsTable();
 registerReleaseList();
 
-initializeAlpine();
+void initializeAlpine();

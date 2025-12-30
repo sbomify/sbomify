@@ -3,31 +3,19 @@ import { showSuccess, showError } from '../../core/js/alerts';
 import { getCsrfToken } from '../../core/js/csrf';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const FILE_SIZE_UNITS = ['Bytes', 'KB', 'MB', 'GB'] as const;
 
 export function registerDocumentUpload(): void {
     Alpine.data('documentUpload', (componentId: string) => ({
         componentId,
-        isExpanded: (() => {
-            const stored = localStorage.getItem('card-collapse-document-upload');
-            if (stored !== null) return stored === 'true';
-            return false;
-        })(),
+        expanded: false,
         isDragOver: false,
         isUploading: false,
         selectedFile: null as File | null,
         documentVersion: '1.0',
         documentType: '',
         documentDescription: '',
-
-        init() {
-            this.$watch('isExpanded', (val: boolean) => {
-                localStorage.setItem('card-collapse-document-upload', val.toString());
-            });
-        },
-
-        toggleExpanded() {
-            this.isExpanded = !this.isExpanded;
-        },
+        abortController: null as AbortController | null,
 
         get isFormValid(): boolean {
             return this.selectedFile !== null && this.documentVersion.trim().length > 0;
@@ -36,9 +24,8 @@ export function registerDocumentUpload(): void {
         formatFileSize(bytes: number): string {
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + FILE_SIZE_UNITS[i];
         },
 
         validateFile(file: File): string | null {
@@ -50,8 +37,8 @@ export function registerDocumentUpload(): void {
 
         clearSelectedFile(): void {
             this.selectedFile = null;
-            const fileInput = this.$el.querySelector('input[type="file"]') as HTMLInputElement;
-            if (fileInput) {
+            const fileInput = this.$el.querySelector('input[type="file"]');
+            if (fileInput instanceof HTMLInputElement) {
                 fileInput.value = '';
             }
         },
@@ -73,7 +60,13 @@ export function registerDocumentUpload(): void {
                 return;
             }
 
+            if (this.isUploading) {
+                showError('An upload is already in progress. Please wait.');
+                return;
+            }
+
             this.isUploading = true;
+            this.abortController = new AbortController();
 
             try {
                 const formData = new FormData();
@@ -87,19 +80,26 @@ export function registerDocumentUpload(): void {
                     formData.append('description', this.documentDescription.trim());
                 }
 
+                const csrfToken = getCsrfToken();
+
                 const response = await fetch('/api/v1/documents/', {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': getCsrfToken()
-                    }
+                        'X-CSRFToken': csrfToken
+                    },
+                    signal: this.abortController.signal
                 });
 
-                let data: Record<string, unknown>;
-                try {
-                    data = await response.json();
-                } catch {
-                    data = {};
+                let data: Record<string, unknown> = {};
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType?.includes('application/json')) {
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.error('Failed to parse JSON response:', error);
+                    }
                 }
 
                 if (response.ok) {
@@ -110,12 +110,25 @@ export function registerDocumentUpload(): void {
                     this.clearSelectedFile();
                     window.dispatchEvent(new CustomEvent('document-uploaded'));
                 } else {
-                    showError((data.detail as string) || 'Upload failed');
+                    const errorMessage = (data.detail as string) || `Upload failed with status ${response.status}`;
+                    showError(errorMessage);
+                    console.error('Document upload failed:', { status: response.status, data });
                 }
-            } catch {
-                showError('Network error occurred. Please try again.');
+            } catch (error) {
+                if (error instanceof Error) {
+                    if (error.name === 'AbortError') {
+                        showError('Upload was cancelled.');
+                    } else {
+                        showError(`Network error: ${error.message}`);
+                        console.error('Document upload error:', error);
+                    }
+                } else {
+                    showError('An unexpected error occurred. Please try again.');
+                    console.error('Unknown upload error:', error);
+                }
             } finally {
                 this.isUploading = false;
+                this.abortController = null;
             }
         },
 
@@ -128,7 +141,7 @@ export function registerDocumentUpload(): void {
             }
 
             const files = event.dataTransfer?.files;
-            if (files && files.length > 0) {
+            if (files?.[0]) {
                 const file = files[0];
                 const validationError = this.validateFile(file);
                 if (validationError) {
@@ -148,7 +161,7 @@ export function registerDocumentUpload(): void {
             }
 
             const files = target.files;
-            if (files && files.length > 0) {
+            if (files?.[0]) {
                 const file = files[0];
                 const validationError = this.validateFile(file);
                 if (validationError) {
@@ -157,6 +170,13 @@ export function registerDocumentUpload(): void {
                     return;
                 }
                 this.selectedFile = file;
+            }
+        },
+
+        cleanup(): void {
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
             }
         }
     }));

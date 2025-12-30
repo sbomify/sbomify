@@ -27,6 +27,7 @@ import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerDeleteModal } from './components/delete-modal';
+
 import '../../vulnerability_scanning/js/vulnerability-chart';
 
 // Register Chart.js components
@@ -72,6 +73,10 @@ import AccessTokensList from './components/AccessTokensList.vue';
 import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
 import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
 import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
+import DangerZone from './components/DangerZone.vue';
+import ProjectDangerZone from './components/ProjectDangerZone.vue';
+import ProductDangerZone from './components/ProductDangerZone.vue';
+import SbomDangerZone from './components/SbomDangerZone.vue';
 import ExportDataCard from './components/ExportDataCard.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 import ItemsListTable from './components/ItemsListTable.vue';
@@ -90,8 +95,15 @@ registerWorkspaceSwitcher();
 registerSbomUpload();
 registerDeleteModal();
 
+import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
+registerComponentMetaInfoEditor();
+
+
+import { registerComponentMetaInfo } from './component-meta-info';
+registerComponentMetaInfo();
+
 import { initializeAlpine } from './alpine-init';
-initializeAlpine();
+void initializeAlpine();
 
 // Initialize Vue components
 mountVueComponent('vc-editable-single-field', EditableSingleField);
@@ -104,6 +116,10 @@ mountVueComponent('vc-access-tokens-list', AccessTokensList);
 mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
 mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
 mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
+mountVueComponent('vc-danger-zone', DangerZone);
+mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
+mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
 mountVueComponent('vc-export-data-card', ExportDataCard);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 mountVueComponent('vc-items-list-table', ItemsListTable);
@@ -128,6 +144,10 @@ document.body.addEventListener('htmx:afterSwap', () => {
   mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
   mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
   mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
+  mountVueComponent('vc-danger-zone', DangerZone);
+  mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
+  mountVueComponent('vc-product-danger-zone', ProductDangerZone);
+  mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
   mountVueComponent('vc-export-data-card', ExportDataCard);
   mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
   mountVueComponent('vc-items-list-table', ItemsListTable);

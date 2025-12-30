@@ -3,22 +3,23 @@
       href="{% static 'css/components/document-upload.css' %}">
 <div class="document-upload-wrapper"
      x-data="documentUpload('{{ component_id }}')"
+     x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false'))"
      x-cloak>
     <div class="standard-card mt-3">
-        <div class="card shadow-sm" :class="{ 'card-collapsed': !isExpanded }">
+        <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
             <div class="card-header collapsible-header"
-                 @click="toggleExpanded()"
+                 @click="expanded = !expanded"
                  style="cursor: pointer">
                 <div class="header-content">
                     <h4 class="card-title mb-0">
-                        Upload Document File
+                        <i class="fas fa-upload me-2"></i>Upload Document File
                         <i class="fas ms-2"
-                           :class="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                           :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </h4>
                 </div>
             </div>
             <div class="card-body"
-                 :class="{ 'collapse': !isExpanded, 'show': isExpanded }">
+                 :class="{ 'collapse': !expanded, 'show': expanded }">
                 <div class="augmentation-notice d-flex align-items-center mb-3">
                     <i class="fas fa-info-circle me-2" style="color: #4f46e5;"></i>
                     <span class="text-muted">

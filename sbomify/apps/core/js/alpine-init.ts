@@ -1,40 +1,35 @@
 import Alpine from 'alpinejs';
+import { parseJsonScript } from './utils';
 
-let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 declare global {
   interface Window {
     Alpine: typeof Alpine;
+    parseJsonScript: typeof parseJsonScript;
   }
 }
 
-// Only set window.Alpine if not already set to ensure singleton across bundles
 if (!window.Alpine) {
   window.Alpine = Alpine;
 }
+window.parseJsonScript = parseJsonScript;
 
-// Use the global instance if available, otherwise fall back to the imported one
-// This ensures that all bundles interact with the same Alpine instance (usually the one from the core bundle)
-const AlpineSingleton = window.Alpine || Alpine;
-
-export function initializeAlpine(): void {
-  // Check if Alpine is already initialized
-  // We check safe access to internal started property if available, or rely on our flag
-  if (isInitialized) {
-    return;
+export function initializeAlpine(): Promise<void> {
+  if (initializationPromise) {
+    return initializationPromise;
   }
 
-  // If window.Alpine exists and it's already started (internal flag often used), skip
-  // Note: Alpine doesn't expose a public 'started' property, so we rely on our mechanism
-  // or safe idempotent start if possible.
+  initializationPromise = Promise.resolve().then(() => {
+    window.Alpine.start();
+  });
 
-  AlpineSingleton.start();
-  isInitialized = true;
+  return initializationPromise;
 }
 
 export function isAlpineInitialized(): boolean {
-  return isInitialized;
+  return initializationPromise !== null;
 }
 
-export default AlpineSingleton;
+export default window.Alpine || Alpine;
 

@@ -1,0 +1,304 @@
+.code-block {
+    position: relative;
+    background: var(--gray-900);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--gray-800);
+    box-shadow: var(--shadow-lg);
+}
+
+.code-block pre {
+    margin: 0;
+    padding: 1.5rem;
+    background: transparent;
+    overflow-x: auto;
+}
+
+.code-block code {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    line-height: 1.7;
+    color: var(--gray-100);
+    tab-size: 2;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(var(--brand-primary-rgb), 0.1);
+    border: 1px solid rgba(var(--brand-primary-rgb), 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--brand-primary);
+    font-size: 0.7rem;
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.copy-btn a {
+    color: var(--brand-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.copy-btn:hover {
+    background: rgba(var(--brand-primary-rgb), 0.2);
+    border-color: rgba(var(--brand-primary-rgb), 0.4);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.copy-btn .copied {
+    display: none;
+}
+
+.nav-tabs {
+    border-bottom: 1px solid var(--surface-border);
+    gap: 2.5rem;
+    flex-wrap: wrap;
+    /* Ensure tabs wrap on smaller screens */
+}
+
+@media (max-width: 576px) {
+    .nav-tabs {
+        gap: 1rem;
+    }
+}
+
+.nav-tabs .nav-link {
+    padding: 0.75rem 0;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: -1px;
+    background: transparent;
+    transition: all var(--transition-normal);
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.nav-tabs .nav-link.active {
+    border: none;
+    border-bottom: 2px solid var(--brand-primary);
+    color: var(--brand-primary);
+    background: transparent;
+}
+
+.nav-tabs .nav-link i {
+    margin-right: 0.5rem;
+}
+
+.tab-content {
+    background: transparent !important;
+    border: none !important;
+    padding: 1.5rem 0 0 0 !important;
+}
+
+.source-selector {
+    max-width: 400px;
+    width: 100%;
+    /* Ensure it doesn't exceed parent width on small screens */
+}
+
+.source-selector select {
+    width: 100%;
+    padding: 0.625rem;
+    border: 1px solid var(--form-control-border);
+    border-radius: var(--radius-md);
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+}
+
+.source-selector select:focus {
+    border-color: var(--brand-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.15);
+}
+
+.config-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--spacing-lg);
+    margin: 1.5rem 0;
+    padding: 0.75rem 0;
+}
+
+.config-option {
+    display: flex;
+    align-items: center;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    width: auto;
+}
+
+.form-check-input {
+    margin: 0;
+    cursor: pointer;
+    width: 1.1em;
+    height: 1.1em;
+    border-color: var(--gray-400);
+}
+
+.form-check-input:checked {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+
+.form-check-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--gray-500);
+    color: var(--white);
+    font-size: 9px;
+    font-weight: 600;
+    cursor: help;
+    transition: background-color var(--transition-fast);
+    margin-left: 0.375rem;
+}
+
+.info-icon:hover {
+    background-color: var(--text-secondary);
+}
+
+/* Info notice styling */
+.info-notice {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background-color: var(--gray-50);
+    border-left: 4px solid var(--brand-primary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+}
+
+.info-notice i {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    color: var(--brand-primary);
+}
+
+.info-notice strong {
+    color: var(--text-title);
+    font-weight: 600;
+}
+
+/* Syntax Highlighting - Catppuccin Mocha inspired */
+.hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 0;
+    color: #cdd6f4;
+    background: transparent;
+    font-size: 0.875rem;
+    line-height: 1.7;
+}
+
+.hljs-comment,
+.hljs-quote {
+    color: #6c7086;
+    font-style: italic;
+}
+
+.hljs-doctag,
+.hljs-keyword,
+.hljs-formula {
+    color: #cba6f7;
+}
+
+.hljs-section,
+.hljs-name,
+.hljs-selector-tag,
+.hljs-deletion,
+.hljs-subst {
+    color: #f38ba8;
+}
+
+.hljs-literal {
+    color: #fab387;
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+    color: #a6e3a1;
+}
+
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-number {
+    color: #f9e2af;
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-selector-id,
+.hljs-title {
+    color: #89b4fa;
+}
+
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+    color: #f5c2e7;
+}
+
+.nav-tabs-container {
+    width: 100%;
+}
+
+.clickable {
+    cursor: pointer;
+}

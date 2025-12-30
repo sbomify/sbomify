@@ -1,0 +1,117 @@
+/* Component Meta Info Display Styles */
+
+.hover-danger:hover {
+    color: #dc3545 !important;
+}
+
+.transition-transform {
+    transition: transform 0.2s ease-in-out;
+}
+
+[aria-expanded="true"] .transition-transform {
+    transform: rotate(180deg);
+}
+
+[aria-expanded="false"] .transition-transform {
+    transform: rotate(0deg);
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.info-notice {
+    padding: 0.75rem 1rem;
+    background-color: #f5f7ff;
+    /* Light blue/purple background */
+    border-left: 4px solid #6366f1;
+    /* Indigo-500 matches brand-primary usually */
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+    color: #4b5563;
+    /* text-gray-600 */
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.info-notice i {
+    color: #6366f1;
+    font-size: 1.1rem;
+}
+
+.info-notice strong {
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.info-notice a {
+    color: #6366f1 !important;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.info-notice a:hover {
+    text-decoration: underline;
+}
+
+.component-meta-info-display-container .card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary, #1f2937);
+}
+
+.section-content {
+    background-color: transparent;
+}
+
+.section-label {
+    font-size: 1rem !important;
+    font-weight: 600;
+    color: var(--text-secondary, #4b5563);
+}
+
+.section-label.small {
+    font-size: 1rem !important;
+}
+
+.sub-section-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary, #4b5563);
+}
+
+.sub-section-label.small {
+    font-size: 1rem !important;
+}
+
+.section-subtext {
+    font-size: 0.9375rem;
+}
+
+.component-meta-info-display-container .table {
+    font-size: 0.9375rem;
+}
+
+.component-meta-info-display-container .table td {
+    font-size: 0.9375rem;
+}
+
+.component-meta-info-display-container .text-muted:not(.section-label):not(.small) {
+    font-size: 0.9375rem;
+}
+
+.profile-indicator {
+    display: flex;
+    align-items: center;
+}
+
+.hover-danger {
+    transition: color 0.2s ease;
+}
+
+/* Ensure badges look good */
+.badge {
+    font-weight: 500;
+    font-size: 0.8125rem;
+}

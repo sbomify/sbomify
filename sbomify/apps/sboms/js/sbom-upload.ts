@@ -2,15 +2,21 @@ import Alpine from '../../core/js/alpine-init'
 import { showSuccess, showError } from '../../core/js/alerts'
 import { getCsrfToken } from '../../core/js/csrf'
 
+const MAX_SBOM_SIZE = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
+const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx'];
+
 interface SbomUploadState {
     expanded: boolean
     isDragOver: boolean
     isUploading: boolean
     componentId: string
+    abortController: AbortController | null
     handleDrop: (event: DragEvent) => void
     handleFileSelect: (event: Event) => void
     validateFile: (file: File) => string | null
     uploadFile: (file: File) => Promise<void>
+    cleanup: () => void
 }
 
 export function registerSbomUpload(): void {
@@ -19,25 +25,18 @@ export function registerSbomUpload(): void {
         isDragOver: false,
         isUploading: false,
         componentId: componentId,
+        abortController: null,
 
         validateFile(file: File): string | null {
-            // Check file size (max 10MB)
-            const maxSize = 10 * 1024 * 1024
-            if (file.size > maxSize) {
+            if (file.size > MAX_SBOM_SIZE) {
                 return 'File size must be less than 10MB'
             }
 
-            // Check file type
-            // We use OR logic (type OR extension) because browsers report MIME types inconsistently:
-            // - Some browsers report .spdx/.cdx files as 'text/plain' or 'application/octet-stream'
-            // - Some fail to detect the type at all for custom extensions
-            // - JSON files typically report correctly as 'application/json'
-            // By accepting either a valid MIME type OR a valid extension, we ensure cross-browser compatibility.
-            const allowedTypes = ['application/json', 'text/plain']
-            const allowedExtensions = ['.json', '.spdx', '.cdx']
-            const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+            const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+            const hasValidType = ALLOWED_MIME_TYPES.includes(file.type);
+            const hasValidExtension = ALLOWED_EXTENSIONS.includes(fileExtension);
 
-            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+            if (!hasValidType && !hasValidExtension) {
                 return 'Please select a valid SBOM file (.json, .spdx, .cdx)'
             }
 
@@ -45,81 +44,108 @@ export function registerSbomUpload(): void {
         },
 
         async uploadFile(file: File): Promise<void> {
-            // Reset drag state in case upload was triggered during drag
-            this.isDragOver = false
-
             const validationError = this.validateFile(file)
             if (validationError) {
                 showError(validationError)
                 return
             }
 
+            if (this.isUploading) {
+                showError('An upload is already in progress. Please wait.')
+                return
+            }
+
             this.isUploading = true
+            this.abortController = new AbortController()
 
             try {
                 const formData = new FormData()
                 formData.append('sbom_file', file)
                 formData.append('component_id', this.componentId)
 
+                const csrfToken = getCsrfToken()
+
                 const response = await fetch(`/api/v1/sboms/upload-file/${this.componentId}`, {
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': getCsrfToken()
-                    }
+                        'X-CSRFToken': csrfToken
+                    },
+                    signal: this.abortController.signal
                 })
 
-                // Safely parse JSON - server might return HTML error page for 5xx errors
-                let data: Record<string, unknown>
-                try {
-                    data = await response.json()
-                } catch {
-                    data = {}
+                let data: Record<string, unknown> = {};
+                const contentType = response.headers.get('content-type');
+
+                if (contentType?.includes('application/json')) {
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.error('Failed to parse JSON response:', error);
+                    }
                 }
 
                 if (response.ok) {
                     showSuccess('SBOM uploaded successfully! Reloading page...')
                     window.dispatchEvent(new CustomEvent('sbom-uploaded'))
                 } else {
-                    showError((data.detail as string) || 'Upload failed')
+                    const errorMessage = (data.detail as string) || `Upload failed with status ${response.status}`
+                    showError(errorMessage)
+                    console.error('SBOM upload failed:', { status: response.status, data })
                 }
-            } catch {
-                showError('Network error occurred. Please try again.')
+            } catch (error) {
+                if (error instanceof Error) {
+                    if (error.name === 'AbortError') {
+                        showError('Upload was cancelled.')
+                    } else {
+                        showError(`Network error: ${error.message}`)
+                        console.error('SBOM upload error:', error)
+                    }
+                } else {
+                    showError('An unexpected error occurred. Please try again.')
+                    console.error('Unknown upload error:', error)
+                }
             } finally {
                 this.isUploading = false
+                this.abortController = null
             }
         },
 
         handleDrop(event: DragEvent): void {
-            event.preventDefault()
-            this.isDragOver = false
+            event.preventDefault();
+            this.isDragOver = false;
 
-            // Prevent concurrent uploads
             if (this.isUploading) {
-                return
+                return;
             }
 
-            const files = event.dataTransfer?.files
-            if (files && files.length > 0) {
-                this.uploadFile(files[0])
+            const files = event.dataTransfer?.files;
+            if (files?.[0]) {
+                this.uploadFile(files[0]);
             }
         },
 
         handleFileSelect(event: Event): void {
-            const target = event.target as HTMLInputElement
+            const target = event.target as HTMLInputElement;
 
-            // Prevent concurrent uploads
             if (this.isUploading) {
-                target.value = ''
-                return
+                showError('An upload is already in progress. Please wait.')
+                target.value = '';
+                return;
             }
 
-            const files = target.files
-            if (files && files.length > 0) {
-                this.uploadFile(files[0])
+            const files = target.files;
+            if (files?.[0]) {
+                this.uploadFile(files[0]);
             }
-            // Reset input value to allow re-uploading the same file
-            target.value = ''
+            target.value = '';
+        },
+
+        cleanup(): void {
+            if (this.abortController) {
+                this.abortController.abort()
+                this.abortController = null
+            }
         }
     }))
 }

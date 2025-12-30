@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="{% static 'css/components/sboms-table.css' %}">
 <div x-data="sbomsTable('{{ component_id }}', '{{ sboms|jsonify|escapejs }}')">
     {% if not is_public_view %}
-        <div class="standard-card mt-3">
+        <div class="standard-card">
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h4 class="card-title mb-0">SBOMs</h4>
@@ -12,7 +12,7 @@
             </div>
         </div>
     {% else %}
-        <div class="mt-3">{% include 'sboms/sboms_table_content.html.j2' %}</div>
+        <div>{% include 'sboms/sboms_table_content.html.j2' %}</div>
     {% endif %}
     {% if has_crud_permissions %}
         {% url 'sboms:sboms_table' component_id as delete_url %}

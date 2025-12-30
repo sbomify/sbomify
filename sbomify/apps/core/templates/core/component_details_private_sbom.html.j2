@@ -6,12 +6,9 @@
           href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content_after_header %}
-    <div class="vc-component-meta-info"
-         data-component-id="{{ component.id }}"
-         data-team-key="{{ request.session.current_team.key }}"
-         {% if component.has_crud_permissions %}data-allow-edit{% endif %}></div>
+    {% include "core/components/component_meta_info.html.j2" %}
     <!-- Vulnerability Time Series Chart -->
-    <div class="row mt-3">
+    <div class="row mt-4">
         <div class="col-12">
             <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?component_id={{ component.id }}&hide_recent_scans=true"
                  hx-trigger="load"
@@ -28,13 +25,16 @@
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}
-        <div class="row mt-3">
+        <div class="row mt-4">
+            <div class="col-12">{% include "sboms/components/ci_cd_info.html.j2" %}</div>
+        </div>
+        <div class="row mt-4">
             <div class="col-12">{% include 'sboms/components/sbom_upload.html.j2' with component_id=component.id %}</div>
         </div>
     {% endif %}
 {% endblock %}
 {% block table_section %}
-    <div class="row mt-3">
+    <div class="row mt-4">
         <div class="col-12">
             <div id="sboms-table-container"
                  hx-get="{% url 'sboms:sboms_table' component.id %}"

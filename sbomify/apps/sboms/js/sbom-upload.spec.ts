@@ -1,5 +1,9 @@
 import { describe, test, expect } from 'bun:test'
 
+const MAX_SBOM_SIZE = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
+const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx'];
+
 /**
  * Tests for SBOM Upload Alpine.js component business logic
  *
@@ -10,28 +14,22 @@ import { describe, test, expect } from 'bun:test'
 describe('SBOM Upload Business Logic', () => {
     const testComponentId = 'test-component-123'
 
-    // Helper to create mock File objects
     const createMockFile = (name: string, size: number, type: string): File => {
         const content = new Array(size).fill('a').join('')
         return new File([content], name, { type })
     }
 
     describe('File Validation', () => {
-        // Validation logic extracted for unit testing
         const validateFile = (file: File): string | null => {
-            // Check file size (max 10MB)
-            const maxSize = 10 * 1024 * 1024
-            if (file.size > maxSize) {
+            if (file.size > MAX_SBOM_SIZE) {
                 return 'File size must be less than 10MB'
             }
 
-            // Check file type
-            // We use OR logic (type OR extension) because browsers report MIME types inconsistently
-            const allowedTypes = ['application/json', 'text/plain']
-            const allowedExtensions = ['.json', '.spdx', '.cdx']
-            const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+            const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+            const hasValidType = ALLOWED_MIME_TYPES.includes(file.type);
+            const hasValidExtension = ALLOWED_EXTENSIONS.includes(fileExtension);
 
-            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+            if (!hasValidType && !hasValidExtension) {
                 return 'Please select a valid SBOM file (.json, .spdx, .cdx)'
             }
 

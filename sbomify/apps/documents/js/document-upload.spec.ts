@@ -1,7 +1,9 @@
 import { describe, test, expect } from 'bun:test'
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
 describe('Document Upload Business Logic', () => {
-    const testComponentId = 'test-component-123'
+    const testComponentId = 'test-component-123';
 
     const createMockFile = (name: string, size: number, type: string): File => {
         const content = new Array(size).fill('a').join('')
@@ -9,8 +11,6 @@ describe('Document Upload Business Logic', () => {
     }
 
     describe('File Validation', () => {
-        const MAX_FILE_SIZE = 50 * 1024 * 1024
-
         const validateFile = (file: File): string | null => {
             if (file.size > MAX_FILE_SIZE) {
                 return 'File size must be less than 50MB'
