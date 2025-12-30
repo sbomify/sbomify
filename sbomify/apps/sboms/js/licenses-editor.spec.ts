@@ -298,16 +298,16 @@ describe('LicensesEditor Business Logic', () => {
         });
 
         test('should handle arrow up navigation', () => {
-            let selectedIndex = 1;
+            let selectedIndex = 0;
             const listLength = 5;
 
-            // Arrow up
-            selectedIndex = selectedIndex <= 0 ? listLength - 1 : selectedIndex - 1;
-            expect(selectedIndex).toBe(0);
-
-            // Wrap to end
+            // Arrow up from 0 should wrap to end
             selectedIndex = selectedIndex <= 0 ? listLength - 1 : selectedIndex - 1;
             expect(selectedIndex).toBe(4);
+
+            // Arrow up from 4 should go to 3
+            selectedIndex = selectedIndex <= 0 ? listLength - 1 : selectedIndex - 1;
+            expect(selectedIndex).toBe(3);
         });
     });
 
