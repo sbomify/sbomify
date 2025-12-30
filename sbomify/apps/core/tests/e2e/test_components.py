@@ -61,13 +61,8 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{document_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        # Ensure the document upload section is expanded
-        document_version = authenticated_page.locator("#document-version")
-        if document_version.is_hidden():
-            authenticated_page.locator(".document-upload-wrapper h4").click()
-        document_version.wait_for(state="visible")
         authenticated_page.locator(".document-upload-wrapper h4").click()
-        authenticated_page.locator(".dangerzone-card h4").click()
+        authenticated_page.locator(".vc-danger-zone h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
