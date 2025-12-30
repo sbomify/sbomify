@@ -2,7 +2,6 @@
 ARG PYTHON_VERSION=3.12-slim-bookworm@sha256:9c1d9ed7593f2552a4ea47362ec0d2ddf5923458a53d0c8e30edf8b398c94a31
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.0.2
-ARG CYCLONEDX_GOMOD_VERSION=v1.9.0
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -131,16 +130,11 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 ### Stage 5: Go Builder for OSV-Scanner
 FROM golang:1.25-alpine@sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb AS go-builder
 ARG OSV_SCANNER_VERSION
-ARG CYCLONEDX_GOMOD_VERSION
 
 WORKDIR /src
 
-# Install osv-scanner and generate SBOM
+# Install osv-scanner
 RUN go install github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}
-
-# Build SBOM
-RUN go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}
-RUN /go/bin/cyclonedx-gomod bin -json -output /tmp/osv.cdx.json /go/bin/osv-scanner
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev

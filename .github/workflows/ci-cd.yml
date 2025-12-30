@@ -432,6 +432,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate additional packages from Dockerfile
+        run: ./bin/generate_additional_packages.sh > dockerfile_packages.txt
+
       - name: Upload backend SBOM
         uses: sbomify/github-action@8275b4990dc8baf2991d7605ea24c7bb358ee44f # master
         env:
@@ -462,6 +465,7 @@ jobs:
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           OUTPUT_FILE: container.cdx.json
           DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:${{ github.ref_name }}
+          ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
           AUGMENT: true
           ENRICH: true
           UPLOAD: true
