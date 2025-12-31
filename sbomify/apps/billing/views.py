@@ -215,7 +215,10 @@ def select_plan(request: HttpRequest, team_key: str):
             request.session["selected_plan"] = selected_plan_data
             return redirect("billing:billing_redirect", team_key=team_key)
 
-    plans = BillingPlan.objects.all()
+    # Sort plans explicitly: Community -> Business -> Enterprise
+    plans_list = list(BillingPlan.objects.all())
+    order = {"community": 0, "business": 1, "enterprise": 2}
+    plans = sorted(plans_list, key=lambda p: order.get(p.key, 99))
 
     # Get current usage counts
     product_count = Product.objects.filter(team=team).count()

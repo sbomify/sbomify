@@ -1,7 +1,366 @@
 {% extends "core/dashboard_base.html.j2" %}
-{% load django_vite %}
+{% load static %}
 {% block title %}sbomify Select Plan{% endblock %}
-{% block content %}<div class="vc-plan-selection"></div>{% endblock %}
+{% block styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/apps/billing/plan-selection.css' %}">
+{% endblock %}
+{% block content %}
+    <div class="pricing-page" x-data="planSelection()">
+        <!-- Hero Section -->
+        <section class="hero-section py-5">
+            <div class="container">
+                <div class="row justify-content-center text-center">
+                    <div class="col-lg-8">
+                        <h1 class="hero-title mb-4">Choose the Perfect Plan for Your Workspace</h1>
+                        <p class="hero-subtitle mb-4">
+                            Secure, scalable security and product artifact management for workspaces of all sizes. Start with Community, upgrade when you need more.
+                        </p>
+                        <div class="billing-toggle-wrapper mb-5">
+                            <div class="billing-toggle">
+                                <span class="toggle-label"
+                                      :class="{ 'active': billingPeriod === 'monthly' }">Monthly</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox"
+                                           :checked="billingPeriod === 'annual'"
+                                           @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-label"
+                                      :class="{ 'active': billingPeriod === 'annual' }">
+                                    Annual
+                                    <span class="savings-badge">Save 20%</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Current Usage Section -->
+        <section class="usage-section py-4"
+                 x-show="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="usage-card">
+                            <div class="usage-header">
+                                <h3 class="usage-title">
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    Current Usage
+                                </h3>
+                            </div>
+                            <div class="usage-stats">
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.users || 0"></span>
+                                    <span class="stat-label">Users</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.products"></span>
+                                    <span class="stat-label">Products</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.projects"></span>
+                                    <span class="stat-label">Projects</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.components"></span>
+                                    <span class="stat-label">Components</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Pricing Cards Section -->
+        <section class="pricing-section py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    {% for plan in plans %}
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="pricing-card"
+                                 :class="{ 'current-plan': currentPlan === '{{ plan.key }}', 'popular': '{{ plan.key }}' === 'business', 'enterprise': '{{ plan.key }}' === 'enterprise' }">
+                                <!-- Popular Badge -->
+                                {% if plan.key == 'business' %}
+                                    <div class="popular-badge">
+                                        <i class="fas fa-star me-1"></i>
+                                        Most Popular
+                                    </div>
+                                {% endif %}
+                                <!-- Plan Header -->
+                                <div class="plan-header">
+                                    <h3 class="plan-name">{{ plan.name }}</h3>
+                                    <div class="plan-price">
+                                        {% if plan.key == 'community' %}
+                                            <span class="price-main">$0</span>
+                                            <span class="price-period">forever</span>
+                                        {% elif plan.key == 'business' %}
+                                            <span class="price-main"
+                                                  x-text="billingPeriod === 'monthly' ? '$199' : '$159'"></span>
+                                            <span class="price-period">/month</span>
+                                            <div x-show="billingPeriod === 'annual'" class="billing-note">
+                                                <span class="original-price">$199/mo</span>
+                                                <span class="savings">Save $480/year</span>
+                                            </div>
+                                        {% else %}
+                                            <span class="price-main">Custom</span>
+                                            <span class="price-period">pricing</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="plan-description">{{ plan.description }}</p>
+                                </div>
+                                <!-- Features List -->
+                                <div class="plan-features">
+                                    <ul class="features-list">
+                                        <template x-for="feature in getFeatures('{{ plan.key }}')" :key="feature.key">
+                                            <li class="feature-item"
+                                                :class="{ 'feature-item-header': feature.key.startsWith('includes-') }">
+                                                <i x-show="!feature.key.startsWith('includes-')"
+                                                   class="fas fa-check feature-check"></i>
+                                                <span :class="{ 'feature-includes': feature.key.startsWith('includes-') }"
+                                                      x-text="feature.label"></span>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </div>
+                                <!-- Action Button -->
+                                <div class="plan-action">
+                                    <button class="btn-plan"
+                                            :class="{ 'btn-current': currentPlan === '{{ plan.key }}', 'btn-primary': currentPlan !== '{{ plan.key }}' && '{{ plan.key }}' !== 'enterprise', 'btn-enterprise': '{{ plan.key }}' === 'enterprise' }"
+                                            :disabled="!canSelectPlan('{{ plan.key }}', {{ plan.max_products|default:'null' }}, {{ plan.max_projects|default:'null' }}, {{ plan.max_components|default:'null' }}, {{ plan.max_users|default:'null' }})"
+                                            @click="handlePlanSelection('{{ plan.key }}', '{{ plan.name }}')">
+                                        <span x-text="getButtonText('{{ plan.key }}')"></span>
+                                    </button>
+                                    <!-- Warning Message -->
+                                    <div x-show="!canDowngrade('{{ plan.key }}', {{ plan.max_products|default:'null' }}, {{ plan.max_projects|default:'null' }}, {{ plan.max_components|default:'null' }}, {{ plan.max_users|default:'null' }}).can"
+                                         class="warning-message">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        <span x-text="canDowngrade('{{ plan.key }}', {{ plan.max_products|default:'null' }}, {{ plan.max_projects|default:'null' }}, {{ plan.max_components|default:'null' }}, {{ plan.max_users|default:'null' }}).message"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        <!-- FAQ Section -->
+        <section class="faq-section py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="faq-header text-center mb-5">
+                            <h2>Frequently Asked Questions</h2>
+                        </div>
+                        <div class="faq-list">
+                            <template x-for="faq in faqs" :key="faq.id">
+                                <div class="faq-item">
+                                    <div class="faq-question" @click="toggleFAQ(faq.id)">
+                                        <span x-text="faq.question"></span>
+                                        <i class="fas fa-chevron-down" :class="{ 'rotated': faq.expanded }"></i>
+                                    </div>
+                                    <div x-show="faq.expanded" class="faq-answer" x-transition>
+                                        <p x-text="faq.answer"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+{% endblock %}
 {% block scripts %}
-    {% vite_asset 'sbomify/apps/billing/js/main.ts' %}
+    <script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('planSelection', () => ({
+            billingPeriod: 'monthly',
+            currentPlan: '{{ team.billing_plan|default:"community" }}',
+            teamKey: '{{ team_key }}',
+            usage: {
+                users: {{ team.members.count }},
+                products: {{ product_count }},
+                projects: {{ project_count }},
+                components: {{ component_count }}
+            },
+            faqs: [
+                {
+                    id: 'what-is-sbom',
+                    question: 'What is an SBOM and why do I need it?',
+                    answer: 'An SBOM (Software Bill of Materials) is a comprehensive inventory of all software components in your applications. It\'s essential for security, compliance, and vulnerability management.',
+                    expanded: false
+                },
+                {
+                    id: 'free-trial',
+                    question: 'Do you offer a free trial?',
+                    answer: 'Yes! Our Community plan is free forever. For Business plans, you get a 14-day free trial to test all premium features.',
+                    expanded: false
+                },
+                {
+                    id: 'upgrade-anytime',
+                    question: 'Can I upgrade or downgrade my plan anytime?',
+                    answer: 'Absolutely! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and billing adjustments are prorated.',
+                    expanded: false
+                },
+                {
+                    id: 'enterprise-features',
+                    question: 'What\'s included in the Enterprise plan?',
+                    answer: 'Enterprise includes unlimited everything, advanced security features, dedicated support, custom integrations, and SLA guarantees. Contact us for details.',
+                    expanded: false
+                },
+                {
+                    id: 'data-security',
+                    question: 'How secure is my data?',
+                    answer: 'We use enterprise-grade security with end-to-end encryption and regular security audits. Your data is always protected.',
+                    expanded: false
+                }
+            ],
+
+            init() {
+                // Initial fetch if needed, but we injected data directly
+            },
+
+            getFeatures(planKey) {
+                const baseFeatures = [
+                    { key: 'unlimited-sboms', label: 'Unlimited SBOMs' },
+                    { key: 'unlimited-products', label: 'Unlimited products' },
+                    { key: 'unlimited-projects', label: 'Unlimited projects' },
+                    { key: 'unlimited-components', label: 'Unlimited components' },
+                ];
+
+                if (planKey === 'community') {
+                    baseFeatures.push(
+                        { key: 'user-limit', label: '1 user (owner only)' },
+                        { key: 'public-only', label: 'All data is public' },
+                        { key: 'vulnerability-scanning', label: 'Weekly vulnerability scans' },
+                        { key: 'community-support', label: 'Community support' },
+                        { key: 'api-access', label: 'API access' }
+                    );
+                } else if (planKey === 'business') {
+                    baseFeatures.push(
+                        { key: 'includes-community', label: 'Everything in Community, plus:' },
+                        { key: 'user-limit', label: 'Up to 5 users' },
+                        { key: 'private-data', label: 'Private components/projects/products' },
+                        { key: 'ntia-compliance', label: 'NTIA Minimum Elements check' },
+                        { key: 'vulnerability-scanning', label: 'Advanced vulnerability scanning (every 12 hours)' },
+                        { key: 'product-identifiers', label: 'Product identifiers (SKUs/barcodes)' },
+                        { key: 'priority-support', label: 'Priority support' },
+                        { key: 'team-management', label: 'Workspace management' }
+                    );
+                } else if (planKey === 'enterprise') {
+                    baseFeatures.push(
+                        { key: 'includes-business', label: 'Everything in Business, plus:' },
+                        { key: 'user-limit', label: 'Unlimited users' },
+                        { key: 'custom-dt-servers', label: 'Custom Dependency Track servers' },
+                        { key: 'dedicated-support', label: 'Dedicated support' },
+                        { key: 'custom-integrations', label: 'Custom integrations' },
+                        { key: 'sla-guarantee', label: 'SLA guarantee' },
+                        { key: 'advanced-security', label: 'Advanced security' },
+                        { key: 'custom-deployment', label: 'Custom deployment options' }
+                    );
+                }
+
+                return baseFeatures;
+            },
+
+            toggleFAQ(id) {
+                const faq = this.faqs.find(f => f.id === id);
+                if (faq) {
+                    faq.expanded = !faq.expanded;
+                }
+            },
+
+            canDowngrade(planKey, maxProducts, maxProjects, maxComponents, maxUsers) {
+                if (!planKey) return { can: false, message: 'Plan not found' };
+
+                if (planKey === this.currentPlan) {
+                    return { can: true, message: '' };
+                }
+
+                // If currently on a plan with no limits (like enterprise) and moving to one with limits?
+                // Logic from Vue:
+                // If target has no limits on anything, it's fine.
+                if (!maxProducts && !maxProjects && !maxComponents && !maxUsers) {
+                    return { can: true, message: '' };
+                }
+                
+                // NOTE: The backend view also performs these checks, this is just for UI feedback
+                
+                if (maxProducts !== null && this.usage.products > maxProducts) {
+                    return { can: false, message: `You have ${this.usage.products} products, but this plan only allows ${maxProducts}` };
+                }
+
+                if (maxProjects !== null && this.usage.projects > maxProjects) {
+                    return { can: false, message: `You have ${this.usage.projects} projects, but this plan only allows ${maxProjects}` };
+                }
+
+                if (maxComponents !== null && this.usage.components > maxComponents) {
+                    return { can: false, message: `You have ${this.usage.components} components, but this plan only allows ${maxComponents}` };
+                }
+
+                if (maxUsers !== null && this.usage.users > maxUsers) {
+                    return { can: false, message: `You have ${this.usage.users} users, but this plan only allows ${maxUsers}` };
+                }
+
+                return { can: true, message: '' };
+            },
+
+            canSelectPlan(planKey, maxProducts, maxProjects, maxComponents, maxUsers) {
+                return this.canDowngrade(planKey, maxProducts, maxProjects, maxComponents, maxUsers).can;
+            },
+
+            getButtonText(planKey) {
+                if (planKey === this.currentPlan) {
+                    return 'Current Plan';
+                } else if (!this.currentPlan && planKey === 'community') {
+                    return 'Get Started with Community';
+                } else if (planKey === 'enterprise') {
+                    return 'Contact Sales';
+                } else {
+                    return this.currentPlan ? 'Switch to This Plan' : 'Get Started';
+                }
+            },
+
+            async handlePlanSelection(planKey, planName) {
+                if (planKey === 'enterprise') {
+                    window.location.href = '{% url "billing:enterprise_contact" %}';
+                    return;
+                }
+
+                if (planKey === 'community' && this.currentPlan && this.currentPlan !== 'community') {
+                    const confirmed = confirm('Are you sure you want to downgrade to the Community plan? All your SBOMs will become public and your subscription will be cancelled.');
+                    if (!confirmed) return;
+                }
+
+                // Create a form and submit it to the view
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = ''; // Post to current URL
+
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = '{{ csrf_token }}';
+                form.appendChild(csrfInput);
+
+                const planInput = document.createElement('input');
+                planInput.type = 'hidden';
+                planInput.name = 'plan';
+                planInput.value = planKey;
+                form.appendChild(planInput);
+                
+                const periodInput = document.createElement('input');
+                periodInput.type = 'hidden';
+                periodInput.name = 'billing_period';
+                periodInput.value = this.billingPeriod;
+                form.appendChild(periodInput);
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }));
+    });
+    </script>
 {% endblock %}
