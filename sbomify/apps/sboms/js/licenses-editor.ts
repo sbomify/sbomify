@@ -147,10 +147,7 @@ export function registerLicensesEditor() {
         },
 
         handleKeyDown(e: KeyboardEvent) {
-            if (e.key === 'Backspace' && !this.licenseExpression && this.licenseTags.length > 0) {
-                this.removeTag(this.licenseTags.length - 1);
-                return;
-            }
+
 
             if (e.key === 'Enter' && (!this.showSuggestions || this.selectedIndex < 0)) {
                 e.preventDefault();

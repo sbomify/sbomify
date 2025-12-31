@@ -1,3 +1,4 @@
+// Force update for lifecycle chips
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
 import { isEmpty } from './utils';
@@ -144,16 +145,21 @@ export function registerComponentMetaInfo() {
         getLifecyclePhaseClass(phase: string): string {
             switch (phase) {
                 case 'design':
+                    return 'lifecycle-badge-design';
                 case 'pre-build':
-                    return 'badge-warning';
+                    return 'lifecycle-badge-pre-build';
                 case 'build':
+                    return 'lifecycle-badge-build';
                 case 'post-build':
+                    return 'lifecycle-badge-post-build';
                 case 'operations':
-                    return 'badge-success';
+                    return 'lifecycle-badge-operations';
+                case 'discovery':
+                    return 'lifecycle-badge-discovery';
                 case 'decommission':
-                    return 'badge-danger';
+                    return 'lifecycle-badge-decommission';
                 default:
-                    return 'badge-warning';
+                    return 'lifecycle-badge-design';
             }
         },
 

@@ -58,12 +58,15 @@
                                         </template>
                                         <template x-if="metadata.supplier.url && metadata.supplier.url.length > 0">
                                             <tr>
-                                                <td class="text-muted">Website</td>
+                                                <td class="text-muted">URL</td>
                                                 <td>
                                                     <a :href="metadata.supplier.url[0]"
                                                        target="_blank"
                                                        rel="noopener noreferrer"
-                                                       x-text="metadata.supplier.url[0]"></a>
+                                                       class="text-decoration-none">
+                                                        <span x-text="metadata.supplier.url[0]"></span>
+                                                        <i class="fas fa-arrow-up-right-from-square ms-1 small text-muted"></i>
+                                                    </a>
                                                 </td>
                                             </tr>
                                         </template>
@@ -104,7 +107,7 @@
                     <div class="section-content">
                         <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Lifecycle</div>
                         <template x-if="metadata.lifecycle_phase">
-                            <span class="badge"
+                            <span class="badge fw-normal"
                                   :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
                                   x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
                         </template>

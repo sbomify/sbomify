@@ -73,6 +73,7 @@
 
 .section-label.small {
     font-size: 1rem !important;
+    font-weight: 600;
 }
 
 .sub-section-label {
@@ -83,6 +84,7 @@
 
 .sub-section-label.small {
     font-size: 1rem !important;
+    font-weight: 600;
 }
 
 .section-subtext {
@@ -112,6 +114,69 @@
 
 /* Ensure badges look good */
 .badge {
+    padding: .5rem 1rem;
+    border-radius: .25rem;
     font-weight: 500;
-    font-size: 0.8125rem;
+}
+
+/* Lifecycle Phase Badges - Matching Bootstrap badge system with unique colors */
+/* Based on Vue component from master: badge-warning, badge-success, badge-danger */
+/* Each lifecycle now has a unique color for better visual distinction */
+
+.badge.lifecycle-badge-design {
+    /* Gray/Neutral - matches badge-secondary-subtle */
+    background-color: var(--gray-100);
+    color: var(--gray-600);
+    border: 1px solid var(--gray-300);
+}
+
+.badge.lifecycle-badge-pre-build {
+    /* Orange/Yellow - matches badge-warning-subtle (from Vue: badge-warning) */
+    background-color: #fffbeb;
+    color: var(--brand-warning);
+    border: 1px solid #fed7aa;
+}
+
+.badge.lifecycle-badge-build {
+    /* Blue - matches badge-primary-subtle */
+    background-color: #eff6ff;
+    color: var(--brand-primary);
+    border: 1px solid #dbeafe;
+}
+
+.badge.lifecycle-badge-post-build {
+    /* Green - matches badge-success-subtle (from Vue: badge-success) */
+    background-color: #ecfdf5;
+    color: var(--brand-success);
+    border: 1px solid #d1fae5;
+}
+
+.badge.lifecycle-badge-operations {
+    /* Cyan - matches badge-info-subtle (from Vue: badge-success for operations) */
+    background-color: #f0f9ff;
+    color: var(--brand-info);
+    border: 1px solid #bae6fd;
+}
+
+.badge.lifecycle-badge-discovery {
+    /* Purple/Violet - unique color for discovery */
+    background-color: #f5f3ff;
+    color: #6d28d9;
+    border: 1px solid #ede9fe;
+}
+
+.badge.lifecycle-badge-decommission {
+    /* Red - matches badge-danger-subtle (from Vue: badge-danger) */
+    background-color: #fef2f2;
+    color: var(--brand-danger);
+    border: 1px solid #fecaca;
+}
+
+/* Force remove borders from table in component meta info display */
+.component-meta-info-display-container .table-borderless tr,
+.component-meta-info-display-container .table-borderless td,
+.component-meta-info-display-container .table-borderless th {
+    border: 0 !important;
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
 }
