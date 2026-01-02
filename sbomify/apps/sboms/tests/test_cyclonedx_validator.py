@@ -222,3 +222,9 @@ def test_validate_1_5_sbom_with_dependencies():
     assert "main-component" in dep_refs
     assert "pkg:maven/org.example/lib-a@1.0.0" in dep_refs
     assert "pkg:maven/org.example/lib-b@2.0.0" in dep_refs
+
+    # Verify dependsOn arrays are correctly handled (including empty/None cases)
+    deps_by_ref = {dep["ref"]: dep.get("dependsOn") for dep in deps_serialized}
+    assert deps_by_ref["main-component"] == ["pkg:maven/org.example/lib-a@1.0.0"]
+    assert deps_by_ref["pkg:maven/org.example/lib-a@1.0.0"] == ["pkg:maven/org.example/lib-b@2.0.0"]
+    assert deps_by_ref["pkg:maven/org.example/lib-b@2.0.0"] is None  # No dependsOn field

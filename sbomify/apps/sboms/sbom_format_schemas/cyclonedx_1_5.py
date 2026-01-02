@@ -44,8 +44,18 @@ class RefType(RootModel[str]):
 
 class RefLinkType(RootModel[RefType]):
     """
-    Descriptor for an element identified by the attribute 'bom-ref' in the same BOM document.
-    In contrast to `bomLinkElementType`.
+    Reference link to an element identified by the attribute 'bom-ref' in the same BOM document.
+
+    This class is a ``pydantic.RootModel[RefType]`` wrapper: its value is represented and
+    serialized as the underlying ``RefType`` string (the 'bom-ref' identifier) rather
+    than as an object with a 'root' field. It replaces the empty ``BaseModel`` that
+    ``datamodel-codegen`` originally generated for the JSON Schema construct
+    ``"allOf": [{"$ref": "#/definitions/refType"}]``, aligning the model with the schema
+    and with other ``RefType`` usages in this module.
+
+    In contrast to ``BomLinkElementType``, which uses BOM-Link URNs for cross-document
+    references, ``RefLinkType`` only allows local 'bom-ref' identifiers within the same
+    BOM document.
     """
 
     root: RefType
