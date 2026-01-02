@@ -24,6 +24,11 @@ interface ModalFocusTrap {
     handleModalClose(modalId: string): void;
 }
 
+interface ModalObservers {
+    intersectionObserver: IntersectionObserver;
+    mutationObserver: MutationObserver;
+}
+
 declare global {
     interface Window {
         getDeleteModalData: (config: DeleteModalConfig) => DeleteModalData;
@@ -32,10 +37,17 @@ declare global {
         handleModalOpen: (modalElement: HTMLElement, modalId: string) => void;
         handleModalClose: (modalId: string) => void;
         initDeleteModal: (modalId: string, overlay: HTMLElement) => void;
+        modalObservers: Map<string, ModalObservers>;
     }
 }
 
 export function registerDeleteModal() {
+    // Timeout constants for focus management
+    // These delays allow the DOM to update and ensure focus operations work correctly
+    const FOCUS_DELAY_MS = 50; // Delay for focusing elements after modal opens (allows DOM updates)
+    const FOCUS_RETURN_DELAY_MS = 100; // Delay for returning focus after modal closes (ensures modal is fully closed)
+    const INITIAL_CHECK_DELAY_MS = 150; // Delay for initial visibility check (allows Alpine.js to finish rendering)
+
     // Focus trapping utilities for modal accessibility
     if (!window.modalFocusTrap) {
         window.modalFocusTrap = {
@@ -136,13 +148,13 @@ export function registerDeleteModal() {
                     // Focus the selected element
                     setTimeout(() => {
                         elementToFocus?.focus();
-                    }, 50);
+                    }, FOCUS_DELAY_MS);
                 } else {
                     // If no focusable elements, focus the modal content itself
                     modalContent.setAttribute('tabindex', '-1');
                     setTimeout(() => {
                         modalContent.focus();
-                    }, 50);
+                    }, FOCUS_DELAY_MS);
                 }
             },
 
@@ -158,7 +170,7 @@ export function registerDeleteModal() {
                             // Element might not be focusable anymore, ignore
                             console.warn('Could not return focus to trigger element:', e);
                         }
-                    }, 100);
+                    }, FOCUS_RETURN_DELAY_MS);
                 }
                 // Clean up
                 delete this.triggerElements[modalId];
@@ -246,10 +258,10 @@ export function registerDeleteModal() {
 
                     if (!csrfToken) {
                         this.isLoading = false;
-                        this[config.modalId] = false;
                         const errorMsg = 'Security error: Missing CSRF token. Please reload the page and try again.';
                         console.error(errorMsg);
                         showError(errorMsg); // Use imported function
+                        this[config.modalId] = false;
                         return;
                     }
 
@@ -263,21 +275,46 @@ export function registerDeleteModal() {
                             credentials: 'same-origin'
                         });
 
-                        this[config.modalId] = false;
-
                         if (response.ok) {
                             showSuccess(config.successMessage); // Use imported function
+                            this[config.modalId] = false;
                             if (config.redirectUrl) {
                                 window.location.href = config.redirectUrl;
                             }
                         } else {
-                            console.error('Delete failed:', response.status);
-                            showError('Failed to delete. Please try again.'); // Use imported function
+                            let errorDetail = '';
+                            try {
+                                const contentType = response.headers.get('Content-Type') || '';
+
+                                if (contentType.includes('application/json')) {
+                                    const data = await response.json() as { detail?: string } | Record<string, unknown>;
+                                    if (data) {
+                                        if (typeof data.detail === 'string') {
+                                            errorDetail = data.detail;
+                                        } else {
+                                            errorDetail = JSON.stringify(data);
+                                        }
+                                    }
+                                } else {
+                                    errorDetail = await response.text();
+                                }
+                            } catch (parseError) {
+                                console.error('Failed to parse error response body:', parseError);
+                            }
+
+                            if (errorDetail) {
+                                console.error('Delete failed:', response.status, errorDetail);
+                                showError(`Failed to delete: ${errorDetail}`); // Use imported function
+                            } else {
+                                console.error('Delete failed:', response.status);
+                                showError('Failed to delete. Please try again.'); // Use imported function
+                            }
+                            this[config.modalId] = false;
                         }
                     } catch (error) {
-                        this[config.modalId] = false;
                         console.error('Delete error:', error);
                         showError('An error occurred. Please try again.'); // Use imported function
+                        this[config.modalId] = false;
                     } finally {
                         this.isLoading = false;
                     }
@@ -286,13 +323,30 @@ export function registerDeleteModal() {
         };
     }
 
+    // Initialize observers storage
+    if (!window.modalObservers) {
+        window.modalObservers = new Map<string, ModalObservers>();
+    }
+
     if (!window.initDeleteModal) {
         window.initDeleteModal = function (modalId: string, overlay: HTMLElement) {
-            let wasVisible = false;
+            // Disconnect existing observers for this modal if they exist
+            const existingObservers = window.modalObservers.get(modalId);
+            if (existingObservers) {
+                existingObservers.intersectionObserver.disconnect();
+                existingObservers.mutationObserver.disconnect();
+                window.modalObservers.delete(modalId);
+            }
 
-            // Watch for visibility changes using IntersectionObserver
-            const observer = new IntersectionObserver((entries) => {
-                const isVisible = entries[0].isIntersecting || window.getComputedStyle(overlay).display !== 'none';
+            let wasVisible = false;
+            let isProcessing = false;
+
+            // Consolidated visibility check function to prevent race conditions
+            const checkVisibility = () => {
+                if (isProcessing) return; // Prevent concurrent execution
+                isProcessing = true;
+
+                const isVisible = window.getComputedStyle(overlay).display !== 'none';
 
                 if (isVisible && !wasVisible) {
                     // Modal just opened
@@ -303,23 +357,30 @@ export function registerDeleteModal() {
                     wasVisible = false;
                     window.handleModalClose(modalId);
                 }
+
+                isProcessing = false;
+            };
+
+            // Watch for visibility changes using IntersectionObserver
+            // Note: Alpine.js x-show controls visibility via display property, so we only check computed style
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const observer = new IntersectionObserver((_entries) => {
+                checkVisibility();
             }, { threshold: 0, root: null });
 
             // Also watch for style changes (Alpine.js x-show uses display: none)
             const styleObserver = new MutationObserver(() => {
-                const isVisible = window.getComputedStyle(overlay).display !== 'none';
-
-                if (isVisible && !wasVisible) {
-                    wasVisible = true;
-                    window.handleModalOpen(overlay, modalId);
-                } else if (!isVisible && wasVisible) {
-                    wasVisible = false;
-                    window.handleModalClose(modalId);
-                }
+                checkVisibility();
             });
 
             styleObserver.observe(overlay, { attributes: true, attributeFilter: ['style'], subtree: false });
             observer.observe(overlay);
+
+            // Store observers for cleanup
+            window.modalObservers.set(modalId, {
+                intersectionObserver: observer,
+                mutationObserver: styleObserver
+            });
 
             // Initial check
             setTimeout(() => {
@@ -328,7 +389,7 @@ export function registerDeleteModal() {
                     wasVisible = true;
                     window.handleModalOpen(overlay, modalId);
                 }
-            }, 150);
+            }, INITIAL_CHECK_DELAY_MS);
         };
     }
 }
