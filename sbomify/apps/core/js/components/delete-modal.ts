@@ -124,7 +124,7 @@ export function registerDeleteModal() {
                     const closeButton = modalContent.querySelector<HTMLElement>('.delete-modal-close');
                     const cancelButton = modalContent.querySelector<HTMLElement>('.delete-modal-button--secondary');
 
-                    let elementToFocus = null;
+                    let elementToFocus: HTMLElement | null = null;
                     if (closeButton && focusableElements.includes(closeButton)) {
                         elementToFocus = closeButton;
                     } else if (cancelButton && focusableElements.includes(cancelButton)) {
