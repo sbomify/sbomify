@@ -442,7 +442,7 @@ class TestYourPageSnapshot:
 
         # Get or create baseline screenshot (stored in __snapshots__)
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
-        
+
         # Take current screenshot
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
