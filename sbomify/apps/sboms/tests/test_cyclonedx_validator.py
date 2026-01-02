@@ -216,8 +216,9 @@ def test_validate_1_5_sbom_with_dependencies():
     assert validated_sbom.specVersion == "1.5"
     assert len(validated_sbom.dependencies) == 3
 
-    # Verify the dependency refs are correctly parsed
-    dep_refs = [str(dep.ref.root.root) for dep in validated_sbom.dependencies]
+    # Verify the dependency refs are correctly parsed by checking serialization
+    deps_serialized = [dep.model_dump() for dep in validated_sbom.dependencies]
+    dep_refs = [dep["ref"] for dep in deps_serialized]
     assert "main-component" in dep_refs
     assert "pkg:maven/org.example/lib-a@1.0.0" in dep_refs
     assert "pkg:maven/org.example/lib-b@2.0.0" in dep_refs
