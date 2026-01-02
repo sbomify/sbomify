@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 from sbomify.apps.core.utils import set_values_if_not_empty
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
+from .sbom_format_schemas import cyclonedx_1_3 as cdx13
+from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas import cyclonedx_1_7 as cdx17
@@ -70,6 +72,8 @@ class CycloneDXSupportedVersion(str, Enum):
     4. That's it! The API will automatically support the new version.
     """
 
+    v1_3 = "1.3"
+    v1_4 = "1.4"
     v1_5 = "1.5"
     v1_6 = "1.6"
     v1_7 = "1.7"
@@ -82,6 +86,8 @@ def get_cyclonedx_module(spec_version: CycloneDXSupportedVersion) -> ModuleType:
     When adding a new version, add it to this mapping.
     """
     module_map: dict[CycloneDXSupportedVersion, ModuleType] = {
+        CycloneDXSupportedVersion.v1_3: cdx13,
+        CycloneDXSupportedVersion.v1_4: cdx14,
         CycloneDXSupportedVersion.v1_5: cdx15,
         CycloneDXSupportedVersion.v1_6: cdx16,
         CycloneDXSupportedVersion.v1_7: cdx17,
@@ -99,7 +105,9 @@ def get_supported_cyclonedx_versions() -> list[str]:
 def validate_cyclonedx_sbom(
     sbom_data: dict,
 ) -> tuple[
-    cdx15.CyclonedxSoftwareBillOfMaterialsStandard
+    cdx13.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx14.CyclonedxSoftwareBillOfMaterialsStandard
+    | cdx15.CyclonedxSoftwareBillOfMaterialsStandard
     | cdx16.CyclonedxSoftwareBillOfMaterialsStandard
     | cdx17.CyclonedxSoftwareBillOfMaterialsStandard,
     str,
@@ -142,7 +150,9 @@ class CustomLicenseSchema(BaseLicenseSchema):
     url: str | None = None
     text: str | None = None
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.License2 | cdx16.License2 | cdx17.License2:
+    def to_cyclonedx(
+        self, spec_version: CycloneDXSupportedVersion
+    ) -> cdx13.License2 | cdx14.License2 | cdx15.License2 | cdx16.License2 | cdx17.License2:
         CycloneDx = get_cyclonedx_module(spec_version)
         result = CycloneDx.License2(name=self.name)
         set_values_if_not_empty(result, url=self.url)
@@ -287,7 +297,9 @@ class ComponentMetaData(BaseModel):
             return cleaned_authors
         return v
 
-    def to_cyclonedx(self, spec_version: CycloneDXSupportedVersion) -> cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
+    def to_cyclonedx(
+        self, spec_version: CycloneDXSupportedVersion
+    ) -> cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
         CycloneDx = get_cyclonedx_module(spec_version)
         result = CycloneDx.Metadata()
 
@@ -353,7 +365,11 @@ class ComponentMetaData(BaseModel):
             if licenses_list:
                 result.licenses = CycloneDx.LicenseChoice(licenses_list)
 
-        if self.lifecycle_phase:
+        # Lifecycles added in 1.5
+        if self.lifecycle_phase and spec_version not in [
+            CycloneDXSupportedVersion.v1_3,
+            CycloneDXSupportedVersion.v1_4,
+        ]:
             result.lifecycles = [CycloneDx.Lifecycles(phase=self.lifecycle_phase)]
         return result
 
@@ -529,6 +545,8 @@ class SPDXSchema(BaseModel):
 
 
 # Patch OrganizationalContact to ignore extra fields
+cdx13.OrganizationalContact.model_config = ConfigDict(extra="ignore")
+cdx14.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 cdx15.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 cdx16.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 

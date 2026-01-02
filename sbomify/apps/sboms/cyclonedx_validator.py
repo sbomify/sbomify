@@ -6,6 +6,8 @@ from typing import Any, Dict
 from pydantic import BaseModel, ValidationError
 
 from .sbom_base_validator import SBOMSchemaError, SBOMValidator, SBOMVersionError
+from .sbom_format_schemas import cyclonedx_1_3 as cdx13
+from .sbom_format_schemas import cyclonedx_1_4 as cdx14
 from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .schemas import BaseLicenseSchema, CustomLicenseSchema, LicenseSchema
@@ -43,13 +45,15 @@ class CycloneDXValidator(SBOMValidator):
         self.version = version
         self._validate_version()
         self._version_map = {
+            "1.3": cdx13.CyclonedxSoftwareBillOfMaterialsStandard,
+            "1.4": cdx14.CyclonedxSoftwareBillOfMaterialsStandard,
             "1.5": cdx15.CyclonedxSoftwareBillOfMaterialsStandard,
             "1.6": cdx16.CyclonedxSoftwareBillOfMaterialsStandard,
         }
 
     def _validate_version(self) -> None:
         """Validate that the version is supported."""
-        supported_versions = ["1.5", "1.6"]
+        supported_versions = ["1.3", "1.4", "1.5", "1.6"]
         if self.version not in supported_versions:
             raise SBOMVersionError(f"Unsupported CycloneDX version: {self.version}")
 

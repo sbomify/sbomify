@@ -112,7 +112,7 @@ After generating the schema file, you need to register it in the application:
 
 ## Current Supported Versions
 
-- **CycloneDX:** 1.5, 1.6, 1.7
+- **CycloneDX:** 1.3, 1.4, 1.5, 1.6, 1.7
 - **SPDX:** 2.2, 2.3
 
 ## Schema Sources

@@ -24,6 +24,8 @@ from .schemas import (
     SBOMResponseSchema,
     SBOMUploadRequest,
     SPDXPackage,
+    cdx13,
+    cdx14,
     cdx15,
     cdx16,
     cdx17,
@@ -246,7 +248,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str):
 @router.post(
     "/artifact/cyclonedx/{spec_version}/{component_id}/metadata",
     response={
-        200: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
+        200: cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
@@ -260,7 +262,7 @@ def get_cyclonedx_component_metadata(
     request,
     spec_version: CycloneDXSupportedVersion,
     component_id: str,
-    metadata: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
+    metadata: cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata,
     sbom_version: str = Query(
         None,
         description="If provided, overwrites the version present in SBOM's metadata",
@@ -272,7 +274,7 @@ def get_cyclonedx_component_metadata(
         "present in both sbom metadata and component metadata then component metadata will be "
         "used, otherwise sbom metadata is be used",
     ),
-) -> cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
+) -> cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata:
     """
     Return metadata section of cyclone-x format sbom.
 
@@ -290,8 +292,8 @@ def get_cyclonedx_component_metadata(
     metadata_dict["name"] = component.name
     component_metadata = ComponentMetaData(**metadata_dict)
 
-    component_cdx_metadata: cdx15.Metadata | cdx16.Metadata | cdx17.Metadata = component_metadata.to_cyclonedx(
-        spec_version
+    component_cdx_metadata: cdx13.Metadata | cdx14.Metadata | cdx15.Metadata | cdx16.Metadata | cdx17.Metadata = (
+        component_metadata.to_cyclonedx(spec_version)
     )
     sbom_metadata_dict = metadata.model_dump(mode="json", exclude_none=True, exclude_unset=True, by_alias=True)
     component_metadata_dict = component_cdx_metadata.model_dump(
@@ -314,9 +316,13 @@ def get_cyclonedx_component_metadata(
     final_metadata = component_cdx_metadata.__class__(**final_dict)
 
     if sbom_version:
-        # For CycloneDX 1.5, version is a string
+        # For CycloneDX 1.3, 1.4, 1.5, version is a string
         # For 1.6+, version is a Version object whose root value is a string
-        if spec_version == CycloneDXSupportedVersion.v1_5:
+        if spec_version in [
+            CycloneDXSupportedVersion.v1_3,
+            CycloneDXSupportedVersion.v1_4,
+            CycloneDXSupportedVersion.v1_5,
+        ]:
             final_metadata.component.version = sbom_version
         else:
             # 1.6, 1.7, and future versions use Version object
