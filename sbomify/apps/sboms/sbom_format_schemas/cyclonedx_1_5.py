@@ -48,12 +48,7 @@ class RefLinkType(RootModel[RefType]):
     In contrast to `bomLinkElementType`.
     """
 
-    root: Annotated[
-        RefType,
-        Field(
-            description="Descriptor for an element identified by the attribute 'bom-ref' in the same BOM document.\nIn contrast to `bomLinkElementType`."
-        ),
-    ]
+    root: RefType
 
 
 class BomLinkDocumentType(RootModel[str]):

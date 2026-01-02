@@ -159,12 +159,7 @@ class RefLinkType(BaseModel):
 # To this:
 class RefLinkType(RootModel[RefType]):
     """..."""
-    root: Annotated[
-        RefType,
-        Field(
-            description="Descriptor for an element identified by the attribute 'bom-ref' in the same BOM document.\nIn contrast to `bomLinkElementType`."
-        ),
-    ]
+    root: RefType
 ```
 
 ## Notes
