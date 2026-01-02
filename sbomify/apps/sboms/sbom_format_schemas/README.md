@@ -120,9 +120,51 @@ After generating the schema file, you need to register it in the application:
 - **CycloneDX:** <https://github.com/CycloneDX/specification>
 - **SPDX:** <https://github.com/spdx/spdx-spec>
 
+## Known Issues and Manual Patches
+
+### CycloneDX 1.5: RefLinkType Bug
+
+**Problem:** The `datamodel-codegen` tool incorrectly generates the `RefLinkType` class as an empty `BaseModel` when processing the CycloneDX 1.5 JSON schema. This is due to a bug in how it handles `"allOf": [{"$ref": ...}]` constructs.
+
+The CycloneDX 1.5 schema defines:
+
+```json
+"refLinkType": {
+  "allOf": [{"$ref": "#/definitions/refType"}]
+}
+```
+
+This should translate to a string type (since `refType` is a string), but `datamodel-codegen` produces:
+
+```python
+class RefLinkType(BaseModel):
+    pass  # Empty class - WRONG
+```
+
+**Impact:** Valid CycloneDX 1.5 SBOMs with string values in `dependencies[].ref` and `dependencies[].dependsOn[]` fail validation with errors like:
+
+```text
+Input should be a valid dictionary or instance of RefLinkType
+```
+
+**Fix Applied:** The `cyclonedx_1_5.py` file has been manually patched to change `RefLinkType` from an empty `BaseModel` to `RootModel[RefType]`, matching the correct behavior in CycloneDX 1.6.
+
+**If Regenerating:** After regenerating `cyclonedx_1_5.py`, you must reapply this patch:
+
+```python
+# Change this:
+class RefLinkType(BaseModel):
+    """..."""
+
+# To this:
+class RefLinkType(RootModel[RefType]):
+    """..."""
+    root: RefType
+```
+
 ## Notes
 
-- The generated files are large (100-200KB) and should not be manually edited
+- The generated files are large (100-200KB) and should not be manually edited (except for known issues documented above)
 - CycloneDX 1.7 changed the main class name from `CyclonedxSoftwareBillOfMaterialsStandard` to `CyclonedxBillOfMaterialsStandard` (removed "Software")
 - We add an alias for backward compatibility in naming
 - SPDX 2.x versions all use the same schema structure, but SPDX 3.0 will require a different approach

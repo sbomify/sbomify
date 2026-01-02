@@ -118,9 +118,7 @@ class TestNTIAComplianceIntegration:
             ],
             "dependencies": [
                 {
-                    "ref": {
-                        "value": "pkg:pypi/example-dependency@2.0.0"
-                    },
+                    "ref": "pkg:pypi/example-dependency@2.0.0",
                     "dependsOn": []
                 }
             ]
