@@ -25,6 +25,10 @@ import Alpine from 'alpinejs';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
+import { registerDeleteModal } from './components/delete-modal';
+
+// Initialize global components
+
 import '../../vulnerability_scanning/js/vulnerability-chart';
 
 // Register Chart.js components
@@ -85,6 +89,7 @@ import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();
+registerDeleteModal();
 
 import { initializeAlpine } from './alpine-init';
 initializeAlpine();

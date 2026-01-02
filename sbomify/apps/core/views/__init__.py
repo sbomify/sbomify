@@ -496,7 +496,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         f"Component {component.name} transferred to team {target_team.get('name')}",
     )
 
-    return redirect("core:component_details", component_id=component_id)
+    return redirect("core:components_dashboard")
 
 
 def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse:
