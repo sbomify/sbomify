@@ -1,0 +1,79 @@
+{% load static %}
+<div x-data="{ showDeleteModal: false, isExpanded: false, toggle() { this.isExpanded = !this.isExpanded; } }">
+    <!-- Standard Card Structure Inlined -->
+    <div class="standard-card mt-3">
+        <div class="card dangerzone-card shadow-sm">
+            <div class="card-header collapsible-header cursor-pointer"
+                 @click="toggle()">
+                <div class="header-content d-flex justify-content-between align-items-center w-100">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Danger Zone
+                        <i class="fas ms-2"
+                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    </h4>
+                </div>
+            </div>
+            <div class="card-body collapse"
+                 :class="{ 'show': isExpanded }"
+                 x-show="isExpanded"
+                 x-collapse>
+                {% if is_owner %}
+                    <!-- Transfer Component Section -->
+                    <div class="danger-section transfer-section">
+                        <div class="section-header">
+                            <div class="section-icon transfer-icon">
+                                <i class="fas fa-exchange-alt"></i>
+                            </div>
+                            <div class="section-content">
+                                <h6 class="section-title">Transfer Component</h6>
+                                <p class="section-description">Move this component to a different workspace</p>
+                            </div>
+                        </div>
+                        <form action="/component/{{ component_id }}/transfer"
+                              method="post"
+                              class="transfer-form">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="team_key" class="form-label">Select Workspace</label>
+                                <div class="input-group">
+                                    <select id="team_key" name="team_key" class="form-select modern-select">
+                                        <option value="" disabled selected>Choose a workspace...</option>
+                                        {% for key, workspace in request.session.user_teams.items %}
+                                            <option value="{{ key }}">{{ workspace.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-warning modern-btn transfer-btn">
+                                        <i class="fas fa-arrow-right me-2"></i>
+                                        Transfer
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <!-- Divider -->
+                    <div class="section-divider"></div>
+                {% endif %}
+                <!-- Delete Component Section -->
+                <div class="danger-section delete-section">
+                    <div class="section-header">
+                        <div class="section-icon delete-icon">
+                            <i class="fas fa-trash-alt"></i>
+                        </div>
+                        <div class="section-content">
+                            <h6 class="section-title">Delete Component</h6>
+                            <p class="section-description">Permanently remove this component and all associated data</p>
+                        </div>
+                    </div>
+                    <button id="del_{{ component_id }}"
+                            class="btn btn-danger modern-btn delete-btn"
+                            @click="showDeleteModal = true">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        Delete Component
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Component' message='Are you sure you want to delete the component' item_name=component_name warning_message='This action cannot be undone and will permanently remove the component from the system.' confirm_text='Delete Component' hx_url='/api/v1/components/'|add:component_id hx_method='delete' success_message='Component deleted successfully!' redirect_url='/components/' %}
+</div>

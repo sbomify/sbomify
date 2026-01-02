@@ -36,7 +36,8 @@ class TestProductDetailsSnapshot:
         authenticated_page.goto(f"/product/{product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-product-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
+        authenticated_page.wait_for_selector(".danger-section")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
@@ -53,7 +54,8 @@ class TestProductDetailsSnapshot:
         authenticated_page.goto(f"/product/{empty_product_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-product-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
+        authenticated_page.wait_for_selector(".danger-section")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)

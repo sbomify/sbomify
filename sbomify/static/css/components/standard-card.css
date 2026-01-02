@@ -272,6 +272,12 @@
   padding: 0;
 }
 
+.dangerzone-card .header-content {
+  justify-content: flex-start;
+  align-items: center;
+  flex-direction: row;
+}
+
 .collapse {
   display: none;
 }

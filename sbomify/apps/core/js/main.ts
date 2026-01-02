@@ -70,10 +70,6 @@ import AccessTokensList from './components/AccessTokensList.vue';
 import ComponentMetaInfo from './components/ComponentMetaInfo.vue';
 import ComponentMetaInfoEditor from './components/ComponentMetaInfoEditor.vue';
 import ComponentMetaInfoDisplay from './components/ComponentMetaInfoDisplay.vue';
-import DangerZone from './components/DangerZone.vue';
-import ProjectDangerZone from './components/ProjectDangerZone.vue';
-import ProductDangerZone from './components/ProductDangerZone.vue';
-import SbomDangerZone from './components/SbomDangerZone.vue';
 import ExportDataCard from './components/ExportDataCard.vue';
 import ItemAssignmentManager from './components/ItemAssignmentManager.vue';
 import ItemsListTable from './components/ItemsListTable.vue';
@@ -84,8 +80,6 @@ import ProductIdentifiers from './components/ProductIdentifiers.vue';
 import ProductLinks from './components/ProductLinks.vue';
 import ProductReleases from './components/ProductReleases.vue';
 import ReleaseArtifacts from './components/ReleaseArtifacts.vue';
-import ReleaseDangerZone from './components/ReleaseDangerZone.vue';
-import TeamDangerZone from './components/TeamDangerZone.vue';
 import PublicReleaseArtifacts from './components/PublicReleaseArtifacts.vue';
 
 registerCopyableValue();
@@ -106,10 +100,6 @@ mountVueComponent('vc-access-tokens-list', AccessTokensList);
 mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
 mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
 mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
-mountVueComponent('vc-danger-zone', DangerZone);
-mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
-mountVueComponent('vc-product-danger-zone', ProductDangerZone);
-mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
 mountVueComponent('vc-export-data-card', ExportDataCard);
 mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
 mountVueComponent('vc-items-list-table', ItemsListTable);
@@ -120,8 +110,6 @@ mountVueComponent('vc-product-identifiers', ProductIdentifiers);
 mountVueComponent('vc-product-links', ProductLinks);
 mountVueComponent('vc-product-releases', ProductReleases);
 mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
-mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
-mountVueComponent('vc-team-danger-zone', TeamDangerZone);
 mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
 
 // Re-mount Vue components after HTMX content swaps
@@ -136,10 +124,6 @@ document.body.addEventListener('htmx:afterSwap', () => {
   mountVueComponent('vc-component-meta-info', ComponentMetaInfo);
   mountVueComponent('vc-component-meta-info-editor', ComponentMetaInfoEditor);
   mountVueComponent('vc-component-meta-info-display', ComponentMetaInfoDisplay);
-  mountVueComponent('vc-danger-zone', DangerZone);
-  mountVueComponent('vc-project-danger-zone', ProjectDangerZone);
-  mountVueComponent('vc-product-danger-zone', ProductDangerZone);
-  mountVueComponent('vc-sbom-danger-zone', SbomDangerZone);
   mountVueComponent('vc-export-data-card', ExportDataCard);
   mountVueComponent('vc-item-assignment-manager', ItemAssignmentManager);
   mountVueComponent('vc-items-list-table', ItemsListTable);
@@ -150,8 +134,6 @@ document.body.addEventListener('htmx:afterSwap', () => {
   mountVueComponent('vc-product-links', ProductLinks);
   mountVueComponent('vc-product-releases', ProductReleases);
   mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
-  mountVueComponent('vc-release-danger-zone', ReleaseDangerZone);
-  mountVueComponent('vc-team-danger-zone', TeamDangerZone);
   mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
 });
 

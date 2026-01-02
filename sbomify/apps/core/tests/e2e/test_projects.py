@@ -36,7 +36,8 @@ class TestProjectDetailsSnapshot:
         authenticated_page.goto(f"/project/{project_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-project-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
+        authenticated_page.wait_for_selector(".danger-section")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
@@ -53,7 +54,8 @@ class TestProjectDetailsSnapshot:
         authenticated_page.goto(f"/project/{empty_project_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-project-danger-zone h4").click()
+        authenticated_page.locator(".dangerzone-card h4").click()
+        authenticated_page.wait_for_selector(".danger-section")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)

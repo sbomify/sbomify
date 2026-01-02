@@ -85,10 +85,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     {% if project.has_crud_permissions %}
         <div class="row mt-3">
             <div class="col-12">
-                <div class="vc-project-danger-zone"
-                     data-project-id="{{ project.id }}"
-                     data-project-name="{{ project.name }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include 'components/project_danger_zone.html.j2' with project_id=project.id project_name=project.name %}
             </div>
         </div>
     {% endif %}

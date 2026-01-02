@@ -308,14 +308,16 @@ For dangerous actions that require special styling:
 
 ### Implemented DangerZone Components
 
-The following dangerzone components are available and use the `variant="dangerzone"` theming:
+The dangerzone components have been migrated from Vue to Django templates with HTMX/Alpine.js. The following templates are available in `sbomify/apps/core/templates/components/`:
 
-- **Components**: `vc-danger-zone` (transfer + delete functionality)
-- **Projects**: `vc-project-danger-zone` (delete only)
-- **Products**: `vc-product-danger-zone` (delete only)
-- **Workspaces**: `vc-team-danger-zone` (delete only, legacy component name retained)
+- **Components**: `component_danger_zone.html.j2` (transfer + delete functionality)
+- **Projects**: `project_danger_zone.html.j2` (delete only)
+- **Products**: `product_danger_zone.html.j2` (delete only)
+- **Releases**: `release_danger_zone.html.j2` (delete only)
+- **SBOMs**: `sbom_danger_zone.html.j2` (delete only)
+- **Workspaces**: `teams/components/team_danger_zone.html.j2` (delete only)
 
-Each component implements collapsible behavior, confirmation modals, and consistent styling patterns.
+Each component uses Alpine.js for collapsible behavior and HTMX-based confirmation modals with consistent styling patterns.
 
 ### Important Notes
 

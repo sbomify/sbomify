@@ -138,11 +138,7 @@
         <!-- Danger Zone Vue Component -->
         <div class="row mt-4">
             <div class="col-12">
-                <div class="vc-sbom-danger-zone"
-                     data-sbom-id="{{ item.id }}"
-                     data-sbom-name="{{ item.name }}"
-                     data-component-id="{{ component_id }}"
-                     data-csrf-token="{{ csrf_token }}"></div>
+                {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
             </div>
         </div>
     {% elif item_type == 'documents' %}

@@ -1,0 +1,44 @@
+{% load static %}
+<div x-data="{ showDeleteModal: false, isExpanded: false, toggle() { this.isExpanded = !this.isExpanded; } }">
+    <!-- Standard Card Structure Inlined -->
+    <div class="standard-card mt-3">
+        <div class="card dangerzone-card shadow-sm">
+            <div class="card-header collapsible-header cursor-pointer"
+                 @click="toggle()">
+                <div class="header-content d-flex justify-content-between align-items-center w-100">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Danger Zone
+                        <i class="fas ms-2"
+                           :class="isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    </h4>
+                </div>
+            </div>
+            <div class="card-body collapse"
+                 :class="{ 'show': isExpanded }"
+                 x-show="isExpanded"
+                 x-collapse>
+                <!-- Delete Project Section -->
+                <div class="danger-section delete-section">
+                    <div class="section-header">
+                        <div class="section-icon delete-icon">
+                            <i class="fas fa-trash-alt"></i>
+                        </div>
+                        <div class="section-content">
+                            <h6 class="section-title">Delete Project</h6>
+                            <p class="section-description">Permanently remove this project and all associated data</p>
+                        </div>
+                    </div>
+                    <button id="del_{{ project_id }}"
+                            class="btn btn-danger modern-btn delete-btn"
+                            @click="showDeleteModal = true">
+                        <i class="fas fa-trash-alt me-2"></i>
+                        Delete Project
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% url 'api-1:delete_project' project_id=project_id as delete_project_url %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Project' message='Are you sure you want to delete the project' item_name=project_name warning_message='This action cannot be undone and will permanently remove the project from the system.' confirm_text='Delete Project' hx_url=delete_project_url hx_method='delete' success_message='Project deleted successfully!' redirect_url='/projects/' %}
+</div>
