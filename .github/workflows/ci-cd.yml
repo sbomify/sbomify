@@ -312,10 +312,15 @@ jobs:
 
       - name: Upload E2E Test Diffs
         if: failure()
+        run: sudo chown -R $USER:$USER sbomify/apps/*/tests/e2e/__diffs__ 2>/dev/null || true
+
+      - name: Upload E2E Test Diffs
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: e2e-test-diffs
+          name: e2e-test-diffs-${{ matrix.test-group.name }}
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
+          if-no-files-found: ignore
 
   frontend-tests:
     name: Frontend Tests

@@ -33,6 +33,7 @@
     "highlight.js": "^11.11.1",
     "js-cookie": "^3.0.5",
     "jsbarcode": "^3.12.1",
+    "license-expressions": "^0.8.0",
     "sweetalert2": "^11.26.3",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",

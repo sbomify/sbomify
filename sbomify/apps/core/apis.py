@@ -1907,10 +1907,9 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
             for order, license_data in enumerate(licenses):
                 if isinstance(license_data, str):
                     # Check if it's a license expression (contains operators)
-                    license_operators = ["AND", "OR", "WITH"]
-                    is_expression = any(f" {op} " in license_data for op in license_operators)
+                    from sbomify.apps.core.licensing_utils import is_license_expression
 
-                    if is_expression:
+                    if is_license_expression(license_data):
                         component.licenses.create(
                             license_type="expression",
                             license_id=license_data,

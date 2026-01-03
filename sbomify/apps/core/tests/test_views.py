@@ -11,6 +11,14 @@ from django.urls import reverse
 from sbomify.apps.access_tokens.models import AccessToken
 
 
+def _clear_current_team(client: Client) -> None:
+    """Clear current_team from session to prevent redirect to team tokens page."""
+    session = client.session
+    if "current_team" in session:
+        del session["current_team"]
+    session.save()
+
+
 @pytest.mark.django_db
 def test_homepage():
     client = Client()
@@ -41,11 +49,7 @@ def test_access_token_creation(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    # Ensure no current_team is set in session
-    session = client.session
-    if "current_team" in session:
-        del session["current_team"]
-    session.save()
+    _clear_current_team(client)
 
     uri = reverse("core:settings")
     form_data = urlencode({"description": "Test Token"})
@@ -142,6 +146,138 @@ def test_delete_another_users_token(guest_user: AbstractBaseUser, sample_user: A
     response = client.post(reverse("core:delete_access_token", kwargs={"token_id": guest_token.id}))
     assert response.status_code == 403
     assert AccessToken.objects.filter(id=guest_token.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_access_token_with_delete_method(sample_user: AbstractBaseUser):
+    """Test that DELETE method works for deleting access tokens."""
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    _clear_current_team(client)
+
+    # Create a token first
+    form_data = urlencode({"description": "Test Token"})
+    response = client.post(
+        reverse("core:settings"),
+        form_data,
+        content_type="application/x-www-form-urlencoded"
+    )
+    assert response.status_code == 200
+
+    token = AccessToken.objects.filter(user=sample_user).first()
+    assert token is not None
+
+    # Delete using DELETE method
+    response = client.delete(reverse("core:delete_access_token", kwargs={"token_id": token.id}))
+    assert response.status_code == 200
+    assert not AccessToken.objects.filter(id=token.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_access_token_json_request(sample_user: AbstractBaseUser):
+    """Test that JSON request returns JSON response."""
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    _clear_current_team(client)
+
+    # Create a token first
+    form_data = urlencode({"description": "Test Token JSON"})
+    response = client.post(
+        reverse("core:settings"),
+        form_data,
+        content_type="application/x-www-form-urlencoded"
+    )
+    assert response.status_code == 200
+
+    token = AccessToken.objects.filter(user=sample_user).first()
+    assert token is not None
+
+    # Delete using DELETE method with JSON content type
+    response = client.delete(
+        reverse("core:delete_access_token", kwargs={"token_id": token.id}),
+        content_type="application/json"
+    )
+    assert response.status_code == 200
+    assert not AccessToken.objects.filter(id=token.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_access_token_htmx_request(sample_user: AbstractBaseUser):
+    """Test that HTMX request returns proper response."""
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+
+    _clear_current_team(client)
+
+    # Create a token first
+    form_data = urlencode({"description": "Test Token HTMX"})
+    response = client.post(
+        reverse("core:settings"),
+        form_data,
+        content_type="application/x-www-form-urlencoded"
+    )
+    assert response.status_code == 200
+
+    token = AccessToken.objects.filter(user=sample_user).first()
+    assert token is not None
+
+    # Delete using POST method with HTMX header
+    response = client.post(
+        reverse("core:delete_access_token", kwargs={"token_id": token.id}),
+        HTTP_HX_REQUEST="true"
+    )
+    assert response.status_code == 200
+    assert not AccessToken.objects.filter(id=token.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_access_token_json_error_responses(sample_user: AbstractBaseUser, guest_user: AbstractBaseUser):
+    """Test that JSON requests return JSON error responses."""
+    client = Client()
+    assert client.login(username="guest", password="guest")
+
+    _clear_current_team(client)
+
+    # Create token with guest user
+    form_data = urlencode({"description": "Guest Token"})
+    response = client.post(
+        reverse("core:settings"),
+        form_data,
+        content_type="application/x-www-form-urlencoded"
+    )
+    guest_token = AccessToken.objects.filter(user=guest_user).first()
+
+    # Switch to sample user and try to delete
+    client.logout()
+    assert client.login(
+        username=os.environ["DJANGO_TEST_USER"],
+        password=os.environ["DJANGO_TEST_PASSWORD"]
+    )
+
+    # Test 403 error with JSON request
+    response = client.delete(
+        reverse("core:delete_access_token", kwargs={"token_id": guest_token.id}),
+        content_type="application/json",
+        HTTP_ACCEPT="application/json"
+    )
+    assert response.status_code == 403
+    assert response["Content-Type"] == "application/json"
+    data = response.json()
+    assert "detail" in data
+    assert "Not allowed" in data["detail"]
+
+    # Test 404 error with JSON request
+    response = client.delete(
+        reverse("core:delete_access_token", kwargs={"token_id": 99999}),
+        content_type="application/json",
+        HTTP_ACCEPT="application/json"
+    )
+    assert response.status_code == 404
+    assert response["Content-Type"] == "application/json"
+    data = response.json()
+    assert "detail" in data
 
 
 @pytest.mark.django_db

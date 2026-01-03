@@ -47,15 +47,6 @@
         {% block header_after_meta %}{% endblock %}
     </div>
     {% block content_after_header %}{% endblock %}
-    {% if component.has_crud_permissions %}
-        <div class="row">
-            <div class="col-12">
-                <div class="vc-ci-cd-info"
-                     data-component-id="{{ component.id }}"
-                     data-component-name="{{ component.name }}"></div>
-            </div>
-        </div>
-    {% endif %}
     {% block upload_section %}{% endblock %}
     {% block table_section %}{% endblock %}
     {% if component.has_crud_permissions %}

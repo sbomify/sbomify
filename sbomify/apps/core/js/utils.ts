@@ -16,15 +16,29 @@ export function isEmpty(obj: unknown | string | number | object | null | undefin
     return obj === undefined || obj === null || obj === '';
   }
 
-
   return Object.values(obj).every(value => {
-    console.log(value);
     if (Array.isArray(value)) {
       return value.length === 0;
     } else {
       return value === null || value === '';
     }
-  } );
+  });
+}
+
+/**
+ * Parse JSON from a script tag by ID. Returns null if not found, empty, or invalid.
+ * Use with Django's json_script filter: {{ data|json_script:"my-id" }}
+ */
+export function parseJsonScript<T = unknown>(elementId: string): T | null {
+  const scriptEl = document.getElementById(elementId);
+  if (!scriptEl?.textContent || scriptEl.textContent === 'null') {
+    return null;
+  }
+  try {
+    return JSON.parse(scriptEl.textContent) as T;
+  } catch {
+    return null;
+  }
 }
 
 export function getErrorMessage(error: Error | unknown): string {

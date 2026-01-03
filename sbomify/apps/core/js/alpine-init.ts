@@ -1,27 +1,35 @@
 import Alpine from 'alpinejs';
+import { parseJsonScript } from './utils';
 
-let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 declare global {
   interface Window {
     Alpine: typeof Alpine;
+    parseJsonScript: typeof parseJsonScript;
   }
 }
 
-window.Alpine = Alpine;
+if (!window.Alpine) {
+  window.Alpine = Alpine;
+}
+window.parseJsonScript = parseJsonScript;
 
-export function initializeAlpine(): void {
-  if (isInitialized) {
-    return;
+export function initializeAlpine(): Promise<void> {
+  if (initializationPromise) {
+    return initializationPromise;
   }
 
-  Alpine.start();
-  isInitialized = true;
+  initializationPromise = Promise.resolve().then(() => {
+    window.Alpine.start();
+  });
+
+  return initializationPromise;
 }
 
 export function isAlpineInitialized(): boolean {
-  return isInitialized;
+  return initializationPromise !== null;
 }
 
-export default Alpine;
+export default window.Alpine || Alpine;
 

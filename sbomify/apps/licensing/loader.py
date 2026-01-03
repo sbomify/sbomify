@@ -70,7 +70,8 @@ def validate_expression(expr: str) -> dict:
     except Exception:
         return {"status": 400, "error": "Invalid expression"}
 
-    # Get tokens from the parsed tree - these are the individual license identifiers
+    # Get tokens from the parsed tree - these are the individual license
+    # identifiers
     tokens = []
     for symbol in tree.symbols:
         if hasattr(symbol, "key"):

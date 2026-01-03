@@ -347,10 +347,9 @@ class ComponentMetaData(BaseModel):
                         license_identifier = str(component_license)
 
                     # Check if this is a license expression (contains operators)
-                    license_operators = ["AND", "OR", "WITH"]
-                    is_expression = any(f" {op} " in license_identifier for op in license_operators)
+                    from sbomify.apps.core.licensing_utils import is_license_expression
 
-                    if is_expression:
+                    if is_license_expression(license_identifier):
                         # License expressions should be stored as name, not id
                         cdx_lic = CycloneDx.License(name=license_identifier)
                     else:

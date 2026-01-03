@@ -1,0 +1,175 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/component-meta-info-display.css' %}">
+<div class="standard-card settings-card shadow-md">
+    <div class="card-header d-flex justify-content-start align-items-center cursor-pointer"
+         data-bs-toggle="collapse"
+         data-bs-target="#componentMetadataCollapse"
+         aria-expanded="true"
+         aria-controls="componentMetadataCollapse">
+        <h5 class="card-title mb-0">
+            Component Metadata
+            <i class="fas fa-chevron-down ms-2 transition-transform"></i>
+        </h5>
+    </div>
+    <div id="componentMetadataCollapse" class="collapse show">
+        <div class="card-body">
+            <div class="info-notice mb-4">
+                <i class="fas fa-info-circle"></i>
+                <span>
+                    <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+    target="_blank"
+    rel="noopener noreferrer">Augmentation feature</a> to include this metadata in your SBOM
+                </span>
+            </div>
+            <div class="row gy-4">
+                <div class="col-12 col-lg-6">
+                    <div class="section-content">
+                        <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Supplier</div>
+                        <template x-if="metadata.contact_profile">
+                            <div class="profile-indicator mb-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-light text-dark border">
+                                        <span x-text="metadata.contact_profile.name"></span>
+                                    </span>
+                                    <template x-if="metadata.contact_profile.is_default">
+                                        <span class="badge bg-info-subtle text-info">Default</span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!metadata.contact_profile">
+                            <div class="section-subtext text-muted mb-2 small">Custom contact information</div>
+                        </template>
+                        <template x-if="isEmpty(metadata.supplier)">
+                            <span class="text-muted fst-italic">Not set yet</span>
+                        </template>
+                        <template x-if="!isEmpty(metadata.supplier)">
+                            <div>
+                                <table class="table table-borderless table-sm mb-3" x-show="hasSupplierInfo">
+                                    <tbody>
+                                        <template x-if="metadata.supplier.name">
+                                            <tr>
+                                                <td class="text-muted" style="width: 100px;">Name</td>
+                                                <td>
+                                                    <span x-text="metadata.supplier.name"></span>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <template x-if="metadata.supplier.url && metadata.supplier.url.length > 0">
+                                            <tr>
+                                                <td class="text-muted">URL</td>
+                                                <td>
+                                                    <a :href="metadata.supplier.url[0]"
+                                                       target="_blank"
+                                                       rel="noopener noreferrer"
+                                                       class="text-decoration-none">
+                                                        <span x-text="metadata.supplier.url[0]"></span>
+                                                        <i class="fas fa-arrow-up-right-from-square ms-1 small text-muted"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <template x-if="metadata.supplier.address">
+                                            <tr>
+                                                <td class="text-muted">Address</td>
+                                                <td x-text="metadata.supplier.address"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                                <template x-if="!hasSupplierInfo && isEmpty(metadata.supplier.contacts)">
+                                    <span class="text-muted fst-italic">No supplier information provided</span>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="metadata.supplier && metadata.supplier.contacts && metadata.supplier.contacts.length > 0">
+                            <div class="mt-3">
+                                <div class="sub-section-label mb-2 text-muted fw-bold small">Contacts</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <template x-for="(contact, index) in metadata.supplier.contacts" :key="index">
+                                        <span class="badge bg-light text-dark border rounded-pill fw-normal">
+                                            <span x-text="contact.name"></span>
+                                            <template x-if="contact.email">
+                                                <span x-text="' (' + contact.email + ')'"></span>
+                                            </template>
+                                            <i x-show="showEditButton"
+                                               class="fa-regular fa-circle-xmark ms-2 cursor-pointer text-muted hover-danger"
+                                               @click="removeSupplierContact(index)"></i>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="section-content">
+                        <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Lifecycle</div>
+                        <template x-if="metadata.lifecycle_phase">
+                            <span class="badge fw-normal"
+                                  :class="getLifecyclePhaseClass(metadata.lifecycle_phase)"
+                                  x-text="formatLifecyclePhase(metadata.lifecycle_phase)"></span>
+                        </template>
+                        <template x-if="!metadata.lifecycle_phase">
+                            <span class="text-muted fst-italic">Not set yet</span>
+                        </template>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="section-content">
+                        <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Licenses</div>
+                        <template x-if="isEmpty(metadata.licenses)">
+                            <span class="text-muted fst-italic">Not set yet</span>
+                        </template>
+                        <template x-if="!isEmpty(metadata.licenses)">
+                            <div class="d-flex flex-wrap gap-2">
+                                <template x-for="license in metadata.licenses"
+                                          :key="typeof license === 'string' ? license : license.name">
+                                    <span class="badge bg-light text-dark border rounded-pill fw-normal">
+                                        <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
+                                    </span>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="section-content">
+                        <div class="section-label border-bottom pb-2 mb-3 text-muted fw-bold small">Authors</div>
+                        <template x-if="isEmpty(metadata.authors)">
+                            <span class="text-muted fst-italic">Not set yet</span>
+                        </template>
+                        <template x-if="!isEmpty(metadata.authors)">
+                            <div class="d-flex flex-wrap gap-2">
+                                <template x-for="(author, index) in metadata.authors" :key="index">
+                                    <span class="badge bg-light text-dark border rounded-pill fw-normal">
+                                        <span x-text="author.name"></span>
+                                        <span x-text="' (' + author.email + ')'"></span>
+                                        <i x-show="showEditButton"
+                                           class="fa-regular fa-circle-xmark ms-2 cursor-pointer text-muted hover-danger"
+                                           @click="removeAuthor(index)"></i>
+                                    </span>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <template x-if="showEditButton">
+                <div class="d-flex gap-2 justify-content-end mt-4 pt-3 border-top">
+                    <button class="btn btn-outline-secondary btn-sm"
+                            @click="$dispatch('copy-metadata')">
+                        <i class="fa-solid fa-copy me-2"></i>
+                        Copy Metadata
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm"
+                            @click="$dispatch('edit-metadata')">
+                        <i class="fa-solid fa-edit me-2"></i>
+                        Edit Metadata
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
