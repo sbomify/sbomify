@@ -20,8 +20,17 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, '.')
+      '@': path.resolve(__dirname, '.'),
     }
+  },
+  optimizeDeps: {
+    include: ['license-expressions'],
+    esbuildOptions: {
+      target: 'esnext'
+    }
+  },
+  ssr: {
+    noExternal: ['license-expressions']
   },
   plugins: [
     vue(),
