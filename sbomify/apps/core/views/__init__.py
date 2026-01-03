@@ -26,6 +26,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.utils import token_to_number, verify_item_access
@@ -299,24 +300,50 @@ def reject_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
 
 @login_required
+@require_http_methods(["DELETE", "POST"])
 def delete_access_token(request: HttpRequest, token_id: int):
+    # DELETE method and HTMX requests are API requests (return 200, not redirect)
+    is_api_request = request.method == "DELETE" or request.headers.get("HX-Request")
+    # Check Accept header to determine if client wants JSON response
+    wants_json = "application/json" in request.headers.get("Accept", "")
+
     try:
         token = AccessToken.objects.get(pk=token_id)
 
         if token.user_id != request.user.id:
+            if wants_json:
+                return JsonResponse({"detail": "Not allowed"}, status=403)
+            if is_api_request:
+                return HttpResponse(status=403)
             return error_response(request, HttpResponseForbidden("Not allowed"))
+
+        try:
+            token.delete()
+        except Exception as e:
+            logger.error(f"Error deleting access token {token_id}: {e}")
+            if wants_json:
+                return JsonResponse({"detail": "Internal server error"}, status=500)
+            if is_api_request:
+                return HttpResponse(status=500)
+            messages.error(request, "An error occurred while deleting the token")
+            return redirect(reverse("core:settings"))
+
+        if is_api_request:
+            return HttpResponse(status=200)
 
         messages.add_message(
             request,
             messages.INFO,
             "Access token removed",
         )
-        token.delete()
+        return redirect(reverse("core:settings"))
 
     except AccessToken.DoesNotExist:
+        if wants_json:
+            return JsonResponse({"detail": "Access token not found"}, status=404)
+        if is_api_request:
+            return HttpResponse(status=404)
         return error_response(request, HttpResponseNotFound("Access token not found"))
-
-    return redirect(reverse("core:settings"))
 
 
 def logout(request: HttpRequest) -> HttpResponse:

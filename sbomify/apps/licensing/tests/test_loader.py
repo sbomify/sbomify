@@ -1,6 +1,7 @@
 """Unit tests for the license loader module."""
 
 import pytest
+from sbomify.apps.core.licensing_utils import is_license_expression
 from ..loader import get_license_list, validate_expression
 
 def test_get_license_list():
@@ -121,3 +122,36 @@ def test_validate_expression_syntax_error():
     assert result["status"] == 400
     assert "error" in result
     assert "processing error" in result["error"].lower()
+
+
+def test_is_license_expression():
+    """Test the is_license_expression helper function."""
+    # Simple license IDs should not be expressions
+    assert not is_license_expression("MIT")
+    assert not is_license_expression("Apache-2.0")
+    assert not is_license_expression("GPL-3.0-only")
+
+    # Expressions with OR operator
+    assert is_license_expression("MIT OR Apache-2.0")
+    assert is_license_expression("(MIT OR Apache-2.0)")
+    assert is_license_expression("MIT or Apache-2.0")  # Case insensitive
+
+    # Expressions with AND operator
+    assert is_license_expression("MIT AND Apache-2.0")
+    assert is_license_expression("(MIT AND Apache-2.0) AND GPL-3.0")
+
+    # Expressions with WITH operator
+    assert is_license_expression("Apache-2.0 WITH Commons-Clause")
+    assert is_license_expression("GPL-3.0 WITH Classpath-exception-2.0")
+
+    # Complex expressions
+    assert is_license_expression("MIT OR (Apache-2.0 AND GPL-3.0)")
+    assert is_license_expression(
+        "(MIT OR Apache-2.0) AND (GPL-3.0 WITH Classpath-exception-2.0)"
+    )
+
+    # Edge cases - should not match operators in license names
+    # (assuming no real license names contain these operators)
+    assert not is_license_expression("")
+    assert not is_license_expression(None)  # type: ignore
+    assert not is_license_expression("MIT-AND-LICENSE")  # No word boundary match

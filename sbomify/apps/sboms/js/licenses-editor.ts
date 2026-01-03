@@ -2,12 +2,7 @@ import Alpine from '../../core/js/alpine-init';
 import { getCsrfToken } from '../../core/js/csrf';
 import type { CustomLicense } from '../../core/js/types';
 
-interface LicenseInfo {
-    key: string;
-    name: string;
-    category?: string | null;
-    origin?: string;
-}
+import { getFilteredLicenses, type LicenseInfo } from './licenses-utils';
 
 interface LicenseTag {
     value: string | CustomLicense;
@@ -98,47 +93,7 @@ export function registerLicensesEditor() {
         },
 
         get filteredLicenses(): LicenseInfo[] {
-            if (!this.licenseExpression) return this.licenses.slice(0, 20);
-
-            const searchTerm = this.licenseExpression.toLowerCase().replace(/\s+/g, '-');
-            const operators = ['AND', 'OR', 'WITH'];
-            const beforeCursor = this.licenseExpression;
-            const operatorPattern = /\s+(AND|OR|WITH)\s+/gi;
-
-            let currentToken = beforeCursor;
-            let lastOperatorEnd = 0;
-            let match: RegExpExecArray | null;
-
-            while ((match = operatorPattern.exec(beforeCursor)) !== null) {
-                lastOperatorEnd = match.index + match[0].length;
-            }
-
-            if (lastOperatorEnd > 0) {
-                currentToken = beforeCursor.substring(lastOperatorEnd).trim();
-            }
-
-            const combinedSuggestions: LicenseInfo[] = [...this.licenses];
-
-            if (lastOperatorEnd > 0 || (beforeCursor.trim().length > 0 && !currentToken.includes(' '))) {
-                operators.forEach(op => {
-                    if (op.toLowerCase().startsWith(currentToken.toLowerCase())) {
-                        combinedSuggestions.push({
-                            key: op,
-                            name: `${op} operator`,
-                            category: 'operator'
-                        });
-                    }
-                });
-            }
-
-            return combinedSuggestions.filter(item => {
-                if (item.category === 'operator') {
-                    return item.key.toLowerCase().startsWith(currentToken.toLowerCase());
-                }
-                const licenseKey = item.key.toLowerCase();
-                const licenseName = item.name.toLowerCase();
-                return licenseKey.includes(searchTerm) || licenseName.includes(searchTerm);
-            }).slice(0, 20);
+            return getFilteredLicenses(this.licenseExpression, this.licenses);
         },
 
         onInput() {
@@ -173,10 +128,8 @@ export function registerLicensesEditor() {
         },
 
         handleBlur() {
-            setTimeout(() => {
-                this.showSuggestions = false;
-                this.selectedIndex = -1;
-            }, 200);
+            this.showSuggestions = false;
+            this.selectedIndex = -1;
         },
 
         selectLicense(license: LicenseInfo) {
