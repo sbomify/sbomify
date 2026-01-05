@@ -18,7 +18,6 @@ from .tasks import verify_custom_domains
     queue_name="domain_verification_cron",
     max_retries=0,  # Don't retry - next cron run will handle it
     time_limit=300000,  # 5 minute timeout for the cron wrapper
-    max_age=3600000,  # 1 hour - skip if queued for too long
 )
 def periodic_domain_verification():
     """

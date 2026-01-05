@@ -240,7 +240,7 @@ def trust_center_absolute_url(context, team=None):
 
     # If custom domain is set and validated, use it
     if custom_domain and custom_domain_validated:
-        return f"https://{custom_domain}/"
+        return f"https://{custom_domain}"
 
     # Fallback to standard URL
     if team_key:

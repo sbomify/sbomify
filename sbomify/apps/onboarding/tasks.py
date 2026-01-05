@@ -175,3 +175,8 @@ def queue_first_component_sbom_reminder(user) -> str:
     logger.info(f"Queueing first component/SBOM reminder for user {user.email}")
     result = send_first_component_sbom_email_task.send(user.id)
     return result.message_id
+
+
+# Import cron module at end of file to ensure cron tasks are registered when this module is autodiscovered
+# This must be at the end to avoid circular import (cron imports from this module)
+from . import cron as _cron  # noqa: F401, E402
