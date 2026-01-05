@@ -1,0 +1,227 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %} › Product Health{% endblock %}
+{% block dashboard_content %}
+    <!-- Product Health Metrics Summary -->
+    <div class="metrics-summary">
+        <div class="metric-card green">
+            <h4>Public Workspaces</h4>
+            <div class="value">{{ stats.public_workspaces }}</div>
+            <div class="subtitle">Trust Centers enabled</div>
+        </div>
+        <div class="metric-card blue">
+            <h4>Custom Domains</h4>
+            <div class="value">{{ stats.custom_domains_configured }}</div>
+            <div class="subtitle">{{ stats.custom_domains_validated }} validated</div>
+        </div>
+        <div class="metric-card purple">
+            <h4>SBOMs (30d)</h4>
+            <div class="value">{{ stats.sboms_30d }}</div>
+            <div class="subtitle">of {{ stats.sboms }} total</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Documents (30d)</h4>
+            <div class="value">{{ stats.documents_30d }}</div>
+            <div class="subtitle">{{ stats.compliance_documents }} compliance</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <!-- Workspace Visibility -->
+        <div class="stats-card">
+            <h3>Workspace Visibility</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="visibilityChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Custom Domains -->
+        <div class="stats-card">
+            <h3>Custom Domains Status</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="domainsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Content Overview -->
+        <div class="stats-card">
+            <h3>Content Overview</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="componentsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Document Types -->
+        <div class="stats-card">
+            <h3>Document Types</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="documentTypesChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Summary Table -->
+        <div class="stats-card wide">
+            <h3>Platform Data Summary</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Entity</th>
+                        <th>Count</th>
+                        <th>Last 30 Days</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Products</td>
+                        <td>{{ stats.products }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Projects</td>
+                        <td>{{ stats.projects }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Components</td>
+                        <td>{{ stats.components }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>SBOMs</td>
+                        <td>{{ stats.sboms }}</td>
+                        <td>+{{ stats.sboms_30d }}</td>
+                    </tr>
+                    <tr>
+                        <td>Documents</td>
+                        <td>{{ stats.documents }}</td>
+                        <td>+{{ stats.documents_30d }}</td>
+                    </tr>
+                    <tr>
+                        <td>Compliance Documents</td>
+                        <td>{{ stats.compliance_documents }}</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // Workspace Visibility Doughnut
+                new Chart(document.getElementById('visibilityChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Public', 'Private'],
+                        datasets: [{
+                            data: [{{ stats.public_workspaces }}, {{ stats.private_workspaces }}],
+                            backgroundColor: ['#10B981', '#F59E0B'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('visibilityChart');
+
+                // Custom Domains Status
+                const configured = {{ stats.custom_domains_configured }};
+                const validated = {{ stats.custom_domains_validated }};
+                const pending = configured - validated;
+
+                new Chart(document.getElementById('domainsChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Validated', 'Pending Validation', 'No Custom Domain'],
+                        datasets: [{
+                            data: [validated, pending > 0 ? pending : 0, {{ stats.teams }} - configured],
+                            backgroundColor: ['#10B981', '#F59E0B', '#9CA3AF'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('domainsChart');
+
+                // Content Overview Bar Chart
+                new Chart(document.getElementById('componentsChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Products', 'Projects', 'Components', 'SBOMs', 'Documents'],
+                        datasets: [{
+                            label: 'Count',
+                            data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.documents }}],
+                            backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+                showChart('componentsChart');
+
+                // Document Types Doughnut Chart
+                new Chart(document.getElementById('documentTypesChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: [{% for doc in stats.documents_by_type %}'{{ doc.document_type|default:"other" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                        datasets: [{
+                            data: [{% for doc in stats.documents_by_type %}{{ doc.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                            backgroundColor: ['#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#6366F1', '#14B8A6', '#F43F5E'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '50%'
+                    }
+                });
+                showChart('documentTypesChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}
+

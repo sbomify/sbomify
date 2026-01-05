@@ -49,6 +49,11 @@ class OnboardingStatus(models.Model):
         db_table = "onboarding_onboardingstatus"
         verbose_name = "Onboarding Status"
         verbose_name_plural = "Onboarding Statuses"
+        indexes = [
+            models.Index(fields=["has_completed_wizard"]),
+            models.Index(fields=["has_created_component"]),
+            models.Index(fields=["has_uploaded_sbom"]),
+        ]
 
     def __str__(self) -> str:
         return f"OnboardingStatus for {self.user.email}"

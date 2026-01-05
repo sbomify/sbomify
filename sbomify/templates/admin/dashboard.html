@@ -1,0 +1,124 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %}{% endblock %}
+{% block dashboard_content %}
+    <!-- Key Metrics Summary Cards -->
+    <div class="metrics-summary">
+        <div class="metric-card">
+            <h4>Total Users</h4>
+            <div class="value">{{ stats.users }}</div>
+            <div class="subtitle">{{ stats.email_verified_users }} verified</div>
+        </div>
+        <div class="metric-card green">
+            <h4>Paying Teams</h4>
+            <div class="value">{{ stats.teams_with_stripe }}</div>
+            <div class="subtitle">of {{ stats.teams }} total</div>
+        </div>
+        <div class="metric-card blue">
+            <h4>New Users (30d)</h4>
+            <div class="value">+{{ stats.new_users_30d }}</div>
+            <div class="subtitle">{{ stats.new_teams_30d }} new workspaces</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Active (7d)</h4>
+            <div class="value">{{ stats.active_users_7d }}</div>
+            <div class="subtitle">{% widthratio stats.active_users_7d stats.users 100 %}% of total</div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Grid -->
+    <div class="charts-grid">
+        <!-- Billing Quick View -->
+        <div class="stats-card">
+            <h3>Billing Distribution</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="billingChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Onboarding Quick View -->
+        <div class="stats-card">
+            <h3>Onboarding Funnel</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="funnelChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // Billing Distribution (Doughnut Chart)
+                const billingData = {
+                    labels: [{% for plan in stats.teams_by_plan %}'{{ plan.billing_plan|default:"No Plan" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                    datasets: [{
+                        data: [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                        backgroundColor: ['#9CA3AF', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
+                        borderWidth: 0
+                    }]
+                };
+                new Chart(document.getElementById('billingChart'), {
+                    type: 'doughnut',
+                    data: billingData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('billingChart');
+
+                // Onboarding Funnel (Horizontal Bar Chart)
+                new Chart(document.getElementById('funnelChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Total Users', 'Wizard Completed', 'Component Created', 'SBOM Uploaded'],
+                        datasets: [{
+                            label: 'Users',
+                            data: [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
+                            backgroundColor: ['#6366F1', '#8B5CF6', '#A855F7', '#EC4899'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = {{ stats.users }};
+                                        const value = context.raw;
+                                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                        return `${value} users (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { beginAtZero: true }
+                        }
+                    }
+                });
+                showChart('funnelChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %} › Onboarding{% endblock %}
+{% block dashboard_content %}
+    <!-- Onboarding Metrics Summary -->
+    <div class="metrics-summary">
+        <div class="metric-card purple">
+            <h4>Total Users</h4>
+            <div class="value">{{ stats.users }}</div>
+            <div class="subtitle">Starting point</div>
+        </div>
+        <div class="metric-card blue">
+            <h4>Wizard Completed</h4>
+            <div class="value">{{ stats.onboarding_wizard_completed }}</div>
+            <div class="subtitle">{% widthratio stats.onboarding_wizard_completed stats.users 100 %}% completion</div>
+        </div>
+        <div class="metric-card green">
+            <h4>Component Created</h4>
+            <div class="value">{{ stats.onboarding_component_created }}</div>
+            <div class="subtitle">{% widthratio stats.onboarding_component_created stats.users 100 %}% of users</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>SBOM Uploaded</h4>
+            <div class="value">{{ stats.onboarding_sbom_uploaded }}</div>
+            <div class="subtitle">{% widthratio stats.onboarding_sbom_uploaded stats.users 100 %}% of users</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <!-- Onboarding Funnel -->
+        <div class="stats-card wide">
+            <h3>Onboarding Funnel</h3>
+            <div class="chart-container tall">
+                <div class="loading">Loading chart...</div>
+                <canvas id="funnelChart" class="chart-canvas tall hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Step Conversion Rates -->
+        <div class="stats-card">
+            <h3>Conversion Rates</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Step</th>
+                        <th>Count</th>
+                        <th>% of Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Total Users</td>
+                        <td>{{ stats.users }}</td>
+                        <td>100%</td>
+                    </tr>
+                    <tr>
+                        <td>Wizard Completed</td>
+                        <td>{{ stats.onboarding_wizard_completed }}</td>
+                        <td>{% widthratio stats.onboarding_wizard_completed stats.users 100 %}%</td>
+                    </tr>
+                    <tr>
+                        <td>Component Created</td>
+                        <td>{{ stats.onboarding_component_created }}</td>
+                        <td>{% widthratio stats.onboarding_component_created stats.users 100 %}%</td>
+                    </tr>
+                    <tr>
+                        <td>SBOM Uploaded</td>
+                        <td>{{ stats.onboarding_sbom_uploaded }}</td>
+                        <td>{% widthratio stats.onboarding_sbom_uploaded stats.users 100 %}%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pending Invitations -->
+        <div class="stats-card">
+            <h3>Invitations</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="invitationsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // Onboarding Funnel Horizontal Bar
+                new Chart(document.getElementById('funnelChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Total Users', 'Wizard Completed', 'Component Created', 'SBOM Uploaded'],
+                        datasets: [{
+                            label: 'Users',
+                            data: [{{ stats.users }}, {{ stats.onboarding_wizard_completed }}, {{ stats.onboarding_component_created }}, {{ stats.onboarding_sbom_uploaded }}],
+                            backgroundColor: ['#6366F1', '#8B5CF6', '#A855F7', '#EC4899'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = {{ stats.users }};
+                                        const value = context.raw;
+                                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                        return `${value} users (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { beginAtZero: true }
+                        }
+                    }
+                });
+                showChart('funnelChart');
+
+                // Invitations Pie Chart
+                const pending = {{ stats.pending_invitations }};
+                new Chart(document.getElementById('invitationsChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Pending Invitations'],
+                        datasets: [{
+                            data: [pending],
+                            backgroundColor: ['#F59E0B'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.raw} pending invitations`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                showChart('invitationsChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}
+

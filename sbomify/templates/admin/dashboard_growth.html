@@ -1,0 +1,165 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %} › User Growth{% endblock %}
+{% block dashboard_content %}
+    <!-- Growth Metrics Summary -->
+    <div class="metrics-summary">
+        <div class="metric-card blue">
+            <h4>New Users (30d)</h4>
+            <div class="value">+{{ stats.new_users_30d }}</div>
+            <div class="subtitle">Last 30 days</div>
+        </div>
+        <div class="metric-card green">
+            <h4>Active (7d)</h4>
+            <div class="value">{{ stats.active_users_7d }}</div>
+            <div class="subtitle">{% widthratio stats.active_users_7d stats.users 100 %}% of total</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Active (30d)</h4>
+            <div class="value">{{ stats.active_users_30d }}</div>
+            <div class="subtitle">{% widthratio stats.active_users_30d stats.users 100 %}% of total</div>
+        </div>
+        <div class="metric-card red">
+            <h4>Never Logged In</h4>
+            <div class="value">{{ stats.users_never_logged_in }}</div>
+            <div class="subtitle">{% widthratio stats.users_never_logged_in stats.users 100 %}% of total</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <!-- User Signup Trend -->
+        <div class="stats-card wide">
+            <h3>User Signups (Last 30 Days)</h3>
+            <div class="chart-container tall">
+                <div class="loading">Loading chart...</div>
+                <canvas id="signupTrendChart" class="chart-canvas tall hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- User Engagement Breakdown -->
+        <div class="stats-card">
+            <h3>User Engagement</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="engagementChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Email Verification -->
+        <div class="stats-card">
+            <h3>Email Verification</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="verificationChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // User Signup Trend Line Chart
+                new Chart(document.getElementById('signupTrendChart'), {
+                    type: 'line',
+                    data: {
+                        labels: [{% for day in stats.signups_by_day %}'{{ day.day }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                        datasets: [{
+                            label: 'New Users',
+                            data: [{% for day in stats.signups_by_day %}{{ day.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#10B981'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }
+                        }
+                    }
+                });
+                showChart('signupTrendChart');
+
+                // User Engagement Doughnut
+                const totalUsers = {{ stats.users }};
+                const active7d = {{ stats.active_users_7d }};
+                const active30d = {{ stats.active_users_30d }};
+                const neverLoggedIn = {{ stats.users_never_logged_in }};
+                const inactive = totalUsers - active30d - neverLoggedIn;
+
+                new Chart(document.getElementById('engagementChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Active (7d)', 'Active (8-30d)', 'Inactive (>30d)', 'Never Logged In'],
+                        datasets: [{
+                            data: [active7d, active30d - active7d, inactive > 0 ? inactive : 0, neverLoggedIn],
+                            backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('engagementChart');
+
+                // Email Verification Doughnut
+                const verified = {{ stats.email_verified_users }};
+                const unverified = totalUsers - verified;
+
+                new Chart(document.getElementById('verificationChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Verified', 'Not Verified'],
+                        datasets: [{
+                            data: [verified, unverified],
+                            backgroundColor: ['#10B981', '#EF4444'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('verificationChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}
+

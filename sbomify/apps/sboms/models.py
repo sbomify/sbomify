@@ -18,6 +18,11 @@ class Product(models.Model):
         db_table = apps.get_app_config("sboms").label + "_products"
         unique_together = ("team", "name")
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["is_public"]),
+            models.Index(fields=["team", "created_at"]),
+            models.Index(fields=["team", "is_public"]),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
@@ -136,6 +141,11 @@ class Project(models.Model):
         db_table = apps.get_app_config("sboms").label + "_projects"
         unique_together = ("team", "name")
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["is_public"]),
+            models.Index(fields=["team", "created_at"]),
+            models.Index(fields=["team", "is_public"]),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
@@ -293,6 +303,12 @@ class Component(models.Model):
         db_table = apps.get_app_config("sboms").label + "_components"
         unique_together = ("team", "name")
         ordering = ["name"]
+        indexes = [
+            models.Index(fields=["is_public"]),
+            models.Index(fields=["team", "created_at"]),
+            models.Index(fields=["team", "is_public"]),
+            models.Index(fields=["component_type"]),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
@@ -412,6 +428,11 @@ class SBOM(models.Model):
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_sboms"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["component", "created_at"]),
+            models.Index(fields=["ntia_compliance_status"]),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     name = models.CharField(max_length=255, blank=False)  # qualified sbom name like com.github.sbomify/backend

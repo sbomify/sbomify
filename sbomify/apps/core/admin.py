@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from functools import wraps
 
 from allauth.socialaccount.models import SocialAccount
@@ -7,12 +8,15 @@ from django.contrib.auth.admin import UserAdmin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
+from django.db.models.functions import TruncDate
 from django.template.response import TemplateResponse
 from django.urls import path
+from django.utils import timezone
 from django.utils.html import format_html
 
 from sbomify.apps.documents.admin import DocumentAdmin
 from sbomify.apps.documents.models import Document
+from sbomify.apps.onboarding.models import OnboardingStatus
 from sbomify.apps.sboms.admin import SBOMAdmin
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
@@ -56,6 +60,10 @@ class DashboardView(admin.AdminSite):
         urls = super().get_urls()
         custom_urls = [
             path("dashboard/", self.admin_view(self.dashboard_view), name="admin_dashboard"),
+            path("dashboard/billing/", self.admin_view(self.dashboard_billing_view), name="admin_dashboard_billing"),
+            path("dashboard/growth/", self.admin_view(self.dashboard_growth_view), name="admin_dashboard_growth"),
+            path("dashboard/funnel/", self.admin_view(self.dashboard_funnel_view), name="admin_dashboard_funnel"),
+            path("dashboard/health/", self.admin_view(self.dashboard_health_view), name="admin_dashboard_health"),
         ]
         return custom_urls + urls
 
@@ -89,7 +97,24 @@ class DashboardView(admin.AdminSite):
 
         if stats is None:
             try:
+                now = timezone.now()
+                seven_days_ago = now - timedelta(days=7)
+                thirty_days_ago = now - timedelta(days=30)
+
+                # Get signups by day for trend chart
+                signups_by_day = list(
+                    User.objects.filter(date_joined__gte=thirty_days_ago)
+                    .annotate(day=TruncDate("date_joined"))
+                    .values("day")
+                    .annotate(count=Count("id"))
+                    .order_by("day")
+                )
+                # Format dates for JavaScript
+                for item in signups_by_day:
+                    item["day"] = item["day"].strftime("%m/%d") if item["day"] else ""
+
                 stats = {
+                    # Basic counts (existing)
                     "users": User.objects.count(),
                     "teams": Team.objects.count(),
                     "products": Product.objects.count(),
@@ -97,8 +122,46 @@ class DashboardView(admin.AdminSite):
                     "components": Component.objects.count(),
                     "sboms": SBOM.objects.count(),
                     "users_per_team": list(
-                        Team.objects.annotate(user_count=Count("members")).values("name", "user_count")
+                        Team.objects.annotate(user_count=Count("members")).values("name", "user_count")[:15]
                     ),
+                    # Billing & Subscription metrics
+                    "teams_by_plan": list(
+                        Team.objects.values("billing_plan").annotate(count=Count("id")).order_by("-count")
+                    ),
+                    "teams_with_stripe": Team.objects.exclude(billing_plan_limits__isnull=True)
+                    .exclude(billing_plan_limits__stripe_subscription_id__isnull=True)
+                    .count(),
+                    # User Growth metrics
+                    "new_users_30d": User.objects.filter(date_joined__gte=thirty_days_ago).count(),
+                    "new_teams_30d": Team.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    "active_users_7d": User.objects.filter(last_login__gte=seven_days_ago).count(),
+                    "active_users_30d": User.objects.filter(last_login__gte=thirty_days_ago).count(),
+                    "users_never_logged_in": User.objects.filter(last_login__isnull=True).count(),
+                    "signups_by_day": signups_by_day,
+                    # Onboarding Funnel metrics
+                    "onboarding_wizard_completed": OnboardingStatus.objects.filter(has_completed_wizard=True).count(),
+                    "onboarding_component_created": OnboardingStatus.objects.filter(has_created_component=True).count(),
+                    "onboarding_sbom_uploaded": OnboardingStatus.objects.filter(has_uploaded_sbom=True).count(),
+                    "pending_invitations": Invitation.objects.filter(expires_at__gt=now).count(),
+                    # Product Health metrics
+                    "public_workspaces": Team.objects.filter(is_public=True).count(),
+                    "private_workspaces": Team.objects.filter(is_public=False).count(),
+                    "custom_domains_configured": Team.objects.exclude(custom_domain__isnull=True)
+                    .exclude(custom_domain="")
+                    .count(),
+                    "custom_domains_validated": Team.objects.filter(custom_domain_validated=True).count(),
+                    "sboms_30d": SBOM.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    # Documents metrics
+                    "documents": Document.objects.count(),
+                    "documents_30d": Document.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    "documents_by_type": list(
+                        Document.objects.values("document_type").annotate(count=Count("id")).order_by("-count")
+                    ),
+                    "compliance_documents": Document.objects.filter(
+                        document_type__in=["compliance", "evidence", "license"]
+                    ).count(),
+                    # Email Verification
+                    "email_verified_users": User.objects.filter(email_verified=True).count(),
                 }
                 # Cache for 5 minutes
                 cache.set(cache_key, stats, 300)
@@ -113,21 +176,96 @@ class DashboardView(admin.AdminSite):
                     "components": 0,
                     "sboms": 0,
                     "users_per_team": [],
+                    "teams_by_plan": [],
+                    "teams_with_stripe": 0,
+                    "new_users_30d": 0,
+                    "new_teams_30d": 0,
+                    "active_users_7d": 0,
+                    "active_users_30d": 0,
+                    "users_never_logged_in": 0,
+                    "signups_by_day": [],
+                    "onboarding_wizard_completed": 0,
+                    "onboarding_component_created": 0,
+                    "onboarding_sbom_uploaded": 0,
+                    "pending_invitations": 0,
+                    "public_workspaces": 0,
+                    "private_workspaces": 0,
+                    "custom_domains_configured": 0,
+                    "custom_domains_validated": 0,
+                    "sboms_30d": 0,
+                    "documents": 0,
+                    "documents_30d": 0,
+                    "documents_by_type": [],
+                    "compliance_documents": 0,
+                    "email_verified_users": 0,
                 }
 
         return stats
 
     @admin_dashboard_required
     def dashboard_view(self, request):
-        """View for the admin dashboard."""
+        """View for the admin dashboard overview."""
         context = {
             **self.each_context(request),
             "title": "System Dashboard",
             "stats": self.get_dashboard_stats(),
             "app_label": "core",
             "has_permission": True,
+            "active_page": "overview",
         }
-        return TemplateResponse(request, "admin/dashboard.html.j2", context)
+        return TemplateResponse(request, "admin/dashboard.html", context)
+
+    @admin_dashboard_required
+    def dashboard_billing_view(self, request):
+        """View for the billing dashboard page."""
+        context = {
+            **self.each_context(request),
+            "title": "Billing Dashboard",
+            "stats": self.get_dashboard_stats(),
+            "app_label": "core",
+            "has_permission": True,
+            "active_page": "billing",
+        }
+        return TemplateResponse(request, "admin/dashboard_billing.html", context)
+
+    @admin_dashboard_required
+    def dashboard_growth_view(self, request):
+        """View for the user growth dashboard page."""
+        context = {
+            **self.each_context(request),
+            "title": "User Growth Dashboard",
+            "stats": self.get_dashboard_stats(),
+            "app_label": "core",
+            "has_permission": True,
+            "active_page": "growth",
+        }
+        return TemplateResponse(request, "admin/dashboard_growth.html", context)
+
+    @admin_dashboard_required
+    def dashboard_funnel_view(self, request):
+        """View for the onboarding funnel dashboard page."""
+        context = {
+            **self.each_context(request),
+            "title": "Onboarding Dashboard",
+            "stats": self.get_dashboard_stats(),
+            "app_label": "core",
+            "has_permission": True,
+            "active_page": "funnel",
+        }
+        return TemplateResponse(request, "admin/dashboard_funnel.html", context)
+
+    @admin_dashboard_required
+    def dashboard_health_view(self, request):
+        """View for the product health dashboard page."""
+        context = {
+            **self.each_context(request),
+            "title": "Product Health Dashboard",
+            "stats": self.get_dashboard_stats(),
+            "app_label": "core",
+            "has_permission": True,
+            "active_page": "health",
+        }
+        return TemplateResponse(request, "admin/dashboard_health.html", context)
 
     def get_social_accounts(self, obj):
         accounts = obj.socialaccount_set.all()

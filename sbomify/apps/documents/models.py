@@ -51,6 +51,11 @@ class Document(models.Model):
     class Meta:
         db_table = "documents_documents"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["document_type"]),
+            models.Index(fields=["component", "created_at"]),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     name = models.CharField(max_length=255, blank=False)  # document name

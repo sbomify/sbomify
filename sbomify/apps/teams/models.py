@@ -85,6 +85,10 @@ class Team(models.Model):
             models.Index(fields=["custom_domain"]),
             # Composite index for verification task queries
             models.Index(fields=["custom_domain_validated", "custom_domain_last_checked_at"]),
+            # Dashboard and analytics indexes
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["billing_plan"]),
+            models.Index(fields=["is_public"]),
         ]
         ordering = ["name"]
         constraints = [
@@ -262,6 +266,7 @@ class Invitation(models.Model):
         unique_together = ("team", "email")
         indexes = [
             models.Index(fields=["email"]),
+            models.Index(fields=["expires_at"]),
         ]
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)

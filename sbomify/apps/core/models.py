@@ -36,6 +36,11 @@ class User(AbstractUser):
 
     class Meta:
         db_table = "core_users"
+        indexes = [
+            models.Index(fields=["date_joined"]),
+            models.Index(fields=["last_login"]),
+            models.Index(fields=["email_verified"]),
+        ]
 
 
 # Proxy models for sbom entities - provides clean core app interface
