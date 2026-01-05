@@ -96,3 +96,8 @@ def verify_custom_domains():
 
         except Exception as e:
             logger.error(f"Error verifying domain {team.custom_domain}: {e}")
+
+
+# Import cron module at end of file to ensure cron tasks are registered when this module is autodiscovered
+# This must be at the end to avoid circular import (cron imports verify_custom_domains from this module)
+from . import cron as _cron  # noqa: F401, E402
