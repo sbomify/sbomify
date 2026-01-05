@@ -44,7 +44,6 @@
                         <th>Step</th>
                         <th>Count</th>
                         <th>% of Total</th>
-                        <th>Drop-off</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,25 +51,21 @@
                         <td>Total Users</td>
                         <td>{{ stats.users }}</td>
                         <td>100%</td>
-                        <td>-</td>
                     </tr>
                     <tr>
                         <td>Wizard Completed</td>
                         <td>{{ stats.onboarding_wizard_completed }}</td>
                         <td>{% widthratio stats.onboarding_wizard_completed stats.users 100 %}%</td>
-                        <td>{% widthratio stats.users|add:stats.onboarding_wizard_completed|add:"-"|add:stats.users stats.users 100 %}%</td>
                     </tr>
                     <tr>
                         <td>Component Created</td>
                         <td>{{ stats.onboarding_component_created }}</td>
                         <td>{% widthratio stats.onboarding_component_created stats.users 100 %}%</td>
-                        <td>-</td>
                     </tr>
                     <tr>
                         <td>SBOM Uploaded</td>
                         <td>{{ stats.onboarding_sbom_uploaded }}</td>
                         <td>{% widthratio stats.onboarding_sbom_uploaded stats.users 100 %}%</td>
-                        <td>-</td>
                     </tr>
                 </tbody>
             </table>

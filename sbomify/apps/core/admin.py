@@ -151,6 +151,15 @@ class DashboardView(admin.AdminSite):
                     .count(),
                     "custom_domains_validated": Team.objects.filter(custom_domain_validated=True).count(),
                     "sboms_30d": SBOM.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    # Documents metrics
+                    "documents": Document.objects.count(),
+                    "documents_30d": Document.objects.filter(created_at__gte=thirty_days_ago).count(),
+                    "documents_by_type": list(
+                        Document.objects.values("document_type").annotate(count=Count("id")).order_by("-count")
+                    ),
+                    "compliance_documents": Document.objects.filter(
+                        document_type__in=["compliance", "evidence", "license"]
+                    ).count(),
                     # Email Verification
                     "email_verified_users": User.objects.filter(email_verified=True).count(),
                 }
@@ -184,6 +193,10 @@ class DashboardView(admin.AdminSite):
                     "custom_domains_configured": 0,
                     "custom_domains_validated": 0,
                     "sboms_30d": 0,
+                    "documents": 0,
+                    "documents_30d": 0,
+                    "documents_by_type": [],
+                    "compliance_documents": 0,
                     "email_verified_users": 0,
                 }
 

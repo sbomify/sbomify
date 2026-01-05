@@ -9,19 +9,19 @@
             <div class="subtitle">Trust Centers enabled</div>
         </div>
         <div class="metric-card blue">
-            <h4>Private Workspaces</h4>
-            <div class="value">{{ stats.private_workspaces }}</div>
-            <div class="subtitle">Internal only</div>
-        </div>
-        <div class="metric-card purple">
             <h4>Custom Domains</h4>
             <div class="value">{{ stats.custom_domains_configured }}</div>
             <div class="subtitle">{{ stats.custom_domains_validated }} validated</div>
         </div>
-        <div class="metric-card orange">
+        <div class="metric-card purple">
             <h4>SBOMs (30d)</h4>
             <div class="value">{{ stats.sboms_30d }}</div>
             <div class="subtitle">of {{ stats.sboms }} total</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Documents (30d)</h4>
+            <div class="value">{{ stats.documents_30d }}</div>
+            <div class="subtitle">{{ stats.compliance_documents }} compliance</div>
         </div>
     </div>
 
@@ -44,12 +44,21 @@
             </div>
         </div>
 
-        <!-- Components Overview -->
-        <div class="stats-card wide">
-            <h3>Components Overview</h3>
+        <!-- Content Overview -->
+        <div class="stats-card">
+            <h3>Content Overview</h3>
             <div class="chart-container">
                 <div class="loading">Loading chart...</div>
                 <canvas id="componentsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Document Types -->
+        <div class="stats-card">
+            <h3>Document Types</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="documentTypesChart" class="chart-canvas hidden"></canvas>
             </div>
         </div>
 
@@ -84,6 +93,16 @@
                         <td>SBOMs</td>
                         <td>{{ stats.sboms }}</td>
                         <td>+{{ stats.sboms_30d }}</td>
+                    </tr>
+                    <tr>
+                        <td>Documents</td>
+                        <td>{{ stats.documents }}</td>
+                        <td>+{{ stats.documents_30d }}</td>
+                    </tr>
+                    <tr>
+                        <td>Compliance Documents</td>
+                        <td>{{ stats.compliance_documents }}</td>
+                        <td>-</td>
                     </tr>
                 </tbody>
             </table>
@@ -149,14 +168,14 @@
                 });
                 showChart('domainsChart');
 
-                // Components Overview Bar Chart
+                // Content Overview Bar Chart
                 new Chart(document.getElementById('componentsChart'), {
                     type: 'bar',
                     data: {
-                        labels: ['Products', 'Projects', 'Components', 'SBOMs', 'SBOMs (30d)'],
+                        labels: ['Products', 'Projects', 'Components', 'SBOMs', 'Documents'],
                         datasets: [{
                             label: 'Count',
-                            data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}],
+                            data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.documents }}],
                             backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
                             borderRadius: 4
                         }]
@@ -176,6 +195,28 @@
                     }
                 });
                 showChart('componentsChart');
+
+                // Document Types Doughnut Chart
+                new Chart(document.getElementById('documentTypesChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: [{% for doc in stats.documents_by_type %}'{{ doc.document_type|default:"other" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                        datasets: [{
+                            data: [{% for doc in stats.documents_by_type %}{{ doc.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                            backgroundColor: ['#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#6366F1', '#14B8A6', '#F43F5E'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '50%'
+                    }
+                });
+                showChart('documentTypesChart');
 
             } catch (error) {
                 console.error('Error initializing charts:', error);
