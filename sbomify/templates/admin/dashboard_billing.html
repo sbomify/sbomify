@@ -1,0 +1,144 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %} › Billing{% endblock %}
+{% block dashboard_content %}
+    <!-- Billing Metrics Summary -->
+    <div class="metrics-summary">
+        <div class="metric-card green">
+            <h4>Paying Teams</h4>
+            <div class="value">{{ stats.teams_with_stripe }}</div>
+            <div class="subtitle">Active subscriptions</div>
+        </div>
+        <div class="metric-card blue">
+            <h4>Total Teams</h4>
+            <div class="value">{{ stats.teams }}</div>
+            <div class="subtitle">All workspaces</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>Conversion Rate</h4>
+            <div class="value">{% widthratio stats.teams_with_stripe stats.teams 100 %}%</div>
+            <div class="subtitle">Free to paid</div>
+        </div>
+        <div class="metric-card purple">
+            <h4>New Teams (30d)</h4>
+            <div class="value">+{{ stats.new_teams_30d }}</div>
+            <div class="subtitle">Recent signups</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <!-- Plan Distribution Doughnut -->
+        <div class="stats-card">
+            <h3>Plan Distribution</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="planDistChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Plan Breakdown Table -->
+        <div class="stats-card">
+            <h3>Plan Breakdown</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Teams</th>
+                        <th>% of Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in stats.teams_by_plan %}
+                    <tr>
+                        <td>{{ plan.billing_plan|default:"No Plan" }}</td>
+                        <td>{{ plan.count }}</td>
+                        <td>{% widthratio plan.count stats.teams 100 %}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Users per Workspace -->
+        <div class="stats-card wide">
+            <h3>Users per Workspace (Top 15)</h3>
+            <div class="chart-container tall">
+                <div class="loading">Loading chart...</div>
+                <canvas id="usersPerWorkspaceChart" class="chart-canvas tall hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // Plan Distribution Doughnut
+                new Chart(document.getElementById('planDistChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: [{% for plan in stats.teams_by_plan %}'{{ plan.billing_plan|default:"No Plan" }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                        datasets: [{
+                            data: [{% for plan in stats.teams_by_plan %}{{ plan.count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                            backgroundColor: ['#9CA3AF', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('planDistChart');
+
+                // Users per Workspace Bar Chart
+                new Chart(document.getElementById('usersPerWorkspaceChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: [{% for team in stats.users_per_team %}'{{ team.name|truncatechars:20 }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+                        datasets: [{
+                            label: 'Users',
+                            data: [{% for team in stats.users_per_team %}{{ team.user_count }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                            backgroundColor: '#4bc0c0',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }
+                        }
+                    }
+                });
+                showChart('usersPerWorkspaceChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}
+

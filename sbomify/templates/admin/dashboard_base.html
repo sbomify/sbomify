@@ -1,0 +1,249 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% load django_vite %}
+{% block extrastyle %}
+    {{ block.super }}
+    <style>
+        .dashboard-container {
+            padding: 20px;
+        }
+
+        /* Navigation tabs */
+        .dashboard-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+
+        .dashboard-nav a {
+            padding: 10px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .dashboard-nav a:hover {
+            background: #e9ecef;
+        }
+
+        .dashboard-nav a.active {
+            background: #417690;
+            color: white;
+        }
+
+        /* Key Metrics Summary Cards */
+        .metrics-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-card.green {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .metric-card.blue {
+            background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+        }
+
+        .metric-card.orange {
+            background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);
+        }
+
+        .metric-card.purple {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .metric-card.red {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .metric-card h4 {
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin: 0 0 8px 0;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .metric-card .subtitle {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .charts-grid.single-column {
+            grid-template-columns: 1fr;
+        }
+
+        .stats-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+
+        .stats-card.wide {
+            grid-column: 1 / -1;
+        }
+
+        .stats-card h3 {
+            margin: 0 0 16px 0;
+            font-size: 1rem;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .chart-container.tall {
+            height: 400px;
+        }
+
+        .chart-canvas {
+            max-height: 300px;
+        }
+
+        .chart-canvas.tall {
+            max-height: 400px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .breadcrumbs {
+            margin: 0 0 20px 0;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .breadcrumbs a {
+            color: #417690;
+            text-decoration: none;
+        }
+
+        .breadcrumbs a:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+        }
+
+        .error-message {
+            color: #ba2121;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Data table styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 900px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .metrics-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .metrics-summary {
+                grid-template-columns: 1fr;
+            }
+            .dashboard-nav {
+                flex-direction: column;
+            }
+        }
+    </style>
+    {% block dashboard_extrastyle %}{% endblock %}
+{% endblock %}
+{% block content %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">Home</a> › <a href="{% url 'admin:admin_dashboard' %}">Dashboard</a>{% block breadcrumb_trail %}{% endblock %}
+    </div>
+    {% if stats.error %}
+        <div class="error-message">
+            <h3>Error Loading Dashboard</h3>
+            <p>{{ stats.error }}</p>
+        </div>
+    {% else %}
+        <div class="dashboard-container">
+            <!-- Navigation tabs -->
+            <nav class="dashboard-nav">
+                <a href="{% url 'admin:admin_dashboard' %}" class="{% if active_page == 'overview' %}active{% endif %}">Overview</a>
+                <a href="{% url 'admin:admin_dashboard_billing' %}" class="{% if active_page == 'billing' %}active{% endif %}">Billing</a>
+                <a href="{% url 'admin:admin_dashboard_growth' %}" class="{% if active_page == 'growth' %}active{% endif %}">User Growth</a>
+                <a href="{% url 'admin:admin_dashboard_funnel' %}" class="{% if active_page == 'funnel' %}active{% endif %}">Onboarding</a>
+                <a href="{% url 'admin:admin_dashboard_health' %}" class="{% if active_page == 'health' %}active{% endif %}">Product Health</a>
+            </nav>
+
+            {% block dashboard_content %}{% endblock %}
+        </div>
+    {% endif %}
+{% endblock %}
+{% block extrahead %}
+    {{ block.super }}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+{% endblock %}
+

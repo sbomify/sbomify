@@ -1,0 +1,186 @@
+{% extends "admin/dashboard_base.html" %}
+{% block breadcrumb_trail %} › Product Health{% endblock %}
+{% block dashboard_content %}
+    <!-- Product Health Metrics Summary -->
+    <div class="metrics-summary">
+        <div class="metric-card green">
+            <h4>Public Workspaces</h4>
+            <div class="value">{{ stats.public_workspaces }}</div>
+            <div class="subtitle">Trust Centers enabled</div>
+        </div>
+        <div class="metric-card blue">
+            <h4>Private Workspaces</h4>
+            <div class="value">{{ stats.private_workspaces }}</div>
+            <div class="subtitle">Internal only</div>
+        </div>
+        <div class="metric-card purple">
+            <h4>Custom Domains</h4>
+            <div class="value">{{ stats.custom_domains_configured }}</div>
+            <div class="subtitle">{{ stats.custom_domains_validated }} validated</div>
+        </div>
+        <div class="metric-card orange">
+            <h4>SBOMs (30d)</h4>
+            <div class="value">{{ stats.sboms_30d }}</div>
+            <div class="subtitle">of {{ stats.sboms }} total</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <!-- Workspace Visibility -->
+        <div class="stats-card">
+            <h3>Workspace Visibility</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="visibilityChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Custom Domains -->
+        <div class="stats-card">
+            <h3>Custom Domains Status</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="domainsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Components Overview -->
+        <div class="stats-card wide">
+            <h3>Components Overview</h3>
+            <div class="chart-container">
+                <div class="loading">Loading chart...</div>
+                <canvas id="componentsChart" class="chart-canvas hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Summary Table -->
+        <div class="stats-card wide">
+            <h3>Platform Data Summary</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Entity</th>
+                        <th>Count</th>
+                        <th>Last 30 Days</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Products</td>
+                        <td>{{ stats.products }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Projects</td>
+                        <td>{{ stats.projects }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>Components</td>
+                        <td>{{ stats.components }}</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>SBOMs</td>
+                        <td>{{ stats.sboms }}</td>
+                        <td>+{{ stats.sboms_30d }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function showChart(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                const loading = canvas.previousElementSibling;
+                canvas.classList.remove('hidden');
+                if (loading) loading.style.display = 'none';
+            }
+
+            try {
+                // Workspace Visibility Doughnut
+                new Chart(document.getElementById('visibilityChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Public', 'Private'],
+                        datasets: [{
+                            data: [{{ stats.public_workspaces }}, {{ stats.private_workspaces }}],
+                            backgroundColor: ['#10B981', '#F59E0B'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('visibilityChart');
+
+                // Custom Domains Status
+                const configured = {{ stats.custom_domains_configured }};
+                const validated = {{ stats.custom_domains_validated }};
+                const pending = configured - validated;
+
+                new Chart(document.getElementById('domainsChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Validated', 'Pending Validation', 'No Custom Domain'],
+                        datasets: [{
+                            data: [validated, pending > 0 ? pending : 0, {{ stats.teams }} - configured],
+                            backgroundColor: ['#10B981', '#F59E0B', '#9CA3AF'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        },
+                        cutout: '60%'
+                    }
+                });
+                showChart('domainsChart');
+
+                // Components Overview Bar Chart
+                new Chart(document.getElementById('componentsChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Products', 'Projects', 'Components', 'SBOMs', 'SBOMs (30d)'],
+                        datasets: [{
+                            label: 'Count',
+                            data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}],
+                            backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+                showChart('componentsChart');
+
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        });
+    </script>
+{% endblock %}
+
