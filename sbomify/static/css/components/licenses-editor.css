@@ -32,7 +32,6 @@
     font-size: 0.875rem;
     font-weight: 500;
     gap: 0.5rem;
-    max-width: 200px;
     transition: all 0.2s ease;
 }
 
@@ -60,11 +59,7 @@
 }
 
 .license-tag-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     flex: 1;
-    min-width: 0;
 }
 
 .custom-icon {

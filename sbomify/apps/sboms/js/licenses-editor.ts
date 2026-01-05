@@ -153,8 +153,11 @@ export function registerLicensesEditor() {
         },
 
         addCurrentExpression() {
-            const expression = this.licenseExpression.trim();
+            let expression = this.licenseExpression.trim();
             if (!expression) return;
+
+            // Normalize operators to uppercase (and -> AND, or -> OR, with -> WITH)
+            expression = expression.replace(/\b(and|or|with)\b/gi, match => match.toUpperCase());
 
             const isDuplicate = this.licenseTags.some(tag => {
                 const tagValue = typeof tag.value === 'string' ? tag.value : tag.value.name;
