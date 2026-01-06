@@ -14,6 +14,9 @@ from sbomify.apps.plugins.sdk.results import (
     PluginMetadata,
 )
 
+# Test constant: clearly fake timestamp for test data
+TEST_TIMESTAMP = "2000-01-01T00:00:00Z"
+
 
 class TestAssessmentCategory:
     """Tests for AssessmentCategory enum."""
@@ -221,7 +224,7 @@ class TestAssessmentResult:
             plugin_name="test-plugin",
             plugin_version="1.0.0",
             category="compliance",
-            assessed_at="2024-01-15T12:00:00Z",
+            assessed_at=TEST_TIMESTAMP,
             summary=summary,
             findings=[finding],
         )
@@ -246,7 +249,7 @@ class TestAssessmentResult:
             plugin_name="test-plugin",
             plugin_version="1.0.0",
             category="compliance",
-            assessed_at="2024-01-15T12:00:00Z",
+            assessed_at=TEST_TIMESTAMP,
             summary=summary,
             findings=[finding],
             metadata={"key": "value"},
@@ -258,7 +261,7 @@ class TestAssessmentResult:
         assert data["plugin_name"] == "test-plugin"
         assert data["plugin_version"] == "1.0.0"
         assert data["category"] == "compliance"
-        assert data["assessed_at"] == "2024-01-15T12:00:00Z"
+        assert data["assessed_at"] == TEST_TIMESTAMP
         assert data["summary"]["total_findings"] == 1
         assert len(data["findings"]) == 1
         assert data["findings"][0]["id"] == "test:finding"
@@ -349,4 +352,3 @@ class TestAssessmentPlugin:
         plugin = SimplePlugin()
 
         assert plugin.config == {}
-
