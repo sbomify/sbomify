@@ -142,6 +142,10 @@ def enqueue_assessment(
     This is the primary interface for triggering assessments. It serializes
     the arguments and sends the task to the Dramatiq queue.
 
+    The task dispatch is wrapped in transaction.on_commit() to ensure that
+    the SBOM and any related data are visible to the worker when the task
+    runs. If called outside a transaction, the task is sent immediately.
+
     Args:
         sbom_id: The SBOM's primary key.
         plugin_name: The plugin identifier to run.
@@ -159,18 +163,32 @@ def enqueue_assessment(
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
     """
-    run_assessment_task.send(
-        sbom_id=sbom_id,
-        plugin_name=plugin_name,
-        run_reason=run_reason.value,
-        config=config,
-        triggered_by_user_id=triggered_by_user.id if triggered_by_user else None,
-        triggered_by_token_id=str(triggered_by_token.id) if triggered_by_token else None,
-    )
+    # Capture values at call time for the closure, as on_commit callbacks execute after this function returns
+    task_sbom_id = sbom_id
+    task_plugin_name = plugin_name
+    task_run_reason = run_reason.value
+    task_config = config
+    task_user_id = triggered_by_user.id if triggered_by_user else None
+    task_token_id = str(triggered_by_token.id) if triggered_by_token else None
 
-    logger.info(
-        f"[PLUGIN] Enqueued assessment for SBOM {sbom_id} with plugin {plugin_name} (reason: {run_reason.value})"
-    )
+    def _send_task():
+        """Send the assessment task to the queue."""
+        run_assessment_task.send(
+            sbom_id=task_sbom_id,
+            plugin_name=task_plugin_name,
+            run_reason=task_run_reason,
+            config=task_config,
+            triggered_by_user_id=task_user_id,
+            triggered_by_token_id=task_token_id,
+        )
+        logger.info(
+            f"[PLUGIN] Enqueued assessment for SBOM {task_sbom_id} with plugin {task_plugin_name} "
+            f"(reason: {task_run_reason})"
+        )
+
+    # Defer task dispatch until after transaction commits to ensure SBOM is visible to workers.
+    # If called outside a transaction (autocommit mode), the callback runs immediately.
+    transaction.on_commit(_send_task)
 
 
 def enqueue_assessments_for_sbom(
@@ -184,6 +202,10 @@ def enqueue_assessments_for_sbom(
 
     This convenience function looks up the team's plugin settings
     and enqueues tasks for each enabled plugin.
+
+    Task dispatch is transaction-safe: tasks are deferred until after the
+    current transaction commits (via enqueue_assessment's on_commit wrapper),
+    ensuring the SBOM is visible to workers when tasks run.
 
     Args:
         sbom_id: The SBOM's primary key.
