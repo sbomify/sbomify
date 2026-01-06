@@ -1,11 +1,10 @@
-
 import pytest
 from django.test import Client
 from django.urls import reverse
+
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.core.tests.fixtures import sample_user
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member
 from sbomify.apps.sboms.tests.test_views import setup_test_session
+
 
 @pytest.mark.django_db
 class TestComponentDetailsViews:
@@ -19,17 +18,14 @@ class TestComponentDetailsViews:
         setup_test_session(self.client, team, sample_user)
 
         component = Component.objects.create(
-            name="Private SBOM Component",
-            team=team,
-            component_type=Component.ComponentType.SBOM,
-            is_public=False
+            name="Private SBOM Component", team=team, component_type=Component.ComponentType.SBOM, is_public=False
         )
 
         url = reverse("core:component_details", kwargs={"component_id": component.id})
         response = self.client.get(url)
-        
+
         assert response.status_code == 200
-        # Verify specific template usage indirectly via content or context if direct template check isn't easy with client
+        # Verify specific template usage indirectly via content or context
         # Django test client 'response.templates' can be checked
         templates = [t.name for t in response.templates]
         assert "core/component_details_private_sbom.html.j2" in templates
@@ -44,12 +40,12 @@ class TestComponentDetailsViews:
             name="Private Document Component",
             team=team,
             component_type=Component.ComponentType.DOCUMENT,
-            is_public=False
+            is_public=False,
         )
 
         url = reverse("core:component_details", kwargs={"component_id": component.id})
         response = self.client.get(url)
-        
+
         assert response.status_code == 200
         templates = [t.name for t in response.templates]
         assert "core/component_details_private_document.html.j2" in templates
@@ -58,15 +54,12 @@ class TestComponentDetailsViews:
         """Test that public SBOM component renders the correct template."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Public SBOM Component",
-            team=team,
-            component_type=Component.ComponentType.SBOM,
-            is_public=True
+            name="Public SBOM Component", team=team, component_type=Component.ComponentType.SBOM, is_public=True
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})
         response = self.client.get(url)
-        
+
         assert response.status_code == 200
         templates = [t.name for t in response.templates]
         assert "core/component_details_public_sbom.html.j2" in templates
@@ -75,15 +68,12 @@ class TestComponentDetailsViews:
         """Test that public Document component renders the correct template."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Public Document Component",
-            team=team,
-            component_type=Component.ComponentType.DOCUMENT,
-            is_public=True
+            name="Public Document Component", team=team, component_type=Component.ComponentType.DOCUMENT, is_public=True
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})
         response = self.client.get(url)
-        
+
         assert response.status_code == 200
         templates = [t.name for t in response.templates]
         assert "core/component_details_public_document.html.j2" in templates
@@ -102,12 +92,35 @@ class TestComponentDetailsViews:
         """Test that public access to private component returns 403."""
         team = sample_team_with_owner_member.team
         component = Component.objects.create(
-            name="Private Component",
-            team=team,
-            component_type=Component.ComponentType.SBOM,
-            is_public=False
+            name="Private Component", team=team, component_type=Component.ComponentType.SBOM, is_public=False
         )
 
         url = reverse("core:component_details_public", kwargs={"component_id": component.id})
         response = self.client.get(url)
         assert response.status_code == 403
+
+    def test_component_item_sbom_template_parses(self):
+        """Test that component item templates parse without syntax errors.
+
+        This test ensures the component_item.html.j2 template and its includes
+        (including assessment_results_card.html.j2 with the plugin accordion items)
+        can be parsed without TemplateSyntaxError. This validates that the templates
+        use valid Django template syntax (not Jinja2 macros).
+        """
+        from django.template import engines
+
+        django_engine = engines["django"]
+
+        # These templates should all parse without TemplateSyntaxError
+        templates_to_test = [
+            "core/component_item.html.j2",
+            "plugins/components/assessment_results_card.html.j2",
+            "plugins/components/_plugin_accordion_items.html.j2",
+        ]
+
+        for template_name in templates_to_test:
+            try:
+                template = django_engine.get_template(template_name)
+                assert template is not None, f"Template {template_name} should be loaded"
+            except Exception as e:
+                pytest.fail(f"Template {template_name} failed to parse: {e}")
