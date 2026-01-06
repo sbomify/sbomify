@@ -23,7 +23,11 @@
                                 <a href="{% url 'core:component_details' item.component_id %}">{{ item.component_name }}</a>
                             </li>
                             <li class="breadcrumb-item active" aria-current="page">
-                                {% if item_type == 'sboms' %}SBOM{% else %}Document{% endif %}
+                                {% if item_type == 'sboms' %}
+                                    SBOM
+                                {% else %}
+                                    Document
+                                {% endif %}
                             </li>
                         </ol>
                     </nav>
@@ -50,7 +54,14 @@
         <div class="header-meta d-flex align-items-center flex-wrap gap-2">
             {% if item_type == 'sboms' %}
                 <span class="badge bg-success-subtle text-success">
-                    {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format|upper }}{% endif %} {{ item.format_version }}
+                    {% if item.format == 'cyclonedx' %}
+                        CycloneDX
+                    {% elif item.format == 'spdx' %}
+                        SPDX
+                    {% else %}
+                        {{ item.format|upper }}
+                    {% endif %}
+                    {{ item.format_version }}
                 </span>
                 {% if item.version %}
                     <span class="meta-divider">•</span>
@@ -72,7 +83,9 @@
                 <span class="meta-divider">•</span>
                 <span class="meta-item">
                     <span class="text-muted">ID:</span>
-                    <span class="ms-1">{% include 'core/components/copyable-value.html.j2' with value=item.id title="SBOM ID (click to copy)" %}</span>
+                    <span class="ms-1">
+                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="SBOM ID (click to copy)" %}
+                    </span>
                 </span>
             {% elif item_type == 'documents' %}
                 <span class="badge bg-info-subtle text-info">{{ item.document_type|default:"Document" }}</span>
@@ -110,7 +123,9 @@
                 <span class="meta-divider">•</span>
                 <span class="meta-item">
                     <span class="text-muted">ID:</span>
-                    <span class="ms-1">{% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID (click to copy)" %}</span>
+                    <span class="ms-1">
+                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID (click to copy)" %}
+                    </span>
                 </span>
             {% endif %}
         </div>
