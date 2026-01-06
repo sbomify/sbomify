@@ -192,9 +192,8 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
                 "metadata": {"team_key": team_key},
             }
 
-            # Add promo code if provided
-            if data.promo_code:
-                session_data["discounts"] = [{"coupon": data.promo_code}]
+            # Enable promotion codes in Stripe Checkout
+            session_data["allow_promotion_codes"] = True
 
             session = stripe.checkout.Session.create(**session_data)
 
