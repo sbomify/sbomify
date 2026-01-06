@@ -156,7 +156,7 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         logger.error(f"Permanent error processing enterprise inquiry email: {e}", exc_info=True)
 
 
-@dramatiq.actor(queue_name="billing", max_retries=1, time_limit=300000)
+@dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)
 def check_stale_trials_task():
     """
     Check for stale trial subscriptions and sync them with Stripe.

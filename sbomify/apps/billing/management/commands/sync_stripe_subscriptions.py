@@ -21,7 +21,7 @@ Usage:
 
 import logging
 from datetime import datetime
-from datetime import timezone as dt_timezone
+from datetime import timezone as python_tz
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -167,7 +167,7 @@ class Command(BaseCommand):
             trial_end = subscription.trial_end
             trial_expired = False
             if trial_end:
-                trial_end_dt = datetime.fromtimestamp(trial_end, tz=dt_timezone.utc)
+                trial_end_dt = datetime.fromtimestamp(trial_end, tz=python_tz.utc)
                 if trial_end_dt < timezone.now():
                     trial_expired = True
 
