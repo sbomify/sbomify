@@ -4,7 +4,7 @@ Tests for the sync_stripe_subscriptions management command.
 
 from datetime import timedelta
 from io import StringIO
-from typing import Any, Generator
+from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,7 +22,7 @@ pytestmark = [
 
 
 @pytest.fixture
-def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:
+def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Team, None, None]:
     """Create a team with a stale trial (trial ended but status not updated)."""
     # Trial ended a week ago
     trial_end = int((timezone.now() - timedelta(days=7)).timestamp())
