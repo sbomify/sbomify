@@ -21,6 +21,7 @@ interface AssessmentsData {
 export function registerAssessmentBadge() {
   Alpine.data('assessmentBadge', (
     sbomId: string,
+    componentId: string,
     assessmentsDataJson: string,
     teamBillingPlan: string,
   ) => {
@@ -28,6 +29,7 @@ export function registerAssessmentBadge() {
 
     return {
       sbomId,
+      componentId,
       teamBillingPlan,
       showDetailsModal: false,
 
@@ -190,6 +192,12 @@ export function registerAssessmentBadge() {
         if (element.parentElement !== document.body) {
           document.body.appendChild(element)
         }
+      },
+
+      getPluginDetailUrl(pluginName: string): string {
+        // Build URL to SBOM detail page with anchor to specific plugin
+        // Note: URL pattern matches Django's core:component_item URL
+        return `/components/${this.componentId}/sboms/${this.sbomId}/#plugin-${pluginName}`
       },
     }
   })

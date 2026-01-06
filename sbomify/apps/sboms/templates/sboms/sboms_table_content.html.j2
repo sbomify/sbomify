@@ -37,7 +37,7 @@
                         </td>
                         {% if not is_public_view %}
                             <td data-label="Assessments">
-                                {% include 'plugins/components/assessment_badge.html.j2' with sbom_id=sbom.sbom.id assessments_data=sbom.assessments team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
+                                {% include 'plugins/components/assessment_badge.html.j2' with sbom_id=sbom.sbom.id component_id=component_id assessments_data=sbom.assessments team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
                             </td>
                         {% endif %}
                         <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ sbom.sbom.created_at|date:"M d, Y" }}</td>

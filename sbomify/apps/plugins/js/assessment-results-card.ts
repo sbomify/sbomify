@@ -68,8 +68,103 @@ export function registerAssessmentResultsCard() {
   Alpine.data('assessmentResultsCard', (sbomId: string, runsDataJson: string) => {
     const runsData: AssessmentRunsData = JSON.parse(runsDataJson || '{}')
 
+    // Helper to determine run status category
+    function getRunStatusCategory(run: AssessmentRun): 'failed' | 'passed' | 'pending' {
+      if (run.status === 'completed') {
+        const summary = run.result?.summary
+        if (summary && (summary.fail_count > 0 || summary.error_count > 0)) {
+          return 'failed'
+        }
+        return 'passed'
+      }
+      if (run.status === 'failed') {
+        return 'failed'
+      }
+      // pending or running
+      return 'pending'
+    }
+
+    // Group runs by status
+    function groupRunsByStatus(runs: AssessmentRun[]): {
+      failed: AssessmentRun[]
+      passed: AssessmentRun[]
+      pending: AssessmentRun[]
+    } {
+      const groups = {
+        failed: [] as AssessmentRun[],
+        passed: [] as AssessmentRun[],
+        pending: [] as AssessmentRun[],
+      }
+      for (const run of runs) {
+        const category = getRunStatusCategory(run)
+        groups[category].push(run)
+      }
+      return groups
+    }
+
+    // Store bound handler for cleanup
+    let hashChangeHandler: (() => void) | null = null
+
     return {
       sbomId,
+      expandedPluginId: null as string | null,
+
+      init() {
+        // Handle anchor links on page load
+        this.handleAnchorLink()
+        // Listen for hash changes - store handler for cleanup
+        hashChangeHandler = () => this.handleAnchorLink()
+        window.addEventListener('hashchange', hashChangeHandler)
+      },
+
+      destroy() {
+        // Clean up event listener to prevent memory leaks
+        if (hashChangeHandler) {
+          window.removeEventListener('hashchange', hashChangeHandler)
+          hashChangeHandler = null
+        }
+      },
+
+      handleAnchorLink() {
+        const hash = window.location.hash
+        // Early return if no hash
+        if (!hash) return
+
+        if (hash.startsWith('#plugin-')) {
+          const pluginName = hash.replace('#plugin-', '')
+          // Find the run with this plugin name
+          const run = this.latestRuns.find(r => r.plugin_name === pluginName)
+          if (run) {
+            this.expandedPluginId = run.id
+            // Scroll to the element after a short delay to ensure it's rendered
+            setTimeout(() => {
+              const element = document.getElementById(`plugin-${pluginName}`)
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            }, 100)
+          }
+        } else if (hash === '#assessment-results') {
+          setTimeout(() => {
+            const element = document.getElementById('assessment-results')
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+          }, 100)
+        }
+      },
+
+      isExpanded(runId: string): boolean {
+        return this.expandedPluginId === runId
+      },
+
+      toggleExpanded(runId: string) {
+        if (this.expandedPluginId === runId) {
+          this.expandedPluginId = null
+        } else {
+          this.expandedPluginId = runId
+        }
+      },
 
       get statusSummary() {
         return runsData.status_summary || {
@@ -88,6 +183,23 @@ export function registerAssessmentResultsCard() {
 
       get allRuns(): AssessmentRun[] {
         return runsData.all_runs || []
+      },
+
+      // Grouped runs by status (failed first, then passed, then pending)
+      get groupedRuns(): { failed: AssessmentRun[], passed: AssessmentRun[], pending: AssessmentRun[] } {
+        return groupRunsByStatus(this.latestRuns)
+      },
+
+      get failedRuns(): AssessmentRun[] {
+        return this.groupedRuns.failed
+      },
+
+      get passedRuns(): AssessmentRun[] {
+        return this.groupedRuns.passed
+      },
+
+      get pendingRuns(): AssessmentRun[] {
+        return this.groupedRuns.pending
       },
 
       get totalAssessments(): number {
