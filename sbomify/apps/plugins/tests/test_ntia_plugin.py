@@ -31,7 +31,8 @@ class TestNTIAPluginMetadata:
 
         assert plugin.STANDARD_NAME == "NTIA Minimum Elements for a Software Bill of Materials (SBOM)"
         assert plugin.STANDARD_VERSION == "2021-07"
-        assert "ntia.gov" in plugin.STANDARD_URL
+        # Using exact URL match to avoid CodeQL incomplete URL substring sanitization warning
+        assert plugin.STANDARD_URL == "https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom"
 
     def test_finding_ids_match_standard(self) -> None:
         """Test that finding IDs are properly formatted with standard version."""

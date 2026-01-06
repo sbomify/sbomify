@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import pytest
-import pytest_django
 from dotenv import load_dotenv
 
 # Register modules for assertion rewriting BEFORE they are imported
@@ -16,7 +15,6 @@ pytest.register_assert_rewrite(
 )
 
 
-# @pytest_django.django_db_setup
 @pytest.fixture(scope="session", autouse=True)
 def tests_init():
     """This only gets executed once."""
