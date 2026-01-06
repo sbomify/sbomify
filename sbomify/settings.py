@@ -108,6 +108,7 @@ INSTALLED_APPS = [
     "health_check.db",
     "anymail",
     "sbomify.apps.licensing",
+    "sbomify.apps.plugins",
 ]
 
 
