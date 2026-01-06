@@ -4,49 +4,26 @@ Tests for the sync_stripe_subscriptions management command.
 
 from datetime import timedelta
 from io import StringIO
+from typing import Any, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.management import call_command
 from django.utils import timezone
 
 from sbomify.apps.billing.stripe_client import StripeError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.core.utils import number_to_random_token
+from sbomify.apps.teams.models import Member, Team
+
+pytestmark = [
+    pytest.mark.django_db,
+]
 
 
 @pytest.fixture
-def team_with_active_subscription(db, django_user_model):
-    """Create a team with an active subscription."""
-    user = django_user_model.objects.create_user(
-        username="testuser",
-        email="test@example.com",
-        password="testpass123",
-    )
-    team = Team.objects.create(
-        name="Test Team",
-        billing_plan="business",
-        billing_plan_limits={
-            "stripe_subscription_id": "sub_active123",
-            "stripe_customer_id": "cus_test123",
-            "subscription_status": "active",
-            "is_trial": False,
-            "max_products": 5,
-            "max_projects": 10,
-            "max_components": 200,
-        },
-    )
-    team.add_member(user, role="owner")
-    return team
-
-
-@pytest.fixture
-def team_with_stale_trial(db, django_user_model):
+def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:
     """Create a team with a stale trial (trial ended but status not updated)."""
-    user = django_user_model.objects.create_user(
-        username="trialuser",
-        email="trial@example.com",
-        password="testpass123",
-    )
     # Trial ended a week ago
     trial_end = int((timezone.now() - timedelta(days=7)).timestamp())
     team = Team.objects.create(
@@ -63,15 +40,15 @@ def team_with_stale_trial(db, django_user_model):
             "max_components": 200,
         },
     )
-    team.add_member(user, role="owner")
-    return team
+    team.key = number_to_random_token(team.pk)
+    team.save()
 
+    Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
 
-@pytest.fixture
-def mock_stripe_client():
-    """Mock the StripeClient."""
-    with patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.StripeClient") as mock:
-        yield mock.return_value
+    yield team
+
+    if team.id is not None:
+        team.delete()
 
 
 class TestSyncStripeSubscriptions:
@@ -89,7 +66,7 @@ class TestSyncStripeSubscriptions:
 
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.is_billing_enabled")
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.StripeClient")
-    def test_no_teams_to_sync(self, mock_stripe_client_class, mock_billing_enabled, db):
+    def test_no_teams_to_sync(self, mock_stripe_client_class, mock_billing_enabled):
         """Test command with no teams having subscriptions."""
         mock_billing_enabled.return_value = True
 
@@ -100,7 +77,12 @@ class TestSyncStripeSubscriptions:
 
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.is_billing_enabled")
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.StripeClient")
-    def test_team_already_in_sync(self, mock_stripe_client_class, mock_billing_enabled, team_with_active_subscription):
+    def test_team_already_in_sync(
+        self,
+        mock_stripe_client_class,
+        mock_billing_enabled,
+        team_with_business_plan,
+    ):
         """Test that teams already in sync are not updated."""
         mock_billing_enabled.return_value = True
 
@@ -116,8 +98,8 @@ class TestSyncStripeSubscriptions:
         assert "Already in sync" in out.getvalue()
 
         # Verify team was not updated
-        team_with_active_subscription.refresh_from_db()
-        assert team_with_active_subscription.billing_plan_limits["subscription_status"] == "active"
+        team_with_business_plan.refresh_from_db()
+        assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
 
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.is_billing_enabled")
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.StripeClient")
@@ -186,7 +168,7 @@ class TestSyncStripeSubscriptions:
         mock_stripe_client_class,
         mock_billing_enabled,
         team_with_stale_trial,
-        team_with_active_subscription,
+        team_with_business_plan,
     ):
         """Test that --stale-trials-only only processes stale trials."""
         mock_billing_enabled.return_value = True
@@ -219,7 +201,7 @@ class TestSyncStripeSubscriptions:
 
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.is_billing_enabled")
     @patch("sbomify.apps.billing.management.commands.sync_stripe_subscriptions.StripeClient")
-    def test_team_not_found(self, mock_stripe_client_class, mock_billing_enabled, db):
+    def test_team_not_found(self, mock_stripe_client_class, mock_billing_enabled):
         """Test with non-existent team key."""
         mock_billing_enabled.return_value = True
 
