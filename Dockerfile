@@ -48,6 +48,7 @@ COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
 COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
+COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 
 # Copy existing static files
 COPY sbomify/static/ ./sbomify/static/
@@ -76,6 +77,7 @@ COPY sbomify/apps/teams/js/ ./sbomify/apps/teams/js/
 COPY sbomify/apps/billing/js/ ./sbomify/apps/billing/js/
 COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
+COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
