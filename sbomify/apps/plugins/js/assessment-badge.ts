@@ -206,7 +206,10 @@ export function registerAssessmentBadge() {
           return `${baseUrlFromData}#plugin-${pluginName}`
         }
 
-        // Fallback: construct URL (matches Django's core:component_item pattern)
+        // Fallback: construct URL for the SBOM detail page.
+        // NOTE: This hardcoded pattern must remain in sync with Django's
+        //       `core:component_item` URL route. If that route changes,
+        //       update this path accordingly.
         return `/components/${this.componentId}/sboms/${this.sbomId}#plugin-${pluginName}`
       },
     }

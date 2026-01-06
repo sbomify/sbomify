@@ -107,7 +107,8 @@ export function registerAssessmentResultsCard() {
 
     return {
       sbomId,
-      expandedPluginId: null as string | null,
+      // Tracks which plugin accordion is expanded (stores run.id, not plugin_name)
+      expandedRunId: null as string | null,
 
       init() {
         // Handle anchor links on page load
@@ -129,7 +130,7 @@ export function registerAssessmentResultsCard() {
         const hash = window.location.hash
         // Clear expanded state if no hash
         if (!hash) {
-          this.expandedPluginId = null
+          this.expandedRunId = null
           return
         }
 
@@ -138,7 +139,7 @@ export function registerAssessmentResultsCard() {
           // Find the run with this plugin name
           const run = this.latestRuns.find(r => r.plugin_name === pluginName)
           if (run) {
-            this.expandedPluginId = run.id
+            this.expandedRunId = run.id
             // Scroll to the element after a short delay to ensure it's rendered
             setTimeout(() => {
               const element = document.getElementById(`plugin-${pluginName}`)
@@ -149,7 +150,7 @@ export function registerAssessmentResultsCard() {
           }
         } else if (hash === '#assessment-results') {
           // Clear expanded state when navigating to section header
-          this.expandedPluginId = null
+          this.expandedRunId = null
           setTimeout(() => {
             const element = document.getElementById('assessment-results')
             if (element) {
@@ -158,19 +159,19 @@ export function registerAssessmentResultsCard() {
           }, 100)
         } else {
           // Clear expanded state when navigating to other anchors
-          this.expandedPluginId = null
+          this.expandedRunId = null
         }
       },
 
       isExpanded(runId: string): boolean {
-        return this.expandedPluginId === runId
+        return this.expandedRunId === runId
       },
 
       toggleExpanded(runId: string) {
-        if (this.expandedPluginId === runId) {
-          this.expandedPluginId = null
+        if (this.expandedRunId === runId) {
+          this.expandedRunId = null
         } else {
-          this.expandedPluginId = runId
+          this.expandedRunId = runId
         }
       },
 
