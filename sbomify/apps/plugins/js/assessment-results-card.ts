@@ -115,22 +115,23 @@ export function registerAssessmentResultsCard() {
         // Listen for hash changes - store handler for cleanup
         hashChangeHandler = () => this.handleAnchorLink()
         window.addEventListener('hashchange', hashChangeHandler)
+      },
 
+      destroy() {
         // Clean up when Alpine destroys this component
-        // Alpine dispatches 'alpine:destroy' event on the component's root element
-        const el = (this as { $el?: HTMLElement }).$el
-        el?.addEventListener('alpine:destroy', () => {
-          if (hashChangeHandler) {
-            window.removeEventListener('hashchange', hashChangeHandler)
-            hashChangeHandler = null
-          }
-        })
+        if (hashChangeHandler) {
+          window.removeEventListener('hashchange', hashChangeHandler)
+          hashChangeHandler = null
+        }
       },
 
       handleAnchorLink() {
         const hash = window.location.hash
-        // Early return if no hash
-        if (!hash) return
+        // Early return if no hash, and clear any expanded plugin state
+        if (!hash) {
+          this.expandedPluginId = null
+          return
+        }
 
         if (hash.startsWith('#plugin-')) {
           const pluginName = hash.replace('#plugin-', '')
