@@ -21,6 +21,7 @@ interface AssessmentsData {
 export function registerAssessmentBadge() {
   Alpine.data('assessmentBadge', (
     sbomId: string,
+    componentId: string,
     assessmentsDataJson: string,
     teamBillingPlan: string,
   ) => {
@@ -28,6 +29,7 @@ export function registerAssessmentBadge() {
 
     return {
       sbomId,
+      componentId,
       teamBillingPlan,
       showDetailsModal: false,
 
@@ -190,6 +192,25 @@ export function registerAssessmentBadge() {
         if (element.parentElement !== document.body) {
           document.body.appendChild(element)
         }
+      },
+
+      getPluginDetailUrl(pluginName: string): string {
+        // Build URL to SBOM detail page with anchor to specific plugin.
+        // Prefer a base URL provided via a data attribute rendered by Django's url tag,
+        // and fall back to constructing the URL if not available.
+        const el = (this as { $el?: HTMLElement }).$el
+        const wrapperElement = el?.closest('.assessment-badge-wrapper') as HTMLElement | null
+        const baseUrlFromData = wrapperElement?.dataset?.sbomDetailUrl
+
+        if (baseUrlFromData) {
+          return `${baseUrlFromData}#plugin-${pluginName}`
+        }
+
+        // Fallback: construct URL for the SBOM detail page.
+        // NOTE: This hardcoded pattern must remain in sync with Django's
+        //       `core:component_item` URL route. If that route changes,
+        //       update this path accordingly.
+        return `/components/${this.componentId}/sboms/${this.sbomId}#plugin-${pluginName}`
       },
     }
   })

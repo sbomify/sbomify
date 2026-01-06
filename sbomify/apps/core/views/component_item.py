@@ -125,7 +125,8 @@ class ComponentItemView(LoginRequiredMixin, View):
 
                 # Create a mock request object with the sbom_id parameter
                 assessment_response = get_sbom_assessments(request, item_id)
-                assessment_runs = assessment_response.model_dump()
+                # Use mode='json' to ensure datetime objects are serialized as ISO strings
+                assessment_runs = assessment_response.model_dump(mode="json")
             except Exception:
                 # If assessment fetch fails, continue without it
                 assessment_runs = None

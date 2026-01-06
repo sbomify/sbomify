@@ -68,8 +68,111 @@ export function registerAssessmentResultsCard() {
   Alpine.data('assessmentResultsCard', (sbomId: string, runsDataJson: string) => {
     const runsData: AssessmentRunsData = JSON.parse(runsDataJson || '{}')
 
+    // Helper to determine run status category
+    function getRunStatusCategory(run: AssessmentRun): 'failed' | 'passed' | 'pending' {
+      if (run.status === 'completed') {
+        const summary = run.result?.summary
+        if (summary && (summary.fail_count > 0 || summary.error_count > 0)) {
+          return 'failed'
+        }
+        return 'passed'
+      }
+      if (run.status === 'failed') {
+        return 'failed'
+      }
+      // pending or running
+      return 'pending'
+    }
+
+    // Group runs by status
+    function groupRunsByStatus(runs: AssessmentRun[]): {
+      failed: AssessmentRun[]
+      passed: AssessmentRun[]
+      pending: AssessmentRun[]
+    } {
+      const groups = {
+        failed: [] as AssessmentRun[],
+        passed: [] as AssessmentRun[],
+        pending: [] as AssessmentRun[],
+      }
+      for (const run of runs) {
+        const category = getRunStatusCategory(run)
+        groups[category].push(run)
+      }
+      return groups
+    }
+
     return {
       sbomId,
+      // Tracks which plugin accordion is expanded (stores run.id, not plugin_name)
+      expandedRunId: null as string | null,
+      // Store bound handler for cleanup (per-instance to support multiple components)
+      _hashChangeHandler: null as (() => void) | null,
+
+      init() {
+        // Handle anchor links on page load
+        this.handleAnchorLink()
+        // Listen for hash changes - store handler for cleanup
+        this._hashChangeHandler = this.handleAnchorLink.bind(this)
+        window.addEventListener('hashchange', this._hashChangeHandler)
+      },
+
+      destroy() {
+        // Clean up when Alpine destroys this component
+        if (this._hashChangeHandler) {
+          window.removeEventListener('hashchange', this._hashChangeHandler)
+          this._hashChangeHandler = null
+        }
+      },
+
+      handleAnchorLink() {
+        const hash = window.location.hash
+        // Clear expanded state if no hash
+        if (!hash) {
+          this.expandedRunId = null
+          return
+        }
+
+        if (hash.startsWith('#plugin-')) {
+          const pluginName = hash.replace('#plugin-', '')
+          // Find the run with this plugin name
+          const run = this.latestRuns.find(r => r.plugin_name === pluginName)
+          if (run) {
+            this.expandedRunId = run.id
+            // Scroll to the element after a short delay to ensure it's rendered
+            setTimeout(() => {
+              const element = document.getElementById(`plugin-${pluginName}`)
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+            }, 100)
+          }
+        } else if (hash === '#assessment-results') {
+          // Clear expanded state when navigating to section header
+          this.expandedRunId = null
+          setTimeout(() => {
+            const element = document.getElementById('assessment-results')
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+          }, 100)
+        } else {
+          // Clear expanded state when navigating to other anchors
+          this.expandedRunId = null
+        }
+      },
+
+      isExpanded(runId: string): boolean {
+        return this.expandedRunId === runId
+      },
+
+      toggleExpanded(runId: string) {
+        if (this.expandedRunId === runId) {
+          this.expandedRunId = null
+        } else {
+          this.expandedRunId = runId
+        }
+      },
 
       get statusSummary() {
         return runsData.status_summary || {
@@ -88,6 +191,23 @@ export function registerAssessmentResultsCard() {
 
       get allRuns(): AssessmentRun[] {
         return runsData.all_runs || []
+      },
+
+      // Grouped runs by status (failed first, then passed, then pending)
+      get groupedRuns(): { failed: AssessmentRun[], passed: AssessmentRun[], pending: AssessmentRun[] } {
+        return groupRunsByStatus(this.latestRuns)
+      },
+
+      get failedRuns(): AssessmentRun[] {
+        return this.groupedRuns.failed
+      },
+
+      get passedRuns(): AssessmentRun[] {
+        return this.groupedRuns.passed
+      },
+
+      get pendingRuns(): AssessmentRun[] {
+        return this.groupedRuns.pending
       },
 
       get totalAssessments(): number {
