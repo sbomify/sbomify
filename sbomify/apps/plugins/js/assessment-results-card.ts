@@ -113,7 +113,7 @@ export function registerAssessmentResultsCard() {
         // Handle anchor links on page load
         this.handleAnchorLink()
         // Listen for hash changes - store handler for cleanup
-        hashChangeHandler = () => this.handleAnchorLink()
+        hashChangeHandler = this.handleAnchorLink.bind(this)
         window.addEventListener('hashchange', hashChangeHandler)
       },
 
