@@ -12,6 +12,26 @@ from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import ContactProfile
 
 
+
+@pytest.fixture
+def community_plan() -> BillingPlan:
+    """Free community plan fixture."""
+    plan, _ = BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "Free plan for small teams",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "stripe_product_id": None,
+            "stripe_price_monthly_id": None,
+            "stripe_price_annual_id": None,
+        }
+    )
+    return plan
+
+
 @pytest.mark.django_db
 class TestDashboardRedirectToOnboarding:
     """Tests for dashboard redirect to onboarding wizard when not completed."""
@@ -102,7 +122,7 @@ class TestOnboardingWizard:
         form = response.context["form"]
         assert form.initial.get("email") == sample_user.email
 
-    def test_successful_onboarding_flow(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_successful_onboarding_flow(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test the complete successful single-step onboarding flow."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -141,7 +161,7 @@ class TestOnboardingWizard:
         assert team.name == "Acme Corporation's Workspace"
         assert team.has_completed_wizard is True
 
-    def test_contact_profile_created(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_contact_profile_created(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that ContactProfile is created with company=supplier=vendor and is_default=True."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -184,7 +204,7 @@ class TestOnboardingWizard:
         assert contact.email == "contact@test.com"
 
     def test_contact_profile_uses_user_email_as_fallback(
-        self, client: Client, sample_user, sample_team_with_owner_member
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
         """Test that ContactProfile uses user email when not provided in form."""
         client.force_login(sample_user)
@@ -214,7 +234,7 @@ class TestOnboardingWizard:
         assert profile.email == sample_user.email
 
     def test_product_project_component_auto_created(
-        self, client: Client, sample_user, sample_team_with_owner_member
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
         """Test that Product, Project, and Component are auto-created with correct hierarchy."""
         client.force_login(sample_user)
@@ -255,7 +275,7 @@ class TestOnboardingWizard:
         assert project in product.projects.all()
         assert component in project.components.all()
 
-    def test_component_has_sbom_type(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_component_has_sbom_type(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that auto-created component has component_type=SBOM."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -282,7 +302,7 @@ class TestOnboardingWizard:
         assert component is not None
         assert component.component_type == Component.ComponentType.SBOM
 
-    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_keycloak_metadata_in_component(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that Keycloak user metadata is properly used when creating a component."""
         # Create Keycloak social auth record with metadata (created for side effects only)
         SocialAccount.objects.create(
@@ -323,7 +343,7 @@ class TestOnboardingWizard:
         assert component.metadata.get("supplier", {}).get("name") == "Keycloak Corp"
         assert component.metadata.get("supplier", {}).get("url") == ["https://keycloak.example.com"]
 
-    def test_complete_step_shows_summary(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_complete_step_shows_summary(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that completion step shows created entities summary."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -353,7 +373,7 @@ class TestOnboardingWizard:
         assert response.context["company_name"] == "Summary Test Inc"
         assert response.context["component_id"] is not None
 
-    def test_session_updated_after_completion(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_session_updated_after_completion(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that session is properly updated after wizard completion."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -380,7 +400,7 @@ class TestOnboardingWizard:
         assert session["current_team"]["has_completed_wizard"] is True
         assert session["current_team"]["name"] == "Session Test's Workspace"
 
-    def test_company_name_required(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_company_name_required(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that company_name is required."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -406,7 +426,7 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["form"].errors.get("company_name") is not None
 
-    def test_contact_name_required(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_contact_name_required(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that contact_name is required for NTIA compliance."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -432,7 +452,7 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["form"].errors.get("contact_name") is not None
 
-    def test_website_is_optional(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_website_is_optional(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that website field is optional."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -460,7 +480,7 @@ class TestOnboardingWizard:
         assert profile is not None
         assert profile.website_urls == []
 
-    def test_invalid_website_url(self, client: Client, sample_user, sample_team_with_owner_member) -> None:
+    def test_invalid_website_url(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that invalid website URL is rejected."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -487,7 +507,7 @@ class TestOnboardingWizard:
         assert response.context["form"].errors.get("website") is not None
 
     def test_community_plan_creates_public_entities(
-        self, client: Client, sample_user, sample_team_with_owner_member
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
         """Test that community plan wizard creates public entities."""
         client.force_login(sample_user)

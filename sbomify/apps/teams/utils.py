@@ -281,12 +281,15 @@ def get_user_default_team(user) -> int:
         return None
 
 
-def can_add_user_to_team(team: Team) -> tuple[bool, str]:
+def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
 
     Args:
         team: The team to check
+        is_joining_via_invite: If True, we are checking if an existing pending user can join.
+                               In this case, we allow joining if total_users <= max_users
+                               (because the pending user is already counted in total_users).
 
     Returns:
         Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
@@ -299,13 +302,16 @@ def can_add_user_to_team(team: Team) -> tuple[bool, str]:
                 pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
                 total_users = current_members + pending_invites
 
-                if total_users >= plan.max_users:
+                # If joining with existing invite, allowing total == max is fine (slot consumed)
+                limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
+
+                if limit_reached:
                     return (
                         False,
                         f"Community plan allows only {plan.max_users} users. "
                         "Please upgrade your plan to add more members.",
                     )
-                return True, ""
+            return True, ""
         except BillingPlan.DoesNotExist:
             pass
 
@@ -313,7 +319,10 @@ def can_add_user_to_team(team: Team) -> tuple[bool, str]:
         pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
         total_users = current_members + pending_invites
 
-        if total_users >= 1:
+        # Fallback limit is 1
+        limit_reached = total_users > 1 if is_joining_via_invite else total_users >= 1
+
+        if limit_reached:
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""
 
@@ -327,12 +336,15 @@ def can_add_user_to_team(team: Team) -> tuple[bool, str]:
         pending_invites = Invitation.objects.filter(team=team, expires_at__gt=timezone.now()).count()
         total_users = current_members + pending_invites
 
-        if plan.max_users is not None and total_users >= plan.max_users:
-            return (
-                False,
-                f"Your {plan.name} plan allows only {plan.max_users} users. "
-                f"Please upgrade your plan to add more members.",
-            )
+        if plan.max_users is not None:
+            limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
+
+            if limit_reached:
+                return (
+                    False,
+                    f"Your {plan.name} plan allows only {plan.max_users} users. "
+                    f"Please upgrade your plan to add more members.",
+                )
 
         return True, ""
 
@@ -377,7 +389,7 @@ def create_user_team_and_subscription(user) -> Team | None:
         if pending_invitations:
             joinable_invites = []
             for invitation in pending_invitations:
-                can_add, _ = can_add_user_to_team(invitation.team)
+                can_add, _ = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
                 if can_add:
                     joinable_invites.append(invitation)
 

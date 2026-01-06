@@ -324,7 +324,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     # Check user limits before accepting invitation
     from sbomify.apps.teams.utils import can_add_user_to_team
 
-    can_add, error_message = can_add_user_to_team(invitation.team)
+    can_add, error_message = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
     if not can_add:
         return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
 
@@ -339,6 +339,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     membership.save()
 
     update_user_teams_session(request, request.user)
+    switch_active_workspace(request, invitation.team, invitation.role)
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 

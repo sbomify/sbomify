@@ -61,6 +61,8 @@ class TestBillingReturnView:
         mock_subscription = MagicMock()
         mock_subscription.id = "sub_123"
         mock_subscription.status = "active"
+        mock_subscription.cancel_at_period_end = False
+        mock_subscription.cancel_at = None
         # Set up attribute access for items.data[0].plan.interval
         mock_plan = MagicMock()
         mock_plan.interval = "month"
@@ -263,6 +265,10 @@ class TestBillingRedirectEdgeCases:
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test billing redirect creating new customer."""
+        # Clear existing billing limits to force new customer creation
+        team_with_business_plan.billing_plan_limits = {}
+        team_with_business_plan.save()
+
         # Mock customer doesn't exist
         mock_customer_retrieve.side_effect = stripe.error.InvalidRequestError(
             message="No such customer", param="id"

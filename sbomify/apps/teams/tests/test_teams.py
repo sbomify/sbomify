@@ -48,6 +48,27 @@ from sbomify.apps.teams.utils import (
 from sbomify.apps.teams.templatetags.teams import user_workspaces
 
 
+
+@pytest.fixture
+def community_plan() -> BillingPlan:
+    """Free community plan fixture."""
+    plan, _ = BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "Free plan for small teams",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "max_users": 1,
+            "stripe_product_id": None,
+            "stripe_price_monthly_id": None,
+            "stripe_price_annual_id": None,
+        }
+    )
+    return plan
+
+
 @pytest.mark.django_db
 def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
@@ -485,7 +506,7 @@ def test_accept_invitation(
 
 
 @pytest.mark.django_db
-def test_accept_invitation_sets_default_team_and_session(django_user_model):
+def test_accept_invitation_sets_default_team_and_session(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="invited-user",
         email="invited-user@example.com",
@@ -511,7 +532,7 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model):
 
 
 @pytest.mark.django_db
-def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
+def test_skip_auto_workspace_creation_for_invited_user(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="pending-invite-user",
         email="pending-invite@example.com",
@@ -527,7 +548,7 @@ def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
 
 
 @pytest.mark.django_db
-def test_pending_invitation_auto_accept_on_login(django_user_model):
+def test_pending_invitation_auto_accept_on_login(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="login-invite-user",
         email="login-invite@example.com",
