@@ -2,6 +2,7 @@ import stripe
 from django.conf import settings
 from django.http import HttpRequest
 from django.urls import reverse
+from django.utils import timezone
 from ninja import Router
 from ninja.security import django_auth
 
@@ -87,42 +88,76 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
         customer_id = f"c_{team_key}"
 
         if plan.key == "community":
+            # Get existing billing limits for safe access
+            billing_limits = team.billing_plan_limits or {}
+
             try:
                 customer = stripe.Customer.retrieve(customer_id)
                 subscriptions = stripe.Subscription.list(customer=customer.id, limit=1)
 
                 if subscriptions.data:
-                    # Cancel at period end
-                    stripe.Subscription.modify(subscriptions.data[0].id, cancel_at_period_end=True)
-                    team.billing_plan = plan.key
-                    team.billing_plan_limits = {
-                        "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
-                        "max_components": plan.max_components,
-                        "stripe_subscription_id": subscriptions.data[0].id,
-                        "subscription_status": "canceled",
-                    }
+                    # Check if downgrade already scheduled
+                    cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
+                    scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
-                    # Update both components and SBOMs
-                    Component.objects.filter(team=team).update(is_public=True)
+                    if cancel_at_period_end and scheduled_downgrade_plan:
+                        return 400, {
+                            "detail": (
+                                "A downgrade is already scheduled. "
+                                "Your current plan will remain active until the end of your billing period."
+                            )
+                        }
+
+                    # Schedule cancellation at period end (don't downgrade immediately)
+                    stripe.Subscription.modify(subscriptions.data[0].id, cancel_at_period_end=True)
+
+                    # Keep current plan active, don't change to community yet
+                    # Preserve existing billing_plan_limits fields
+                    existing_limits = billing_limits.copy()
+                    existing_limits.update(
+                        {
+                            "cancel_at_period_end": True,
+                            "scheduled_downgrade_plan": "community",
+                            "stripe_subscription_id": subscriptions.data[0].id,
+                            "subscription_status": "active",  # Keep as active, not canceled
+                            "last_updated": timezone.now().isoformat(),
+                        }
+                    )
+                    # Preserve stripe_customer_id if it exists
+                    if "stripe_customer_id" not in existing_limits:
+                        existing_limits["stripe_customer_id"] = customer.id
+
+                    team.billing_plan_limits = existing_limits
+                    # Don't update team.billing_plan - keep current plan active
+                    # Don't update components to public yet - wait until downgrade completes
 
                 else:
+                    # No active subscription, downgrade immediately
                     team.billing_plan = plan.key
-                    team.billing_plan_limits = {
-                        "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
-                        "max_components": plan.max_components,
-                    }
+                    existing_limits = billing_limits.copy()
+                    existing_limits.update(
+                        {
+                            "max_products": plan.max_products,
+                            "max_projects": plan.max_projects,
+                            "max_components": plan.max_components,
+                        }
+                    )
+                    team.billing_plan_limits = existing_limits
                     # Update components even without subscription
                     Component.objects.filter(team=team).update(is_public=True)
 
             except stripe.error.InvalidRequestError:
+                # No Stripe customer, downgrade immediately
                 team.billing_plan = plan.key
-                team.billing_plan_limits = {
-                    "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
-                    "max_components": plan.max_components,
-                }
+                existing_limits = billing_limits.copy()
+                existing_limits.update(
+                    {
+                        "max_products": plan.max_products,
+                        "max_projects": plan.max_projects,
+                        "max_components": plan.max_components,
+                    }
+                )
+                team.billing_plan_limits = existing_limits
                 # Update components for non-Stripe customers
                 Component.objects.filter(team=team).update(is_public=True)
 

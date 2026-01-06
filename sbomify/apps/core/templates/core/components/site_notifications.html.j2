@@ -1,4 +1,37 @@
 <!-- Site-wide notifications/alerts that require urgent user action -->
 {% load static %}
 {% load django_vite %}
+{% if team and team.billing_plan_limits.subscription_status == 'past_due' and is_owner %}
+    {% if team.is_in_grace_period %}
+        <div class="alert alert-warning shadow-sm d-flex align-items-center justify-content-between mb-4 border-0 rounded-3">
+            <div class="d-flex align-items-center">
+                <div class="fs-4 me-3 text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading fw-bold mb-1">Payment Failed</h5>
+                    <p class="mb-0 small">
+                        Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
+                    </p>
+                </div>
+            </div>
+            <a href="{% url 'billing:create_portal_session' team.key %}"
+               class="btn btn-warning btn-sm fw-bold px-3">Fix Payment</a>
+        </div>
+    {% else %}
+        <div class="alert alert-danger shadow-sm d-flex align-items-center justify-content-between mb-4 border-0 rounded-3">
+            <div class="d-flex align-items-center">
+                <div class="fs-4 me-3 text-danger">
+                    <i class="fas fa-ban"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading fw-bold mb-1">Account Suspended</h5>
+                    <p class="mb-0 small">Your account is restricted due to payment failure. Creation of new resources is blocked.</p>
+                </div>
+            </div>
+            <a href="{% url 'billing:create_portal_session' team.key %}"
+               class="btn btn-danger btn-sm fw-bold px-3">Reactivate Subscription</a>
+        </div>
+    {% endif %}
+{% endif %}
 <div class="vc-site-notifications"></div>

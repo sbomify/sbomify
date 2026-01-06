@@ -23,14 +23,25 @@ class UserLimitsTestCase(TestCase):
         self.user3 = User.objects.create_user(username="user3", email="user3@example.com", password="test")
 
         # Create billing plans
-        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
+        self.community_plan = BillingPlan.objects.create(
+            key="community",
+            name="Community",
+            description="Community Plan",
+            max_users=1
+        )
 
-        self.business_plan = BillingPlan.objects.create(key="business", name="Business", max_users=5)
+        self.business_plan = BillingPlan.objects.create(
+            key="business",
+            name="Business",
+            description="Business Plan",
+            max_users=5
+        )
 
         self.enterprise_plan = BillingPlan.objects.create(
             key="enterprise",
             name="Enterprise",
-            max_users=None,  # Unlimited
+            description="Enterprise Plan",
+            max_users=None  # Unlimited
         )
 
     def test_community_plan_user_limit(self):
@@ -171,11 +182,26 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.user = User.objects.create_user(username="user", email="user@example.com", password="test")
 
         # Create billing plans
-        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
+        self.community_plan = BillingPlan.objects.create(
+            key="community",
+            name="Community",
+            description="Community Plan",
+            max_users=1
+        )
 
-        self.business_plan = BillingPlan.objects.create(key="business", name="Business", max_users=5)
+        self.business_plan = BillingPlan.objects.create(
+            key="business",
+            name="Business",
+            description="Business Plan",
+            max_users=5
+        )
 
-        self.enterprise_plan = BillingPlan.objects.create(key="enterprise", name="Enterprise", max_users=None)
+        self.enterprise_plan = BillingPlan.objects.create(
+            key="enterprise",
+            name="Enterprise",
+            description="Enterprise Plan",
+            max_users=None
+        )
 
     def test_billing_plan_has_ntia_compliance_property(self):
         """Test that billing plans have correct NTIA compliance properties."""
@@ -308,7 +334,12 @@ class InvitationUserLimitsTestCase(TestCase):
         self.user2 = User.objects.create_user(username="invitee", email="invitee@example.com", password="test")
 
         # Create community plan with 1 user limit
-        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
+        self.community_plan = BillingPlan.objects.create(
+            key="community",
+            name="Community",
+            description="Community Plan",
+            max_users=1
+        )
 
     def test_invitation_creation_respects_user_limits(self):
         """Test that invitations cannot be created when user limit is reached."""

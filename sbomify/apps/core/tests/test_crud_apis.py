@@ -712,12 +712,22 @@ def test_crud_operations_require_authentication():
 
 
 @pytest.mark.django_db
-def test_crud_operations_require_billing_plan(
+def test_crud_operations_default_billing_plan_behavior(
     sample_access_token: AccessToken,  # noqa: F811
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    """Test that CRUD operations require an active billing plan when using access tokens."""
+    """Test that CRUD operations work with default (community) limits when no plan is set."""
     client = Client()
+
+    # Create community plan to allow fallback
+    BillingPlan.objects.create(
+        key="community", 
+        name="Community", 
+        description="Default Plan",
+        max_products=10, 
+        max_projects=10, 
+        max_components=10
+    )
 
     # Set up authentication but no team session - API will fall back to user's first team
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -727,16 +737,19 @@ def test_crud_operations_require_billing_plan(
     session.pop("current_team", None)
     session.pop("user_teams", None)
     session.save()
+    
+    # Ensure team has no billing plan
+    team = sample_team_with_owner_member.team
+    team.billing_plan = None
+    team.save()
 
     create_urls = [
         reverse("api-1:create_product"),
-        reverse("api-1:create_project"),
-        reverse("api-1:create_component"),
     ]
 
     payload = {"name": "Test Item"}
 
-    # Test create operations - these require billing plan validation
+    # Test create operations - these should now SUCCEED with default community limits
     for url in create_urls:
         response = client.post(
             url,
@@ -744,8 +757,7 @@ def test_crud_operations_require_billing_plan(
             content_type="application/json",
             **get_api_headers(sample_access_token),
         )
-        assert response.status_code == 403
-        assert "No active billing plan" in response.json()["detail"]
+        assert response.status_code == 201
 
 
 # =============================================================================
@@ -1372,6 +1384,8 @@ class TestBillingPlanLimitsAPI:
 
     def _setup_team_with_plan(self, team: Member, plan_data: dict) -> BillingPlan:
         """Helper to set up team with billing plan."""
+        if "description" not in plan_data:
+            plan_data["description"] = f"Description for {plan_data.get('name', 'Plan')}"
         plan = BillingPlan.objects.create(**plan_data)
         team.billing_plan = plan.key
         team.save()

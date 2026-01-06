@@ -22,6 +22,7 @@ import { registerReleaseList } from './components/release-list';
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerPlanSelection } from '../../billing/js/plan-selection'; // Import billing plan selection logic
 import { initializeAlpine } from './alpine-init';
 
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
@@ -83,6 +84,7 @@ registerDeleteModal();
 registerSbomsTable();
 registerComponentMetaInfoEditor();
 registerComponentMetaInfo();
+registerPlanSelection();
 
 // Initialize Alpine
 void initializeAlpine();

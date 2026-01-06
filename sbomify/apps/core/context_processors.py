@@ -1,6 +1,10 @@
 import os
 from importlib.metadata import PackageNotFoundError, version
 
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
+
 
 def version_context(request):
     """Add version and build information to template context.
@@ -62,3 +66,68 @@ def global_modals_context(request):
     return {
         "add_workspace_form": AddTeamForm(),
     }
+
+
+def team_context(request):
+    """
+    Add current team and user role to context.
+
+    This enables global access to 'team' and 'is_owner' for banners/navigation
+    without requiring every view to pass them explicitly.
+
+    Also syncs subscription data from Stripe to ensure billing status is always up-to-date.
+    """
+    if not request.user.is_authenticated:
+        return {}
+
+    current_team_data = request.session.get("current_team", {})
+    team_key = current_team_data.get("key")
+
+    if not team_key:
+        return {}
+
+    try:
+        from sbomify.apps.teams.models import Member, Team
+
+        # We could use select_related hooks or simple caching here if performance is an issue
+        team = Team.objects.get(key=team_key)
+
+        # Sync subscription data from Stripe if subscription exists
+        # This ensures billing status is always current for banners/notifications
+        billing_limits = team.billing_plan_limits or {}
+        stripe_sub_id = billing_limits.get("stripe_subscription_id")
+        if stripe_sub_id:
+            try:
+                from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
+
+                # Sync in background (non-blocking) - if it fails, we still show the page
+                # Use force_refresh=False to use cache, but sync will still check for changes
+                result = sync_subscription_from_stripe(team, force_refresh=False)
+                if result:
+                    # Refresh team to get updated billing_plan_limits
+                    team.refresh_from_db()
+                    logger.debug(f"Successfully synced subscription for team {team_key}")
+                else:
+                    logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
+            except Exception as e:
+                # Log error but don't break page rendering if sync fails
+                logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
+
+        # Determine if owner
+        # Optimization: Check if the session already has reliable role info,
+        # but fetching DB ensures latest status (important for billing updates etc)
+        is_owner = False
+        member = Member.objects.filter(team=team, user=request.user).first()
+        if member and member.role == "owner":
+            is_owner = True
+
+        from django.conf import settings
+
+        return {
+            "team": team,
+            "is_owner": is_owner,
+            "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
+        }
+    except Exception:
+        # Fail silently to avoid crashing unrelated pages if session is stale
+        return {}

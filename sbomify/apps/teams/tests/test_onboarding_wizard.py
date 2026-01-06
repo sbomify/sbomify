@@ -540,6 +540,7 @@ class TestOnboardingWizard:
             key="business",
             defaults={
                 "name": "Business",
+                "description": "Business Plan",
                 "max_products": 10,
                 "max_projects": 10,
                 "max_components": 10,

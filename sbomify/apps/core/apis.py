@@ -14,6 +14,7 @@ from pydantic import BaseModel, ValidationError
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.schemas import (
@@ -322,20 +323,125 @@ def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
 def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
+    Also checks for suspended accounts due to payment failure.
 
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
-    if not is_billing_enabled():
-        return True, "", None
-
+    # Always check payment restriction first (even if billing is disabled)
     try:
         team = Team.objects.get(id=team_id)
     except Team.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
+    # Check for payment failure / suspended account (always enforced)
+    if team.is_payment_restricted:
+        return (
+            False,
+            "Your account is suspended due to payment failure. Please update your payment method to create resources.",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
+
+    # If billing plan is None, set it to community plan first
     if not team.billing_plan:
-        return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
+        try:
+            plan = BillingPlan.objects.get(key="community")
+            team.billing_plan = "community"
+            if not team.billing_plan_limits:
+                team.billing_plan_limits = {}
+            team.billing_plan_limits.update(
+                {
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+            )
+            team.save(update_fields=["billing_plan", "billing_plan_limits"])
+            log.info(f"Set billing_plan to community for team {team.key} (was None)")
+        except BillingPlan.DoesNotExist:
+            # If community plan doesn't exist and billing is disabled, allow creation
+            if not is_billing_enabled():
+                return True, "", None
+            return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
+
+    # If billing is disabled but team has a billing_plan set, still enforce limits
+    # This ensures teams with plans (even if billing is disabled) respect their limits
+    # Only skip limits if billing is disabled AND no plan is set (shouldn't happen after above)
+    if not is_billing_enabled() and not team.billing_plan:
+        return True, "", None
+
+    # CHECK SCHEDULED DOWNGRADE LIMITS
+    billing_limits = team.billing_plan_limits or {}
+    cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
+    scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
+    stripe_subscription_id = billing_limits.get("stripe_subscription_id")
+
+    if cancel_at_period_end and scheduled_downgrade_plan:
+        # Fetch real-time subscription data from Stripe to verify cancel_at_period_end status
+        real_cancel_at_period_end = get_subscription_cancel_at_period_end(
+            stripe_subscription_id, team.key, fallback_value=cancel_at_period_end
+        )
+
+        # If user cancelled the cancellation (reactivated subscription)
+        if not real_cancel_at_period_end:
+            # Clear scheduled_downgrade_plan flag
+            billing_limits.pop("scheduled_downgrade_plan", None)
+            invalidate_subscription_cache(stripe_subscription_id, team.key)
+            team.billing_plan_limits = billing_limits
+            team.save()
+            log.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+        else:
+            # Still scheduled, check against target plan limits
+            try:
+                target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
+            except BillingPlan.DoesNotExist:
+                log.warning(f"Target plan {scheduled_downgrade_plan} not found for scheduled downgrade, skipping check")
+            else:
+                # Get current usage
+                if resource_type == "product":
+                    current_count = Product.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_products
+                elif resource_type == "project":
+                    current_count = Project.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_projects
+                elif resource_type == "component":
+                    current_count = Component.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_components
+                else:
+                    max_allowed = None
+
+                # Check if creating this resource would exceed target plan limits
+                if max_allowed is not None and (current_count + 1) > max_allowed:
+                    error_message = (
+                        f"You cannot create this {resource_type} because your scheduled downgrade to "
+                        f"{target_plan.name} would exceed the plan limit of {max_allowed} {resource_type}s. "
+                        f"Please reduce your usage or continue with your current plan."
+                    )
+                    return False, error_message, ErrorCode.BILLING_LIMIT_EXCEEDED
+
+    # At this point, billing_plan should be set (handled above)
+    # But double-check in case it wasn't saved properly
+    if not team.billing_plan:
+        try:
+            plan = BillingPlan.objects.get(key="community")
+            team.billing_plan = "community"
+            if not team.billing_plan_limits:
+                team.billing_plan_limits = {}
+            team.billing_plan_limits.update(
+                {
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+            )
+            team.save(update_fields=["billing_plan", "billing_plan_limits"])
+            log.warning(f"billing_plan was still None for team {team.key}, set to community")
+        except BillingPlan.DoesNotExist:
+            return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
@@ -359,11 +465,13 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     if plan.key == "enterprise" or max_allowed is None:
         return True, "", None
 
-    # Check if limit is reached
-    if current_count >= max_allowed:
+    # Check if creating this resource would exceed the limit
+    # We check (current_count + 1) > max_allowed to prevent creating one more that would exceed
+    if max_allowed is not None and (current_count + 1) > max_allowed:
         return (
             False,
-            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan",
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan. "
+            f"You currently have {current_count} {resource_type}s.",
             ErrorCode.BILLING_LIMIT_EXCEEDED,
         )
 

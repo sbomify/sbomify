@@ -14,7 +14,7 @@ BILLING_PLANS = [
     {
         "key": "business",
         "name": "Business",
-        "description": "Pro plan for medium teams",
+        "description": "Business plan for medium teams",
         "max_products": 5,
         "max_projects": 10,
         "max_components": 200,

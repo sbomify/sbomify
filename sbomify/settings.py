@@ -43,6 +43,9 @@ VULNERABILITY_SCAN_CACHE_TTL = int(os.environ.get("VULNERABILITY_SCAN_CACHE_TTL"
 # Time to wait after SBOM upload before retrieving results to allow DT to process
 DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))
 
+# Payment failure grace period in days before account is restricted
+PAYMENT_GRACE_PERIOD_DAYS = int(os.environ.get("PAYMENT_GRACE_PERIOD_DAYS", 3))
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -173,6 +176,7 @@ TEMPLATES = [
                 "sbomify.apps.core.context_processors.version_context",
                 "sbomify.apps.core.context_processors.pending_invitations_context",
                 "sbomify.apps.core.context_processors.global_modals_context",
+                "sbomify.apps.core.context_processors.team_context",
             ],
         },
     },

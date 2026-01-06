@@ -54,6 +54,8 @@ def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBas
     response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
+    messages = list(get_messages(response.wsgi_request))
+    assert "only team owners" in str(messages[0]).lower()
 
 
 @pytest.mark.django_db
@@ -72,13 +74,17 @@ def test_select_plan_page(
 
 
 @pytest.mark.django_db
-def test_select_community_plan(
+def test_select_community_plan_immediate(
     client: Client,
-    sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
-    community_plan: BillingPlan,  # noqa: F811
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
 ):
-    """Test switching to community plan."""
+    """Test switching to community plan when no active subscription exists (immediate)."""
+    # clear subscription id to simulate no active sub
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    
     client.force_login(sample_user)
     response = client.post(
         reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
@@ -96,34 +102,126 @@ def test_select_community_plan(
 
 
 @pytest.mark.django_db
-def test_select_business_plan(
+def test_select_community_plan_with_subscription_redirects_to_portal(
     client: Client,
-    sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
-    business_plan: BillingPlan,  # noqa: F811
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
 ):
-    """Test initiating business plan subscription."""
+    """Test selecting community plan with active subscription redirects to Portal (cancel flow)."""
+    # Ensure has sub id and active status
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = "sub_test_123"
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "active"
+    team_with_business_plan.save()
+
+    client.force_login(sample_user)
+    
+    # Mock create_billing_portal_session on the CLASS
+    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+        mock_session = MagicMock()
+        mock_session.url = "https://billing.stripe.com/p/session/test_portal_123"
+        mock_create_portal.return_value = mock_session
+
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), 
+            {"plan": community_plan.key}
+        )
+
+        assert response.status_code == 302
+        # Verify redirect to create_portal_session
+        assert "/billing/portal/" in response.url
+        assert "subscription_cancel" in response.url
+        
+        # Follow the redirect manually
+        response = client.get(response.url)
+        
+        assert response.status_code == 302
+        assert response.url == "https://billing.stripe.com/p/session/test_portal_123"
+
+        # Verify called with subscription_cancel flow
+        mock_create_portal.assert_called_once()
+        args, kwargs = mock_create_portal.call_args
+        assert kwargs["flow_data"]["type"] == "subscription_cancel"
+        assert kwargs["flow_data"]["subscription_cancel"]["subscription"] == "sub_test_123"
+
+
+@pytest.mark.django_db
+def test_select_business_plan_new_checkout(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    business_plan: BillingPlan,
+):
+    """Test initiating business plan subscription (new)."""
+    # Simulate being on community so we need checkout
+    team_with_business_plan.billing_plan = "community"
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    
     client.force_login(sample_user)
 
-    # First request to select_plan endpoint
-    response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
-        {"plan": business_plan.key, "billing_period": "monthly"},
-    )
+    # Mock the checkout session creation
+    with patch("sbomify.apps.billing.views.pricing_service.create_checkout_session") as mock_create_session:
+        mock_session = MagicMock()
+        mock_session.url = "https://checkout.stripe.com/test-session"
+        mock_create_session.return_value = mock_session
 
-    # Should redirect to billing_redirect
-    assert response.status_code == 302
-    assert response.url == reverse("billing:billing_redirect", kwargs={"team_key": team_with_business_plan.key})
+        # Request to select_plan endpoint
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": business_plan.key, "billing_period": "monthly"},
+        )
 
-    # Follow the redirect to billing_redirect endpoint
-    response = client.get(response.url)
+        # Should redirect directly to Stripe
+        assert response.status_code == 302
+        assert response.url == "https://checkout.stripe.com/test-session"
+        
+        # Verify the service was called correctly
+        mock_create_session.assert_called_once()
 
-    # Should redirect to Stripe checkout
-    assert response.status_code == 302
-    # Verify URL starts with expected Stripe checkout domain for security
-    from urllib.parse import urlparse
-    parsed_url = urlparse(response.url)
-    assert parsed_url.netloc == "checkout.stripe.com"
+
+@pytest.mark.django_db
+def test_switch_business_plan_with_subscription_redirects_to_portal(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    business_plan: BillingPlan,
+):
+    """Test switching business plan period with active subscription redirects to Portal (update flow)."""
+    # Simulate already on business with sub
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = "sub_test_456"
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "active"
+    team_with_business_plan.save()
+    
+    client.force_login(sample_user)
+    
+    # Expect create_billing_portal_session to be called instead of checkout
+    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+        mock_session = MagicMock()
+        mock_session.url = "https://billing.stripe.com/p/session/test_portal_456"
+        mock_create_portal.return_value = mock_session
+        
+        # Switch to annual
+        response = client.post(
+             reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+             {"plan": business_plan.key, "billing_period": "annual"},
+        )
+        
+        assert response.status_code == 302
+        # Verify redirect to create_portal_session
+        assert "/billing/portal/" in response.url
+        assert "subscription_update" in response.url
+        
+        # Follow manually
+        response = client.get(response.url)
+        
+        assert response.status_code == 302
+        assert response.url == "https://billing.stripe.com/p/session/test_portal_456"
+        
+        mock_create_portal.assert_called_once()
+        args, kwargs = mock_create_portal.call_args
+        assert kwargs["flow_data"]["type"] == "subscription_update"
+        assert kwargs["flow_data"]["subscription_update"]["subscription"] == "sub_test_456"
 
 
 @pytest.mark.django_db
@@ -261,15 +359,4 @@ def test_stripe_webhook_error_handling(factory):
             assert response.status_code == 500
 
 
-@pytest.mark.django_db
-def test_billing_redirect_trial(client, team_with_business_plan):
-    """Test billing redirect with trial period."""
-    member = team_with_business_plan.member_set.first()
-    client.force_login(member.user)
 
-    with patch("stripe.checkout.Session.create") as mock_create:
-        mock_create.return_value = MagicMock(url="https://checkout.stripe.com/test")
-        response = client.get(reverse("billing:billing_redirect", kwargs={"team_key": team_with_business_plan.key}))
-
-        assert response.status_code == 302
-        assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})

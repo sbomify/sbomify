@@ -1,7 +1,6 @@
 import json
 
 from django import template
-from django.conf import settings
 from django.utils.safestring import mark_safe
 
 from sbomify.apps.billing.models import BillingPlan
@@ -18,9 +17,6 @@ def schema_org_metadata():
     # Get all non-community billing plans
     plans = BillingPlan.objects.exclude(key="community")
 
-    # Get current prices from Stripe
-    stripe_prices = get_stripe_prices()
-
     schema = {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
@@ -34,15 +30,24 @@ def schema_org_metadata():
         "offers": [],
     }
 
-    # In test mode or if no Stripe prices are available, use test data
-    if not stripe_prices or settings.DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
-        stripe_prices = {
-            "business": {"monthly": 199.0, "annual": 1908.0},
-            "starter": {"monthly": 49.0, "annual": 499.0},
-        }
-
     for plan in plans:
-        plan_prices = stripe_prices.get(plan.key, {})
+        # Use model prices first, fall back to Stripe API if model prices are None
+        plan_prices = {}
+
+        if plan.monthly_price_discounted is not None:
+            plan_prices["monthly"] = float(plan.monthly_price_discounted)
+        elif plan.monthly_price is not None:
+            plan_prices["monthly"] = float(plan.monthly_price)
+
+        if plan.annual_price_discounted is not None:
+            plan_prices["annual"] = float(plan.annual_price_discounted)
+        elif plan.annual_price is not None:
+            plan_prices["annual"] = float(plan.annual_price)
+
+        # Fall back to Stripe API if model prices are not available
+        if not plan_prices:
+            stripe_prices = get_stripe_prices()
+            plan_prices = stripe_prices.get(plan.key, {})
 
         # Add monthly offer if available
         if "monthly" in plan_prices:

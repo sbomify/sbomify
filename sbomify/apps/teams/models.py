@@ -192,6 +192,37 @@ class Team(models.Model):
 
         return False
 
+    @property
+    def is_in_grace_period(self):
+        """Check if team is in payment grace period."""
+        from django.conf import settings
+
+        limits = self.billing_plan_limits or {}
+        if limits.get("subscription_status") != "past_due":
+            return False
+
+        failed_at_str = limits.get("payment_failed_at")
+        if not failed_at_str:
+            # If past_due but no date, assume grace period (safe default vs lockout)
+            return True
+
+        try:
+            import datetime
+
+            failed_at = datetime.datetime.fromisoformat(failed_at_str)
+            grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
+            return (timezone.now() - failed_at).days <= grace_days
+        except (ValueError, TypeError):
+            return True
+
+    @property
+    def is_payment_restricted(self):
+        """Check if team is restricted due to payment failure (past grace period)."""
+        limits = self.billing_plan_limits or {}
+        if limits.get("subscription_status") != "past_due":
+            return False
+        return not self.is_in_grace_period
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()

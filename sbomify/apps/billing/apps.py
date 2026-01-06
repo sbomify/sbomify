@@ -7,6 +7,7 @@ class BillingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sbomify.apps.billing"
     label = "billing"
+    verbose_name = "Billing"
 
     def ready(self):
         # Only set Stripe API key if billing is enabled
@@ -14,3 +15,6 @@ class BillingConfig(AppConfig):
             # This ensures stripe.api_key is set when Django starts
             # It will use the value from STRIPE_SECRET_KEY environment variable
             stripe.api_key = settings.STRIPE_API_KEY
+
+        # Import signals to register them
+        from . import signals  # noqa: F401

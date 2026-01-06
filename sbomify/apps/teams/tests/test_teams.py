@@ -412,6 +412,7 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
         key="business",
         defaults={
             "name": "Business Plan",
+            "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
             "max_projects": 100,
@@ -1715,7 +1716,7 @@ def test_private_workspace_rejects_unknown_plan():
 @pytest.mark.django_db
 def test_private_workspace_allowed_custom_plan_when_registered():
     """Custom plans that exist in BillingPlan are treated as paid/allowing private workspaces."""
-    plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan")
+    plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan", description="Custom Plan Description")
     team = Team.objects.create(name="Custom Plan Workspace", billing_plan=plan.key, is_public=False)
     assert _private_workspace_allowed(team) is True
 
