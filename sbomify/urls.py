@@ -46,6 +46,7 @@ urlpatterns = [
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),
+    path("plugins/", include("sbomify.apps.plugins.urls")),
     path("", include("sbomify.apps.vulnerability_scanning.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string

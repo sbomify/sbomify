@@ -1,0 +1,132 @@
+{% load static %}
+{% load json_extras %}
+<link rel="stylesheet"
+      href="{% static 'css/components/assessment-badge.css' %}">
+<div class="assessment-badge-wrapper">
+    <div x-data="assessmentBadge('{{ sbom_id }}', '{{ assessments_data|jsonify|escapejs }}', '{{ team_billing_plan|default:""|escapejs }}')">
+        {% if team_billing_plan == 'community' %}
+            <a href="{% url 'billing:select_plan' team_key %}"
+               class="badge d-flex align-items-center gap-1 text-decoration-none"
+               :class="getBadgeClasses()"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               :title="getTooltipText()">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </a>
+        {% else %}
+            <div class="badge d-flex align-items-center gap-1"
+                 :class="getBadgeClasses()"
+                 data-bs-toggle="tooltip"
+                 data-bs-placement="top"
+                 :title="getTooltipText()"
+                 :style="isBadgeClickable() ? 'cursor: pointer' : ''"
+                 @click="isBadgeClickable() ? showDetailsModal = true : null">
+                <i :class="getBadgeIconClass()"></i>
+                <span x-text="getBadgeText()"></span>
+            </div>
+        {% endif %}
+        <template x-if="showDetailsModal">
+            <div class="modal fade show assessment-modal"
+                 tabindex="-1"
+                 @click.self="showDetailsModal = false"
+                 x-init="initModal($el)">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-clipboard-check me-2"></i>
+                                Assessment Results
+                            </h5>
+                            <button type="button" class="btn-close" @click="showDetailsModal = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <!-- Summary -->
+                            <div class="assessment-summary mb-4">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <div class="summary-card text-center p-3 rounded"
+                                             :class="overallStatus === 'all_pass' ? 'bg-success-subtle' : 'bg-light'">
+                                            <div class="summary-number fs-4 fw-bold text-success"
+                                                 x-text="passingCount"></div>
+                                            <div class="summary-label text-muted small">Passing</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-card text-center p-3 rounded"
+                                             :class="failingCount > 0 ? 'bg-warning-subtle' : 'bg-light'">
+                                            <div class="summary-number fs-4 fw-bold text-warning"
+                                                 x-text="failingCount"></div>
+                                            <div class="summary-label text-muted small">Failing</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-card text-center p-3 rounded bg-light">
+                                            <div class="summary-number fs-4 fw-bold text-info" x-text="pendingCount"></div>
+                                            <div class="summary-label text-muted small">Pending</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="summary-card text-center p-3 rounded bg-light">
+                                            <div class="summary-number fs-4 fw-bold text-secondary"
+                                                 x-text="totalAssessments"></div>
+                                            <div class="summary-label text-muted small">Total</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Per-plugin results -->
+                            <div class="assessment-plugins">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-puzzle-piece me-2"></i>
+                                    Plugin Results
+                                </h6>
+                                <template x-for="plugin in plugins" :key="plugin.name">
+                                    <div class="plugin-result-card mb-3 p-3 border rounded">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div class="plugin-info">
+                                                <span class="plugin-name fw-medium" x-text="plugin.display_name"></span>
+                                                <span class="badge ms-2"
+                                                      :class="getPluginStatusBadgeClass(plugin.status)"
+                                                      x-text="getPluginStatusText(plugin.status)"></span>
+                                            </div>
+                                            <div class="plugin-stats text-muted small">
+                                                <template x-if="plugin.status === 'pass' || plugin.status === 'fail'">
+                                                    <span>
+                                                        <span x-text="plugin.findings_count"></span> findings
+                                                        <template x-if="plugin.fail_count > 0">
+                                                            <span class="text-warning">
+                                                                (<span x-text="plugin.fail_count"></span> failed)
+                                                            </span>
+                                                        </template>
+                                                    </span>
+                                                </template>
+                                                <template x-if="plugin.status === 'pending'">
+                                                    <span class="text-info">
+                                                        <i class="fas fa-clock fa-pulse me-1"></i>
+                                                        Processing...
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="plugins.length === 0">
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle mb-2 fs-4"></i>
+                                        <p>No assessments have been run yet.</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button"
+                                    class="btn btn-secondary"
+                                    @click="showDetailsModal = false">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>

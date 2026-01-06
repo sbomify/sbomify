@@ -3555,8 +3555,14 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 log.error(f"Database error fetching SBOMs for component {component_id}: {db_err}")
                 return 500, {"detail": "Database error occurred", "error_code": ErrorCode.INTERNAL_ERROR}
 
-        # Build response items with vulnerability status and releases
+        # Build response items with vulnerability status, releases, and assessments
         items = []
+
+        # Import assessment helpers
+        from sbomify.apps.plugins.apis import _compute_status_summary
+        from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
+        from sbomify.apps.plugins.sdk.enums import RunStatus
+
         for sbom in paginated_sboms:
             # Get vulnerability status
             vuln_status = check_vulnerability_report(sbom.id)
@@ -3585,6 +3591,73 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     }
                 )
 
+            # Get assessment data for badge
+            assessment_data = {"overall_status": "no_assessments", "total_assessments": 0, "plugins": []}
+            try:
+                # Get latest run per plugin
+                from django.db.models import OuterRef, Subquery
+
+                latest_run_ids = (
+                    AssessmentRun.objects.filter(sbom_id=sbom.id)
+                    .values("plugin_name")
+                    .annotate(
+                        latest_id=Subquery(
+                            AssessmentRun.objects.filter(sbom_id=sbom.id, plugin_name=OuterRef("plugin_name"))
+                            .order_by("-created_at")
+                            .values("id")[:1]
+                        )
+                    )
+                    .values_list("latest_id", flat=True)
+                )
+                latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+                status_summary = _compute_status_summary(latest_runs)
+
+                plugins = []
+                for run in latest_runs:
+                    display_name = run.plugin_name
+                    try:
+                        plugin = RegisteredPlugin.objects.get(name=run.plugin_name)
+                        display_name = plugin.display_name
+                    except RegisteredPlugin.DoesNotExist:
+                        pass
+
+                    if run.status == RunStatus.COMPLETED.value:
+                        result = run.result or {}
+                        summary = result.get("summary", {})
+                        if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
+                            plugin_status = "fail"
+                        else:
+                            plugin_status = "pass"
+                        findings_count = summary.get("total_findings", 0)
+                    elif run.status in (RunStatus.PENDING.value, RunStatus.RUNNING.value):
+                        plugin_status = "pending"
+                        findings_count = 0
+                    else:
+                        plugin_status = "error"
+                        findings_count = 0
+
+                    plugins.append(
+                        {
+                            "name": run.plugin_name,
+                            "display_name": display_name,
+                            "status": plugin_status,
+                            "findings_count": findings_count,
+                            "fail_count": (run.result or {}).get("summary", {}).get("fail_count", 0),
+                        }
+                    )
+
+                assessment_data = {
+                    "sbom_id": str(sbom.id),
+                    "overall_status": status_summary.overall_status,
+                    "total_assessments": status_summary.total_assessments,
+                    "passing_count": status_summary.passing_count,
+                    "failing_count": status_summary.failing_count,
+                    "pending_count": status_summary.pending_count,
+                    "plugins": plugins,
+                }
+            except Exception as e:
+                log.warning(f"Error fetching assessment data for SBOM {sbom.id}: {e}")
+
             items.append(
                 {
                     "sbom": {
@@ -3594,11 +3667,10 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                         "format_version": sbom.format_version,
                         "version": sbom.version,
                         "created_at": sbom.created_at,
-                        "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", None),
-                        "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
                     },
                     "has_vulnerabilities_report": vuln_status,
                     "releases": releases,
+                    "assessments": assessment_data,
                 }
             )
 

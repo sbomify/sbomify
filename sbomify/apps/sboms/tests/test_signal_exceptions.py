@@ -5,7 +5,6 @@ This module tests the error handling and resilience of the signal handlers
 that trigger NTIA compliance checks and vulnerability scans when SBOMs are created.
 """
 
-import pytest
 from unittest.mock import Mock, patch
 from django.test import TestCase
 
@@ -84,7 +83,7 @@ class SignalExceptionHandlingTests(TestCase):
             self.assertIn("no billing plan (community)", args[0])
 
     def test_ntia_compliance_with_business_plan(self):
-        """Test NTIA compliance check with business plan."""
+        """Test NTIA compliance check with business plan uses plugin framework."""
         # Set up team with business plan
         business_plan = BillingPlan.objects.create(
             key="business",
@@ -98,15 +97,15 @@ class SignalExceptionHandlingTests(TestCase):
             component=self.component
         )
 
-        with patch('sbomify.apps.sboms.tasks.check_sbom_ntia_compliance') as mock_task:
+        with patch('sbomify.apps.plugins.tasks.enqueue_assessment') as mock_enqueue:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
                 trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
 
-                # Should trigger the task
-                mock_task.send_with_options.assert_called_once_with(
-                    args=[sbom.id],
-                    delay=60000
-                )
+                # Should trigger the plugin assessment
+                mock_enqueue.assert_called_once()
+                call_kwargs = mock_enqueue.call_args[1]
+                self.assertEqual(call_kwargs['sbom_id'], sbom.id)
+                self.assertEqual(call_kwargs['plugin_name'], 'ntia-minimum-elements-2021')
 
                 # Should log that NTIA compliance is triggered
                 mock_logger.info.assert_called_once()

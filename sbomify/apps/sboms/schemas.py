@@ -28,6 +28,12 @@ class SBOMUploadRequest(Schema):
 
 
 class SBOMResponseSchema(BaseModel):
+    """Schema for SBOM API responses.
+
+    Note: NTIA compliance data is now available via the AssessmentRun model
+    in the plugins app. Query assessment_runs with plugin_name="ntia-minimum-elements-2021".
+    """
+
     id: str
     name: str
     version: str
@@ -38,9 +44,6 @@ class SBOMResponseSchema(BaseModel):
     source: str | None
     component_id: str
     component_name: str
-    ntia_compliance_status: str
-    ntia_compliance_details: dict
-    ntia_compliance_checked_at: datetime | None
     source_display: str
 
 

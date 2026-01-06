@@ -94,6 +94,7 @@ export default defineConfig({
         billing: resolve('./sbomify/apps/billing/js/main.ts'),
         documents: resolve('./sbomify/apps/documents/js/main.ts'),
         vulnerability_scanning: resolve('./sbomify/apps/vulnerability_scanning/js/main.ts'),
+        plugins: resolve('./sbomify/apps/plugins/js/main.ts'),
         alerts: resolve('./sbomify/apps/core/js/alerts-global.ts'),
         djangoMessages: resolve('./sbomify/apps/core/js/django-messages.ts'),
         htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),

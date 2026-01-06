@@ -131,6 +131,14 @@
                 </div>
             </div>
         {% endif %}
+        <!-- Assessment Results Section -->
+        {% if assessment_runs %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
+                </div>
+            </div>
+        {% endif %}
         <div class="row">
             <div class="col-12 col-lg-5">{% include 'sboms/components/sbom_metadata_card.html.j2' with item=item %}</div>
             <div class="col-12 col-lg-7">{% include 'sboms/components/sbom_actions_card.html.j2' with item=item %}</div>
@@ -152,6 +160,7 @@
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% if item_type == 'sboms' %}
         {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+        {% vite_asset 'sbomify/apps/plugins/js/main.ts' %}
     {% elif item_type == 'documents' %}
         {% vite_asset 'sbomify/apps/documents/js/main.ts' %}
     {% endif %}
