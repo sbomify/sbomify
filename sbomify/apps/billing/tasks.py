@@ -6,6 +6,8 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
+from .config import is_billing_enabled
+
 logger = logging.getLogger(__name__)
 
 
@@ -152,3 +154,95 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         # Permanent errors (e.g., invalid email format, configuration issues)
         # Log and don't retry to avoid infinite loops
         logger.error(f"Permanent error processing enterprise inquiry email: {e}", exc_info=True)
+
+
+@dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
+def check_stale_trials_task():
+    """
+    Check for stale trial subscriptions and sync them with Stripe.
+
+    This task acts as a safety net for missed webhooks by:
+    1. Finding teams with trials that appear expired (trial_end in past)
+    2. Fetching actual subscription status from Stripe
+    3. Updating local database to match Stripe's state
+
+    This is a defensive measure - normally trial expiration is handled by
+    Stripe webhooks, but this catches cases where webhooks were missed.
+    """
+    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+    from sbomify.apps.teams.models import Team
+
+    if not is_billing_enabled():
+        logger.info("Billing is not enabled, skipping stale trials check")
+        return
+
+    stripe_client = StripeClient()
+    now_timestamp = int(timezone.now().timestamp())
+
+    # Find teams with stale trials
+    teams_with_subscriptions = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
+        billing_plan_limits__has_key="stripe_subscription_id"
+    )
+
+    stale_teams = []
+    for team in teams_with_subscriptions:
+        limits = team.billing_plan_limits or {}
+        # Check if it looks like a trial that should have ended
+        if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
+            trial_end = limits.get("trial_end")
+            if trial_end and trial_end < now_timestamp:
+                stale_teams.append(team)
+
+    if not stale_teams:
+        logger.info("No stale trials found")
+        return
+
+    logger.info(f"Found {len(stale_teams)} teams with potentially stale trials")
+
+    synced_count = 0
+    error_count = 0
+
+    for team in stale_teams:
+        subscription_id = team.billing_plan_limits.get("stripe_subscription_id")
+        if not subscription_id:
+            continue
+
+        try:
+            # Fetch actual subscription from Stripe
+            subscription = stripe_client.get_subscription(subscription_id)
+
+            # Get Stripe's actual state
+            stripe_status = subscription.status
+            stripe_is_trial = stripe_status == "trialing"
+
+            # Get current local state
+            local_status = team.billing_plan_limits.get("subscription_status")
+            local_is_trial = team.billing_plan_limits.get("is_trial", False)
+
+            # Check if update needed
+            if local_status != stripe_status or local_is_trial != stripe_is_trial:
+                team.billing_plan_limits["subscription_status"] = stripe_status
+                team.billing_plan_limits["is_trial"] = stripe_is_trial
+                team.billing_plan_limits["last_updated"] = timezone.now().isoformat()
+                team.billing_plan_limits["last_synced_from_stripe"] = timezone.now().isoformat()
+
+                if not stripe_is_trial:
+                    team.billing_plan_limits["trial_days_remaining"] = 0
+
+                team.save()
+
+                logger.info(
+                    f"Synced stale trial for team {team.key}: "
+                    f"status {local_status} -> {stripe_status}, "
+                    f"is_trial {local_is_trial} -> {stripe_is_trial}"
+                )
+                synced_count += 1
+
+        except StripeError as e:
+            logger.error(f"Failed to sync team {team.key}: {e}")
+            error_count += 1
+        except Exception as e:
+            logger.exception(f"Unexpected error syncing team {team.key}: {e}")
+            error_count += 1
+
+    logger.info(f"Stale trials check complete: synced={synced_count}, errors={error_count}")

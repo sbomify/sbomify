@@ -56,19 +56,33 @@ DRAMATIQ_RESULT_BACKEND = {
 
 # Ensure allauth apps are included in INSTALLED_APPS
 if "allauth" not in INSTALLED_APPS:
-    INSTALLED_APPS.extend(["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"])
+    INSTALLED_APPS.extend(
+        ["allauth", "allauth.account", "allauth.socialaccount", "allauth.socialaccount.providers.openid_connect"]
+    )
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("TEST_DATABASE_NAME", "sbomify_test"),
-        "USER": os.environ.get("TEST_DATABASE_USER", "sbomify_test"),
-        "PASSWORD": os.environ.get("TEST_DATABASE_PASSWORD", "sbomify_test"),
-        "HOST": os.environ.get("TEST_DATABASE_HOST", "localhost"),
-        "PORT": os.environ.get("TEST_DATABASE_PORT", "5433"),
-        "ATOMIC_REQUESTS": False,
+# Database configuration: Use PostgreSQL if test env vars are set, otherwise SQLite in-memory
+if os.environ.get("TEST_DATABASE_HOST"):
+    # PostgreSQL for E2E tests (Docker environment)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("TEST_DATABASE_NAME", "sbomify_test"),
+            "USER": os.environ.get("TEST_DATABASE_USER", "sbomify_test"),
+            "PASSWORD": os.environ.get("TEST_DATABASE_PASSWORD", "sbomify_test"),
+            "HOST": os.environ.get("TEST_DATABASE_HOST", "localhost"),
+            "PORT": os.environ.get("TEST_DATABASE_PORT", "5432"),
+            "ATOMIC_REQUESTS": False,
+        }
     }
-}
+else:
+    # SQLite in-memory for local unit/integration tests
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+            "ATOMIC_REQUESTS": True,
+        }
+    }
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
@@ -102,10 +116,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Add WhiteNoise compression for test similarity
 STORAGES = {
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 # Django Vite test settings
 DJANGO_VITE = {
