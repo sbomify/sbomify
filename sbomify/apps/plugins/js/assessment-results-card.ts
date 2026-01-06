@@ -127,7 +127,7 @@ export function registerAssessmentResultsCard() {
 
       handleAnchorLink() {
         const hash = window.location.hash
-        // Early return if no hash, and clear any expanded plugin state
+        // Clear expanded state if no hash
         if (!hash) {
           this.expandedPluginId = null
           return
@@ -148,12 +148,17 @@ export function registerAssessmentResultsCard() {
             }, 100)
           }
         } else if (hash === '#assessment-results') {
+          // Clear expanded state when navigating to section header
+          this.expandedPluginId = null
           setTimeout(() => {
             const element = document.getElementById('assessment-results')
             if (element) {
               element.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }
           }, 100)
+        } else {
+          // Clear expanded state when navigating to other anchors
+          this.expandedPluginId = null
         }
       },
 

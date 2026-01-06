@@ -207,7 +207,7 @@ export function registerAssessmentBadge() {
         }
 
         // Fallback: construct URL (matches Django's core:component_item pattern)
-        return `/components/${this.componentId}/sboms/${this.sbomId}/#plugin-${pluginName}`
+        return `/components/${this.componentId}/sboms/${this.sbomId}#plugin-${pluginName}`
       },
     }
   })
