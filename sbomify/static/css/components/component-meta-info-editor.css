@@ -1,0 +1,249 @@
+/* ComponentMetaInfoEditor Styles */
+
+.component-meta-info-editor {
+    width: 100%;
+}
+
+/* Main Card */
+.component-meta-info-editor>.standard-card {
+    background: var(--surface-card, #ffffff);
+    border: 1px solid var(--surface-border, #e5e7eb);
+    border-radius: 0.75rem;
+}
+
+.component-meta-info-editor>.standard-card.shadow-md {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.component-meta-info-editor .card-header {
+    padding: 1.25rem 1.5rem;
+    background-color: var(--surface-card-muted, #f8f9fa);
+    border-bottom: 1px solid var(--surface-border, #e5e7eb);
+    border-radius: 0.75rem 0.75rem 0 0;
+}
+
+.component-meta-info-editor .card-header .card-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary, #1f2937);
+}
+
+.component-meta-info-editor .card-body {
+    padding: 1.5rem;
+}
+
+/* Inner Cards */
+.component-meta-info-editor .settings-card {
+    background: var(--surface-card, #ffffff);
+    border: 1px solid var(--surface-border, #e5e7eb);
+    border-radius: 0.5rem;
+}
+
+.component-meta-info-editor .settings-card.shadow-sm {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.component-meta-info-editor .settings-card .card-header {
+    padding: 1rem 1.25rem;
+    background-color: transparent;
+    border-bottom: 1px solid var(--surface-border, #e9ecef);
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.component-meta-info-editor .settings-card .card-header h6 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary, #4b5563);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.component-meta-info-editor .settings-card .card-body {
+    padding: 1.25rem;
+}
+
+/* Info Notice */
+/* Info Notice */
+.component-meta-info-editor .info-notice {
+    padding: 0.75rem 1rem;
+    background-color: #f5f7ff;
+    /* Light blue/purple background */
+    border-left: 4px solid #6366f1;
+    /* Indigo-500 matches brand-primary usually */
+    border-bottom: none;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+    color: #4b5563;
+    /* text-gray-600 */
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.component-meta-info-editor .info-notice i {
+    color: #6366f1;
+    font-size: 1.1rem;
+}
+
+.component-meta-info-editor .info-notice strong {
+    color: #4b5563;
+    font-weight: 600;
+}
+
+.component-meta-info-editor .info-notice a {
+    color: #6366f1 !important;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.component-meta-info-editor .info-notice a:hover {
+    text-decoration: underline;
+}
+
+/* Help Icon Tooltip */
+.help-icon {
+    position: relative;
+    color: var(--text-muted, #9ca3af);
+    cursor: help;
+    font-size: 0.875rem;
+}
+
+.help-icon .tooltiptext {
+    visibility: hidden;
+    position: absolute;
+    z-index: 1000;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 250px;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface-dark, #1f2937);
+    color: var(--white, #ffffff);
+    font-size: 0.75rem;
+    font-weight: 400;
+    font-style: normal;
+    border-radius: 0.375rem;
+    opacity: 0;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.help-icon .tooltiptext::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--surface-dark, #1f2937) transparent transparent transparent;
+}
+
+.help-icon:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Profile Details */
+.profile-details {
+    background-color: var(--surface-card-muted, #f9fafb);
+    font-size: 1rem;
+}
+
+.profile-details strong {
+    color: var(--text-secondary, #4b5563);
+}
+
+.profile-contacts .badge {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.375rem 0.75rem;
+}
+
+.text-prewrap {
+    white-space: pre-wrap;
+}
+
+/* Form Elements */
+.component-meta-info-editor .form-label {
+    font-weight: 500;
+    color: var(--text-secondary, #4b5563);
+    margin-bottom: 0.5rem;
+}
+
+.component-meta-info-editor .form-select,
+.component-meta-info-editor .form-control {
+    padding: 0.75rem;
+    border: 1px solid var(--surface-border, #d1d5db);
+    border-radius: 0.5rem;
+    font-size: 0.9375rem;
+    transition: all 0.2s ease;
+}
+
+.component-meta-info-editor .form-select:focus,
+.component-meta-info-editor .form-control:focus {
+    border-color: var(--brand-primary, #6366f1);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    outline: none;
+}
+
+.component-meta-info-editor .form-select.is-invalid,
+.component-meta-info-editor .form-control.is-invalid {
+    border-color: var(--brand-danger, #ef4444);
+}
+
+/* Actions Section */
+.actions-section {
+    border-color: var(--surface-border, #e5e7eb) !important;
+}
+
+.actions-section .btn-lg {
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+}
+
+.actions-section .btn-success {
+    background-color: var(--brand-success, #10b981);
+    border-color: var(--brand-success, #10b981);
+}
+
+.actions-section .btn-success:hover:not(:disabled) {
+    background-color: #059669;
+    border-color: #059669;
+}
+
+.actions-section .btn-success:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.actions-section .btn-outline-secondary {
+    color: var(--text-secondary, #6b7280);
+    border-color: var(--surface-border, #d1d5db);
+}
+
+.actions-section .btn-outline-secondary:hover {
+    background-color: var(--surface-card-muted, #f3f4f6);
+    border-color: var(--surface-border, #9ca3af);
+}
+
+/* Licenses Card Container - allows overflow for autocomplete */
+.licenses-card-container {
+    overflow: visible !important;
+}
+
+.licenses-card-container .card-body {
+    overflow: visible !important;
+}
+
+/* Responsive */
+@media (max-width: 991.98px) {
+    .component-meta-info-editor .row.g-4>div {
+        margin-bottom: 1rem;
+    }
+}

@@ -86,9 +86,96 @@
                 </div>
                 <div class="card-body">
                     {{ access_tokens|json_script:"access-tokens-data" }}
-                    <div class="vc-access-tokens-list"
-                         data-tokens-data-element-id="access-tokens-data"
-                         data-csrf-token="{{ csrf_token }}"></div>
+                    <div x-data="accessTokensList({ tokensDataElementId: 'access-tokens-data', csrfToken: '{{ csrf_token }}' })"
+                         class="tokens-container">
+                        <!-- Empty State -->
+                        <div x-show="tokens.length === 0"
+                             class="empty-state text-center py-5 text-muted"
+                             style="display: none">
+                            <div class="empty-icon mb-3">
+                                <i class="fas fa-key fa-3x opacity-25"></i>
+                            </div>
+                            <h5 class="empty-title mb-2">No personal access tokens</h5>
+                            <p class="empty-description mb-0 mx-auto" style="max-width: 400px;">
+                                Generate a personal access token to access the sbomify API from scripts and applications.
+                            </p>
+                        </div>
+                        <!-- Tokens List -->
+                        <div x-show="tokens.length > 0"
+                             class="tokens-list border rounded overflow-hidden bg-white"
+                             style="display: none">
+                            <div class="tokens-header d-flex bg-light border-bottom p-3 fw-bold text-muted small text-uppercase">
+                                <div class="col-8">Token</div>
+                                <div class="col-4">Created</div>
+                            </div>
+                            <template x-for="token in tokens" :key="token.id">
+                                <div class="token-row d-flex border-bottom p-3 align-items-center">
+                                    <div class="col-8">
+                                        <div class="fw-semibold text-dark" x-text="token.description"></div>
+                                        <div class="small text-muted">Personal access token</div>
+                                    </div>
+                                    <div class="col-3 text-muted small" x-text="formatDate(token.created_at)"></div>
+                                    <div class="col-1 text-end">
+                                        <button class="btn btn-sm btn-link text-secondary p-0"
+                                                title="Delete token"
+                                                @click="confirmDelete(token)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <!-- Delete Confirmation Modal -->
+                        <div x-show="showDeleteModal"
+                             style="display: none;
+                                    background-color: rgba(0,0,0,0.5)"
+                             class="modal fade show d-block"
+                             tabindex="-1"
+                             role="dialog"
+                             aria-modal="true"
+                             aria-labelledby="deleteTokenModalLabel"
+                             @click.self="showDeleteModal = false"
+                             @keydown.escape.window="showDeleteModal = false">
+                            <div class="modal-dialog modal-dialog-centered" role="document">
+                                <div class="modal-content border-0 shadow-lg">
+                                    <div class="modal-header border-0 pb-0">
+                                        <h5 class="modal-title text-danger" id="deleteTokenModalLabel">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            Delete personal access token?
+                                        </h5>
+                                        <button type="button"
+                                                class="btn-close"
+                                                @click="showDeleteModal = false"
+                                                aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body py-4">
+                                        <p class="mb-0 fs-5">
+                                            Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="fw-bold"></span>" token?
+                                        </p>
+                                        <div class="alert alert-warning mt-3 mb-0 d-flex align-items-center">
+                                            <i class="fas fa-info-circle me-3 fs-4"></i>
+                                            <div>
+                                                This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-0 pt-0">
+                                        <button type="button" class="btn btn-light" @click="showDeleteModal = false">Cancel</button>
+                                        <button type="button"
+                                                class="btn btn-danger"
+                                                @click="deleteToken()"
+                                                :disabled="isDeleting">
+                                            <span x-show="isDeleting"
+                                                  class="spinner-border spinner-border-sm me-2"
+                                                  role="status"
+                                                  aria-hidden="true"></span>
+                                            <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

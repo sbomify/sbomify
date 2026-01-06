@@ -36,7 +36,14 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{sbom_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-sbom-upload h4").click()
+        sbom_upload_area = authenticated_page.locator(".sbom-upload-area")
+        sbom_upload_header = authenticated_page.locator(".sbom-upload-header")
+        if sbom_upload_header.is_visible():
+            if sbom_upload_area.is_hidden():
+                sbom_upload_header.click()
+        
+        sbom_upload_area.wait_for(state="visible")
+        authenticated_page.locator(".sbom-upload-header").click()
         authenticated_page.locator(".dangerzone-card h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
@@ -54,7 +61,12 @@ class TestComponentDetailsPrivateSnapshot:
         authenticated_page.goto(f"/component/{document_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
-        authenticated_page.locator(".vc-document-upload h4").click()
+        # Ensure the document upload section is expanded
+        document_version = authenticated_page.locator("#document-version")
+        if document_version.is_hidden():
+            authenticated_page.locator(".document-upload-wrapper h4").click()
+        document_version.wait_for(state="visible")
+        authenticated_page.locator(".document-upload-wrapper h4").click()
         authenticated_page.locator(".dangerzone-card h4").click()
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)

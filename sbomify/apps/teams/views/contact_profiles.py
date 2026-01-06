@@ -132,21 +132,28 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         formset = ContactProfileContactFormSet(request.POST, instance=profile)
         contacts = []
 
-        if formset.extra_forms and not any(form.has_changed() for form in formset.forms):
-            raise ValidationError("Please fill at least one contact.")
+        if not formset.is_valid():
+            raise ValidationError(formset.errors.as_text())
 
         for contact_form in formset:
-            if not contact_form.has_changed():
+            cleaned_data = contact_form.cleaned_data
+            if not cleaned_data:
                 continue
 
-            if not contact_form.is_valid():
-                raise ValidationError(contact_form.errors.as_text())
+            name = cleaned_data.get("name", "").strip()
+            if not name:
+                continue
 
             contacts.append(
                 ContactProfileContactSchema(
-                    **contact_form.cleaned_data,
+                    name=name,
+                    email=cleaned_data.get("email") or None,
+                    phone=cleaned_data.get("phone") or None,
                 )
             )
+
+        if not contacts and not profile:
+            raise ValidationError("Please fill at least one contact.")
 
         return form.cleaned_data, contacts
 
@@ -156,8 +163,10 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except ValidationError as e:
             return htmx_error_response(e.message)
 
+        website_urls = form_data.pop("website_urls_text", [])
         payload = ContactProfileCreateSchema(
             **form_data,
+            website_urls=website_urls,
             contacts=contacts,
         )
 
@@ -177,8 +186,17 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except ValidationError as e:
             return htmx_error_response(e.message)
 
+        website_urls = form_data.pop("website_urls_text", None)
+        payload_data = {}
+        for k, v in form_data.items():
+            if v is not None or k == "is_default":
+                payload_data[k] = v
+
+        if website_urls is not None:
+            payload_data["website_urls"] = website_urls
+
         payload = ContactProfileUpdateSchema(
-            **form_data,
+            **payload_data,
             contacts=contacts,
         )
 

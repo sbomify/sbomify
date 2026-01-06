@@ -1,0 +1,69 @@
+<!-- Supplier Name -->
+<div class="mb-3">
+    <label for="supplierName" class="form-label">Name</label>
+    <input id="supplierName"
+           type="text"
+           class="form-control"
+           x-model="supplier.name"
+           @input="dispatchUpdate()">
+</div>
+<!-- URLs (multiple) -->
+<div class="mb-3">
+    <label class="form-label">URLs</label>
+    <!-- URL List (when URLs exist) -->
+    <template x-if="supplier.url && supplier.url.length > 0">
+        <div>
+            <div class="url-list">
+                <template x-for="(url, index) in supplier.url" :key="index">
+                    <div class="input-group mb-2">
+                        <input type="url"
+                               class="form-control"
+                               placeholder="https://example.com"
+                               :value="url"
+                               @input="updateUrl(index, $event.target.value)">
+                        <button type="button"
+                                class="btn btn-outline-danger"
+                                :disabled="supplier.url.length <= 1"
+                                @click="removeUrl(index)">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    @click="addUrl()">
+                <i class="fa-solid fa-plus me-1"></i>Add Another URL
+            </button>
+        </div>
+    </template>
+    <!-- Empty State (no URLs yet) -->
+    <template x-if="!supplier.url || supplier.url.length === 0">
+        <div class="input-group">
+            <input type="url"
+                   class="form-control"
+                   placeholder="https://example.com"
+                   x-model="newUrlInput"
+                   @keyup.enter="addUrlFromInput()">
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    @click="addUrlFromInput()">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+    </template>
+</div>
+<!-- Address -->
+<div class="mb-3">
+    <label for="supplierAddress" class="form-label">Address</label>
+    <textarea id="supplierAddress"
+              class="form-control"
+              x-model="supplier.address"
+              @input="dispatchUpdate()"></textarea>
+</div>
+<!-- Contacts Section -->
+<h4 class="card-title mb-3">Contacts</h4>
+<div x-data="contactsEditor({ contacts: supplier.contacts || [], contactType: 'contact' })"
+     @contacts-updated.stop="supplier.contacts = $event.detail.contacts; dispatchUpdate()">
+    {% include 'sboms/components/contacts_editor_base.html.j2' %}
+</div>

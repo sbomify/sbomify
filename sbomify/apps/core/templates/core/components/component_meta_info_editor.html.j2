@@ -1,0 +1,267 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/component-meta-info-editor.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/supplier-editor.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/contacts-editor.css' %}">
+{{ metadata|default:None|json_script:"component-metadata" }}
+{{ contact_profiles|default:None|json_script:"contact-profiles" }}
+<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: window.parseJsonScript('component-metadata'), contactProfiles: window.parseJsonScript('contact-profiles') || [] })"
+     class="component-meta-info-editor">
+    <!-- Main Card -->
+    <div class="standard-card settings-card shadow-md">
+        <div class="card-header">
+            <h5 class="card-title">Component Metadata</h5>
+        </div>
+        <div class="card-body">
+            <div class="info-notice mb-4">
+                <i class="fas fa-info-circle"></i>
+                <span>
+                    <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+    target="_blank"
+    rel="noopener noreferrer">Augmentation feature</a> to include this metadata in your SBOM
+                </span>
+            </div>
+            <div class="container-fluid p-0">
+                <div class="row g-4">
+                    <!-- Left Column: Supplier Information -->
+                    <div class="col-12 col-lg-6">
+                        <div class="standard-card settings-card shadow-sm">
+                            <div class="card-header">
+                                <h6 class="card-title">
+                                    Supplier Information
+                                    <i class="fa-regular fa-circle-question help-icon">
+                                        <span class="tooltiptext">Organization that supplied or manufactured the component</span>
+                                    </i>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- Contact Profile Selector -->
+                                <div class="mb-3">
+                                    <label class="form-label">Contact Profile</label>
+                                    <select class="form-select"
+                                            x-model="selectedProfileId"
+                                            @change="handleProfileChange()"
+                                            :disabled="contactProfiles.length === 0 && !selectedProfile">
+                                        <option value="">Use custom contact info</option>
+                                        <template x-for="profile in allContactProfiles" :key="profile.id">
+                                            <option :value="profile.id" x-text="getProfileOptionText(profile)"></option>
+                                        </template>
+                                    </select>
+                                    <template x-if="contactProfiles.length === 0">
+                                        <div class="form-text text-muted">
+                                            No contact profiles available. Manage them in Workspace Settings → Contact Profiles.
+                                        </div>
+                                    </template>
+                                </div>
+                                <!-- Profile Details (when using profile) -->
+                                <template x-if="isUsingProfile">
+                                    <div>
+                                        <div class="alert alert-info">
+                                            This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
+                                            Contact details are managed at the workspace level.
+                                        </div>
+                                        <template x-if="selectedProfile">
+                                            <div class="profile-details border rounded p-3">
+                                                <template x-if="selectedProfile.company">
+                                                    <div class="mb-2">
+                                                        <strong>Company:</strong> <span x-text="selectedProfile.company"></span>
+                                                    </div>
+                                                </template>
+                                                <template x-if="selectedProfile.supplier_name">
+                                                    <div class="mb-2">
+                                                        <strong>Supplier:</strong> <span x-text="selectedProfile.supplier_name"></span>
+                                                    </div>
+                                                </template>
+                                                <template x-if="selectedProfile.vendor">
+                                                    <div class="mb-2">
+                                                        <strong>Vendor:</strong> <span x-text="selectedProfile.vendor"></span>
+                                                    </div>
+                                                </template>
+                                                <template x-if="selectedProfile.email">
+                                                    <div class="mb-2">
+                                                        <strong>Email:</strong>
+                                                        <a :href="'mailto:' + selectedProfile.email"
+                                                           x-text="selectedProfile.email"></a>
+                                                    </div>
+                                                </template>
+                                                <template x-if="selectedProfile.website_urls && selectedProfile.website_urls.length > 0">
+                                                    <div class="mb-2">
+                                                        <strong>Website:</strong>
+                                                        <div>
+                                                            <template x-for="(url, index) in selectedProfile.website_urls" :key="index">
+                                                                <div class="mb-1">
+                                                                    <span>•</span>
+                                                                    <a :href="url" target="_blank" rel="noopener noreferrer" x-text="url"></a>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="selectedProfile.contacts && selectedProfile.contacts.length > 0">
+                                                    <div class="mb-1">
+                                                        <strong>Contacts:</strong>
+                                                        <div class="mt-1">
+                                                            <template x-for="contact in selectedProfile.contacts"
+                                                                      :key="contact.name + (contact.email || '')">
+                                                                <div class="mb-1">
+                                                                    <span x-text="contact.name"></span>
+                                                                    <template x-if="contact.email">
+                                                                        <span x-text="' (' + contact.email + ')'"></span>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="!selectedProfile">
+                                            <div class="text-muted">Profile details unavailable.</div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <!-- Custom Supplier Form (when not using profile) -->
+                                <template x-if="!isUsingProfile">
+                                    <div x-data="supplierEditor({ supplier: metadata.supplier })"
+                                         class="supplier-info-editor"
+                                         @supplier-updated.window="metadata.supplier = $event.detail.supplier; hasUnsavedChanges = true">
+                                        {% include 'sboms/components/supplier_editor_base.html.j2' %}
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right Column -->
+                    <div class="col-12 col-lg-6">
+                        <div class="d-flex flex-column gap-3">
+                            <!-- Lifecycle Phase -->
+                            <div class="standard-card settings-card shadow-sm">
+                                <div class="card-header">
+                                    <h6 class="card-title">
+                                        Lifecycle Phase
+                                        <i class="fa-regular fa-circle-question help-icon">
+                                            <span class="tooltiptext">Current phase in the component's lifecycle</span>
+                                        </i>
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <select class="form-select"
+                                                :class="{ 'is-invalid': validationErrors.lifecycle_phase }"
+                                                x-model="metadata.lifecycle_phase"
+                                                @change="hasUnsavedChanges = true">
+                                            <option :value="null">Select a phase...</option>
+                                            <template x-for="phase in lifecyclePhases" :key="phase.value">
+                                                <option :value="phase.value" x-text="phase.label"></option>
+                                            </template>
+                                        </select>
+                                        <template x-if="validationErrors.lifecycle_phase">
+                                            <div class="invalid-feedback" x-text="validationErrors.lifecycle_phase"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Licenses -->
+                            <div class="standard-card settings-card shadow-sm licenses-card-container">
+                                <div class="card-header">
+                                    <h6 class="card-title">
+                                        Licenses
+                                        <i class="fa-regular fa-circle-question help-icon">
+                                            <span class="tooltiptext">Software licenses or license expressions (e.g., MIT AND Apache-2.0) that apply to this component</span>
+                                        </i>
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div x-data="licensesEditor({ licenses: metadata.licenses, unknownTokens: [] })"
+                                         @licenses-updated.window="metadata.licenses = $event.detail.licenses; hasUnsavedChanges = true">
+                                        {% include 'sboms/components/licenses_editor.html.j2' %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Authors -->
+                            <div class="standard-card settings-card shadow-sm">
+                                <div class="card-header">
+                                    <h6 class="card-title">
+                                        Authors
+                                        <i class="fa-regular fa-circle-question help-icon">
+                                            <span class="tooltiptext">People who contributed to this component</span>
+                                        </i>
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div x-data="contactsEditor({ contacts: (metadata && metadata.authors) ? metadata.authors : [], contactType: 'author' })"
+                                         @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
+                                        {% include 'sboms/components/contacts_editor_base.html.j2' %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Actions Section -->
+                <div class="actions-section mt-4 pt-4 border-top">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-8">
+                            <button class="btn btn-primary w-100"
+                                    :disabled="!isFormValid || isSaving"
+                                    @click="updateMetaData()">
+                                <template x-if="isSaving">
+                                    <span>
+                                        <i class="fa-solid fa-spinner fa-spin me-2"></i>Saving Changes...
+                                    </span>
+                                </template>
+                                <template x-if="!isSaving">
+                                    <span>
+                                        <i class="fa-solid fa-save me-2"></i>Save Component Metadata
+                                    </span>
+                                </template>
+                            </button>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <button class="btn btn-outline-secondary w-100" @click="handleCancel()">
+                                <i class="fa-solid fa-times me-2"></i>
+                                Cancel Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Unsaved Changes Modal -->
+    <div class="modal fade"
+         id="unsavedChangesModal"
+         tabindex="-1"
+         aria-labelledby="unsavedChangesModalLabel"
+         aria-hidden="true"
+         data-bs-backdrop="static"
+         data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <h5 class="modal-title h5 fw-bold text-danger"
+                        id="unsavedChangesModalLabel">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i>Unsaved Changes
+                    </h5>
+                    <button type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <p class="mb-0 text-secondary fs-6">You have unsaved changes. Are you sure you want to discard them?</p>
+                </div>
+                <div class="modal-footer border-top-0 pt-0 pb-4">
+                    <button type="button"
+                            class="btn btn-outline-secondary px-4 fw-medium"
+                            data-bs-dismiss="modal">Keep Editing</button>
+                    <button type="button"
+                            class="btn btn-danger px-4 fw-medium"
+                            @click="discardChanges()">Discard Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

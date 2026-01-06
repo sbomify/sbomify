@@ -1,4 +1,4 @@
-import Alpine from 'alpinejs'
+import Alpine from '../../core/js/alpine-init'
 import { createPaginationData } from '../../core/js/components/pagination-controls'
 
 interface Sbom {

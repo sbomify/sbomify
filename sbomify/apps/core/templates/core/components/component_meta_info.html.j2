@@ -1,0 +1,21 @@
+<div class="mb-4" x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+    {% if component.has_crud_permissions %}
+        true
+    {% else %}
+        false
+    {% endif %}
+    })" @metadata-saved="refreshDisplay()">
+    <!-- Display Mode -->
+    <template x-if="!isEditing">
+        <div class="component-meta-info-display-container"
+             @edit-metadata="isEditing = true"
+             @copy-metadata="openCopyModal()">{% include 'core/components/component_meta_info_display.html.j2' %}</div>
+    </template>
+    <!-- Edit Mode -->
+    <template x-if="isEditing">
+        <div class="component-meta-info-editor-container"
+             @close-editor="isEditing = false">{% include 'core/components/component_meta_info_editor.html.j2' %}</div>
+    </template>
+    <!-- Copy Modal -->
+    {% include 'core/components/item_select_modal.html.j2' %}
+</div>

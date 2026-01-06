@@ -1,0 +1,5 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/supplier-editor.css' %}">
+<div x-data="supplierEditor({ supplier: {{ supplier|default:'{"name": null, "url": [], "address": null, "contacts": []}'|safe }} })"
+     class="supplier-info-editor">{% include 'sboms/components/supplier_editor_base.html.j2' %}</div>

@@ -433,14 +433,15 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
     response={200: list[ContactProfileSchema], 403: ErrorResponse, 404: ErrorResponse},
 )
 def list_contact_profiles(request: HttpRequest, team_key: str):
-    """List contact profiles for a workspace."""
+    """List contact profiles for a workspace.
+
+    All team members can view contact profiles, but only owners and admins can manage them.
+    """
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
 
-    if not _user_can_manage_profiles(role):
-        return 403, {"detail": "Only owners and admins can view contact profiles"}
-
+    # Allow all team members to view contact profiles (for use in component metadata)
     profiles = ContactProfile.objects.filter(team=team).prefetch_related("contacts").order_by("-is_default", "name")
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
@@ -450,13 +451,15 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     response={200: ContactProfileSchema, 403: ErrorResponse, 404: ErrorResponse},
 )
 def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, return_instance: bool = False):
+    """Get a specific contact profile.
+
+    All team members can view contact profiles, but only owners and admins can manage them.
+    """
     team, role, error = _get_team_and_membership_role(request, team_key)
     if error:
         return error
 
-    if not _user_can_manage_profiles(role):
-        return 403, {"detail": "Only owners and admins can view contact profiles"}
-
+    # Allow all team members to view contact profiles (for use in component metadata)
     try:
         profile = ContactProfile.objects.prefetch_related("contacts").get(team=team, pk=profile_id)
     except ContactProfile.DoesNotExist:
