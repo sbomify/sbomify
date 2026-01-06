@@ -163,7 +163,7 @@ def enqueue_assessment(
         ...     run_reason=RunReason.ON_UPLOAD,
         ... )
     """
-    # Capture values for the closure to avoid late binding issues
+    # Capture values at call time for the closure, as on_commit callbacks execute after this function returns
     task_sbom_id = sbom_id
     task_plugin_name = plugin_name
     task_run_reason = run_reason.value
