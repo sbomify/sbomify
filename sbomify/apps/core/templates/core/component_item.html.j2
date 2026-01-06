@@ -84,7 +84,7 @@
                 <span class="meta-item">
                     <span class="text-muted">ID:</span>
                     <span class="ms-1">
-                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="SBOM ID (click to copy)" %}
+                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="SBOM ID: "|add:item.id|add:" (click to copy)" %}
                     </span>
                 </span>
             {% elif item_type == 'documents' %}
@@ -124,7 +124,7 @@
                 <span class="meta-item">
                     <span class="text-muted">ID:</span>
                     <span class="ms-1">
-                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID (click to copy)" %}
+                        {% include 'core/components/copyable-value.html.j2' with value=item.id title="Document ID: "|add:item.id|add:" (click to copy)" %}
                     </span>
                 </span>
             {% endif %}

@@ -102,27 +102,26 @@ export function registerAssessmentResultsCard() {
       return groups
     }
 
-    // Store bound handler for cleanup
-    let hashChangeHandler: (() => void) | null = null
-
     return {
       sbomId,
       // Tracks which plugin accordion is expanded (stores run.id, not plugin_name)
       expandedRunId: null as string | null,
+      // Store bound handler for cleanup (per-instance to support multiple components)
+      _hashChangeHandler: null as (() => void) | null,
 
       init() {
         // Handle anchor links on page load
         this.handleAnchorLink()
         // Listen for hash changes - store handler for cleanup
-        hashChangeHandler = this.handleAnchorLink.bind(this)
-        window.addEventListener('hashchange', hashChangeHandler)
+        this._hashChangeHandler = this.handleAnchorLink.bind(this)
+        window.addEventListener('hashchange', this._hashChangeHandler)
       },
 
       destroy() {
         // Clean up when Alpine destroys this component
-        if (hashChangeHandler) {
-          window.removeEventListener('hashchange', hashChangeHandler)
-          hashChangeHandler = null
+        if (this._hashChangeHandler) {
+          window.removeEventListener('hashchange', this._hashChangeHandler)
+          this._hashChangeHandler = null
         }
       },
 

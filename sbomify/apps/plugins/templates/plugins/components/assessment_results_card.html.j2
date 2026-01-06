@@ -2,8 +2,8 @@
 {% load json_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-results-card.css' %}">
-{# Macro for plugin accordion item - avoids code duplication #}
-{% macro plugin_accordion_item(runs, show_error=true, show_details=true) %}
+{# Macro for plugin accordion items - avoids code duplication #}
+{% macro plugin_accordion_items(runs, show_error=true, show_details=true) %}
     <template x-for="run in {{ runs }}" :key="run.id">
         <div class="accordion-item" :id="'plugin-' + run.plugin_name">
             <h2 class="accordion-header">
@@ -233,7 +233,7 @@
                                    x-text="failedRuns.length + ' plugin' + (failedRuns.length !== 1 ? 's' : '')"></small>
                         </div>
                         <div class="accordion" id="failedAccordion">
-                            {{ plugin_accordion_item('failedRuns', show_error=true, show_details=true) }}
+                            {{ plugin_accordion_items('failedRuns', show_error=true, show_details=true) }}
                         </div>
                     </div>
                 </template>
@@ -249,7 +249,7 @@
                                    x-text="passedRuns.length + ' plugin' + (passedRuns.length !== 1 ? 's' : '')"></small>
                         </div>
                         <div class="accordion" id="passedAccordion">
-                            {{ plugin_accordion_item('passedRuns', show_error=false, show_details=true) }}
+                            {{ plugin_accordion_items('passedRuns', show_error=false, show_details=true) }}
                         </div>
                     </div>
                 </template>
@@ -265,7 +265,7 @@
                                    x-text="pendingRuns.length + ' plugin' + (pendingRuns.length !== 1 ? 's' : '')"></small>
                         </div>
                         <div class="accordion" id="pendingAccordion">
-                            {{ plugin_accordion_item('pendingRuns', show_error=false, show_details=false) }}
+                            {{ plugin_accordion_items('pendingRuns', show_error=false, show_details=false) }}
                         </div>
                     </div>
                 </template>
