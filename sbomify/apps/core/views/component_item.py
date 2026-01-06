@@ -91,6 +91,7 @@ class ComponentItemView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
         vulnerability_summary = None
+        assessment_runs = None
 
         if item_type == "sboms":
             status_code, item = get_sbom(request, item_id)
@@ -118,6 +119,17 @@ class ComponentItemView(LoginRequiredMixin, View):
                     "scan_date": latest_scan.created_at,
                 }
 
+            # Get assessment runs for this SBOM
+            try:
+                from sbomify.apps.plugins.apis import get_sbom_assessments
+
+                # Create a mock request object with the sbom_id parameter
+                assessment_response = get_sbom_assessments(request, item_id)
+                assessment_runs = assessment_response.model_dump()
+            except Exception:
+                # If assessment fetch fails, continue without it
+                assessment_runs = None
+
         elif item_type == "documents":
             status_code, item = get_document(request, item_id)
             if status_code != 200:
@@ -137,5 +149,6 @@ class ComponentItemView(LoginRequiredMixin, View):
                 "item_type": item_type,
                 "component_id": component_id,
                 "vulnerability_summary": vulnerability_summary,
+                "assessment_runs": assessment_runs,
             },
         )

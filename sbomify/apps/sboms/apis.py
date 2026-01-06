@@ -369,9 +369,6 @@ def get_sbom(request: HttpRequest, sbom_id: str):
         "source": sbom.source,
         "component_id": str(sbom.component.id),
         "component_name": sbom.component.name,
-        "ntia_compliance_status": getattr(sbom, "ntia_compliance_status", "unknown"),
-        "ntia_compliance_details": getattr(sbom, "ntia_compliance_details", {}),
-        "ntia_compliance_checked_at": getattr(sbom, "ntia_compliance_checked_at", None),
         "source_display": sbom.source_display,
     }
 

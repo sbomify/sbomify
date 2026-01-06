@@ -15,7 +15,11 @@ logger = getLogger(__name__)
 
 @receiver(post_save, sender=SBOM)
 def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
-    """Trigger NTIA compliance checking task when a new SBOM is created."""
+    """Trigger NTIA compliance checking via plugin framework when a new SBOM is created.
+
+    Uses the NTIA Minimum Elements 2021 plugin for compliance checking.
+    Only triggers for business/enterprise plans that include NTIA compliance.
+    """
     if created:
         try:
             # Check if the team's billing plan includes NTIA compliance
@@ -39,13 +43,17 @@ def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
                 return
 
             # Proceed with NTIA compliance check for business/enterprise plans
-            from sbomify.apps.sboms.tasks import check_sbom_ntia_compliance
+            from sbomify.apps.plugins.sdk.enums import RunReason
+            from sbomify.apps.plugins.tasks import enqueue_assessment
 
             logger.info(
                 f"Triggering NTIA compliance check for SBOM {instance.id} - plan '{plan.key}' includes NTIA compliance"
             )
-            # Add a 60 second delay to ensure transaction is committed and to stagger after license processing
-            check_sbom_ntia_compliance.send_with_options(args=[instance.id], delay=60000)
+            enqueue_assessment(
+                sbom_id=instance.id,
+                plugin_name="ntia-minimum-elements-2021",
+                run_reason=RunReason.ON_UPLOAD,
+            )
 
         except (AttributeError, ImportError) as e:
             logger.error(f"Failed to trigger NTIA compliance check for SBOM {instance.id}: {e}", exc_info=True)

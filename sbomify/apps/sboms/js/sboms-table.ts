@@ -8,16 +8,6 @@ interface Sbom {
   format_version: string
   version: string
   created_at: string
-  ntia_compliance_status?: string
-  ntia_compliance_details?: {
-    errors?: Array<{
-      field: string
-      message: string
-      suggestion: string
-    }>
-    checked_at?: string
-    error_count?: number
-  }
 }
 
 interface Release {
@@ -30,10 +20,29 @@ interface Release {
   is_public: boolean
 }
 
+interface PluginResult {
+  name: string
+  display_name: string
+  status: 'pass' | 'fail' | 'pending' | 'error'
+  findings_count: number
+  fail_count: number
+}
+
+interface AssessmentsData {
+  sbom_id: string
+  overall_status: 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments'
+  total_assessments: number
+  passing_count: number
+  failing_count: number
+  pending_count: number
+  plugins: PluginResult[]
+}
+
 interface SbomItem {
   sbom: Sbom
   has_vulnerabilities_report: boolean
   releases: Release[]
+  assessments?: AssessmentsData
 }
 
 export function registerSbomsTable() {

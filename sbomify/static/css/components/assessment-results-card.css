@@ -1,0 +1,176 @@
+/* Assessment Results Card Styles */
+
+.assessment-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 576px) {
+  .assessment-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat-item {
+  text-align: center;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  transition: transform 0.2s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+}
+
+.stat-item .stat-number {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-item .stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bs-secondary-color);
+  margin-top: 0.25rem;
+}
+
+.stat-item.stat-pass {
+  border-color: var(--bs-success);
+}
+
+.stat-item.stat-fail {
+  border-color: var(--bs-warning);
+}
+
+.stat-item.stat-pending {
+  border-color: var(--bs-info);
+}
+
+/* Plugin Results Section */
+.plugin-results-section .section-title {
+  font-weight: 600;
+  color: var(--bs-body-color);
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.5rem;
+}
+
+.plugin-results-section .accordion-item {
+  border: 1px solid var(--bs-border-color);
+  margin-bottom: 0.5rem;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.plugin-results-section .accordion-button {
+  background-color: var(--bs-body-bg);
+  padding: 1rem;
+}
+
+.plugin-results-section .accordion-button:not(.collapsed) {
+  background-color: var(--bs-tertiary-bg);
+  box-shadow: none;
+}
+
+.plugin-results-section .accordion-button:focus {
+  box-shadow: none;
+  border-color: var(--bs-border-color);
+}
+
+.plugin-results-section .accordion-body {
+  padding: 1.25rem;
+  background-color: var(--bs-body-bg);
+}
+
+.plugin-header .plugin-name {
+  font-size: 0.95rem;
+}
+
+.plugin-meta {
+  flex-shrink: 0;
+}
+
+/* Findings Summary */
+.findings-summary .finding-stat {
+  transition: transform 0.2s ease;
+}
+
+.findings-summary .finding-stat:hover {
+  transform: translateY(-2px);
+}
+
+/* Findings List */
+.findings-list .finding-item {
+  background-color: var(--bs-body-bg);
+  transition: background-color 0.2s ease;
+}
+
+.findings-list .finding-item:hover {
+  background-color: var(--bs-tertiary-bg);
+}
+
+.findings-list .finding-status-icon {
+  font-size: 1rem;
+  width: 1.5rem;
+  flex-shrink: 0;
+}
+
+.findings-list .finding-title {
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.findings-list .finding-description {
+  line-height: 1.4;
+}
+
+.findings-list .finding-remediation {
+  background-color: var(--bs-info-bg-subtle);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Standard Info Section */
+.standard-info {
+  border: 1px solid var(--bs-border-color);
+}
+
+.standard-info h6 {
+  color: var(--bs-body-color);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+/* Run Metadata */
+.run-metadata {
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.75rem;
+}
+
+/* Status Badge in Header */
+.status-badge-wrapper .badge {
+  font-size: 0.85rem;
+  padding: 0.5em 0.75em;
+}
+
+/* Dark Mode Adjustments */
+[data-bs-theme="dark"] .stat-item {
+  background-color: var(--bs-dark-bg-subtle);
+}
+
+[data-bs-theme="dark"] .plugin-results-section .accordion-item {
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .findings-list .finding-item {
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .standard-info {
+  background-color: var(--bs-dark-bg-subtle) !important;
+}
+

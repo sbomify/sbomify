@@ -5,8 +5,9 @@ import { registerContactsEditor } from './contacts-editor'
 import { registerSupplierEditor } from './supplier-editor'
 import { registerLicensesEditor } from './licenses-editor'
 import { registerReleaseList } from '../../core/js/components/release-list'
-import { registerNtiaComplianceBadge } from '../../core/js/components/ntia-compliance-badge'
+import { registerAssessmentBadge } from '../../plugins/js/assessment-badge'
 import { initializeAlpine } from '../../core/js/alpine-init'
+
 registerSbomsTable()
 registerSbomUpload()
 registerCiCdInfo()
@@ -14,6 +15,6 @@ registerContactsEditor()
 registerSupplierEditor()
 registerLicensesEditor()
 registerReleaseList()
-registerNtiaComplianceBadge()
+registerAssessmentBadge()
 
 void initializeAlpine()

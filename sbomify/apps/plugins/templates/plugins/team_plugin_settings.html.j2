@@ -1,0 +1,139 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/plugin-settings.css' %}">
+<div class="card shadow-sm">
+    <div class="card-header">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-puzzle-piece me-2"></i>
+                    Assessment Plugins
+                </h4>
+                <p class="text-muted small mb-0 mt-1">Configure which assessment plugins run on your SBOMs</p>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <form hx-post="{% url 'plugins:team_plugin_settings' team.key %}"
+              hx-swap="none"
+              hx-indicator="#plugin-settings-spinner">
+            {% if plugin_settings.available_plugins %}
+                <div class="plugins-list">
+                    {% for plugin in plugin_settings.available_plugins %}
+                        <div class="plugin-item mb-3 p-3 border rounded {% if plugin.requires_upgrade %}plugin-requires-upgrade{% endif %}">
+                            <div class="d-flex align-items-start">
+                                <div class="form-check form-switch me-3">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           role="switch"
+                                           name="enabled_plugins"
+                                           value="{{ plugin.name }}"
+                                           id="plugin-{{ plugin.name }}"
+                                           {% if plugin.name in plugin_settings.enabled_plugins and plugin.has_access %}checked{% endif %}
+                                           {% if plugin.requires_upgrade %}disabled{% endif %}>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center flex-wrap gap-1 mb-1">
+                                        <label class="form-check-label fw-medium me-1 {% if plugin.requires_upgrade %}text-muted{% endif %}"
+                                               for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</label>
+                                        <span class="badge bg-{{ plugin.category }}-category text-capitalize">{{ plugin.category }}</span>
+                                        <span class="badge bg-secondary-subtle text-secondary">v{{ plugin.version }}</span>
+                                        {% if plugin.requires_upgrade %}
+                                            <span class="badge bg-warning-subtle text-warning">
+                                                <i class="fas fa-lock me-1"></i>
+                                                {{ plugin.required_plan }}+ Plan
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-muted small mb-0">{{ plugin.description }}</p>
+                                    {% if plugin.requires_upgrade %}
+                                        <div class="mt-2">
+                                            <a href="{% url 'billing:subscription' %}"
+                                               class="btn btn-sm btn-outline-warning">
+                                                <i class="fas fa-arrow-up me-1"></i>
+                                                Upgrade to Enable
+                                            </a>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex align-items-center justify-content-between mt-4 pt-3 border-top">
+                    <div class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Enabled plugins will automatically assess new SBOM uploads.
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="plugin-settings-spinner"
+                              class="htmx-indicator spinner-border spinner-border-sm text-primary"></span>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+            {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-puzzle-piece fa-3x mb-3 d-block opacity-50"></i>
+                    <p class="mb-0">No assessment plugins are currently available.</p>
+                    <small>Plugins will appear here once they are registered by administrators.</small>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+<!-- Info Card about Plugin Behavior -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-info-circle me-2 text-info"></i>
+            About Assessment Plugins
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h6 class="fw-medium mb-2">
+                    <i class="fas fa-check-circle text-success me-2"></i>
+                    Automatic Assessments
+                </h6>
+                <p class="text-muted small mb-0">
+                    Enabled plugins automatically run assessments when new SBOMs are uploaded.
+                    Results appear on the SBOM detail page and in the SBOMs table.
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h6 class="fw-medium mb-2">
+                    <i class="fas fa-history text-info me-2"></i>
+                    Historical Tracking
+                </h6>
+                <p class="text-muted small mb-0">
+                    All assessment results are preserved, allowing you to track compliance
+                    and security status over time for audit purposes.
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h6 class="fw-medium mb-2">
+                    <i class="fas fa-shield-alt text-primary me-2"></i>
+                    Compliance Plugins
+                </h6>
+                <p class="text-muted small mb-0">
+                    Compliance plugins like NTIA Minimum Elements verify that your SBOMs
+                    meet industry standards and regulatory requirements.
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h6 class="fw-medium mb-2">
+                    <i class="fas fa-cog text-secondary me-2"></i>
+                    Per-Plugin Configuration
+                </h6>
+                <p class="text-muted small mb-0">
+                    Some plugins support custom configuration. Configuration options
+                    will appear when the plugin is enabled.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

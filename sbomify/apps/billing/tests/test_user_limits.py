@@ -23,22 +23,14 @@ class UserLimitsTestCase(TestCase):
         self.user3 = User.objects.create_user(username="user3", email="user3@example.com", password="test")
 
         # Create billing plans
-        self.community_plan = BillingPlan.objects.create(
-            key="community",
-            name="Community",
-            max_users=1
-        )
+        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
 
-        self.business_plan = BillingPlan.objects.create(
-            key="business",
-            name="Business",
-            max_users=5
-        )
+        self.business_plan = BillingPlan.objects.create(key="business", name="Business", max_users=5)
 
         self.enterprise_plan = BillingPlan.objects.create(
             key="enterprise",
             name="Enterprise",
-            max_users=None  # Unlimited
+            max_users=None,  # Unlimited
         )
 
     def test_community_plan_user_limit(self):
@@ -63,7 +55,9 @@ class UserLimitsTestCase(TestCase):
 
         # Add 4 more members to reach the limit
         for i in range(4):
-            user = User.objects.create_user(username=f"user{i+10}", email=f"user{i+10}@example.com", password="test")
+            user = User.objects.create_user(
+                username=f"user{i + 10}", email=f"user{i + 10}@example.com", password="test"
+            )
             Member.objects.create(user=user, team=team, role="member")
 
         # Should not be able to add another user
@@ -83,7 +77,9 @@ class UserLimitsTestCase(TestCase):
 
         # Add many members and should still be able to add more
         for i in range(10):
-            user = User.objects.create_user(username=f"user{i+20}", email=f"user{i+20}@example.com", password="test")
+            user = User.objects.create_user(
+                username=f"user{i + 20}", email=f"user{i + 20}@example.com", password="test"
+            )
             Member.objects.create(user=user, team=team, role="member")
 
         can_add, message = can_add_user_to_team(team)
@@ -113,10 +109,7 @@ class UserLimitsTestCase(TestCase):
     def test_community_team_with_multiple_users_grandfathered(self):
         """Test that existing community teams with multiple users can't add more but aren't broken."""
         # Create a community team with multiple users (simulating legacy data)
-        team = Team.objects.create(
-            name="Legacy Community Team",
-            billing_plan="community"
-        )
+        team = Team.objects.create(name="Legacy Community Team", billing_plan="community")
 
         # Add multiple users (simulating pre-limit situation)
         owner = User.objects.create_user(username="legacy_owner", email="legacy_owner@test.com")
@@ -147,10 +140,7 @@ class UserLimitsTestCase(TestCase):
     def test_business_team_with_excess_users_grandfathered(self):
         """Test that existing business teams with >5 users are grandfathered on business plan."""
         # Create a business team with more than 5 users (simulating legacy data)
-        team = Team.objects.create(
-            name="Legacy Business Team",
-            billing_plan="business"
-        )
+        team = Team.objects.create(name="Legacy Business Team", billing_plan="business")
 
         # Add 7 users (exceeding business plan limit of 5)
         for i in range(7):
@@ -181,23 +171,11 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.user = User.objects.create_user(username="user", email="user@example.com", password="test")
 
         # Create billing plans
-        self.community_plan = BillingPlan.objects.create(
-            key="community",
-            name="Community",
-            max_users=1
-        )
+        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
 
-        self.business_plan = BillingPlan.objects.create(
-            key="business",
-            name="Business",
-            max_users=5
-        )
+        self.business_plan = BillingPlan.objects.create(key="business", name="Business", max_users=5)
 
-        self.enterprise_plan = BillingPlan.objects.create(
-            key="enterprise",
-            name="Enterprise",
-            max_users=None
-        )
+        self.enterprise_plan = BillingPlan.objects.create(key="enterprise", name="Enterprise", max_users=None)
 
     def test_billing_plan_has_ntia_compliance_property(self):
         """Test that billing plans have correct NTIA compliance properties."""
@@ -217,90 +195,76 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.assertTrue(self.business_plan.has_dependency_track_access)
         self.assertTrue(self.enterprise_plan.has_dependency_track_access)
 
-    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
-    def test_ntia_compliance_not_triggered_for_community(self, mock_task):
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
+    def test_ntia_compliance_not_triggered_for_community(self, mock_enqueue):
         """Test that NTIA compliance is not triggered for community plans."""
         team = Team.objects.create(name="Community Team", billing_plan="community")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance task should not be called
-        mock_task.assert_not_called()
+        # NTIA compliance assessment should not be enqueued
+        mock_enqueue.assert_not_called()
 
-    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
-    def test_ntia_compliance_triggered_for_business(self, mock_task):
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
+    def test_ntia_compliance_triggered_for_business(self, mock_enqueue):
         """Test that NTIA compliance is triggered for business plans."""
         team = Team.objects.create(name="Business Team", billing_plan="business")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger NTIA compliance check
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance task should be called
-        mock_task.assert_called_once_with(args=[sbom.id], delay=60000)
+        # NTIA compliance assessment should be enqueued via plugin system
+        mock_enqueue.assert_called_once()
+        call_kwargs = mock_enqueue.call_args[1]
+        self.assertEqual(call_kwargs["sbom_id"], sbom.id)
+        self.assertEqual(call_kwargs["plugin_name"], "ntia-minimum-elements-2021")
 
-    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
-    def test_ntia_compliance_triggered_for_enterprise(self, mock_task):
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
+    def test_ntia_compliance_triggered_for_enterprise(self, mock_enqueue):
         """Test that NTIA compliance is triggered for enterprise plans."""
         team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger NTIA compliance check
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance task should be called
-        mock_task.assert_called_once_with(args=[sbom.id], delay=60000)
+        # NTIA compliance assessment should be enqueued via plugin system
+        mock_enqueue.assert_called_once()
+        call_kwargs = mock_enqueue.call_args[1]
+        self.assertEqual(call_kwargs["sbom_id"], sbom.id)
+        self.assertEqual(call_kwargs["plugin_name"], "ntia-minimum-elements-2021")
 
-    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
-    def test_ntia_compliance_not_triggered_for_no_plan(self, mock_task):
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
+    def test_ntia_compliance_not_triggered_for_no_plan(self, mock_enqueue):
         """Test that NTIA compliance is not triggered when team has no billing plan."""
         team = Team.objects.create(name="No Plan Team")  # No billing_plan set
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance task should not be called
-        mock_task.assert_not_called()
+        # NTIA compliance assessment should not be enqueued
+        mock_enqueue.assert_not_called()
 
-    @patch("sbomify.apps.sboms.tasks.check_sbom_ntia_compliance.send_with_options")
-    def test_ntia_compliance_not_triggered_for_invalid_plan(self, mock_task):
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
+    def test_ntia_compliance_not_triggered_for_invalid_plan(self, mock_enqueue):
         """Test that NTIA compliance is not triggered for invalid billing plans."""
         team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance task should not be called
-        mock_task.assert_not_called()
+        # NTIA compliance assessment should not be enqueued
+        mock_enqueue.assert_not_called()
 
     @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_community(self, mock_task):
@@ -310,11 +274,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger vulnerability scan with OSV
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
@@ -327,11 +287,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger vulnerability scan
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
@@ -344,11 +300,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger vulnerability scan
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
@@ -361,11 +313,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger vulnerability scan with OSV
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
@@ -378,11 +326,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         component = Component.objects.create(name="Test Component", team=team)
 
         # Create SBOM - this should trigger vulnerability scan with OSV
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="spdx"
-        )
+        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
         # Vulnerability scan task should be called
         mock_task.assert_called_once_with(args=[sbom.id], delay=90000)
@@ -397,11 +341,7 @@ class InvitationUserLimitsTestCase(TestCase):
         self.user2 = User.objects.create_user(username="invitee", email="invitee@example.com", password="test")
 
         # Create community plan with 1 user limit
-        self.community_plan = BillingPlan.objects.create(
-            key="community",
-            name="Community",
-            max_users=1
-        )
+        self.community_plan = BillingPlan.objects.create(key="community", name="Community", max_users=1)
 
     def test_invitation_creation_respects_user_limits(self):
         """Test that invitations cannot be created when user limit is reached."""
@@ -419,11 +359,7 @@ class InvitationUserLimitsTestCase(TestCase):
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Create invitation (bypassing the normal flow for testing)
-        _invitation = Invitation.objects.create(
-            team=team,
-            email=self.user2.email,
-            role="member"
-        )
+        _invitation = Invitation.objects.create(team=team, email=self.user2.email, role="member")
 
         # Should not be able to accept invitation due to user limits
         can_add, message = can_add_user_to_team(team)

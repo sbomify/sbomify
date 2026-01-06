@@ -4,7 +4,11 @@ from .models import SBOM
 
 
 class SBOMAdmin(admin.ModelAdmin):
-    """Admin configuration for SBOM model."""
+    """Admin configuration for SBOM model.
+
+    Note: NTIA compliance data is now available via AssessmentRun records
+    in the plugins app (plugin_name="ntia-minimum-elements-2021").
+    """
 
     list_display = (
         "name",
@@ -13,13 +17,11 @@ class SBOMAdmin(admin.ModelAdmin):
         "format_version",
         "component",
         "workspace",
-        "ntia_compliance_status",
         "created_at",
     )
 
     list_filter = (
         "format",
-        "ntia_compliance_status",
         "component__team",
         "created_at",
     )
@@ -35,7 +37,6 @@ class SBOMAdmin(admin.ModelAdmin):
     readonly_fields = (
         "id",
         "created_at",
-        "ntia_compliance_checked_at",
     )
 
     def workspace(self, obj):

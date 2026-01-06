@@ -1,10 +1,19 @@
 import os
+from pathlib import Path
+
 import pytest
 import pytest_django
-from pathlib import Path
 from dotenv import load_dotenv
 
-# from django.test.utils import setup_test_environment
+# Register modules for assertion rewriting BEFORE they are imported
+# This must be done before pytest_plugins is processed
+pytest.register_assert_rewrite(
+    "sbomify.apps.teams.fixtures",
+    "sbomify.apps.sboms.tests.fixtures",
+    "sbomify.apps.core.tests.fixtures",
+    "sbomify.apps.core.tests.s3_fixtures",
+    "sbomify.apps.core.tests.shared_fixtures",
+)
 
 
 # @pytest_django.django_db_setup

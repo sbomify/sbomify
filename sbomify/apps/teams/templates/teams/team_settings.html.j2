@@ -329,6 +329,15 @@
                             <span>Contact Profiles</span>
                         </a>
                     {% endif %}
+                    {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                        <a class="nav-link"
+                           data-bs-toggle="pill"
+                           href="#plugins"
+                           data-tab="plugins">
+                            <i class="fas fa-puzzle-piece"></i>
+                            <span>Plugins</span>
+                        </a>
+                    {% endif %}
                     {% if request.session.current_team.role == 'owner' %}
                         <a class="nav-link"
                            data-bs-toggle="pill"
@@ -372,6 +381,7 @@
                     <div class="tab-pane fade" id="contact-profiles">
                         {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
                     </div>
+                    <div class="tab-pane fade" id="plugins">{% include "teams/team_settings_tabs/plugins.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' %}
                     <div class="tab-pane fade" id="integrations">{% include "teams/team_settings_tabs/integrations.html.j2" %}</div>
@@ -395,6 +405,7 @@
             {% if request.session.current_team.role == 'owner' %}availableTabs.push('custom-domain');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('contact-profiles');
+                availableTabs.push('plugins');
             {% endif %}
             {% if request.session.current_team.role == 'owner' %}
                 availableTabs.push('integrations');
