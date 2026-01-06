@@ -11,7 +11,8 @@
                         :class="{ 'collapsed': !isExpanded(run.id) }"
                         type="button"
                         @click="toggleExpanded(run.id)"
-                        :aria-expanded="isExpanded(run.id)">
+                        :aria-expanded="isExpanded(run.id)"
+                        :aria-controls="'collapse-' + run.id">
                     <div class="d-flex align-items-center justify-content-between w-100 me-3">
                         <div class="plugin-header">
                             <span class="plugin-name fw-medium"
@@ -35,6 +36,7 @@
                 </button>
             </h2>
             <div class="accordion-collapse"
+                 :id="'collapse-' + run.id"
                  :class="{ 'collapse': true, 'show': isExpanded(run.id) }">
                 <div class="accordion-body">
                     {% if show_details %}
