@@ -4,8 +4,8 @@
       href="{% static 'css/components/assessment-results-card.css' %}">
 
 {# Macro for plugin accordion item - avoids code duplication #}
-{% macro plugin_accordion_item(runs_var, show_error=true, show_details=true) %}
-<template x-for="run in {{ runs_var }}" :key="run.id">
+{% macro plugin_accordion_item(runs, show_error=true, show_details=true) %}
+<template x-for="run in {{ runs }}" :key="run.id">
     <div class="accordion-item" :id="'plugin-' + run.plugin_name">
         <h2 class="accordion-header">
             <button class="accordion-button"

@@ -195,8 +195,18 @@ export function registerAssessmentBadge() {
       },
 
       getPluginDetailUrl(pluginName: string): string {
-        // Build URL to SBOM detail page with anchor to specific plugin
-        // Note: URL pattern matches Django's core:component_item URL
+        // Build URL to SBOM detail page with anchor to specific plugin.
+        // Prefer a base URL provided via a data attribute rendered by Django's url tag,
+        // and fall back to constructing the URL if not available.
+        const el = (this as { $el?: HTMLElement }).$el
+        const wrapperElement = el?.closest('.assessment-badge-wrapper') as HTMLElement | null
+        const baseUrlFromData = wrapperElement?.dataset?.sbomDetailUrl
+
+        if (baseUrlFromData) {
+          return `${baseUrlFromData}#plugin-${pluginName}`
+        }
+
+        // Fallback: construct URL (matches Django's core:component_item pattern)
         return `/components/${this.componentId}/sboms/${this.sbomId}/#plugin-${pluginName}`
       },
     }

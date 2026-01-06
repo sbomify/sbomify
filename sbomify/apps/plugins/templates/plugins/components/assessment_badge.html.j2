@@ -2,7 +2,8 @@
 {% load json_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-badge.css' %}">
-<div class="assessment-badge-wrapper">
+<div class="assessment-badge-wrapper"
+     data-sbom-detail-url="{% url 'core:component_item' component_id 'sboms' sbom_id %}">
     <div x-data="assessmentBadge('{{ sbom_id }}', '{{ component_id }}', '{{ assessments_data|jsonify|escapejs }}', '{{ team_billing_plan|default:""|escapejs }}')">
         {% if team_billing_plan == 'community' %}
             <a href="{% url 'billing:select_plan' team_key %}"
