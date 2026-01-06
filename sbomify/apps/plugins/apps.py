@@ -1,6 +1,10 @@
 """Django app configuration for the plugins framework."""
 
+import logging
+
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 class PluginsConfig(AppConfig):
@@ -45,6 +49,6 @@ class PluginsConfig(AppConfig):
                     "default_config": {},
                 },
             )
-        except (OperationalError, ProgrammingError):
+        except (OperationalError, ProgrammingError) as e:
             # Table doesn't exist yet (e.g., during initial migrations)
-            pass
+            logger.debug("Could not register built-in plugins (table may not exist yet): %s", e)
