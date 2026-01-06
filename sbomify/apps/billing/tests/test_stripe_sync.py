@@ -270,7 +270,7 @@ class TestSyncCaching:
     @patch("sbomify.apps.billing.stripe_sync.get_cached_subscription")
     @patch("sbomify.apps.billing.stripe_sync.stripe_client")
     def test_sync_force_refresh(
-        self, mock_client, mock_invalidate, mock_cache, team_with_subscription, mock_stripe_subscription
+        self, mock_client, mock_cache, mock_invalidate, team_with_subscription, mock_stripe_subscription
     ):
         """Test sync bypasses cache when force_refresh=True."""
         team = team_with_subscription
@@ -287,7 +287,7 @@ class TestSyncCaching:
 class TestSyncIntegration:
     """Test sync integration with views and context processors."""
 
-    @patch("sbomify.apps.core.context_processors.sync_subscription_from_stripe")
+    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
     def test_context_processor_calls_sync(self, mock_sync, sample_user, team_with_subscription):
         """Test that context processor calls sync on page load."""
         from sbomify.apps.core.context_processors import team_context
@@ -306,7 +306,7 @@ class TestSyncIntegration:
         # Sync should be called
         mock_sync.assert_called_once()
 
-    @patch("sbomify.apps.core.context_processors.sync_subscription_from_stripe")
+    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
     def test_context_processor_handles_sync_failure(
         self, mock_sync, sample_user, team_with_subscription
     ):

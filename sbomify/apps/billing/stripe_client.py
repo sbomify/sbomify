@@ -60,9 +60,12 @@ class StripeClient:
         return self.stripe.Customer.retrieve(customer_id)
 
     @_handle_stripe_error
-    def create_customer(self, email, name, metadata=None):
+    def create_customer(self, email, name, metadata=None, id=None):
         """Create a new customer in Stripe."""
-        return self.stripe.Customer.create(email=email, name=name, metadata=metadata or {})
+        kwargs = {"email": email, "name": name, "metadata": metadata or {}}
+        if id is not None:
+            kwargs["id"] = id
+        return self.stripe.Customer.create(**kwargs)
 
     @_handle_stripe_error
     def update_customer(self, customer_id, **kwargs):

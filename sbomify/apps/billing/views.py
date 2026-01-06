@@ -143,6 +143,113 @@ def public_enterprise_contact(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def billing_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
+    """Redirect to Stripe checkout based on selected plan in session."""
+    team = get_object_or_404(Team, key=team_key)
+
+    if not team.members.filter(member__user=request.user, member__role="owner").exists():
+        messages.error(request, "Only team owners can change billing plans")
+        return redirect("core:dashboard")
+
+    # Get selected plan from session
+    selected_plan = request.session.get("selected_plan")
+    if not selected_plan:
+        return redirect("billing:select_plan", team_key=team_key)
+
+    plan_key = selected_plan.get("key")
+    billing_period = selected_plan.get("billing_period", "monthly")
+
+    if not plan_key:
+        messages.error(request, "No plan selected")
+        return redirect("billing:select_plan", team_key=team_key)
+
+    # Get plan
+    try:
+        plan = BillingPlan.objects.get(key=plan_key)
+    except BillingPlan.DoesNotExist:
+        messages.error(request, "Invalid plan selected")
+        return redirect("billing:select_plan", team_key=team_key)
+
+    # Handle enterprise plan
+    if plan.key == BillingPlan.KEY_ENTERPRISE:
+        return redirect("billing:enterprise_contact")
+
+    # Validate billing_period
+    if billing_period not in ["monthly", "annual"]:
+        messages.error(request, "Invalid billing period")
+        return redirect("billing:select_plan", team_key=team_key)
+
+    # Get price ID
+    price_id = plan.stripe_price_monthly_id if billing_period == "monthly" else plan.stripe_price_annual_id
+    if not price_id:
+        raise ValueError(f"No price ID found for plan {plan_key} with billing period {billing_period}")
+
+    # Get or create Stripe customer
+    billing_limits = team.billing_plan_limits or {}
+    customer_id = billing_limits.get("stripe_customer_id")
+
+    if not customer_id:
+        try:
+            customer = stripe_client.create_customer(
+                id=f"c_{team.key}",
+                email=request.user.email,
+                name=team.name,
+                metadata={"team_key": team.key},
+            )
+            customer_id = customer.id
+        except StripeError as e:
+            # If customer already exists with that ID, retrieve it
+            if "already exists" in str(e).lower():
+                try:
+                    customer = stripe_client.get_customer(f"c_{team.key}")
+                    customer_id = customer.id
+                except StripeError:
+                    # Create without ID
+                    customer = stripe_client.create_customer(
+                        email=request.user.email,
+                        name=team.name,
+                        metadata={"team_key": team.key},
+                    )
+                    customer_id = customer.id
+            else:
+                logger.error(f"Failed to create customer for team {team_key}: {e}")
+                messages.error(request, "Failed to create billing account. Please try again.")
+                return redirect("billing:select_plan", team_key=team_key)
+    else:
+        try:
+            customer = stripe_client.get_customer(customer_id)
+        except StripeError:
+            # Customer doesn't exist, create new one
+            customer = stripe_client.create_customer(
+                email=request.user.email,
+                name=team.name,
+                metadata={"team_key": team.key},
+            )
+            customer_id = customer.id
+
+    # Create checkout session
+    try:
+        success_url = (
+            request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
+        )
+        cancel_url = request.build_absolute_uri(reverse("billing:select_plan", kwargs={"team_key": team_key}))
+
+        session = stripe_client.create_checkout_session(
+            customer_id=customer_id,
+            price_id=price_id,
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={"team_key": team.key, "plan_key": plan.key},
+        )
+
+        return redirect(session.url)
+    except StripeError as e:
+        logger.error(f"Failed to create checkout session for team {team_key}: {e}")
+        messages.error(request, "Failed to initiate payment. Please try again.")
+        return redirect("billing:select_plan", team_key=team_key)
+
+
+@login_required
 def create_portal_session(request: HttpRequest, team_key: str) -> HttpResponse:
     """Create a Stripe Billing Portal session and redirect to it."""
     team = get_object_or_404(Team, key=team_key)
