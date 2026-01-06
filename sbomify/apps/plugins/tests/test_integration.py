@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import pytest
+from django.db import transaction
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
@@ -14,6 +15,7 @@ from sbomify.apps.plugins.models import (
 )
 from sbomify.apps.plugins.orchestrator import PluginOrchestrator
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
+from sbomify.apps.plugins.tasks import enqueue_assessment, run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team
 
@@ -255,3 +257,74 @@ class TestChecksumPluginEndToEnd:
         assert "status" in finding
         assert "severity" in finding
 
+
+@pytest.mark.django_db(transaction=True)
+class TestEnqueueAssessmentTransactionSafety:
+    """Tests for transaction-safe task enqueueing behavior."""
+
+    def test_enqueue_assessment_deferred_until_commit(self, mocker) -> None:
+        """Verify task dispatch is deferred until transaction commits.
+
+        This test ensures that when enqueue_assessment() is called inside a
+        transaction, the Dramatiq task is not sent until after the transaction
+        commits. This prevents race conditions where workers try to fetch
+        SBOMs that don't exist yet.
+        """
+        mock_send = mocker.patch.object(run_assessment_task, "send")
+
+        with transaction.atomic():
+            enqueue_assessment(
+                sbom_id="test-sbom-id",
+                plugin_name="checksum",
+                run_reason=RunReason.ON_UPLOAD,
+            )
+            # Task should NOT be sent yet - we're still inside the transaction
+            mock_send.assert_not_called()
+
+        # After transaction commits, task should be sent
+        mock_send.assert_called_once()
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["sbom_id"] == "test-sbom-id"
+        assert call_kwargs["plugin_name"] == "checksum"
+        assert call_kwargs["run_reason"] == "on_upload"
+
+    def test_enqueue_assessment_immediate_outside_transaction(self, mocker) -> None:
+        """Verify task is sent immediately when called outside a transaction.
+
+        When not inside an explicit transaction (autocommit mode), the task
+        should be dispatched immediately since data is already committed.
+        """
+        mock_send = mocker.patch.object(run_assessment_task, "send")
+
+        # Call outside any transaction block
+        enqueue_assessment(
+            sbom_id="test-sbom-id",
+            plugin_name="checksum",
+            run_reason=RunReason.MANUAL,
+        )
+
+        # Task should be sent immediately
+        mock_send.assert_called_once()
+
+    def test_enqueue_assessment_not_sent_on_rollback(self, mocker) -> None:
+        """Verify task is NOT sent if transaction is rolled back.
+
+        If the transaction fails and rolls back, the on_commit callback
+        should never execute, preventing orphaned tasks.
+        """
+        mock_send = mocker.patch.object(run_assessment_task, "send")
+
+        try:
+            with transaction.atomic():
+                enqueue_assessment(
+                    sbom_id="test-sbom-id",
+                    plugin_name="checksum",
+                    run_reason=RunReason.ON_UPLOAD,
+                )
+                # Force a rollback
+                raise ValueError("Simulated error to trigger rollback")
+        except ValueError:
+            pass
+
+        # Task should NOT be sent because transaction rolled back
+        mock_send.assert_not_called()
