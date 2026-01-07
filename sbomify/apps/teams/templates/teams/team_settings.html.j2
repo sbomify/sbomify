@@ -4,7 +4,6 @@
 {% load static %}
 {% load json_extras %}
 {% load teams %}
-{% load public_url_tags %}
 {% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
     <div class="page-header mb-4">
@@ -18,271 +17,6 @@
             </div>
         </div>
     </div>
-    <div class="mb-4">
-        <div class="card settings-card workspace-visibility-card shadow-sm">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Trust Center Availability</h4>
-            </div>
-            <div class="card-body">
-                <div class="visibility-wrapper">
-                    <div class="copy">
-                        <p class="eyebrow">Workspace Trust Center</p>
-                        <h3 class="title">Enable or disable your Trust Center</h3>
-                        <p class="description">Control whether your Trust Center is accessible to visitors.</p>
-                        <span class="status-pill {{ team.is_public|yesno:'public,private' }}">
-                            <i class="fas {{ team.is_public|yesno:'fa-globe,fa-lock' }}"></i>
-                            {{ team.is_public|yesno:'Enabled,Disabled' }}
-                        </span>
-                        {% if team.is_public %}
-                            {% trust_center_absolute_url team as public_url %}
-                            <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                                <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
-                                <button type="button"
-                                        class="copy-url-btn visibility-copy-btn"
-                                        title="Copy public URL"
-                                        aria-label="Copy public URL"
-                                        data-public-url="{{ public_url }}">
-                                    <i class="fas fa-copy"></i>
-                                    <span class="copy-text">Copy public URL</span>
-                                </button>
-                            </div>
-                        {% endif %}
-                        {% if not is_owner %}
-                            <div class="text-muted mt-2 small">Only workspace owners can change visibility.</div>
-                        {% elif not can_set_private %}
-                            <div class="text-muted mt-2 small">Disabling the Trust Center is available on Business or Enterprise plans.</div>
-                        {% endif %}
-                    </div>
-                    <div class="control">
-                        <form method="post"
-                              action="{% url 'teams:team_settings' team.key %}"
-                              class="d-inline-block">
-                            {% csrf_token %}
-                            <input type="hidden" name="visibility_action" value="update">
-                            <input type="hidden" name="is_public" value="false">
-                            <input type="hidden" name="active_tab" id="visibility-active-tab" value="">
-                            <div class="form-check form-switch">
-                                <input id="workspace-visibility-toggle"
-                                       class="form-check-input"
-                                       type="checkbox"
-                                       name="is_public"
-                                       value="true"
-                                       {% if team.is_public %}checked{% endif %}
-                                       {% if not is_owner %}disabled{% endif %}
-                                       onchange="this.form.submit()">
-                                <label class="form-check-label" for="workspace-visibility-toggle">{{ team.is_public|yesno:'Enabled,Disabled' }}</label>
-                            </div>
-                            <button type="submit" class="visually-hidden">Save visibility</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <style>
-        .workspace-visibility-card .visibility-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .workspace-visibility-card .copy {
-            flex: 1 1 60%;
-        }
-
-        .workspace-visibility-card .eyebrow {
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 0.35rem;
-        }
-
-        .workspace-visibility-card .title {
-            font-size: 1.25rem;
-            margin: 0 0 0.35rem;
-            color: #111827;
-        }
-
-        .workspace-visibility-card .description {
-            color: #4b5563;
-            margin-bottom: 0.75rem;
-        }
-
-        .workspace-visibility-card .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.75rem;
-            border-radius: 999px;
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
-
-        .workspace-visibility-card .status-pill.public {
-            background-color: #ecfdf3;
-            color: #15803d;
-            border: 1px solid #bbf7d0;
-        }
-
-        .workspace-visibility-card .status-pill.private {
-            background-color: #f4f5f7;
-            color: #374151;
-            border: 1px solid #e5e7eb;
-        }
-
-        .workspace-visibility-card .control {
-            min-width: 220px;
-            text-align: right;
-            padding: 2rem;
-            border-radius: 8px;
-        }
-
-        .workspace-visibility-card .form-check-input {
-            width: 3rem;
-            height: 1.5rem;
-            cursor: pointer;
-            margin-top: 0;
-            margin-left: 0;
-            flex-shrink: 0;
-        }
-
-        .workspace-visibility-card .form-check-label {
-            margin-left: 0.75rem;
-            font-weight: 500;
-            color: #374151;
-            cursor: pointer;
-            line-height: 1.5rem;
-            margin-bottom: 0;
-        }
-
-        .workspace-visibility-card .form-switch {
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-left: 0;
-        }
-
-
-        .workspace-visibility-card .visibility-copy-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.4rem 0.75rem;
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-        }
-
-        .workspace-visibility-card .visibility-copy-btn:hover {
-            background: linear-gradient(135deg, #1d4ed8, #1e40af);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
-        }
-
-        .workspace-visibility-card .visibility-copy-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-        }
-
-        .workspace-visibility-card .visibility-copy-btn .copy-text {
-            font-size: 0.75rem;
-        }
-
-        @media (max-width: 768px) {
-            .workspace-visibility-card .visibility-wrapper {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 1.5rem;
-            }
-
-            .workspace-visibility-card .copy {
-                flex: 1 1 100%;
-            }
-
-            .workspace-visibility-card .control {
-                min-width: 100%;
-                text-align: left;
-                padding: 1rem;
-                border-top: 1px solid #e5e7eb;
-                margin-top: 1rem;
-            }
-
-            .workspace-visibility-card .form-switch {
-                justify-content: flex-start;
-            }
-
-            .workspace-visibility-card .title {
-                font-size: 1.125rem;
-            }
-
-            .workspace-visibility-card .description {
-                font-size: 0.875rem;
-            }
-
-            .workspace-visibility-card code {
-                font-size: 0.75rem;
-                word-break: break-all;
-                display: block;
-                margin-bottom: 0.5rem;
-            }
-
-            .workspace-visibility-card .visibility-copy-btn {
-                width: 100%;
-                justify-content: center;
-                padding: 0.625rem 1rem;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .workspace-visibility-card .card-body {
-                padding: 1rem 0.875rem;
-            }
-
-            .workspace-visibility-card .title {
-                font-size: 1rem;
-            }
-
-            .workspace-visibility-card .control {
-                padding: 0.875rem;
-                margin-top: 0.875rem;
-            }
-
-            .workspace-visibility-card .form-check-input {
-                width: 2.5rem;
-                height: 1.375rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .workspace-visibility-card .card-body {
-                padding: 0.875rem 0.75rem;
-            }
-
-            .workspace-visibility-card .title {
-                font-size: 0.9375rem;
-            }
-
-            .workspace-visibility-card .description {
-                font-size: 0.8125rem;
-            }
-
-            .workspace-visibility-card .control {
-                padding: 0.75rem;
-            }
-        }
-    </style>
     <div class="settings-layout">
         <!-- Vertical Navigation Tabs -->
         <div class="settings-nav-col">
@@ -314,10 +48,10 @@
                     {% if request.session.current_team.role == 'owner' %}
                         <a class="nav-link"
                            data-bs-toggle="pill"
-                           href="#custom-domain"
-                           data-tab="custom-domain">
-                            <i class="fas fa-globe"></i>
-                            <span>Custom Domain</span>
+                           href="#trust-center"
+                           data-tab="trust-center">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Trust Center</span>
                         </a>
                     {% endif %}
                     {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
@@ -375,7 +109,7 @@
                 <div class="tab-pane fade" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
                 <div class="tab-pane fade" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
                 {% if request.session.current_team.role == 'owner' %}
-                    <div class="tab-pane fade" id="custom-domain">{% include "teams/team_settings_tabs/custom_domain.html.j2" %}</div>
+                    <div class="tab-pane fade" id="trust-center">{% include "teams/team_settings_tabs/trust_center.html.j2" %}</div>
                 {% endif %}
                 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                     <div class="tab-pane fade" id="contact-profiles">
@@ -402,7 +136,7 @@
             // Get available tabs
             const availableTabs = ['members', 'tokens'];
             {% if request.session.current_team.role == 'owner' %}availableTabs.unshift('general');{% endif %}
-            {% if request.session.current_team.role == 'owner' %}availableTabs.push('custom-domain');{% endif %}
+            {% if request.session.current_team.role == 'owner' %}availableTabs.push('trust-center');{% endif %}
             {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                 availableTabs.push('contact-profiles');
                 availableTabs.push('plugins');

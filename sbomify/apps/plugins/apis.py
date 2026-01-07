@@ -263,7 +263,12 @@ def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
 
 def _check_team_has_plugin_access(team: Team, plugin_name: str) -> bool:
     """Check if a team's billing plan allows access to a plugin."""
+    from sbomify.apps.billing.config import is_billing_enabled
     from sbomify.apps.billing.models import BillingPlan
+
+    # If billing is disabled, grant access to all plugins
+    if not is_billing_enabled():
+        return True
 
     required_feature = _get_plugin_plan_requirement(plugin_name)
     if required_feature is None:
