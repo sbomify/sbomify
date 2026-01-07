@@ -30,10 +30,7 @@ function handleAnchorLink(): void {
       // Find the collapse element within this accordion item
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
-        // Use Bootstrap's Collapse API to show it. Using getOrCreateInstance ensures we
-        // reuse any existing Collapse instance for this element instead of creating a
-        // new one, avoiding duplicate event handlers, inconsistent state, and potential
-        // memory leaks from multiple instances bound to the same DOM node.
+        // Reuse existing instance to avoid duplicate handlers and state conflicts
         const bootstrapCollapse = Collapse.getOrCreateInstance(collapseEl)
         bootstrapCollapse.show()
       }
