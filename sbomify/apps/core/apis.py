@@ -397,7 +397,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             try:
                 target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
             except BillingPlan.DoesNotExist:
-                log.warning(f"Target plan {scheduled_downgrade_plan} not found for scheduled downgrade, skipping check")
+                log.warning("Target plan not found for scheduled downgrade, skipping check")
             else:
                 # Get current usage
                 if resource_type == "product":

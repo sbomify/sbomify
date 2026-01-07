@@ -49,7 +49,7 @@ class StripeClient:
                 logger.error(f"Stripe error: {str(e)}")
                 raise StripeError(f"Stripe error: {str(e)}")
             except Exception as e:
-                logger.exception(f"Unexpected error: {str(e)}")
+                logger.error(f"Unexpected error: {str(e)}")
                 raise StripeError(f"Unexpected error: {str(e)}")
 
         return wrapper

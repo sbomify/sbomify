@@ -67,10 +67,6 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest):
 
     team_key = data.team_key or request.session.get("current_team", {}).get("key")
 
-    # print("team_key")
-    # breakpoint()
-    # print(team_key)
-
     if not team_key:
         return 404, {"detail": "No team selected"}
 

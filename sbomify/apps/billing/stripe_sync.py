@@ -124,21 +124,13 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             # Only override if we got a valid numeric value > 0
             if cancel_at_value is not None and cancel_at_value > 0:
                 real_cancel_at_period_end = True
-                logger.debug(
-                    f"Team {team.key}: cancel_at is set ({cancel_at_value}), treating as scheduled cancellation"
-                )
+                logger.debug("cancel_at is set, treating as scheduled cancellation")
 
-        logger.debug(
-            f"Team {team.key}: current_cancel={current_cancel_at_period_end}, "
-            f"stripe_cancel={real_cancel_at_period_end} (raw={raw_cancel_at_period_end}, cancel_at={cancel_at})"
-        )
+        logger.debug("Checking cancel status")
 
         # Log for debugging
         if real_cancel_at_period_end != current_cancel_at_period_end:
-            logger.info(
-                f"Cancel status change detected for team {team.key}: "
-                f"{current_cancel_at_period_end} -> {real_cancel_at_period_end}"
-            )
+            logger.info("Cancel status change detected")
 
         # Check if we need to update
         needs_update = False
@@ -154,13 +146,13 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             if real_sub_status == "past_due" and not billing_limits.get("payment_failed_at"):
                 billing_limits["payment_failed_at"] = timezone.now().isoformat()
                 updated_fields.append("payment_failed_at")
-                logger.info(f"Payment failure detected for team {team.key}, setting payment_failed_at")
+                logger.info("Payment failure detected, setting payment_failed_at")
 
             # If status changed from past_due to active/trialing, clear payment_failed_at
             elif current_sub_status == "past_due" and real_sub_status in ["active", "trialing"]:
                 billing_limits.pop("payment_failed_at", None)
                 updated_fields.append("payment_failed_at (cleared)")
-                logger.info(f"Payment restored for team {team.key}, clearing payment_failed_at")
+                logger.info("Payment restored, clearing payment_failed_at")
 
         # Check cancel_at_period_end
         if real_cancel_at_period_end != current_cancel_at_period_end:
@@ -176,7 +168,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     # Default to community plan for scheduled downgrade
                     billing_limits["scheduled_downgrade_plan"] = "community"
                     updated_fields.append("scheduled_downgrade_plan (set)")
-                    logger.info(f"Detected cancellation for team {team.key}, set scheduled_downgrade_plan to community")
+                    logger.info("Detected cancellation, set scheduled_downgrade_plan to community")
                 # Invalidate cache to ensure fresh data on next fetch
                 invalidate_subscription_cache(stripe_sub_id, team.key)
 
@@ -186,7 +178,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 if billing_limits.get("scheduled_downgrade_plan"):
                     billing_limits.pop("scheduled_downgrade_plan", None)
                     updated_fields.append("scheduled_downgrade_plan (cleared)")
-                    logger.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+                    logger.info("User reactivated subscription, cleared scheduled downgrade")
 
         # Sync next_billing_date - always update to ensure it's correct
         # Use cancel_at if subscription is scheduled to cancel, otherwise use period_end
@@ -197,7 +189,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 billing_limits["next_billing_date"] = next_billing_date
                 needs_update = True
                 updated_fields.append("next_billing_date")
-                logger.debug(f"Updated next_billing_date for team {team.key}")
+                logger.debug("Updated next_billing_date")
 
         # Update last_updated timestamp
         if needs_update:
@@ -234,13 +226,13 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                         # This is a backup in case the "scheduled_downgrade_plan (set)" field wasn't processed
                         if real_cancel_at_period_end and not billing_limits.get("scheduled_downgrade_plan"):
                             billing_limits["scheduled_downgrade_plan"] = "community"
-                            logger.info(f"Set scheduled_downgrade_plan in transaction for team {team.key}")
+                            logger.info("Set scheduled_downgrade_plan in transaction")
                     elif field == "scheduled_downgrade_plan (set)":
                         billing_limits["scheduled_downgrade_plan"] = "community"
-                        logger.debug(f"Applied scheduled_downgrade_plan (set) for team {team.key}")
+                        logger.debug("Applied scheduled_downgrade_plan (set)")
                     elif field == "scheduled_downgrade_plan (cleared)":
                         billing_limits.pop("scheduled_downgrade_plan", None)
-                        logger.debug(f"Cleared scheduled_downgrade_plan for team {team.key}")
+                        logger.debug("Cleared scheduled_downgrade_plan")
                     elif field == "next_billing_date":
                         next_billing_date = get_period_end_from_subscription(subscription, stripe_sub_id)
                         if next_billing_date:
@@ -368,7 +360,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                     except (KeyError, TypeError):
                         pass  # Expected if data missing
 
-            logger.debug(f"Priority 3: billing_cycle_anchor={billing_cycle_anchor} for subscription {subscription_id}")
+            logger.debug("Priority 3: billing_cycle_anchor found")
 
             if billing_cycle_anchor:
                 # Get subscription items to find the billing interval
@@ -380,7 +372,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                     except (KeyError, TypeError):
                         pass  # Expected if data missing
 
-                logger.debug(f"Priority 3: items found, type={type(items)} for subscription {subscription_id}")
+                logger.debug("Priority 3: items found")
 
                 if items:
                     # Handle both StripeList and regular list
@@ -391,7 +383,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                     else:
                         items_list = [items]
 
-                    logger.debug(f"Priority 3: items_list length={len(items_list)} for subscription {subscription_id}")
+                    logger.debug(f"Priority 3: items_list length={len(items_list)}")
 
                     # Get interval from first item's price
                     for item in items_list:
@@ -444,14 +436,11 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                                         )
 
                                     period_end = int(next_anchor.timestamp())
-                                    logger.info(
-                                        f"Calculated period_end from billing_cycle_anchor: {period_end} "
-                                        f"({next_anchor.isoformat()}) for subscription {subscription_id}"
-                                    )
+                                    logger.info("Calculated period_end from billing_cycle_anchor")
                                     break
         except Exception as e:
             logger.warning(
-                f"Could not calculate period_end from billing_cycle_anchor for subscription {subscription_id}: {e}",
+                f"Could not calculate period_end from billing_cycle_anchor for subscription: {e}",
                 exc_info=True,
             )
 
@@ -465,8 +454,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                 # But for now, let's just use it as a fallback and log a warning
                 period_end = invoices.data[0].period_end
                 logger.warning(
-                    f"Using latest invoice period_end ({period_end}) for subscription {subscription_id}. "
-                    f"This may be a past date. Consider using upcoming invoice instead."
+                    "Using latest invoice period_end. This may be a past date. Consider using upcoming invoice instead."
                 )
         except Exception as e:
             logger.debug(f"Could not get period_end from invoice: {e}")
@@ -596,14 +584,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
 
     for plan in plans:
         try:
-            logger.debug(
-                f"Processing plan {plan.key}: "
-                f"monthly_price={plan.monthly_price}, "
-                f"annual_price={plan.annual_price}, "
-                f"stripe_product_id={plan.stripe_product_id}, "
-                f"stripe_price_monthly_id={plan.stripe_price_monthly_id}, "
-                f"stripe_price_annual_id={plan.stripe_price_annual_id}"
-            )
+            logger.debug(f"Processing plan {plan.key}")
 
             # Check if plan needs Stripe IDs (either has prices but no IDs, or no prices and no IDs - "fresh start")
             # We want to try finding/creating Stripe objects for any plan that lacks IDs
@@ -667,12 +648,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
                                 # Do not update annual_price - preserve existing value
 
                         plan.save(update_fields=update_fields)
-                        logger.info(
-                            f"Updated plan {plan.key} with Stripe IDs: "
-                            f"product={product_id}, monthly={monthly_id}, "
-                            f"annual={annual_id}, prices: monthly=${plan.monthly_price}, "
-                            f"annual=${plan.annual_price}"
-                        )
+                        logger.info(f"Updated plan {plan.key} with Stripe IDs")
                     # Refresh plan from DB to get updated IDs
                     plan.refresh_from_db()
                     # Recalculate has_stripe_ids after refresh
@@ -776,7 +752,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
                 plan.save(update_fields=update_fields)
 
                 if updated:
-                    logger.info(f"Successfully synced prices for plan {plan.key}: {price_updates}")
+                    logger.info(f"Successfully synced prices for plan {plan.key}")
                 else:
                     logger.info(
                         f"Plan {plan.key}: prices already up to date "

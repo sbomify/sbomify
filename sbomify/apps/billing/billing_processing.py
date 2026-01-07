@@ -75,7 +75,7 @@ def check_billing_limits(resource_type: str):
                         invalidate_subscription_cache(stripe_subscription_id, team.key)
                         team.billing_plan_limits = billing_limits
                         team.save()
-                        logger.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+                        logger.info("User reactivated subscription, cleared scheduled downgrade")
                     else:
                         try:
                             target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
@@ -125,7 +125,7 @@ def check_billing_limits(resource_type: str):
                                     "Payment failed. Grace period expired. "
                                     "Please update payment method to create resources."
                                 )
-                                logger.warning(f"Blocking resource access for team {team.key}: Grace period expired")
+                                logger.warning("Blocking resource access: Grace period expired")
                                 is_ajax = (
                                     request.headers.get("Accept") == "application/json"
                                     or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
@@ -135,7 +135,7 @@ def check_billing_limits(resource_type: str):
                                 return HttpResponseForbidden(msg)
 
                         except (ValueError, TypeError):
-                            logger.error(f"Invalid payment_failed_at format for team {team.key}")
+                            logger.error("Invalid payment_failed_at format")
                             msg = "Payment failed. Unable to verify grace period. Please contact support."
                             is_ajax = (
                                 request.headers.get("Accept") == "application/json"
@@ -268,7 +268,7 @@ def handle_trial_period(subscription, team):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_trial_ending(team, member, days_remaining)
-                logger.info(f"Trial ending notification sent for team {team.key}")
+                logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
             with transaction.atomic():
@@ -280,7 +280,7 @@ def handle_trial_period(subscription, team):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_trial_expired(team, member)
-                logger.info(f"Trial expired notification sent for team {team.key}")
+                logger.info("Trial expired notification sent")
 
         return True
     return False
@@ -302,17 +302,14 @@ def handle_subscription_updated(subscription, event=None):
             try:
                 team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
                 billing_limits = team.billing_plan_limits or {}
-                logger.warning(
-                    "Found team by customer ID instead of subscription ID for subscription %s",
-                    subscription.id,
-                )
+                logger.warning("Found team by customer ID instead of subscription ID")
             except Team.DoesNotExist:
                 try:
                     customer = stripe_client.get_customer(subscription.customer)
                     if customer.metadata and "team_key" in customer.metadata:
                         team = Team.objects.get(key=customer.metadata["team_key"])
                         billing_limits = team.billing_plan_limits or {}
-                        logger.warning(f"Found team by customer metadata for subscription {subscription.id}")
+                        logger.warning("Found team by customer metadata")
                     else:
                         raise Team.DoesNotExist("No team key in customer metadata")
                 except Exception as e:
@@ -330,7 +327,7 @@ def handle_subscription_updated(subscription, event=None):
             webhook_id = f"sub_{subscription.id}_{subscription.updated}"
 
         if last_processed_id == webhook_id:
-            logger.info(f"Webhook already processed for subscription {subscription.id}, skipping")
+            logger.info("Webhook already processed, skipping")
             return
 
         invalidate_subscription_cache(subscription.id, team.key)
@@ -340,7 +337,7 @@ def handle_subscription_updated(subscription, event=None):
             billing_limits = (team.billing_plan_limits or {}).copy()
 
             if billing_limits.get("last_processed_webhook_id") == webhook_id:
-                logger.info(f"Webhook already processed (checked after lock) for subscription {subscription.id}")
+                logger.info("Webhook already processed (checked after lock)")
                 return
 
             billing_limits["subscription_status"] = subscription.status
@@ -379,9 +376,7 @@ def handle_subscription_updated(subscription, event=None):
                 # Only override if we got a valid numeric value > 0
                 if cancel_at_value is not None and cancel_at_value > 0:
                     new_cancel_at_period_end = True
-                    logger.debug(
-                        f"Team {team.key}: cancel_at is set ({cancel_at_value}), treating as scheduled cancellation"
-                    )
+                    logger.debug("cancel_at is set, treating as scheduled cancellation")
 
             if hasattr(subscription, "cancel_at_period_end") or cancel_at:
                 billing_limits["cancel_at_period_end"] = new_cancel_at_period_end
@@ -392,23 +387,20 @@ def handle_subscription_updated(subscription, event=None):
                     # This handles cases where cancellation happens via Stripe portal directly
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         billing_limits["scheduled_downgrade_plan"] = "community"
-                        logger.info(
-                            f"Detected cancellation via webhook for team {team.key}, "
-                            "set scheduled_downgrade_plan to community"
-                        )
+                        logger.info("set scheduled_downgrade_plan to community")
 
                 # Handle reactivation (cancellation reversal)
                 elif previous_cancel_at_period_end and not new_cancel_at_period_end:
                     billing_limits.pop("scheduled_downgrade_plan", None)
-                    logger.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+                    logger.info("User reactivated subscription, cleared scheduled downgrade")
 
             # Ensure stripe_customer_id is present if we have subscription_id to satisfy valid_billing_relationship
             if billing_limits.get("stripe_subscription_id") and not billing_limits.get("stripe_customer_id"):
                 if hasattr(subscription, "customer"):
                     billing_limits["stripe_customer_id"] = subscription.customer
-                    logger.info(f"Setting missing stripe_customer_id for team {team.key} from subscription")
+                    logger.info("Setting missing stripe_customer_id from subscription")
                 else:
-                    logger.warning(f"Could not find customer ID in subscription for team {team.key}")
+                    logger.warning("Could not find customer ID in subscription")
 
             if subscription.items.data:
                 try:
@@ -442,9 +434,7 @@ def handle_subscription_updated(subscription, event=None):
                         }
                     )
                 except BillingPlan.DoesNotExist:
-                    logger.critical(
-                        f"Billing plan not found during subscription update for subscription {subscription.id}"
-                    )
+                    logger.critical("Billing plan not found during subscription update")
 
             team.billing_plan_limits = billing_limits
             team.save()
@@ -456,31 +446,31 @@ def handle_subscription_updated(subscription, event=None):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_past_due(team, member)
-                logger.warning(f"Payment past due notification sent for team {team.key}")
+                logger.warning("Payment past due notification sent")
 
         elif subscription.status == "active":
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_succeeded(team, member)
-                logger.info(f"Payment restored notification sent for team {team.key}")
+                logger.info("Payment restored notification sent")
 
         elif subscription.status == "canceled":
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_subscription_cancelled(team, member)
-                logger.info(f"Subscription cancelled notification sent for team {team.key}")
+                logger.info("Subscription cancelled notification sent")
 
         elif subscription.status in ["incomplete", "incomplete_expired"]:
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_failed(team, member, None)
-                logger.warning(f"Initial payment failed notification sent for team {team.key}")
+                logger.warning("Initial payment failed notification sent")
 
-        logger.info(f"Updated subscription status for team {team.key} to {subscription.status}")
+        logger.info(f"Updated subscription status to {subscription.status}")
 
     except Team.DoesNotExist:
-        logger.error(f"No team found for subscription {subscription.id}")
-        raise StripeError(f"No team found for subscription {subscription.id}")
+        logger.error("No team found for subscription")
+        raise StripeError("No team found for subscription")
     except Exception as e:
         logger.error(f"Error processing subscription update: {str(e)}")
         raise StripeError(f"Error processing subscription update: {str(e)}")
@@ -503,7 +493,7 @@ def handle_subscription_deleted(subscription, event=None):
         last_processed_id = billing_limits.get("last_processed_webhook_id")
 
         if last_processed_id == webhook_id:
-            logger.info(f"Webhook already processed for deleted subscription {subscription.id}, skipping")
+            logger.info("Webhook already processed for deleted subscription, skipping")
             return
 
         invalidate_subscription_cache(subscription.id, team.key)
@@ -512,7 +502,7 @@ def handle_subscription_deleted(subscription, event=None):
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
 
         if cancel_at_period_end and scheduled_downgrade_plan:
-            logger.info(f"Processing scheduled downgrade for team {team.key}")
+            logger.info("Processing scheduled downgrade")
 
             try:
                 target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
@@ -571,14 +561,12 @@ def handle_subscription_deleted(subscription, event=None):
                         team.billing_plan_limits = existing_limits
                         team.save()
 
-                    logger.warning(
-                        f"Downgrade blocked for team {team.key} due to exceeded limits: {', '.join(exceeded_resources)}"
-                    )
+                    logger.warning(f"Downgrade blocked due to exceeded limits: {', '.join(exceeded_resources)}")
 
                     team_owners = Member.objects.filter(team=team, role="owner")
                     for member in team_owners:
                         email_notifications.notify_subscription_ended(team, member)
-                        logger.info(f"Subscription ended notification sent for team {team.key}")
+                        logger.info("Subscription ended notification sent")
                 else:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -607,12 +595,12 @@ def handle_subscription_deleted(subscription, event=None):
                     if target_plan.key == BillingPlan.KEY_COMMUNITY:
                         Component.objects.filter(team=team).update(is_public=True)
 
-                    logger.info(f"Completed downgrade for team {team.key} to {target_plan.key}")
+                    logger.info(f"Completed downgrade to {target_plan.key}")
 
                     team_owners = Member.objects.filter(team=team, role="owner")
                     for member in team_owners:
                         email_notifications.notify_subscription_ended(team, member)
-                        logger.info(f"Subscription ended notification sent for team {team.key}")
+                        logger.info("Subscription ended notification sent")
         else:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
@@ -626,9 +614,9 @@ def handle_subscription_deleted(subscription, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_subscription_ended(team, member)
-            logger.info(f"Subscription ended notification sent for team {team.key}")
+            logger.info("Subscription ended notification sent")
 
-        logger.info(f"Subscription canceled for team {team.key}")
+        logger.info("Subscription canceled")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {subscription.id}")
@@ -673,9 +661,9 @@ def handle_payment_failed(invoice, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_payment_failed(team, member, invoice.id)
-            logger.warning(f"Payment failed notification sent for team {team.key}")
+            logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
 
-        logger.warning(f"Payment failed for team {team.key}")
+        logger.warning("Payment failed")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
@@ -736,7 +724,7 @@ def handle_payment_succeeded(invoice, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_payment_succeeded(team, member)
-            logger.info(f"Payment successful notification sent for team {team.key}")
+            logger.info("Payment successful notification sent")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
@@ -797,20 +785,15 @@ def handle_checkout_completed(session):
         existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
 
         if existing_subscription_id and existing_subscription_id != session.subscription:
-            logger.info(
-                "Cancelling old subscription for team %s to prevent double billing (new sub: %s)",
-                team_key,
-                session.subscription,
-            )
+            logger.info("Cancelling old subscription to prevent double billing")
             try:
                 stripe_client.cancel_subscription(existing_subscription_id)
-                logger.info(f"Successfully cancelled old subscription for team {team_key}")
+                logger.info("Successfully cancelled old subscription")
             except StripeError as e:
                 logger.critical(
-                    "CRITICAL: Failed to cancel old subscription for team %s: %s. "
+                    "CRITICAL: Failed to cancel old subscription: %s. "
                     "Cannot proceed with checkout - both subscriptions would be active. "
                     "MANUAL INTERVENTION REQUIRED immediately.",
-                    team.key,
                     e,
                 )
                 raise StripeError(
@@ -819,9 +802,8 @@ def handle_checkout_completed(session):
                 )
             except Exception as e:
                 logger.critical(
-                    "CRITICAL: Unexpected error cancelling old subscription for team %s: %s. "
+                    "CRITICAL: Unexpected error cancelling old subscription: %s. "
                     "Cannot proceed with checkout - both subscriptions would be active.",
-                    team.key,
                     e,
                 )
                 raise StripeError(
@@ -941,7 +923,7 @@ def handle_price_updated(price, event=None):
             logger.warning(f"Errors syncing prices for plan {plan.key} after price update: {results['errors']}")
 
     except Exception as e:
-        logger.exception(f"Error processing price update: {str(e)}")
+        logger.error(f"Error processing price update: {str(e)}")
         raise StripeError(f"Error processing price update: {str(e)}")
 
 
@@ -970,5 +952,5 @@ def stripe_webhook(request):
 
         return HttpResponse(status=200)
     except Exception as e:
-        logger.exception(f"Error processing webhook: {str(e)}")
+        logger.error(f"Error processing webhook: {str(e)}")
         return HttpResponse(status=500)

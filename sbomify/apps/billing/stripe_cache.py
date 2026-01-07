@@ -63,7 +63,7 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str = None):
     if team_key:
         cache_key = f"stripe_sub_{subscription_id}_{team_key}"
         cache.delete(cache_key)
-        logger.debug(f"Invalidated cache for subscription, team {team_key}")
+        logger.debug("Invalidated cache for subscription")
     else:
         # If no team_key, we can't easily invalidate all variations
         # This is a fallback - prefer providing team_key

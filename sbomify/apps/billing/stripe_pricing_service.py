@@ -176,7 +176,7 @@ class StripePricingService:
                         ]
                     )
                 except Exception as e:
-                    logger.error(f"Failed to save synced plan data for {db_plan.key}: {e}", exc_info=True)
+                    logger.error(f"Failed to save synced plan data: {e}")
                     # Continue with other plans even if one fails
 
         return plans_pricing
@@ -306,12 +306,9 @@ class StripePricingService:
                 # 3. We can clean up orphaned customers periodically with a maintenance script
                 # 4. The constraint ensures we never have a customer_id without subscription_id in DB
 
-                logger.debug(
-                    f"Created Stripe customer {customer_id} for team {team.key}. "
-                    f"Will save to DB when checkout completes."
-                )
+                logger.debug("Created Stripe customer. Will save to DB when checkout completes.")
             except Exception as e:
-                logger.error(f"Failed to create Stripe customer for team {team.key}: {e}")
+                logger.error(f"Failed to create Stripe customer for team: {e}")
                 raise StripeError(f"Failed to create customer: {str(e)}")
 
         # Determine price ID
@@ -346,5 +343,5 @@ class StripePricingService:
         try:
             return self.stripe_client.stripe.checkout.Session.create(**session_data)
         except self.stripe_client.stripe.error.StripeError as e:
-            logger.error(f"Stripe checkout error for team {team.key}: {e}")
+            logger.error(f"Stripe checkout error: {e}")
             raise StripeError(f"Payment provider error: {str(e)}")

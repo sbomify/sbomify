@@ -120,7 +120,7 @@ class WebhookHandler:
             logger.error(f"Error processing webhook: {str(e)}")
             return HttpResponse(status=400)
         except Exception as e:
-            logger.exception(f"Unexpected error processing webhook: {str(e)}")
+            logger.error(f"Unexpected error processing webhook: {str(e)}")
             return HttpResponse(status=500)
 
     def _handle_checkout_completed(self, session):

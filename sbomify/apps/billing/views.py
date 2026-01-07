@@ -321,10 +321,7 @@ def create_portal_session(request: HttpRequest, team_key: str) -> HttpResponse:
             messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
             return redirect("billing:select_plan", team_key=team.key)
 
-        logger.debug(
-            f"Creating portal session for team {team_key}: customer={stripe_customer_id}, "
-            f"sub_status={sub_status}, cancel_at_period_end={cancel_at_period_end}, flow_type={flow_type}"
-        )
+        logger.debug(f"Creating portal session for team {team_key}")
         try:
             session = stripe_client.create_billing_portal_session(stripe_customer_id, return_url, flow_data=flow_data)
             return redirect(session.url)

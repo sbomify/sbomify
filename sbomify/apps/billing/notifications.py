@@ -112,7 +112,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
         invalidate_subscription_cache(stripe_subscription_id, team.key)
         team.billing_plan_limits = billing_limits
         team.save()
-        logger.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+        logger.info("User reactivated subscription, cleared scheduled downgrade")
         return None
 
     # Still scheduled, check if usage exceeds target plan limits

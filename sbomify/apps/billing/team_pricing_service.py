@@ -74,9 +74,9 @@ class TeamPricingService:
                     # valid_billing_relationship constraint requires both to be set.
                     # Let's rely on _fetch_invoice_amount to update the limits if we pass the ID.
             except StripeError as e:
-                logger.error(f"Failed to recover subscription ID for team {team.key}: {e}")
+                logger.error(f"Failed to recover subscription ID for team: {e}")
             except Exception as e:
-                logger.exception(f"Unexpected error recovering subscription ID for team {team.key}: {e}")
+                logger.error(f"Unexpected error recovering subscription ID for team: {e}")
 
         # Community plan is always free
         if billing_plan == "community":
@@ -202,7 +202,7 @@ class TeamPricingService:
                     if amount is None:
                         amount = 0.0  # Default if paid is None but invoice exists?
             except Exception as e:
-                logger.warning(f"Failed to fetch invoice details for subscription {subscription_id}: {e}")
+                logger.warning(f"Failed to fetch invoice details: {e}")
 
             # Cache what we found
             from sbomify.apps.teams.models import Team
@@ -255,9 +255,9 @@ class TeamPricingService:
             return amount, currency, next_billing_date
 
         except StripeError as e:
-            logger.error(f"Failed to fetch subscription for team {team.key}: {e}")
+            logger.error(f"Failed to fetch subscription for team: {e}")
         except Exception as e:
-            logger.exception(f"Unexpected error fetching subscription for team {team.key}: {e}")
+            logger.error(f"Unexpected error fetching subscription for team: {e}")
 
         return None, "usd", None
 
