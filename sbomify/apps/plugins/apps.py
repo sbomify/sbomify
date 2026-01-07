@@ -57,7 +57,7 @@ class PluginsConfig(AppConfig):
                     "display_name": "FDA Medical Device Cybersecurity (2025)",
                     "description": (
                         "Validates SBOMs against FDA guidance 'Cybersecurity in Medical Devices: "
-                        "Quality System Considerations and Content of Premarket Submissions' (September 2025). "
+                        "Quality System Considerations and Content of Premarket Submissions' (June 2025). "
                         "Checks for all NTIA minimum elements plus CLE (Component Lifecycle Enumeration) "
                         "data including software support status and end-of-support dates for each component."
                     ),
