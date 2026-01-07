@@ -328,13 +328,16 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
-    # Always check payment restriction first (even if billing is disabled)
+    # If billing is disabled, bypass all checks - treat all teams as enterprise
+    if not is_billing_enabled():
+        return True, "", None
+
     try:
         team = Team.objects.get(id=team_id)
     except Team.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
-    # Check for payment failure / suspended account (always enforced)
+    # Check for payment failure / suspended account
     if team.is_payment_restricted:
         return (
             False,
@@ -361,16 +364,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             team.save(update_fields=["billing_plan", "billing_plan_limits"])
             log.info(f"Set billing_plan to community for team {team.key} (was None)")
         except BillingPlan.DoesNotExist:
-            # If community plan doesn't exist and billing is disabled, allow creation
-            if not is_billing_enabled():
-                return True, "", None
             return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
-
-    # If billing is disabled but team has a billing_plan set, still enforce limits
-    # This ensures teams with plans (even if billing is disabled) respect their limits
-    # Only skip limits if billing is disabled AND no plan is set (shouldn't happen after above)
-    if not is_billing_enabled() and not team.billing_plan:
-        return True, "", None
 
     # CHECK SCHEDULED DOWNGRADE LIMITS
     billing_limits = team.billing_plan_limits or {}
