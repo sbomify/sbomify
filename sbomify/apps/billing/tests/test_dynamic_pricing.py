@@ -607,6 +607,7 @@ class TestSelectPlanTemplate(TestCase):
     def test_select_plan_template_shows_promo_message(self):
         """Test that select_plan template shows promo message if available."""
         self.business_plan.promo_message = "Limited time offer!"
+        self.business_plan.discount_percent_monthly = 10
         self.business_plan.save()
 
         from django.test import Client

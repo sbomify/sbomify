@@ -3,8 +3,11 @@ Centralized utility for syncing subscription data from Stripe to database.
 This ensures we always have up-to-date subscription information regardless of which page the user visits.
 """
 
+from decimal import Decimal
+
 from django.utils import timezone
 
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Team
 from sbomify.logging import getLogger
 
@@ -480,3 +483,271 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
         return period_end_date.isoformat()
 
     return None
+
+
+def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
+    """
+    Find Stripe product and prices for a plan (read-only from Stripe).
+
+    Args:
+        plan: BillingPlan instance
+
+    Returns:
+        Tuple of (product_id, monthly_price_id, annual_price_id) or (None, None, None) if not found
+    """
+    try:
+        # Find product - try stored ID first
+        product = None
+        if plan.stripe_product_id:
+            try:
+                product = stripe_client.stripe.Product.retrieve(plan.stripe_product_id)
+                logger.debug(f"Found existing product {product.id} for plan {plan.key}")
+            except StripeError:
+                logger.debug(f"Product {plan.stripe_product_id} not found in Stripe")
+
+        if not product:
+            # Try to find by name (case-insensitive match)
+            products = stripe_client.stripe.Product.list(active=True, limit=100).data
+            product_match = next((p for p in products if p.name.lower() == plan.name.lower()), None)
+            if product_match:
+                product = product_match
+                logger.debug(f"Found product by name {product.id} for plan {plan.key}")
+            else:
+                logger.warning(f"No matching Stripe product found for plan {plan.key}")
+                return (None, None, None)
+
+        # Get existing prices for this product, sorted by creation date (oldest first)
+        # This ensures we pick the original/canonical price if duplicates exist
+        existing_prices = sorted(
+            stripe_client.stripe.Price.list(product=product.id, active=True, limit=100).data,
+            key=lambda p: getattr(p, "created", 0) or 0,
+        )
+
+        monthly_price_id = plan.stripe_price_monthly_id
+        annual_price_id = plan.stripe_price_annual_id
+
+        # Find monthly price from Stripe (Stripe is source of truth - read only)
+        # Takes the oldest monthly price (most stable/canonical)
+        if not monthly_price_id:
+            monthly_price = next(
+                (p for p in existing_prices if p.recurring and p.recurring.interval == "month"),
+                None,
+            )
+
+            if monthly_price:
+                monthly_price_id = monthly_price.id
+                amount = monthly_price.unit_amount / 100 if monthly_price.unit_amount else 0
+                logger.debug(f"Found monthly price {monthly_price_id} (${amount}) for plan {plan.key}")
+            else:
+                logger.warning(f"No monthly price found in Stripe for plan {plan.key}")
+
+        # Find annual price from Stripe (Stripe is source of truth - read only)
+        # Takes the oldest annual price (most stable/canonical)
+        if not annual_price_id:
+            annual_price = next(
+                (p for p in existing_prices if p.recurring and p.recurring.interval == "year"),
+                None,
+            )
+
+            if annual_price:
+                annual_price_id = annual_price.id
+                amount = annual_price.unit_amount / 100 if annual_price.unit_amount else 0
+                logger.debug(f"Found annual price {annual_price_id} (${amount}) for plan {plan.key}")
+            else:
+                logger.warning(f"No annual price found in Stripe for plan {plan.key}")
+
+        return (product.id, monthly_price_id, annual_price_id)
+
+    except StripeError as e:
+        logger.error(f"Error finding/creating Stripe product/prices for plan {plan.key}: {e}")
+        return (None, None, None)
+    except Exception as e:
+        logger.exception(f"Unexpected error finding/creating Stripe product/prices for plan {plan.key}: {e}")
+        return (None, None, None)
+
+
+def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
+    """
+    Sync plan prices from Stripe to database.
+
+    This function:
+    1. Fetches all BillingPlan objects (or a specific plan if plan_key is provided)
+    2. For plans without Stripe IDs but with prices, finds or creates Stripe products/prices
+    3. For each plan with Stripe price IDs, fetches the current price from Stripe
+    4. Updates monthly_price and annual_price fields in the database
+    5. Updates last_synced_at timestamp
+
+    Args:
+        plan_key: Optional plan key to sync a specific plan. If None, syncs all plans.
+
+    Returns:
+        Dictionary with sync results: {
+            'synced': int,  # Number of plans successfully synced
+            'failed': int,  # Number of plans that failed to sync
+            'skipped': int,  # Number of plans skipped (no prices and no Stripe IDs)
+            'errors': list   # List of error messages
+        }
+    """
+    from django.db import transaction
+
+    results = {"synced": 0, "failed": 0, "skipped": 0, "errors": []}
+
+    # Get plans to sync
+    if plan_key:
+        plans = BillingPlan.objects.filter(key=plan_key)
+    else:
+        # Sync all plans except community (which doesn't have Stripe prices)
+        plans = BillingPlan.objects.exclude(key=BillingPlan.KEY_COMMUNITY)
+
+    logger.info(f"Starting price sync for {plans.count()} plan(s)")
+
+    for plan in plans:
+        try:
+            logger.debug(
+                f"Processing plan {plan.key}: "
+                f"monthly_price={plan.monthly_price}, "
+                f"annual_price={plan.annual_price}, "
+                f"stripe_product_id={plan.stripe_product_id}, "
+                f"stripe_price_monthly_id={plan.stripe_price_monthly_id}, "
+                f"stripe_price_annual_id={plan.stripe_price_annual_id}"
+            )
+
+            # Check if plan needs Stripe IDs (either has prices but no IDs, or no prices and no IDs - "fresh start")
+            # We want to try finding/creating Stripe objects for any plan that lacks IDs
+            has_stripe_ids = plan.stripe_price_monthly_id or plan.stripe_price_annual_id
+
+            if not has_stripe_ids:
+                logger.info(f"Plan {plan.key} has no Stripe IDs, attempting to find or create Stripe product/prices")
+                product_id, monthly_id, annual_id = _find_stripe_product_and_prices(plan)
+                if product_id:
+                    # Update plan with Stripe IDs AND fetch prices from Stripe
+                    # We must set prices before saving to pass validation
+                    with transaction.atomic():
+                        plan._skip_team_update = True
+                        plan.stripe_product_id = product_id
+                        update_fields = ["stripe_product_id"]
+
+                        if monthly_id:
+                            plan.stripe_price_monthly_id = monthly_id
+                            update_fields.append("stripe_price_monthly_id")
+                            try:
+                                monthly_stripe_price = stripe_client.get_price(monthly_id)
+                                if monthly_stripe_price and monthly_stripe_price.unit_amount is not None:
+                                    plan.monthly_price = Decimal(monthly_stripe_price.unit_amount) / Decimal("100")
+                                    update_fields.append("monthly_price")
+                                    logger.debug(f"Set monthly_price to ${plan.monthly_price} from Stripe")
+                            except StripeError as e:
+                                logger.warning(f"Could not fetch monthly price for {monthly_id}: {e}")
+
+                        if annual_id:
+                            plan.stripe_price_annual_id = annual_id
+                            update_fields.append("stripe_price_annual_id")
+                            try:
+                                annual_stripe_price = stripe_client.get_price(annual_id)
+                                if annual_stripe_price and annual_stripe_price.unit_amount is not None:
+                                    plan.annual_price = Decimal(annual_stripe_price.unit_amount) / Decimal("100")
+                                    update_fields.append("annual_price")
+                                    logger.debug(f"Set annual_price to ${plan.annual_price} from Stripe")
+                            except StripeError as e:
+                                logger.warning(f"Could not fetch annual price for {annual_id}: {e}")
+
+                        plan.save(update_fields=update_fields)
+                        logger.info(
+                            f"Updated plan {plan.key} with Stripe IDs: "
+                            f"product={product_id}, monthly={monthly_id}, "
+                            f"annual={annual_id}, prices: monthly=${plan.monthly_price}, "
+                            f"annual=${plan.annual_price}"
+                        )
+                    # Refresh plan from DB to get updated IDs
+                    plan.refresh_from_db()
+                    # Recalculate has_stripe_ids after refresh
+                    has_stripe_ids = plan.stripe_price_monthly_id or plan.stripe_price_annual_id
+                else:
+                    # If we couldn't find/create product, we can't do anything else
+                    error_msg = f"Failed to find or create Stripe product/prices for plan {plan.key}"
+                    logger.warning(error_msg)
+                    results["errors"].append(error_msg)
+                    results["failed"] += 1
+                    continue
+
+            # Skip plans that still have no Stripe IDs
+            if not has_stripe_ids:
+                logger.debug(f"Skipping plan {plan.key}: could not resolve Stripe price IDs")
+                results["skipped"] += 1
+                continue
+
+            updated = False
+            price_updates = {}
+
+            # Sync monthly price
+            if plan.stripe_price_monthly_id:
+                try:
+                    stripe_price = stripe_client.get_price(plan.stripe_price_monthly_id)
+                    if stripe_price and stripe_price.unit_amount is not None:
+                        stripe_amount = Decimal(stripe_price.unit_amount) / Decimal("100")
+                        # Compare with proper Decimal handling
+                        current_price = Decimal(str(plan.monthly_price)) if plan.monthly_price is not None else None
+                        if current_price is None or abs(current_price - stripe_amount) > Decimal("0.01"):
+                            price_updates["monthly_price"] = stripe_amount
+                            updated = True
+                            logger.info(f"Plan {plan.key}: monthly price update: ${current_price} -> ${stripe_amount}")
+                        else:
+                            logger.debug(f"Plan {plan.key}: monthly price already matches: ${stripe_amount}")
+                except StripeError as e:
+                    error_msg = f"Failed to fetch monthly price for plan {plan.key}: {e}"
+                    logger.warning(error_msg)
+                    results["errors"].append(error_msg)
+
+            # Sync annual price
+            if plan.stripe_price_annual_id:
+                try:
+                    stripe_price = stripe_client.get_price(plan.stripe_price_annual_id)
+                    if stripe_price and stripe_price.unit_amount is not None:
+                        stripe_amount = Decimal(stripe_price.unit_amount) / Decimal("100")
+                        # Compare with proper Decimal handling
+                        current_price = Decimal(str(plan.annual_price)) if plan.annual_price is not None else None
+                        if current_price is None or abs(current_price - stripe_amount) > Decimal("0.01"):
+                            price_updates["annual_price"] = stripe_amount
+                            updated = True
+                            logger.info(f"Plan {plan.key}: annual price update: ${current_price} -> ${stripe_amount}")
+                        else:
+                            logger.debug(f"Plan {plan.key}: annual price already matches: ${stripe_amount}")
+                except StripeError as e:
+                    error_msg = f"Failed to fetch annual price for plan {plan.key}: {e}"
+                    logger.warning(error_msg)
+                    results["errors"].append(error_msg)
+
+            # Always update last_synced_at, and update prices if they changed
+            with transaction.atomic():
+                # Use update_fields to skip team updates during price sync
+                plan._skip_team_update = True
+                for field, value in price_updates.items():
+                    setattr(plan, field, value)
+                plan.last_synced_at = timezone.now()
+
+                # Build update_fields list
+                update_fields = ["last_synced_at"]
+                if price_updates:
+                    update_fields.extend(price_updates.keys())
+
+                plan.save(update_fields=update_fields)
+
+                if updated:
+                    logger.info(f"Successfully synced prices for plan {plan.key}: {price_updates}")
+                else:
+                    logger.info(
+                        f"Plan {plan.key}: prices already up to date "
+                        f"(monthly=${plan.monthly_price}, annual=${plan.annual_price})"
+                    )
+                results["synced"] += 1
+
+        except Exception as e:
+            error_msg = f"Unexpected error syncing prices for plan {plan.key}: {e}"
+            logger.exception(error_msg)
+            results["errors"].append(error_msg)
+            results["failed"] += 1
+
+    logger.info(
+        f"Price sync completed: {results['synced']} synced, {results['failed']} failed, {results['skipped']} skipped"
+    )
+    return results

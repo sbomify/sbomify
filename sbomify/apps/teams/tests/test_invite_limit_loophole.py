@@ -11,7 +11,7 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     # 1. Setup team and plan with max_users=2
     plan = BillingPlan.objects.create(
         key="community",
-        name="Community Plan",
+        name="Community",
         description="Community Plan",
         max_users=2
     )

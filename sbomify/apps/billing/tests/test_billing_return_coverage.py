@@ -72,6 +72,9 @@ class TestBillingReturnIdempotency:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
@@ -100,6 +103,7 @@ class TestBillingReturnIdempotency:
         messages = list(get_messages(response.wsgi_request))
         assert any("already active" in str(m) for m in messages)
 
+    @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
@@ -108,6 +112,7 @@ class TestBillingReturnIdempotency:
         mock_get_checkout_session,
         mock_get_subscription,
         mock_get_customer,
+        mock_sync,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -142,6 +147,9 @@ class TestBillingReturnIdempotency:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
@@ -209,6 +217,9 @@ class TestBillingReturnEdgeCases:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
@@ -260,6 +271,9 @@ class TestBillingReturnEdgeCases:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
@@ -280,6 +294,7 @@ class TestBillingReturnEdgeCases:
         messages = list(get_messages(response.wsgi_request))
         assert any("configuration error" in str(m).lower() for m in messages)
 
+    @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
@@ -288,6 +303,7 @@ class TestBillingReturnEdgeCases:
         mock_get_checkout_session,
         mock_get_subscription,
         mock_get_customer,
+        mock_sync,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -315,6 +331,9 @@ class TestBillingReturnEdgeCases:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
@@ -367,6 +386,9 @@ class TestBillingReturnEdgeCases:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
+        mock_subscription.cancel_at_period_end = False
         mock_get_subscription.return_value = mock_subscription
 
         mock_customer = MagicMock()
@@ -433,6 +455,8 @@ class TestBillingReturnRaceConditions:
         mock_item.plan = mock_plan
         mock_subscription.items = MagicMock()
         mock_subscription.items.data = [mock_item]
+        mock_subscription.cancel_at = None
+        mock_subscription.current_period_end = 1735689600
         mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data

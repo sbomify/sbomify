@@ -882,6 +882,78 @@ def handle_checkout_completed(session):
 
 
 @_handle_stripe_error
+def handle_price_updated(price, event=None):
+    """Handle price update/created events from Stripe.
+
+    When a price is updated or created in Stripe, sync it to the corresponding BillingPlan.
+    Also handles cases where plans don't have Stripe IDs yet by finding matching plans.
+
+    Args:
+        price: Stripe price object
+        event: Optional Stripe event object for idempotency checking
+    """
+    from .stripe_sync import sync_plan_prices_from_stripe
+
+    try:
+        price_id = price.id if hasattr(price, "id") else price.get("id")
+        price_obj = price if hasattr(price, "product") else None
+
+        # Find the plan that uses this price ID
+        plan = BillingPlan.objects.filter(
+            models.Q(stripe_price_monthly_id=price_id) | models.Q(stripe_price_annual_id=price_id)
+        ).first()
+
+        # If not found by price ID, try to find by product
+        if not plan and price_obj:
+            try:
+                product_id = (
+                    price_obj.product
+                    if isinstance(price_obj.product, str)
+                    else price_obj.product.id
+                    if hasattr(price_obj.product, "id")
+                    else None
+                )
+                if product_id:
+                    # First try by stored product ID
+                    plan = BillingPlan.objects.filter(stripe_product_id=product_id).first()
+
+                    # If not found, fetch the product from Stripe and match by name
+                    if not plan:
+                        try:
+                            product = stripe.Product.retrieve(product_id)
+                            if product and product.name:
+                                plan = BillingPlan.objects.filter(name__iexact=product.name).first()
+                                if plan:
+                                    logger.info(f"Matched plan {plan.key} by product name '{product.name}'")
+                        except Exception as e:
+                            logger.debug(f"Error fetching product for name matching: {e}")
+
+            except Exception as e:
+                logger.debug(f"Error trying to find plan by product: {e}")
+
+        if not plan:
+            logger.debug(
+                f"Price {price_id} updated but no matching plan found. "
+                "This is normal for prices not yet associated with plans."
+            )
+            return
+
+        logger.info(f"Price {price_id} updated, syncing plan {plan.key}")
+
+        # Sync the plan prices (this will update the specific plan and set Stripe IDs if missing)
+        results = sync_plan_prices_from_stripe(plan_key=plan.key)
+
+        if results["synced"] > 0:
+            logger.info(f"Successfully synced prices for plan {plan.key} after price update")
+        elif results["errors"]:
+            logger.warning(f"Errors syncing prices for plan {plan.key} after price update: {results['errors']}")
+
+    except Exception as e:
+        logger.exception(f"Error processing price update: {str(e)}")
+        raise StripeError(f"Error processing price update: {str(e)}")
+
+
+@_handle_stripe_error
 def stripe_webhook(request):
     """Handle Stripe webhook events."""
     event = verify_stripe_webhook(request)
@@ -899,6 +971,8 @@ def stripe_webhook(request):
             handle_payment_failed(event.data.object, event=event)
         elif event.type == "invoice.payment_succeeded":
             handle_payment_succeeded(event.data.object, event=event)
+        elif event.type in ["price.updated", "price.created"]:
+            handle_price_updated(event.data.object, event=event)
         else:
             logger.info(f"Unhandled event type: {event.type}")
 

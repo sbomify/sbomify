@@ -564,6 +564,8 @@ def select_plan(request: HttpRequest, team_key: str) -> HttpResponse:
 
     for plan in plans:
         plan.stripe_pricing = stripe_pricing_data.get(plan.key, {})
+        if plan.promo_message and "promo_message" not in plan.stripe_pricing:
+            plan.stripe_pricing["promo_message"] = plan.promo_message
 
         # Check if downgrade to this plan would exceed limits
         # Only check if user is subscribed and trying to downgrade (lower plan key order)

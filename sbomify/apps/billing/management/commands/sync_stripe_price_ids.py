@@ -80,7 +80,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"\nProcessing plan: {plan.name} ({plan.key})")
 
                 try:
-                    product = self._get_or_create_product(plan, existing_products, dry_run)
+                    product = self._find_product(plan, existing_products, dry_run)
                     if not product:
                         continue
 
@@ -118,8 +118,8 @@ class Command(BaseCommand):
             if error_count > 0:
                 self.stdout.write(self.style.WARNING(f"Encountered errors for {error_count} plan(s)"))
 
-    def _get_or_create_product(self, plan, existing_products, dry_run):
-        """Get existing product or create new one."""
+    def _find_product(self, plan, existing_products, dry_run):
+        """Find existing product in Stripe (read-only, no creation)."""
         product_name = plan.name
 
         # Check if product exists by name
@@ -137,16 +137,9 @@ class Command(BaseCommand):
             except stripe.error.InvalidRequestError:
                 pass
 
-        if dry_run:
-            self.stdout.write(self.style.WARNING(f"  Would create new product: {product_name}"))
-            return type("MockProduct", (), {"id": f"prod_new_{plan.key}"})()
-
-        product = stripe.Product.create(
-            name=product_name,
-            description=plan.description or "",
-        )
-        self.stdout.write(self.style.SUCCESS(f"  Created new product {product_name} ({product.id})"))
-        return product
+        # Product not found - don't create (read-only)
+        self.stdout.write(self.style.WARNING(f"  No product found for {product_name} in Stripe"))
+        return None
 
     def _sync_prices(self, plan, product, force, dry_run):
         """Sync price IDs from existing Stripe prices."""

@@ -265,7 +265,7 @@ class TestStripeClient:
         result = self.client.get_subscription("sub_123")
 
         assert result == mock_subscription
-        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent"])
+        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent", "items.data.price"])
 
     # Checkout session tests
     @patch("stripe.checkout.Session.create")

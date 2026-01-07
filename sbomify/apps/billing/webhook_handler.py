@@ -109,6 +109,8 @@ class WebhookHandler:
                 self._handle_payment_failed(event.data.object)
             elif event.type == "invoice.payment_succeeded":
                 self._handle_payment_succeeded(event.data.object)
+            elif event.type in ["price.updated", "price.created"]:
+                self._handle_price_updated(event.data.object)
             else:
                 logger.info(f"Unhandled event type: {event.type}")
 
@@ -150,3 +152,9 @@ class WebhookHandler:
         from .billing_processing import handle_payment_succeeded
 
         handle_payment_succeeded(invoice)
+
+    def _handle_price_updated(self, price):
+        """Handle price updated event."""
+        from .billing_processing import handle_price_updated
+
+        handle_price_updated(price)
