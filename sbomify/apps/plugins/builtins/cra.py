@@ -51,6 +51,9 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# Pre-compiled email regex pattern for SPDX creator field validation
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
 
 class CRACompliancePlugin(AssessmentPlugin):
     """EU Cyber Resilience Act (CRA) SBOM compliance plugin.
@@ -423,14 +426,11 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
-        # Email regex pattern for more robust detection
-        email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
-
         # Check creators for contact information (email or URL)
         creators = creation_info.get("creators", [])
         for creator in creators:
-            # Check for email in creator string using regex
-            if ("Organization:" in creator or "Person:" in creator) and email_pattern.search(creator):
+            # Check for email in creator string using pre-compiled regex
+            if ("Organization:" in creator or "Person:" in creator) and EMAIL_PATTERN.search(creator):
                 return True
 
         # Check document-level annotations for vulnerability contact

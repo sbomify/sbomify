@@ -30,7 +30,14 @@ export function initAssessmentResultsCard(): void {
 
 /**
  * Toggle visibility of hidden packages in finding descriptions.
- * Called from onclick handler in template-rendered HTML.
+ *
+ * This function is exposed globally on {@link window} and is invoked from
+ * inline `onclick` handlers in template-rendered HTML (see plugins_extras.py
+ * format_finding_description filter).
+ *
+ * @param button - The toggle button element that was clicked. This should be
+ *   the button inside a `.missing-packages` container whose visibility state
+ *   will be toggled.
  */
 function togglePackages(button: HTMLButtonElement): void {
   const container = button.closest('.missing-packages')
