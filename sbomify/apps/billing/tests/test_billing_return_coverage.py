@@ -10,7 +10,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.billing.stripe_client import StripeError
+
 from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     business_plan,
     sample_user,

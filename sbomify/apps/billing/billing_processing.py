@@ -211,7 +211,7 @@ def _handle_stripe_error(func):
             logger.error(f"Stripe error: {str(e)}")
             raise StripeError(f"Stripe error: {str(e)}")
         except Exception as e:
-            logger.exception(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error: {str(e)}")
             raise StripeError(f"Unexpected error: {str(e)}")
 
     return wrapper
@@ -273,7 +273,7 @@ def handle_trial_period(subscription, team):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_trial_ending(team, member, days_remaining)
-                logger.info(f"Trial ending notification sent for team {team.key} to {member.user.email}")
+                logger.info(f"Trial ending notification sent for team {team.key}")
 
         if days_remaining <= 0:
             with transaction.atomic():
@@ -285,7 +285,7 @@ def handle_trial_period(subscription, team):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_trial_expired(team, member)
-                logger.info(f"Trial expired notification sent for team {team.key} to {member.user.email}")
+                logger.info(f"Trial expired notification sent for team {team.key}")
 
         return True
     return False
@@ -461,25 +461,25 @@ def handle_subscription_updated(subscription, event=None):
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_past_due(team, member)
-                logger.warning(f"Payment past due notification sent for team {team.key} to {member.user.email}")
+                logger.warning(f"Payment past due notification sent for team {team.key}")
 
         elif subscription.status == "active":
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_succeeded(team, member)
-                logger.info(f"Payment restored notification sent for team {team.key} to {member.user.email}")
+                logger.info(f"Payment restored notification sent for team {team.key}")
 
         elif subscription.status == "canceled":
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_subscription_cancelled(team, member)
-                logger.info(f"Subscription cancelled notification sent for team {team.key} to {member.user.email}")
+                logger.info(f"Subscription cancelled notification sent for team {team.key}")
 
         elif subscription.status in ["incomplete", "incomplete_expired"]:
             team_owners = Member.objects.filter(team=team, role="owner")
             for member in team_owners:
                 email_notifications.notify_payment_failed(team, member, None)
-                logger.warning(f"Initial payment failed notification sent for team {team.key} to {member.user.email}")
+                logger.warning(f"Initial payment failed notification sent for team {team.key}")
 
         logger.info(f"Updated subscription status for team {team.key} to {subscription.status}")
 
@@ -487,7 +487,7 @@ def handle_subscription_updated(subscription, event=None):
         logger.error(f"No team found for subscription {subscription.id}")
         raise StripeError(f"No team found for subscription {subscription.id}")
     except Exception as e:
-        logger.exception(f"Error processing subscription update: {str(e)}")
+        logger.error(f"Error processing subscription update: {str(e)}")
         raise StripeError(f"Error processing subscription update: {str(e)}")
 
 
@@ -583,7 +583,7 @@ def handle_subscription_deleted(subscription, event=None):
                     team_owners = Member.objects.filter(team=team, role="owner")
                     for member in team_owners:
                         email_notifications.notify_subscription_ended(team, member)
-                        logger.info(f"Subscription ended notification sent for team {team.key} to {member.user.email}")
+                        logger.info(f"Subscription ended notification sent for team {team.key}")
                 else:
                     with transaction.atomic():
                         team = Team.objects.select_for_update().get(pk=team.pk)
@@ -617,7 +617,7 @@ def handle_subscription_deleted(subscription, event=None):
                     team_owners = Member.objects.filter(team=team, role="owner")
                     for member in team_owners:
                         email_notifications.notify_subscription_ended(team, member)
-                        logger.info(f"Subscription ended notification sent for team {team.key} to {member.user.email}")
+                        logger.info(f"Subscription ended notification sent for team {team.key}")
         else:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
@@ -631,7 +631,7 @@ def handle_subscription_deleted(subscription, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_subscription_ended(team, member)
-            logger.info(f"Subscription ended notification sent for team {team.key} to {member.user.email}")
+            logger.info(f"Subscription ended notification sent for team {team.key}")
 
         logger.info(f"Subscription canceled for team {team.key}")
 
@@ -678,7 +678,7 @@ def handle_payment_failed(invoice, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_payment_failed(team, member, invoice.id)
-            logger.warning(f"Payment failed notification sent for team {team.key} to {member.user.email}")
+            logger.warning(f"Payment failed notification sent for team {team.key}")
 
         logger.warning(f"Payment failed for team {team.key}")
 
@@ -741,7 +741,7 @@ def handle_payment_succeeded(invoice, event=None):
         team_owners = Member.objects.filter(team=team, role="owner")
         for member in team_owners:
             email_notifications.notify_payment_succeeded(team, member)
-            logger.info(f"Payment successful notification sent for team {team.key} to {member.user.email}")
+            logger.info(f"Payment successful notification sent for team {team.key}")
 
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")

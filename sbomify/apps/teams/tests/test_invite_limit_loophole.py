@@ -9,7 +9,7 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     """Test that pending invitations count towards the user limit."""
     
     # 1. Setup team and plan with max_users=2
-    plan = BillingPlan.objects.create(
+    BillingPlan.objects.create(
         key="community",
         name="Community",
         description="Community Plan",

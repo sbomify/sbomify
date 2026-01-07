@@ -46,7 +46,7 @@ class TeamPricingService:
         # Fetch billing plan if not provided
         if billing_plan_obj is None:
             try:
-                billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
+                BillingPlan.objects.get(key=billing_plan)
             except BillingPlan.DoesNotExist:
                 if billing_plan == "community":
                     return {"amount": "$0", "period": "forever", "billing_period": None}
@@ -73,8 +73,10 @@ class TeamPricingService:
                     # But better to save it now or let the fetch mechanism handle it?
                     # valid_billing_relationship constraint requires both to be set.
                     # Let's rely on _fetch_invoice_amount to update the limits if we pass the ID.
-            except Exception as e:
+            except StripeError as e:
                 logger.error(f"Failed to recover subscription ID for team {team.key}: {e}")
+            except Exception as e:
+                logger.exception(f"Unexpected error recovering subscription ID for team {team.key}: {e}")
 
         # Community plan is always free
         if billing_plan == "community":

@@ -3,7 +3,6 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_plan_prices_from_stripe

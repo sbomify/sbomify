@@ -314,7 +314,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             logger.warning(f"Failed to sync subscription {stripe_sub_id} for team {team.key}: {e}")
             return False
     except Exception as e:
-        logger.exception(f"Unexpected error syncing subscription for team {team.key}: {e}")
+        logger.error(f"Unexpected error syncing subscription for team {team.key}: {e}")
         return False
 
 
@@ -373,7 +373,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                     try:
                         billing_cycle_anchor = subscription["billing_cycle_anchor"]
                     except (KeyError, TypeError):
-                        pass
+                        pass  # Expected if data missing
 
             logger.debug(f"Priority 3: billing_cycle_anchor={billing_cycle_anchor} for subscription {subscription_id}")
 
@@ -385,7 +385,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                     try:
                         items = subscription["items"]
                     except (KeyError, TypeError):
-                        pass
+                        pass  # Expected if data missing
 
                 logger.debug(f"Priority 3: items found, type={type(items)} for subscription {subscription_id}")
 
@@ -562,7 +562,7 @@ def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple:
         logger.error(f"Error finding/creating Stripe product/prices for plan {plan.key}: {e}")
         return (None, None, None)
     except Exception as e:
-        logger.exception(f"Unexpected error finding/creating Stripe product/prices for plan {plan.key}: {e}")
+        logger.error(f"Unexpected error finding/creating Stripe product/prices for plan {plan.key}: {e}")
         return (None, None, None)
 
 
@@ -793,7 +793,7 @@ def sync_plan_prices_from_stripe(plan_key: str = None) -> dict:
 
         except Exception as e:
             error_msg = f"Unexpected error syncing prices for plan {plan.key}: {e}"
-            logger.exception(error_msg)
+            logger.error(error_msg)
             results["errors"].append(error_msg)
             results["failed"] += 1
 

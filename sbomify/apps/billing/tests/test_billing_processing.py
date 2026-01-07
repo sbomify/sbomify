@@ -437,7 +437,7 @@ def test_billing_enabled_checks():
 def test_payment_failure_grace_period():
     """Test grace period logic for payment failures."""
     # Create test plan
-    plan = BillingPlan.objects.create(key="business", name="Business", max_products=10)
+    BillingPlan.objects.create(key="business", name="Business", max_products=10)
     
     # Create team with past_due status
     team = Team.objects.create(

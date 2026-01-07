@@ -217,7 +217,7 @@ def billing_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
                 return redirect("billing:select_plan", team_key=team_key)
     else:
         try:
-            customer = stripe_client.get_customer(customer_id)
+            stripe_client.get_customer(customer_id)
         except StripeError:
             # Customer doesn't exist, create new one
             customer = stripe_client.create_customer(

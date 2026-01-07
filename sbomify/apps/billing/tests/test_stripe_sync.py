@@ -4,17 +4,15 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.core.cache import cache
 from django.utils import timezone
 
-from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.stripe_client import StripeError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 
 # Import shared fixtures
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
-    team_with_business_plan,
     sample_user,
+    team_with_business_plan,
 )
 
 pytestmark = pytest.mark.django_db
@@ -293,8 +291,9 @@ class TestSyncIntegration:
     @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
     def test_context_processor_calls_sync(self, mock_sync, sample_user, team_with_subscription):
         """Test that context processor calls sync on page load."""
-        from sbomify.apps.core.context_processors import team_context
         from django.test import RequestFactory
+
+        from sbomify.apps.core.context_processors import team_context
 
         factory = RequestFactory()
         request = factory.get("/")
@@ -314,8 +313,9 @@ class TestSyncIntegration:
         self, mock_sync, sample_user, team_with_subscription
     ):
         """Test that context processor handles sync failure gracefully."""
-        from sbomify.apps.core.context_processors import team_context
         from django.test import RequestFactory
+
+        from sbomify.apps.core.context_processors import team_context
 
         factory = RequestFactory()
         request = factory.get("/")
