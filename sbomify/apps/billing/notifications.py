@@ -119,7 +119,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
     try:
         target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
     except BillingPlan.DoesNotExist:
-        logger.warning(f"Target plan {scheduled_downgrade_plan} not found for scheduled downgrade")
+        logger.warning("Target plan not found for scheduled downgrade")
         return None
 
     # Get current usage

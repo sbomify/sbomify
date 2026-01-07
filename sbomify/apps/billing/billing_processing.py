@@ -80,10 +80,7 @@ def check_billing_limits(resource_type: str):
                         try:
                             target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
                         except BillingPlan.DoesNotExist:
-                            logger.warning(
-                                f"Target plan {scheduled_downgrade_plan} not found for scheduled downgrade, "
-                                "skipping check"
-                            )
+                            logger.warning("Target plan not found for scheduled downgrade, skipping check")
                         else:
                             if resource_type == "product":
                                 current_count = Product.objects.filter(team=team).count()
@@ -138,7 +135,7 @@ def check_billing_limits(resource_type: str):
                                 return HttpResponseForbidden(msg)
 
                         except (ValueError, TypeError):
-                            logger.error(f"Invalid payment_failed_at format for team {team.key}: {failed_at_str}")
+                            logger.error(f"Invalid payment_failed_at format for team {team.key}")
                             msg = "Payment failed. Unable to verify grace period. Please contact support."
                             is_ajax = (
                                 request.headers.get("Accept") == "application/json"
@@ -248,9 +245,7 @@ def handle_trial_period(subscription, team):
                 trial_end_value = int(trial_end_value)
             except (TypeError, ValueError, AttributeError):
                 # If we can't convert it, skip trial handling
-                logger.warning(
-                    f"Could not convert trial_end to timestamp: {trial_end_value} (type: {type(trial_end_value)})"
-                )
+                logger.warning(f"Could not convert trial_end to timestamp (type: {type(trial_end_value)})")
                 return False
 
         try:
@@ -435,7 +430,7 @@ def handle_subscription_updated(subscription, event=None):
                         plan = found_plan
                     else:
                         plan_key = subscription.metadata.get("plan_key", "business")
-                        logger.warning(f"Could not find plan by price ID, falling back to metadata key: {plan_key}")
+                        logger.warning("Could not find plan by price ID, falling back to metadata key")
                         plan = BillingPlan.objects.get(key=plan_key)
 
                     team.billing_plan = plan.key
@@ -517,12 +512,12 @@ def handle_subscription_deleted(subscription, event=None):
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
 
         if cancel_at_period_end and scheduled_downgrade_plan:
-            logger.info(f"Processing scheduled downgrade for team {team.key} to {scheduled_downgrade_plan}")
+            logger.info(f"Processing scheduled downgrade for team {team.key}")
 
             try:
                 target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
             except BillingPlan.DoesNotExist:
-                logger.error(f"Target plan {scheduled_downgrade_plan} not found for scheduled downgrade")
+                logger.error("Target plan not found for scheduled downgrade")
                 with transaction.atomic():
                     team = Team.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
@@ -803,32 +798,29 @@ def handle_checkout_completed(session):
 
         if existing_subscription_id and existing_subscription_id != session.subscription:
             logger.info(
-                "Cancelling old subscription %s for team %s to prevent double billing (new sub: %s)",
-                existing_subscription_id,
+                "Cancelling old subscription for team %s to prevent double billing (new sub: %s)",
                 team_key,
                 session.subscription,
             )
             try:
                 stripe_client.cancel_subscription(existing_subscription_id)
-                logger.info(f"Successfully cancelled old subscription {existing_subscription_id} for team {team_key}")
+                logger.info(f"Successfully cancelled old subscription for team {team_key}")
             except StripeError as e:
                 logger.critical(
-                    "CRITICAL: Failed to cancel old subscription %s for team %s: %s. "
+                    "CRITICAL: Failed to cancel old subscription for team %s: %s. "
                     "Cannot proceed with checkout - both subscriptions would be active. "
                     "MANUAL INTERVENTION REQUIRED immediately.",
-                    existing_subscription_id,
                     team.key,
                     e,
                 )
                 raise StripeError(
-                    f"Cannot complete checkout: failed to cancel existing subscription {existing_subscription_id}. "
-                    f"Both subscriptions would be active. Manual intervention required."
+                    "Cannot complete checkout: failed to cancel existing subscription. "
+                    "Both subscriptions would be active. Manual intervention required."
                 )
             except Exception as e:
                 logger.critical(
-                    "CRITICAL: Unexpected error cancelling old subscription %s for team %s: %s. "
+                    "CRITICAL: Unexpected error cancelling old subscription for team %s: %s. "
                     "Cannot proceed with checkout - both subscriptions would be active.",
-                    existing_subscription_id,
                     team.key,
                     e,
                 )

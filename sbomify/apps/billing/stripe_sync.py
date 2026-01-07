@@ -197,7 +197,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 billing_limits["next_billing_date"] = next_billing_date
                 needs_update = True
                 updated_fields.append("next_billing_date")
-                logger.debug(f"Updated next_billing_date for team {team.key} to {next_billing_date}")
+                logger.debug(f"Updated next_billing_date for team {team.key}")
 
         # Update last_updated timestamp
         if needs_update:
@@ -276,14 +276,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 team.billing_plan_limits = billing_limits
                 team.save()
 
-                # Verify the save worked
-                team.refresh_from_db()
-                saved_limits = team.billing_plan_limits or {}
-                logger.info(
-                    f"Synced subscription data for team {team.key}: {', '.join(updated_fields)}. "
-                    f"Saved cancel_at_period_end={saved_limits.get('cancel_at_period_end')}, "
-                    f"scheduled_downgrade_plan={saved_limits.get('scheduled_downgrade_plan')}"
-                )
+                logger.info(f"Synced subscription data for team {team.key}: {', '.join(updated_fields)}")
             return True
 
         return True  # No update needed, but sync was successful
@@ -292,7 +285,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         error_str = str(e).lower()
         # Handle deleted subscriptions
         if "no such subscription" in error_str or "resource_missing" in error_str:
-            logger.info(f"Subscription {stripe_sub_id} no longer exists in Stripe for team {team.key}")
+            logger.info(f"Subscription no longer exists in Stripe for team {team.key}")
             # Update database to reflect deleted subscription
             from django.db import transaction as db_transaction
 

@@ -33,7 +33,8 @@ def get_cached_subscription(subscription_id: str, team_key: str):
     # Try to get from cache first
     cached_subscription = cache.get(cache_key)
     if cached_subscription:
-        logger.debug(f"Using cached subscription data for {subscription_id}")
+        # subscription_id is internal, safe to log usage but avoiding explicit ID if requested for extreme caution
+        logger.debug("Using cached subscription data")
         return cached_subscription
 
     # Fetch from Stripe
@@ -41,13 +42,13 @@ def get_cached_subscription(subscription_id: str, team_key: str):
         subscription = stripe_client.get_subscription(subscription_id)
         # Cache for 5 minutes
         cache.set(cache_key, subscription, CACHE_TTL)
-        logger.debug(f"Cached subscription data for {subscription_id}")
+        logger.debug("Cached subscription data")
         return subscription
     except StripeError as e:
-        logger.warning(f"Failed to fetch subscription {subscription_id} from Stripe: {e}")
+        logger.warning(f"Failed to fetch subscription from Stripe: {e}")
         return None
     except Exception as e:
-        logger.warning(f"Unexpected error fetching subscription {subscription_id}: {e}")
+        logger.warning(f"Unexpected error fetching subscription: {e}")
         return None
 
 
@@ -62,11 +63,11 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str = None):
     if team_key:
         cache_key = f"stripe_sub_{subscription_id}_{team_key}"
         cache.delete(cache_key)
-        logger.debug(f"Invalidated cache for subscription {subscription_id}, team {team_key}")
+        logger.debug(f"Invalidated cache for subscription, team {team_key}")
     else:
         # If no team_key, we can't easily invalidate all variations
         # This is a fallback - prefer providing team_key
-        logger.warning(f"Cannot invalidate cache for subscription {subscription_id} without team_key")
+        logger.warning("Cannot invalidate cache for subscription without team_key")
 
 
 def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, fallback_value: bool = False) -> bool:
