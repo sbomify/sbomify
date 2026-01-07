@@ -122,20 +122,10 @@
                                 <i class="fas fa-list-ul me-1"></i>Findings
                             </h6>
                             {% for finding in run.result.findings %}
-                                <div class="finding-item {% if finding.status == 'pass' %}border-success{% elif finding.status == 'fail' %}border-warning{% elif finding.status == 'error' %}border-danger{% elif finding.status == 'warning' %}border-info{% else %}border-secondary{% endif %}">
+                                <div class="finding-item {{ finding.status|status_border_class }}">
                                     <div class="d-flex align-items-start">
-                                        <span class="finding-status-icon {% if finding.status == 'pass' %}text-success{% elif finding.status == 'fail' %}text-warning{% elif finding.status == 'error' %}text-danger{% elif finding.status == 'warning' %}text-info{% else %}text-secondary{% endif %}">
-                                            {% if finding.status == 'pass' %}
-                                                <i class="fas fa-check-circle"></i>
-                                            {% elif finding.status == 'fail' %}
-                                                <i class="fas fa-times-circle"></i>
-                                            {% elif finding.status == 'warning' %}
-                                                <i class="fas fa-exclamation-circle"></i>
-                                            {% elif finding.status == 'error' %}
-                                                <i class="fas fa-exclamation-triangle"></i>
-                                            {% else %}
-                                                <i class="fas fa-info-circle"></i>
-                                            {% endif %}
+                                        <span class="finding-status-icon {{ finding.status|status_text_class }}">
+                                            <i class="{{ finding.status|status_icon }}"></i>
                                         </span>
                                         <div class="flex-grow-1 ms-2">
                                             <div class="finding-title">{{ finding.title }}</div>
