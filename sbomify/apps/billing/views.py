@@ -442,6 +442,8 @@ def checkout_cancel(request):
     return render(request, "billing/checkout_cancel.html.j2")
 
 
+# nosemgrep: python.django.security.audit.csrf-exempt.no-csrf-exempt
+# CSRF exempt required for Stripe webhooks - webhook signature verification provides security
 @csrf_exempt
 @require_http_methods(["POST"])
 def stripe_webhook(request):

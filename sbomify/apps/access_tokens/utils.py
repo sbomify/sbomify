@@ -43,6 +43,8 @@ def decode_personal_access_token(token: str) -> dict:
         )
 
         # If signature is valid, decode without verification to get the payload
+        # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        # Signature was verified above (lines 35-43); this decode extracts payload for type normalization
         unverified_payload = jwt.decode(token, options={"verify_signature": False})
 
         # Convert sub to string if it exists and isn't already a string
