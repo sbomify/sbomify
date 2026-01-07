@@ -12,7 +12,7 @@ from django.db.models.functions import TruncDate
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 
 from sbomify.apps.documents.admin import DocumentAdmin
 from sbomify.apps.documents.models import Document
@@ -269,7 +269,13 @@ class DashboardView(admin.AdminSite):
 
     def get_social_accounts(self, obj):
         accounts = obj.socialaccount_set.all()
-        return format_html("<br>".join(f"{account.provider}: {account.uid}" for account in accounts))
+        if not accounts:
+            return format_html('<span style="color: #666;">None</span>')
+        return format_html_join(
+            format_html("<br>"),
+            "{}: {}",
+            ((account.provider, account.uid) for account in accounts),
+        )
 
     get_social_accounts.short_description = "Social Accounts"
 
@@ -371,14 +377,18 @@ class CustomUserAdmin(UserAdmin):
         if not social_auths:
             return format_html('<span style="color: #666;">None</span>')
 
-        accounts = []
-        for auth in social_auths:
-            provider = auth.provider.capitalize()
-            uid = auth.uid
-            verified = "✓" if auth.extra_data.get("email_verified", False) else "✗"
-            accounts.append(f"{provider}: {uid} {verified}")
-
-        return format_html("<br>".join(accounts))
+        return format_html_join(
+            format_html("<br>"),
+            "{}: {} {}",
+            (
+                (
+                    auth.provider.capitalize(),
+                    auth.uid,
+                    "✓" if auth.extra_data.get("email_verified", False) else "✗",
+                )
+                for auth in social_auths
+            ),
+        )
 
 
 class ProjectAdmin(admin.ModelAdmin):
