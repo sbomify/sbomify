@@ -38,6 +38,11 @@
                                                for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</label>
                                         <span class="badge bg-{{ plugin.category }}-category text-capitalize">{{ plugin.category }}</span>
                                         <span class="badge bg-secondary-subtle text-secondary">v{{ plugin.version }}</span>
+                                        {% if plugin.is_beta %}
+                                            <span class="badge bg-info-subtle text-info">
+                                                <i class="fas fa-flask me-1"></i>Beta
+                                            </span>
+                                        {% endif %}
                                         {% if plugin.requires_upgrade %}
                                             <span class="badge bg-warning-subtle text-warning">
                                                 <i class="fas fa-lock me-1"></i>

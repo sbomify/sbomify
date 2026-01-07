@@ -43,9 +43,10 @@ class PluginsConfig(AppConfig):
                         "SBOM Author, and Timestamp."
                     ),
                     "category": "compliance",
-                    "version": "1.0.0",
+                    "version": "0.1.0",
                     "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
                     "is_enabled": True,
+                    "is_beta": True,
                     "default_config": {},
                 },
             )
@@ -62,11 +63,12 @@ class PluginsConfig(AppConfig):
                         "data including software support status and end-of-support dates for each component."
                     ),
                     "category": "compliance",
-                    "version": "1.0.0",
+                    "version": "0.1.0",
                     "plugin_class_path": (
                         "sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity.FDAMedicalDevicePlugin"
                     ),
                     "is_enabled": True,
+                    "is_beta": True,
                     "default_config": {},
                 },
             )
@@ -84,9 +86,10 @@ class PluginsConfig(AppConfig):
                         "and Support Period End Date as required by Annex I Part II and Annex II."
                     ),
                     "category": "compliance",
-                    "version": "1.0.0",
+                    "version": "0.1.0",
                     "plugin_class_path": "sbomify.apps.plugins.builtins.cra.CRACompliancePlugin",
                     "is_enabled": True,
+                    "is_beta": True,
                     "default_config": {},
                 },
             )

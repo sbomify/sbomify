@@ -39,6 +39,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
@@ -51,8 +54,36 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-# Pre-compiled email regex pattern for SPDX creator field validation
-EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+# Simple pattern to extract email candidates from SPDX creator strings.
+# SPDX embeds emails in free-text like "Person: John Doe (john@example.com)".
+# CycloneDX uses structured EmailStr fields validated at schema level, so this
+# pattern is only needed for SPDX format.
+EMAIL_CANDIDATE_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def _contains_valid_email(text: str) -> bool:
+    """Check if SPDX creator text contains at least one valid email address.
+
+    SPDX creator strings are free-text (e.g., "Person: John Doe (john@example.com)")
+    so we extract email candidates and validate with Django's email validator.
+
+    Note: CycloneDX uses structured contact fields with Pydantic EmailStr validation
+    at schema level, so this function is only needed for SPDX format.
+
+    Args:
+        text: The SPDX creator string to search for email addresses.
+
+    Returns:
+        True if at least one valid email is found, False otherwise.
+    """
+    candidates = EMAIL_CANDIDATE_PATTERN.findall(text)
+    for candidate in candidates:
+        try:
+            validate_email(candidate)
+            return True
+        except ValidationError:
+            continue
+    return False
 
 
 class CRACompliancePlugin(AssessmentPlugin):
@@ -429,8 +460,8 @@ class CRACompliancePlugin(AssessmentPlugin):
         # Check creators for contact information (email or URL)
         creators = creation_info.get("creators", [])
         for creator in creators:
-            # Check for email in creator string using pre-compiled regex
-            if ("Organization:" in creator or "Person:" in creator) and EMAIL_PATTERN.search(creator):
+            # Check for valid email in Organization or Person creator entries
+            if ("Organization:" in creator or "Person:" in creator) and _contains_valid_email(creator):
                 return True
 
         # Check document-level annotations for vulnerability contact
@@ -559,7 +590,9 @@ class CRACompliancePlugin(AssessmentPlugin):
         # 5. SBOM Author (document-level)
         authors = metadata.get("authors", [])
         tools = metadata.get("tools", [])
-        # Check manufacturer (1.6+) first, fallback to manufacture (1.5 legacy)
+        # Check manufacturer (1.6+) first, fallback to manufacture (1.5 legacy).
+        # In CycloneDX, manufacturer.name identifies the SBOM producer at document level,
+        # which satisfies the CRA "author" requirement for SBOM technical documentation.
         manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
         has_author = bool(authors or tools or manufacturer.get("name"))
         findings.append(
@@ -642,6 +675,9 @@ class CRACompliancePlugin(AssessmentPlugin):
     def _cyclonedx_has_vulnerability_contact(self, metadata: dict[str, Any], data: dict[str, Any]) -> bool:
         """Check if CycloneDX document has vulnerability contact information.
 
+        CycloneDX contact fields use Pydantic's EmailStr for email validation at
+        schema level, so we only check for presence here (trusting schema validation).
+
         Args:
             metadata: CycloneDX metadata dictionary.
             data: Full CycloneDX document dictionary.
@@ -649,7 +685,8 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
-        # Check manufacturer contact (1.6+) first, fallback to manufacture (1.5 legacy)
+        # Check manufacturer contact (1.6+) first, fallback to manufacture (1.5 legacy).
+        # Email format already validated by CycloneDX schema (EmailStr).
         manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
         if manufacturer.get("contact"):
             return True

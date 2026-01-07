@@ -26,6 +26,7 @@ class RegisteredPlugin(models.Model):
         version: Current version of the plugin.
         plugin_class_path: Python import path to the plugin class.
         is_enabled: Whether the plugin is available for teams to use.
+        is_beta: Whether the plugin is in beta status.
         default_config: Default configuration for the plugin.
         created_at: When the plugin was registered.
         updated_at: When the plugin was last updated.
@@ -73,6 +74,10 @@ class RegisteredPlugin(models.Model):
         default=True,
         help_text="Whether the plugin is available for teams to use",
     )
+    is_beta = models.BooleanField(
+        default=False,
+        help_text="Whether the plugin is in beta status (shown with beta badge in UI)",
+    )
     default_config = models.JSONField(
         default=dict,
         blank=True,
@@ -84,7 +89,8 @@ class RegisteredPlugin(models.Model):
     def __str__(self) -> str:
         """Return string representation."""
         status = "enabled" if self.is_enabled else "disabled"
-        return f"{self.display_name} v{self.version} ({status})"
+        beta = " [BETA]" if self.is_beta else ""
+        return f"{self.display_name} v{self.version}{beta} ({status})"
 
 
 class TeamPluginSettings(models.Model):

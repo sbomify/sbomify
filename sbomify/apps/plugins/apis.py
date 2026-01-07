@@ -223,6 +223,7 @@ def get_registered_plugins(request: HttpRequest) -> list[dict]:
             "description": p.description,
             "category": p.category,
             "version": p.version,
+            "is_beta": p.is_beta,
         }
         for p in plugins
     ]
@@ -312,6 +313,7 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
                 "category": p.category,
                 "version": p.version,
                 "default_config": p.default_config,
+                "is_beta": p.is_beta,
                 "has_access": has_access,
                 "requires_upgrade": required_feature is not None and not has_access,
                 "required_plan": "Business" if required_feature else None,
