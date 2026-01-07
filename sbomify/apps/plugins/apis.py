@@ -255,6 +255,7 @@ def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
     # Map plugin names to their required plan features
     plan_requirements = {
         "ntia-minimum-elements-2021": "has_ntia_compliance",
+        "fda-medical-device-2025": "has_fda_compliance",
         # Future plugins can be added here
         # "cisa-minimum-elements-2025": "has_cisa_compliance",
     }

@@ -49,6 +49,27 @@ class PluginsConfig(AppConfig):
                     "default_config": {},
                 },
             )
+
+            # FDA Medical Device Cybersecurity 2025 Plugin
+            RegisteredPlugin.objects.update_or_create(
+                name="fda-medical-device-2025",
+                defaults={
+                    "display_name": "FDA Medical Device Cybersecurity (2025)",
+                    "description": (
+                        "Validates SBOMs against FDA guidance 'Cybersecurity in Medical Devices: "
+                        "Quality System Considerations and Content of Premarket Submissions' (June 2025). "
+                        "Checks for all NTIA minimum elements plus CLE (Component Lifecycle Enumeration) "
+                        "data including software support status and end-of-support dates for each component."
+                    ),
+                    "category": "compliance",
+                    "version": "1.0.0",
+                    "plugin_class_path": (
+                        "sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity.FDAMedicalDevicePlugin"
+                    ),
+                    "is_enabled": True,
+                    "default_config": {},
+                },
+            )
         except (OperationalError, ProgrammingError) as e:
             # Table doesn't exist yet (e.g., during initial migrations)
             logger.debug("Could not register built-in plugins (table may not exist yet): %s", e)

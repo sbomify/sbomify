@@ -22,6 +22,13 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Public and private access controls
 - Workspace-based organization
 
+### Compliance Plugins
+
+| Plugin                                   | Type       | Standard                                                                                                          |
+|------------------------------------------|------------|-------------------------------------------------------------------------------------------------------------------|
+| NTIA Minimum Elements (2021)             | Compliance | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)  |
+| FDA Medical Device Cybersecurity (2025)  | Compliance | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                 |
+
 ### Document Management
 
 - Upload and manage document artifacts (specifications, manuals, reports, compliance documents, etc.)
