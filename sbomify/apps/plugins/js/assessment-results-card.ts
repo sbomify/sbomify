@@ -31,8 +31,8 @@ function handleAnchorLink(): void {
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
         // Use Bootstrap's Collapse API to show it (getOrCreateInstance avoids conflicts with existing instances)
-        const bsCollapse = Collapse.getOrCreateInstance(collapseEl)
-        bsCollapse.show()
+        const bootstrapCollapse = Collapse.getOrCreateInstance(collapseEl)
+        bootstrapCollapse.show()
       }
 
       // Scroll to the element
