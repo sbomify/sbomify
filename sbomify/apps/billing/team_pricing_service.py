@@ -134,14 +134,14 @@ class TeamPricingService:
                         # Try parsing as timestamp
                         next_billing_date = datetime.fromtimestamp(float(next_billing_date), tz=django_timezone.utc)
                     except (ValueError, TypeError):
-                        logger.warning(f"Failed to parse next_billing_date: {next_billing_date}")
+                        logger.warning("Failed to parse next_billing_date")
                         next_billing_date = None
             elif isinstance(next_billing_date, (int, float)):
                 # Handle timestamp
                 try:
                     next_billing_date = datetime.fromtimestamp(next_billing_date, tz=django_timezone.utc)
                 except (ValueError, OSError):
-                    logger.warning(f"Failed to convert timestamp to datetime: {next_billing_date}")
+                    logger.warning("Failed to convert timestamp to datetime")
                     next_billing_date = None
             # Ensure timezone-aware
             if next_billing_date and next_billing_date.tzinfo is None:
@@ -296,7 +296,7 @@ class TeamPricingService:
                     "billing_period": None,
                 }
         except Exception as e:
-            logger.error(f"Failed to get pricing from Stripe for plan {billing_plan}: {e}")
+            logger.error(f"Failed to get pricing from Stripe: {e}")
 
         return {"amount": "Custom", "period": "pricing", "billing_period": None}
 

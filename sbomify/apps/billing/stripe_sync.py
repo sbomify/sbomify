@@ -41,11 +41,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
     stripe_sub_id = billing_limits.get("stripe_subscription_id")
 
     if not stripe_sub_id:
-        # No subscription to sync
-        logger.debug(f"No subscription ID for team {team.key}, skipping sync")
+        logger.debug("No subscription ID, skipping sync")
         return False
 
-    logger.debug(f"Starting sync for team {team.key}, subscription {stripe_sub_id}, force_refresh={force_refresh}")
+    logger.debug(f"Starting sync, force_refresh={force_refresh}")
 
     try:
         # Check if we should force refresh based on last update time
@@ -76,7 +75,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
                 cache_key = f"stripe_sub_{stripe_sub_id}_{team.key}"
                 cache.set(cache_key, subscription, CACHE_TTL)
-            logger.debug(f"Force refreshed subscription {stripe_sub_id} for team {team.key}")
+            logger.debug("Force refreshed subscription")
         else:
             subscription = get_cached_subscription(stripe_sub_id, team.key)
             if not subscription:
@@ -89,7 +88,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     cache.set(cache_key, subscription, CACHE_TTL)
 
         if not subscription:
-            logger.warning(f"Could not fetch subscription {stripe_sub_id} for team {team.key}")
+            logger.warning("Could not fetch subscription")
             return False
 
         # Get current values from database
@@ -209,10 +208,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                         # Also handle payment_failed_at when status changes
                         if real_sub_status == "past_due" and not billing_limits.get("payment_failed_at"):
                             billing_limits["payment_failed_at"] = timezone.now().isoformat()
-                            logger.debug(f"Set payment_failed_at for team {team.key} due to past_due status")
+                            logger.debug("Set payment_failed_at due to past_due status")
                         elif real_sub_status in ["active", "trialing"] and billing_limits.get("payment_failed_at"):
                             billing_limits.pop("payment_failed_at", None)
-                            logger.debug(f"Cleared payment_failed_at for team {team.key} due to restored status")
+                            logger.debug("Cleared payment_failed_at due to restored status")
                     elif field == "payment_failed_at":
                         # Set payment_failed_at (already set above, but ensure it's in transaction)
                         if real_sub_status == "past_due":
@@ -254,21 +253,16 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                         billing_limits["stripe_customer_id"] = existing_customer_id
                     else:
                         # Can't satisfy constraint - remove subscription_id
-                        logger.warning(
-                            f"Team {team.key}: Cannot satisfy valid_billing_relationship constraint, "
-                            "removing subscription_id"
-                        )
+                        logger.warning("Cannot satisfy valid_billing_relationship constraint, removing subscription_id")
                         billing_limits.pop("stripe_subscription_id", None)
                 elif billing_limits.get("stripe_customer_id") and not billing_limits.get("stripe_subscription_id"):
                     # Have customer_id but no subscription_id - remove customer_id to satisfy constraint
-                    logger.warning(
-                        f"Team {team.key}: Cannot satisfy valid_billing_relationship constraint, removing customer_id"
-                    )
+                    logger.warning("Cannot satisfy valid_billing_relationship constraint, removing customer_id")
                     billing_limits.pop("stripe_customer_id", None)
                 team.billing_plan_limits = billing_limits
                 team.save()
 
-                logger.info(f"Synced subscription data for team {team.key}: {', '.join(updated_fields)}")
+                logger.info(f"Synced subscription data: {', '.join(updated_fields)}")
             return True
 
         return True  # No update needed, but sync was successful
@@ -277,7 +271,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         error_str = str(e).lower()
         # Handle deleted subscriptions
         if "no such subscription" in error_str or "resource_missing" in error_str:
-            logger.info(f"Subscription no longer exists in Stripe for team {team.key}")
+            logger.info("Subscription no longer exists in Stripe")
             # Update database to reflect deleted subscription
             from django.db import transaction as db_transaction
 
@@ -296,10 +290,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             invalidate_subscription_cache(stripe_sub_id, team.key)
             return True
         else:
-            logger.warning(f"Failed to sync subscription {stripe_sub_id} for team {team.key}: {e}")
+            logger.warning(f"Failed to sync subscription: {e}")
             return False
     except Exception as e:
-        logger.error(f"Unexpected error syncing subscription for team {team.key}: {e}")
+        logger.error(f"Unexpected error syncing subscription: {e}")
         return False
 
 
@@ -337,7 +331,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
                 cancel_at = None
         if cancel_at and cancel_at > 0:
             period_end = cancel_at
-            logger.debug(f"Using cancel_at ({cancel_at}) as period_end for subscription {subscription_id}")
+            logger.debug("Using cancel_at as period_end")
 
     # Priority 2: Try to get current_period_end from subscription
     # Try both attribute access and dictionary access
@@ -346,7 +340,7 @@ def get_period_end_from_subscription(subscription, subscription_id: str) -> str 
         if not period_end and isinstance(subscription, dict):
             period_end = subscription.get("current_period_end")
         if period_end:
-            logger.debug(f"Using current_period_end ({period_end}) for subscription {subscription_id}")
+            logger.debug("Using current_period_end")
 
     # Priority 3: Calculate from billing_cycle_anchor and interval if current_period_end is not available
     if not period_end:

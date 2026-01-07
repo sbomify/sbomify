@@ -314,7 +314,7 @@ class StripePricingService:
         # Determine price ID
         price_id = plan.stripe_price_monthly_id if billing_period == "monthly" else plan.stripe_price_annual_id
         if not price_id:
-            logger.error(f"Missing price ID for plan {plan.key} ({billing_period})")
+            logger.error(f"Missing price ID for plan {plan.key}")
             raise StripeError("Configuration error: Missing price ID for selected plan")
 
         # Prepare session data
