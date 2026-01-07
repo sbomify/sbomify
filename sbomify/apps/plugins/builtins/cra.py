@@ -34,6 +34,7 @@ Key CRA Quote (Annex I Part II point 1):
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,9 @@ class CRACompliancePlugin(AssessmentPlugin):
         STANDARD_NAME: Official name of the standard being checked.
         STANDARD_VERSION: Version identifier of the regulation.
         STANDARD_URL: Official URL to the regulation.
+        FORMAT_SPDX: Constant for SPDX format detection.
+        FORMAT_CYCLONEDX: Constant for CycloneDX format detection.
+        FORMAT_UNKNOWN: Constant for unknown format detection.
 
     Example:
         >>> plugin = CRACompliancePlugin()
@@ -77,6 +81,11 @@ class CRACompliancePlugin(AssessmentPlugin):
     STANDARD_NAME = "EU Cyber Resilience Act (CRA) - Regulation (EU) 2024/2847"
     STANDARD_VERSION = "2024/2847"
     STANDARD_URL = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847"
+
+    # SBOM format constants
+    FORMAT_SPDX = "spdx"
+    FORMAT_CYCLONEDX = "cyclonedx"
+    FORMAT_UNKNOWN = "unknown"
 
     # Finding IDs for each CRA element (prefixed with standard version)
     FINDING_IDS = {
@@ -181,9 +190,9 @@ class CRACompliancePlugin(AssessmentPlugin):
 
         # Detect format and validate
         sbom_format = self._detect_format(sbom_data)
-        if sbom_format == "spdx":
+        if sbom_format == self.FORMAT_SPDX:
             findings = self._validate_spdx(sbom_data)
-        elif sbom_format == "cyclonedx":
+        elif sbom_format == self.FORMAT_CYCLONEDX:
             findings = self._validate_cyclonedx(sbom_data)
         else:
             logger.warning(f"[CRA-2024] Unknown SBOM format for {sbom_id}")
@@ -228,16 +237,16 @@ class CRACompliancePlugin(AssessmentPlugin):
             sbom_data: Parsed SBOM dictionary.
 
         Returns:
-            Format string: "spdx", "cyclonedx", or "unknown".
+            Format string: FORMAT_SPDX, FORMAT_CYCLONEDX, or FORMAT_UNKNOWN.
         """
         if "spdxVersion" in sbom_data:
-            return "spdx"
+            return self.FORMAT_SPDX
         elif "bomFormat" in sbom_data and sbom_data.get("bomFormat", "").lower() == "cyclonedx":
-            return "cyclonedx"
+            return self.FORMAT_CYCLONEDX
         elif "specVersion" in sbom_data and "components" in sbom_data:
             # CycloneDX without explicit bomFormat
-            return "cyclonedx"
-        return "unknown"
+            return self.FORMAT_CYCLONEDX
+        return self.FORMAT_UNKNOWN
 
     def _validate_spdx(self, data: dict[str, Any]) -> list[Finding]:
         """Validate SPDX format SBOM against CRA requirements.
@@ -414,11 +423,14 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
+        # Email regex pattern for more robust detection
+        email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
         # Check creators for contact information (email or URL)
         creators = creation_info.get("creators", [])
         for creator in creators:
-            # Check for email in creator string
-            if "@" in creator and ("Organization:" in creator or "Person:" in creator):
+            # Check for email in creator string using regex
+            if ("Organization:" in creator or "Person:" in creator) and email_pattern.search(creator):
                 return True
 
         # Check document-level annotations for vulnerability contact

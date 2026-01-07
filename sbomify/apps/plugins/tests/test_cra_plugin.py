@@ -8,9 +8,109 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from sbomify.apps.plugins.builtins.cra import CRACompliancePlugin
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import AssessmentResult
+
+
+def create_base_cyclonedx_sbom() -> dict:
+    """Create a base compliant CycloneDX SBOM for testing.
+
+    Returns:
+        A dictionary representing a fully compliant CycloneDX SBOM.
+    """
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "components": [
+            {
+                "name": "example-component",
+                "version": "1.0.0",
+                "publisher": "Example Corp",
+                "purl": "pkg:pypi/example-component@1.0.0",
+            }
+        ],
+        "dependencies": [{"ref": "pkg:pypi/example-component@1.0.0", "dependsOn": []}],
+        "metadata": {
+            "authors": [{"name": "Example Developer"}],
+            "tools": [{"name": "sbom-generator", "version": "1.0.0"}],
+            "timestamp": "2023-01-01T00:00:00Z",
+            "manufacture": {
+                "name": "Example Corp",
+                "contact": [{"email": "security@example.com"}],
+            },
+            "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+        },
+    }
+
+
+def create_base_spdx_sbom() -> dict:
+    """Create a base compliant SPDX SBOM for testing.
+
+    Returns:
+        A dictionary representing a fully compliant SPDX SBOM.
+    """
+    return {
+        "spdxVersion": "SPDX-2.3",
+        "packages": [
+            {
+                "SPDXID": "SPDXRef-Package",
+                "name": "example-package",
+                "supplier": "Organization: Example Corp",
+                "versionInfo": "1.0.0",
+                "externalRefs": [
+                    {
+                        "referenceCategory": "PACKAGE-MANAGER",
+                        "referenceType": "purl",
+                        "referenceLocator": "pkg:pypi/example-package@1.0.0",
+                    }
+                ],
+                "validUntilDate": "2028-12-31T00:00:00Z",
+            }
+        ],
+        "relationships": [
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relationshipType": "DEPENDS_ON",
+                "relatedSpdxElement": "SPDXRef-Package",
+            }
+        ],
+        "creationInfo": {
+            "creators": ["Tool: example-tool", "Organization: Example Corp (security@example.com)"],
+            "created": "2023-01-01T00:00:00Z",
+        },
+    }
+
+
+def assess_sbom(sbom_data: dict) -> AssessmentResult:
+    """Write SBOM to temp file and assess it.
+
+    Args:
+        sbom_data: The SBOM dictionary to assess.
+
+    Returns:
+        AssessmentResult from the CRA plugin.
+    """
+    plugin = CRACompliancePlugin()
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(sbom_data, f)
+        f.flush()
+        return plugin.assess("test-sbom-id", Path(f.name))
+
+
+@pytest.fixture
+def base_cyclonedx_sbom() -> dict:
+    """Pytest fixture for base CycloneDX SBOM."""
+    return create_base_cyclonedx_sbom()
+
+
+@pytest.fixture
+def base_spdx_sbom() -> dict:
+    """Pytest fixture for base SPDX SBOM."""
+    return create_base_spdx_sbom()
 
 
 class TestCRAPluginMetadata:
@@ -89,7 +189,7 @@ class TestCycloneDXValidation:
             },
         }
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         assert result.summary.fail_count == 0
         assert result.summary.pass_count == 10  # All 10 CRA elements
@@ -97,229 +197,194 @@ class TestCycloneDXValidation:
 
     def test_cyclonedx_missing_component_name(self) -> None:
         """Test CycloneDX SBOM missing component name."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["name"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         name_finding = next(f for f in result.findings if "component-name" in f.id)
         assert name_finding.status == "fail"
 
     def test_cyclonedx_missing_component_version(self) -> None:
         """Test CycloneDX SBOM missing component version."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["version"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         version_finding = next(f for f in result.findings if "component-version" in f.id)
         assert version_finding.status == "fail"
 
     def test_cyclonedx_missing_supplier(self) -> None:
         """Test CycloneDX SBOM missing supplier information."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["publisher"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         supplier_finding = next(f for f in result.findings if "supplier" in f.id)
         assert supplier_finding.status == "fail"
 
     def test_cyclonedx_with_supplier_object(self) -> None:
         """Test CycloneDX SBOM with supplier.name instead of publisher."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["publisher"]
         sbom_data["components"][0]["supplier"] = {"name": "Example Corp"}
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         supplier_finding = next(f for f in result.findings if "supplier" in f.id)
         assert supplier_finding.status == "pass"
 
     def test_cyclonedx_missing_unique_identifiers(self) -> None:
         """Test CycloneDX SBOM missing unique identifiers."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["purl"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         identifier_finding = next(f for f in result.findings if "unique-identifiers" in f.id)
         assert identifier_finding.status == "fail"
 
     def test_cyclonedx_with_cpe_identifier(self) -> None:
         """Test CycloneDX SBOM with CPE instead of PURL."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["components"][0]["purl"]
         sbom_data["components"][0]["cpe"] = "cpe:2.3:a:example:component:1.0.0:*:*:*:*:*:*:*"
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         identifier_finding = next(f for f in result.findings if "unique-identifiers" in f.id)
         assert identifier_finding.status == "pass"
 
     def test_cyclonedx_missing_sbom_author(self) -> None:
         """Test CycloneDX SBOM missing SBOM author."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["authors"]
         del sbom_data["metadata"]["tools"]
         del sbom_data["metadata"]["manufacture"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         author_finding = next(f for f in result.findings if "sbom-author" in f.id)
         assert author_finding.status == "fail"
 
     def test_cyclonedx_with_tools_as_author(self) -> None:
         """Test CycloneDX SBOM with tools field satisfies author requirement."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["authors"]
         del sbom_data["metadata"]["manufacture"]
         sbom_data["metadata"]["tools"] = [{"name": "sbom-generator"}]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         author_finding = next(f for f in result.findings if "sbom-author" in f.id)
         assert author_finding.status == "pass"
 
     def test_cyclonedx_missing_timestamp(self) -> None:
         """Test CycloneDX SBOM missing timestamp."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["timestamp"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         timestamp_finding = next(f for f in result.findings if f.id == "cra-2024:timestamp")
         assert timestamp_finding.status == "fail"
 
     def test_cyclonedx_invalid_timestamp(self) -> None:
         """Test CycloneDX SBOM with invalid timestamp format."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         sbom_data["metadata"]["timestamp"] = "invalid-timestamp"
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         timestamp_finding = next(f for f in result.findings if f.id == "cra-2024:timestamp")
         assert timestamp_finding.status == "fail"
 
     def test_cyclonedx_missing_dependencies(self) -> None:
         """Test CycloneDX SBOM missing dependencies."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["dependencies"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         dep_finding = next(f for f in result.findings if "dependencies" in f.id)
         assert dep_finding.status == "fail"
 
     def test_cyclonedx_machine_readable_always_passes(self) -> None:
         """Test that machine-readable format check always passes for valid CycloneDX."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         format_finding = next(f for f in result.findings if "machine-readable" in f.id)
         assert format_finding.status == "pass"
 
     def test_cyclonedx_missing_vulnerability_contact(self) -> None:
         """Test CycloneDX SBOM missing vulnerability contact."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["manufacture"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "fail"
 
     def test_cyclonedx_with_supplier_contact(self) -> None:
         """Test CycloneDX SBOM with supplier contact for vulnerability reporting."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["manufacture"]
         sbom_data["metadata"]["supplier"] = {
             "name": "Example Corp",
             "contact": [{"email": "security@example.com"}],
         }
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "pass"
 
     def test_cyclonedx_with_external_reference_issue_tracker(self) -> None:
         """Test CycloneDX SBOM with external reference issue tracker."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["manufacture"]
         sbom_data["externalReferences"] = [{"type": "issue-tracker", "url": "https://github.com/example/issues"}]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "pass"
 
     def test_cyclonedx_missing_support_period(self) -> None:
         """Test CycloneDX SBOM missing support period."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["properties"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "fail"
 
     def test_cyclonedx_with_cdx_support_property(self) -> None:
         """Test CycloneDX SBOM with cdx:support:endDate property."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         sbom_data["metadata"]["properties"] = [{"name": "cdx:support:endDate", "value": "2028-12-31"}]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
 
     def test_cyclonedx_with_lifecycle_end_of_life(self) -> None:
         """Test CycloneDX SBOM with lifecycle end-of-life phase."""
-        sbom_data = self._create_base_cyclonedx_sbom()
+        sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["properties"]
         sbom_data["metadata"]["lifecycles"] = [{"phase": "end-of-life"}]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
-
-    def _create_base_cyclonedx_sbom(self) -> dict:
-        """Create a base compliant CycloneDX SBOM for testing."""
-        return {
-            "bomFormat": "CycloneDX",
-            "specVersion": "1.5",
-            "components": [
-                {
-                    "name": "example-component",
-                    "version": "1.0.0",
-                    "publisher": "Example Corp",
-                    "purl": "pkg:pypi/example-component@1.0.0",
-                }
-            ],
-            "dependencies": [{"ref": "pkg:pypi/example-component@1.0.0", "dependsOn": []}],
-            "metadata": {
-                "authors": [{"name": "Example Developer"}],
-                "tools": [{"name": "sbom-generator", "version": "1.0.0"}],
-                "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {
-                    "name": "Example Corp",
-                    "contact": [{"email": "security@example.com"}],
-                },
-                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
-            },
-        }
-
-    def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
-        """Helper to write SBOM to temp file and assess it."""
-        plugin = CRACompliancePlugin()
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(sbom_data, f)
-            f.flush()
-            return plugin.assess("test-sbom-id", Path(f.name))
 
 
 class TestSPDXValidation:
@@ -358,124 +423,124 @@ class TestSPDXValidation:
             },
         }
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         assert result.summary.fail_count == 0
         assert result.summary.pass_count == 10
 
     def test_spdx_missing_component_name(self) -> None:
         """Test SPDX SBOM missing component name."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["name"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         name_finding = next(f for f in result.findings if "component-name" in f.id)
         assert name_finding.status == "fail"
 
     def test_spdx_missing_component_version(self) -> None:
         """Test SPDX SBOM missing component version."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["versionInfo"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         version_finding = next(f for f in result.findings if "component-version" in f.id)
         assert version_finding.status == "fail"
 
     def test_spdx_missing_supplier(self) -> None:
         """Test SPDX SBOM missing supplier information."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["supplier"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         supplier_finding = next(f for f in result.findings if "supplier" in f.id)
         assert supplier_finding.status == "fail"
 
     def test_spdx_missing_unique_identifiers(self) -> None:
         """Test SPDX SBOM missing unique identifiers."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["externalRefs"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         identifier_finding = next(f for f in result.findings if "unique-identifiers" in f.id)
         assert identifier_finding.status == "fail"
 
     def test_spdx_missing_sbom_author(self) -> None:
         """Test SPDX SBOM missing SBOM author."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["creationInfo"]["creators"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         author_finding = next(f for f in result.findings if "sbom-author" in f.id)
         assert author_finding.status == "fail"
 
     def test_spdx_missing_timestamp(self) -> None:
         """Test SPDX SBOM missing timestamp."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["creationInfo"]["created"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         timestamp_finding = next(f for f in result.findings if f.id == "cra-2024:timestamp")
         assert timestamp_finding.status == "fail"
 
     def test_spdx_missing_dependencies(self) -> None:
         """Test SPDX SBOM missing dependencies."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["relationships"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         dep_finding = next(f for f in result.findings if "dependencies" in f.id)
         assert dep_finding.status == "fail"
 
     def test_spdx_with_contains_relationship(self) -> None:
         """Test SPDX SBOM with CONTAINS relationship."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         sbom_data["relationships"][0]["relationshipType"] = "CONTAINS"
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         dep_finding = next(f for f in result.findings if "dependencies" in f.id)
         assert dep_finding.status == "pass"
 
     def test_spdx_machine_readable_always_passes(self) -> None:
         """Test that machine-readable format check always passes for valid SPDX."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         format_finding = next(f for f in result.findings if "machine-readable" in f.id)
         assert format_finding.status == "pass"
 
     def test_spdx_missing_vulnerability_contact(self) -> None:
         """Test SPDX SBOM missing vulnerability contact."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         # Remove email from creators
         sbom_data["creationInfo"]["creators"] = ["Tool: example-tool"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "fail"
 
     def test_spdx_with_creator_email(self) -> None:
         """Test SPDX SBOM with email in creators for vulnerability contact."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         sbom_data["creationInfo"]["creators"] = ["Organization: Example Corp (security@example.com)"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "pass"
 
     def test_spdx_with_vulnerability_contact_annotation(self) -> None:
         """Test SPDX SBOM with vulnerability contact in annotation."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         sbom_data["creationInfo"]["creators"] = ["Tool: example-tool"]
         sbom_data["annotations"] = [
             {
@@ -486,34 +551,34 @@ class TestSPDXValidation:
             }
         ]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
         assert contact_finding.status == "pass"
 
     def test_spdx_missing_support_period(self) -> None:
         """Test SPDX SBOM missing support period."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["validUntilDate"]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "fail"
 
     def test_spdx_with_valid_until_date(self) -> None:
         """Test SPDX SBOM with validUntilDate for support period."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         sbom_data["packages"][0]["validUntilDate"] = "2028-12-31T00:00:00Z"
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
 
     def test_spdx_with_support_period_annotation(self) -> None:
         """Test SPDX SBOM with support period in annotation."""
-        sbom_data = self._create_base_spdx_sbom()
+        sbom_data = create_base_spdx_sbom()
         del sbom_data["packages"][0]["validUntilDate"]
         sbom_data["annotations"] = [
             {
@@ -524,52 +589,10 @@ class TestSPDXValidation:
             }
         ]
 
-        result = self._assess_sbom(sbom_data)
+        result = assess_sbom(sbom_data)
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
-
-    def _create_base_spdx_sbom(self) -> dict:
-        """Create a base compliant SPDX SBOM for testing."""
-        return {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "SPDXID": "SPDXRef-Package",
-                    "name": "example-package",
-                    "supplier": "Organization: Example Corp",
-                    "versionInfo": "1.0.0",
-                    "externalRefs": [
-                        {
-                            "referenceCategory": "PACKAGE-MANAGER",
-                            "referenceType": "purl",
-                            "referenceLocator": "pkg:pypi/example-package@1.0.0",
-                        }
-                    ],
-                    "validUntilDate": "2028-12-31T00:00:00Z",
-                }
-            ],
-            "relationships": [
-                {
-                    "spdxElementId": "SPDXRef-DOCUMENT",
-                    "relationshipType": "DEPENDS_ON",
-                    "relatedSpdxElement": "SPDXRef-Package",
-                }
-            ],
-            "creationInfo": {
-                "creators": ["Tool: example-tool", "Organization: Example Corp (security@example.com)"],
-                "created": "2023-01-01T00:00:00Z",
-            },
-        }
-
-    def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
-        """Helper to write SBOM to temp file and assess it."""
-        plugin = CRACompliancePlugin()
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(sbom_data, f)
-            f.flush()
-            return plugin.assess("test-sbom-id", Path(f.name))
 
 
 class TestErrorHandling:

@@ -10,6 +10,13 @@
 
 import { Collapse } from 'bootstrap'
 
+// Extend Window interface for togglePackages global function
+declare global {
+  interface Window {
+    togglePackages: typeof togglePackages
+  }
+}
+
 export function initAssessmentResultsCard(): void {
   // Handle anchor links on page load
   handleAnchorLink()
@@ -53,7 +60,7 @@ function togglePackages(button: HTMLButtonElement): void {
  */
 function registerPackageToggle(): void {
   // Make togglePackages available globally for onclick handlers
-  ;(window as unknown as { togglePackages: typeof togglePackages }).togglePackages = togglePackages
+  window.togglePackages = togglePackages
 }
 
 function handleAnchorLink(): void {

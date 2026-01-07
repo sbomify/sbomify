@@ -3,10 +3,12 @@
 import re
 
 from django import template
-from django.utils.html import escape
-from django.utils.safestring import mark_safe
+from django.utils.html import conditional_escape, format_html, format_html_join
 
 register = template.Library()
+
+# Number of packages to show before collapsing with "Show all" toggle
+VISIBLE_PACKAGE_COUNT = 5
 
 
 @register.filter
@@ -109,6 +111,22 @@ def status_icon(status: str) -> str:
     return icons.get(status, "fas fa-info-circle")
 
 
+def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
+    """Build argument tuples for package spans.
+
+    Args:
+        packages: List of package names.
+
+    Returns:
+        List of (hidden_class, pkg, pkg) tuples for format_html_join.
+    """
+    args = []
+    for i, pkg in enumerate(packages):
+        hidden_class = " pkg-hidden" if i >= VISIBLE_PACKAGE_COUNT else ""
+        args.append((hidden_class, pkg, pkg))
+    return args
+
+
 @register.filter
 def format_finding_description(description: str) -> str:
     """Format finding description with styled package lists.
@@ -116,6 +134,8 @@ def format_finding_description(description: str) -> str:
     Parses descriptions containing "Missing for:" followed by a list of
     package names/paths and renders them as styled HTML spans for better
     readability. Includes expand/collapse for long lists.
+
+    All user input is properly escaped via format_html/format_html_join.
 
     Args:
         description: The finding description text. May contain patterns like:
@@ -133,7 +153,7 @@ def format_finding_description(description: str) -> str:
     match = re.match(pattern, description, re.IGNORECASE | re.DOTALL)
 
     if not match:
-        return escape(description)
+        return conditional_escape(description)
 
     prefix_text = match.group(1).strip()
     missing_label = match.group(2)
@@ -142,35 +162,32 @@ def format_finding_description(description: str) -> str:
     # Split packages by comma
     packages = [p.strip() for p in packages_text.split(",") if p.strip()]
 
-    # Build HTML
-    html_parts = []
+    # Build package spans using format_html_join (properly escapes all args)
+    hidden_count = max(0, len(packages) - VISIBLE_PACKAGE_COUNT)
+    pkg_span_args = _build_package_span_args(packages)
+    pkg_spans_joined = format_html_join(" ", '<span class="pkg{}" title="{}">{}</span>', pkg_span_args)
 
-    if prefix_text:
-        html_parts.append(f"<span>{escape(prefix_text)}</span>")
-
-    # Package list container
-    pkg_html = [f'<span class="missing-label fw-medium">{escape(missing_label)}</span>']
-    pkg_html.append('<span class="missing-packages">')
-
-    # Show first 5 packages initially, rest are hidden but expandable
-    visible_count = 5
-    hidden_count = max(0, len(packages) - visible_count)
-
-    for i, pkg in enumerate(packages):
-        hidden_class = " pkg-hidden" if i >= visible_count else ""
-        pkg_html.append(f'<span class="pkg{hidden_class}" title="{escape(pkg)}">{escape(pkg)}</span>')
-
-    # Show toggle if there are hidden items
+    # Build the toggle button if needed (static HTML, only integer from len())
+    toggle_html = ""
     if hidden_count > 0:
-        pkg_html.append(
-            f'<button type="button" class="pkg-toggle" data-expanded="false" '
-            f'onclick="togglePackages(this)">'
-            f'<span class="pkg-toggle-more">Show all {len(packages)}</span>'
-            f'<span class="pkg-toggle-less" style="display:none;">Show less</span>'
-            f"</button>"
+        toggle_html = format_html(
+            '<button type="button" class="pkg-toggle" data-expanded="false" '
+            'onclick="togglePackages(this)">'
+            '<span class="pkg-toggle-more">Show all {}</span>'
+            '<span class="pkg-toggle-less" style="display:none;">Show less</span>'
+            "</button>",
+            len(packages),
         )
 
-    pkg_html.append("</span>")
-    html_parts.append(" ".join(pkg_html))
+    # Build the missing packages section
+    packages_html = format_html(
+        '<span class="missing-label fw-medium">{}</span> <span class="missing-packages">{} {}</span>',
+        missing_label,
+        pkg_spans_joined,
+        toggle_html,
+    )
 
-    return mark_safe(" ".join(html_parts))
+    # Return with optional prefix
+    if prefix_text:
+        return format_html("<span>{}</span> {}", prefix_text, packages_html)
+    return packages_html
