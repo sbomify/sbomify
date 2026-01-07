@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.db import migrations, models
 import sys
+import stripe
 
 PRICE_PLANS = {
     'business': {
@@ -42,7 +43,6 @@ def populate_pricing_fields(apps, schema_editor):
 
     # Try to fetch from Stripe
     try:
-        import stripe
         stripe.api_key = settings.STRIPE_SECRET_KEY
         
         for plan in BillingPlan.objects.all():
