@@ -283,4 +283,3 @@ class TestPluginOrchestrator:
         )
 
         assert AssessmentRun.objects.count() == initial_count + 1
-

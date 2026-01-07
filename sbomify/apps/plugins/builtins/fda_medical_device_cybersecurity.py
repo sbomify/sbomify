@@ -290,10 +290,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "supplier_name",
                 is_ntia=True,
                 status="fail" if supplier_failures else "pass",
-                details=f"Missing for: {', '.join(supplier_failures[:5])}"
-                + (f" and {len(supplier_failures) - 5} more" if len(supplier_failures) > 5 else "")
-                if supplier_failures
-                else None,
+                details=f"Missing for: {', '.join(supplier_failures)}" if supplier_failures else None,
                 remediation="Add supplier field to packages. Use 'NOASSERTION' if supplier is unknown.",
             )
         )
@@ -303,10 +300,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "component_name",
                 is_ntia=True,
                 status="fail" if component_name_failures else "pass",
-                details=f"Missing for: {', '.join(component_name_failures[:5])}"
-                + (f" and {len(component_name_failures) - 5} more" if len(component_name_failures) > 5 else "")
-                if component_name_failures
-                else None,
+                details=f"Missing for: {', '.join(component_name_failures)}" if component_name_failures else None,
                 remediation="Add name field to all packages.",
             )
         )
@@ -316,10 +310,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "version",
                 is_ntia=True,
                 status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures[:5])}"
-                + (f" and {len(version_failures) - 5} more" if len(version_failures) > 5 else "")
-                if version_failures
-                else None,
+                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
                 remediation="Add versionInfo field to packages. Use 'NOASSERTION' if version is unknown.",
             )
         )
@@ -329,10 +320,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "unique_identifiers",
                 is_ntia=True,
                 status="fail" if unique_id_failures else "pass",
-                details=f"Missing for: {', '.join(unique_id_failures[:5])}"
-                + (f" and {len(unique_id_failures) - 5} more" if len(unique_id_failures) > 5 else "")
-                if unique_id_failures
-                else None,
+                details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
                 remediation="Add externalRefs with PURL, CPE, or other identifiers.",
             )
         )
@@ -384,10 +372,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "support_status",
                 is_ntia=False,
                 status="fail" if support_status_failures else "pass",
-                details=f"Missing for: {', '.join(support_status_failures[:5])}"
-                + (f" and {len(support_status_failures) - 5} more" if len(support_status_failures) > 5 else "")
-                if support_status_failures
-                else None,
+                details=f"Missing for: {', '.join(support_status_failures)}" if support_status_failures else None,
                 remediation=(
                     "Add CLE support status via annotation with comment 'cle:supportStatus=<status>' "
                     "where status is one of: active, deprecated, eol, abandoned, unknown. "
@@ -401,10 +386,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "end_of_support",
                 is_ntia=False,
                 status="fail" if end_of_support_failures else "pass",
-                details=f"Missing for: {', '.join(end_of_support_failures[:5])}"
-                + (f" and {len(end_of_support_failures) - 5} more" if len(end_of_support_failures) > 5 else "")
-                if end_of_support_failures
-                else None,
+                details=f"Missing for: {', '.join(end_of_support_failures)}" if end_of_support_failures else None,
                 remediation=(
                     "Add validUntilDate field to packages with ISO-8601 date. "
                     "Use sbomify GitHub Action to inject CLE data."
@@ -535,10 +517,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "supplier_name",
                 is_ntia=True,
                 status="fail" if supplier_failures else "pass",
-                details=f"Missing for: {', '.join(supplier_failures[:5])}"
-                + (f" and {len(supplier_failures) - 5} more" if len(supplier_failures) > 5 else "")
-                if supplier_failures
-                else None,
+                details=f"Missing for: {', '.join(supplier_failures)}" if supplier_failures else None,
                 remediation="Add publisher field or supplier.name to components.",
             )
         )
@@ -548,10 +527,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "component_name",
                 is_ntia=True,
                 status="fail" if component_name_failures else "pass",
-                details=f"Missing for: {', '.join(component_name_failures[:5])}"
-                + (f" and {len(component_name_failures) - 5} more" if len(component_name_failures) > 5 else "")
-                if component_name_failures
-                else None,
+                details=f"Missing for: {', '.join(component_name_failures)}" if component_name_failures else None,
                 remediation="Add name field to all components.",
             )
         )
@@ -561,10 +537,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "version",
                 is_ntia=True,
                 status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures[:5])}"
-                + (f" and {len(version_failures) - 5} more" if len(version_failures) > 5 else "")
-                if version_failures
-                else None,
+                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
                 remediation="Add version field to components.",
             )
         )
@@ -574,10 +547,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "unique_identifiers",
                 is_ntia=True,
                 status="fail" if unique_id_failures else "pass",
-                details=f"Missing for: {', '.join(unique_id_failures[:5])}"
-                + (f" and {len(unique_id_failures) - 5} more" if len(unique_id_failures) > 5 else "")
-                if unique_id_failures
-                else None,
+                details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
                 remediation="Add purl, cpe, swid, or hashes to components.",
             )
         )
@@ -630,10 +600,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "support_status",
                 is_ntia=False,
                 status="fail" if support_status_failures else "pass",
-                details=f"Missing for: {', '.join(support_status_failures[:5])}"
-                + (f" and {len(support_status_failures) - 5} more" if len(support_status_failures) > 5 else "")
-                if support_status_failures
-                else None,
+                details=f"Missing for: {', '.join(support_status_failures)}" if support_status_failures else None,
                 remediation=(
                     "Add CLE support status via component property 'cdx:cle:supportStatus' "
                     "with value: active, deprecated, eol, abandoned, or unknown. "
@@ -647,10 +614,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
                 "end_of_support",
                 is_ntia=False,
                 status="fail" if end_of_support_failures else "pass",
-                details=f"Missing for: {', '.join(end_of_support_failures[:5])}"
-                + (f" and {len(end_of_support_failures) - 5} more" if len(end_of_support_failures) > 5 else "")
-                if end_of_support_failures
-                else None,
+                details=f"Missing for: {', '.join(end_of_support_failures)}" if end_of_support_failures else None,
                 remediation=(
                     "Add CLE end-of-support date via component property 'cdx:cle:endOfSupport' "
                     "with ISO-8601 date value. Use sbomify GitHub Action to inject CLE data."

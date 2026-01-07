@@ -737,9 +737,9 @@ class TestFindingDetails:
         assert "sbomify GitHub Action" in support_finding.remediation
         assert "sbomify GitHub Action" in eos_finding.remediation
 
-    def test_truncated_failure_list_for_many_components(self) -> None:
-        """Test that failure details are truncated when many components fail."""
-        # Create SBOM with more than 5 components missing CLE data
+    def test_failure_list_includes_all_components(self) -> None:
+        """Test that failure details include all failing components."""
+        # Create SBOM with 10 components missing CLE data
         components = [
             {
                 "name": f"component-{i}",
@@ -768,5 +768,6 @@ class TestFindingDetails:
             result = plugin.assess("test-sbom-id", Path(f.name))
 
         support_finding = next(f for f in result.findings if "support-status" in f.id)
-        # Should show first 5 and indicate more
-        assert "and 5 more" in support_finding.description
+        # All 10 components should be listed (no truncation)
+        for i in range(10):
+            assert f"component-{i}" in support_finding.description

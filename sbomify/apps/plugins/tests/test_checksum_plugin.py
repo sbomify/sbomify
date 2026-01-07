@@ -4,8 +4,6 @@ import hashlib
 import json
 from pathlib import Path
 
-import pytest
-
 from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 
@@ -132,4 +130,3 @@ class TestChecksumPlugin:
         checksum2 = result2.findings[0].metadata["digest"]
 
         assert checksum1 != checksum2
-

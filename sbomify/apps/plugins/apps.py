@@ -43,9 +43,10 @@ class PluginsConfig(AppConfig):
                         "SBOM Author, and Timestamp."
                     ),
                     "category": "compliance",
-                    "version": "1.0.0",
+                    "version": "0.1.0",
                     "plugin_class_path": "sbomify.apps.plugins.builtins.ntia.NTIAMinimumElementsPlugin",
                     "is_enabled": True,
+                    "is_beta": True,
                     "default_config": {},
                 },
             )
@@ -62,11 +63,33 @@ class PluginsConfig(AppConfig):
                         "data including software support status and end-of-support dates for each component."
                     ),
                     "category": "compliance",
-                    "version": "1.0.0",
+                    "version": "0.1.0",
                     "plugin_class_path": (
                         "sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity.FDAMedicalDevicePlugin"
                     ),
                     "is_enabled": True,
+                    "is_beta": True,
+                    "default_config": {},
+                },
+            )
+
+            # EU Cyber Resilience Act (CRA) 2024 Plugin
+            RegisteredPlugin.objects.update_or_create(
+                name="cra-compliance-2024",
+                defaults={
+                    "display_name": "EU Cyber Resilience Act (CRA) (2024)",
+                    "description": (
+                        "Validates SBOMs against the EU Cyber Resilience Act (Regulation 2024/2847) "
+                        "requirements for software bills of materials. Checks for: Component Name, "
+                        "Component Version, Supplier, Unique Identifiers, SBOM Author, Timestamp, "
+                        "Top-Level Dependencies, Machine-Readable Format, Vulnerability Contact, "
+                        "and Support Period End Date as required by Annex I Part II and Annex II."
+                    ),
+                    "category": "compliance",
+                    "version": "0.1.0",
+                    "plugin_class_path": "sbomify.apps.plugins.builtins.cra.CRACompliancePlugin",
+                    "is_enabled": True,
+                    "is_beta": True,
                     "default_config": {},
                 },
             )

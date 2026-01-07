@@ -23,9 +23,10 @@ class RegisteredPluginAdmin(admin.ModelAdmin):
         "version",
         "category",
         "is_enabled",
+        "is_beta",
         "updated_at",
     ]
-    list_filter = ["is_enabled", "category"]
+    list_filter = ["is_enabled", "is_beta", "category"]
     search_fields = ["name", "display_name", "description"]
     readonly_fields = ["id", "created_at", "updated_at"]
     ordering = ["category", "name"]
@@ -46,7 +47,7 @@ class RegisteredPluginAdmin(admin.ModelAdmin):
         (
             "Status",
             {
-                "fields": ["is_enabled"],
+                "fields": ["is_enabled", "is_beta"],
             },
         ),
         (
@@ -58,7 +59,7 @@ class RegisteredPluginAdmin(admin.ModelAdmin):
         ),
     ]
 
-    actions = ["enable_plugins", "disable_plugins"]
+    actions = ["enable_plugins", "disable_plugins", "mark_as_beta", "mark_as_stable"]
 
     @admin.action(description="Enable selected plugins")
     def enable_plugins(self, request, queryset) -> None:
@@ -71,6 +72,18 @@ class RegisteredPluginAdmin(admin.ModelAdmin):
         """Bulk disable selected plugins."""
         count = queryset.update(is_enabled=False)
         self.message_user(request, f"{count} plugin(s) disabled.")
+
+    @admin.action(description="Mark selected plugins as beta")
+    def mark_as_beta(self, request, queryset) -> None:
+        """Bulk mark selected plugins as beta."""
+        count = queryset.update(is_beta=True)
+        self.message_user(request, f"{count} plugin(s) marked as beta.")
+
+    @admin.action(description="Mark selected plugins as stable")
+    def mark_as_stable(self, request, queryset) -> None:
+        """Bulk mark selected plugins as stable (not beta)."""
+        count = queryset.update(is_beta=False)
+        self.message_user(request, f"{count} plugin(s) marked as stable.")
 
 
 @admin.register(TeamPluginSettings)
