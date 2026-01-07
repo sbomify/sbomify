@@ -15,7 +15,7 @@ from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.sboms.signals import trigger_ntia_compliance_check
+from sbomify.apps.sboms.signals import trigger_plugin_assessments
 from sbomify.apps.teams.models import Team
 
 
@@ -100,33 +100,17 @@ class TestNTIAPluginIntegration:
             },
         }
 
-    def test_signal_triggers_assessment_for_business_plan(
+    def test_signal_triggers_plugin_assessments(
         self, team: Team, component: Component, ntia_plugin: RegisteredPlugin
     ) -> None:
-        """Test that SBOM creation signal triggers NTIA assessment for business plans."""
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=component,
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="test.json",
-            source="test",
+        """Test that SBOM creation signal triggers plugin assessments."""
+        from sbomify.apps.plugins.models import TeamPluginSettings
+
+        # Enable the NTIA plugin for this team
+        TeamPluginSettings.objects.create(
+            team=team,
+            enabled_plugins=["ntia-minimum-elements-2021"],
         )
-
-        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
-            trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
-
-            mock_enqueue.assert_called_once_with(
-                sbom_id=sbom.id,
-                plugin_name="ntia-minimum-elements-2021",
-                run_reason=RunReason.ON_UPLOAD,
-            )
-
-    def test_signal_skips_assessment_for_community_plan(self, component: Component) -> None:
-        """Test that SBOM creation signal skips NTIA assessment for community plans."""
-        # Update team to have no billing plan (community)
-        component.team.billing_plan = None
-        component.team.save()
 
         sbom = SBOM.objects.create(
             name="test-sbom",
@@ -137,10 +121,35 @@ class TestNTIAPluginIntegration:
             source="test",
         )
 
-        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
-            trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
+            trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-            mock_enqueue.assert_not_called()
+            mock_enqueue.assert_called_once()
+            call_kwargs = mock_enqueue.call_args[1]
+            assert call_kwargs["sbom_id"] == sbom.id
+            assert call_kwargs["team_id"] == team.id
+            assert call_kwargs["run_reason"] == RunReason.ON_UPLOAD
+
+    def test_signal_triggers_for_all_teams(self, component: Component) -> None:
+        """Test that SBOM creation signal triggers plugin assessment check for all teams.
+
+        The actual filtering of which plugins run is handled by enqueue_assessments_for_sbom
+        based on TeamPluginSettings.
+        """
+        sbom = SBOM.objects.create(
+            name="test-sbom",
+            component=component,
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="test.json",
+            source="test",
+        )
+
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
+            trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
+
+            # Should always be called - filtering happens inside the function
+            mock_enqueue.assert_called_once()
 
     def test_full_assessment_workflow_compliant(
         self,

@@ -14,53 +14,39 @@ logger = getLogger(__name__)
 
 
 @receiver(post_save, sender=SBOM)
-def trigger_ntia_compliance_check(sender, instance, created, **kwargs):
-    """Trigger NTIA compliance checking via plugin framework when a new SBOM is created.
+def trigger_plugin_assessments(sender, instance, created, **kwargs):
+    """Trigger all enabled plugin assessments when a new SBOM is created.
 
-    Uses the NTIA Minimum Elements 2021 plugin for compliance checking.
-    Only triggers for business/enterprise plans that include NTIA compliance.
+    Uses the plugin framework to run all plugins that the team has enabled
+    in their plugin settings. Plugin access is controlled by:
+    1. Team's enabled_plugins in TeamPluginSettings
+    2. Plugin's global is_enabled flag in RegisteredPlugin
+    3. Billing plan restrictions (enforced when enabling plugins)
     """
     if created:
         try:
-            # Check if the team's billing plan includes NTIA compliance
+            from sbomify.apps.plugins.sdk.enums import RunReason
+            from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+
             team = instance.component.team
 
-            # If no billing plan, skip NTIA check (community default)
-            if not team.billing_plan:
-                logger.info(f"Skipping NTIA compliance check for SBOM {instance.id} - no billing plan (community)")
-                return
+            logger.info(f"Triggering plugin assessments for SBOM {instance.id} (team: {team.key})")
 
-            try:
-                plan = BillingPlan.objects.get(key=team.billing_plan)
-                if not plan.has_ntia_compliance:
-                    logger.info(
-                        f"Skipping NTIA compliance check for SBOM {instance.id} - "
-                        f"plan '{plan.key}' does not include NTIA compliance"
-                    )
-                    return
-            except BillingPlan.DoesNotExist:
-                logger.warning(f"Billing plan not found for team {team.key}, skipping NTIA compliance check")
-                return
-
-            # Proceed with NTIA compliance check for business/enterprise plans
-            from sbomify.apps.plugins.sdk.enums import RunReason
-            from sbomify.apps.plugins.tasks import enqueue_assessment
-
-            logger.info(
-                f"Triggering NTIA compliance check for SBOM {instance.id} - plan '{plan.key}' includes NTIA compliance"
-            )
-            enqueue_assessment(
+            enqueued = enqueue_assessments_for_sbom(
                 sbom_id=instance.id,
-                plugin_name="ntia-minimum-elements-2021",
+                team_id=team.id,
                 run_reason=RunReason.ON_UPLOAD,
             )
 
+            if enqueued:
+                logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")
+            else:
+                logger.debug(f"No plugin assessments enqueued for SBOM {instance.id} (no plugins enabled)")
+
         except (AttributeError, ImportError) as e:
-            logger.error(f"Failed to trigger NTIA compliance check for SBOM {instance.id}: {e}", exc_info=True)
+            logger.error(f"Failed to trigger plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
         except Exception as e:
-            logger.error(
-                f"Unexpected error triggering NTIA compliance check for SBOM {instance.id}: {e}", exc_info=True
-            )
+            logger.error(f"Unexpected error triggering plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
 
 
 @receiver(post_save, sender=SBOM)

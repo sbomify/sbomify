@@ -83,7 +83,7 @@ services:
     entrypoint: /bin/sh /opt/bin/create-minio-buckets.sh
 
   sbomify-backend:
-    pull_policy: build  # Always build in development, never pull
+    pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       # context is inherited from docker-compose.yml
       target: ${BUILD_TARGET:-python-app-dev}
@@ -105,7 +105,7 @@ services:
         condition: service_started
 
   sbomify-migrations:
-    pull_policy: build  # Always build in development, never pull
+    pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
@@ -116,7 +116,7 @@ services:
       <<: *dev-env
 
   sbomify-worker:
-    pull_policy: build  # Always build in development, never pull
+    pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
       args:
@@ -130,7 +130,7 @@ services:
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
-    pull_policy: build  # Always build in development, never pull
+    pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       context: . # Must be defined as it's a new service
       target: ${FRONTEND_BUILD_TARGET:-frontend-dev-server}

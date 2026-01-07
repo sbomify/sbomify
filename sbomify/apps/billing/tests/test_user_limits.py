@@ -195,76 +195,43 @@ class NTIAFeatureGatingTestCase(TestCase):
         self.assertTrue(self.business_plan.has_dependency_track_access)
         self.assertTrue(self.enterprise_plan.has_dependency_track_access)
 
-    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
-    def test_ntia_compliance_not_triggered_for_community(self, mock_enqueue):
-        """Test that NTIA compliance is not triggered for community plans."""
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom")
+    def test_plugin_assessments_triggered_on_sbom_create(self, mock_enqueue):
+        """Test that plugin assessments are triggered when SBOM is created."""
+        team = Team.objects.create(name="Test Team", billing_plan="business")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
-        # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
-
-        # NTIA compliance assessment should not be enqueued
-        mock_enqueue.assert_not_called()
-
-    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
-    def test_ntia_compliance_triggered_for_business(self, mock_enqueue):
-        """Test that NTIA compliance is triggered for business plans."""
-        team = Team.objects.create(name="Business Team", billing_plan="business")
-        Member.objects.create(user=self.user, team=team, role="owner")
-        component = Component.objects.create(name="Test Component", team=team)
-
-        # Create SBOM - this should trigger NTIA compliance check
+        # Create SBOM - this should trigger plugin assessments
         sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-        # NTIA compliance assessment should be enqueued via plugin system
+        # enqueue_assessments_for_sbom should be called with team info
         mock_enqueue.assert_called_once()
         call_kwargs = mock_enqueue.call_args[1]
         self.assertEqual(call_kwargs["sbom_id"], sbom.id)
-        self.assertEqual(call_kwargs["plugin_name"], "ntia-minimum-elements-2021")
+        self.assertEqual(call_kwargs["team_id"], team.id)
 
-    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
-    def test_ntia_compliance_triggered_for_enterprise(self, mock_enqueue):
-        """Test that NTIA compliance is triggered for enterprise plans."""
-        team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
-        Member.objects.create(user=self.user, team=team, role="owner")
-        component = Component.objects.create(name="Test Component", team=team)
+    @patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom")
+    def test_plugin_assessments_triggered_for_all_plans(self, mock_enqueue):
+        """Test that plugin assessment triggering works for any billing plan.
 
-        # Create SBOM - this should trigger NTIA compliance check
-        sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
+        The actual plugin access control is handled by TeamPluginSettings,
+        not the billing plan check in the signal.
+        """
+        for plan in ["community", "business", "enterprise", None]:
+            mock_enqueue.reset_mock()
+            team = Team.objects.create(name=f"Team {plan}", billing_plan=plan)
+            Member.objects.create(user=self.user, team=team, role="owner")
+            component = Component.objects.create(name="Test Component", team=team)
 
-        # NTIA compliance assessment should be enqueued via plugin system
-        mock_enqueue.assert_called_once()
-        call_kwargs = mock_enqueue.call_args[1]
-        self.assertEqual(call_kwargs["sbom_id"], sbom.id)
-        self.assertEqual(call_kwargs["plugin_name"], "ntia-minimum-elements-2021")
+            # Create SBOM - this should always trigger plugin assessment check
+            sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
 
-    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
-    def test_ntia_compliance_not_triggered_for_no_plan(self, mock_enqueue):
-        """Test that NTIA compliance is not triggered when team has no billing plan."""
-        team = Team.objects.create(name="No Plan Team")  # No billing_plan set
-        Member.objects.create(user=self.user, team=team, role="owner")
-        component = Component.objects.create(name="Test Component", team=team)
-
-        # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
-
-        # NTIA compliance assessment should not be enqueued
-        mock_enqueue.assert_not_called()
-
-    @patch("sbomify.apps.plugins.tasks.enqueue_assessment")
-    def test_ntia_compliance_not_triggered_for_invalid_plan(self, mock_enqueue):
-        """Test that NTIA compliance is not triggered for invalid billing plans."""
-        team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
-        Member.objects.create(user=self.user, team=team, role="owner")
-        component = Component.objects.create(name="Test Component", team=team)
-
-        # Create SBOM - this should not trigger NTIA compliance check
-        _sbom = SBOM.objects.create(name="test-sbom", component=component, format="spdx")
-
-        # NTIA compliance assessment should not be enqueued
-        mock_enqueue.assert_not_called()
+            # enqueue_assessments_for_sbom should be called (it handles enabled plugin filtering)
+            mock_enqueue.assert_called_once()
+            call_kwargs = mock_enqueue.call_args[1]
+            self.assertEqual(call_kwargs["sbom_id"], sbom.id)
+            self.assertEqual(call_kwargs["team_id"], team.id)
 
     @patch("sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified.send_with_options")
     def test_vulnerability_scan_triggered_for_community(self, mock_task):
