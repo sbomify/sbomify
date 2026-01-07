@@ -559,14 +559,15 @@ class CRACompliancePlugin(AssessmentPlugin):
         # 5. SBOM Author (document-level)
         authors = metadata.get("authors", [])
         tools = metadata.get("tools", [])
-        manufacture = metadata.get("manufacture", {})
-        has_author = bool(authors or tools or manufacture.get("name"))
+        # Check manufacturer (1.6+) first, fallback to manufacture (1.5 legacy)
+        manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
+        has_author = bool(authors or tools or manufacturer.get("name"))
         findings.append(
             self._create_finding(
                 "sbom_author",
                 status="pass" if has_author else "fail",
-                details=None if has_author else "No authors, tools, or manufacture info found in metadata",
-                remediation="Add authors, tools, or manufacture field in metadata section.",
+                details=None if has_author else "No authors, tools, or manufacturer info found in metadata",
+                remediation="Add authors, tools, or manufacturer field in metadata section.",
             )
         )
 
@@ -616,7 +617,7 @@ class CRACompliancePlugin(AssessmentPlugin):
                 status="pass" if has_vuln_contact else "fail",
                 details=None if has_vuln_contact else "No vulnerability reporting contact found",
                 remediation=(
-                    "Add vulnerability contact via metadata.manufacture.contact, "
+                    "Add vulnerability contact via metadata.manufacturer.contact, "
                     "metadata.supplier.contact, or externalReferences with type 'issue-tracker'."
                 ),
             )
@@ -648,9 +649,9 @@ class CRACompliancePlugin(AssessmentPlugin):
         Returns:
             True if vulnerability contact found.
         """
-        # Check manufacture contact
-        manufacture = metadata.get("manufacture", {})
-        if manufacture.get("contact"):
+        # Check manufacturer contact (1.6+) first, fallback to manufacture (1.5 legacy)
+        manufacturer = metadata.get("manufacturer") or metadata.get("manufacture", {})
+        if manufacturer.get("contact"):
             return True
 
         # Check supplier contact

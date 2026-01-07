@@ -37,7 +37,7 @@ def create_base_cyclonedx_sbom() -> dict:
             "authors": [{"name": "Example Developer"}],
             "tools": [{"name": "sbom-generator", "version": "1.0.0"}],
             "timestamp": "2023-01-01T00:00:00Z",
-            "manufacture": {
+            "manufacturer": {
                 "name": "Example Corp",
                 "contact": [{"email": "security@example.com"}],
             },
@@ -181,7 +181,7 @@ class TestCycloneDXValidation:
                 "authors": [{"name": "Example Developer"}],
                 "tools": [{"name": "sbom-generator", "version": "1.0.0"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {
+                "manufacturer": {
                     "name": "Example Corp",
                     "contact": [{"email": "security@example.com"}],
                 },
@@ -262,7 +262,7 @@ class TestCycloneDXValidation:
         sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["authors"]
         del sbom_data["metadata"]["tools"]
-        del sbom_data["metadata"]["manufacture"]
+        del sbom_data["metadata"]["manufacturer"]
 
         result = assess_sbom(sbom_data)
 
@@ -273,7 +273,7 @@ class TestCycloneDXValidation:
         """Test CycloneDX SBOM with tools field satisfies author requirement."""
         sbom_data = create_base_cyclonedx_sbom()
         del sbom_data["metadata"]["authors"]
-        del sbom_data["metadata"]["manufacture"]
+        del sbom_data["metadata"]["manufacturer"]
         sbom_data["metadata"]["tools"] = [{"name": "sbom-generator"}]
 
         result = assess_sbom(sbom_data)
@@ -323,7 +323,7 @@ class TestCycloneDXValidation:
     def test_cyclonedx_missing_vulnerability_contact(self) -> None:
         """Test CycloneDX SBOM missing vulnerability contact."""
         sbom_data = create_base_cyclonedx_sbom()
-        del sbom_data["metadata"]["manufacture"]
+        del sbom_data["metadata"]["manufacturer"]
 
         result = assess_sbom(sbom_data)
 
@@ -333,7 +333,7 @@ class TestCycloneDXValidation:
     def test_cyclonedx_with_supplier_contact(self) -> None:
         """Test CycloneDX SBOM with supplier contact for vulnerability reporting."""
         sbom_data = create_base_cyclonedx_sbom()
-        del sbom_data["metadata"]["manufacture"]
+        del sbom_data["metadata"]["manufacturer"]
         sbom_data["metadata"]["supplier"] = {
             "name": "Example Corp",
             "contact": [{"email": "security@example.com"}],
@@ -347,7 +347,7 @@ class TestCycloneDXValidation:
     def test_cyclonedx_with_external_reference_issue_tracker(self) -> None:
         """Test CycloneDX SBOM with external reference issue tracker."""
         sbom_data = create_base_cyclonedx_sbom()
-        del sbom_data["metadata"]["manufacture"]
+        del sbom_data["metadata"]["manufacturer"]
         sbom_data["externalReferences"] = [{"type": "issue-tracker", "url": "https://github.com/example/issues"}]
 
         result = assess_sbom(sbom_data)
@@ -385,6 +385,45 @@ class TestCycloneDXValidation:
 
         support_finding = next(f for f in result.findings if "support-period" in f.id)
         assert support_finding.status == "pass"
+
+    def test_cyclonedx_15_legacy_manufacture_field(self) -> None:
+        """Test backward compatibility with CycloneDX 1.5 'manufacture' field.
+
+        CycloneDX 1.5 uses 'manufacture' in metadata, which was deprecated in 1.6+
+        in favor of 'manufacturer'. We support both for backward compatibility.
+        """
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "components": [
+                {
+                    "name": "example-component",
+                    "version": "1.0.0",
+                    "publisher": "Example Corp",
+                    "purl": "pkg:pypi/example-component@1.0.0",
+                }
+            ],
+            "dependencies": [{"ref": "pkg:pypi/example-component@1.0.0", "dependsOn": []}],
+            "metadata": {
+                "authors": [{"name": "Example Developer"}],
+                "timestamp": "2023-01-01T00:00:00Z",
+                # Legacy 1.5 field name
+                "manufacture": {
+                    "name": "Example Corp",
+                    "contact": [{"email": "security@example.com"}],
+                },
+                "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
+            },
+        }
+
+        result = assess_sbom(sbom_data)
+
+        # Should pass with legacy 'manufacture' field
+        author_finding = next(f for f in result.findings if "sbom-author" in f.id)
+        assert author_finding.status == "pass"
+
+        contact_finding = next(f for f in result.findings if "vulnerability-contact" in f.id)
+        assert contact_finding.status == "pass"
 
 
 class TestSPDXValidation:
@@ -635,7 +674,7 @@ class TestErrorHandling:
                 "authors": [{"name": "Example Developer"}],
                 "tools": [{"name": "sbom-generator"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {"contact": [{"email": "test@example.com"}]},
+                "manufacturer": {"contact": [{"email": "test@example.com"}]},
                 "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
             },
         }
@@ -691,7 +730,7 @@ class TestFindingDetails:
                 "authors": [{"name": "Author"}],
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {"contact": [{"email": "test@example.com"}]},
+                "manufacturer": {"contact": [{"email": "test@example.com"}]},
                 "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
             },
         }
@@ -745,7 +784,7 @@ class TestMultipleComponentFailures:
                 "authors": [{"name": "Author"}],
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {"contact": [{"email": "test@example.com"}]},
+                "manufacturer": {"contact": [{"email": "test@example.com"}]},
                 "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
             },
         }
@@ -777,7 +816,7 @@ class TestMultipleComponentFailures:
                 "authors": [{"name": "Author"}],
                 "tools": [{"name": "tool"}],
                 "timestamp": "2023-01-01T00:00:00Z",
-                "manufacture": {"contact": [{"email": "test@example.com"}]},
+                "manufacturer": {"contact": [{"email": "test@example.com"}]},
                 "properties": [{"name": "cra:supportPeriodEnd", "value": "2028-12-31"}],
             },
         }
@@ -908,7 +947,7 @@ class TestCRASpecificRequirements:
                 "metadata": {
                     "authors": [{"name": "Author"}],
                     "timestamp": "2023-01-01T00:00:00Z",
-                    "manufacture": {"contact": [{"email": "test@example.com"}]},
+                    "manufacturer": {"contact": [{"email": "test@example.com"}]},
                     "properties": [{"name": prop_name, "value": "2028-12-31"}],
                 },
             }
