@@ -226,6 +226,10 @@
   letter-spacing: 0.05em;
 }
 
+.findings-summary .finding-stat.stat-total {
+  background: #f1f5f9;
+}
+
 /* Findings List */
 .findings-list {
   margin-top: 1.25rem;
@@ -403,4 +407,8 @@
 [data-bs-theme="dark"] .standard-info {
   background: linear-gradient(135deg, #1e293b, #0f172a);
   border-color: #334155;
+}
+
+[data-bs-theme="dark"] .findings-summary .finding-stat.stat-total {
+  background: #334155;
 }

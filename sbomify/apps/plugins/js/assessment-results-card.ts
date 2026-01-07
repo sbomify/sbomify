@@ -7,6 +7,8 @@
  * The only JavaScript needed is for handling URL hash navigation to specific plugins.
  */
 
+import { Collapse } from 'bootstrap'
+
 export function initAssessmentResultsCard(): void {
   // Handle anchor links on page load
   handleAnchorLink()
@@ -29,7 +31,7 @@ function handleAnchorLink(): void {
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
         // Use Bootstrap's Collapse API to show it
-        const bsCollapse = new (window as unknown as { bootstrap: { Collapse: new (el: Element) => { show: () => void } } }).bootstrap.Collapse(collapseEl)
+        const bsCollapse = new Collapse(collapseEl)
         bsCollapse.show()
       }
 

@@ -1,6 +1,6 @@
 {% load static %}
-<link rel="stylesheet" href="{% static 'css/components/assessment-results-card.css' %}">
-
+<link rel="stylesheet"
+      href="{% static 'css/components/assessment-results-card.css' %}">
 <div id="assessment-results" class="standard-card mt-3">
     <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -53,13 +53,11 @@
                             <div class="stat-label">Total</div>
                         </div>
                     </div>
-
                     <!-- Plugin Results -->
                     <div class="plugin-results-section">
                         <h6 class="section-title">
                             <i class="fas fa-puzzle-piece me-2"></i>Plugin Results
                         </h6>
-
                         <div class="accordion" id="assessmentAccordion">
                             {% for run in assessment_runs.latest_runs %}
                                 {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
