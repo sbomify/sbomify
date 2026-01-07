@@ -1473,7 +1473,7 @@ def get_project_sbom_package(project: Project, target_folder: Path, user=None) -
 
     # Save project SBOM with clean serialization (exclude null values)
     sbom_path = target_folder / f"{project.name}.cdx.json"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True))
+    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
     return sbom_path
 
@@ -1511,7 +1511,7 @@ def get_product_sbom_package(product: Product, target_folder: Path, user=None) -
 
     # Save product SBOM with clean serialization (exclude null values)
     sbom_path = target_folder / f"{product.name}.cdx.json"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True))
+    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
     return sbom_path
 
@@ -1538,7 +1538,7 @@ def get_release_sbom_package(release, target_folder: Path, user=None) -> Path:
 
     # Save release SBOM with clean serialization (exclude null values)
     sbom_path = target_folder / f"{release.product.name}-{release.name}.cdx.json"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True))
+    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
     return sbom_path
 

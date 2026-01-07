@@ -1288,3 +1288,63 @@ def test_product_sbom_documents_relationship_debug():
         print(f"  Ref {i}: type={getattr(ref, 'type', 'unknown')}, url={getattr(ref, 'url', 'unknown')}")
 
     assert len(external_refs) >= 1, "Should have external references"
+
+
+@pytest.mark.django_db
+def test_sbom_serialization_uses_schema_alias(tmp_path):
+    """
+    Regression test: Verify SBOM serialization outputs '$schema' not 'field_schema'.
+
+    The CycloneDX Pydantic model uses `field_schema` as the Python attribute name
+    with `alias='$schema'`. When serializing to JSON, we must use `by_alias=True`
+    to ensure the output contains '$schema' (valid CycloneDX) instead of 'field_schema'
+    (invalid, causes validation errors when re-uploaded).
+    """
+    from sbomify.apps.sboms.models import SBOM, Component, Product, Project, ProjectComponent, ProductProject
+    from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
+    from sbomify.apps.teams.models import Team
+
+    # Create test entities
+    team = Team.objects.create(name="schema-test-team", key="schema-test-team")
+    product = Product.objects.create(name="schema-test-product", team=team, is_public=True)
+    project = Project.objects.create(name="schema-test-project", team=team, is_public=True)
+    ProductProject.objects.create(product=product, project=project)
+
+    component = Component.objects.create(name="schema-test-component", team=team, component_type="sbom", is_public=True)
+    SBOM.objects.create(
+        name="schema-test-sbom",
+        component=component,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="schema-test.cdx.json",
+    )
+    ProjectComponent.objects.create(project=project, component=component)
+
+    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+        mock_s3_instance = mock_s3.return_value
+        mock_s3_instance.get_sbom_data.return_value = json.dumps({
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "metadata": {"component": {"name": "test", "type": "library", "version": "1.0.0"}},
+        }).encode()
+
+        # Test project SBOM
+        project_sbom_path = get_project_sbom_package(project, tmp_path)
+        project_sbom_content = project_sbom_path.read_text()
+
+        # Verify '$schema' is used (if present), not 'field_schema'
+        assert "field_schema" not in project_sbom_content, \
+            "Project SBOM should not contain 'field_schema' - must use '$schema' alias"
+        if "$schema" in project_sbom_content:
+            project_sbom_data = json.loads(project_sbom_content)
+            assert "$schema" in project_sbom_data, "If schema is present, it must be '$schema'"
+
+        # Test product SBOM
+        product_sbom_path = get_product_sbom_package(product, tmp_path)
+        product_sbom_content = product_sbom_path.read_text()
+
+        assert "field_schema" not in product_sbom_content, \
+            "Product SBOM should not contain 'field_schema' - must use '$schema' alias"
+        if "$schema" in product_sbom_content:
+            product_sbom_data = json.loads(product_sbom_content)
+            assert "$schema" in product_sbom_data, "If schema is present, it must be '$schema'"
