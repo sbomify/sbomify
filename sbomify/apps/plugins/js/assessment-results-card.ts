@@ -30,8 +30,8 @@ function handleAnchorLink(): void {
       // Find the collapse element within this accordion item
       const collapseEl = element.querySelector('.accordion-collapse')
       if (collapseEl) {
-        // Use Bootstrap's Collapse API to show it
-        const bsCollapse = new Collapse(collapseEl)
+        // Use Bootstrap's Collapse API to show it (getOrCreateInstance avoids conflicts with existing instances)
+        const bsCollapse = Collapse.getOrCreateInstance(collapseEl)
         bsCollapse.show()
       }
 

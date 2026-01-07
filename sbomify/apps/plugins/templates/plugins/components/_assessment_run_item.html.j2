@@ -1,7 +1,7 @@
 {# Individual assessment run accordion item - rendered server-side #}
 {% load plugins_extras %}
 {% with run_id=run.id|default:loop_index %}
-    {% with has_issues=run.result.summary.fail_count|add:run.result.summary.error_count %}
+    {% with has_issues=run.result.summary.fail_count|default:0|add:run.result.summary.error_count|default:0 %}
         <div class="accordion-item {% if has_issues %}has-issues{% elif run.status == 'completed' %}all-passed{% endif %}"
              id="plugin-{{ run.plugin_name }}">
             <h2 class="accordion-header">
