@@ -295,12 +295,20 @@
 }
 
 /* Package list styling for "Missing for:" descriptions */
+/* Custom properties for code-block syntax highlighting colors */
 .findings-list .finding-description .missing-packages {
+  --pkg-text-color: var(--code-string, #e9d5ff);
+  --pkg-toggle-color: var(--bs-info, #60a5fa);
+  --pkg-toggle-hover: var(--bs-info-text-emphasis, #93c5fd);
+  --pkg-warning-color: var(--bs-warning, #fbbf24);
+  --pkg-bg: var(--gray-900, #212529);
+  --pkg-border: var(--gray-700, #495057);
+
   display: block;
   margin-top: 0.5rem;
   padding: 0.75rem 1rem;
-  background: var(--gray-900, #212529);
-  border: 1px solid var(--gray-700, #495057);
+  background: var(--pkg-bg);
+  border: 1px solid var(--pkg-border);
   border-radius: var(--radius-md, 0.375rem);
   font-family: var(--font-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
   font-size: 0.75rem;
@@ -311,7 +319,7 @@
 .findings-list .finding-description .missing-packages .pkg {
   display: block;
   padding: 0.125rem 0;
-  color: #e9d5ff; /* Light purple for paths/packages - like syntax highlighting */
+  color: var(--pkg-text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,7 +345,7 @@
   margin-top: 0.375rem;
   padding-top: 0.375rem;
   border-top: 1px dashed var(--gray-600, #6c757d);
-  color: #fbbf24; /* Amber for warning/info */
+  color: var(--pkg-warning-color);
   font-size: 0.7rem;
   font-style: italic;
 }
@@ -351,7 +359,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 1px dashed var(--gray-600, #6c757d);
   border-radius: var(--radius-sm, 0.25rem);
-  color: #60a5fa; /* Blue for interactive */
+  color: var(--pkg-toggle-color);
   font-family: inherit;
   font-size: 0.7rem;
   font-weight: var(--font-weight-medium, 500);
@@ -361,34 +369,27 @@
 }
 
 .findings-list .finding-description .missing-packages .pkg-toggle:hover {
-  background: rgba(96, 165, 250, 0.1);
-  border-color: #60a5fa;
-  color: #93c5fd;
+  background: color-mix(in srgb, var(--pkg-toggle-color) 10%, transparent);
+  border-color: var(--pkg-toggle-color);
+  color: var(--pkg-toggle-hover);
 }
 
 .findings-list .finding-description .missing-packages .pkg-toggle:focus {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid var(--pkg-toggle-color);
   outline-offset: 2px;
 }
 
 /* Light mode - still use dark code block for contrast */
 [data-bs-theme="light"] .findings-list .finding-description .missing-packages {
-  background: var(--gray-900, #1e1e1e);
-  border-color: var(--gray-700, #3a3a3a);
+  --pkg-bg: var(--gray-900, #1e1e1e);
+  --pkg-border: var(--gray-700, #3a3a3a);
 }
 
-/* Dark mode for package list */
+/* Dark mode for package list - GitHub dark theme */
 [data-bs-theme="dark"] .findings-list .finding-description .missing-packages {
-  background: #0d1117; /* GitHub dark */
-  border-color: #30363d;
-}
-
-[data-bs-theme="dark"] .findings-list .finding-description .missing-packages .pkg {
-  color: #d2a8ff; /* Purple for paths - GitHub syntax */
-}
-
-[data-bs-theme="dark"] .findings-list .finding-description .missing-packages .pkg-toggle {
-  border-color: #30363d;
+  --pkg-bg: #0d1117;
+  --pkg-border: #30363d;
+  --pkg-text-color: #d2a8ff;
 }
 
 /* Remediation Tips */
