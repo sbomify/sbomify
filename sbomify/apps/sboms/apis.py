@@ -684,7 +684,7 @@ router.patch(
 
 
 @router.delete(
-    "/sbom/{sbom_id}",
+    "/{sbom_id}",
     response={204: None, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
 )
