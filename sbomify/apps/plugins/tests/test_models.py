@@ -171,6 +171,21 @@ class TestTeamPluginSettings:
 
         assert config == {}
 
+    def test_plugins_disabled_by_default(self, test_team: Team) -> None:
+        """Test that all plugins are disabled by default when TeamPluginSettings is created.
+
+        This ensures teams must explicitly opt-in to enable plugins.
+        """
+        # Create settings with defaults (simulating get_or_create behavior)
+        settings = TeamPluginSettings.objects.create(team=test_team)
+
+        # Verify no plugins are enabled by default
+        assert settings.enabled_plugins == []
+        assert settings.is_plugin_enabled("ntia-minimum-elements-2021") is False
+        assert settings.is_plugin_enabled("cisa-minimum-elements-2025") is False
+        assert settings.is_plugin_enabled("checksum") is False
+        assert settings.is_plugin_enabled("fda-medical-device-2025") is False
+
 
 @pytest.mark.django_db
 class TestAssessmentRun:
@@ -279,4 +294,3 @@ class TestAssessmentRun:
         )
 
         assert run.is_successful is False
-
