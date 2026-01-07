@@ -2,7 +2,7 @@
 Test exception handling in SBOM signal handlers.
 
 This module tests the error handling and resilience of the signal handlers
-that trigger NTIA compliance checks and vulnerability scans when SBOMs are created.
+that trigger plugin assessments and vulnerability scans when SBOMs are created.
 """
 
 from unittest.mock import Mock, patch
@@ -12,7 +12,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import User, Component
 from sbomify.apps.teams.models import Team
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.signals import trigger_ntia_compliance_check, trigger_vulnerability_scan
+from sbomify.apps.sboms.signals import trigger_plugin_assessments, trigger_vulnerability_scan
 
 
 class SignalExceptionHandlingTests(TestCase):
@@ -42,7 +42,7 @@ class SignalExceptionHandlingTests(TestCase):
 
         with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
             # Trigger signals for update (created=False)
-            trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=False)
+            trigger_plugin_assessments(sender=SBOM, instance=sbom, created=False)
             trigger_vulnerability_scan(sender=SBOM, instance=sbom, created=False)
 
             # Verify no logging occurred (handlers should exit early)
@@ -57,8 +57,8 @@ class SignalExceptionHandlingTests(TestCase):
         mock_instance.component = None
 
         with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-            # Test NTIA compliance check
-            trigger_ntia_compliance_check(sender=SBOM, instance=mock_instance, created=True)
+            # Test plugin assessments
+            trigger_plugin_assessments(sender=SBOM, instance=mock_instance, created=True)
 
             # Test vulnerability scan
             trigger_vulnerability_scan(sender=SBOM, instance=mock_instance, created=True)
@@ -66,51 +66,25 @@ class SignalExceptionHandlingTests(TestCase):
             # Verify both functions logged errors
             self.assertEqual(mock_logger.error.call_count, 2)
 
-    def test_ntia_compliance_with_no_billing_plan(self):
-        """Test NTIA compliance check with no billing plan (community users)."""
+    def test_plugin_assessments_triggered(self):
+        """Test plugin assessments are triggered for new SBOMs."""
         sbom = SBOM.objects.create(
             name="test-sbom",
             component=self.component
         )
 
-        with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-            trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
-
-            # Should log that NTIA is skipped for community users
-            mock_logger.info.assert_called_once()
-            args, kwargs = mock_logger.info.call_args
-            self.assertIn("Skipping NTIA compliance check", args[0])
-            self.assertIn("no billing plan (community)", args[0])
-
-    def test_ntia_compliance_with_business_plan(self):
-        """Test NTIA compliance check with business plan uses plugin framework."""
-        # Set up team with business plan
-        business_plan = BillingPlan.objects.create(
-            key="business",
-            name="Business Plan"
-        )
-        self.team.billing_plan = business_plan.key
-        self.team.save()
-
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            component=self.component
-        )
-
-        with patch('sbomify.apps.plugins.tasks.enqueue_assessment') as mock_enqueue:
+        with patch('sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom') as mock_enqueue:
             with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                trigger_ntia_compliance_check(sender=SBOM, instance=sbom, created=True)
+                trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-                # Should trigger the plugin assessment
+                # Should trigger the plugin assessment enqueue function
                 mock_enqueue.assert_called_once()
                 call_kwargs = mock_enqueue.call_args[1]
                 self.assertEqual(call_kwargs['sbom_id'], sbom.id)
-                self.assertEqual(call_kwargs['plugin_name'], 'ntia-minimum-elements-2021')
+                self.assertEqual(call_kwargs['team_id'], self.team.id)
 
-                # Should log that NTIA compliance is triggered
-                mock_logger.info.assert_called_once()
-                args, kwargs = mock_logger.info.call_args
-                self.assertIn("Triggering NTIA compliance check", args[0])
+                # Should log that plugin assessments are triggered
+                mock_logger.info.assert_called()
 
     def test_vulnerability_scan_always_triggered(self):
         """Test vulnerability scan is always triggered regardless of plan."""
@@ -211,26 +185,22 @@ class SignalIntegrationTests(TestCase):
     def test_signals_triggered_on_sbom_creation(self):
         """Test that both signals are triggered when an SBOM is created."""
         with patch('sbomify.apps.vulnerability_scanning.tasks.scan_sbom_for_vulnerabilities_unified') as mock_vuln_task:
-            with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
-                # Create SBOM - this should trigger both signals
-                sbom = SBOM.objects.create(
-                    name="test-sbom",
-                    component=self.component
-                )
+            with patch('sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom') as mock_plugin_enqueue:
+                with patch('sbomify.apps.sboms.signals.logger') as mock_logger:
+                    # Create SBOM - this should trigger both signals
+                    sbom = SBOM.objects.create(
+                        name="test-sbom",
+                        component=self.component
+                    )
 
-                # Verify vulnerability scan was triggered
-                mock_vuln_task.send_with_options.assert_called_once_with(
-                    args=[sbom.id],
-                    delay=90000
-                )
+                    # Verify vulnerability scan was triggered
+                    mock_vuln_task.send_with_options.assert_called_once_with(
+                        args=[sbom.id],
+                        delay=90000
+                    )
 
-                # Verify logging occurred for both signals
-                info_calls = [str(call) for call in mock_logger.info.call_args_list]
-                vuln_calls = [call for call in info_calls if 'vulnerability scan' in call]
-                ntia_calls = [call for call in info_calls if 'NTIA compliance check' in call]
-
-                self.assertTrue(len(vuln_calls) > 0)
-                self.assertTrue(len(ntia_calls) > 0)  # Should skip NTIA for community
+                    # Verify plugin assessments were triggered
+                    mock_plugin_enqueue.assert_called_once()
 
     def test_exception_handling_resilience(self):
         """Test that exceptions in signal handlers don't break SBOM creation."""
