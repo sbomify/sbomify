@@ -140,7 +140,7 @@
 }
 
 .settings-tabs .nav-link.active {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(var(--brand-primary-rgb), 0.1);
   color: var(--brand-primary);
   border-left-color: var(--brand-primary);
   font-weight: 600;
@@ -152,7 +152,7 @@
 }
 
 .settings-tabs .nav-link.active:hover {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--brand-primary-rgb), 0.15);
   color: var(--brand-primary);
 }
 

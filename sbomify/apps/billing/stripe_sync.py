@@ -190,6 +190,43 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                 updated_fields.append("next_billing_date")
                 logger.debug("Updated next_billing_date")
 
+        # Sync billing period
+        current_billing_period = billing_limits.get("billing_period")
+        real_billing_period = None
+        try:
+            # Extract interval from subscription items
+            items_data = None
+            if hasattr(subscription, "items") and hasattr(subscription.items, "data"):
+                items_data = subscription.items.data
+            elif isinstance(subscription, dict) and "items" in subscription:
+                items_items = subscription["items"]
+                if isinstance(items_items, dict) and "data" in items_items:
+                    items_data = items_items["data"]
+                elif isinstance(items_items, list):
+                    items_data = items_items
+
+            if items_data and len(items_data) > 0:
+                item = items_data[0]
+                price = getattr(item, "price", None) or (item.get("price") if isinstance(item, dict) else None)
+                recurring = getattr(price, "recurring", None) or (
+                    price.get("recurring") if isinstance(price, dict) else None
+                )
+                interval = getattr(recurring, "interval", None) or (
+                    recurring.get("interval") if isinstance(recurring, dict) else None
+                )
+
+                if interval == "year":
+                    real_billing_period = "annual"
+                elif interval == "month":
+                    real_billing_period = "monthly"
+        except Exception as e:
+            logger.warning(f"Could not extract billing period: {e}")
+
+        if real_billing_period and real_billing_period != current_billing_period:
+            billing_limits["billing_period"] = real_billing_period
+            needs_update = True
+            updated_fields.append("billing_period")
+
         # Update last_updated timestamp
         if needs_update:
             from django.db import transaction as db_transaction

@@ -153,7 +153,7 @@ class TeamPricingService:
             period_display = "per month" if billing_period == "monthly" else "per year"
 
             return {
-                "amount": f"{currency_symbol}{last_payment_amount:.2f}",
+                "amount": f"{currency_symbol}{last_payment_amount:,.0f}",
                 "period": period_display,
                 "billing_period": billing_period,
                 "next_billing_date": next_billing_date,
@@ -272,26 +272,26 @@ class TeamPricingService:
 
             if billing_period == "annual" and annual_discounted:
                 return {
-                    "amount": f"${float(annual_discounted):.0f}",
+                    "amount": f"${float(annual_discounted):,.0f}",
                     "period": "per year",
                     "billing_period": "annual",
                 }
             elif billing_period == "monthly" and monthly_discounted:
                 return {
-                    "amount": f"${float(monthly_discounted):.0f}",
+                    "amount": f"${float(monthly_discounted):,.0f}",
                     "period": "per month",
                     "billing_period": "monthly",
                 }
             elif monthly_discounted:
                 # Default to monthly if billing_period is not set
                 return {
-                    "amount": f"${float(monthly_discounted):.0f}",
+                    "amount": f"${float(monthly_discounted):,.0f}",
                     "period": "per month",
                     "billing_period": None,
                 }
             elif annual_discounted:
                 return {
-                    "amount": f"${float(annual_discounted):.0f}",
+                    "amount": f"${float(annual_discounted):,.0f}",
                     "period": "per year",
                     "billing_period": None,
                 }

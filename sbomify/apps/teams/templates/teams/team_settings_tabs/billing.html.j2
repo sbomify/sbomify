@@ -34,7 +34,13 @@
                         <span class="price-amount">{{ plan_pricing.amount|default:'$0' }}</span>
                         {% if plan_pricing.period %}<span class="price-period">{{ plan_pricing.period }}</span>{% endif %}
                         {% if plan_pricing.billing_period and team.billing_plan and team.billing_plan != 'community' %}
-                            <span class="badge bg-info-subtle text-info ms-2">Billed {{ plan_pricing.billing_period|title }}</span>
+                            <span class="badge bg-info-subtle text-info ms-2">Billed
+                                {% if plan_pricing.billing_period == 'annual' %}
+                                    Annually
+                                {% else %}
+                                    {{ plan_pricing.billing_period|title }}
+                                {% endif %}
+                            </span>
                         {% endif %}
                         {% if team.billing_plan_limits.subscription_status == 'past_due' %}
                             <div class="next-billing-date mt-1 text-danger fw-bold small">
@@ -92,9 +98,9 @@
                 {% if plan_features %}
                     <div class="plan-features mt-4">
                         <h6 class="features-title mb-3">Plan Features</h6>
-                        <ul class="features-list">
+                        <ul class="list-unstyled row g-2 mb-0">
                             {% for feature in plan_features %}
-                                <li class="feature-item">
+                                <li class="col-6 feature-item">
                                     <i class="fas fa-check text-success me-2"></i>
                                     {{ feature }}
                                 </li>

@@ -1,5 +1,6 @@
 {% extends "core/dashboard_base.html.j2" %}
 {% load static %}
+{% load humanize %}
 {% block title %}sbomify Select Plan{% endblock %}
 {% block styles %}
     <link rel="stylesheet"
@@ -22,7 +23,7 @@
             ] }
             {% if not forloop.last %},{% endif %}
         {% endfor %}
-        } })">
+        }, billingPeriod: '{{ team.billing_plan_limits.billing_period|default:'monthly' }}' })">
         <!-- Hero Section -->
         <section class="hero-section py-5">
             <div class="container">
@@ -133,9 +134,9 @@
                                                         {% if pricing.monthly_price_discounted %}
                                                             <div class="price-with-discount">
                                                                 {% if pricing.discount_percent_monthly and pricing.monthly_price != pricing.monthly_price_discounted %}
-                                                                    <span class="original-price">${{ pricing.monthly_price|floatformat:0 }}</span>
+                                                                    <span class="original-price">${{ pricing.monthly_price|floatformat:0|intcomma }}</span>
                                                                 {% endif %}
-                                                                <span class="price-main">${{ pricing.monthly_price_discounted|floatformat:0 }}</span>
+                                                                <span class="price-main">${{ pricing.monthly_price_discounted|floatformat:0|intcomma }}</span>
                                                                 <span class="price-period">/month</span>
                                                             </div>
                                                         {% else %}
@@ -147,15 +148,15 @@
                                                         {% if pricing.annual_price %}
                                                             <div class="price-with-discount">
                                                                 {% if pricing.monthly_price_base_annualized and pricing.monthly_price_base_annualized > pricing.annual_price_discounted %}
-                                                                    <span class="original-price">${{ pricing.monthly_price_base_annualized|floatformat:0 }}/yr</span>
+                                                                    <span class="original-price">${{ pricing.monthly_price_base_annualized|floatformat:0|intcomma }}/yr</span>
                                                                 {% endif %}
-                                                                <span class="price-main">${{ pricing.annual_price_discounted|floatformat:0 }}</span>
+                                                                <span class="price-main">${{ pricing.annual_price_discounted|floatformat:0|intcomma }}</span>
                                                                 <span class="price-period">/year</span>
                                                             </div>
                                                             <!-- Show monthly equivalent -->
                                                             <div class="billing-note">
                                                                 {% widthratio pricing.annual_price_discounted 12 1 as monthly_equiv %}
-                                                                <span class="monthly-equivalent">${{ monthly_equiv|floatformat:0 }}/mo billed annually</span>
+                                                                <span class="monthly-equivalent">${{ monthly_equiv|floatformat:0|intcomma }}/mo billed annually</span>
                                                             </div>
                                                         {% else %}
                                                             <span class="price-main">Contact us</span>
@@ -190,7 +191,7 @@
                                                     <div class="promo-message" x-show="billingPeriod === 'annual'">
                                                         <div class="annual-subscription-savings">
                                                             <i class="fas fa-calendar-check"></i>
-                                                            <span>Save ${{ pricing.total_annual_savings|floatformat:0 }} when billed annually</span>
+                                                            <span>Save ${{ pricing.total_annual_savings|floatformat:0|intcomma }} when billed annually</span>
                                                         </div>
                                                     </div>
                                                 {% endif %}

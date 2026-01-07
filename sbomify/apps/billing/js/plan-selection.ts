@@ -64,9 +64,10 @@ export default function planSelection(initialData: {
     cancelAtPeriodEnd?: boolean;
     currentPeriodEnd?: string;
     downgradeLimits?: DowngradeLimits;
+    billingPeriod?: 'monthly' | 'annual';
 }): PlanSelectionData {
     return {
-        billingPeriod: 'monthly',
+        billingPeriod: initialData.billingPeriod || 'monthly',
         currentPlan: initialData.currentPlan,
         teamKey: initialData.teamKey,
         usage: initialData.usage,
@@ -124,7 +125,7 @@ export default function planSelection(initialData: {
                 currentSubscriptionStatus: initialData.currentSubscriptionStatus,
                 downgradeLimits: this.downgradeLimits,
             });
-            
+
             // Validate downgradeLimits structure
             if (!this.downgradeLimits || typeof this.downgradeLimits !== 'object') {
                 console.warn('downgradeLimits is missing or invalid, initializing empty object');
@@ -184,7 +185,7 @@ export default function planSelection(initialData: {
 
         canSelectPlan(planKey?: string) {
             if (this.isSubmitting) return false;
-            
+
             // If checking a specific plan, check if downgrade limits are exceeded
             if (planKey && this.downgradeLimits) {
                 const limits = this.downgradeLimits[planKey];
@@ -192,11 +193,11 @@ export default function planSelection(initialData: {
                     return false;
                 }
             }
-            
+
             // Allow all plans to be clickable - we handle special cases in handlePlanSelection
             return true;
         },
-        
+
         getDowngradeWarning(planKey: string): string | null {
             if (!this.downgradeLimits || !this.downgradeLimits[planKey]) {
                 return null;
@@ -245,7 +246,7 @@ export default function planSelection(initialData: {
 
         handlePlanSelection(planKey: string) {
             console.log('handlePlanSelection called:', { planKey, isSubmitting: this.isSubmitting });
-            
+
             if (this.isSubmitting) {
                 console.log('Already submitting, returning');
                 return;
