@@ -115,7 +115,7 @@ class TestComponentDetailsViews:
         templates_to_test = [
             "core/component_item.html.j2",
             "plugins/components/assessment_results_card.html.j2",
-            "plugins/components/_plugin_accordion_items.html.j2",
+            "plugins/components/_assessment_run_item.html.j2",
         ]
 
         for template_name in templates_to_test:
