@@ -55,3 +55,8 @@ class BillingPlan(models.Model):
     def has_custom_domain_access(self) -> bool:
         """Check if this plan includes custom domain feature."""
         return self.key in ["business", "enterprise"]
+
+    @property
+    def has_fda_compliance(self) -> bool:
+        """Check if this plan includes FDA Medical Device Cybersecurity compliance checking."""
+        return self.key in ["business", "enterprise"]
