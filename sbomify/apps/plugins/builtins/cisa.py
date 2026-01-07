@@ -297,10 +297,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "software_producer",
                 status="fail" if producer_failures else "pass",
-                details=f"Missing for: {', '.join(producer_failures[:5])}"
-                + (f" and {len(producer_failures) - 5} more" if len(producer_failures) > 5 else "")
-                if producer_failures
-                else None,
+                details=f"Missing for: {', '.join(producer_failures)}" if producer_failures else None,
                 remediation="Add supplier field to packages. Use 'Organization: <name>' format.",
             )
         )
@@ -310,10 +307,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_name",
                 status="fail" if component_name_failures else "pass",
-                details=f"Missing for: {', '.join(component_name_failures[:5])}"
-                + (f" and {len(component_name_failures) - 5} more" if len(component_name_failures) > 5 else "")
-                if component_name_failures
-                else None,
+                details=f"Missing for: {', '.join(component_name_failures)}" if component_name_failures else None,
                 remediation="Add name field to all packages.",
             )
         )
@@ -323,10 +317,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_version",
                 status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures[:5])}"
-                + (f" and {len(version_failures) - 5} more" if len(version_failures) > 5 else "")
-                if version_failures
-                else None,
+                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
                 remediation="Add versionInfo field. Use file creation date if version is unknown.",
             )
         )
@@ -336,10 +327,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "software_identifiers",
                 status="fail" if identifier_failures else "pass",
-                details=f"Missing for: {', '.join(identifier_failures[:5])}"
-                + (f" and {len(identifier_failures) - 5} more" if len(identifier_failures) > 5 else "")
-                if identifier_failures
-                else None,
+                details=f"Missing for: {', '.join(identifier_failures)}" if identifier_failures else None,
                 remediation="Add externalRefs with at least one identifier (PURL or CPE preferred).",
             )
         )
@@ -349,10 +337,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_hash",
                 status="fail" if hash_failures else "pass",
-                details=f"Missing for: {', '.join(hash_failures[:5])}"
-                + (f" and {len(hash_failures) - 5} more" if len(hash_failures) > 5 else "")
-                if hash_failures
-                else None,
+                details=f"Missing for: {', '.join(hash_failures)}" if hash_failures else None,
                 remediation="Add checksums field with cryptographic hash (SHA-256 recommended).",
             )
         )
@@ -362,10 +347,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "license",
                 status="fail" if license_failures else "pass",
-                details=f"Missing for: {', '.join(license_failures[:5])}"
-                + (f" and {len(license_failures) - 5} more" if len(license_failures) > 5 else "")
-                if license_failures
-                else None,
+                details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
                 remediation="Add licenseConcluded or licenseDeclared field with SPDX license expression.",
             )
         )
@@ -519,10 +501,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "software_producer",
                 status="fail" if producer_failures else "pass",
-                details=f"Missing for: {', '.join(producer_failures[:5])}"
-                + (f" and {len(producer_failures) - 5} more" if len(producer_failures) > 5 else "")
-                if producer_failures
-                else None,
+                details=f"Missing for: {', '.join(producer_failures)}" if producer_failures else None,
                 remediation="Add publisher field or supplier.name to components.",
             )
         )
@@ -532,10 +511,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_name",
                 status="fail" if component_name_failures else "pass",
-                details=f"Missing for: {', '.join(component_name_failures[:5])}"
-                + (f" and {len(component_name_failures) - 5} more" if len(component_name_failures) > 5 else "")
-                if component_name_failures
-                else None,
+                details=f"Missing for: {', '.join(component_name_failures)}" if component_name_failures else None,
                 remediation="Add name field to all components.",
             )
         )
@@ -545,10 +521,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_version",
                 status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures[:5])}"
-                + (f" and {len(version_failures) - 5} more" if len(version_failures) > 5 else "")
-                if version_failures
-                else None,
+                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
                 remediation="Add version field. Use file creation date if version is unknown.",
             )
         )
@@ -558,10 +531,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "software_identifiers",
                 status="fail" if identifier_failures else "pass",
-                details=f"Missing for: {', '.join(identifier_failures[:5])}"
-                + (f" and {len(identifier_failures) - 5} more" if len(identifier_failures) > 5 else "")
-                if identifier_failures
-                else None,
+                details=f"Missing for: {', '.join(identifier_failures)}" if identifier_failures else None,
                 remediation="Add at least one identifier: purl (preferred), cpe, or swid.",
             )
         )
@@ -571,10 +541,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "component_hash",
                 status="fail" if hash_failures else "pass",
-                details=f"Missing for: {', '.join(hash_failures[:5])}"
-                + (f" and {len(hash_failures) - 5} more" if len(hash_failures) > 5 else "")
-                if hash_failures
-                else None,
+                details=f"Missing for: {', '.join(hash_failures)}" if hash_failures else None,
                 remediation="Add hashes field with cryptographic hash (SHA-256 recommended).",
             )
         )
@@ -584,10 +551,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "license",
                 status="fail" if license_failures else "pass",
-                details=f"Missing for: {', '.join(license_failures[:5])}"
-                + (f" and {len(license_failures) - 5} more" if len(license_failures) > 5 else "")
-                if license_failures
-                else None,
+                details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
                 remediation="Add licenses field with license information.",
             )
         )

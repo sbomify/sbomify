@@ -4,7 +4,8 @@
  * This component has been simplified to use server-side rendering with Django templates.
  * Bootstrap's collapse component handles the expand/collapse functionality.
  *
- * The only JavaScript needed is for handling URL hash navigation to specific plugins.
+ * The only JavaScript needed is for handling URL hash navigation to specific plugins
+ * and toggling package lists in findings.
  */
 
 import { Collapse } from 'bootstrap'
@@ -15,6 +16,44 @@ export function initAssessmentResultsCard(): void {
 
   // Listen for hash changes
   window.addEventListener('hashchange', handleAnchorLink)
+
+  // Register global toggle function for package lists
+  registerPackageToggle()
+}
+
+/**
+ * Toggle visibility of hidden packages in finding descriptions.
+ * Called from onclick handler in template-rendered HTML.
+ */
+function togglePackages(button: HTMLButtonElement): void {
+  const container = button.closest('.missing-packages')
+  if (!container) return
+
+  const isExpanded = button.dataset.expanded === 'true'
+  const moreSpan = button.querySelector('.pkg-toggle-more') as HTMLElement
+  const lessSpan = button.querySelector('.pkg-toggle-less') as HTMLElement
+
+  if (isExpanded) {
+    // Collapse
+    container.classList.remove('expanded')
+    button.dataset.expanded = 'false'
+    if (moreSpan) moreSpan.style.display = ''
+    if (lessSpan) lessSpan.style.display = 'none'
+  } else {
+    // Expand
+    container.classList.add('expanded')
+    button.dataset.expanded = 'true'
+    if (moreSpan) moreSpan.style.display = 'none'
+    if (lessSpan) lessSpan.style.display = ''
+  }
+}
+
+/**
+ * Register the toggle function globally so it can be called from onclick handlers.
+ */
+function registerPackageToggle(): void {
+  // Make togglePackages available globally for onclick handlers
+  ;(window as unknown as { togglePackages: typeof togglePackages }).togglePackages = togglePackages
 }
 
 function handleAnchorLink(): void {

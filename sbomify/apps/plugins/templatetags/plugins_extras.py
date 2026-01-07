@@ -1,6 +1,10 @@
 """Template tags and filters for plugins app."""
 
+import re
+
 from django import template
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 register = template.Library()
 
@@ -103,3 +107,70 @@ def status_icon(status: str) -> str:
         "info": "fas fa-info-circle",
     }
     return icons.get(status, "fas fa-info-circle")
+
+
+@register.filter
+def format_finding_description(description: str) -> str:
+    """Format finding description with styled package lists.
+
+    Parses descriptions containing "Missing for:" followed by a list of
+    package names/paths and renders them as styled HTML spans for better
+    readability. Includes expand/collapse for long lists.
+
+    Args:
+        description: The finding description text. May contain patterns like:
+            - "Description text. Missing for: pkg1, pkg2, pkg3 and N more"
+            - "Description text. Missing for: pkg1, pkg2, pkg3"
+
+    Returns:
+        HTML-safe string with package names wrapped in styled spans.
+    """
+    if not description:
+        return ""
+
+    # Pattern to match "Missing for: package1, package2, ... and N more"
+    pattern = r"(.*?)(Missing for:|Not found in:|Missing in:)\s*(.+)"
+    match = re.match(pattern, description, re.IGNORECASE | re.DOTALL)
+
+    if not match:
+        return escape(description)
+
+    prefix_text = match.group(1).strip()
+    missing_label = match.group(2)
+    packages_text = match.group(3).strip()
+
+    # Split packages by comma
+    packages = [p.strip() for p in packages_text.split(",") if p.strip()]
+
+    # Build HTML
+    html_parts = []
+
+    if prefix_text:
+        html_parts.append(f"<span>{escape(prefix_text)}</span>")
+
+    # Package list container
+    pkg_html = [f'<span class="missing-label fw-medium">{escape(missing_label)}</span>']
+    pkg_html.append('<span class="missing-packages">')
+
+    # Show first 5 packages initially, rest are hidden but expandable
+    visible_count = 5
+    hidden_count = max(0, len(packages) - visible_count)
+
+    for i, pkg in enumerate(packages):
+        hidden_class = " pkg-hidden" if i >= visible_count else ""
+        pkg_html.append(f'<span class="pkg{hidden_class}" title="{escape(pkg)}">{escape(pkg)}</span>')
+
+    # Show toggle if there are hidden items
+    if hidden_count > 0:
+        pkg_html.append(
+            f'<button type="button" class="pkg-toggle" data-expanded="false" '
+            f'onclick="togglePackages(this)">'
+            f'<span class="pkg-toggle-more">Show all {len(packages)}</span>'
+            f'<span class="pkg-toggle-less" style="display:none;">Show less</span>'
+            f"</button>"
+        )
+
+    pkg_html.append("</span>")
+    html_parts.append(" ".join(pkg_html))
+
+    return mark_safe(" ".join(html_parts))

@@ -1,177 +1,184 @@
 {# Individual assessment run accordion item - rendered server-side #}
 {% load plugins_extras %}
-{% with run_id=run.id|default:loop_index has_issues=run.result.summary.fail_count|default:0|add:run.result.summary.error_count|default:0 %}
-    <div class="accordion-item {% if has_issues %}has-issues{% elif run.status == 'completed' %}all-passed{% endif %}"
-         id="plugin-{{ run.plugin_name }}">
-        <h2 class="accordion-header">
-            <button class="accordion-button collapsed"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#collapse-{{ run_id }}"
-                    aria-expanded="false"
-                    aria-controls="collapse-{{ run_id }}">
-                <div class="d-flex align-items-center justify-content-between w-100 me-3">
-                    <div class="plugin-header">
-                        <span class="plugin-name">{{ run.plugin_display_name|default:run.plugin_name }}</span>
-                        {% if run.status == 'completed' %}
-                            {% if has_issues %}
-                                <span class="badge bg-warning-subtle text-warning">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
-                                </span>
-                            {% else %}
-                                <span class="badge bg-success-subtle text-success">
-                                    <i class="fas fa-check-circle me-1"></i>Passed
-                                </span>
-                            {% endif %}
-                        {% elif run.status == 'failed' %}
-                            <span class="badge bg-danger-subtle text-danger">
-                                <i class="fas fa-times-circle me-1"></i>Error
-                            </span>
-                        {% elif run.status == 'running' %}
-                            <span class="badge bg-info-subtle text-info">
-                                <i class="fas fa-sync-alt fa-spin me-1"></i>Running
-                            </span>
-                        {% else %}
-                            <span class="badge bg-secondary-subtle text-secondary">
-                                <i class="fas fa-clock me-1"></i>Pending
-                            </span>
-                        {% endif %}
-                    </div>
-                    <div class="plugin-meta d-none d-md-block">
-                        {% if run.result.summary %}<span>{{ run.result.summary.total_findings|default:0 }} findings</span>{% endif %}
-                    </div>
-                </div>
-            </button>
-        </h2>
-        <div id="collapse-{{ run_id }}"
-             class="accordion-collapse collapse"
-             data-bs-parent="#assessmentAccordion">
-            <div class="accordion-body">
-                {% if run.status == 'completed' or run.status == 'failed' %}
-                    <!-- Run Metadata -->
-                    <div class="run-metadata">
-                        <span>
-                            <i class="fas fa-code-branch me-1"></i>
-                            v{{ run.plugin_version }}
-                        </span>
-                        <span>
-                            <i class="fas fa-play-circle me-1"></i>
-                            {{ run.run_reason|format_run_reason }}
-                        </span>
-                        {% if run.completed_at %}
-                            <span>
-                                <i class="fas fa-calendar-check me-1"></i>
-                                {{ run.completed_at|date:"M d, Y \a\t H:i" }}
-                            </span>
-                        {% endif %}
-                    </div>
-                    {% if run.status == 'failed' and run.error_message %}
-                        <!-- Error Message -->
-                        <div class="alert alert-danger d-flex align-items-start mb-3">
-                            <i class="fas fa-exclamation-circle me-2 mt-1"></i>
-                            <div>{{ run.error_message }}</div>
-                        </div>
-                    {% endif %}
-                    {% if run.result.summary %}
-                        <!-- Findings Summary - Compact grid -->
-                        <div class="findings-summary">
-                            <div class="row g-2">
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat bg-success-subtle">
-                                        <div class="fw-bold text-success">{{ run.result.summary.pass_count|default:0 }}</div>
-                                        <small class="text-muted">Pass</small>
-                                    </div>
+{# Safely compute has_issues - run.result may be None for pending/running assessments #}
+{% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" %}
+    {% with summary=result.summary|default_if_none:"" %}
+        {% with fail_count=summary.fail_count|default:0 error_count=summary.error_count|default:0 %}
+            {% with has_issues=fail_count|add:error_count %}
+                <div class="accordion-item {% if has_issues %}has-issues{% elif run.status == 'completed' %}all-passed{% endif %}"
+                     id="plugin-{{ run.plugin_name }}">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapse-{{ run_id }}"
+                                aria-expanded="false"
+                                aria-controls="collapse-{{ run_id }}">
+                            <div class="d-flex align-items-center justify-content-between w-100 me-3">
+                                <div class="plugin-header">
+                                    <span class="plugin-name">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                                    {% if run.status == 'completed' %}
+                                        {% if has_issues %}
+                                            <span class="badge bg-warning-subtle text-warning">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success-subtle text-success">
+                                                <i class="fas fa-check-circle me-1"></i>Passed
+                                            </span>
+                                        {% endif %}
+                                    {% elif run.status == 'failed' %}
+                                        <span class="badge bg-danger-subtle text-danger">
+                                            <i class="fas fa-times-circle me-1"></i>Error
+                                        </span>
+                                    {% elif run.status == 'running' %}
+                                        <span class="badge bg-info-subtle text-info">
+                                            <i class="fas fa-sync-alt fa-spin me-1"></i>Running
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary">
+                                            <i class="fas fa-clock me-1"></i>Pending
+                                        </span>
+                                    {% endif %}
                                 </div>
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat bg-warning-subtle">
-                                        <div class="fw-bold text-warning">{{ run.result.summary.fail_count|default:0 }}</div>
-                                        <small class="text-muted">Fail</small>
-                                    </div>
-                                </div>
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat bg-danger-subtle">
-                                        <div class="fw-bold text-danger">{{ run.result.summary.error_count|default:0 }}</div>
-                                        <small class="text-muted">Error</small>
-                                    </div>
-                                </div>
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat bg-info-subtle">
-                                        <div class="fw-bold text-info">{{ run.result.summary.warning_count|default:0 }}</div>
-                                        <small class="text-muted">Warn</small>
-                                    </div>
-                                </div>
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat bg-secondary-subtle">
-                                        <div class="fw-bold text-secondary">{{ run.result.summary.info_count|default:0 }}</div>
-                                        <small class="text-muted">Info</small>
-                                    </div>
-                                </div>
-                                <div class="col-4 col-md-2">
-                                    <div class="finding-stat stat-total">
-                                        <div class="fw-bold text-dark">{{ run.result.summary.total_findings|default:0 }}</div>
-                                        <small class="text-muted">Total</small>
-                                    </div>
+                                <div class="plugin-meta d-none d-md-block">
+                                    {% if run.result.summary %}<span>{{ run.result.summary.total_findings|default:0 }} findings</span>{% endif %}
                                 </div>
                             </div>
-                        </div>
-                    {% endif %}
-                    {% if run.result.findings %}
-                        <!-- Findings List -->
-                        <div class="findings-list">
-                            <h6>
-                                <i class="fas fa-list-ul me-1"></i>Findings
-                            </h6>
-                            {% for finding in run.result.findings %}
-                                <div class="finding-item {{ finding.status|status_border_class }}">
-                                    <div class="d-flex align-items-start">
-                                        <span class="finding-status-icon {{ finding.status|status_text_class }}">
-                                            <i class="{{ finding.status|status_icon }}"></i>
+                        </button>
+                    </h2>
+                    <div id="collapse-{{ run_id }}"
+                         class="accordion-collapse collapse"
+                         data-bs-parent="#assessmentAccordion">
+                        <div class="accordion-body">
+                            {% if run.status == 'completed' or run.status == 'failed' %}
+                                <!-- Run Metadata -->
+                                <div class="run-metadata">
+                                    <span>
+                                        <i class="fas fa-code-branch me-1"></i>
+                                        v{{ run.plugin_version }}
+                                    </span>
+                                    <span>
+                                        <i class="fas fa-play-circle me-1"></i>
+                                        {{ run.run_reason|format_run_reason }}
+                                    </span>
+                                    {% if run.completed_at %}
+                                        <span>
+                                            <i class="fas fa-calendar-check me-1"></i>
+                                            {{ run.completed_at|date:"M d, Y \a\t H:i" }}
                                         </span>
-                                        <div class="flex-grow-1 ms-2">
-                                            <div class="finding-title">{{ finding.title }}</div>
-                                            <div class="finding-description">{{ finding.description }}</div>
-                                            {% if finding.remediation %}
-                                                <div class="finding-remediation">
-                                                    <i class="fas fa-lightbulb me-1"></i>
-                                                    {{ finding.remediation }}
+                                    {% endif %}
+                                </div>
+                                {% if run.status == 'failed' and run.error_message %}
+                                    <!-- Error Message -->
+                                    <div class="alert alert-danger d-flex align-items-start mb-3">
+                                        <i class="fas fa-exclamation-circle me-2 mt-1"></i>
+                                        <div>{{ run.error_message }}</div>
+                                    </div>
+                                {% endif %}
+                                {% if run.result.summary %}
+                                    <!-- Findings Summary - Compact grid -->
+                                    <div class="findings-summary">
+                                        <div class="row g-2">
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat bg-success-subtle">
+                                                    <div class="fw-bold text-success">{{ run.result.summary.pass_count|default:0 }}</div>
+                                                    <small class="text-muted">Pass</small>
                                                 </div>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat bg-warning-subtle">
+                                                    <div class="fw-bold text-warning">{{ run.result.summary.fail_count|default:0 }}</div>
+                                                    <small class="text-muted">Fail</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat bg-danger-subtle">
+                                                    <div class="fw-bold text-danger">{{ run.result.summary.error_count|default:0 }}</div>
+                                                    <small class="text-muted">Error</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat bg-info-subtle">
+                                                    <div class="fw-bold text-info">{{ run.result.summary.warning_count|default:0 }}</div>
+                                                    <small class="text-muted">Warn</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat bg-secondary-subtle">
+                                                    <div class="fw-bold text-secondary">{{ run.result.summary.info_count|default:0 }}</div>
+                                                    <small class="text-muted">Info</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4 col-md-2">
+                                                <div class="finding-stat stat-total">
+                                                    <div class="fw-bold text-dark">{{ run.result.summary.total_findings|default:0 }}</div>
+                                                    <small class="text-muted">Total</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                {% if run.result.findings %}
+                                    <!-- Findings List -->
+                                    <div class="findings-list">
+                                        <h6>
+                                            <i class="fas fa-list-ul me-1"></i>Findings
+                                        </h6>
+                                        {% for finding in run.result.findings %}
+                                            <div class="finding-item {{ finding.status|status_border_class }}">
+                                                <div class="d-flex align-items-start">
+                                                    <span class="finding-status-icon {{ finding.status|status_text_class }}">
+                                                        <i class="{{ finding.status|status_icon }}"></i>
+                                                    </span>
+                                                    <div class="flex-grow-1 ms-2">
+                                                        <div class="finding-title">{{ finding.title }}</div>
+                                                        <div class="finding-description">{{ finding.description|format_finding_description }}</div>
+                                                        {% if finding.remediation %}
+                                                            <div class="finding-remediation">
+                                                                <i class="fas fa-lightbulb me-1"></i>
+                                                                {{ finding.remediation }}
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                {% if run.result.metadata.standard_name %}
+                                    <!-- Standard Info (for compliance plugins) -->
+                                    <div class="standard-info mt-3">
+                                        <h6>
+                                            <i class="fas fa-book me-1"></i>Standard Reference
+                                        </h6>
+                                        <div class="small">
+                                            <strong>Standard:</strong> {{ run.result.metadata.standard_name }}
+                                            <br>
+                                            <strong>Version:</strong> {{ run.result.metadata.standard_version }}
+                                            {% if run.result.metadata.standard_url %}
+                                                <br>
+                                                <strong>Reference:</strong>
+                                                <a href="{{ run.result.metadata.standard_url }}"
+                                                   target="_blank"
+                                                   rel="noopener">
+                                                    View Standard <i class="fas fa-external-link-alt ms-1"></i>
+                                                </a>
                                             {% endif %}
                                         </div>
                                     </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                    {% if run.result.metadata.standard_name %}
-                        <!-- Standard Info (for compliance plugins) -->
-                        <div class="standard-info mt-3">
-                            <h6>
-                                <i class="fas fa-book me-1"></i>Standard Reference
-                            </h6>
-                            <div class="small">
-                                <strong>Standard:</strong> {{ run.result.metadata.standard_name }}
-                                <br>
-                                <strong>Version:</strong> {{ run.result.metadata.standard_version }}
-                                {% if run.result.metadata.standard_url %}
-                                    <br>
-                                    <strong>Reference:</strong>
-                                    <a href="{{ run.result.metadata.standard_url }}"
-                                       target="_blank"
-                                       rel="noopener">
-                                        View Standard <i class="fas fa-external-link-alt ms-1"></i>
-                                    </a>
                                 {% endif %}
-                            </div>
+                            {% else %}
+                                <!-- Pending state -->
+                                <div class="assessment-no-results py-4">
+                                    <i class="fas fa-sync-alt fa-spin fa-2x d-block mb-3"></i>
+                                    <p class="mb-0">Assessment in progress...</p>
+                                </div>
+                            {% endif %}
                         </div>
-                    {% endif %}
-                {% else %}
-                    <!-- Pending state -->
-                    <div class="assessment-no-results py-4">
-                        <i class="fas fa-sync-alt fa-spin fa-2x d-block mb-3"></i>
-                        <p class="mb-0">Assessment in progress...</p>
                     </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+                </div>
+            {% endwith %}
+        {% endwith %}
+    {% endwith %}
 {% endwith %}

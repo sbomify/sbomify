@@ -693,8 +693,8 @@ class TestMultipleComponentFailures:
         assert version_finding.status == "fail"
         assert "comp1" in version_finding.description
 
-    def test_failure_message_truncation(self) -> None:
-        """Test that failure messages are truncated when many components fail."""
+    def test_failure_message_lists_all_components(self) -> None:
+        """Test that failure messages list all failing components."""
         sbom_data = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -714,9 +714,10 @@ class TestMultipleComponentFailures:
             f.flush()
             result = plugin.assess("test-sbom-id", Path(f.name))
 
-        # Check that failure message indicates "and X more"
+        # Check that failure message lists all failing components (no truncation)
         producer_finding = next(f for f in result.findings if "software-producer" in f.id)
-        assert "and 5 more" in producer_finding.description
+        for i in range(10):
+            assert f"comp{i}" in producer_finding.description
 
 
 class TestFormatDetection:

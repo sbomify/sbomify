@@ -1,7 +1,5 @@
 """Tests for plugin utility functions."""
 
-import pytest
-
 from sbomify.apps.plugins.utils import compute_config_hash, compute_content_digest
 
 
@@ -88,4 +86,3 @@ class TestComputeContentDigest:
         digest = compute_content_digest(b"test content")
 
         assert len(digest) == 64  # SHA256 hex length
-
