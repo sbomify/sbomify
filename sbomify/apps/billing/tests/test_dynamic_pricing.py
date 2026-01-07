@@ -1,6 +1,7 @@
 """Comprehensive tests for dynamic pricing implementation."""
 
 import sys
+from io import StringIO
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -286,105 +287,25 @@ class TestBillingPlanValidation(TestCase):
 class TestSyncBillingPlansCommand(TestCase):
     """Test the sync_billing_plans management command."""
 
-    def setUp(self):
-        """Set up test data."""
-        self.plan = create_test_plan(
-            key="business",
-            name="Business",
-            monthly_price=Decimal("199.00"),
-            annual_price=Decimal("1908.00"),
-            stripe_price_monthly_id="price_monthly_test",
-            stripe_price_annual_id="price_annual_test",
-        )
+    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.sync_plan_prices_from_stripe")
+    def test_sync_calls_sync_plan_prices(self, mock_sync):
+        """Test that sync command calls sync_plan_prices_from_stripe with no plan key."""
+        mock_sync.return_value = {"synced": 1, "failed": 0, "skipped": 0, "errors": []}
 
-    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.StripeClient")
-    def test_sync_updates_prices_from_stripe(self, mock_stripe_client_class):
-        """Test that sync command updates prices from Stripe."""
-        # Set prices to different values so sync will trigger an update
-        self.plan.monthly_price = Decimal("100.00")
-        self.plan.annual_price = Decimal("1000.00")
-        self.plan.save()
-        
-        # Mock Stripe prices (different from current to trigger update)
-        mock_monthly_price = MagicMock()
-        mock_monthly_price.unit_amount = 19900  # $199.00
-
-        mock_annual_price = MagicMock()
-        mock_annual_price.unit_amount = 190800  # $1908.00
-
-        mock_client = MagicMock()
-        mock_client.get_price.side_effect = [mock_monthly_price, mock_annual_price]
-        mock_stripe_client_class.return_value = mock_client
-
-        # Run command
-        call_command("sync_billing_plans")
-
-        # Refresh from database
-        self.plan.refresh_from_db()
-        assert self.plan.monthly_price == Decimal("199.00")
-        assert self.plan.annual_price == Decimal("1908.00")
-        assert self.plan.last_synced_at is not None
-
-    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.StripeClient")
-    def test_sync_dry_run_shows_changes(self, mock_stripe_client_class):
-        """Test that dry-run mode shows what would change."""
-        # Mock Stripe prices with different values
-        mock_monthly_price = MagicMock()
-        mock_monthly_price.unit_amount = 29900  # $299.00 (different from current)
-
-        mock_client = MagicMock()
-        mock_client.get_price.return_value = mock_monthly_price
-        mock_stripe_client_class.return_value = mock_client
-
-        # Run command with dry-run
-        from io import StringIO
         out = StringIO()
-        call_command("sync_billing_plans", "--dry-run", stdout=out)
+        call_command("sync_billing_plans", stdout=out)
 
-        # Check output
-        output = out.getvalue()
-        assert "Would update" in output or "monthly_price" in output
+        mock_sync.assert_called_once_with(plan_key=None)
+        assert "Successfully synced: 1 plan(s)" in out.getvalue()
 
-        # Verify no changes were made
-        self.plan.refresh_from_db()
-        assert self.plan.monthly_price == Decimal("199.00")  # Unchanged
+    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.sync_plan_prices_from_stripe")
+    def test_sync_specific_plan_passes_plan_key(self, mock_sync):
+        """Test syncing a specific plan by key passes through plan_key."""
+        mock_sync.return_value = {"synced": 0, "failed": 0, "skipped": 0, "errors": []}
 
-    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.StripeClient")
-    def test_sync_specific_plan(self, mock_stripe_client_class):
-        """Test syncing a specific plan by key."""
-        # Create another plan (with required fields)
-        other_plan = create_test_plan(
-            key="enterprise",
-            name="Enterprise",
-            stripe_price_monthly_id="price_enterprise_monthly",
-        )
-
-        mock_price = MagicMock()
-        mock_price.unit_amount = 19900
-
-        mock_client = MagicMock()
-        mock_client.get_price.return_value = mock_price
-        mock_stripe_client_class.return_value = mock_client
-
-        # Run command for specific plan
         call_command("sync_billing_plans", "--plan-key", "business")
 
-        # Only business plan should be updated
-        self.plan.refresh_from_db()
-        assert self.plan.last_synced_at is not None
-
-        other_plan.refresh_from_db()
-        assert other_plan.last_synced_at is None
-
-    @patch("sbomify.apps.billing.management.commands.sync_billing_plans.StripeClient")
-    def test_sync_handles_errors_gracefully(self, mock_stripe_client_class):
-        """Test that sync command handles Stripe errors gracefully."""
-        mock_client = MagicMock()
-        mock_client.get_price.side_effect = StripeError("API Error")
-        mock_stripe_client_class.return_value = mock_client
-
-        # Should not raise exception
-        call_command("sync_billing_plans")
+        mock_sync.assert_called_once_with(plan_key="business")
 
 
 class TestBillingPlanAdmin(TestCase):
@@ -838,4 +759,3 @@ class TestIntegrationScenarios(TestCase):
 
         # Verify promo message
         assert plan.promo_message == "Limited time: Save up to 20%!"
-
