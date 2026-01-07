@@ -6,7 +6,7 @@ Devices: Quality System Considerations and Content of Premarket Submissions"
 
 Standard Reference:
     - Name: FDA Cybersecurity in Medical Devices
-    - Version: 2025-09 (June 2025)
+    - Version: 2025-06 (June 2025)
     - URL: https://www.fda.gov/media/119933/download
 
 The FDA guidance requires SBOMs to include:
