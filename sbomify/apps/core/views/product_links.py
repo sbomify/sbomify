@@ -134,7 +134,10 @@ class ProductLinksView(LoginRequiredMixin, View):
 
 
 def add_utm_params(url: str, campaign: str = "product_links") -> str:
-    """Add UTM tracking parameters to a URL."""
+    """Add UTM tracking parameters to an external URL.
+
+    Internal or relative URLs (without a domain/netloc) are returned unchanged.
+    """
     if not url:
         return url
 

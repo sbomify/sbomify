@@ -45,32 +45,28 @@
             <!-- Schema.org metadata -->
             {% schema_org_metadata %}
             <!-- Social media image: use brand image or absolute fallback URL -->
-            {% with social_image=brand.brand_image|default_if_none:"" %}
-                {% with fallback_image=request.scheme|add:"://"|add:request.get_host %}
-                    {% static 'img/favicons/android-chrome-512x512.png' as default_logo %}
-                    {% with final_image=social_image|default:fallback_image|add:default_logo %}
-                        {% with brand_name=brand.name|default:"sbomify" %}
-                            <!-- Open Graph / Facebook -->
-                            <meta property="og:type" content="website">
-                            <meta property="og:url" content="{{ request.build_absolute_uri }}">
-                            <meta property="og:title"
-                                  content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                            <meta property="og:description"
-                                  content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                            <meta property="og:image"
-                                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{{ fallback_image }}{{ default_logo }}{% endif %}">
-                            <meta property="og:image:alt" content="{{ brand_name }} Logo">
-                            <!-- Twitter -->
-                            <meta property="twitter:card" content="summary_large_image">
-                            <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-                            <meta property="twitter:title"
-                                  content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                            <meta property="twitter:description"
-                                  content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-                            <meta property="twitter:image"
-                                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{{ fallback_image }}{{ default_logo }}{% endif %}">
-                            <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
-                        {% endwith %}
+            {% static 'img/favicons/android-chrome-512x512.png' as default_logo %}
+            {% with fallback_url=request.scheme|add:"://"|add:request.get_host|add:default_logo %}
+                {% with social_image=brand.brand_image|default:fallback_url %}
+                    {% with brand_name=brand.name|default:"sbomify" %}
+                        <!-- Open Graph / Facebook -->
+                        <meta property="og:type" content="website">
+                        <meta property="og:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="og:title"
+                              content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:description"
+                              content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:image" content="{{ social_image }}">
+                        <meta property="og:image:alt" content="{{ brand_name }} Logo">
+                        <!-- Twitter -->
+                        <meta property="twitter:card" content="summary_large_image">
+                        <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="twitter:title"
+                              content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:description"
+                              content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:image" content="{{ social_image }}">
+                        <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
                     {% endwith %}
                 {% endwith %}
             {% endwith %}
