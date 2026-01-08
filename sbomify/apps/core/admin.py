@@ -344,7 +344,9 @@ class CustomUserAdmin(UserAdmin):
         Uses Django User.email_verified as the primary source of truth,
         with fallback to social account extra_data for legacy accounts.
         """
-        # Primary: Use Django User model field
+        # Primary: Use Django User model field. If this is True we intentionally
+        # skip the legacy social-account-based fallback below, because
+        # email_verified is the authoritative source for current users.
         if obj.email_verified:
             return format_html('<span style="color: #28a745;">Verified</span>')
 
