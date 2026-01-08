@@ -12,6 +12,10 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
+from sbomify.apps.plugins.public_assessment_utils import (
+    get_project_assessment_status,
+    passing_assessments_to_dict,
+)
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
@@ -44,10 +48,16 @@ class ProjectDetailsPublicView(View):
 
         brand = build_branding_context(team)
 
+        # Get aggregated assessment status for this project (only passing assessments)
+        assessment_status = get_project_assessment_status(project_obj)
+        passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
+
         context = {
             "project": project,
             "brand": brand,
             "has_downloadable_content": has_downloadable_content,
+            "passing_assessments": passing_assessments,
+            "has_passing_assessments": assessment_status.all_pass,
         }
         add_custom_domain_to_context(request, context, team)
 

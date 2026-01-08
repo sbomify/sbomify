@@ -14,6 +14,10 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
+from sbomify.apps.plugins.public_assessment_utils import (
+    get_component_assessment_status,
+    passing_assessments_to_dict,
+)
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -42,9 +46,15 @@ class ComponentDetailsPublicView(View):
             path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_obj.slug)
             return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 
+        # Get assessment status for this component (only passing assessments)
+        assessment_status = get_component_assessment_status(component_obj)
+        passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "passing_assessments": passing_assessments,
+            "has_passing_assessments": assessment_status.all_pass,
         }
 
         brand = build_branding_context(team)

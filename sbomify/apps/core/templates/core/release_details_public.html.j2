@@ -2,6 +2,7 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
+{% load humanize %}
 {% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/release-details-public.css' %}">
@@ -31,13 +32,15 @@
                     <div class="header-meta">
                         <span class="meta-item">
                             <i class="fas fa-calendar me-2"></i>
-                            <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
+                            <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
                         </span>
-                        <span class="meta-divider">•</span>
-                        <span class="meta-item">
-                            <i class="fas fa-puzzle-piece me-2"></i>
-                            <span class="meta-label">{{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}</span>
-                        </span>
+                        {% if release.artifacts.count %}
+                            <span class="meta-divider">•</span>
+                            <span class="meta-item">
+                                <i class="fas fa-puzzle-piece me-2"></i>
+                                <span class="meta-label">{{ release.artifacts.count|apnumber }} artifact{{ release.artifacts.count|pluralize }}</span>
+                            </span>
+                        {% endif %}
                     </div>
                 </div>
                 {% if release.has_sboms %}

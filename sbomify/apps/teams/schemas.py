@@ -96,6 +96,7 @@ class BrandingInfo(BaseModel):
     branding_enabled: bool = False
     brand_color: str = ""
     accent_color: str = ""
+    trust_center_description: str = ""
 
     @property
     def brand_icon_url(self) -> str:
@@ -140,6 +141,7 @@ class UpdateTeamBrandingSchema(BaseModel):
     branding_enabled: bool | None = None
     icon_pending_deletion: bool = False
     logo_pending_deletion: bool = False
+    trust_center_description: str | None = None
 
 
 class ContactProfileContactSchema(BaseModel):

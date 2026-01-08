@@ -1,0 +1,45 @@
+{# Public Product Projects - server-rendered replacement for PublicProductProjects.vue #}
+{% load static %}
+{% load humanize %}
+{% load public_url_tags %}
+{% if projects %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-product-projects.css' %}">
+    <div class="standard-card mt-3">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <div class="header-content">
+                    <h4 class="card-title mb-0">Product Projects</h4>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="augmentation-notice d-flex align-items-center mb-3">
+                    <span class="text-muted">Projects that are part of this product.</span>
+                </div>
+                <div class="projects-list">
+                    <div class="row">
+                        {% for project in projects %}
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="project-item">
+                                    <div class="project-icon">
+                                        <i class="fas fa-project-diagram project-type-icon"></i>
+                                    </div>
+                                    <div class="project-info">
+                                        <h6 class="project-name">
+                                            {% if project.is_public %}
+                                                <a href="{{ project.public_url }}" class="project-link">{{ project.name }}</a>
+                                            {% else %}
+                                                <span class="project-private">{{ project.name }}</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="project-type text-muted">Project</small>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

@@ -23,7 +23,19 @@ from sbomify.apps.core.utils import number_to_random_token
 from .models import Invitation, Member, Team, get_team_name_for_user
 
 # Valid tab names for team settings - used for input validation
-ALLOWED_TABS = frozenset({"members", "billing", "branding", "general", "domains", "api"})
+ALLOWED_TABS = frozenset(
+    {
+        "general",
+        "members",
+        "tokens",
+        "trust-center",
+        "contact-profiles",
+        "plugins",
+        "integrations",
+        "billing",
+        "branding",
+    }
+)
 
 
 def redirect_to_team_settings(team_key: str, active_tab: str | None = None):

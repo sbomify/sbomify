@@ -2,6 +2,7 @@
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block meta_description %}
     {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
@@ -418,38 +419,46 @@
                         <div class="eyebrow">TRUST CENTER</div>
                         <h1>{{ workspace.name }} Trust Center</h1>
                         <p class="workspace-hero-description">
-                            Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts.
+                            {% if brand.trust_center_description %}
+                                {{ brand.trust_center_description }}
+                            {% else %}
+                                Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts.
+                            {% endif %}
                         </p>
                         <div class="d-flex gap-3 flex-wrap">
-                            <div class="meta-chip">
-                                <i class="fas fa-cube"></i>
-                                <span class="meta-chip-number">{{ products|length }}</span>
-                                <span class="meta-chip-label">Public Product{{ products|length|pluralize }}</span>
-                            </div>
-                            <div class="meta-chip">
-                                <i class="fas fa-award"></i>
-                                <span class="meta-chip-number">{{ global_components|length }}</span>
-                                <span class="meta-chip-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
-                            </div>
+                            {% if products %}
+                                <div class="meta-chip">
+                                    <i class="fas fa-cube"></i>
+                                    <span class="meta-chip-number">{{ products|length|apnumber }}</span>
+                                    <span class="meta-chip-label">Public Product{{ products|length|pluralize }}</span>
+                                </div>
+                            {% endif %}
+                            {% if global_components %}
+                                <div class="meta-chip">
+                                    <i class="fas fa-award"></i>
+                                    <span class="meta-chip-number">{{ global_components|length|apnumber }}</span>
+                                    <span class="meta-chip-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-                <!-- Products Section -->
-                <div class="content-section">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-cube me-2"></i>Public Products
-                        </h2>
-                        <p class="section-subtitle">Explore our publicly available products and their software bill of materials (SBOMs)</p>
-                    </div>
-                    {% if products %}
+                {% if products %}
+                    <!-- Products Section -->
+                    <div class="content-section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-cube me-2"></i>Public Products
+                            </h2>
+                            <p class="section-subtitle">Explore our publicly available products and their software bill of materials (SBOMs)</p>
+                        </div>
                         <div class="row g-4">
                             {% for product in products %}
                                 <div class="col-md-6 col-lg-4">
                                     <div class="glass-card">
                                         <div class="card-header-section">
                                             <h3 class="card-title">{{ product.name }}</h3>
-                                            <span class="badge badge-count">{{ product.project_count }} project{{ product.project_count|pluralize }}</span>
+                                            <span class="badge badge-count">{{ product.project_count|apnumber }} project{{ product.project_count|pluralize }}</span>
                                         </div>
                                         <p class="card-description">
                                             {{ product.description|default:"Comprehensive product information and software composition details." }}
@@ -467,24 +476,17 @@
                                 </div>
                             {% endfor %}
                         </div>
-                    {% else %}
-                        <div class="empty-state">
-                            <div class="empty-state-icon">
-                                <i class="fas fa-cube"></i>
-                            </div>
-                            <p class="empty-state-text">No public products available yet</p>
-                        </div>
-                    {% endif %}
-                </div>
-                <!-- Workspace Artifacts Section -->
-                <div class="content-section">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            <i class="fas fa-award me-2"></i>Organization Compliance Artifacts
-                        </h2>
-                        <p class="section-subtitle">Organization-wide compliance documents, certifications, and security attestations</p>
                     </div>
-                    {% if global_components %}
+                {% endif %}
+                {% if global_components %}
+                    <!-- Workspace Artifacts Section -->
+                    <div class="content-section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <i class="fas fa-award me-2"></i>Organization Compliance Artifacts
+                            </h2>
+                            <p class="section-subtitle">Organization-wide compliance documents, certifications, and security attestations</p>
+                        </div>
                         <div class="row g-4">
                             {% for component in global_components %}
                                 <div class="col-md-6 col-lg-4">
@@ -508,15 +510,8 @@
                                 </div>
                             {% endfor %}
                         </div>
-                    {% else %}
-                        <div class="empty-state">
-                            <div class="empty-state-icon">
-                                <i class="fas fa-award"></i>
-                            </div>
-                            <p class="empty-state-text">No organization-level artifacts published yet</p>
-                        </div>
-                    {% endif %}
-                </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

@@ -5,7 +5,8 @@ from django.conf import settings
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.sboms.models import ProductProject
 from sbomify.apps.teams.models import Team
 
 
@@ -14,7 +15,11 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
     client = Client()
     team = Team.objects.create(name="Public Workspace", is_public=True)
 
-    Product.objects.create(name="Public Product", team=team, is_public=True)
+    # Create a product with a public project (required for product to be shown)
+    product = Product.objects.create(name="Public Product", team=team, is_public=True)
+    project = Project.objects.create(name="Public Project", team=team, is_public=True)
+    ProductProject.objects.create(product=product, project=project)
+
     Component.objects.create(
         name="Global Artifact",
         team=team,
@@ -173,7 +178,7 @@ def test_workspace_public_handles_none_colors():
         name="No Colors Workspace",
         is_public=True,
         branding_info={
-"brand_color": "",
+            "brand_color": "",
             "accent_color": "",
             "branding_enabled": True,
         },
@@ -187,3 +192,141 @@ def test_workspace_public_handles_none_colors():
     # Should use defaults
     assert "--brand-color: #4f46e5" in content
     assert "--accent-color: #7c8b9d" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_hides_products_with_no_public_projects():
+    """Products with 0 public projects should not be shown."""
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    # Product with no projects
+    Product.objects.create(name="Empty Product", team=team, is_public=True)
+
+    # Product with private project only
+    product_with_private = Product.objects.create(name="Private Projects Only", team=team, is_public=True)
+    private_project = Project.objects.create(name="Private Project", team=team, is_public=False)
+    ProductProject.objects.create(product=product_with_private, project=private_project)
+
+    # Product with public project (should be shown)
+    product_with_public = Product.objects.create(name="Has Public Project", team=team, is_public=True)
+    public_project = Project.objects.create(name="Public Project", team=team, is_public=True)
+    ProductProject.objects.create(product=product_with_public, project=public_project)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Only the product with public projects should be shown
+    assert "Empty Product" not in content
+    assert "Private Projects Only" not in content
+    assert "Has Public Project" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_hides_products_section_when_empty():
+    """Products section should be hidden when there are no products with public projects."""
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    # Create a product with no public projects
+    product = Product.objects.create(name="Empty Product", team=team, is_public=True)
+    private_project = Project.objects.create(name="Private Project", team=team, is_public=False)
+    ProductProject.objects.create(product=product, project=private_project)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Section header should not be shown when there are no products
+    assert "Public Products" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_hides_artifacts_section_when_empty():
+    """Organization Compliance Artifacts section should be hidden when empty."""
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Section header should not be shown when there are no global artifacts
+    assert "Organization Compliance Artifacts" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_hides_compliance_artifacts_badge_when_zero():
+    """Compliance Artifacts badge in hero should be hidden when count is 0."""
+    client = Client()
+    team = Team.objects.create(name="Public Workspace", is_public=True)
+
+    # Add a product with public project to make the page have some content
+    product = Product.objects.create(name="Public Product", team=team, is_public=True)
+    public_project = Project.objects.create(name="Public Project", team=team, is_public=True)
+    ProductProject.objects.create(product=product, project=public_project)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # "Compliance Artifact" badge text should not appear when count is 0
+    assert "Compliance Artifact" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_uses_configurable_description():
+    """Trust center description should be configurable via branding info."""
+    client = Client()
+    custom_description = "Welcome to our custom trust center! Browse our SBOMs and compliance docs."
+    team = Team.objects.create(
+        name="Custom Description Workspace",
+        is_public=True,
+        branding_info={
+            "trust_center_description": custom_description,
+        },
+    )
+
+    # Add content so the page renders
+    product = Product.objects.create(name="Product", team=team, is_public=True)
+    public_project = Project.objects.create(name="Project", team=team, is_public=True)
+    ProductProject.objects.create(product=product, project=public_project)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Custom description should be shown
+    assert custom_description in content
+    # Default description should not be shown
+    assert "Your centralized hub for transparency and compliance" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_uses_default_description_when_empty():
+    """Trust center should use default description when no custom description is set."""
+    client = Client()
+    team = Team.objects.create(
+        name="Default Description Workspace",
+        is_public=True,
+        branding_info={},
+    )
+
+    # Add content so the page renders
+    product = Product.objects.create(name="Product", team=team, is_public=True)
+    public_project = Project.objects.create(name="Project", team=team, is_public=True)
+    ProductProject.objects.create(product=product, project=public_project)
+
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Default description should be shown
+    assert "Your centralized hub for transparency and compliance" in content

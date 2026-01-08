@@ -1,0 +1,68 @@
+{# Public Releases List - server-rendered replacement for ProductReleases.vue (public view) #}
+{% load static %}
+{% load humanize %}
+{% if public_releases %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/releases-list.css' %}">
+    <div class="standard-card mt-3">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="header-content">
+                    <h4 class="card-title mb-0">Releases</h4>
+                </div>
+                {% if view_all_releases_url %}
+                    <a href="{{ view_all_releases_url }}"
+                       class="btn btn-outline-primary btn-sm">
+                        View All <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="releases-list">
+                    {% for release in public_releases %}
+                        <div class="release-item">
+                            <div class="release-header">
+                                <div class="release-info">
+                                    <div class="release-title">
+                                        <a href="{{ release.public_url }}" class="release-name">{{ release.name }}</a>
+                                        <div class="release-badges">
+                                            {% if release.is_latest %}<span class="badge bg-success">Latest</span>{% endif %}
+                                            {% if release.is_prerelease %}<span class="badge bg-warning">Pre-release</span>{% endif %}
+                                            <span class="badge bg-primary">Public</span>
+                                        </div>
+                                    </div>
+                                    {% if release.description %}<p class="release-description">{{ release.description }}</p>{% endif %}
+                                </div>
+                                <div class="release-actions">
+                                    <div class="release-meta">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>
+                                            {{ release.released_at|default:release.created_at|naturaltime }}
+                                        </small>
+                                    </div>
+                                    <div class="action-buttons">
+                                        {% if release.has_sboms %}
+                                            <a href="/api/v1/releases/{{ release.id }}/download"
+                                               class="btn btn-sm btn-outline-primary"
+                                               title="Download release SBOM">
+                                                <i class="fas fa-download me-1"></i>Download
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if release.artifacts_count %}
+                                <div class="release-summary">
+                                    <span class="artifacts-summary">
+                                        <i class="fas fa-puzzle-piece me-1"></i>
+                                        {{ release.artifacts_count|apnumber }} artifact{{ release.artifacts_count|pluralize }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

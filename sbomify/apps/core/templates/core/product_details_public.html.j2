@@ -3,8 +3,11 @@
 {% load django_vite %}
 {% load static %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ product.name }}{% endblock %}
 {% block extra_css %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-compliance-badge.css' %}">
     <style>
   .meta-chip {
     display: inline-flex;
@@ -55,57 +58,57 @@
                         </h1>
                         <p class="text-muted mb-1">{{ product.description|default:"No description provided." }}</p>
                         <div class="meta-row">
-                            <span class="meta-chip">
-                                <i class="fas fa-diagram-project"></i>
-                                {{ product.projects|length }} project{{ product.projects|length|pluralize }}
-                            </span>
+                            {% if public_projects %}
+                                <span class="meta-chip">
+                                    <i class="fas fa-diagram-project"></i>
+                                    {{ public_projects|length|apnumber }} project{{ public_projects|length|pluralize }}
+                                </span>
+                            {% endif %}
                             <span class="meta-chip">
                                 <i class="fas fa-globe"></i>
                                 Public
                             </span>
+                            {% for assessment in passing_assessments %}
+                                <span class="meta-chip meta-chip--compliance"
+                                      title="{{ assessment.display_name }}: All checks passed">
+                                    <i class="fas fa-check-circle"></i>
+                                    {{ assessment.display_name }}
+                                </span>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
                 <div class="public-main-content">
                     <div class="content-section">
                         <div class="product-content">
-                            <div class="product-identifiers-section">
-                                <div class="vc-product-identifiers"
-                                     data-product-id="{{ product.id }}"
-                                     data-has-crud-permissions="false"
-                                     data-billing-plan="business"></div>
-                            </div>
-                            <div class="product-links-section">
-                                <div class="vc-product-links"
-                                     data-product-id="{{ product.id }}"
-                                     data-has-crud-permissions="false"></div>
-                            </div>
-                            <div class="product-projects-section">
-                                <div class="vc-public-product-projects"
-                                     data-product-id="{{ product.id }}"
-                                     data-brand-color="{{ brand.primary_color|default:'#4f46e5' }}"
-                                     data-accent-color="{{ brand.secondary_color|default:'#7c8b9d' }}"
-                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}">
-                                </div>
-                            </div>
-                            <div class="product-releases-section">
-                                <div class="vc-product-releases"
-                                     data-product-id="{{ product.id }}"
-                                     data-product-slug="{{ product.slug }}"
-                                     data-has-crud-permissions="false"
-                                     data-public-view="true"
-                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}"
-                                     data-view-all-url="{% public_url 'core:product_releases_public' product_id=product.id product_slug=product.slug %}">
-                                </div>
-                            </div>
+                            {# Product Identifiers - server-rendered, hidden when empty #}
+                            {% include 'core/components/public_product_identifiers.html.j2' %}
+                            {# Product Links - server-rendered, hidden when empty #}
+                            {% include 'core/components/public_product_links.html.j2' %}
+                            {# Product Projects - server-rendered, hidden when empty #}
+                            {% include 'core/components/public_product_projects.html.j2' with projects=public_projects %}
+                            {# Product Releases - server-rendered, hidden when empty #}
+                            {% include 'core/components/public_releases_list.html.j2' %}
                             {% if has_downloadable_content %}
                                 <div class="download-section">
-                                    <div class="vc-public-download-card"
-                                         data-title="Download Latest Release"
-                                         data-description="Download SBOM from the latest release containing the most current artifacts for this product"
-                                         data-download-url="{% url 'core:sbom_download_product' product.id %}"
-                                         data-download-text="Download Latest Release"
-                                         data-download-icon="fas fa-download"></div>
+                                    <div class="standard-card mt-3">
+                                        <div class="card shadow-sm">
+                                            <div class="card-header">
+                                                <div class="header-content">
+                                                    <h4 class="card-title mb-0">Download Latest Release</h4>
+                                                </div>
+                                            </div>
+                                            <div class="card-body text-center">
+                                                <p class="text-muted mb-3">
+                                                    Download SBOM from the latest release containing the most current artifacts for this product
+                                                </p>
+                                                <a href="{% url 'core:sbom_download_product' product.id %}"
+                                                   class="btn btn-primary">
+                                                    <i class="fas fa-download me-2"></i>Download Latest Release
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             {% endif %}
                         </div>

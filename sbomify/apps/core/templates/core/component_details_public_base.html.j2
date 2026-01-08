@@ -8,6 +8,8 @@
     {% block meta_description_suffix %}{% endblock %}
 {% endblock %}
 {% block extra_css %}
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-compliance-badge.css' %}">
     <style>
   .meta-chip {
     display: inline-flex;
@@ -64,6 +66,13 @@
                                     Workspace-wide
                                 </span>
                             {% endif %}
+                            {% for assessment in passing_assessments %}
+                                <span class="meta-chip meta-chip--compliance"
+                                      title="{{ assessment.display_name }}: All checks passed">
+                                    <i class="fas fa-check-circle"></i>
+                                    {{ assessment.display_name }}
+                                </span>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>

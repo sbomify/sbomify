@@ -3,6 +3,7 @@
 {% load django_vite %}
 {% load static %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ project.name }}{% endblock %}
 {% block meta_description %}
     {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
@@ -12,6 +13,8 @@
           href="{% static 'css/components/public-project-components.css' %}">
     <link rel="stylesheet"
           href="{% static 'css/components/public-download-card.css' %}">
+    <link rel="stylesheet"
+          href="{% static 'css/components/public-compliance-badge.css' %}">
     <style>
       .meta-chip {
         display: inline-flex;
@@ -51,30 +54,39 @@
                         </h1>
                         <p class="text-muted mb-1">Components and SBOMs shared for this project.</p>
                         <div class="meta-row">
-                            <span class="meta-chip">
-                                <i class="fas fa-cube"></i>
-                                {{ project.components|length }} component{{ project.components|length|pluralize }}
-                            </span>
+                            {% if project.components %}
+                                <span class="meta-chip">
+                                    <i class="fas fa-cube"></i>
+                                    {{ project.components|length|apnumber }} component{{ project.components|length|pluralize }}
+                                </span>
+                            {% endif %}
                             <span class="meta-chip">
                                 <i class="fas fa-globe"></i>
                                 Public
                             </span>
+                            {% for assessment in passing_assessments %}
+                                <span class="meta-chip meta-chip--compliance"
+                                      title="{{ assessment.display_name }}: All checks passed">
+                                    <i class="fas fa-check-circle"></i>
+                                    {{ assessment.display_name }}
+                                </span>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
                 <div class="public-main-content">
                     <div class="content-section">
                         <div class="project-content">
-                            <div class="public-card-wrapper public-card--default">
-                                <div class="standard-card mt-4">
-                                    <div class="card shadow-sm">
-                                        <div class="card-header">
-                                            <div class="header-content">
-                                                <h4 class="card-title mb-0">Project Components</h4>
+                            {% if project.components %}
+                                <div class="public-card-wrapper public-card--default">
+                                    <div class="standard-card mt-4">
+                                        <div class="card shadow-sm">
+                                            <div class="card-header">
+                                                <div class="header-content">
+                                                    <h4 class="card-title mb-0">Project Components</h4>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="card-body">
-                                            {% if project.components %}
+                                            <div class="card-body">
                                                 <div class="components-list">
                                                     <div class="row">
                                                         {% for component in project.components %}
@@ -101,19 +113,11 @@
                                                         {% endfor %}
                                                     </div>
                                                 </div>
-                                            {% else %}
-                                                <div class="empty-state">
-                                                    <div class="empty-icon">
-                                                        <i class="fas fa-cube"></i>
-                                                    </div>
-                                                    <h6 class="empty-title">No components yet</h6>
-                                                    <p class="empty-description text-muted">No components have been added to this project yet.</p>
-                                                </div>
-                                            {% endif %}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            {% endif %}
                             {% if has_downloadable_content %}
                                 <div class="download-section">
                                     <div class="standard-card mt-3">

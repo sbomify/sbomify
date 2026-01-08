@@ -2,6 +2,7 @@
 {% load breadcrumb_tags %}
 {% load static %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ product.name }} - Releases{% endblock %}
 {% block extra_css %}
     <link rel="stylesheet"
@@ -26,12 +27,14 @@
                             <p class="item-subtitle">Software releases for {{ product.name }}</p>
                         </div>
                     </div>
-                    <div class="header-meta">
-                        <span class="meta-item">
-                            <i class="fas fa-tag me-2"></i>
-                            <span class="meta-label">{{ releases|length }} Release{{ releases|length|pluralize }}</span>
-                        </span>
-                    </div>
+                    {% if releases %}
+                        <div class="header-meta">
+                            <span class="meta-item">
+                                <i class="fas fa-tag me-2"></i>
+                                <span class="meta-label">{{ releases|length|apnumber }} release{{ releases|length|pluralize }}</span>
+                            </span>
+                        </div>
+                    {% endif %}
                 </div>
                 {% if releases %}
                     <div class="releases-grid">
@@ -48,17 +51,19 @@
                                     <div class="release-meta">
                                         <small class="text-muted">
                                             <i class="fas fa-clock me-1"></i>
-                                            {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
+                                            {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                                         </small>
                                     </div>
                                 </div>
                                 <div class="release-content">
                                     <div class="release-stats">
-                                        <div class="stat-item">
-                                            <i class="fas fa-puzzle-piece me-1"></i>
-                                            <span class="stat-value">{{ release.artifacts.count }}</span>
-                                            <span class="stat-label">Artifact{{ release.artifacts.count|pluralize }}</span>
-                                        </div>
+                                        {% if release.artifacts.count %}
+                                            <div class="stat-item">
+                                                <i class="fas fa-puzzle-piece me-1"></i>
+                                                <span class="stat-value">{{ release.artifacts.count|apnumber }}</span>
+                                                <span class="stat-label">artifact{{ release.artifacts.count|pluralize }}</span>
+                                            </div>
+                                        {% endif %}
                                         {% with sbom_count=release.artifacts.filter|length %}
                                             {% if sbom_count > 0 %}
                                                 <div class="stat-item">
@@ -72,14 +77,6 @@
                                 </div>
                             </div>
                         {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="empty-state">
-                        <div class="empty-icon">
-                            <i class="fas fa-tag"></i>
-                        </div>
-                        <h3>No releases available</h3>
-                        <p class="text-muted">This product doesn't have any releases yet.</p>
                     </div>
                 {% endif %}
             </div>

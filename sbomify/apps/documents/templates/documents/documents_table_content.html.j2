@@ -1,4 +1,5 @@
 {% load static %}
+{% load humanize %}
 {% if not documents %}
     <div class="text-center text-muted py-4">
         <i class="fas fa-file-alt fa-3x mb-3"></i>
@@ -34,7 +35,13 @@
                             title="{{ document.document.version }}">
                             <span>{{ document.document.version|truncatechars:20 }}</span>
                         </td>
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ document.document.created_at|date:"M d, Y" }}</td>
+                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
+                            {% if is_public_view %}
+                                {{ document.document.created_at|naturaltime }}
+                            {% else %}
+                                {{ document.document.created_at|date:"M d, Y" }}
+                            {% endif %}
+                        </td>
                         <td {% if not is_public_view %}data-label="Releases"{% endif %}>
                             {% include 'core/components/release_list.html.j2' with releases=document.releases document_id=document.document.id is_public_view=is_public_view %}
                         </td>
