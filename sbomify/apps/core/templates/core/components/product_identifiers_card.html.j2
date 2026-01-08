@@ -52,7 +52,7 @@
                                         <div class="barcode-wrapper"
                                              x-data="productIdentifiersBarcodes()"
                                              x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
-                                            <svg :id="'barcode-' + '{{ identifier.id }}'" class="barcode-svg">
+                                            <svg data-barcode-id="{{ identifier.id }}" class="barcode-svg">
                                             </svg>
                                             <template x-if="barcodeErrors['{{ identifier.id }}']">
                                                 <div class="barcode-error-state">
