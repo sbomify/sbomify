@@ -145,7 +145,7 @@ The `notifications.py` module provides billing alerts:
 
 | Variable                         | Description                                                                                                                                   |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BILLING`                        | For local/self-hosted: set to `TRUE` to enable billing or `FALSE` to disable billing for unlimited access; only `TRUE`/`FALSE` are supported  |
+| `BILLING`                        | For local/self-hosted: set `BILLING=TRUE` to enable billing or `BILLING=FALSE` to disable billing for unlimited access; only `TRUE`/`FALSE` are supported |
 | `STRIPE_SECRET_KEY`              | Stripe secret API key                                                                                                                         |
 | `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard                                                                                                  |
 | `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                                                                                                         |
