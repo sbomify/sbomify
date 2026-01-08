@@ -300,14 +300,14 @@
                     <div class="meta-chip">
                         <i class="fas fa-cube"></i>
                         <span class="meta-chip-number">{{ products|length }}</span>
-                        <span class="meta-chip-label">Product{{ products|length|pluralize }}</span>
+                        <span class="meta-chip-label">product{{ products|length|pluralize }}</span>
                     </div>
                 {% endif %}
                 {% if global_components %}
                     <div class="meta-chip">
                         <i class="fas fa-award"></i>
                         <span class="meta-chip-number">{{ global_components|length }}</span>
-                        <span class="meta-chip-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
+                        <span class="meta-chip-label">compliance artifact{{ global_components|length|pluralize }}</span>
                     </div>
                 {% endif %}
             </div>
@@ -328,7 +328,7 @@
                         <div class="glass-card">
                             <div class="card-header-section">
                                 <h3 class="card-title">{{ product.name }}</h3>
-                                <span class="badge badge-count">{{ product.project_count }} Project{{ product.project_count|pluralize }}</span>
+                                <span class="badge badge-count">{{ product.project_count }} project{{ product.project_count|pluralize }}</span>
                             </div>
                             {% if product.description %}<p class="card-description">{{ product.description }}</p>{% endif %}
                             <div class="card-footer-section">

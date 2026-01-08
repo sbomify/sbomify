@@ -30,7 +30,7 @@
                                     </td>
                                     <td>
                                         <div class="artifact-name">
-                                            <div class="fw-medium">{{ artifact.artifact_name|default:"Unknown" }}</div>
+                                            <div class="fw-medium">{{ artifact.artifact_name|default:"Unnamed artifact" }}</div>
                                             <div class="artifact-type-badge">
                                                 {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
                                                     SBOM •
@@ -48,7 +48,7 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="component-name">{{ artifact.component_name|default:"Unknown" }}</span>
+                                        <span class="component-name">{{ artifact.component_name|default:"—" }}</span>
                                     </td>
                                     <td>
                                         <span class="format-text">
@@ -64,7 +64,7 @@
                                             {% elif artifact.artifact_type == 'document' and artifact.document_type %}
                                                 {{ artifact.document_type|title }}
                                             {% else %}
-                                                Unknown
+                                                —
                                             {% endif %}
                                         </span>
                                     </td>
