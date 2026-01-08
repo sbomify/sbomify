@@ -90,6 +90,8 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         Handle user account connecting or creation.
 
+        Also syncs email_verified status from social providers on every login for existing users.
+
         Args:
             request: The current HTTP request
             sociallogin: The social login instance
@@ -105,6 +107,27 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                 sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass
+
+        # Sync email_verified status from social provider on every login
+        extra_data = sociallogin.account.extra_data or {}
+        provider = sociallogin.account.provider
+
+        # Extract email_verified from provider-specific field
+        if provider == "keycloak":
+            email_verified = extra_data.get("email_verified", False)
+        elif provider == "github":
+            email_verified = extra_data.get("email_verified", False)
+        elif provider == "google":
+            email_verified = extra_data.get("verified_email", False)
+        else:
+            email_verified = None  # Unknown provider, don't sync
+
+        # Update existing user's email_verified status if changed
+        user = sociallogin.user
+        if email_verified is not None and user.pk is not None and user.email_verified != email_verified:
+            user.email_verified = email_verified
+            user.save(update_fields=["email_verified"])
+            logger.info(f"Synced email_verified={email_verified} for user {user.username} from {provider}")
 
     def populate_user(self, request: HttpRequest, sociallogin: SocialLogin, data: dict[str, Any]) -> Any:
         """

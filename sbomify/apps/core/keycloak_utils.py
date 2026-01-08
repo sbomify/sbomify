@@ -7,17 +7,7 @@ import uuid
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
-try:
-    # Try importing from python-keycloak
-    from python_keycloak import KeycloakAdmin, KeycloakOpenID
-except ImportError:
-    try:
-        # Try importing from keycloak
-        from keycloak import KeycloakAdmin, KeycloakOpenID
-    except ImportError:
-        # For the older versions of python-keycloak
-        from keycloak.keycloak_admin import KeycloakAdmin
-        from keycloak.keycloak_openid import KeycloakOpenID
+from keycloak import KeycloakAdmin, KeycloakOpenID
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
