@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
@@ -32,7 +34,7 @@ def mock_sociallogin():
     return DummySocialLogin()
 
 
-def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid"):
+def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid") -> Any:
     """Create a mock social login object for testing.
 
     Args:

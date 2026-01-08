@@ -124,7 +124,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         # Update existing user's email_verified status if changed
         user = sociallogin.user
-        if email_verified is not None and user.id and user.email_verified != email_verified:
+        if email_verified is not None and user.pk is not None and user.email_verified != email_verified:
             user.email_verified = email_verified
             user.save(update_fields=["email_verified"])
             logger.info(f"Synced email_verified={email_verified} for user {user.username} from {provider}")
