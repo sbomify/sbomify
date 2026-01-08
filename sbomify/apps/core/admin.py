@@ -339,37 +339,36 @@ class CustomUserAdmin(UserAdmin):
         boolean=False,  # We're using custom HTML output
     )
     def email_verified_status(self, obj):
-        """Get email verification status from Keycloak.
+        """Get email verification status.
 
-        Checks both Keycloak and social login providers (GitHub/Google) which
-        may have different verification statuses.
+        Uses Django User.email_verified as the primary source of truth,
+        with fallback to social account extra_data for legacy accounts.
         """
+        # Primary: Use Django User model field
+        if obj.email_verified:
+            return format_html('<span style="color: #28a745;">Verified</span>')
+
+        # Fallback: Check social account extra_data
+        # (for accounts created before email_verified sync was implemented)
         auth = obj.socialaccount_set.first()
         if not auth:
             return format_html('<span style="color: #666;">No social account</span>')
 
-        # Check Keycloak verification
-        if auth.provider == "keycloak" and auth.extra_data:
-            verified = auth.extra_data.get("email_verified", False)
-            return format_html(
-                '<span style="color: {};">{}</span>',
-                "#28a745" if verified else "#dc3545",
-                "Verified" if verified else "Not Verified",
-            )
+        # Check provider-specific verification field in extra_data
+        if auth.extra_data:
+            if auth.provider == "keycloak":
+                verified = auth.extra_data.get("email_verified", False)
+            elif auth.provider == "github":
+                verified = auth.extra_data.get("email_verified", False)
+            elif auth.provider == "google":
+                verified = auth.extra_data.get("verified_email", False)
+            else:
+                verified = False
 
-        # For other providers, check their specific verification field
-        if auth.provider == "github":
-            verified = auth.extra_data.get("email_verified", False)
-        elif auth.provider == "google":
-            verified = auth.extra_data.get("verified_email", False)
-        else:
-            verified = False
+            if verified:
+                return format_html('<span style="color: #28a745;">Verified</span>')
 
-        return format_html(
-            '<span style="color: {};">{}</span>',
-            "#28a745" if verified else "#dc3545",
-            "Verified" if verified else "Not Verified",
-        )
+        return format_html('<span style="color: #dc3545;">Not Verified</span>')
 
     def social_accounts(self, obj):
         """Display social accounts for the user."""
