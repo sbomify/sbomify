@@ -19,6 +19,7 @@ import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerDeleteModal } from './components/delete-modal';
 import { registerReleaseList } from './components/release-list';
+import { registerProductIdentifiersBarcodes } from './components/product-identifiers-barcodes';
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
@@ -78,6 +79,7 @@ registerContactsEditor();
 registerSupplierEditor();
 registerLicensesEditor();
 registerReleaseList();
+registerProductIdentifiersBarcodes();
 registerAssessmentBadge();
 registerDocumentUpload();
 registerDeleteModal();
@@ -129,6 +131,15 @@ document.body.addEventListener('htmx:afterSwap', () => {
   mountVueComponent('vc-product-releases', ProductReleases);
   mountVueComponent('vc-release-artifacts', ReleaseArtifacts);
   mountVueComponent('vc-public-release-artifacts', PublicReleaseArtifacts);
+});
+
+// Global HTMX event handler to close Bootstrap modals
+document.body.addEventListener('closeModal', () => {
+  const modals = document.querySelectorAll('.modal.show');
+  modals.forEach((modal) => {
+    const bsModal = window.bootstrap?.Modal.getInstance(modal);
+    if (bsModal) bsModal.hide();
+  });
 });
 
 export { };

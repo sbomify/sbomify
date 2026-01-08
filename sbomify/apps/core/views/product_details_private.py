@@ -1,11 +1,12 @@
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.core.apis import get_dashboard_summary, get_product
+from sbomify.apps.core.apis import get_dashboard_summary, get_product, patch_product
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.schemas import ProductPatchSchema
 
 
 class ProductDetailsPrivateView(LoginRequiredMixin, View):
@@ -46,3 +47,18 @@ class ProductDetailsPrivateView(LoginRequiredMixin, View):
                 "team_billing_plan": team_billing_plan,
             },
         )
+
+    def post(self, request: HttpRequest, product_id: str) -> HttpResponse:
+        """Handle product description updates."""
+        action = request.POST.get("action")
+
+        if action == "update_description":
+            description = request.POST.get("description", "").strip()
+            payload = ProductPatchSchema(description=description if description else None)
+            status_code, result = patch_product(request, product_id, payload)
+
+            if status_code != 200:
+                # TODO: Add proper error handling/flash message
+                pass
+
+        return redirect("core:product_details", product_id=product_id)

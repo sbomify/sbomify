@@ -1,150 +1,44 @@
-{# Public Product Identifiers - server-rendered replacement for ProductIdentifiers.vue (public view) #}
+{# Public Product Identifiers - server-rendered #}
 {% load static %}
 {% if product_identifiers %}
-    <link rel="stylesheet"
-          href="{% static 'css/components/product-identifiers.css' %}">
-    <div class="standard-card mt-3" x-data="productIdentifiersBarcodes()">
-        <div class="card shadow-sm">
+    <div class="public-section" x-data="productIdentifiersBarcodes()">
+        <div class="card">
             <div class="card-header">
-                <div class="header-content">
-                    <h4 class="card-title mb-0">Product Identifiers</h4>
-                </div>
+                <h4 class="card-title">
+                    <i class="fas fa-fingerprint"></i>Product Identifiers
+                </h4>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th style="width: 20%">Type</th>
-                                <th style="width: 30%">Value</th>
-                                <th style="width: 50%" class="text-center">Barcode</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for identifier in product_identifiers %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary">{{ identifier.identifier_type_display }}</span>
-                                    </td>
-                                    <td>
-                                        <code class="text-primary">{{ identifier.value }}</code>
-                                    </td>
-                                    <td class="text-center">
-                                        <div class="barcode-container">
-                                            {% if identifier.identifier_type == 'gtin_12' or identifier.identifier_type == 'gtin_13' or identifier.identifier_type == 'gtin_14' or identifier.identifier_type == 'gtin_8' %}
-                                                {# Barcode-eligible types #}
-                                                <div class="barcode-wrapper"
-                                                     :class="{ 'barcode-success': barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}'], 'barcode-loading': !barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}'], 'barcode-error': barcodeErrors['{{ identifier.id }}'] }"
-                                                     x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
-                                                    {# SVG element for barcode rendering #}
-                                                    <svg data-barcode-id="{{ identifier.id }}"
-                                                         class="barcode-svg"
-                                                         x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
-                                                    </svg>
-                                                    {# Loading state #}
-                                                    <div class="barcode-state-content"
-                                                         x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
-                                                        <i class="fas fa-spinner fa-spin"></i>
-                                                        <span class="small">Generating...</span>
-                                                    </div>
-                                                    {# Error state #}
-                                                    <div class="barcode-state-content"
-                                                         x-show="barcodeErrors['{{ identifier.id }}']">
-                                                        <i class="fas fa-exclamation-triangle"></i>
-                                                        <span class="small">Invalid barcode data</span>
-                                                    </div>
-                                                </div>
-                                            {% else %}
-                                                {# Not applicable for non-GTIN types #}
-                                                <div class="barcode-wrapper barcode-not-applicable">
-                                                    <i class="fas fa-info-circle"></i>
-                                                    <span class="small">Not Applicable</span>
-                                                </div>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body p-0">
+                <ul class="public-list">
+                    {% for identifier in product_identifiers %}
+                        <li class="public-list-item">
+                            <div class="public-list-item-content">
+                                <div class="public-list-item-type">{{ identifier.identifier_type_display }}</div>
+                                <div class="public-identifier-value">{{ identifier.value }}</div>
+                            </div>
+                            {% if identifier.identifier_type == 'gtin_12' or identifier.identifier_type == 'gtin_13' or identifier.identifier_type == 'gtin_14' or identifier.identifier_type == 'gtin_8' %}
+                                <div class="public-identifier-barcode"
+                                     x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
+                                    <svg data-barcode-id="{{ identifier.id }}"
+                                         class="barcode-svg"
+                                         x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
+                                    </svg>
+                                    <div class="barcode-state-content"
+                                         x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
+                                        <i class="fas fa-spinner fa-spin me-1"></i>
+                                        <span>Loading...</span>
+                                    </div>
+                                    <div class="barcode-state-content"
+                                         x-show="barcodeErrors['{{ identifier.id }}']">
+                                        <i class="fas fa-exclamation-circle me-1"></i>
+                                        <span>Invalid</span>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
     </div>
-    <script>
-document.addEventListener('alpine:init', () => {
-    Alpine.data('productIdentifiersBarcodes', () => ({
-        barcodeRendered: {},
-        barcodeErrors: {},
-        jsBarcode: null,
-
-        async renderBarcode(id, value, type) {
-            // Skip if already rendered or errored
-            if (this.barcodeRendered[id] || this.barcodeErrors[id]) return;
-
-            // Initialize state
-            this.barcodeRendered[id] = false;
-            this.barcodeErrors[id] = false;
-
-            try {
-                // Dynamically import JsBarcode
-                if (!this.jsBarcode) {
-                    const module = await import('https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/+esm');
-                    this.jsBarcode = module.default;
-                }
-
-                // Get the barcode format based on type
-                const formatMap = {
-                    'gtin_12': 'UPC',
-                    'gtin_13': 'EAN13',
-                    'gtin_14': 'ITF14',
-                    'gtin_8': 'EAN8'
-                };
-                const format = formatMap[type] || 'EAN13';
-
-                // Wait a tick for DOM to be ready
-                await this.$nextTick();
-
-                // Find the SVG element
-                const svg = document.querySelector(`[data-barcode-id="${id}"]`);
-                if (!svg) {
-                    console.warn(`No SVG element found for barcode ID: ${id}`);
-                    this.barcodeErrors[id] = true;
-                    return;
-                }
-
-                // Validate barcode value
-                if (!value || value.trim() === '') {
-                    throw new Error('Empty barcode value');
-                }
-
-                // Render the barcode
-                this.jsBarcode(svg, value, {
-                    format: format,
-                    width: 2,
-                    height: 50,
-                    displayValue: true,
-                    fontSize: 14,
-                    fontOptions: 'bold',
-                    font: 'monospace',
-                    textMargin: 8,
-                    textAlign: 'center',
-                    textPosition: 'bottom',
-                    margin: 10,
-                    background: '#ffffff',
-                    lineColor: '#000000'
-                });
-
-                this.barcodeRendered[id] = true;
-                this.barcodeErrors[id] = false;
-
-            } catch (err) {
-                console.warn(`Failed to generate barcode for ${type}: ${value}`, err);
-                this.barcodeErrors[id] = true;
-                this.barcodeRendered[id] = false;
-            }
-        }
-    }));
-});
-    </script>
 {% endif %}

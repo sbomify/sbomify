@@ -15,6 +15,7 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.documents.apis import get_document
+from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
 from sbomify.apps.sboms.apis import get_sbom
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
@@ -71,11 +72,19 @@ class ComponentItemPublicView(View):
 
         brand = build_branding_context(component.team)
 
+        # Get passing assessments for SBOMs
+        passing_assessments = []
+        if item_type == "sboms":
+            sbom_passing = get_sbom_passing_assessments(item_id)
+            passing_assessments = passing_assessments_to_dict(sbom_passing)
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "brand": brand,
             "item": item,
+            "item_type": item_type,
             "component": _build_item_response(request, component, "component"),
+            "passing_assessments": passing_assessments,
         }
         add_custom_domain_to_context(request, context, component.team)
 

@@ -430,7 +430,7 @@
                                 <div class="meta-chip">
                                     <i class="fas fa-cube"></i>
                                     <span class="meta-chip-number">{{ products|length|apnumber }}</span>
-                                    <span class="meta-chip-label">Public Product{{ products|length|pluralize }}</span>
+                                    <span class="meta-chip-label">Product{{ products|length|pluralize }}</span>
                                 </div>
                             {% endif %}
                             {% if global_components %}
@@ -448,9 +448,9 @@
                     <div class="content-section">
                         <div class="section-header">
                             <h2 class="section-title">
-                                <i class="fas fa-cube me-2"></i>Public Products
+                                <i class="fas fa-cube me-2"></i>Products
                             </h2>
-                            <p class="section-subtitle">Explore our publicly available products and their software bill of materials (SBOMs)</p>
+                            <p class="section-subtitle">Explore our products and their software bill of materials (SBOMs)</p>
                         </div>
                         <div class="row g-4">
                             {% for product in products %}
@@ -460,9 +460,7 @@
                                             <h3 class="card-title">{{ product.name }}</h3>
                                             <span class="badge badge-count">{{ product.project_count|apnumber }} project{{ product.project_count|pluralize }}</span>
                                         </div>
-                                        <p class="card-description">
-                                            {{ product.description|default:"Comprehensive product information and software composition details." }}
-                                        </p>
+                                        {% if product.description %}<p class="card-description">{{ product.description }}</p>{% endif %}
                                         <div class="card-footer-section">
                                             <span class="badge badge-type">
                                                 <i class="fas fa-tag me-1"></i>Product

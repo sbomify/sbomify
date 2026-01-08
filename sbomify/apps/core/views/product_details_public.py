@@ -24,24 +24,44 @@ from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
 
-def _prepare_public_projects(projects: list, is_custom_domain: bool) -> list:
-    """Prepare project data with public URLs, filtering to only public projects."""
+def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list:
+    """Prepare project data with components for display on the product page."""
+    from sbomify.apps.core.models import Project
+    from sbomify.apps.core.url_utils import get_public_path
+
+    # Get projects for this product with their components
+    projects = (
+        Project.objects.filter(products__id=product_id, is_public=True).prefetch_related("components").order_by("name")
+    )
+
     public_projects = []
     for project in projects:
-        if not project.get("is_public"):
-            continue
+        # Get public components for this project
+        public_components = []
+        for component in project.components.filter(is_public=True).order_by("name"):
+            component_data = {
+                "id": component.id,
+                "name": component.name,
+                "slug": component.slug,
+                "component_type": component.component_type,
+                "component_type_display": component.get_component_type_display(),
+            }
+            # Build component public URL
+            component_data["public_url"] = get_public_path(
+                "component", component.id, is_custom_domain=is_custom_domain, slug=component.slug
+            )
+            public_components.append(component_data)
+
         project_data = {
-            "id": project["id"],
-            "name": project["name"],
-            "slug": project.get("slug"),
+            "id": project.id,
+            "name": project.name,
+            "slug": project.slug,
             "is_public": True,
+            "components": public_components,
+            "component_count": len(public_components),
         }
-        # Build public URL based on domain type
-        if is_custom_domain:
-            project_data["public_url"] = f"/project/{project.get('slug') or project['id']}/"
-        else:
-            project_data["public_url"] = f"/public/project/{project['id']}/"
         public_projects.append(project_data)
+
     return public_projects
 
 
@@ -139,7 +159,7 @@ class ProductDetailsPublicView(View):
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
         # Prepare server-side data for Django templates (replacing Vue components)
-        public_projects = _prepare_public_projects(product.get("projects", []), is_custom_domain)
+        public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
         public_releases = _get_public_releases(resolved_id, is_custom_domain, product.get("slug") or resolved_id)
         product_identifiers = _get_product_identifiers(resolved_id)
         product_links = _get_product_links(resolved_id)

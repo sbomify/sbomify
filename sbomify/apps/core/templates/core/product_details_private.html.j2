@@ -28,6 +28,47 @@
                     {% include 'core/components/public_status_toggle.html.j2' with item_type='product' item_id=product.id public_url=product_public_url is_public=product.is_public %}
                 {% endif %}
             </div>
+            {% if product.has_crud_permissions %}
+                <div class="description-section" x-data="{ editing: false }">
+                    <template x-if="!editing">
+                        <div class="description-display" @click="editing = true">
+                            {% if product.description %}
+                                <p class="description-text mb-1">{{ product.description }}</p>
+                            {% else %}
+                                <p class="description-placeholder mb-1">Add a description...</p>
+                            {% endif %}
+                            <i class="fas fa-pencil-alt edit-icon"></i>
+                        </div>
+                    </template>
+                    <template x-if="editing">
+                        <form method="post"
+                              action="{% url 'core:product_details' product.id %}"
+                              class="description-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_description">
+                            <textarea name="description"
+                                      class="form-control mb-2"
+                                      rows="3"
+                                      maxlength="1000"
+                                      placeholder="Enter a product description..."
+                                      x-init="$el.focus()">{{ product.description|default:'' }}</textarea>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-check me-1"></i>Save
+                                </button>
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        @click="editing = false">Cancel</button>
+                            </div>
+                        </form>
+                    </template>
+                    <small class="description-hint">
+                        <i class="fas fa-globe me-1"></i>Displayed on public Trust Center
+                    </small>
+                </div>
+            {% elif product.description %}
+                <p class="text-muted mb-0 mt-2">{{ product.description }}</p>
+            {% endif %}
         </div>
         <div class="header-meta">
             <span class="meta-item">
@@ -61,18 +102,27 @@
         </div>
     </div>
     <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-product-identifiers"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"
-                 data-billing-plan="{{ team_billing_plan }}"></div>
+        <div class="col-12"
+             hx-get="{% url 'core:product_identifiers' product.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
         </div>
     </div>
     <div class="row mt-3">
-        <div class="col-12">
-            <div class="vc-product-links"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
+        <div class="col-12"
+             hx-get="{% url 'core:product_links' product.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
         </div>
     </div>
     <div class="row mt-3">

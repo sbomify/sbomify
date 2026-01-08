@@ -37,7 +37,9 @@ from sbomify.apps.core.views.component_scope import ComponentScopeView  # noqa: 
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.dashboard import DashboardView  # noqa: F401, E402
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView  # noqa: F401, E402
-from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView  # noqa: F401, E402
+from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
+from sbomify.apps.core.views.product_identifiers import ProductIdentifiersView as ProductIdentifiersView
+from sbomify.apps.core.views.product_links import ProductLinksView as ProductLinksView
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView  # noqa: F401, E402
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView  # noqa: F401, E402
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView  # noqa: F401, E402
