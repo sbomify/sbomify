@@ -272,6 +272,9 @@ def test_public_pages_accessibility(
         if "sbom" in uri:
             assert "component" in response.request["PATH_INFO"]
             assert "detailed" in response.request["PATH_INFO"]
+        elif "project" in uri:
+            # Project public pages redirect to the parent product page
+            assert "product" in response.request["PATH_INFO"]
         else:
             assert quote(response.request["PATH_INFO"]) == uri
 

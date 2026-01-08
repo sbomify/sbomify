@@ -2483,11 +2483,11 @@ def test_create_product_link_success(
 
 
 @pytest.mark.django_db
-def test_create_product_link_duplicate_url(
+def test_create_product_link_duplicate_url_allowed(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test creating duplicate link fails."""
+    """Test creating duplicate link is allowed (multiple links to same target supported)."""
     # Create initial link
     ProductLink.objects.create(
         product=sample_product,
@@ -2519,8 +2519,10 @@ def test_create_product_link_duplicate_url(
         **get_api_headers(sample_access_token),
     )
 
-    assert response.status_code == 400
-    assert "already exists" in response.json()["detail"]
+    # Duplicate links are now allowed
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Another Website"
 
 
 @pytest.mark.django_db
@@ -2892,12 +2894,11 @@ def test_product_link_not_found(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_product_link_validation(
+def test_product_link_allows_duplicates(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    """Test validation of product link fields."""
+    """Test that duplicate links (same type and URL) are allowed for the same product."""
     import uuid
-    from django.db import IntegrityError, transaction
 
     unique_suffix = str(uuid.uuid4())[:8]
 
@@ -2906,31 +2907,33 @@ def test_product_link_validation(
         team=sample_team_with_owner_member.team,
     )
 
-    # Test unique constraint within product
+    # Create first link
     link1 = ProductLink.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
         link_type="website",
         title="Website",
         url=f"https://unique-{unique_suffix}.example.com",
-        description="Unique URL",
+        description="First link",
     )
 
-    # Creating another link with same type and URL for same product should fail
-    # Use separate atomic block for this test to handle the rollback
-    with pytest.raises(IntegrityError):
-        with transaction.atomic():
-            ProductLink.objects.create(
-                product=product,
-                team=sample_team_with_owner_member.team,
-                link_type="website",
-                title="Another Website",
-                url=f"https://unique-{unique_suffix}.example.com",
-                description="Duplicate URL",
-            )
-
-    # But same URL with different type should be allowed
+    # Creating another link with same type and URL for same product should succeed
+    # (duplicate links are allowed to support multiple links to the same target)
     link2 = ProductLink.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        link_type="website",
+        title="Another Website",
+        url=f"https://unique-{unique_suffix}.example.com",
+        description="Duplicate URL - allowed",
+    )
+
+    assert link1.id != link2.id
+    assert link1.url == link2.url
+    assert link1.link_type == link2.link_type
+
+    # Different type with different URL should also work
+    link3 = ProductLink.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
         link_type="support",
@@ -2939,7 +2942,7 @@ def test_product_link_validation(
         description="Different URL",
     )
 
-    assert link1.id != link2.id
+    assert link3.id not in [link1.id, link2.id]
 
 
 @pytest.mark.django_db(transaction=True)
