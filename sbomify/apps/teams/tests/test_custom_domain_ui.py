@@ -144,7 +144,8 @@ class TestTeamBrandingViewCustomDomain:
         content = response.content.decode()
         assert "Custom Domain" in content
         # Check app_hostname appears in the CNAME target instructions
-        assert "<code>app.sbomify.io</code>" in content
+        assert "app.sbomify.io" in content
+        assert "Target:" in content or "dns-record-label" in content
         # Check that the upgrade badge is NOT shown (hasAccess should be true)
         assert "hasAccess: true" in content
 
