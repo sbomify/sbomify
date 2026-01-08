@@ -143,14 +143,14 @@ The `notifications.py` module provides billing alerts:
 
 ## Environment Variables
 
-| Variable                         | Description                                             |
-| -------------------------------- | ------------------------------------------------------- |
-| `BILLING`                        | Enable billing (`TRUE`) or treat all as Enterprise      |
-| `STRIPE_SECRET_KEY`              | Stripe secret API key                                   |
-| `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard            |
-| `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                   |
-| `TRIAL_PERIOD_DAYS`              | Number of days for trial period (default: 14)           |
-| `TRIAL_ENDING_NOTIFICATION_DAYS` | Days before trial end to send notification (default: 3) |
+| Variable                         | Description                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| `BILLING`                        | For local/self-hosted: enable (TRUE) or disable for unlimited access (FALSE)  |
+| `STRIPE_SECRET_KEY`              | Stripe secret API key                                                         |
+| `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard                                  |
+| `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                                         |
+| `TRIAL_PERIOD_DAYS`              | Number of days for trial period (default: 14)                                 |
+| `TRIAL_ENDING_NOTIFICATION_DAYS` | Days before trial end to send notification (default: 3)                       |
 
 ## Trial Management
 
