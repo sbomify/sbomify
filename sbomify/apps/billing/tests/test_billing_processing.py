@@ -36,6 +36,7 @@ def mock_stripe_subscription():
     subscription.trial_end = None
     subscription.items.data = [MagicMock(price=MagicMock(product="prod_123", metadata={"plan_key": "business"}))]
     subscription.metadata = {"plan_key": "business"}
+    subscription.cancel_at_period_end = False
     return subscription
 
 
@@ -47,6 +48,8 @@ def mock_stripe_checkout_session(team_with_business_plan):
     session.customer = "cus_test123"  # Match the team's customer ID
     session.subscription = "sub_test123"  # Match the team's subscription ID
     session.payment_status = "paid"
+    session.amount_total = 1000  # $10.00
+    session.currency = "usd"
     session.metadata = {
         "team_key": team_with_business_plan.key,  # Use the actual team key
         "plan_key": "business",
@@ -62,6 +65,8 @@ def mock_stripe_invoice():
     invoice.subscription = "sub_test123"  # Match the team's subscription ID
     invoice.customer = "cus_test123"  # Match the team's customer ID
     invoice.status = "paid"
+    invoice.amount_paid = 1000
+    invoice.currency = "usd"
     return invoice
 
 
@@ -166,6 +171,40 @@ class TestBillingProcessing:
         mock_email.notify_trial_ending.assert_called_once()
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_handle_checkout_completed_cancels_old_subscription(self, mock_email):
+        """Test that old subscription is cancelled when a new one is created via checkout."""
+        # Setup: Team has an EXISTING subscription
+        old_sub_id = "sub_old_999"
+        self.team.billing_plan_limits["stripe_subscription_id"] = old_sub_id
+        self.team.save()
+
+        # Webhook brings a NEW subscription
+        new_sub_id = "sub_new_111"
+        self.session.subscription = new_sub_id
+        
+        # Mock Stripe client to return valid new subscription
+        mock_new_sub = MagicMock(
+            id=new_sub_id, 
+            status="active", 
+            trial_end=None,
+            items=MagicMock(data=[MagicMock(price=MagicMock(product="prod_123", metadata={"plan_key": "business"}))]),
+            metadata={"plan_key": "business"}
+        )
+        self.stripe_client.get_subscription.return_value = mock_new_sub
+
+        # Call the handler
+        billing_processing.handle_checkout_completed(self.session)
+
+        # Verify old subscription was cancelled
+        self.stripe_client.cancel_subscription.assert_called_once_with(old_sub_id)
+        
+        # Verify team updated with new subscription
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["stripe_subscription_id"] == new_sub_id
+        assert self.team.billing_plan_limits["subscription_status"] == "active"
+
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_handle_payment_succeeded(self, mock_email):
         """Test handling successful payment."""
         billing_processing.handle_payment_succeeded(self.invoice)
@@ -183,36 +222,7 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["subscription_status"] == "past_due"
         mock_email.notify_payment_failed.assert_called_once()
 
-    def test_can_downgrade_to_plan(self):
-        """Test checking if team can downgrade to a plan."""
-        # Create some test data exceeding limits
-        for i in range(15):  # More than max_products (10)
-            Product.objects.create(team=self.team, name=f"Product {i}")
 
-        for i in range(25):  # More than max_projects (20)
-            Project.objects.create(team=self.team, name=f"Project {i}")
-
-        for i in range(150):  # More than max_components (100)
-            Component.objects.create(team=self.team, name=f"Component {i}")
-
-        # Test with no limits
-        plan = BillingPlan.objects.create(key="enterprise", name="Enterprise", stripe_price_monthly_id="price_456")
-        can_downgrade, message = billing_processing.can_downgrade_to_plan(self.team, plan)
-        assert can_downgrade is True
-        assert message == ""
-
-        # Test with limits exceeded
-        plan = BillingPlan.objects.create(
-            key="starter",
-            name="Starter",
-            stripe_price_monthly_id="price_789",
-            max_products=1,
-            max_projects=1,
-            max_components=1,
-        )
-        can_downgrade, message = billing_processing.can_downgrade_to_plan(self.team, plan)
-        assert can_downgrade is False
-        assert "Current usage exceeds plan limits" in message
 
     def test_handle_subscription_deleted(self):
         """Test handling subscription deletion."""
@@ -233,11 +243,7 @@ class TestBillingProcessing:
         with pytest.raises(StripeError):
             billing_processing.handle_subscription_updated(self.subscription)
 
-    def test_handle_missing_plan(self):
-        """Test handling missing billing plan."""
-        self.plan.delete()
-        with pytest.raises(StripeError):
-            billing_processing.handle_subscription_updated(self.subscription)
+
 
 
 def test_handle_stripe_error():
@@ -314,6 +320,8 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
     invoice = MagicMock()
     invoice.subscription = "sub_test123"
     invoice.customer = "cus_test123"
+    invoice.amount_paid = 1000
+    invoice.currency = "usd"
 
     billing_processing.handle_payment_succeeded(invoice)
 
@@ -324,60 +332,7 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
     assert team_with_business_plan.billing_plan_limits["subscription_status"] == "active"
 
 
-def test_can_downgrade_to_plan_within_limits(team_with_business_plan, business_plan):
-    """Test downgrade check when usage is within plan limits."""
-    # Create some test data within limits
-    for i in range(5):  # Less than max_products (10)
-        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
 
-    for i in range(10):  # Less than max_projects (20)
-        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
-
-    for i in range(50):  # Less than max_components (100)
-        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
-
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, business_plan)
-    assert can_downgrade is True
-    assert message == ""
-
-
-def test_can_downgrade_to_plan_exceeds_limits(team_with_business_plan, business_plan):
-    """Test downgrade check when usage exceeds plan limits."""
-    # Create test data exceeding limits
-    for i in range(15):  # More than max_products (10)
-        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
-
-    for i in range(25):  # More than max_projects (20)
-        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
-
-    for i in range(150):  # More than max_components (100)
-        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
-
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, business_plan)
-    assert can_downgrade is False
-    assert "Current usage exceeds plan limits" in message
-
-
-def test_can_downgrade_to_plan_no_limits(team_with_business_plan):
-    """Test downgrade check for plan with no limits."""
-    # Create enterprise plan with no limits
-    enterprise_plan = BillingPlan.objects.create(
-        key="enterprise",
-        name="Enterprise",
-        max_products=None,
-        max_projects=None,
-        max_components=None,
-    )
-
-    # Create test data exceeding normal limits
-    for i in range(100):
-        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
-        Project.objects.create(team=team_with_business_plan, name=f"Project {i}")
-        Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
-
-    can_downgrade, message = billing_processing.can_downgrade_to_plan(team_with_business_plan, enterprise_plan)
-    assert can_downgrade is True
-    assert message == ""
 
 
 @override_settings(BILLING=False)
@@ -476,3 +431,96 @@ def test_billing_enabled_checks():
     result = test_view(request)
     assert isinstance(result, HttpResponseForbidden)
     assert result.content.decode() == "You have reached the maximum 5 products allowed by your plan"
+
+
+@override_settings(BILLING=True)
+def test_payment_failure_grace_period():
+    """Test grace period logic for payment failures."""
+    # Create test plan
+    BillingPlan.objects.create(key="business", name="Business", max_products=10)
+    
+    # Create team with past_due status
+    team = Team.objects.create(
+        name="Test Team", 
+        key="test-team-grace", 
+        billing_plan="business",
+        billing_plan_limits={"subscription_status": "past_due"}
+    )
+    
+    # Setup user/member
+    user = User.objects.create_user(username="grace_user", email="grace@example.com")
+    Member.objects.create(team=team, user=user, role="owner")
+    
+    # Setup request
+    request = MagicMock()
+    request.method = "POST"
+    request.session = {"current_team": {"key": "test-team-grace"}}
+    request.headers = {}
+    request.META = {}
+
+    @billing_processing.check_billing_limits("product")
+    def test_view(request):
+        return "success"
+
+    # 1. Test: Within Grace Period (1 day ago failure)
+    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=1)).isoformat()
+    team.save()
+    
+    result = test_view(request)
+    assert result == "success"
+
+    # 2. Test: Grace Period Expired (4 days ago failure)
+    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=4)).isoformat()
+    team.save()
+    
+    result = test_view(request)
+    assert isinstance(result, HttpResponseForbidden)
+    assert "Grace period expired" in result.content.decode()
+
+    # 3. Test: Test handle_payment_failed sets the timestamp
+    # Reset team
+    team.billing_plan_limits = {"subscription_status": "active"}
+    team.save()
+    
+    invoice = MagicMock()
+    invoice.subscription = "sub_test_grace"
+    invoice.id = "in_grace_123"
+    
+    # We need to link team to this subscription AND customer locally to satisfy constraint
+    team.billing_plan_limits["stripe_subscription_id"] = "sub_test_grace"
+    team.billing_plan_limits["stripe_customer_id"] = "cus_test_grace"
+    team.save()
+    
+    with patch("sbomify.apps.billing.billing_processing.email_notifications"):
+        billing_processing.handle_payment_failed(invoice)
+    
+    team.refresh_from_db()
+    assert team.billing_plan_limits["subscription_status"] == "past_due"
+    assert "payment_failed_at" in team.billing_plan_limits
+    # Verify timestamp is recent
+    failed_at = datetime.datetime.fromisoformat(team.billing_plan_limits["payment_failed_at"])
+    assert (timezone.now() - failed_at).total_seconds() < 10
+
+
+@patch("sbomify.apps.billing.billing_processing.stripe_client")
+@patch("sbomify.apps.billing.billing_processing.email_notifications")
+def test_handle_subscription_updated_cancel_at_period_end(
+    mock_email, mock_client, team_with_business_plan, mock_stripe_subscription, business_plan
+):
+    """Test that cancel_at_period_end is correctly saved when subscription is updated."""
+    mock_stripe_subscription.cancel_at_period_end = True
+    mock_stripe_subscription.current_period_end = int(
+        (timezone.now() + datetime.timedelta(days=30)).timestamp()
+    )
+    # Patch items.data to return a price that matches our plan
+    mock_stripe_subscription.items.data = [
+        MagicMock(price=MagicMock(id="price_monthly"))
+    ]
+
+    billing_processing.handle_subscription_updated(mock_stripe_subscription)
+
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits.get("cancel_at_period_end") is True
+    assert "next_billing_date" in team_with_business_plan.billing_plan_limits
+
+

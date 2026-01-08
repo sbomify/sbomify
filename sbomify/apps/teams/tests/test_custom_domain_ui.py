@@ -79,6 +79,7 @@ class TestPlanHasCustomDomainAccess:
         BillingPlan.objects.create(
             key="custom_paid",
             name="Custom Paid Plan",
+            description="Custom Paid Plan",
         )
         # Since has_custom_domain_access is a property that checks key in ["business", "enterprise"]
         # custom plans that aren't in that list should not have access
@@ -89,6 +90,7 @@ class TestPlanHasCustomDomainAccess:
         BillingPlan.objects.create(
             key="business",
             name="Business Plan",
+            description="Business Plan",
         )
         # The function looks up the model and uses has_custom_domain_access property
         assert plan_has_custom_domain_access("business") is True

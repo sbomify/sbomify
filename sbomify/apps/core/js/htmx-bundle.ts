@@ -13,6 +13,7 @@ import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerAccessTokensList } from './components/access-tokens-list';
 import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
+import { registerPlanSelection } from '../../billing/js/plan-selection';
 import { initializeAlpine } from './alpine-init';
 
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
@@ -47,6 +48,7 @@ registerLicensesEditor();
 registerContactsEditor();
 registerSupplierEditor();
 registerDeleteModal();
+registerPlanSelection();
 
 void initializeAlpine();
 

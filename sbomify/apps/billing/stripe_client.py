@@ -8,6 +8,8 @@ from functools import wraps
 import stripe
 from django.conf import settings
 
+from .utils import STRIPE_API_LIMIT
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +49,7 @@ class StripeClient:
                 logger.error(f"Stripe error: {str(e)}")
                 raise StripeError(f"Stripe error: {str(e)}")
             except Exception as e:
-                logger.exception(f"Unexpected error: {str(e)}")
+                logger.error(f"Unexpected error: {str(e)}")
                 raise StripeError(f"Unexpected error: {str(e)}")
 
         return wrapper
@@ -58,9 +60,12 @@ class StripeClient:
         return self.stripe.Customer.retrieve(customer_id)
 
     @_handle_stripe_error
-    def create_customer(self, email, name, metadata=None):
+    def create_customer(self, email, name, metadata=None, id=None):
         """Create a new customer in Stripe."""
-        return self.stripe.Customer.create(email=email, name=name, metadata=metadata or {})
+        kwargs = {"email": email, "name": name, "metadata": metadata or {}}
+        if id is not None:
+            kwargs["id"] = id
+        return self.stripe.Customer.create(**kwargs)
 
     @_handle_stripe_error
     def update_customer(self, customer_id, **kwargs):
@@ -113,11 +118,13 @@ class StripeClient:
     @_handle_stripe_error
     def get_subscription(self, subscription_id):
         """Retrieve a subscription."""
-        return self.stripe.Subscription.retrieve(subscription_id, expand=["latest_invoice.payment_intent"])
+        return self.stripe.Subscription.retrieve(
+            subscription_id, expand=["latest_invoice.payment_intent", "items.data.price"]
+        )
 
     @_handle_stripe_error
-    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None, promo_code=None):
-        """Create a checkout session with optional promo code support."""
+    def create_checkout_session(self, customer_id, price_id, success_url, cancel_url, metadata=None):
+        """Create a checkout session. Stripe handles promo codes via allow_promotion_codes."""
         session_data = {
             "customer": customer_id,
             "payment_method_types": ["card"],
@@ -133,10 +140,6 @@ class StripeClient:
             "metadata": metadata or {},
         }
 
-        # Add promo code if provided
-        if promo_code:
-            session_data["discounts"] = [{"coupon": promo_code}]
-
         return self.stripe.checkout.Session.create(**session_data)
 
     @_handle_stripe_error
@@ -145,10 +148,58 @@ class StripeClient:
         return self.stripe.checkout.Session.retrieve(session_id)
 
     @_handle_stripe_error
+    def create_billing_portal_session(self, customer_id, return_url, flow_data=None):
+        """
+        Create a billing portal session for customer to manage subscription.
+
+        Args:
+            customer_id: Stripe Customer ID
+            return_url: URL to redirect after portal
+            flow_data: Optional dict to configure portal flow (e.g. subscription_update)
+        """
+        params = {
+            "customer": customer_id,
+            "return_url": return_url,
+        }
+        if flow_data:
+            params["flow_data"] = flow_data
+
+        return self.stripe.billing_portal.Session.create(**params)
+
+    @_handle_stripe_error
+    def get_price(self, price_id):
+        """Retrieve a price object from Stripe."""
+        return self.stripe.Price.retrieve(price_id)
+
+    @_handle_stripe_error
+    def get_invoice(self, invoice_id):
+        """Retrieve an invoice from Stripe."""
+        return self.stripe.Invoice.retrieve(invoice_id)
+
+    @_handle_stripe_error
     def construct_webhook_event(self, payload, sig_header, webhook_secret=None):
         """Construct a webhook event from payload and signature."""
         secret = webhook_secret or settings.STRIPE_WEBHOOK_SECRET
         return self.stripe.Webhook.construct_event(payload, sig_header, secret)
+
+    @_handle_stripe_error
+    def get_product_with_prices(self, product_id):
+        """Retrieve a product with all its prices."""
+        product = self.stripe.Product.retrieve(product_id)
+        prices = self.stripe.Price.list(product=product_id, active=True, limit=STRIPE_API_LIMIT)
+        return product, prices.data
+
+    @_handle_stripe_error
+    def get_all_products_with_prices(self):
+        """Retrieve all active products with their prices."""
+        products = self.stripe.Product.list(active=True, limit=STRIPE_API_LIMIT)
+        result = []
+
+        for product in products.data:
+            prices = self.stripe.Price.list(product=product.id, active=True, limit=STRIPE_API_LIMIT)
+            result.append({"product": product, "prices": prices.data})
+
+        return result
 
 
 class StripeError(Exception):

@@ -1,7 +1,594 @@
 {% extends "core/dashboard_base.html.j2" %}
-{% load django_vite %}
+{% load static %}
+{% load humanize %}
 {% block title %}sbomify Select Plan{% endblock %}
-{% block content %}<div class="vc-plan-selection"></div>{% endblock %}
+{% block styles %}
+    <link rel="stylesheet"
+          href="{% static 'css/apps/billing/plan-selection.css' %}">
+{% endblock %}
+{% block content %}
+    <div class="pricing-page" x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, projects: {{ project_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
+        {% if team.billing_plan_limits.stripe_customer_id %}
+            '{% url 'billing:create_portal_session' team.key %}'
+        {% else %}
+            null
+        {% endif %}
+        , cancelAtPeriodEnd: {{ team.billing_plan_limits.cancel_at_period_end|yesno:'true,false' }}, currentPeriodEnd: '{{ team.billing_plan_limits.next_billing_date|default:'' }}', downgradeLimits: {
+        {% for plan in plans %}
+            '{{ plan.key }}': { exceeds: {{ plan.exceeds_downgrade_limits|yesno:'true,false' }}, resources: [
+            {% for resource in plan.downgrade_exceeded_resources %}
+                '{{ resource|escapejs }}'
+                {% if not forloop.last %},{% endif %}
+            {% endfor %}
+            ] }
+            {% if not forloop.last %},{% endif %}
+        {% endfor %}
+        }, billingPeriod: '{{ team.billing_plan_limits.billing_period|default:'monthly' }}' })">
+        <!-- Hero Section -->
+        <section class="hero-section py-5">
+            <div class="container">
+                <div class="row justify-content-center text-center">
+                    <div class="col-lg-8">
+                        <h1 class="hero-title mb-4">Choose the Perfect Plan for Your Workspace</h1>
+                        <p class="hero-subtitle mb-4">
+                            Secure, scalable security and product artifact management for workspaces of all sizes. Start with Community, upgrade when you need more.
+                        </p>
+                        <div class="billing-toggle-wrapper mb-5">
+                            <div class="billing-toggle">
+                                <span class="toggle-label"
+                                      :class="{ 'active': billingPeriod === 'monthly' }">Monthly</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox"
+                                           :checked="billingPeriod === 'annual'"
+                                           @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-label"
+                                      :class="{ 'active': billingPeriod === 'annual' }">
+                                    Annual
+                                    {% for plan in plans %}
+                                        {% if plan.key == 'business' and plan.stripe_pricing.annual_savings_percent %}
+                                            <span class="savings-badge">Save {{ plan.stripe_pricing.annual_savings_percent|floatformat:0 }}%</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Current Usage Section -->
+        <section class="usage-section py-4"
+                 x-show="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="usage-card">
+                            <div class="usage-header">
+                                <h3 class="usage-title">
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    Current Usage
+                                </h3>
+                            </div>
+                            <div class="usage-stats">
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.users || 0"></span>
+                                    <span class="stat-label">Users</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.products"></span>
+                                    <span class="stat-label">Products</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.projects"></span>
+                                    <span class="stat-label">Projects</span>
+                                </div>
+                                <div class="usage-stat">
+                                    <span class="stat-number" x-text="usage.components"></span>
+                                    <span class="stat-label">Components</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- Pricing Cards Section -->
+        <section class="pricing-section py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    {% for plan in plans %}
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="pricing-card"
+                                 :class="{ 'current-plan': currentPlan === '{{ plan.key }}', 'popular': '{{ plan.key }}' === 'business', 'enterprise': '{{ plan.key }}' === 'enterprise' }">
+                                <!-- Popular Badge -->
+                                {% if plan.key == 'business' %}
+                                    <div class="popular-badge">
+                                        <i class="fas fa-star me-1"></i>
+                                        Most Popular
+                                    </div>
+                                {% endif %}
+                                <!-- Plan Header -->
+                                <div class="plan-header">
+                                    <h3 class="plan-name">{{ plan.name }}</h3>
+                                    <div x-show="currentPlan === '{{ plan.key }}' && cancelAtPeriodEnd"
+                                         x-cloak
+                                         class="alert alert-warning py-1 px-2 mb-2">
+                                        <small><i class="fas fa-clock me-1"></i> Plan ends on <span x-text="formatDate(currentPeriodEnd)"></span></small>
+                                    </div>
+                                    <div x-show="currentPlan === '{{ plan.key }}' && !cancelAtPeriodEnd && currentPeriodEnd && '{{ plan.key }}' !== 'community'"
+                                         x-cloak
+                                         class="alert alert-info py-1 px-2 mb-2">
+                                        <small><i class="fas fa-calendar-alt me-1"></i> Renews on <span x-text="formatDate(currentPeriodEnd)"></span></small>
+                                    </div>
+                                    <div class="plan-price">
+                                        {% if plan.key == 'community' %}
+                                            <span class="price-main">$0</span>
+                                            <span class="price-period">forever</span>
+                                        {% elif plan.key == 'business' %}
+                                            {% with pricing=plan.stripe_pricing %}
+                                                {% if pricing.monthly_price or pricing.annual_price %}
+                                                    <!-- Monthly Pricing -->
+                                                    <div x-show="billingPeriod === 'monthly'">
+                                                        {% if pricing.monthly_price_discounted %}
+                                                            <div class="price-with-discount">
+                                                                {% if pricing.discount_percent_monthly and pricing.monthly_price != pricing.monthly_price_discounted %}
+                                                                    <span class="original-price">${{ pricing.monthly_price|floatformat:0|intcomma }}</span>
+                                                                {% endif %}
+                                                                <span class="price-main">${{ pricing.monthly_price_discounted|floatformat:0|intcomma }}</span>
+                                                                <span class="price-period">/month</span>
+                                                            </div>
+                                                        {% else %}
+                                                            <span class="price-main">Contact us</span>
+                                                        {% endif %}
+                                                    </div>
+                                                    <!-- Annual Pricing -->
+                                                    <div x-show="billingPeriod === 'annual'">
+                                                        {% if pricing.annual_price %}
+                                                            <div class="price-with-discount">
+                                                                {% if pricing.monthly_price_base_annualized and pricing.monthly_price_base_annualized > pricing.annual_price_discounted %}
+                                                                    <span class="original-price">${{ pricing.monthly_price_base_annualized|floatformat:0|intcomma }}/yr</span>
+                                                                {% endif %}
+                                                                <span class="price-main">${{ pricing.annual_price_discounted|floatformat:0|intcomma }}</span>
+                                                                <span class="price-period">/year</span>
+                                                            </div>
+                                                            <!-- Show monthly equivalent -->
+                                                            <div class="billing-note">
+                                                                {% widthratio pricing.annual_price_discounted 12 1 as monthly_equiv %}
+                                                                <span class="monthly-equivalent">${{ monthly_equiv|floatformat:0|intcomma }}/mo billed annually</span>
+                                                            </div>
+                                                        {% else %}
+                                                            <span class="price-main">Contact us</span>
+                                                        {% endif %}
+                                                    </div>
+                                                {% else %}
+                                                    <span class="price-main">Contact us</span>
+                                                    <span class="price-period">for pricing</span>
+                                                {% endif %}
+                                                <!-- Promo Message Card for Monthly -->
+                                                {% if pricing.promo_message and pricing.discount_percent_monthly %}
+                                                    <div class="promo-card" x-show="billingPeriod === 'monthly'">
+                                                        <i class="fas fa-gift"></i>
+                                                        <div class="promo-content">
+                                                            <span class="promo-title">{{ pricing.promo_message }}</span>
+                                                            <span class="promo-discount">{{ pricing.discount_percent_monthly|floatformat:0 }}% OFF</span>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                                <!-- Promo Message Card for Annual -->
+                                                {% if pricing.promo_message and pricing.discount_percent_annual %}
+                                                    <div class="promo-card" x-show="billingPeriod === 'annual'">
+                                                        <i class="fas fa-gift"></i>
+                                                        <div class="promo-content">
+                                                            <span class="promo-title">{{ pricing.promo_message }}</span>
+                                                            <span class="promo-discount">{{ pricing.discount_percent_annual|floatformat:0 }}% OFF</span>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                                <!-- Annual Savings Badge (total savings = annual billing + promo discount) -->
+                                                {% if pricing.total_annual_savings %}
+                                                    <div class="promo-message" x-show="billingPeriod === 'annual'">
+                                                        <div class="annual-subscription-savings">
+                                                            <i class="fas fa-calendar-check"></i>
+                                                            <span>Save ${{ pricing.total_annual_savings|floatformat:0|intcomma }} when billed annually</span>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endwith %}
+                                        {% else %}
+                                            <span class="price-main">Custom</span>
+                                            <span class="price-period">pricing</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="plan-description">{{ plan.description }}</p>
+                                </div>
+                                <!-- Plan Limits -->
+                                {% if plan.max_products is not None or plan.max_projects is not None or plan.max_components is not None or plan.max_users is not None %}
+                                    <div class="plan-limits">
+                                        <h6 class="limits-title">Plan Limits</h6>
+                                        <div class="limits-grid">
+                                            {% if plan.max_users is not None %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-users"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Users</span>
+                                                        <span class="limit-value">{{ plan.max_users }}</span>
+                                                    </div>
+                                                </div>
+                                            {% elif plan.key == 'enterprise' %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-users"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Users</span>
+                                                        <span class="limit-value">Unlimited</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            {% if plan.max_products is not None %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-cube"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Products</span>
+                                                        <span class="limit-value">{{ plan.max_products }}</span>
+                                                    </div>
+                                                </div>
+                                            {% elif plan.key == 'enterprise' %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-cube"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Products</span>
+                                                        <span class="limit-value">Unlimited</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            {% if plan.max_projects is not None %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-folder"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Projects</span>
+                                                        <span class="limit-value">{{ plan.max_projects }}</span>
+                                                    </div>
+                                                </div>
+                                            {% elif plan.key == 'enterprise' %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-folder"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Projects</span>
+                                                        <span class="limit-value">Unlimited</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            {% if plan.max_components is not None %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-puzzle-piece"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Components</span>
+                                                        <span class="limit-value">{{ plan.max_components }}</span>
+                                                    </div>
+                                                </div>
+                                            {% elif plan.key == 'enterprise' %}
+                                                <div class="limit-item">
+                                                    <div class="limit-icon">
+                                                        <i class="fas fa-puzzle-piece"></i>
+                                                    </div>
+                                                    <div class="limit-details">
+                                                        <span class="limit-label">Components</span>
+                                                        <span class="limit-value">Unlimited</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                <!-- Features List -->
+                                <div class="plan-features">
+                                    <h6 class="features-title">Features</h6>
+                                    <ul class="features-list">
+                                        <!-- Plan Features -->
+                                        {% if plan.key == 'community' %}
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited SBOMs</span>
+                                            </li>
+                                            {% if plan.max_products is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_products }} product{{ plan.max_products|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited products</span>
+                                                </li>
+                                            {% endif %}
+                                            {% if plan.max_projects is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_projects }} project{{ plan.max_projects|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited projects</span>
+                                                </li>
+                                            {% endif %}
+                                            {% if plan.max_components is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_components }} component{{ plan.max_components|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited components</span>
+                                                </li>
+                                            {% endif %}
+                                            {% if plan.max_users is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>{{ plan.max_users }} user{{ plan.max_users|pluralize }} (owner only)</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited users</span>
+                                                </li>
+                                            {% endif %}
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>All data is public</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Weekly vulnerability scans</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Community support</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>API access</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Workspace management</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Public Trust Center</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom branding (logo & colors)</span>
+                                            </li>
+                                        {% elif plan.key == 'business' %}
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited SBOMs</span>
+                                            </li>
+                                            {% if plan.max_products is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_products }} product{{ plan.max_products|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited products</span>
+                                                </li>
+                                            {% endif %}
+                                            {% if plan.max_projects is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_projects }} project{{ plan.max_projects|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited projects</span>
+                                                </li>
+                                            {% endif %}
+                                            {% if plan.max_components is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_components }} component{{ plan.max_components|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited components</span>
+                                                </li>
+                                            {% endif %}
+                                            <li class="feature-item feature-item-header">
+                                                <span class="feature-includes">Everything in Community, plus:</span>
+                                            </li>
+                                            {% if plan.max_users is not None %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Up to {{ plan.max_users }} user{{ plan.max_users|pluralize }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="feature-item">
+                                                    <i class="fas fa-check feature-check"></i>
+                                                    <span>Unlimited users</span>
+                                                </li>
+                                            {% endif %}
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Private components/projects/products</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>NTIA Minimum Elements check</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Advanced vulnerability scanning (every 12 hours)</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Product identifiers (SKUs/barcodes)</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Priority support</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Workspace management</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Public Trust Center</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom domain for Trust Center</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom branding (logo & colors)</span>
+                                            </li>
+                                        {% elif plan.key == 'enterprise' %}
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited SBOMs</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited products</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited projects</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited components</span>
+                                            </li>
+                                            <li class="feature-item feature-item-header">
+                                                <span class="feature-includes">Everything in Business, plus:</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Unlimited users</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom Dependency Track servers</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Dedicated support</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom integrations</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>SLA guarantee</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Advanced security</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom deployment options</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Public Trust Center</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Custom domain for Trust Center</span>
+                                            </li>
+                                            <li class="feature-item">
+                                                <i class="fas fa-check feature-check"></i>
+                                                <span>Advanced custom branding (logo, colors, themes)</span>
+                                            </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                <!-- Action Button -->
+                                <div class="plan-action">
+                                    <button class="btn-plan"
+                                            :class="{ 'btn-current': currentPlan === '{{ plan.key }}', 'btn-primary': currentPlan !== '{{ plan.key }}' && '{{ plan.key }}' !== 'enterprise', 'btn-enterprise': '{{ plan.key }}' === 'enterprise', 'btn-disabled': !canSelectPlan('{{ plan.key }}') }"
+                                            :disabled="!canSelectPlan('{{ plan.key }}')"
+                                            @click="handlePlanSelection('{{ plan.key }}')"
+                                            x-cloak>
+                                        <span x-text="getButtonText('{{ plan.key }}')">
+                                            {% if plan.key == 'enterprise' %}
+                                                Contact Sales
+                                            {% elif plan.key == 'community' %}
+                                                Get Started
+                                            {% else %}
+                                                Select Plan
+                                            {% endif %}
+                                        </span>
+                                    </button>
+                                    <!-- Warning Message for Exceeded Limits -->
+                                    <div x-show="getDowngradeWarning('{{ plan.key }}')"
+                                         x-cloak
+                                         class="alert alert-warning mt-2 py-2 px-3 mb-0">
+                                        <small>
+                                            <i class="fas fa-exclamation-triangle me-1"></i>
+                                            <span x-text="getDowngradeWarning('{{ plan.key }}')"></span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        <!-- FAQ Section -->
+        <section class="faq-section py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="faq-header text-center mb-5">
+                            <h2>Frequently Asked Questions</h2>
+                        </div>
+                        <div class="faq-list">
+                            <template x-for="faq in faqs" :key="faq.id">
+                                <div class="faq-item">
+                                    <div class="faq-question" @click="toggleFAQ(faq.id)">
+                                        <span x-text="faq.question"></span>
+                                        <i class="fas fa-chevron-down" :class="{ 'rotated': faq.expanded }"></i>
+                                    </div>
+                                    <div x-show="faq.expanded" class="faq-answer" x-transition>
+                                        <p x-text="faq.answer"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+{% endblock %}
 {% block scripts %}
+    {% load django_vite %}
     {% vite_asset 'sbomify/apps/billing/js/main.ts' %}
 {% endblock %}

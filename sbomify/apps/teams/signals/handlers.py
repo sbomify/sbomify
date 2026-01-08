@@ -53,7 +53,7 @@ def _accept_pending_invitations(user, request: HttpRequest | None = None) -> lis
             invitation.delete()
             continue
 
-        can_add, error_msg = can_add_user_to_team(invitation.team)
+        can_add, error_msg = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
         if not can_add:
             logger.warning(
                 "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg

@@ -45,6 +45,10 @@ def business_plan() -> BillingPlan:
             "stripe_product_id": "prod_test_business",
             "stripe_price_monthly_id": "price_test_business_monthly",  # $199/month
             "stripe_price_annual_id": "price_test_business_annual",  # $159 * 12/year
+            "monthly_price": 199.00,
+            "annual_price": 1908.00,  # $159 * 12
+            "discount_percent_monthly": 0,
+            "discount_percent_annual": 0,
         }
     )
     return plan
@@ -64,6 +68,10 @@ def enterprise_plan() -> BillingPlan:
             "stripe_product_id": "prod_test_enterprise",
             "stripe_price_monthly_id": "price_test_enterprise_monthly",
             "stripe_price_annual_id": "price_test_enterprise_annual",
+            "monthly_price": None,  # Custom pricing
+            "annual_price": None,  # Custom pricing
+            "discount_percent_monthly": 0,
+            "discount_percent_annual": 0,
         }
     )
     return plan
@@ -131,6 +139,21 @@ def mock_stripe(monkeypatch):
             instance = cls()
             return instance
 
+    # Mock Price operations
+    class MockPrice:
+        @classmethod
+        def retrieve(cls, price_id, **kwargs):
+            instance = cls()
+            instance.id = price_id
+            # Set unit_amount based on price_id for testing
+            if "monthly" in price_id:
+                instance.unit_amount = 19900  # $199.00 in cents
+            elif "annual" in price_id:
+                instance.unit_amount = 190800  # $1908.00 in cents ($159 * 12)
+            else:
+                instance.unit_amount = 0
+            return instance
+
     # Mock Webhook operations
     class MockWebhook:
         @classmethod
@@ -184,6 +207,7 @@ def mock_stripe(monkeypatch):
     monkeypatch.setattr(stripe.Subscription, "modify", MockSubscription.modify)
     monkeypatch.setattr(stripe.checkout.Session, "create", MockCheckoutSession.create)
     monkeypatch.setattr(stripe.Webhook, "construct_event", MockWebhook.construct_event)
+    monkeypatch.setattr(stripe.Price, "retrieve", MockPrice.retrieve)
 
     return "sk_test_dummy_key_for_ci"
 

@@ -48,6 +48,27 @@ from sbomify.apps.teams.utils import (
 from sbomify.apps.teams.templatetags.teams import user_workspaces
 
 
+
+@pytest.fixture
+def community_plan() -> BillingPlan:
+    """Free community plan fixture."""
+    plan, _ = BillingPlan.objects.get_or_create(
+        key="community",
+        defaults={
+            "name": "Community",
+            "description": "Free plan for small teams",
+            "max_products": 1,
+            "max_projects": 1,
+            "max_components": 5,
+            "max_users": 1,
+            "stripe_product_id": None,
+            "stripe_price_monthly_id": None,
+            "stripe_price_annual_id": None,
+        }
+    )
+    return plan
+
+
 @pytest.mark.django_db
 def test_new_user_default_team_get_created(sample_user: AbstractBaseUser):  # noqa: F811
     client = Client()
@@ -412,6 +433,7 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
         key="business",
         defaults={
             "name": "Business Plan",
+            "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
             "max_projects": 100,
@@ -484,7 +506,7 @@ def test_accept_invitation(
 
 
 @pytest.mark.django_db
-def test_accept_invitation_sets_default_team_and_session(django_user_model):
+def test_accept_invitation_sets_default_team_and_session(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="invited-user",
         email="invited-user@example.com",
@@ -510,7 +532,7 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model):
 
 
 @pytest.mark.django_db
-def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
+def test_skip_auto_workspace_creation_for_invited_user(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="pending-invite-user",
         email="pending-invite@example.com",
@@ -526,7 +548,7 @@ def test_skip_auto_workspace_creation_for_invited_user(django_user_model):
 
 
 @pytest.mark.django_db
-def test_pending_invitation_auto_accept_on_login(django_user_model):
+def test_pending_invitation_auto_accept_on_login(django_user_model, community_plan):
     invited_user = django_user_model.objects.create_user(
         username="login-invite-user",
         email="login-invite@example.com",
@@ -1715,7 +1737,7 @@ def test_private_workspace_rejects_unknown_plan():
 @pytest.mark.django_db
 def test_private_workspace_allowed_custom_plan_when_registered():
     """Custom plans that exist in BillingPlan are treated as paid/allowing private workspaces."""
-    plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan")
+    plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan", description="Custom Plan Description")
     team = Team.objects.create(name="Custom Plan Workspace", billing_plan=plan.key, is_public=False)
     assert _private_workspace_allowed(team) is True
 

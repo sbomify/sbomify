@@ -63,6 +63,7 @@
             <link href="{% static 'css/responsive.css' %}" rel="stylesheet">
             <link href="{% static 'css/pages.css' %}" rel="stylesheet">
             <link href="{% static 'css/utilities.css' %}" rel="stylesheet">
+            {% block styles %}{% endblock %}
             <title>
                 {% block title %}sbomify{% endblock %}
             </title>
@@ -88,6 +89,7 @@
                 <main class="content">
                     <div class="container-fluid p-0">
                         <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
+                        {% include "core/components/site_notifications.html.j2" %}
                         {% block content %}{% endblock %}
                     </div>
                 </main>

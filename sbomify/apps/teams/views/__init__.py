@@ -324,7 +324,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     # Check user limits before accepting invitation
     from sbomify.apps.teams.utils import can_add_user_to_team
 
-    can_add, error_message = can_add_user_to_team(invitation.team)
+    can_add, error_message = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
     if not can_add:
         return _render_workspace_availability_page(request, invitation.team, invitation, error_message)
 
@@ -339,6 +339,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     membership.save()
 
     update_user_teams_session(request, request.user)
+    switch_active_workspace(request, invitation.team, invitation.role)
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 
@@ -443,6 +444,27 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     f"{conflict_msg} Try using a different company name, or check your existing products and projects.",
                 )
             else:
+                # Check billing limits before creating resources
+                from sbomify.apps.core.apis import _check_billing_limits
+
+                # Check if we can create product
+                can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
+                if not can_create_product:
+                    messages.error(request, product_error)
+                    return redirect("teams:onboarding_wizard")
+
+                # Check if we can create project
+                can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
+                if not can_create_project:
+                    messages.error(request, project_error)
+                    return redirect("teams:onboarding_wizard")
+
+                # Check if we can create component
+                can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
+                if not can_create_component:
+                    messages.error(request, component_error)
+                    return redirect("teams:onboarding_wizard")
+
                 try:
                     with transaction.atomic():
                         # 1. Create default ContactProfile (company = supplier = vendor)

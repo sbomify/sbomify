@@ -7,36 +7,58 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
+from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
+from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import refresh_current_team_session
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
 
 PLAN_FEATURES = {
-    "business": [
-        "Advanced SBOM analysis",
-        "Advanced vulnerability scanning (every 12 hours)",
+    "community": [
+        "Unlimited SBOMs",
+        "Unlimited products & projects",
+        "All data is public",
+        "Weekly vulnerability scans",
+        "Community support",
         "API access",
+        "Workspace management",
+        "Public Trust Center",
+        "Custom branding (logo & colors)",
+    ],
+    "business": [
+        "Everything in Community",
+        "Private components/projects/products",
+        "NTIA Minimum Elements check",
+        "Advanced vulnerability scanning (every 12 hours)",
+        "Product identifiers (SKUs/barcodes)",
         "Priority support",
-        "Custom branding",
+        "Workspace management",
+        "Public Trust Center",
+        "Custom domain for Trust Center",
+        "Custom branding (logo & colors)",
     ],
     "enterprise": [
         "Everything in Business",
-        "Unlimited resources",
-        "SSO integration",
-        "Advanced security",
+        "Unlimited users",
+        "Custom Dependency Track servers",
         "Dedicated support",
         "Custom integrations",
+        "SLA guarantee",
+        "Advanced security",
+        "Custom deployment options",
+        "Public Trust Center",
+        "Custom domain for Trust Center",
+        "Advanced custom branding (logo, colors, themes)",
     ],
 }
 
-PLAN_PRICING = {
-    "community": {"amount": "$0", "period": "forever"},
-    "business": {"amount": "$49", "period": "per month"},
-    "enterprise": {"amount": "Custom", "period": "pricing"},
-}
 
 PLAN_LIMITS = {
     "max_products": {
@@ -72,39 +94,77 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 request, HttpResponse(status=status_code, content=team.get("detail", "Unknown error"))
             )
 
+        # Sync subscription data from Stripe before displaying billing info
+        try:
+            team_obj = Team.objects.get(key=team_key)
+            sync_subscription_from_stripe(team_obj)
+            # Refresh team data after sync
+            team_obj.refresh_from_db()
+        except Team.DoesNotExist:
+            team_obj = None
+
         # Get plan features and pricing based on billing plan
         billing_plan = team.billing_plan or Team.Plan.COMMUNITY
         plan_features = PLAN_FEATURES.get(billing_plan, [])
-        plan_pricing = PLAN_PRICING.get(billing_plan, {"amount": "Contact us", "period": ""})
-        can_set_private = team.can_set_private
+
+        # Use pricing service to calculate plan pricing and limits
+        pricing_service = TeamPricingService()
+
+        # Fetch billing plan object once for reuse
+        try:
+            billing_plan_obj = BillingPlan.objects.get(key=billing_plan)
+        except BillingPlan.DoesNotExist:
+            billing_plan_obj = None
+
+        # Get pricing information
+        plan_pricing = pricing_service.get_plan_pricing(team, billing_plan_obj)
+
+        # Get plan limits
+        plan_limits = pricing_service.get_plan_limits(team, billing_plan_obj)
+
+        # Get actual Team model instance to access helper properties and enrich context
+        # (The 'team' from get_team is a Pydantic schema which lacks these properties)
+        # team_obj was already fetched above for sync, reuse it
+        if not team_obj:
+            try:
+                team_obj = Team.objects.get(key=team_key)
+            except Team.DoesNotExist:
+                team_obj = None
+
+        # Convert Pydantic model to dict so we can inject properties
+        # .dict() is generic for Pydantic v1/v2, .model_dump() is v2
+        # leveraging getattr to support both or verify version. assuming .dict() or simply vars() won't work on Pydantic
+        # Using model_dump() if available (Pydantic V2) or dict() (V1)
+        if team_obj:
+            try:
+                team_data = team.dict() if hasattr(team, "dict") else team.model_dump()
+            except AttributeError:
+                # Fallback if team doesn't have dict or model_dump
+                team_data = team.model_dump() if hasattr(team, "model_dump") else vars(team)
+
+            # Inject properties used by global banners
+            team_data["is_in_grace_period"] = team_obj.is_in_grace_period
+            team_data["is_payment_restricted"] = team_obj.is_payment_restricted
+        else:
+            # Fallback if team_obj not found
+            team_data = team  # Use schema as-is
+
+        can_set_private = team_data.get("can_set_private") if isinstance(team_data, dict) else team.can_set_private
         is_owner = request.session.get("current_team", {}).get("role") == "owner"
-
-        # Process plan limits into structured data
-        plan_limits = []
-        billing_plan_limits = team.billing_plan_limits or {}
-        for limit_key, limit_value in billing_plan_limits.items():
-            if limit_key not in PLAN_LIMITS:
-                continue
-
-            plan_limits.append(
-                {
-                    "icon": PLAN_LIMITS[limit_key]["icon"],
-                    "label": PLAN_LIMITS[limit_key]["label"],
-                    "value": "Unlimited" if limit_value == -1 else str(limit_value),
-                }
-            )
 
         return render(
             request,
             "teams/team_settings.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
-                "team": team,
+                "team": team_data,
+                "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
                 # Members tab
                 "delete_member_form": DeleteMemberForm(),
                 "delete_invitation_form": DeleteInvitationForm(),
                 # Billing tab
                 "plan_features": plan_features,
+                "all_plan_features": PLAN_FEATURES,
                 "plan_pricing": plan_pricing,
                 "plan_limits": plan_limits,
                 "can_set_private": can_set_private,

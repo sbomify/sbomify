@@ -14,6 +14,8 @@ from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
+from sbomify.apps.billing.admin import BillingPlanAdmin
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.documents.admin import DocumentAdmin
 from sbomify.apps.documents.models import Document
 from sbomify.apps.onboarding.models import OnboardingStatus
@@ -515,6 +517,9 @@ admin_site.register(Project, ProjectAdmin)
 admin_site.register(Component, ComponentAdmin)
 admin_site.register(SBOM, SBOMAdmin)
 admin_site.register(Document, DocumentAdmin)
+
+# Register billing models
+admin_site.register(BillingPlan, BillingPlanAdmin)
 
 # Register vulnerability scanning models
 admin_site.register(DependencyTrackServer, DependencyTrackServerAdmin)

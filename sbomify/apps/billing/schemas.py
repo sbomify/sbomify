@@ -21,7 +21,6 @@ class ChangePlanRequest(Schema):
     plan: str
     billing_period: str | None = None
     team_key: str | None = None
-    promo_code: str | None = None
 
 
 class ChangePlanResponse(Schema):

@@ -75,6 +75,7 @@ def sample_billing_plan() -> Generator[BillingPlan, Any, None]:
     plan = BillingPlan.objects.create(
         key="test_plan",
         name="Test Plan",
+        description="Test Plan Description",
         max_products=10,
         max_projects=10,
         max_components=10
