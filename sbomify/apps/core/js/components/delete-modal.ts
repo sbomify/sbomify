@@ -7,6 +7,7 @@ interface DeleteModalConfig {
     successMessage: string;
     csrfToken: string;
     redirectUrl?: string;
+    refreshEvent?: string;
 }
 
 interface DeleteModalData {
@@ -280,6 +281,9 @@ export function registerDeleteModal() {
                             this[config.modalId] = false;
                             if (config.redirectUrl) {
                                 window.location.href = config.redirectUrl;
+                            } else if (config.refreshEvent) {
+                                // Dispatch custom event to trigger HTMX refresh
+                                document.body.dispatchEvent(new CustomEvent(config.refreshEvent));
                             }
                         } else {
                             let errorDetail = '';
