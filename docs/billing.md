@@ -39,7 +39,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 | -------------------------- | --------------------------------------------------- |
 | `models.py`                | BillingPlan model, feature flags, price calculations|
 | `views.py`                 | HTTP endpoints (plan selection, checkout, portal)   |
-| `billing_processing.py`    | Webhook event handlers, billing limit decorator     |
+| `billing_processing.py`    | Webhook event handlers, check_billing_limits decorator |
 | `stripe_client.py`         | Stripe API wrapper with error handling              |
 | `stripe_pricing_service.py`| Fetches/caches pricing from Stripe                  |
 | `team_pricing_service.py`  | Calculates team-specific pricing display            |
