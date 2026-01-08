@@ -32,6 +32,33 @@ def mock_sociallogin():
     return DummySocialLogin()
 
 
+def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid"):
+    """Create a mock social login object for testing.
+
+    Args:
+        user: The Django user to associate with the social login
+        provider: The social provider name (e.g., 'keycloak', 'github', 'google')
+        extra_data: The extra_data dict from the social provider
+        uid: The unique identifier from the provider
+
+    Returns:
+        A mock social login object suitable for testing adapter methods
+    """
+
+    class MockSocialLogin:
+        account = type("Account", (), {"provider": provider, "extra_data": extra_data, "uid": uid})()
+        is_existing = True
+
+        def __init__(self, user):
+            self.user = user
+
+        def connect(self, request, user):
+            self.user = user
+            self.is_existing = True
+
+    return MockSocialLogin(user)
+
+
 @pytest.mark.django_db
 class TestCustomSocialAccountAdapter:
     def test_populate_user_with_keycloak_data(self, adapter, mock_request, mock_sociallogin):
@@ -148,168 +175,96 @@ class TestCustomSocialAccountAdapter:
 
     def test_pre_social_login_syncs_email_verified_on_existing_user(self, adapter, mock_request):
         """Test that email_verified is synced from Keycloak on every login for existing users."""
-        # Create existing user with email_verified=False
         existing_user = User.objects.create(
             username="sync_test_user", email="sync_test@example.com", email_verified=False
         )
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="keycloak",
+            extra_data={"email_verified": True},
+            uid="sync-test-uid",
+        )
 
-        # Create a sociallogin with email_verified=True from Keycloak
-        class SyncTestSocialLogin:
-            account = type(
-                "Account", (), {"provider": "keycloak", "extra_data": {"email_verified": True}, "uid": "sync-test-uid"}
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = SyncTestSocialLogin()
-
-        # Process pre-social login - should sync email_verified
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Refresh from database and verify email_verified was synced
         existing_user.refresh_from_db()
         assert existing_user.email_verified is True
 
     def test_pre_social_login_does_not_sync_if_unchanged(self, adapter, mock_request):
         """Test that email_verified is not updated if already in sync."""
-        # Create existing user with email_verified=True
         existing_user = User.objects.create(username="no_sync_user", email="no_sync@example.com", email_verified=True)
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="keycloak",
+            extra_data={"email_verified": True},
+            uid="no-sync-uid",
+        )
 
-        # Create a sociallogin with email_verified=True (same value)
-        class NoSyncSocialLogin:
-            account = type(
-                "Account", (), {"provider": "keycloak", "extra_data": {"email_verified": True}, "uid": "no-sync-uid"}
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = NoSyncSocialLogin()
-
-        # Process pre-social login - should not trigger a save
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Verify email_verified is still True
         existing_user.refresh_from_db()
         assert existing_user.email_verified is True
 
     def test_pre_social_login_syncs_email_verified_to_false(self, adapter, mock_request):
         """Test that email_verified can be synced from True to False."""
-        # Create existing user with email_verified=True
         existing_user = User.objects.create(
             username="sync_false_user", email="sync_false@example.com", email_verified=True
         )
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="keycloak",
+            extra_data={"email_verified": False},
+            uid="sync-false-uid",
+        )
 
-        # Create a sociallogin with email_verified=False from Keycloak
-        class SyncFalseSocialLogin:
-            account = type(
-                "Account",
-                (),
-                {"provider": "keycloak", "extra_data": {"email_verified": False}, "uid": "sync-false-uid"},
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = SyncFalseSocialLogin()
-
-        # Process pre-social login - should sync email_verified to False
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Refresh from database and verify email_verified was synced to False
         existing_user.refresh_from_db()
         assert existing_user.email_verified is False
 
     def test_pre_social_login_syncs_email_verified_from_github(self, adapter, mock_request):
         """Test that email_verified is synced from GitHub on login."""
-        # Create existing user with email_verified=False
         existing_user = User.objects.create(username="github_user", email="github@example.com", email_verified=False)
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="github",
+            extra_data={"email_verified": True},
+            uid="github-uid",
+        )
 
-        # Create a sociallogin with email_verified=True from GitHub
-        class GitHubSocialLogin:
-            account = type(
-                "Account",
-                (),
-                {"provider": "github", "extra_data": {"email_verified": True}, "uid": "github-uid"},
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = GitHubSocialLogin()
-
-        # Process pre-social login - should sync email_verified
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Refresh from database and verify email_verified was synced
         existing_user.refresh_from_db()
         assert existing_user.email_verified is True
 
     def test_pre_social_login_syncs_email_verified_from_google(self, adapter, mock_request):
         """Test that email_verified is synced from Google on login (uses verified_email field)."""
-        # Create existing user with email_verified=False
         existing_user = User.objects.create(username="google_user", email="google@example.com", email_verified=False)
+        # Note: Google uses 'verified_email' instead of 'email_verified'
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="google",
+            extra_data={"verified_email": True},
+            uid="google-uid",
+        )
 
-        # Create a sociallogin with verified_email=True from Google (note: different field name)
-        class GoogleSocialLogin:
-            account = type(
-                "Account",
-                (),
-                {"provider": "google", "extra_data": {"verified_email": True}, "uid": "google-uid"},
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = GoogleSocialLogin()
-
-        # Process pre-social login - should sync email_verified
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Refresh from database and verify email_verified was synced
         existing_user.refresh_from_db()
         assert existing_user.email_verified is True
 
     def test_pre_social_login_does_not_sync_unknown_provider(self, adapter, mock_request):
         """Test that email_verified is not synced for unknown providers."""
-        # Create existing user with email_verified=False
         existing_user = User.objects.create(username="unknown_user", email="unknown@example.com", email_verified=False)
+        mock_sociallogin = create_mock_sociallogin(
+            user=existing_user,
+            provider="unknown_provider",
+            extra_data={"email_verified": True},
+            uid="unknown-uid",
+        )
 
-        # Create a sociallogin from an unknown provider
-        class UnknownSocialLogin:
-            account = type(
-                "Account",
-                (),
-                {"provider": "unknown_provider", "extra_data": {"email_verified": True}, "uid": "unknown-uid"},
-            )()
-            user = existing_user
-            is_existing = True
-
-            def connect(self, request, user):
-                self.user = user
-                self.is_existing = True
-
-        mock_sociallogin = UnknownSocialLogin()
-
-        # Process pre-social login - should NOT sync email_verified
         adapter.pre_social_login(mock_request, mock_sociallogin)
 
-        # Refresh from database and verify email_verified was NOT changed
+        # Should NOT sync - unknown provider
         existing_user.refresh_from_db()
         assert existing_user.email_verified is False

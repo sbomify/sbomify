@@ -90,7 +90,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         Handle user account connecting or creation.
 
-        Also syncs email_verified status from Keycloak on every login for existing users.
+        Also syncs email_verified status from social providers on every login for existing users.
 
         Args:
             request: The current HTTP request
