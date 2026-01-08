@@ -1,12 +1,33 @@
-from typing import Any
+from typing import Protocol
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.http import HttpRequest
 from django.test import RequestFactory
 
 from sbomify.apps.core.adapters import CustomSocialAccountAdapter
 
 User = get_user_model()
+
+
+class SocialAccount(Protocol):
+    """Protocol for social account objects."""
+
+    provider: str
+    extra_data: dict
+    uid: str
+
+
+class MockSocialLoginProtocol(Protocol):
+    """Protocol for mock social login objects used in testing."""
+
+    account: SocialAccount
+    user: "User"  # type: ignore[type-arg]
+    is_existing: bool
+
+    def connect(self, request: HttpRequest, user: "User") -> None:  # type: ignore[type-arg]
+        """Connect this social login to an existing user."""
+        ...
 
 
 @pytest.fixture
@@ -34,7 +55,7 @@ def mock_sociallogin():
     return DummySocialLogin()
 
 
-def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid") -> Any:
+def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "test-uid") -> MockSocialLoginProtocol:
     """Create a mock social login object for testing.
 
     Args:
@@ -44,7 +65,7 @@ def create_mock_sociallogin(user, provider: str, extra_data: dict, uid: str = "t
         uid: The unique identifier from the provider
 
     Returns:
-        A mock social login object suitable for testing adapter methods
+        MockSocialLoginProtocol: A mock social login object suitable for testing adapter methods
     """
 
     class MockSocialLogin:
