@@ -52,9 +52,9 @@
                                 {% endif %}
                                 <div class="public-list-item-footer">
                                     {% if release.artifacts_count %}
-                                        <span class="public-list-item-stat">
+                                        <span class="public-badge badge-count">
                                             <i class="fas fa-puzzle-piece"></i>
-                                            {{ release.artifacts_count|apnumber }} artifact{{ release.artifacts_count|pluralize }}
+                                            {{ release.artifacts_count }} Artifact{{ release.artifacts_count|pluralize }}
                                         </span>
                                     {% endif %}
                                     {% if release.has_sboms %}

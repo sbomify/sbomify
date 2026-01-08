@@ -66,6 +66,11 @@ urlpatterns = [
         views.ProductLinksView.as_view(),
         name="product_links",
     ),
+    path(
+        "public/link/<str:link_id>/",
+        views.ProductLinkRedirectView.as_view(),
+        name="product_link_redirect",
+    ),
     path("projects/", views.ProjectsDashboardView.as_view(), name="projects_dashboard"),
     path(
         "project/<str:project_id>/",

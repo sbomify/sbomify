@@ -4,9 +4,13 @@
 {% load static %}
 {% load public_url_tags %}
 {% load humanize %}
-{% block title %}{{ product.name }}{% endblock %}
+{% block title %}{{ product.name }} - SBOM & Security{% endblock %}
 {% block meta_description %}
     {{ product.name }} - Software Bill of Materials (SBOM) for this product. View projects, components, and download SBOMs.
+{% endblock %}
+{% block og_title %}{{ product.name }} - Software Bill of Materials{% endblock %}
+{% block og_description %}
+    {{ product.name }} - View projects, components, and download Software Bill of Materials (SBOM) for this product.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb product 'product' %}
@@ -30,7 +34,7 @@
                 {% if public_projects %}
                     <span class="public-badge badge-count">
                         <i class="fas fa-diagram-project"></i>
-                        {{ public_projects|length|apnumber }} project{{ public_projects|length|pluralize }}
+                        {{ public_projects|length }} Project{{ public_projects|length|pluralize }}
                     </span>
                 {% endif %}
                 {% for assessment in passing_assessments %}

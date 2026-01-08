@@ -10,6 +10,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_public_path,
+    get_workspace_public_url,
     resolve_component_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
@@ -72,6 +73,9 @@ class ComponentItemPublicView(View):
 
         brand = build_branding_context(component.team)
 
+        # Get workspace public URL for breadcrumbs
+        workspace_public_url = get_workspace_public_url(request, component.team)
+
         # Get passing assessments for SBOMs
         passing_assessments = []
         if item_type == "sboms":
@@ -85,6 +89,7 @@ class ComponentItemPublicView(View):
             "item_type": item_type,
             "component": _build_item_response(request, component, "component"),
             "passing_assessments": passing_assessments,
+            "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, component.team)
 

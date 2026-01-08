@@ -1,7 +1,9 @@
 """Product links management views."""
 
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
 
@@ -14,6 +16,7 @@ from sbomify.apps.core.apis import (
 )
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.schemas import ProductLinkCreateSchema, ProductLinkUpdateSchema
+from sbomify.apps.sboms.models import ProductLink
 
 # Link types mapping
 LINK_TYPES = {
@@ -128,3 +131,73 @@ class ProductLinksView(LoginRequiredMixin, View):
         response = render(request, self.template_name, context)
         response["HX-Trigger"] = "closeModal"
         return response
+
+
+def add_utm_params(url: str, campaign: str = "product_links") -> str:
+    """Add UTM tracking parameters to an external URL.
+
+    Internal or relative URLs (without a domain/netloc) are returned unchanged.
+    """
+    if not url:
+        return url
+
+    try:
+        parsed = urlparse(url)
+
+        # Only add UTM params to external URLs (those with a netloc/domain)
+        if not parsed.netloc:
+            return url
+
+        # Parse existing query parameters
+        existing_params = parse_qs(parsed.query, keep_blank_values=True)
+
+        # Add UTM parameters (don't overwrite if they exist)
+        utm_params = {
+            "utm_source": "sbomify",
+            "utm_medium": "trust_center",
+            "utm_campaign": campaign,
+        }
+
+        for key, value in utm_params.items():
+            if key not in existing_params:
+                existing_params[key] = [value]
+
+        # Encode parameters, preserving multi-valued query parameters.
+        # parse_qs returns all values as lists, and doseq=True handles this correctly.
+        new_query = urlencode(existing_params, doseq=True)
+
+        return urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                new_query,
+                parsed.fragment,
+            )
+        )
+    except Exception:
+        return url
+
+
+class ProductLinkRedirectView(View):
+    """Public redirect view for product links.
+
+    This view handles redirects for product links on public pages,
+    enabling future click tracking while hiding the actual URL.
+    """
+
+    def get(self, request: HttpRequest, link_id: str) -> HttpResponse:
+        """Redirect to the external URL with UTM parameters."""
+        try:
+            link = ProductLink.objects.select_related("product").get(id=link_id)
+        except ProductLink.DoesNotExist:
+            raise Http404("Link not found")
+
+        # Only allow redirects for public products
+        if not link.product.is_public:
+            raise Http404("Link not found")
+
+        # Add UTM parameters and redirect
+        redirect_url = add_utm_params(link.url, campaign="product_links")
+        return HttpResponseRedirect(redirect_url)

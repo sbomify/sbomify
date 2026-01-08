@@ -8,16 +8,13 @@
                     <i class="fas fa-fingerprint"></i>Product Identifiers
                 </h4>
             </div>
-            <div class="card-body p-0">
-                <ul class="public-list">
+            <div class="card-body">
+                <div class="identifier-cards">
                     {% for identifier in product_identifiers %}
-                        <li class="public-list-item">
-                            <div class="public-list-item-content">
-                                <div class="public-list-item-type">{{ identifier.identifier_type_display }}</div>
-                                <div class="public-identifier-value">{{ identifier.value }}</div>
-                            </div>
+                        <div class="identifier-card" title="{{ identifier.value }}">
+                            <div class="identifier-card-type">{{ identifier.identifier_type_display }}</div>
                             {% if identifier.identifier_type in barcode_types %}
-                                <div class="public-identifier-barcode"
+                                <div class="identifier-card-barcode"
                                      x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
                                     <svg data-barcode-id="{{ identifier.id }}"
                                          class="barcode-svg"
@@ -34,10 +31,12 @@
                                         <span>Invalid</span>
                                     </div>
                                 </div>
+                            {% else %}
+                                <div class="identifier-card-value">{{ identifier.value }}</div>
                             {% endif %}
-                        </li>
+                        </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
         </div>
     </div>

@@ -9,18 +9,25 @@ const FORMAT_MAP: Record<string, string> = {
   'gtin_8': 'EAN8'
 };
 
-/** Default barcode rendering configuration */
+/**
+ * Default barcode rendering configuration.
+ *
+ * Height 60 with reduced margins (textMargin: 6, margin: 4) is tuned to:
+ * - Keep the barcode large enough for reliable scanning
+ * - Fit into the compressed product identifier card layout
+ * - Balance visual prominence with space efficiency
+ */
 const BARCODE_CONFIG = {
   width: 2,
-  height: 50,
+  height: 60,
   displayValue: true,
   fontSize: 14,
   fontOptions: 'bold',
   font: 'monospace',
-  textMargin: 8,
+  textMargin: 6,
   textAlign: 'center' as const,
   textPosition: 'bottom' as const,
-  margin: 10,
+  margin: 4,
   background: '#ffffff',
   lineColor: '#000000'
 };

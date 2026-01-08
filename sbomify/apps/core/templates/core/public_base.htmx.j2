@@ -22,6 +22,10 @@
                   content="{% block meta_keywords %}SBOM, Software Bill of Materials, security, compliance, vulnerability management{% endblock %}">
             <meta name="author"
                   content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}">
+            <meta name="robots"
+                  content="{% block meta_robots %}index, follow{% endblock %}">
+            <!-- Canonical URL -->
+            <link rel="canonical" href="{{ request.build_absolute_uri }}">
             <!-- Favicon -->
             <link rel="apple-touch-icon"
                   sizes="180x180"
@@ -40,24 +44,32 @@
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
             <!-- Schema.org metadata -->
             {% schema_org_metadata %}
-            <!-- Open Graph / Facebook -->
-            <meta property="og:type" content="website">
-            <meta property="og:url" content="{{ request.build_absolute_uri }}">
-            <meta property="og:title"
-                  content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="og:description"
-                  content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="og:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
-            <!-- Twitter -->
-            <meta property="twitter:card" content="summary_large_image">
-            <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-            <meta property="twitter:title"
-                  content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="twitter:description"
-                  content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="twitter:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <!-- Social media image: use brand image or absolute fallback URL -->
+            {% static 'img/favicons/android-chrome-512x512.png' as default_logo %}
+            {% with fallback_url=request.scheme|add:"://"|add:request.get_host|add:default_logo %}
+                {% with social_image=brand.brand_image|default:fallback_url %}
+                    {% with brand_name=brand.name|default:"sbomify" %}
+                        <!-- Open Graph / Facebook -->
+                        <meta property="og:type" content="website">
+                        <meta property="og:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="og:title"
+                              content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:description"
+                              content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:image" content="{{ social_image }}">
+                        <meta property="og:image:alt" content="{{ brand_name }} Logo">
+                        <!-- Twitter -->
+                        <meta property="twitter:card" content="summary_large_image">
+                        <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="twitter:title"
+                              content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:description"
+                              content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:image" content="{{ social_image }}">
+                        <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
+                    {% endwith %}
+                {% endwith %}
+            {% endwith %}
             <!-- Fonts -->
             <link rel="preconnect" href="https://fonts.gstatic.com">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
@@ -488,25 +500,23 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Modern Footer -->
+            <!-- Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
                         <div class="footer-main-content">
-                            {% block footer_branding %}
-                                <div class="footer-brand">
-                                    <div class="footer-brand-name">
-                                        <i class="fas fa-shield-alt"></i>
-                                        {% if brand.name %}
-                                            {{ brand.name }}
-                                        {% else %}
-                                            sbomify
-                                        {% endif %}
-                                        Trust Center
-                                    </div>
-                                    <div class="footer-tagline">Transparency and security through Software Bill of Materials</div>
+                            <div class="footer-brand">
+                                <div class="footer-brand-name">
+                                    <i class="fas fa-shield-alt"></i>
+                                    {% if brand.name %}
+                                        {{ brand.name }}
+                                    {% else %}
+                                        sbomify
+                                    {% endif %}
+                                    Trust Center
                                 </div>
-                            {% endblock %}
+                                <div class="footer-tagline">Transparency and security through Software Bill of Materials</div>
+                            </div>
                             <div class="footer-divider"></div>
                             <div class="footer-bottom">
                                 <div class="footer-meta">
@@ -525,7 +535,6 @@
                                 </div>
                             </div>
                         </div>
-                        {% block footer_content %}{% endblock %}
                     </div>
                 </div>
             </footer>

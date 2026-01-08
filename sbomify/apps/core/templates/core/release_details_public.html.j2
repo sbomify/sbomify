@@ -4,6 +4,18 @@
 {% load static %}
 {% load humanize %}
 {% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
+{% block meta_description %}
+    {{ release.name }} release for {{ release.product.name }}.
+    {% if release.description %}
+        {{ release.description|truncatechars:120 }}
+    {% else %}
+        Download SBOM and view release artifacts.
+    {% endif %}
+{% endblock %}
+{% block og_title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
+{% block og_description %}
+    {{ release.name }} release for {{ release.product.name }}. Download SBOM and view release artifacts.
+{% endblock %}
 {% block breadcrumb %}
     {% breadcrumb release 'release' %}
 {% endblock %}
@@ -42,7 +54,7 @@
             {% if release.artifacts.count %}
                 <span class="public-badge badge-workspace">
                     <i class="fas fa-puzzle-piece"></i>
-                    {{ release.artifacts.count|apnumber }} artifact{{ release.artifacts.count|pluralize }}
+                    {{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}
                 </span>
             {% endif %}
         </div>
@@ -70,13 +82,7 @@
             </div>
         </div>
     {% endif %}
-    {{ release.artifacts|json_script:"artifacts-data" }}
-    <div class="public-section">
-        <div class="vc-public-release-artifacts"
-             data-release-id="{{ release.id }}"
-             data-product-id="{{ release.product.id }}"
-             data-artifacts-data-element-id="artifacts-data"></div>
-    </div>
+    {% include 'core/components/public_release_artifacts.html.j2' %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

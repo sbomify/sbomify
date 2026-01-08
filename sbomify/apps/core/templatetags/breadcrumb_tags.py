@@ -6,6 +6,23 @@ from sbomify.apps.core.models import Product, Project
 register = template.Library()
 
 
+def _get_trust_center_crumb(context):
+    """Get the Trust Center (workspace) breadcrumb if available.
+
+    Returns None if Trust Center is not enabled (no workspace_public_url).
+    """
+    workspace_public_url = context.get("workspace_public_url")
+    brand = context.get("brand", {})
+    if workspace_public_url:
+        brand_name = brand.get("name") if isinstance(brand, dict) else getattr(brand, "name", None)
+        return {
+            "name": f"{brand_name} Trust Center" if brand_name else "Trust Center",
+            "url": workspace_public_url,
+            "icon": "fas fa-shield-alt",
+        }
+    return None
+
+
 @register.inclusion_tag("core/components/breadcrumb.html.j2", takes_context=True)
 def breadcrumb(context, item, item_type):
     """Generate breadcrumb navigation for public pages.
@@ -23,6 +40,11 @@ def breadcrumb(context, item, item_type):
     """
     crumbs = []
     request = context.get("request")
+
+    # Add Trust Center as root for all pages
+    trust_center_crumb = _get_trust_center_crumb(context)
+    if trust_center_crumb:
+        crumbs.append(trust_center_crumb)
 
     def detect_product_from_referrer(public_products):
         """Try to detect which product the user navigated from based on referrer."""
@@ -104,7 +126,7 @@ def breadcrumb(context, item, item_type):
                     }
                 )
 
-    # For products, no breadcrumb needed (they're top-level)
+    # For products, only the Trust Center crumb is shown (products are direct children of Trust Center)
     return {"crumbs": crumbs}
 
 

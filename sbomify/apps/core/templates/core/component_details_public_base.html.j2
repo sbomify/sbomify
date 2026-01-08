@@ -2,10 +2,14 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
-{% block title %}{{ component.name }}{% endblock %}
+{% block title %}{{ component.name }} - {{ component.component_type_display }}{% endblock %}
 {% block meta_description %}
     {{ component.name }} - {{ component.component_type_display }} component.
     {% block meta_description_suffix %}{% endblock %}
+{% endblock %}
+{% block og_title %}{{ component.name }} - {{ component.component_type_display }}{% endblock %}
+{% block og_description %}
+    {{ component.name }} - {{ component.component_type_display }} component. View and download security artifacts.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}

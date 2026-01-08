@@ -4,6 +4,13 @@
 {% load public_url_tags %}
 {% load humanize %}
 {% block title %}{{ product.name }} - Releases{% endblock %}
+{% block meta_description %}
+    All software releases for {{ product.name }}. Browse release history, download SBOMs, and view release artifacts.
+{% endblock %}
+{% block og_title %}{{ product.name }} - Release History{% endblock %}
+{% block og_description %}
+    All software releases for {{ product.name }}. Browse release history, download SBOMs, and view release artifacts.
+{% endblock %}
 {% block breadcrumb %}
     {% breadcrumb releases 'releases' %}
 {% endblock %}
@@ -24,7 +31,7 @@
             <div class="public-item-badges">
                 <span class="public-badge badge-count">
                     <i class="fas fa-tag"></i>
-                    {{ releases|length|apnumber }} release{{ releases|length|pluralize }}
+                    {{ releases|length }} Release{{ releases|length|pluralize }}
                 </span>
             </div>
         {% endif %}
@@ -75,9 +82,9 @@
                                     {% endif %}
                                     <div class="public-list-item-footer">
                                         {% if release.artifacts.count %}
-                                            <span class="public-list-item-stat">
+                                            <span class="public-badge badge-count">
                                                 <i class="fas fa-puzzle-piece"></i>
-                                                {{ release.artifacts.count|apnumber }} artifact{{ release.artifacts.count|pluralize }}
+                                                {{ release.artifacts.count }} Artifact{{ release.artifacts.count|pluralize }}
                                             </span>
                                         {% endif %}
                                         {% if release.has_sboms %}

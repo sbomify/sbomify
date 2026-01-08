@@ -120,7 +120,7 @@ def test_product_details_shows_barcode_for_gtin_identifiers(public_team, public_
 
     # Barcode SVG element should be present for GTIN types
     assert "data-barcode-id" in content
-    assert "public-identifier-barcode" in content
+    assert "identifier-card-barcode" in content
 
 
 @pytest.mark.django_db
@@ -438,3 +438,127 @@ def test_product_details_shows_releases(public_team, public_product):
 
     assert "v1.0.0" in content
     assert "v0.9.0-beta" in content
+
+
+@pytest.mark.django_db
+class TestProductLinkRedirectView:
+    """Tests for the ProductLinkRedirectView."""
+
+    def test_redirect_works_for_public_product(self, public_team, public_product):
+        """Redirect should work for links on public products."""
+        client = Client()
+
+        link = ProductLink.objects.create(
+            product=public_product,
+            link_type=ProductLink.LinkType.WEBSITE,
+            title="Product Website",
+            url="https://example.com/product",
+        )
+
+        url = reverse("core:product_link_redirect", kwargs={"link_id": link.id})
+        response = client.get(url)
+
+        assert response.status_code == 302
+        redirect_url = response.url
+        assert "https://example.com/product" in redirect_url
+        assert "utm_source=sbomify" in redirect_url
+        assert "utm_medium=trust_center" in redirect_url
+        assert "utm_campaign=product_links" in redirect_url
+
+    def test_redirect_returns_404_for_private_product(self, public_team):
+        """Redirect should return 404 for links on private products."""
+        client = Client()
+
+        # Create a private product
+        private_product = Product.objects.create(
+            name="Private Product",
+            team=public_team,
+            is_public=False
+        )
+
+        link = ProductLink.objects.create(
+            product=private_product,
+            link_type=ProductLink.LinkType.WEBSITE,
+            title="Private Website",
+            url="https://example.com/private",
+        )
+
+        url = reverse("core:product_link_redirect", kwargs={"link_id": link.id})
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+    def test_redirect_returns_404_for_invalid_link_id(self):
+        """Redirect should return 404 for non-existent link IDs."""
+        client = Client()
+
+        url = reverse("core:product_link_redirect", kwargs={"link_id": "nonexistent123"})
+        response = client.get(url)
+
+        assert response.status_code == 404
+
+    def test_redirect_preserves_existing_query_params(self, public_team, public_product):
+        """Redirect should preserve existing query parameters in the URL."""
+        client = Client()
+
+        link = ProductLink.objects.create(
+            product=public_product,
+            link_type=ProductLink.LinkType.DOCUMENTATION,
+            title="Documentation",
+            url="https://docs.example.com/guide?version=2.0&lang=en",
+        )
+
+        url = reverse("core:product_link_redirect", kwargs={"link_id": link.id})
+        response = client.get(url)
+
+        assert response.status_code == 302
+        redirect_url = response.url
+        assert "version=2.0" in redirect_url
+        assert "lang=en" in redirect_url
+        assert "utm_source=sbomify" in redirect_url
+
+    def test_redirect_does_not_overwrite_existing_utm_params(self, public_team, public_product):
+        """Redirect should not overwrite existing UTM parameters."""
+        client = Client()
+
+        link = ProductLink.objects.create(
+            product=public_product,
+            link_type=ProductLink.LinkType.SUPPORT,
+            title="Support Portal",
+            url="https://support.example.com?utm_source=existing",
+        )
+
+        url = reverse("core:product_link_redirect", kwargs={"link_id": link.id})
+        response = client.get(url)
+
+        assert response.status_code == 302
+        redirect_url = response.url
+        # Should keep the existing utm_source, not overwrite it
+        assert "utm_source=existing" in redirect_url
+        # Should add the other UTM params
+        assert "utm_medium=trust_center" in redirect_url
+        assert "utm_campaign=product_links" in redirect_url
+
+    def test_redirect_link_in_template(self, public_team, public_product):
+        """Links on public product page should use the redirect URL."""
+        client = Client()
+
+        link = ProductLink.objects.create(
+            product=public_product,
+            link_type=ProductLink.LinkType.WEBSITE,
+            title="Product Website",
+            url="https://example.com/product",
+        )
+
+        url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        # The template should use the redirect URL, not the direct URL
+        redirect_url = reverse("core:product_link_redirect", kwargs={"link_id": link.id})
+        assert redirect_url in content
+        assert "Product Website" in content
+        # The direct URL should NOT be displayed
+        assert "https://example.com/product" not in content

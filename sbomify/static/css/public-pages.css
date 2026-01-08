@@ -325,6 +325,30 @@
     margin: 0 0 0.125rem 0;
 }
 
+.public-list-item-title-link {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-title);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    transition: color var(--transition-fast);
+}
+
+.public-list-item-title-link:hover {
+    color: var(--brand-color, var(--brand-primary));
+}
+
+.public-list-item-title-link i {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+}
+
+.public-list-item-title-link:hover i {
+    opacity: 1;
+}
+
 .public-list-item-description {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
@@ -449,18 +473,67 @@
     font-weight: var(--font-weight-medium);
 }
 
-.public-identifier-barcode {
-    margin-left: var(--spacing-xl);
-    padding: var(--spacing-md) var(--spacing-md);
+/* ===== IDENTIFIER CARDS ===== */
+.identifier-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.identifier-card {
     background: var(--gray-50);
     border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 180px;
+    cursor: default;
+    transition: background-color var(--transition-fast);
+}
+
+.identifier-card:hover {
+    background: var(--gray-100);
+}
+
+.identifier-card-type {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+}
+
+.identifier-card-barcode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.identifier-card-barcode svg {
+    display: block;
+}
+
+.identifier-card-value {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-title);
+    word-break: break-all;
+    text-align: center;
+}
+
+/* Legacy styles - keep for backwards compatibility */
+.public-identifier-barcode {
+    margin-left: var(--spacing-xl);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .public-identifier-barcode svg {
-    max-height: 50px;
+    display: block;
 }
 
 /* ===== PROJECT GROUPS (integrated on product page) ===== */
@@ -648,6 +721,16 @@
     font-size: 0.7rem;
 }
 
+/* Barcode state content within identifier cards */
+.identifier-card-barcode .barcode-state-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 576px) {
     .public-item-header {
@@ -694,4 +777,102 @@
         width: 100%;
         justify-content: center;
     }
+
+    .identifier-cards {
+        flex-direction: column;
+    }
+
+    .identifier-card {
+        width: 100%;
+    }
+
+    .artifacts-table .artifact-name {
+        min-width: 9.375rem;
+    }
+}
+
+/* ===== EMPTY STATE ===== */
+.public-empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+}
+
+.public-empty-state-icon {
+    color: var(--text-muted);
+    opacity: 0.25;
+    margin-bottom: var(--spacing-md);
+}
+
+.public-empty-state-title {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.public-empty-state-text {
+    color: var(--text-muted);
+}
+
+/* ===== ARTIFACTS TABLE ===== */
+.artifacts-table th {
+    border-top: none;
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    background-color: var(--gray-50);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+}
+
+.artifacts-table td {
+    vertical-align: middle;
+    padding: var(--spacing-md);
+    border-color: var(--border-color-light);
+}
+
+.artifacts-table .artifact-type-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+}
+
+.artifacts-table .artifact-type-icon.sbom-icon {
+    background: linear-gradient(135deg, var(--brand-success) 0%, color-mix(in srgb, var(--brand-success), #000 15%) 100%);
+    color: var(--white);
+}
+
+.artifacts-table .artifact-type-icon.document-icon {
+    background: linear-gradient(135deg, var(--brand-warning) 0%, color-mix(in srgb, var(--brand-warning), #000 15%) 100%);
+    color: var(--white);
+}
+
+.artifacts-table .artifact-type-icon.unknown-icon {
+    background: var(--gray-200);
+    color: var(--text-muted);
+}
+
+.artifacts-table .artifact-name {
+    min-width: 12.5rem;
+}
+
+.artifacts-table .artifact-type-badge {
+    font-size: var(--font-size-xs);
+    color: var(--brand-color, var(--brand-primary));
+    font-weight: var(--font-weight-medium);
+}
+
+.artifacts-table .component-name {
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+.artifacts-table .format-text {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    background: var(--gray-100);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
 }
