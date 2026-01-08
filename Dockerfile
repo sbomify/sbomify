@@ -1,5 +1,5 @@
 # Base Python version
-ARG PYTHON_VERSION=3.12-slim-bookworm@sha256:9c1d9ed7593f2552a4ea47362ec0d2ddf5923458a53d0c8e30edf8b398c94a31
+ARG PYTHON_VERSION=3.13-slim-trixie@sha256:1f3781f578e17958f55ada96c0a827bf279a11e10d6a458ecb8bde667afbb669
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.0.2
 
@@ -102,7 +102,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install uv
+    && pip install --root-user-action=ignore uv
 
 WORKDIR /code
 
