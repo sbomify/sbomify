@@ -1,0 +1,75 @@
+{# Public Releases List - server-rendered #}
+{% load static %}
+{% load humanize %}
+{% if public_releases %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-tags"></i>Releases
+                </h4>
+                {% if view_all_releases_url %}
+                    <a href="{{ view_all_releases_url }}" class="public-view-all-btn">
+                        View All<i class="fas fa-arrow-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <ul class="public-list">
+                    {% for release in public_releases %}
+                        <li class="public-list-item">
+                            <div class="public-list-item-icon {% if release.is_latest %}icon-release-latest{% elif release.is_prerelease %}icon-release-prerelease{% else %}icon-release{% endif %}">
+                                {% if release.is_latest %}
+                                    <i class="fas fa-check"></i>
+                                {% elif release.is_prerelease %}
+                                    <i class="fas fa-flask"></i>
+                                {% else %}
+                                    <i class="fas fa-tag"></i>
+                                {% endif %}
+                            </div>
+                            <div class="public-list-item-content">
+                                <div style="display: flex;
+                                            align-items: flex-start;
+                                            justify-content: space-between;
+                                            gap: 1rem;
+                                            margin-bottom: 0.25rem">
+                                    <div style="display: flex;
+                                                align-items: center;
+                                                flex-wrap: wrap;
+                                                gap: 0.5rem">
+                                        <a href="{{ release.public_url }}"
+                                           class="public-list-item-title"
+                                           style="margin: 0">{{ release.name }}</a>
+                                        {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
+                                        {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
+                                    </div>
+                                    <div class="public-list-item-type" style="white-space: nowrap;">
+                                        <i class="far fa-clock me-1"></i>{{ release.released_at|default:release.created_at|naturaltime }}
+                                    </div>
+                                </div>
+                                {% if release.description %}
+                                    <p class="public-list-item-description">{{ release.description|truncatechars:150 }}</p>
+                                {% endif %}
+                                <div class="public-list-item-footer">
+                                    {% if release.artifacts_count %}
+                                        <span class="public-list-item-stat">
+                                            <i class="fas fa-puzzle-piece"></i>
+                                            {{ release.artifacts_count|apnumber }} artifact{{ release.artifacts_count|pluralize }}
+                                        </span>
+                                    {% endif %}
+                                    {% if release.has_sboms %}
+                                        <a href="/api/v1/releases/{{ release.id }}/download"
+                                           class="public-action-btn btn-right"
+                                           title="Download release SBOM">
+                                            <i class="fas fa-download"></i>Download SBOM
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+{% endif %}

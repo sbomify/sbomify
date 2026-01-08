@@ -1,0 +1,55 @@
+{# Public Product Links - server-rendered #}
+{% load static %}
+{% load utils %}
+{% if product_links %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-link"></i>Resources & Links
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                <ul class="public-list">
+                    {% for link in product_links %}
+                        <li class="public-list-item">
+                            <div class="public-list-item-icon icon-{{ link.link_type|default:'default' }}">
+                                {% if link.link_type == 'website' %}
+                                    <i class="fas fa-globe"></i>
+                                {% elif link.link_type == 'documentation' %}
+                                    <i class="fas fa-book"></i>
+                                {% elif link.link_type == 'support' %}
+                                    <i class="fas fa-life-ring"></i>
+                                {% elif link.link_type == 'repository' %}
+                                    <i class="fab fa-github"></i>
+                                {% elif link.link_type == 'license' %}
+                                    <i class="fas fa-balance-scale"></i>
+                                {% elif link.link_type == 'security' %}
+                                    <i class="fas fa-shield-alt"></i>
+                                {% elif link.link_type == 'changelog' %}
+                                    <i class="fas fa-history"></i>
+                                {% elif link.link_type == 'api' %}
+                                    <i class="fas fa-code"></i>
+                                {% else %}
+                                    <i class="fas fa-external-link-alt"></i>
+                                {% endif %}
+                            </div>
+                            <div class="public-list-item-content">
+                                <div class="public-list-item-type">{{ link.link_type_display }}</div>
+                                <div class="public-list-item-title">{{ link.title }}</div>
+                                {% if link.description %}<div class="public-list-item-description">{{ link.description }}</div>{% endif %}
+                                <a href="{{ link.url|add_utm:'product_links' }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="public-list-item-link">
+                                    {{ link.url|truncatechars:60 }}
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+{% endif %}

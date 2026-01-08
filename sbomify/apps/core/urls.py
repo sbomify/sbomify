@@ -56,6 +56,16 @@ urlpatterns = [
         views.ProductDetailsPublicView.as_view(),
         name="product_details_public",
     ),
+    path(
+        "product/<str:product_id>/identifiers/",
+        views.ProductIdentifiersView.as_view(),
+        name="product_identifiers",
+    ),
+    path(
+        "product/<str:product_id>/links/",
+        views.ProductLinksView.as_view(),
+        name="product_links",
+    ),
     path("projects/", views.ProjectsDashboardView.as_view(), name="projects_dashboard"),
     path(
         "project/<str:project_id>/",

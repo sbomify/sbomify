@@ -1,54 +1,44 @@
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
-from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.core.apis import get_project
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
-    add_custom_domain_to_context,
     build_custom_domain_url,
-    get_public_path,
     resolve_project_identifier,
-    should_redirect_to_clean_url,
-    should_redirect_to_custom_domain,
 )
-from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
 
 class ProjectDetailsPublicView(View):
+    """
+    Redirect project public pages to the parent product page.
+
+    Projects are now shown as sections within the product page,
+    so standalone project pages redirect to maintain old URLs.
+    """
+
     def get(self, request: HttpRequest, project_id: str) -> HttpResponse:
         # Resolve project by slug (on custom domains) or ID (on main app)
         project_obj = resolve_project_identifier(request, project_id)
         if not project_obj:
             return error_response(request, HttpResponseNotFound("Project not found"))
 
-        # Use the resolved project's ID for API calls
-        resolved_id = project_obj.id
+        # Find a public product that contains this project
+        public_products = project_obj.products.filter(is_public=True)
+        if not public_products.exists():
+            # No public product - return 404
+            return error_response(request, HttpResponseNotFound("Project not available"))
 
-        status_code, project = get_project(request, resolved_id)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=project.get("detail", "Unknown error"))
-            )
+        # Get the first public product
+        product = public_products.first()
+        team = Team.objects.filter(pk=project_obj.team_id).first()
 
-        has_downloadable_content = SBOM.objects.filter(component__projects=project["id"]).exists()
-        team = Team.objects.filter(pk=project.get("team_id")).first()
-
-        # Redirect to custom domain if team has a verified one and we're not already on it
-        # OR redirect from /public/ URL to clean URL on custom domain
-        if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
-            path = get_public_path("project", resolved_id, is_custom_domain=True, slug=project_obj.slug)
+        # Build the redirect URL
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        if is_custom_domain and team:
+            path = f"/product/{product.slug or product.id}/"
             return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
-
-        brand = build_branding_context(team)
-
-        context = {
-            "project": project,
-            "brand": brand,
-            "has_downloadable_content": has_downloadable_content,
-        }
-        add_custom_domain_to_context(request, context, team)
-
-        return render(request, "core/project_details_public.html.j2", context)
+        else:
+            redirect_url = reverse("core:product_details_public", kwargs={"product_id": product.id})
+            return HttpResponseRedirect(redirect_url)

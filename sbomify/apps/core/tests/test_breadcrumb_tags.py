@@ -39,8 +39,15 @@ class TestBreadcrumbTags:
         assert 'public-breadcrumb' in result
 
     def test_breadcrumb_for_component_with_public_project(self, sample_team_with_owner_member):
-        """Test breadcrumb for component with public parent project."""
+        """Test breadcrumb for component with public parent project and product."""
         team = sample_team_with_owner_member.team
+
+        # Create a public product
+        product = Product.objects.create(
+            name="Test Product",
+            team=team,
+            is_public=True
+        )
 
         # Create a public project
         project = Project.objects.create(
@@ -48,6 +55,7 @@ class TestBreadcrumbTags:
             team=team,
             is_public=True
         )
+        project.products.add(product)
 
         # Create a public component
         component = Component.objects.create(
@@ -68,8 +76,10 @@ class TestBreadcrumbTags:
         context = Context({'component': component})
         result = template.render(context)
 
-        # Should contain the project name in breadcrumbs
-        assert "Test Project" in result
+        # Should contain the product name in breadcrumbs (not project)
+        assert "Test Product" in result
+        # Should NOT contain the project name (projects no longer in breadcrumb path)
+        assert "Test Project" not in result
         # Should NOT contain the current component name (by design)
         assert "Test Component" not in result
 
@@ -110,8 +120,15 @@ class TestBreadcrumbTags:
         assert '<li class="breadcrumb-item"' not in result
 
     def test_breadcrumb_for_component_with_multiple_projects(self, sample_team_with_owner_member):
-        """Test breadcrumb for component with multiple public parent projects."""
+        """Test breadcrumb for component with multiple public parent projects showing product."""
         team = sample_team_with_owner_member.team
+
+        # Create a public product
+        product = Product.objects.create(
+            name="Parent Product",
+            team=team,
+            is_public=True
+        )
 
         # Create multiple public projects
         project1 = Project.objects.create(
@@ -119,16 +136,19 @@ class TestBreadcrumbTags:
             team=team,
             is_public=True
         )
+        project1.products.add(product)
         project2 = Project.objects.create(
             name="Project Two",
             team=team,
             is_public=True
         )
+        project2.products.add(product)
         project3 = Project.objects.create(
             name="Project Three",
             team=team,
             is_public=True
         )
+        project3.products.add(product)
 
         # Create a public component
         component = Component.objects.create(
@@ -149,29 +169,42 @@ class TestBreadcrumbTags:
         context = Context({'component': component})
         result = template.render(context)
 
-        # Should contain one project name (first one found)
-        project_names = ["Project One", "Project Two", "Project Three"]
-        found_projects = [name for name in project_names if name in result]
-        assert len(found_projects) >= 1
+        # Should contain the product name (projects are no longer shown)
+        assert "Parent Product" in result
 
         # Component name should NOT be in breadcrumbs (by design)
         assert "Multi-Project Component" not in result
 
     def test_breadcrumb_with_referrer_detection(self, sample_team_with_owner_member):
-        """Test breadcrumb can detect parent from HTTP referrer."""
+        """Test breadcrumb can detect parent product from HTTP referrer."""
         team = sample_team_with_owner_member.team
 
-        # Create multiple public projects
+        # Create multiple public products
+        product1 = Product.objects.create(
+            name="Product One",
+            team=team,
+            is_public=True
+        )
+        product2 = Product.objects.create(
+            name="Product Two",
+            team=team,
+            is_public=True
+        )
+
+        # Create projects for each product
         project1 = Project.objects.create(
             name="Project One",
             team=team,
             is_public=True
         )
+        project1.products.add(product1)
+
         project2 = Project.objects.create(
             name="Project Two",
             team=team,
             is_public=True
         )
+        project2.products.add(product2)
 
         # Create a public component
         component = Component.objects.create(
@@ -183,10 +216,11 @@ class TestBreadcrumbTags:
         # Link component to both projects
         component.projects.add(project1, project2)
 
-        # Mock request with referrer pointing to project2
+        # Mock request with referrer pointing to product2's page
         factory = RequestFactory()
         request = factory.get(f'/public/component/{component.id}/')
-        request.META['HTTP_REFERER'] = f'/public/project/{project2.id}/'
+        # Set referrer to product2's public URL - the breadcrumb should detect this
+        request.META['HTTP_REFERER'] = f'/public/product/{product2.id}/'
 
         # Test the breadcrumb template tag with referrer context
         template = Template("""
@@ -197,14 +231,14 @@ class TestBreadcrumbTags:
         context = Context({'component': component, 'request': request})
         result = template.render(context)
 
-        # Should contain Project Two (from referrer) but not Project One
-        assert "Project Two" in result
-        assert "Project One" not in result
+        # Should contain Product Two (from referrer) but not Product One
+        assert "Product Two" in result
+        assert "Product One" not in result
         # Component name should NOT be in breadcrumbs (by design)
         assert "Test Component" not in result
 
-    def test_breadcrumb_for_project_with_public_product(self, sample_team_with_owner_member):
-        """Test breadcrumb for project with public parent product."""
+    def test_breadcrumb_for_project_redirects(self, sample_team_with_owner_member):
+        """Test breadcrumb for project item type - not used anymore since projects redirect."""
         team = sample_team_with_owner_member.team
 
         # Create a public product
@@ -224,7 +258,7 @@ class TestBreadcrumbTags:
         # Link project to product
         project.products.add(product)
 
-        # Test the breadcrumb template tag
+        # Test the breadcrumb template tag - should return empty since 'project' type is not handled
         template = Template("""
             {% load breadcrumb_tags %}
             {% breadcrumb project 'project' %}
@@ -233,10 +267,8 @@ class TestBreadcrumbTags:
         context = Context({'project': project})
         result = template.render(context)
 
-        # Should contain the product name in breadcrumbs
-        assert "Test Product" in result
-        # Should NOT contain the current project name (by design)
-        assert "Test Project" not in result
+        # Projects no longer have standalone pages, so breadcrumbs return empty
+        assert '<li class="breadcrumb-item"' not in result
 
     def test_breadcrumb_for_project_with_no_products(self, sample_team_with_owner_member):
         """Test breadcrumb for project with no parent products."""

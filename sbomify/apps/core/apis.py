@@ -1056,10 +1056,11 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError:
+    except IntegrityError as e:
+        log.error(f"IntegrityError creating product link: {e}")
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product"),
-            "error_code": ErrorCode.DUPLICATE_NAME,
+            "detail": "Failed to create link due to data integrity issue",
+            "error_code": ErrorCode.INTERNAL_ERROR,
         }
     except Exception as e:
         log.error(f"Error creating product link: {e}")
@@ -1153,9 +1154,11 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError:
+    except IntegrityError as e:
+        log.error(f"IntegrityError updating product link {link_id}: {e}")
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product")
+            "detail": "Failed to update link due to data integrity issue",
+            "error_code": ErrorCode.INTERNAL_ERROR,
         }
     except Exception as e:
         log.error(f"Error updating product link {link_id}: {e}")

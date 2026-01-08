@@ -3,31 +3,8 @@
 {% load django_vite %}
 {% load static %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ product.name }}{% endblock %}
-{% block extra_css %}
-    <style>
-  .meta-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(var(--brand-color-rgb), 0.05);
-    border: 1px solid rgba(var(--brand-color-rgb), 0.1);
-    color: var(--brand-color);
-    font-weight: 600;
-  }
-  .meta-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-  .title-icon {
-    color: var(--brand-color);
-  }
-    </style>
-{% endblock %}
 {% block meta_description %}
     {{ product.name }} - Software Bill of Materials (SBOM) for this product. View projects, components, and download SBOMs.
 {% endblock %}
@@ -35,85 +12,41 @@
     {% breadcrumb product 'product' %}
 {% endblock %}
 {% block content %}
-    <div class="public-page-layout">
-        <div class="content-wrapper">
-            <div class="content-container">
-                <div class="public-page-header">
-                    <div class="page-header-content">
-                        {% if workspace_public_url %}
-                            <div class="mb-2">
-                                <a class="btn btn-outline-secondary btn-sm"
-                                   href="{{ workspace_public_url }}">
-                                    <i class="fas fa-arrow-left me-1"></i> Back to Trust Center
-                                </a>
-                            </div>
-                        {% endif %}
-                        <p class="eyebrow text-muted mb-1">Public product</p>
-                        <h1 class="page-title">
-                            <i class="fas fa-box title-icon"></i>
-                            {{ product.name }}
-                        </h1>
-                        <p class="text-muted mb-1">{{ product.description|default:"No description provided." }}</p>
-                        <div class="meta-row">
-                            <span class="meta-chip">
-                                <i class="fas fa-diagram-project"></i>
-                                {{ product.projects|length }} project{{ product.projects|length|pluralize }}
-                            </span>
-                            <span class="meta-chip">
-                                <i class="fas fa-globe"></i>
-                                Public
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div class="public-main-content">
-                    <div class="content-section">
-                        <div class="product-content">
-                            <div class="product-identifiers-section">
-                                <div class="vc-product-identifiers"
-                                     data-product-id="{{ product.id }}"
-                                     data-has-crud-permissions="false"
-                                     data-billing-plan="business"></div>
-                            </div>
-                            <div class="product-links-section">
-                                <div class="vc-product-links"
-                                     data-product-id="{{ product.id }}"
-                                     data-has-crud-permissions="false"></div>
-                            </div>
-                            <div class="product-projects-section">
-                                <div class="vc-public-product-projects"
-                                     data-product-id="{{ product.id }}"
-                                     data-brand-color="{{ brand.primary_color|default:'#4f46e5' }}"
-                                     data-accent-color="{{ brand.secondary_color|default:'#7c8b9d' }}"
-                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}">
-                                </div>
-                            </div>
-                            <div class="product-releases-section">
-                                <div class="vc-product-releases"
-                                     data-product-id="{{ product.id }}"
-                                     data-product-slug="{{ product.slug }}"
-                                     data-has-crud-permissions="false"
-                                     data-public-view="true"
-                                     data-is-custom-domain="{% if is_custom_domain %}true{% else %}false{% endif %}"
-                                     data-view-all-url="{% public_url 'core:product_releases_public' product_id=product.id product_slug=product.slug %}">
-                                </div>
-                            </div>
-                            {% if has_downloadable_content %}
-                                <div class="download-section">
-                                    <div class="vc-public-download-card"
-                                         data-title="Download Latest Release"
-                                         data-description="Download SBOM from the latest release containing the most current artifacts for this product"
-                                         data-download-url="{% url 'core:sbom_download_product' product.id %}"
-                                         data-download-text="Download Latest Release"
-                                         data-download-icon="fas fa-download"></div>
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+    <div class="public-item-header">
+        {% if workspace_public_url %}
+            <a href="{{ workspace_public_url }}" class="back-link">
+                <i class="fas fa-arrow-left"></i>Back to Trust Center
+            </a>
+        {% endif %}
+        <h1 class="public-item-title">
+            <span class="public-item-title-icon icon-product">
+                <i class="fas fa-box"></i>
+            </span>
+            {{ product.name }}
+        </h1>
+        {% if product.description %}<p class="public-item-description">{{ product.description }}</p>{% endif %}
+        {% if public_projects or passing_assessments %}
+            <div class="public-item-badges">
+                {% if public_projects %}
+                    <span class="public-badge badge-count">
+                        <i class="fas fa-diagram-project"></i>
+                        {{ public_projects|length|apnumber }} project{{ public_projects|length|pluralize }}
+                    </span>
+                {% endif %}
+                {% for assessment in passing_assessments %}
+                    <span class="public-badge badge-compliance"
+                          title="{{ assessment.display_name }}: All checks passed">
+                        <i class="fas fa-check-circle"></i>
+                        {{ assessment.display_name }}
+                    </span>
+                {% endfor %}
             </div>
-        </div>
+        {% endif %}
     </div>
+    {% include 'core/components/public_product_identifiers.html.j2' %}
+    {% include 'core/components/public_product_links.html.j2' %}
+    {% include 'core/components/public_product_projects.html.j2' with projects=public_projects %}
+    {% include 'core/components/public_releases_list.html.j2' %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

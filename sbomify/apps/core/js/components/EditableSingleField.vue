@@ -1,6 +1,15 @@
 <template>
-  <span v-if="isEditing">
+  <span v-if="isEditing" :class="{ 'editing-block': isTextarea }">
+    <textarea
+      v-if="isTextarea"
+      v-model="fieldValue"
+      class="editable-field editable-textarea"
+      :placeholder="placeholder"
+      rows="3"
+      v-on:keyup.escape="cancelEdit()"
+    ></textarea>
     <input
+      v-else
       v-model="fieldValue"
       :type="inputType"
       class="editable-field"
@@ -17,8 +26,8 @@
     </button>
   </span>
   <span v-else>
-    <span @click="startEdit">
-      {{ displayText }}
+    <span @click="startEdit" :class="{ 'editable-placeholder': !displayText }">
+      {{ displayText || placeholder }}
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
     </span>
   </span>
@@ -36,6 +45,7 @@
     fieldName?: string;
     fieldType?: string;
     displayValue?: string;
+    placeholder?: string;
   }
 
   const props = defineProps<Props>()
@@ -44,6 +54,10 @@
   const fieldValue = ref(props.itemValue);
   const originalValue = props.itemValue;
   const errorMessage = ref('');
+  const placeholder = computed(() => props.placeholder || '');
+
+  // Check if this is a textarea field
+  const isTextarea = computed(() => props.fieldType === 'textarea');
 
   // Determine input type based on fieldType
   const inputType = computed(() => {
@@ -171,5 +185,35 @@ input.editable-field {
 input.editable-field[type="date"] {
   font-size: 16pt; /* Slightly smaller for date inputs */
   padding: 4px 0;
+}
+
+textarea.editable-textarea {
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: transparent;
+  font-size: 14px;
+  padding: 8px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.editing-block {
+  display: block;
+  width: 100%;
+}
+
+.editing-block .editable-textarea {
+  margin-bottom: 8px;
+}
+
+.editable-placeholder {
+  color: #6c757d;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.editable-placeholder:hover {
+  color: #495057;
 }
 </style>

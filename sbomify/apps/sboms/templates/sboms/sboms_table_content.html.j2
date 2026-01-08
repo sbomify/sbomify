@@ -1,5 +1,6 @@
 {% load static %}
 {% load json_extras %}
+{% load humanize %}
 {% if not sboms %}
     <div class="text-center text-muted py-4">
         <i class="fas fa-file-code fa-3x mb-3"></i>
@@ -40,7 +41,13 @@
                                 {% include 'plugins/components/assessment_badge.html.j2' with sbom_id=sbom.sbom.id component_id=component_id assessments_data=sbom.assessments team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
                             </td>
                         {% endif %}
-                        <td {% if not is_public_view %}data-label="Created"{% endif %}>{{ sbom.sbom.created_at|date:"M d, Y" }}</td>
+                        <td {% if not is_public_view %}data-label="Created"{% endif %}>
+                            {% if is_public_view %}
+                                {{ sbom.sbom.created_at|naturaltime }}
+                            {% else %}
+                                {{ sbom.sbom.created_at|date:"M d, Y" }}
+                            {% endif %}
+                        </td>
                         <td {% if not is_public_view %}data-label="Releases"{% endif %}>
                             {% include 'core/components/release_list.html.j2' with releases=sbom.releases document_id=sbom.sbom.id is_public_view=is_public_view %}
                         </td>

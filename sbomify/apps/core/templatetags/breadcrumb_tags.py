@@ -12,18 +12,20 @@ def breadcrumb(context, item, item_type):
 
     Args:
         context: Template context (includes request)
-        item: The current item (Product, Project, or Component)
-        item_type: String indicating the type ('product', 'project', 'component')
-        detailed: Boolean indicating if this is a detailed view
+        item: The current item (Product, Component, or Release)
+        item_type: String indicating the type ('product', 'component', 'release', 'releases')
 
     Returns:
         Context dictionary for the breadcrumb template
+
+    Note: Projects no longer have standalone public pages - they are integrated
+    into product pages. Components link back to their parent product.
     """
     crumbs = []
     request = context.get("request")
 
-    def detect_parent_from_referrer(public_parents, parent_type):
-        """Try to detect which parent the user navigated from based on referrer."""
+    def detect_product_from_referrer(public_products):
+        """Try to detect which product the user navigated from based on referrer."""
         if not request or not hasattr(request, "META"):
             return None
 
@@ -31,60 +33,66 @@ def breadcrumb(context, item, item_type):
         if not referrer:
             return None
 
-        # Extract ID from referrer URL patterns like /public/project/ID/ or /public/product/ID/
+        # Extract ID from referrer URL patterns like /public/product/ID/ or /product/SLUG/
         import re
 
-        pattern = rf"/public/{parent_type}/([^/]+)/"
+        # Try standard URL pattern
+        pattern = r"/public/product/([^/]+)/"
         match = re.search(pattern, referrer)
         if match:
-            parent_id = match.group(1)
-            # Find the parent with this ID
-            for parent in public_parents:
-                if str(parent.id) == parent_id:
-                    return parent
+            product_id = match.group(1)
+            for product in public_products:
+                if str(product.id) == product_id:
+                    return product
+
+        # Try custom domain URL pattern
+        pattern = r"/product/([^/]+)/"
+        match = re.search(pattern, referrer)
+        if match:
+            slug_or_id = match.group(1)
+            for product in public_products:
+                if str(product.id) == slug_or_id or product.slug == slug_or_id:
+                    return product
+
         return None
 
-    if item_type == "project":
-        # For projects, show parent products (if any are public)
-        if isinstance(item, dict):
-            public_products = Product.objects.filter(project__id=item.get("id"), is_public=True)
-        else:
-            public_products = item.products.filter(is_public=True)
+    # Handle release and releases types - show parent product
+    if item_type in ("release", "releases"):
+        product = context.get("product")
+        if not product and hasattr(item, "product"):
+            product = item.product
+        if product:
+            # Handle both dict and model object
+            if isinstance(product, dict):
+                product_name = product.get("name")
+                product_id = product.get("id")
+            else:
+                product_name = product.name
+                product_id = product.id
 
-        if public_products.exists():
-            # Try to detect which product the user came from
-            product = detect_parent_from_referrer(public_products, "product")
-            if not product:
-                # If multiple products and we can't detect, show the first one
-                # TODO: Could show multiple paths or let user choose
-                product = public_products.first()
-
-            crumbs.append(
-                {
-                    "name": product.name,
-                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
-                    "icon": "fas fa-box",
-                }
-            )
+            if product_name and product_id:
+                crumbs.append(
+                    {
+                        "name": product_name,
+                        "url": reverse("core:product_details_public", kwargs={"product_id": product_id}),
+                        "icon": "fas fa-box",
+                    }
+                )
+        return {"crumbs": crumbs}
 
     elif item_type == "component":
-        # For components, show a simple hierarchy: Product > Project > Component
+        # For components, show the parent product (via project)
         if isinstance(item, dict):
             public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
         else:
             public_projects = item.projects.filter(is_public=True)
 
         if public_projects.exists():
-            # Try to detect which project the user came from, otherwise use first
-            project = detect_parent_from_referrer(public_projects, "project")
-            if not project:
-                project = public_projects.first()
+            # Collect ALL public products across all public projects
+            public_products = Product.objects.filter(projects__in=public_projects, is_public=True).distinct()
 
-            # Check if this project has public products
-            public_products = project.products.filter(is_public=True)
             if public_products.exists():
-                # Try to detect which product the user might have come from, otherwise use first
-                product = detect_parent_from_referrer(public_products, "product")
+                product = detect_product_from_referrer(public_products)
                 if not product:
                     product = public_products.first()
 
@@ -96,16 +104,7 @@ def breadcrumb(context, item, item_type):
                     }
                 )
 
-            # Add the primary project
-            crumbs.append(
-                {
-                    "name": project.name,
-                    "url": reverse("core:project_details_public", kwargs={"project_id": project.id}),
-                    "icon": "fas fa-project-diagram",
-                }
-            )
-
-    # Don't add the current item to breadcrumbs since it's redundant with the page header
+    # For products, no breadcrumb needed (they're top-level)
     return {"crumbs": crumbs}
 
 
@@ -114,32 +113,15 @@ def get_breadcrumb_data(item, item_type):
     """Get breadcrumb data as a dictionary for JavaScript use."""
     crumbs = []
 
-    if item_type == "project":
-        if isinstance(item, dict):
-            public_products = Product.objects.filter(project__id=item.get("id"), is_public=True)
-        else:
-            public_products = item.products.filter(is_public=True)
-
-        if public_products.exists():
-            product = public_products.first()
-            crumbs.append(
-                {
-                    "name": product.name,
-                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
-                    "type": "product",
-                }
-            )
-
-    elif item_type == "component":
+    if item_type == "component":
         if isinstance(item, dict):
             public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
         else:
             public_projects = item.projects.filter(is_public=True)
 
         if public_projects.exists():
-            project = public_projects.first()
-
-            public_products = project.products.filter(is_public=True)
+            # Collect ALL public products across all public projects
+            public_products = Product.objects.filter(projects__in=public_projects, is_public=True).distinct()
             if public_products.exists():
                 product = public_products.first()
                 crumbs.append(
@@ -149,13 +131,5 @@ def get_breadcrumb_data(item, item_type):
                         "type": "product",
                     }
                 )
-
-            crumbs.append(
-                {
-                    "name": project.name,
-                    "url": reverse("core:project_details_public", kwargs={"project_id": project.id}),
-                    "type": "project",
-                }
-            )
 
     return crumbs

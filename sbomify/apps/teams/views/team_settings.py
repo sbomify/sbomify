@@ -152,6 +152,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         can_set_private = team_data.get("can_set_private") if isinstance(team_data, dict) else team.can_set_private
         is_owner = request.session.get("current_team", {}).get("role") == "owner"
 
+        # Get branding info for trust center settings
+        branding_info = team_obj.branding_info if team_obj else {}
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -169,12 +172,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "plan_limits": plan_limits,
                 "can_set_private": can_set_private,
                 "is_owner": is_owner,
+                # Trust center settings
+                "branding_info": branding_info,
             },
         )
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         if request.POST.get("visibility_action") == "update":
             return self._update_visibility(request, team_key)
+
+        if request.POST.get("trust_center_description_action") == "update":
+            return self._update_trust_center_description(request, team_key)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
@@ -265,6 +273,37 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Trust center is now {'public' if team.is_public else 'private'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_trust_center_description(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change the trust center description")
+            return self._redirect_with_tab(request, team_key)
+
+        description = request.POST.get("trust_center_description", "").strip()
+
+        # Validate length
+        if len(description) > 500:
+            messages.error(request, "Description must be 500 characters or less")
+            return self._redirect_with_tab(request, team_key)
+
+        # Update branding_info with new description
+        branding_info = team.branding_info or {}
+        branding_info["trust_center_description"] = description
+        team.branding_info = branding_info
+        team.save()
+
+        if description:
+            messages.success(request, "Trust center description updated.")
+        else:
+            messages.success(request, "Trust center description cleared. Using default description.")
         return self._redirect_with_tab(request, team_key)
 
     @staticmethod

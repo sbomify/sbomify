@@ -1,0 +1,61 @@
+{# Public Product Projects with Components - integrated view #}
+{% load static %}
+{% load humanize %}
+{% load public_url_tags %}
+{% if projects %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-folder-tree"></i>Projects &amp; Components
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                {% for project in projects %}
+                    <div class="project-group" x-data="{ expanded: true }">
+                        <div class="project-header" @click="expanded = !expanded">
+                            <div class="project-header-content">
+                                <div class="project-icon">
+                                    <i class="fas fa-project-diagram"></i>
+                                </div>
+                                <div class="project-info">
+                                    <h5 class="project-name">{{ project.name }}</h5>
+                                    <span class="public-badge badge-count">
+                                        <i class="fas fa-cube"></i>
+                                        {{ project.component_count }} Component{{ project.component_count|pluralize }}
+                                    </span>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-down project-toggle"
+                               :class="{ 'rotated': !expanded }"></i>
+                        </div>
+                        <div class="project-components" x-show="expanded" x-transition>
+                            {% if project.components %}
+                                <ul class="component-list">
+                                    {% for component in project.components %}
+                                        <li class="component-item">
+                                            <a href="{{ component.public_url }}" class="component-link">
+                                                <span class="component-icon">
+                                                    <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
+                                                </span>
+                                                <span class="component-name">{{ component.name }}</span>
+                                                <span class="component-type">{{ component.component_type_display }}</span>
+                                                <i class="fas fa-chevron-right component-arrow"></i>
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <div class="no-components">
+                                    <i class="fas fa-info-circle"></i>
+                                    No public components in this project
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if not forloop.last %}<div class="project-divider"></div>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+{% endif %}

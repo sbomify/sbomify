@@ -79,6 +79,7 @@
             <link href="{% static 'css/components/standard-card.css' %}"
                   rel="stylesheet">
             <link href="{% static 'css/public-base.css' %}" rel="stylesheet">
+            <link href="{% static 'css/public-pages.css' %}" rel="stylesheet">
             <!-- Custom CSS Variables for Branding -->
             <style>
             :root {
@@ -267,15 +268,35 @@
                 padding: 2rem 1.5rem;
             }
 
-            /* Enhanced Footer */
+            /* Modern Footer */
             .public-footer {
-                background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-                border-top: 1px solid #e2e8f0;
-                padding: 3rem 0 1.5rem;
-                margin-top: 4rem;
+                background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
+                border-top: 1px solid var(--border-color-light, #f0f0f0);
+                margin-top: auto;
+                position: relative;
+                overflow: hidden;
             }
 
-            .public-footer-container,
+            .public-footer::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 3px;
+                background: linear-gradient(90deg,
+                    var(--brand-color, #6366f1) 0%,
+                    color-mix(in srgb, var(--brand-color, #6366f1), #fff 30%) 50%,
+                    var(--brand-color, #6366f1) 100%);
+                opacity: 0.6;
+            }
+
+            .public-footer-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 0 1.5rem;
+            }
+
             .public-header-container,
             .public-content-container {
                 max-width: 1200px;
@@ -289,160 +310,114 @@
             }
 
             .footer-content-wrapper {
+                padding: 2.5rem 0 2rem;
+            }
+
+            .footer-main-content {
                 display: flex;
                 flex-direction: column;
-                gap: 2rem;
+                align-items: center;
+                text-align: center;
+                gap: 1.5rem;
             }
 
-            .footer-main {
-                display: grid;
-                grid-template-columns: 1fr 2fr;
-                gap: 3rem;
-                padding-bottom: 2rem;
-                border-bottom: 1px solid #e2e8f0;
-            }
-
-            .footer-branding-section {
-                display: flex;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .footer-logo img {
-                height: 32px;
-                width: auto;
-                opacity: 0.9;
-            }
-
-            .footer-brand-text {
+            .footer-brand {
                 display: flex;
                 flex-direction: column;
-                gap: 0.25rem;
+                align-items: center;
+                gap: 0.5rem;
             }
 
             .footer-brand-name {
-                font-size: 1.125rem;
+                font-size: 1.25rem;
                 font-weight: 700;
-                color: #0f172a;
+                color: var(--text-title, #0f172a);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .footer-brand-name i {
+                color: var(--brand-color, #6366f1);
+                font-size: 1rem;
             }
 
             .footer-tagline {
                 font-size: 0.875rem;
-                color: #64748b;
+                color: var(--text-muted, #64748b);
+                max-width: 400px;
             }
 
-            .footer-info {
-                display: flex;
-                gap: 3rem;
-            }
-
-            .footer-section {
-                flex: 1;
-            }
-
-            .footer-section-title {
-                font-size: 0.875rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #0f172a;
-                margin-bottom: 0.75rem;
-            }
-
-            .footer-section-text {
-                font-size: 0.875rem;
-                line-height: 1.6;
-                color: #64748b;
-                margin: 0;
-            }
-
-            .footer-security-badges {
-                display: flex;
-                flex-direction: column;
-                gap: 0.75rem;
-            }
-
-            .security-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 0.75rem;
-                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                font-size: 0.75rem;
-                font-weight: 600;
-                color: #475569;
-            }
-
-            .security-badge i {
-                color: #6366f1;
-                font-size: 0.875rem;
-            }
-
-            .footer-workspace-section {
-                text-align: center;
-                padding-bottom: 1.5rem;
-                border-bottom: 1px solid #e2e8f0;
-                margin-bottom: 1.5rem;
-            }
-
-            .footer-workspace-name {
-                font-size: 1.125rem;
-                font-weight: 600;
-                color: #0f172a;
+            .footer-divider {
+                width: 60px;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, var(--border-color, #e2e8f0), transparent);
+                border-radius: 1px;
             }
 
             .footer-bottom {
                 display: flex;
-                justify-content: space-between;
+                justify-content: center;
                 align-items: center;
+                gap: 1.5rem;
                 flex-wrap: wrap;
-                gap: 1rem;
+            }
+
+            .footer-meta {
+                font-size: 0.8rem;
+                color: var(--text-muted, #64748b);
+            }
+
+            .footer-dot {
+                width: 3px;
+                height: 3px;
+                background: var(--border-color, #cbd5e1);
+                border-radius: 50%;
             }
 
             .footer-powered {
                 display: flex;
                 align-items: center;
-                gap: 0.5rem;
-                font-size: 0.8125rem;
-                color: #64748b;
+                gap: 0.375rem;
+                font-size: 0.8rem;
+                color: var(--text-muted, #64748b);
             }
 
             .footer-powered a {
-                color: #6366f1;
+                color: var(--brand-color, #6366f1);
                 text-decoration: none;
                 font-weight: 600;
-                transition: color 0.2s ease;
+                transition: all 0.2s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
             }
 
             .footer-powered a:hover {
-                color: #4f46e5;
+                color: color-mix(in srgb, var(--brand-color, #6366f1), #000 15%);
             }
 
-            .footer-separator {
-                color: #cbd5e1;
+            .footer-powered a::after {
+                content: '→';
+                font-size: 0.75rem;
+                opacity: 0;
+                transform: translateX(-4px);
+                transition: all 0.2s ease;
             }
 
-            .footer-meta {
-                font-size: 0.8125rem;
-                color: #64748b;
+            .footer-powered a:hover::after {
+                opacity: 1;
+                transform: translateX(0);
             }
 
-            @media (max-width: 768px) {
-                .footer-main {
-                    grid-template-columns: 1fr;
-                    gap: 2rem;
-                }
-
-                .footer-info {
-                    flex-direction: column;
-                    gap: 2rem;
-                }
-
+            @media (max-width: 576px) {
                 .footer-bottom {
                     flex-direction: column;
-                    text-align: center;
+                    gap: 0.75rem;
+                }
+
+                .footer-dot {
+                    display: none;
                 }
             }
             </style>
@@ -513,32 +488,45 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Enhanced Footer -->
+            <!-- Modern Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
-                        {% block footer_branding %}
-                            <div class="footer-workspace-section">
-                                <div class="footer-workspace-name">
+                        <div class="footer-main-content">
+                            {% block footer_branding %}
+                                <div class="footer-brand">
+                                    <div class="footer-brand-name">
+                                        <i class="fas fa-shield-alt"></i>
+                                        {% if brand.name %}
+                                            {{ brand.name }}
+                                        {% else %}
+                                            sbomify
+                                        {% endif %}
+                                        Trust Center
+                                    </div>
+                                    <div class="footer-tagline">Transparency and security through Software Bill of Materials</div>
+                                </div>
+                            {% endblock %}
+                            <div class="footer-divider"></div>
+                            <div class="footer-bottom">
+                                <div class="footer-meta">
+                                    © {% now "Y" %}
                                     {% if brand.name %}
                                         {{ brand.name }}
                                     {% else %}
                                         sbomify
                                     {% endif %}
-                                    Trust Center
+                                </div>
+                                <span class="footer-dot"></span>
+                                <div class="footer-powered">
+                                    Powered by <a href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
+    target="_blank"
+    rel="noopener noreferrer">sbomify</a>
                                 </div>
                             </div>
-                        {% endblock %}
-                        <div class="footer-bottom">
-                            <div class="footer-meta">
-                                <span>© {% now "Y" %} sbomify</span>
-                            </div>
-                            <div class="footer-powered">
-                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
-                            </div>
                         </div>
+                        {% block footer_content %}{% endblock %}
                     </div>
-                    {% block footer_content %}{% endblock %}
                 </div>
             </footer>
         </div>

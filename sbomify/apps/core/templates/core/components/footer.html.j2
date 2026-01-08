@@ -9,7 +9,7 @@
                         <a href="https://sbomify.com"
                            class="brand-link"
                            target="_blank"
-                           rel="noopener">
+                           rel="noopener noreferrer">
                             <strong>sbomify</strong>
                         </a>
                         {% if request.user.is_authenticated %}
@@ -18,13 +18,13 @@
                                 <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
                                    class="version-tag"
                                    target="_blank"
-                                   rel="noopener"
+                                   rel="noopener noreferrer"
                                    title="View release notes">v{{ app_version }}</a>
                                 {% if git_commit %}
                                     <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
                                        class="commit-tag"
                                        target="_blank"
-                                       rel="noopener"
+                                       rel="noopener noreferrer"
                                        title="View commit {{ git_commit }}">{{ git_commit }}</a>
                                 {% endif %}
                             {% elif git_commit %}
@@ -34,14 +34,14 @@
                                     {% if git_ref %}{{ git_ref }} @{% endif %}
                                     <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
                                        target="_blank"
-                                       rel="noopener">{{ git_commit }}</a>
+                                       rel="noopener noreferrer">{{ git_commit }}</a>
                                 </span>
                             {% elif app_version %}
                                 {# Fallback: just show version (local development) #}
                                 <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
                                    class="version-tag"
                                    target="_blank"
-                                   rel="noopener"
+                                   rel="noopener noreferrer"
                                    title="View release notes">v{{ app_version }}</a>
                             {% endif %}
                         {% endif %}
@@ -69,7 +69,7 @@
                         <a href="https://sbomify.com"
                            class="brand-link"
                            target="_blank"
-                           rel="noopener">
+                           rel="noopener noreferrer">
                             <strong>sbomify</strong>
                         </a>
                         {% if request.user.is_authenticated %}
@@ -78,13 +78,13 @@
                                 <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
                                    class="version-tag"
                                    target="_blank"
-                                   rel="noopener"
+                                   rel="noopener noreferrer"
                                    title="View release notes">v{{ app_version }}</a>
                                 {% if git_commit %}
                                     <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
                                        class="commit-tag"
                                        target="_blank"
-                                       rel="noopener"
+                                       rel="noopener noreferrer"
                                        title="View commit {{ git_commit }}">{{ git_commit }}</a>
                                 {% endif %}
                             {% elif git_commit %}
@@ -94,14 +94,14 @@
                                     {% if git_ref %}{{ git_ref }} @{% endif %}
                                     <a href="https://github.com/sbomify/sbomify/commit/{{ git_commit_full }}"
                                        target="_blank"
-                                       rel="noopener">{{ git_commit }}</a>
+                                       rel="noopener noreferrer">{{ git_commit }}</a>
                                 </span>
                             {% elif app_version %}
                                 {# Fallback: just show version (local development) #}
                                 <a href="https://github.com/sbomify/sbomify/releases/tag/v{{ app_version }}"
                                    class="version-tag"
                                    target="_blank"
-                                   rel="noopener"
+                                   rel="noopener noreferrer"
                                    title="View release notes">v{{ app_version }}</a>
                             {% endif %}
                         {% endif %}
