@@ -785,4 +785,94 @@
     .identifier-card {
         width: 100%;
     }
+
+    .artifacts-table .artifact-name {
+        min-width: 9.375rem;
+    }
+}
+
+/* ===== EMPTY STATE ===== */
+.public-empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+}
+
+.public-empty-state-icon {
+    color: var(--text-muted);
+    opacity: 0.25;
+    margin-bottom: var(--spacing-md);
+}
+
+.public-empty-state-title {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.public-empty-state-text {
+    color: var(--text-muted);
+}
+
+/* ===== ARTIFACTS TABLE ===== */
+.artifacts-table th {
+    border-top: none;
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    background-color: var(--gray-50);
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-md);
+}
+
+.artifacts-table td {
+    vertical-align: middle;
+    padding: var(--spacing-md);
+    border-color: var(--border-color-light);
+}
+
+.artifacts-table .artifact-type-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+}
+
+.artifacts-table .artifact-type-icon.sbom-icon {
+    background: linear-gradient(135deg, var(--brand-success) 0%, color-mix(in srgb, var(--brand-success), #000 15%) 100%);
+    color: var(--white);
+}
+
+.artifacts-table .artifact-type-icon.document-icon {
+    background: linear-gradient(135deg, var(--brand-warning) 0%, color-mix(in srgb, var(--brand-warning), #000 15%) 100%);
+    color: var(--white);
+}
+
+.artifacts-table .artifact-type-icon.unknown-icon {
+    background: var(--gray-200);
+    color: var(--text-muted);
+}
+
+.artifacts-table .artifact-name {
+    min-width: 12.5rem;
+}
+
+.artifacts-table .artifact-type-badge {
+    font-size: var(--font-size-xs);
+    color: var(--brand-color, var(--brand-primary));
+    font-weight: var(--font-weight-medium);
+}
+
+.artifacts-table .component-name {
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+.artifacts-table .format-text {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    background: var(--gray-100);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
 }

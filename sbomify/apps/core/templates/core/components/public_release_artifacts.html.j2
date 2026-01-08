@@ -96,89 +96,12 @@
                     <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
                 </h4>
             </div>
-            <div class="card-body" style="text-align: center; padding: 3rem;">
-                <i class="fas fa-puzzle-piece fa-3x"
-                   style="color: var(--text-muted);
-                          opacity: 0.25;
-                          margin-bottom: 1rem"></i>
-                <h5 style="color: var(--text-secondary)">No artifacts in this release</h5>
-                <p class="mb-0" style="color: var(--text-muted)">This release doesn't contain any artifacts yet.</p>
+            <div class="card-body public-empty-state">
+                <i class="fas fa-puzzle-piece fa-3x public-empty-state-icon"></i>
+                <h5 class="public-empty-state-title">No artifacts in this release</h5>
+                <p class="mb-0 public-empty-state-text">This release doesn't contain any artifacts yet.</p>
             </div>
         </div>
     </div>
 {% endif %}
-<style>
-.artifacts-table th {
-    border-top: none;
-    font-weight: 600;
-    color: var(--text-secondary);
-    background-color: var(--gray-50);
-    font-size: var(--font-size-sm);
-    padding: 0.75rem 1rem;
-}
-
-.artifacts-table td {
-    vertical-align: middle;
-    padding: 0.75rem 1rem;
-    border-color: var(--border-color-light);
-}
-
-.artifact-type-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    font-size: var(--font-size-sm);
-}
-
-.sbom-icon {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-}
-
-.document-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-}
-
-.unknown-icon {
-    background: var(--gray-200);
-    color: var(--text-muted);
-}
-
-.artifact-name {
-    min-width: 200px;
-}
-
-.artifact-type-badge {
-    font-size: var(--font-size-xs);
-    color: var(--brand-color);
-    font-weight: 500;
-}
-
-.component-name {
-    color: var(--text-secondary);
-    font-weight: 500;
-}
-
-.format-text {
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-size: var(--font-size-sm);
-    background: var(--gray-100);
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-}
-
-@media (max-width: 768px) {
-    .artifacts-table {
-        font-size: var(--font-size-sm);
-    }
-
-    .artifact-name {
-        min-width: 150px;
-    }
-}
-</style>
+{# Styles are in public-pages.css #}
