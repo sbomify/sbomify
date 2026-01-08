@@ -33,10 +33,119 @@ sbomify uses Stripe for payment processing and subscription management. The bill
                         └──────────┘   └──────────┘   └──────────┘
 ```
 
+## Module Structure
+
+| File                       | Responsibility                                      |
+| -------------------------- | --------------------------------------------------- |
+| `models.py`                | BillingPlan model, feature flags, price calculations|
+| `views.py`                 | HTTP endpoints (plan selection, checkout, portal)   |
+| `billing_processing.py`    | Webhook event handlers, billing limit decorator     |
+| `stripe_client.py`         | Stripe API wrapper with error handling              |
+| `stripe_pricing_service.py`| Fetches/caches pricing from Stripe                  |
+| `team_pricing_service.py`  | Calculates team-specific pricing display            |
+| `stripe_sync.py`           | Syncs subscription/price data from Stripe           |
+| `stripe_cache.py`          | Subscription data caching layer                     |
+| `notifications.py`         | In-app billing alerts/warnings                      |
+| `tasks.py`                 | Async Dramatiq tasks (emails, stale trial checks)   |
+| `webhook_handler.py`       | Webhook signature verification                      |
+
+## Service Architecture
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│                         Views Layer                            │
+│  (select_plan, billing_redirect, create_portal_session, etc.)  │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+┌───────────────────────▼────────────────────────────────────────┐
+│                     Service Layer                               │
+│  ┌─────────────────────┐  ┌──────────────────────────────────┐ │
+│  │ TeamPricingService  │  │ StripePricingService             │ │
+│  │ (team-specific      │  │ (all plans pricing,              │ │
+│  │  pricing display)   │  │  checkout session creation)      │ │
+│  └─────────────────────┘  └──────────────────────────────────┘ │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+┌───────────────────────▼────────────────────────────────────────┐
+│                     StripeClient                                │
+│  (Stripe API wrapper with error handling and rate limit mgmt)   │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## User Flows
+
+### Plan Selection & Checkout
+
+1. User visits `/billing/select-plan/<team_key>/` → `select_plan()` view
+2. User selects plan → redirected to `/billing/redirect/<team_key>/`
+3. `billing_redirect()` creates Stripe checkout session
+4. User completes payment on Stripe
+5. Stripe sends `checkout.session.completed` webhook (see [Webhook Events](#required-webhook-events))
+6. `handle_checkout_completed()` updates Team billing state
+7. User redirected to `/billing/return/` → `billing_return()` shows success
+
+### Billing Portal Access
+
+1. User clicks "Manage Billing" → `/billing/portal/<team_key>/`
+2. `create_portal_session()` creates Stripe portal session
+3. User redirected to Stripe Billing Portal
+
+### Downgrade/Cancellation
+
+1. User schedules downgrade (sets `cancel_at_period_end`)
+2. At period end, Stripe sends `customer.subscription.deleted` webhook
+3. `handle_subscription_deleted()` downgrades to Community
+
+## Billing Limits Enforcement
+
+Use the `check_billing_limits` decorator to enforce plan limits:
+
+```python
+from sbomify.apps.billing.billing_processing import check_billing_limits
+
+class MyCreateView(View):
+    @check_billing_limits('product')  # or 'project', 'component'
+    def post(self, request, *args, **kwargs):
+        # Create logic here
+```
+
+Limits are stored in `Team.billing_plan_limits` JSONField:
+
+- `max_products`, `max_projects`, `max_components`
+- When billing is disabled (`BILLING=FALSE`), all teams get unlimited access
+
+## Async Tasks & Cron Jobs
+
+| Task/Cron                       | Schedule          | Purpose                                                    |
+| ------------------------------- | ----------------- | ---------------------------------------------------------- |
+| `check_stale_trials_task`       | Daily 2:00 AM UTC | Safety net for missed trial expiration webhooks            |
+| `send_enterprise_inquiry_email` | On-demand         | Async email sending for enterprise inquiries               |
+
+## In-App Notifications
+
+The `notifications.py` module provides billing alerts:
+
+- Missing billing plan selection
+- Missing payment information for Business plan
+- Payment failures (past_due, unpaid states)
+- Downgrade would exceed target plan limits
+- Community plan upgrade suggestions
+
+## API Endpoints
+
+| URL Pattern                          | View                    | Purpose                   |
+| ------------------------------------ | ----------------------- | ------------------------- |
+| `/billing/select-plan/<team_key>/`   | `select_plan`           | Plan selection page       |
+| `/billing/redirect/<team_key>/`      | `billing_redirect`      | Stripe checkout redirect  |
+| `/billing/portal/<team_key>/`        | `create_portal_session` | Stripe portal redirect    |
+| `/billing/enterprise-contact/`       | `enterprise_contact`    | Enterprise inquiry form   |
+| `/billing/return/`                   | `billing_return`        | Checkout return handler   |
+
 ## Environment Variables
 
 | Variable                         | Description                                             |
 | -------------------------------- | ------------------------------------------------------- |
+| `BILLING`                        | Enable billing (`TRUE`) or treat all as Enterprise      |
 | `STRIPE_SECRET_KEY`              | Stripe secret API key                                   |
 | `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard            |
 | `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                   |
@@ -67,10 +176,6 @@ The `Team.billing_plan_limits` JSON field contains:
   "last_updated": "2025-12-01T10:00:00+00:00"
 }
 ```
-
-### Safety Net: Stale Trial Check
-
-A daily cron job (`daily_stale_trial_check`) runs at 2:00 AM UTC to catch any trials that may have expired but weren't updated due to missed webhooks.
 
 ## Stripe Webhook Configuration
 
@@ -151,26 +256,6 @@ Use the Stripe CLI to forward webhooks:
 stripe listen --forward-to localhost:8000/billing/webhook/
 ```
 
-## Management Commands
-
-### sync_stripe_subscriptions
-
-Sync subscription status from Stripe for teams whose local data may be out of sync:
-
-```bash
-# Dry run - see what would change
-python manage.py sync_stripe_subscriptions --dry-run
-
-# Sync all teams with subscriptions
-python manage.py sync_stripe_subscriptions
-
-# Sync only teams with stale trials
-python manage.py sync_stripe_subscriptions --stale-trials-only
-
-# Sync a specific team
-python manage.py sync_stripe_subscriptions --team-key=ABC123
-```
-
 ## Troubleshooting
 
 ### Webhook Returns 404
@@ -208,14 +293,24 @@ python manage.py sync_stripe_subscriptions --team-key=ABC123
 
 1. Verify webhook configuration in Stripe Dashboard
 2. Check webhook delivery logs in Stripe
-3. Run `sync_stripe_subscriptions --stale-trials-only` to sync stale trials
+3. Run the sync command with `--stale-trials-only` (see below)
 
 ### Subscription Status Out of Sync
 
 **Cause:** Missed webhooks due to server downtime, network issues, or configuration problems.
 
-**Fix:** Run the sync command:
+**Fix:** Use the `sync_stripe_subscriptions` command to sync subscription data from Stripe:
 
 ```bash
-python manage.py sync_stripe_subscriptions --team-key=<TEAM_KEY>
+# Dry run - see what would change
+python manage.py sync_stripe_subscriptions --dry-run
+
+# Sync all teams with subscriptions
+python manage.py sync_stripe_subscriptions
+
+# Sync only teams with stale trials
+python manage.py sync_stripe_subscriptions --stale-trials-only
+
+# Sync a specific team
+python manage.py sync_stripe_subscriptions --team-key=ABC123
 ```
