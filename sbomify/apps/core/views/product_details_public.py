@@ -23,6 +23,9 @@ from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
+# GTIN types that support barcode rendering
+BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
+
 
 def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list:
     """Prepare project data with components for display on the product page."""
@@ -187,6 +190,8 @@ class ProductDetailsPublicView(View):
             "product_identifiers": product_identifiers,
             "product_links": product_links,
             "view_all_releases_url": view_all_releases_url,
+            # Barcode types for identifier rendering
+            "barcode_types": BARCODE_TYPES,
             # Assessment status (only passing assessments for public display)
             "passing_assessments": passing_assessments,
             "has_passing_assessments": assessment_status.all_pass,
