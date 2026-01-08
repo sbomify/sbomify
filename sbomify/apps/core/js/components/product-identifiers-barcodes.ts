@@ -1,11 +1,28 @@
 import Alpine from 'alpinejs';
 import JsBarcode from 'jsbarcode';
 
+/** Maps identifier types to JsBarcode format names */
 const FORMAT_MAP: Record<string, string> = {
   'gtin_12': 'UPC',
   'gtin_13': 'EAN13',
   'gtin_14': 'ITF14',
   'gtin_8': 'EAN8'
+};
+
+/** Default barcode rendering configuration */
+const BARCODE_CONFIG = {
+  width: 2,
+  height: 50,
+  displayValue: true,
+  fontSize: 14,
+  fontOptions: 'bold',
+  font: 'monospace',
+  textMargin: 8,
+  textAlign: 'center' as const,
+  textPosition: 'bottom' as const,
+  margin: 10,
+  background: '#ffffff',
+  lineColor: '#000000'
 };
 
 export function registerProductIdentifiersBarcodes(): void {
@@ -44,18 +61,7 @@ export function registerProductIdentifiersBarcodes(): void {
         // Render the barcode
         JsBarcode(svg, value, {
           format: format,
-          width: 2,
-          height: 50,
-          displayValue: true,
-          fontSize: 14,
-          fontOptions: 'bold',
-          font: 'monospace',
-          textMargin: 8,
-          textAlign: 'center',
-          textPosition: 'bottom',
-          margin: 10,
-          background: '#ffffff',
-          lineColor: '#000000'
+          ...BARCODE_CONFIG
         });
 
         this.barcodeRendered[id] = true;

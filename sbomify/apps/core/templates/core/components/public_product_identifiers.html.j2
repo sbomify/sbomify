@@ -16,7 +16,7 @@
                                 <div class="public-list-item-type">{{ identifier.identifier_type_display }}</div>
                                 <div class="public-identifier-value">{{ identifier.value }}</div>
                             </div>
-                            {% if identifier.identifier_type == 'gtin_12' or identifier.identifier_type == 'gtin_13' or identifier.identifier_type == 'gtin_14' or identifier.identifier_type == 'gtin_8' %}
+                            {% if identifier.identifier_type in ['gtin_12', 'gtin_13', 'gtin_14', 'gtin_8'] %}
                                 <div class="public-identifier-barcode"
                                      x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
                                     <svg data-barcode-id="{{ identifier.id }}"
