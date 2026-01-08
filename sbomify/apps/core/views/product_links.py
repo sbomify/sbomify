@@ -159,7 +159,10 @@ def add_utm_params(url: str, campaign: str = "product_links") -> str:
             if key not in existing_params:
                 existing_params[key] = [value]
 
-        # Flatten the params dict (parse_qs returns lists)
+        # Flatten single-value lists for cleaner URL encoding.
+        # parse_qs returns all values as lists (e.g., {"foo": ["bar"]}).
+        # urlencode with doseq=True handles multi-value params correctly,
+        # but single values look cleaner as scalars in the final URL.
         flat_params = {k: v[0] if len(v) == 1 else v for k, v in existing_params.items()}
         new_query = urlencode(flat_params, doseq=True)
 
