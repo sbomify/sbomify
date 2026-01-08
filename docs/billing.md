@@ -293,7 +293,7 @@ stripe listen --forward-to localhost:8000/billing/webhook/
 
 1. Verify webhook configuration in Stripe Dashboard
 2. Check webhook delivery logs in Stripe
-3. Run the sync command with `--stale-trials-only` (see below)
+3. Run the sync command with `--stale-trials-only` (see [Subscription Status Out of Sync](#subscription-status-out-of-sync) below)
 
 ### Subscription Status Out of Sync
 
