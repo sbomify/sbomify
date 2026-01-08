@@ -1,0 +1,184 @@
+{% load humanize %}
+{% if release.artifacts %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table artifacts-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Component</th>
+                                <th>Format</th>
+                                <th>Version</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for artifact in release.artifacts %}
+                                <tr>
+                                    <td>
+                                        <span class="artifact-type-icon {% if artifact.artifact_type == 'sbom' %}sbom-icon{% elif artifact.artifact_type == 'document' %}document-icon{% else %}unknown-icon{% endif %}">
+                                            <i class="fas {% if artifact.artifact_type == 'sbom' %}fa-file-code{% elif artifact.artifact_type == 'document' %}fa-file-alt{% else %}fa-file{% endif %}"></i>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="artifact-name">
+                                            <div class="fw-medium">{{ artifact.artifact_name|default:"Unknown" }}</div>
+                                            <div class="artifact-type-badge">
+                                                {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                                    SBOM •
+                                                    {% if artifact.sbom_format == 'cyclonedx' %}
+                                                        CycloneDX
+                                                    {% elif artifact.sbom_format == 'spdx' %}
+                                                        SPDX
+                                                    {% else %}
+                                                        {{ artifact.sbom_format|title }}
+                                                    {% endif %}
+                                                {% elif artifact.artifact_type == 'document' and artifact.document_type %}
+                                                    Document • {{ artifact.document_type|title }}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="component-name">{{ artifact.component_name|default:"Unknown" }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="format-text">
+                                            {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                                {% if artifact.sbom_format == 'cyclonedx' %}
+                                                    CycloneDX
+                                                {% elif artifact.sbom_format == 'spdx' %}
+                                                    SPDX
+                                                {% else %}
+                                                    {{ artifact.sbom_format|title }}
+                                                {% endif %}
+                                                {{ artifact.sbom_format_version|default:"" }}
+                                            {% elif artifact.artifact_type == 'document' and artifact.document_type %}
+                                                {{ artifact.document_type|title }}
+                                            {% else %}
+                                                Unknown
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if artifact.artifact_type == 'sbom' and artifact.sbom_version %}
+                                            <span title="{{ artifact.sbom_version }}">{{ artifact.sbom_version|truncatechars:23 }}</span>
+                                        {% elif artifact.artifact_type == 'document' and artifact.document_version %}
+                                            <span title="{{ artifact.document_version }}">{{ artifact.document_version|truncatechars:23 }}</span>
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ artifact.created_at|date:"M d, Y" }}</small>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+                </h4>
+            </div>
+            <div class="card-body" style="text-align: center; padding: 3rem;">
+                <i class="fas fa-puzzle-piece fa-3x"
+                   style="color: var(--text-muted);
+                          opacity: 0.25;
+                          margin-bottom: 1rem"></i>
+                <h5 style="color: var(--text-secondary)">No artifacts in this release</h5>
+                <p class="mb-0" style="color: var(--text-muted)">This release doesn't contain any artifacts yet.</p>
+            </div>
+        </div>
+    </div>
+{% endif %}
+<style>
+.artifacts-table th {
+    border-top: none;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background-color: var(--gray-50);
+    font-size: var(--font-size-sm);
+    padding: 0.75rem 1rem;
+}
+
+.artifacts-table td {
+    vertical-align: middle;
+    padding: 0.75rem 1rem;
+    border-color: var(--border-color-light);
+}
+
+.artifact-type-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: var(--font-size-sm);
+}
+
+.sbom-icon {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.document-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
+.unknown-icon {
+    background: var(--gray-200);
+    color: var(--text-muted);
+}
+
+.artifact-name {
+    min-width: 200px;
+}
+
+.artifact-type-badge {
+    font-size: var(--font-size-xs);
+    color: var(--brand-color);
+    font-weight: 500;
+}
+
+.component-name {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.format-text {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: var(--font-size-sm);
+    background: var(--gray-100);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+    .artifacts-table {
+        font-size: var(--font-size-sm);
+    }
+
+    .artifact-name {
+        min-width: 150px;
+    }
+}
+</style>

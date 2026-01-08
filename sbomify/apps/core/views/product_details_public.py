@@ -11,6 +11,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_public_path,
+    get_workspace_public_url,
     resolve_product_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
@@ -161,6 +162,9 @@ class ProductDetailsPublicView(View):
         brand = build_branding_context(team)
         is_custom_domain = getattr(request, "is_custom_domain", False)
 
+        # Get workspace public URL for breadcrumbs
+        workspace_public_url = get_workspace_public_url(request, team)
+
         # Prepare server-side data for Django templates (replacing Vue components)
         public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
         public_releases = _get_public_releases(resolved_id, is_custom_domain, product.get("slug") or resolved_id)
@@ -195,6 +199,8 @@ class ProductDetailsPublicView(View):
             # Assessment status (only passing assessments for public display)
             "passing_assessments": passing_assessments,
             "has_passing_assessments": assessment_status.all_pass,
+            # Workspace URL for breadcrumbs
+            "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
 

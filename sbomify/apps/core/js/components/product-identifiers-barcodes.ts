@@ -12,15 +12,15 @@ const FORMAT_MAP: Record<string, string> = {
 /** Default barcode rendering configuration */
 const BARCODE_CONFIG = {
   width: 2,
-  height: 50,
+  height: 60,
   displayValue: true,
   fontSize: 14,
   fontOptions: 'bold',
   font: 'monospace',
-  textMargin: 8,
+  textMargin: 6,
   textAlign: 'center' as const,
   textPosition: 'bottom' as const,
-  margin: 10,
+  margin: 4,
   background: '#ffffff',
   lineColor: '#000000'
 };

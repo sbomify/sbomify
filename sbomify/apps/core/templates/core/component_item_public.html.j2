@@ -2,12 +2,20 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
-{% block title %}{{ item.name }}{% endblock %}
+{% block title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
 {% block meta_description %}
     {% if component.component_type == 'sbom' %}
         {{ item.name }} - SBOM (Software Bill of Materials) file. Download and view this SBOM.
     {% elif component.component_type == 'document' %}
         {{ item.name }} - Document file. Download and view this document.
+    {% endif %}
+{% endblock %}
+{% block og_title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
+{% block og_description %}
+    {% if component.component_type == 'sbom' %}
+        {{ item.name }} - Download and view this Software Bill of Materials (SBOM).
+    {% elif component.component_type == 'document' %}
+        {{ item.name }} - Download and view this document.
     {% endif %}
 {% endblock %}
 {% block breadcrumb %}

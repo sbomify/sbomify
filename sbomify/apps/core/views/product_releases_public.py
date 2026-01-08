@@ -8,6 +8,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_public_path,
+    get_workspace_public_url,
     resolve_product_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
@@ -48,10 +49,14 @@ class ProductReleasesPublicView(View):
 
         brand = build_branding_context(team)
 
+        # Get workspace public URL for breadcrumbs
+        workspace_public_url = get_workspace_public_url(request, team)
+
         context = {
             "product": product,
             "releases": releases.get("items"),
             "brand": brand,
+            "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
 

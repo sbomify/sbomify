@@ -36,15 +36,14 @@
                             </div>
                             <div class="public-list-item-content">
                                 <div class="public-list-item-type">{{ link.link_type_display }}</div>
-                                <div class="public-list-item-title">{{ link.title }}</div>
-                                {% if link.description %}<div class="public-list-item-description">{{ link.description }}</div>{% endif %}
-                                <a href="{{ link.url|add_utm:'product_links' }}"
+                                <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
                                    target="_blank"
                                    rel="noopener noreferrer"
-                                   class="public-list-item-link">
-                                    {{ link.url|truncatechars:60 }}
-                                    <i class="fas fa-external-link-alt"></i>
+                                   class="public-list-item-title-link">
+                                    {{ link.title }}
+                                    <i class="fas fa-external-link-alt ms-1"></i>
                                 </a>
+                                {% if link.description %}<div class="public-list-item-description">{{ link.description }}</div>{% endif %}
                             </div>
                         </li>
                     {% endfor %}

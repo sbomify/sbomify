@@ -22,6 +22,10 @@
                   content="{% block meta_keywords %}SBOM, Software Bill of Materials, security, compliance, vulnerability management{% endblock %}">
             <meta name="author"
                   content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}">
+            <meta name="robots"
+                  content="{% block meta_robots %}index, follow{% endblock %}">
+            <!-- Canonical URL -->
+            <link rel="canonical" href="{{ request.build_absolute_uri }}">
             <!-- Favicon -->
             <link rel="apple-touch-icon"
                   sizes="180x180"
@@ -48,7 +52,9 @@
             <meta property="og:description"
                   content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="og:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{{ request.scheme }}://{{ request.get_host }}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <meta property="og:image:alt"
+                  content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo">
             <!-- Twitter -->
             <meta property="twitter:card" content="summary_large_image">
             <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
@@ -57,7 +63,9 @@
             <meta property="twitter:description"
                   content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta property="twitter:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{{ request.scheme }}://{{ request.get_host }}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <meta property="twitter:image:alt"
+                  content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo">
             <!-- Fonts -->
             <link rel="preconnect" href="https://fonts.gstatic.com">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
@@ -488,25 +496,23 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Modern Footer -->
+            <!-- Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
                         <div class="footer-main-content">
-                            {% block footer_branding %}
-                                <div class="footer-brand">
-                                    <div class="footer-brand-name">
-                                        <i class="fas fa-shield-alt"></i>
-                                        {% if brand.name %}
-                                            {{ brand.name }}
-                                        {% else %}
-                                            sbomify
-                                        {% endif %}
-                                        Trust Center
-                                    </div>
-                                    <div class="footer-tagline">Transparency and security through Software Bill of Materials</div>
+                            <div class="footer-brand">
+                                <div class="footer-brand-name">
+                                    <i class="fas fa-shield-alt"></i>
+                                    {% if brand.name %}
+                                        {{ brand.name }}
+                                    {% else %}
+                                        sbomify
+                                    {% endif %}
+                                    Trust Center
                                 </div>
-                            {% endblock %}
+                                <div class="footer-tagline">Transparency and security through Software Bill of Materials</div>
+                            </div>
                             <div class="footer-divider"></div>
                             <div class="footer-bottom">
                                 <div class="footer-meta">
@@ -525,7 +531,6 @@
                                 </div>
                             </div>
                         </div>
-                        {% block footer_content %}{% endblock %}
                     </div>
                 </div>
             </footer>
