@@ -428,149 +428,131 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            # Check for conflicts - only for Product naming collisions if we want to be strict,
-            # but for idempotency we might want to allow reuse.
-            # However, if a DIFFERENT product exists with that name, it might be confusing.
-            # For now, we will allow reuse of resources if they match.
-            conflict_msg = None
-            # Removed default profile check to allow idempotency
-            if Product.objects.filter(team=team, name=company_name).exists():
-                # We will try to reuse it, so no message here unless we want to force unique names for NEW products
-                pass
+            # Idempotent design: get_or_create handles reuse of existing resources
+            # Check billing limits before creating resources
+            from sbomify.apps.core.apis import _check_billing_limits
 
-            if conflict_msg:
+            # Check if we can create product
+            can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
+            if not can_create_product:
+                messages.error(request, product_error)
+                return redirect("teams:onboarding_wizard")
+
+            # Check if we can create project
+            can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
+            if not can_create_project:
+                messages.error(request, project_error)
+                return redirect("teams:onboarding_wizard")
+
+            # Check if we can create component
+            can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
+            if not can_create_component:
+                messages.error(request, component_error)
+                return redirect("teams:onboarding_wizard")
+
+            try:
+                with transaction.atomic():
+                    # 1. Get or Create default ContactProfile
+                    website_url = form.cleaned_data.get("website")
+                    contact_name = form.cleaned_data["contact_name"]
+                    # Empty, None, or whitespace-only falls back to user email
+                    contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
+
+                    # Use get_or_create to ensure we strictly have only 1 default profile
+                    contact_profile, created = ContactProfile.objects.get_or_create(
+                        team=team, is_default=True, defaults={"name": "Default"}
+                    )
+
+                    # 2. Get or Create Entity
+                    # Entity name is the company name (company > supplier_name > vendor priority)
+                    entity, entity_created = ContactEntity.objects.get_or_create(
+                        profile=contact_profile,
+                        name=company_name,
+                        defaults={
+                            "email": contact_email,
+                            "website_urls": [website_url] if website_url else [],
+                            "is_manufacturer": True,
+                            "is_supplier": True,
+                        },
+                    )
+
+                    # Create author (CycloneDX 1.7: authors are separate from entities)
+                    from sbomify.apps.teams.models import AuthorContact
+
+                    AuthorContact.objects.get_or_create(
+                        profile=contact_profile,
+                        name=contact_name,
+                        defaults={"email": contact_email},
+                    )
+
+                    # Create the contact person for NTIA compliance (linked to entity)
+                    # Check all three fields in unique_together constraint (entity, name, email)
+                    if not ContactProfileContact.objects.filter(
+                        entity=entity, name=contact_name, email=contact_email
+                    ).exists():
+                        ContactProfileContact.objects.create(
+                            entity=entity,
+                            name=contact_name,
+                            email=contact_email,
+                        )
+
+                    # 2. Auto-create hierarchy with SBOM component type
+                    # Set visibility based on billing plan: community plans must be public
+                    is_public = not team.can_be_private()
+                    product, _ = Product.objects.get_or_create(
+                        name=company_name, team=team, defaults={"is_public": is_public}
+                    )
+                    project, _ = Project.objects.get_or_create(
+                        name="Main Project", team=team, defaults={"is_public": is_public}
+                    )
+
+                    component_metadata = create_default_component_metadata(
+                        user=request.user, team_id=team.id, custom_metadata=None
+                    )
+
+                    component, component_created = Component.objects.get_or_create(
+                        name="Main Component",
+                        team=team,
+                        defaults={
+                            "component_type": Component.ComponentType.SBOM,
+                            "metadata": component_metadata,
+                            "is_public": is_public,
+                        },
+                    )
+
+                    if component_created:
+                        # Populate native fields with default metadata
+                        populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+
+                    # Link hierarchy: product -> project -> component
+                    product.projects.add(project)
+                    project.components.add(component)
+
+                    # 3. Update workspace name and mark wizard as completed
+                    team.name = format_workspace_name(company_name)
+                    team.has_completed_wizard = True
+                    team.save()
+
+                    # 4. Update session - refresh user_teams to pick up new team state
+                    update_user_teams_session(request, request.user)
+
+                    # Refresh current_team with all the latest team data (including id)
+                    refresh_current_team_session(request, team)
+
+                    # Store wizard completion data for the success page
+                    request.session["wizard_component_id"] = component.id
+                    request.session["wizard_company_name"] = company_name
+                    request.session.modified = True
+
+                messages.success(request, "Your SBOM identity has been set up!")
+                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
+            except IntegrityError as e:
+                # Fallback for race conditions or unexpected constraint violations
+                log.warning(f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}")
                 messages.warning(
                     request,
-                    f"{conflict_msg} Try using a different company name, or check your existing products and projects.",
+                    "Setup could not be completed due to a conflict. Please try again or contact support.",
                 )
-            else:
-                # Check billing limits before creating resources
-                from sbomify.apps.core.apis import _check_billing_limits
-
-                # Check if we can create product
-                can_create_product, product_error, _ = _check_billing_limits(team.id, "product")
-                if not can_create_product:
-                    messages.error(request, product_error)
-                    return redirect("teams:onboarding_wizard")
-
-                # Check if we can create project
-                can_create_project, project_error, _ = _check_billing_limits(team.id, "project")
-                if not can_create_project:
-                    messages.error(request, project_error)
-                    return redirect("teams:onboarding_wizard")
-
-                # Check if we can create component
-                can_create_component, component_error, _ = _check_billing_limits(team.id, "component")
-                if not can_create_component:
-                    messages.error(request, component_error)
-                    return redirect("teams:onboarding_wizard")
-
-                try:
-                    with transaction.atomic():
-                        # 1. Get or Create default ContactProfile
-                        website_url = form.cleaned_data.get("website")
-                        contact_name = form.cleaned_data["contact_name"]
-                        # Empty, None, or whitespace-only falls back to user email
-                        contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
-
-                        # Use get_or_create to ensure we strictly have only 1 default profile
-                        contact_profile, created = ContactProfile.objects.get_or_create(
-                            team=team, is_default=True, defaults={"name": "Default"}
-                        )
-
-                        # 2. Get or Create Entity
-                        # Entity name is the company name (company > supplier_name > vendor priority)
-                        entity, entity_created = ContactEntity.objects.get_or_create(
-                            profile=contact_profile,
-                            name=company_name,
-                            defaults={
-                                "email": contact_email,
-                                "website_urls": [website_url] if website_url else [],
-                                "is_manufacturer": True,
-                                "is_supplier": True,
-                            },
-                        )
-
-                        # Create author (CycloneDX 1.7: authors are separate from entities)
-                        from sbomify.apps.teams.models import AuthorContact
-
-                        AuthorContact.objects.get_or_create(
-                            profile=contact_profile,
-                            name=contact_name,
-                            defaults={"email": contact_email},
-                        )
-
-                        # Create the contact person for NTIA compliance (linked to entity)
-                        # Check all three fields in unique_together constraint (entity, name, email)
-                        if not ContactProfileContact.objects.filter(
-                            entity=entity, name=contact_name, email=contact_email
-                        ).exists():
-                            ContactProfileContact.objects.create(
-                                entity=entity,
-                                name=contact_name,
-                                email=contact_email,
-                            )
-
-                        # 2. Auto-create hierarchy with SBOM component type
-                        # Set visibility based on billing plan: community plans must be public
-                        is_public = not team.can_be_private()
-                        product, _ = Product.objects.get_or_create(
-                            name=company_name, team=team, defaults={"is_public": is_public}
-                        )
-                        project, _ = Project.objects.get_or_create(
-                            name="Main Project", team=team, defaults={"is_public": is_public}
-                        )
-
-                        component_metadata = create_default_component_metadata(
-                            user=request.user, team_id=team.id, custom_metadata=None
-                        )
-
-                        component, component_created = Component.objects.get_or_create(
-                            name="Main Component",
-                            team=team,
-                            defaults={
-                                "component_type": Component.ComponentType.SBOM,
-                                "metadata": component_metadata,
-                                "is_public": is_public,
-                            },
-                        )
-
-                        if component_created:
-                            # Populate native fields with default metadata
-                            populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
-
-                        # Link hierarchy: product -> project -> component
-                        product.projects.add(project)
-                        project.components.add(component)
-
-                        # 3. Update workspace name and mark wizard as completed
-                        team.name = format_workspace_name(company_name)
-                        team.has_completed_wizard = True
-                        team.save()
-
-                        # 4. Update session - refresh user_teams to pick up new team state
-                        update_user_teams_session(request, request.user)
-
-                        # Refresh current_team with all the latest team data (including id)
-                        refresh_current_team_session(request, team)
-
-                        # Store wizard completion data for the success page
-                        request.session["wizard_component_id"] = component.id
-                        request.session["wizard_company_name"] = company_name
-                        request.session.modified = True
-
-                    messages.success(request, "Your SBOM identity has been set up!")
-                    return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-
-                except IntegrityError as e:
-                    # Fallback for race conditions or unexpected constraint violations
-                    log.warning(
-                        f"IntegrityError during onboarding for team {team.key}, company_name='{company_name}': {e}"
-                    )
-                    messages.warning(
-                        request,
-                        "Setup could not be completed due to a conflict. Please try again or contact support.",
-                    )
     else:
         # GET request - show the form with pre-filled data
         initial = {"email": request.user.email}

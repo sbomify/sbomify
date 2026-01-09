@@ -420,7 +420,8 @@ def _upsert_entities(
     is_update: bool = False,
 ):
     """Create or update entities and their contacts (CycloneDX aligned)."""
-    if entities is None:
+    # Early return if no entities provided (None = don't modify, [] = also skip to prevent accidental deletion)
+    if not entities:
         return
 
     # Validate each entity has at least one contact (CycloneDX requirement)
@@ -458,6 +459,11 @@ def _upsert_entities(
                 entity.full_clean()
                 entity.save()
             except ContactEntity.DoesNotExist:
+                logger.warning(
+                    "Entity %s not found in profile %s during update - skipping",
+                    entity_id,
+                    profile.id,
+                )
                 continue
         else:
             # Create new entity - validation enforced by schema and model clean()
@@ -505,7 +511,12 @@ def _upsert_authors(
 
 
 def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
-    """Serialize a contact profile with entities, authors, and legacy fields for backward compatibility."""
+    """Serialize a contact profile with entities, authors, and legacy fields for backward compatibility.
+
+    Note: For optimal performance, the profile should be prefetched with:
+        .prefetch_related("entities", "entities__contacts", "authors")
+    Without prefetching, this function will cause N+1 queries.
+    """
     entities = []
     for entity in profile.entities.all():
         entity_contacts = [
@@ -680,8 +691,10 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
             if payload.authors:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
-            profile.refresh_from_db()
-
+        # Re-fetch with prefetch_related for efficient serialization
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
+            pk=profile.pk
+        )
         return 201, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}
@@ -776,8 +789,10 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
             if payload.authors is not None:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
-            profile.refresh_from_db()
-
+        # Re-fetch with prefetch_related for efficient serialization
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
+            pk=profile.pk
+        )
         return 200, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}
