@@ -1,6 +1,6 @@
 # Generated manually for CycloneDX Contact Profile Alignment - Part 2
 
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):

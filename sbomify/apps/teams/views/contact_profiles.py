@@ -50,9 +50,13 @@ def _format_formset_errors(formset) -> str:
         if not form_errors:
             continue
         for field, field_errors in form_errors.items():
-            for error in field_errors:
+            # Get error objects with codes if available
+            error_list = field_errors.as_data() if hasattr(field_errors, "as_data") else []
+            for idx, error in enumerate(field_errors):
                 if field == "__all__":
-                    if "already exists" in str(error).lower():
+                    # Check for unique constraint violation using error code (more robust than string matching)
+                    error_code = error_list[idx].code if idx < len(error_list) else None
+                    if error_code in ("unique", "unique_together"):
                         messages.append(
                             "Duplicate entity name. Each entity must have a unique name within the profile."
                         )
@@ -214,8 +218,8 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if entity_form.cleaned_data.get("DELETE"):
                 continue
 
-            # If empty form in create mode (no name), skip
-            if not entity_form.cleaned_data.get("name"):
+            # Skip empty/incomplete forms (both name and email are required)
+            if not entity_form.cleaned_data.get("name") or not entity_form.cleaned_data.get("email"):
                 continue
 
             # Handle nested logic validation

@@ -770,16 +770,24 @@
     initAlpineComponents();
 
     window.addContactRow = function(container, entityPrefix) {
-    if (!container) return;
+    // Validate required DOM elements exist before proceeding
+    if (!container) {
+        console.warn('addContactRow: container element not found');
+        return;
+    }
     const contactPrefix = `${entityPrefix}-contacts`;
     const entityCard = container.closest('.entity-card');
-    if (!entityCard) return;
+    if (!entityCard) {
+        console.warn('addContactRow: entity-card element not found');
+        return;
+    }
 
     let totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
     if (!totalInput) {
         totalInput = entityCard.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
     }
     
+    // Create management form inputs if they don't exist
     if (!totalInput) {
         const mgmtDiv = document.createElement('div');
         mgmtDiv.innerHTML = `
@@ -790,6 +798,12 @@
         `;
         container.insertBefore(mgmtDiv, container.firstChild);
         totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    }
+    
+    // Final safety check after creating management form
+    if (!totalInput) {
+        console.error('addContactRow: failed to create/find TOTAL_FORMS input');
+        return;
     }
     
     const index = parseInt(totalInput.value);
