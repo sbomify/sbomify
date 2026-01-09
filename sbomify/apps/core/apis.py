@@ -1794,7 +1794,7 @@ def get_component_metadata(request, component_id: str):
     try:
         component = (
             Component.objects.select_related("contact_profile")
-            .prefetch_related("supplier_contacts", "authors", "licenses", "contact_profile__contacts")
+            .prefetch_related("supplier_contacts", "authors", "licenses", "contact_profile__entities__contacts")
             .get(pk=component_id)
         )
     except Component.DoesNotExist:

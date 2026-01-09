@@ -230,19 +230,12 @@
         },
         
         addContact() {
-             console.log('[Debug] addContact clicked. Prefix:', prefix);
-             // Use $root to ensure we select from the component root
              const listContainer = this.$root.querySelector('.contacts-list');
-             console.log('[Debug] Root:', this.$root);
-             console.log('[Debug] listContainer found?', !!listContainer);
-
              if (listContainer) {
                  window.addContactRow(listContainer, prefix);
                  this.$nextTick(() => {
                      this.updateContactCount();
                  });
-             } else {
-                 console.error('Contacts list not found in entity card');
              }
         },
 
@@ -293,10 +286,8 @@
                 if (profilesScript) {
                     try {
                         this.profiles = JSON.parse(profilesScript.textContent);
-                         // Initialize filtered profiles here to ensure sync
                         this.filteredProfiles = this.profiles.map(p => ({...p, hidden: false}));
                     } catch (e) {
-                        console.error('Failed to parse profiles data:', e);
                         this.profiles = [];
                     }
                 }
@@ -358,17 +349,10 @@
 
     /* Helper function for adding contacts dynamically */
     window.addContactRow = function(container, entityPrefix) {
-    if (!container) {
-        console.error("addContactRow called with null container");
-        return;
-    }
+    if (!container) return;
     const contactPrefix = `${entityPrefix}-contacts`;
     const entityCard = container.closest('.entity-card');
-    
-    if (!entityCard) {
-        console.error("Entity parent card not found");
-        return;
-    }
+    if (!entityCard) return;
 
     // Look for the total forms input - it could be directly in the contacts-list or in the entity card
     let totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);

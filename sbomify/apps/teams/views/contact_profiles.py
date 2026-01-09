@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -5,6 +7,8 @@ from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
+    _get_team_and_membership_role,
+    _get_team_owner_email,
     create_contact_profile,
     delete_contact_profile,
     get_contact_profile,
@@ -45,9 +49,6 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         status_code, profiles = list_contact_profiles(request, team_key)
         if status_code != 200:
             return htmx_error_response(profiles.get("detail", "Failed to load contact profiles"))
-
-        # Compute counts for template (profiles are serialized Pydantic models from API)
-        import json
 
         profiles_list = []
         for profile_schema in profiles:
@@ -162,9 +163,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         form = ContactProfileModelForm(request.POST, instance=profile)
         if not form.is_valid():
             raise ValidationError(form.errors.as_text())
-
-        # Get team owner email for fallback
-        from sbomify.apps.teams.apis import _get_team_and_membership_role, _get_team_owner_email
 
         team, _, error = _get_team_and_membership_role(request, team_key)
         if error or not team:
@@ -286,9 +284,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return self._render_profile_list_response(request, team_key, "Contact profile updated successfully")
 
     def _render_profile_list_response(self, request: HttpRequest, team_key: str, message: str) -> HttpResponse:
-        """Helper to render the profile list with a success message."""
-        import json
-
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return htmx_error_response("Failed to load team")
