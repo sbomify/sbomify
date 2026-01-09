@@ -38,6 +38,30 @@ class ValidationError(Exception):
         super().__init__(message)
 
 
+def _format_formset_errors(formset) -> str:
+    """Format formset errors into user-friendly messages."""
+    messages = []
+    for error in formset.non_form_errors():
+        messages.append(str(error))
+
+    for i, form_errors in enumerate(formset.errors):
+        if not form_errors:
+            continue
+        for field, field_errors in form_errors.items():
+            for error in field_errors:
+                if field == "__all__":
+                    if "already exists" in str(error).lower():
+                        messages.append(
+                            "Duplicate entity name. Each entity must have a unique name within the profile."
+                        )
+                    else:
+                        messages.append(str(error))
+                else:
+                    messages.append(f"{field}: {error}")
+
+    return " ".join(messages) if messages else "Validation failed"
+
+
 class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner", "admin"]
 
@@ -172,8 +196,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         entities_formset = ContactEntityFormSet(request.POST, instance=profile, prefix="entities")
 
         if not entities_formset.is_valid():
-            errors = f"{entities_formset.non_form_errors().as_text()}\n{entities_formset.errors}"
-            raise ValidationError(errors)
+            raise ValidationError(_format_formset_errors(entities_formset))
 
         entities_data = []
         is_update = profile is not None
@@ -199,8 +222,10 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
             if not contacts_formset.is_valid():
-                errors = f"{contacts_formset.non_form_errors().as_text()}\n{contacts_formset.errors}"
-                raise ValidationError(f"Contacts error for entity '{entity_form.cleaned_data.get('name')}': {errors}")
+                entity_name = entity_form.cleaned_data.get("name", "Unknown")
+                raise ValidationError(
+                    f"Error in contacts for '{entity_name}': {_format_formset_errors(contacts_formset)}"
+                )
 
             contacts_data = []
             for contact_form in contacts_formset:
