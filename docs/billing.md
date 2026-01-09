@@ -35,19 +35,19 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 
 ## Module Structure
 
-| File                       | Responsibility                                      |
-| -------------------------- | --------------------------------------------------- |
-| `models.py`                | BillingPlan model, feature flags, price calculations|
-| `views.py`                 | HTTP endpoints (plan selection, checkout, portal)   |
-| `billing_processing.py`    | Webhook event handlers, check_billing_limits decorator |
-| `stripe_client.py`         | Stripe API wrapper with error handling              |
-| `stripe_pricing_service.py`| Fetches/caches pricing from Stripe                  |
-| `team_pricing_service.py`  | Calculates team-specific pricing display            |
-| `stripe_sync.py`           | Syncs subscription/price data from Stripe           |
-| `stripe_cache.py`          | Subscription data caching layer                     |
-| `notifications.py`         | In-app billing alerts/warnings                      |
-| `tasks.py`                 | Async Dramatiq tasks (emails, stale trial checks)   |
-| `webhook_handler.py`       | Webhook signature verification                      |
+| File                        | Responsibility                                         |
+| --------------------------- | ------------------------------------------------------ |
+| `models.py`                 | BillingPlan model, feature flags, price calculations   |
+| `views.py`                  | HTTP endpoints (plan selection, checkout, portal)      |
+| `billing_processing.py`     | Webhook event handlers, check_billing_limits decorator |
+| `stripe_client.py`          | Stripe API wrapper with error handling                 |
+| `stripe_pricing_service.py` | Fetches/caches pricing from Stripe                     |
+| `team_pricing_service.py`   | Calculates team-specific pricing display               |
+| `stripe_sync.py`            | Syncs subscription/price data from Stripe              |
+| `stripe_cache.py`           | Subscription data caching layer                        |
+| `notifications.py`          | In-app billing alerts/warnings                         |
+| `tasks.py`                  | Async Dramatiq tasks (emails, stale trial checks)      |
+| `webhook_handler.py`        | Webhook signature verification                         |
 
 ## Service Architecture
 
@@ -116,10 +116,10 @@ Limits are stored in `Team.billing_plan_limits` JSONField:
 
 ## Async Tasks & Cron Jobs
 
-| Task/Cron                       | Schedule          | Purpose                                                    |
-| ------------------------------- | ----------------- | ---------------------------------------------------------- |
-| `check_stale_trials_task`       | Daily 2:00 AM UTC | Safety net for missed trial expiration webhooks            |
-| `send_enterprise_inquiry_email` | On-demand         | Async email sending for enterprise inquiries               |
+| Task/Cron                       | Schedule          | Purpose                                         |
+| ------------------------------- | ----------------- | ----------------------------------------------- |
+| `check_stale_trials_task`       | Daily 2:00 AM UTC | Safety net for missed trial expiration webhooks |
+| `send_enterprise_inquiry_email` | On-demand         | Async email sending for enterprise inquiries    |
 
 ## In-App Notifications
 
@@ -133,24 +133,24 @@ The `notifications.py` module provides billing alerts:
 
 ## API Endpoints
 
-| URL Pattern                          | View                    | Purpose                   |
-| ------------------------------------ | ----------------------- | ------------------------- |
-| `/billing/select-plan/<team_key>/`   | `select_plan`           | Plan selection page       |
-| `/billing/redirect/<team_key>/`      | `billing_redirect`      | Stripe checkout redirect  |
-| `/billing/portal/<team_key>/`        | `create_portal_session` | Stripe portal redirect    |
-| `/billing/enterprise-contact/`       | `enterprise_contact`    | Enterprise inquiry form   |
-| `/billing/return/`                   | `billing_return`        | Checkout return handler   |
+| URL Pattern                        | View                    | Purpose                  |
+| ---------------------------------- | ----------------------- | ------------------------ |
+| `/billing/select-plan/<team_key>/` | `select_plan`           | Plan selection page      |
+| `/billing/redirect/<team_key>/`    | `billing_redirect`      | Stripe checkout redirect |
+| `/billing/portal/<team_key>/`      | `create_portal_session` | Stripe portal redirect   |
+| `/billing/enterprise-contact/`     | `enterprise_contact`    | Enterprise inquiry form  |
+| `/billing/return/`                 | `billing_return`        | Checkout return handler  |
 
 ## Environment Variables
 
-| Variable                         | Description                                                                                                                                   |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable                         | Description                                                                                                                                               |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `BILLING`                        | For local/self-hosted: set `BILLING=TRUE` to enable billing or `BILLING=FALSE` to disable billing for unlimited access; only `TRUE`/`FALSE` are supported |
-| `STRIPE_SECRET_KEY`              | Stripe secret API key                                                                                                                         |
-| `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard                                                                                                  |
-| `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                                                                                                         |
-| `TRIAL_PERIOD_DAYS`              | Number of days for trial period (default: 14)                                                                                                 |
-| `TRIAL_ENDING_NOTIFICATION_DAYS` | Days before trial end to send notification (default: 3)                                                                                       |
+| `STRIPE_SECRET_KEY`              | Stripe secret API key                                                                                                                                     |
+| `STRIPE_WEBHOOK_SECRET`          | Webhook signing secret from Stripe Dashboard                                                                                                              |
+| `STRIPE_PUBLISHABLE_KEY`         | Stripe publishable key (for frontend)                                                                                                                     |
+| `TRIAL_PERIOD_DAYS`              | Number of days for trial period (default: 14)                                                                                                             |
+| `TRIAL_ENDING_NOTIFICATION_DAYS` | Days before trial end to send notification (default: 3)                                                                                                   |
 
 ## Trial Management
 
@@ -176,6 +176,10 @@ The `Team.billing_plan_limits` JSON field contains:
   "last_updated": "2025-12-01T10:00:00+00:00"
 }
 ```
+
+### Safety Net: Stale Trial Check
+
+A daily cron job (`check_stale_trials_task`) runs at 2:00 AM UTC to catch any trials that may have expired but weren't updated due to missed webhooks.
 
 ## Stripe Webhook Configuration
 
