@@ -13,8 +13,9 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
+from sbomify.apps.teams.models import AuthorContact, ContactEntity, ContactProfile, Member, Team
 from sbomify.apps.teams.schemas import (
+    AuthorContactSchema,
     BrandingInfo,
     BrandingInfoWithUrls,
     ContactEntityCreateSchema,
@@ -418,17 +419,23 @@ def _upsert_entities(
     fallback_email: str,
     is_update: bool = False,
 ):
-    """Create or update entities and their contacts."""
+    """Create or update entities and their contacts (CycloneDX aligned)."""
     if entities is None:
         return
+
+    # Validate each entity has at least one contact (CycloneDX requirement)
+    for entity_data in entities:
+        if not entity_data:
+            continue
+        contacts = getattr(entity_data, "contacts", None)
+        if not contacts:
+            entity_name = getattr(entity_data, "name", "Entity")
+            raise ValueError(f"'{entity_name}' must have at least one contact")
 
     # Collect IDs of entities that are being updated (not new ones)
     existing_ids = [e.id for e in entities if getattr(e, "id", None)]
 
     if is_update:
-        # Safety check: Ensure we're not deleting all entities (empty list should be caught earlier)
-        if len(entities) == 0:
-            raise ValueError("Cannot update to zero entities - at least one entity is required")
         profile.entities.exclude(id__in=existing_ids).delete()
 
     for entity_data in entities:
@@ -439,7 +446,7 @@ def _upsert_entities(
         if entity_id:
             try:
                 entity = profile.entities.get(id=entity_id)
-                for field in ["name", "email", "phone", "address", "is_manufacturer", "is_supplier", "is_author"]:
+                for field in ["name", "email", "phone", "address", "is_manufacturer", "is_supplier"]:
                     value = getattr(entity_data, field, None)
                     if value is not None:
                         setattr(entity, field, value)
@@ -463,7 +470,6 @@ def _upsert_entities(
                 website_urls=_clean_url_list(entity_data.website_urls or []),
                 is_manufacturer=entity_data.is_manufacturer,
                 is_supplier=entity_data.is_supplier,
-                is_author=entity_data.is_author,
             )
             # Validate role flags before saving
             entity.full_clean()
@@ -474,8 +480,32 @@ def _upsert_entities(
             _upsert_entity_contacts(entity, contacts, fallback_email)
 
 
+def _upsert_authors(
+    profile: ContactProfile,
+    authors: list[AuthorContactSchema] | None,
+    fallback_email: str,
+):
+    """Create or update author contacts (CycloneDX aligned - individuals, not organizations)."""
+    if authors is None:
+        return
+
+    # Delete existing authors and recreate
+    profile.authors.all().delete()
+
+    for order, author in enumerate(authors):
+        if not author.name:
+            continue
+        AuthorContact.objects.create(
+            profile=profile,
+            name=author.name,
+            email=author.email or fallback_email,
+            phone=author.phone,
+            order=order,
+        )
+
+
 def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
-    """Serialize a contact profile with entities and legacy fields for backward compatibility."""
+    """Serialize a contact profile with entities, authors, and legacy fields for backward compatibility."""
     entities = []
     for entity in profile.entities.all():
         entity_contacts = [
@@ -497,12 +527,22 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
                 website_urls=_clean_url_list(entity.website_urls or []),
                 is_manufacturer=entity.is_manufacturer,
                 is_supplier=entity.is_supplier,
-                is_author=entity.is_author,
                 contacts=entity_contacts,
                 created_at=entity.created_at.isoformat(),
                 updated_at=entity.updated_at.isoformat(),
             )
         )
+
+    # Serialize authors (CycloneDX aligned - individuals, not organizations)
+    authors = [
+        AuthorContactSchema(
+            name=a.name,
+            email=a.email,
+            phone=a.phone,
+            order=a.order,
+        )
+        for a in profile.authors.all()
+    ]
 
     first_entity = profile.entities.first()
     legacy_contacts = []
@@ -521,6 +561,7 @@ def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
         id=profile.id,
         name=profile.name,
         entities=entities,
+        authors=authors,
         company=first_entity.name if first_entity else None,
         supplier_name=first_entity.name if first_entity else None,
         vendor=first_entity.name if first_entity else None,
@@ -551,7 +592,7 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
     # Allow all team members to view contact profiles (for use in component metadata)
     profiles = (
         ContactProfile.objects.filter(team=team)
-        .prefetch_related("entities", "entities__contacts")
+        .prefetch_related("entities", "entities__contacts", "authors")
         .order_by("-is_default", "name")
     )
     return 200, [serialize_contact_profile(profile) for profile in profiles]
@@ -572,7 +613,7 @@ def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, re
 
     # Allow all team members to view contact profiles (for use in component metadata)
     try:
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
             team=team, pk=profile_id
         )
     except ContactProfile.DoesNotExist:
@@ -607,8 +648,6 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
 
             # Handle entity-based structure (new API)
             if payload.entities is not None:
-                if not payload.entities:
-                    return 400, {"detail": "At least one entity is required"}
                 _upsert_entities(profile, payload.entities, fallback_email)
             elif any(
                 [
@@ -632,18 +671,20 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
                     address=payload.address or "",
                     website_urls=_clean_url_list(payload.website_urls or []),
                     is_manufacturer=True,
-                    is_supplier=True,
-                    is_author=True,
+                    is_supplier=False,
                 )
                 if payload.contacts:
                     _upsert_entity_contacts(entity, payload.contacts, fallback_email)
-            else:
-                # No entities provided and no legacy fields - require at least one entity
-                return 400, {"detail": "At least one entity is required. Provide 'entities' array or legacy fields."}
+
+            # Handle authors (CycloneDX aligned - individuals, not organizations)
+            if payload.authors:
+                _upsert_authors(profile, payload.authors, fallback_email)
 
             profile.refresh_from_db()
 
         return 201, serialize_contact_profile(profile)
+    except ValueError as e:
+        return 400, {"detail": str(e)}
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 
@@ -662,7 +703,7 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
     try:
-        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
             team=team, pk=profile_id
         )
     except ContactProfile.DoesNotExist:
@@ -681,8 +722,6 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
 
             # Handle entity-based structure (new API)
             if payload.entities is not None:
-                if not payload.entities:
-                    return 400, {"detail": "At least one entity is required"}
                 _upsert_entities(profile, payload.entities, fallback_email, is_update=True)
             # Handle legacy flat fields (backward compatibility)
             elif any(
@@ -709,10 +748,9 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
                         first_entity.address = payload.address
                     if payload.website_urls is not None:
                         first_entity.website_urls = _clean_url_list(payload.website_urls)
-                    # Force all roles True for backward compatibility when using legacy fields
+                    # Set manufacturer and supplier for backward compatibility
                     first_entity.is_manufacturer = True
                     first_entity.is_supplier = True
-                    first_entity.is_author = True
                     first_entity.full_clean()
                     first_entity.save()
 
@@ -729,15 +767,20 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
                         address=payload.address or "",
                         website_urls=_clean_url_list(payload.website_urls or []),
                         is_manufacturer=True,
-                        is_supplier=True,
-                        is_author=True,
+                        is_supplier=False,
                     )
                     if payload.contacts:
                         _upsert_entity_contacts(entity, payload.contacts, fallback_email)
 
+            # Handle authors (CycloneDX aligned - individuals, not organizations)
+            if payload.authors is not None:
+                _upsert_authors(profile, payload.authors, fallback_email)
+
             profile.refresh_from_db()
 
         return 200, serialize_contact_profile(profile)
+    except ValueError as e:
+        return 400, {"detail": str(e)}
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 

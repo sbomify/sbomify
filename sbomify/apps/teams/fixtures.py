@@ -98,19 +98,19 @@ def sample_contact_profile_with_contacts(
     sample_team: Team,
 ) -> Generator[ContactProfile, Any, None]:
     # Create profile (3-level hierarchy: Profile -> Entity -> Contact)
+    # CycloneDX aligned: entities are manufacturer/supplier, authors are separate
     profile = ContactProfile.objects.create(
         team=sample_team,
         name="Test Profile",
     )
 
-    # Create entity with all roles for backward compatibility
+    # Create entity with manufacturer and supplier roles (CycloneDX aligned)
     entity = ContactEntity.objects.create(
         profile=profile,
         name="Test Company",
         email="company@example.com",
         is_manufacturer=True,
-        is_supplier=True,
-        is_author=True,
+        is_supplier=False,
     )
 
     # Create contact linked to entity

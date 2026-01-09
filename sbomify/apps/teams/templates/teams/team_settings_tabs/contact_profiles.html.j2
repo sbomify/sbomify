@@ -33,16 +33,22 @@
             return;
         }
 
-        // Only register if not already registered (idempotent)
         if (window._alpineContactProfilesInitialized) return;
         window._alpineContactProfilesInitialized = true;
 
-    Alpine.data('contactProfileForm', (entitiesPrefix) => ({
+    Alpine.data('contactProfileForm', (entitiesPrefix, authorsPrefix) => ({
         entitiesPrefix: entitiesPrefix,
+        authorsPrefix: authorsPrefix,
         visibleEntitiesCount: 0,
+        visibleAuthorsCount: 0,
+        manufacturerCount: 0,
+        supplierCount: 0,
         
         initForm() {
-            this.updateCounts();
+            // Delay to ensure all entity components are initialized first
+            this.$nextTick(() => {
+                setTimeout(() => this.updateCounts(), 100);
+            });
         },
         
         get hasErrors() {
@@ -58,11 +64,9 @@
             const newRow = document.createElement('div');
             newRow.appendChild(template);
             
-            // Replace prefix in inputs
             const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
             newRow.innerHTML = newHtml;
 
-            // Handle the nested contact formset management form
             const entityPrefix = `${this.entitiesPrefix}-${currentCount}`;
             const contactPrefix = `${entityPrefix}-contacts`;
             
@@ -73,7 +77,6 @@
                 <input type="hidden" name="${contactPrefix}-MIN_NUM_FORMS" value="0" id="id_${contactPrefix}-MIN_NUM_FORMS">
                 <input type="hidden" name="${contactPrefix}-MAX_NUM_FORMS" value="1000" id="id_${contactPrefix}-MAX_NUM_FORMS">
             `;
-            // Add management form to the contacts-list inside entity-editor-content
             const contactsList = newRow.querySelector('.contacts-list');
             if (contactsList) {
                 contactsList.insertBefore(mgmtDiv, contactsList.firstChild);
@@ -84,22 +87,50 @@
             
             totalFormsInput.value = currentCount + 1;
             
-            // Initialize Alpine on the new element
             if (window.Alpine) {
                 Alpine.initTree(newEntityEl);
             }
             
             this.updateCounts();
             
-            // Auto-open the editor for the new entity (small delay to ensure Alpine is ready)
             setTimeout(() => {
                 if (newEntityEl) {
                     const alpineData = Alpine.$data(newEntityEl);
                     if (alpineData) {
                         alpineData.editing = true;
                     }
-                    // Scroll to the new entity
                     newEntityEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 50);
+        },
+
+        addAuthor() {
+            const container = document.getElementById('authors-container');
+            const totalFormsInput = document.querySelector(`input[name="${this.authorsPrefix}-TOTAL_FORMS"]`);
+            const currentCount = parseInt(totalFormsInput.value);
+            
+            const template = document.getElementById('author-template').content.cloneNode(true);
+            const newRow = document.createElement('div');
+            newRow.appendChild(template);
+            
+            const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
+            newRow.innerHTML = newHtml;
+
+            container.appendChild(newRow.firstElementChild);
+            const newAuthorEl = container.lastElementChild;
+            
+            totalFormsInput.value = currentCount + 1;
+            
+            if (window.Alpine) {
+                Alpine.initTree(newAuthorEl);
+            }
+            
+            this.updateCounts();
+            
+            setTimeout(() => {
+                if (newAuthorEl) {
+                    const nameInput = newAuthorEl.querySelector('input[name$="-name"]');
+                    if (nameInput) nameInput.focus();
                 }
             }, 50);
         },
@@ -107,37 +138,87 @@
         submitForm(e) {
             const form = this.$el.querySelector('form');
             
-            // Remove required attributes from all deleted/hidden contacts before validation
-            document.querySelectorAll('.contact-card').forEach(card => {
+            const isElementVisible = (el) => {
+                if (!el) return false;
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' && 
+                       style.visibility !== 'hidden' && 
+                       el.offsetParent !== null;
+            };
+            
+            document.querySelectorAll('.entity-card').forEach(card => {
                 const deleteInput = card.querySelector('input[name$="-DELETE"]');
                 const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
-                const isHidden = card.style.display === 'none' || !card.offsetParent;
+                const isVisible = isElementVisible(card);
                 
-                if (isDeleted || isHidden) {
+                if (isDeleted || !isVisible) {
                     card.querySelectorAll('input[required]').forEach(input => {
                         input.removeAttribute('required');
                     });
                 }
             });
             
-            // Mark all entity forms as touched to show validation errors
+            document.querySelectorAll('.author-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isVisible = isElementVisible(card);
+                
+                if (isDeleted || !isVisible) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            document.querySelectorAll('.contact-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isVisible = isElementVisible(card);
+                
+                if (isDeleted || !isVisible) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
             document.querySelectorAll('.entity-card').forEach(card => {
                 const alpineData = Alpine.$data(card);
                 if (alpineData && !alpineData.deleted) {
                     alpineData.touched = true;
+                    alpineData.contactsTouched = true;
+                    alpineData.updateContactCount();
                 }
             });
             
-            // Check for entity-level validation (roles)
+            // Check for role errors (at least one role must be selected)
             const hasRoleErrors = Array.from(document.querySelectorAll('.entity-card')).some(card => {
                 const alpineData = Alpine.$data(card);
-                return alpineData && !alpineData.deleted && !alpineData.hasRole;
+                return alpineData && !alpineData.deleted && !alpineData.isManufacturer && !alpineData.isSupplier;
             });
             
             if (hasRoleErrors) {
-                // Find first entity with role error and scroll to it
                 const errorEntity = document.querySelector('.entity-card');
                 if (errorEntity) {
+                    errorEntity.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
+            // Check for contact requirement (CycloneDX)
+            const hasContactErrors = Array.from(document.querySelectorAll('.entity-card')).some(card => {
+                const alpineData = Alpine.$data(card);
+                return alpineData && !alpineData.deleted && alpineData.activeContactsCount === 0;
+            });
+            
+            if (hasContactErrors) {
+                const errorEntity = Array.from(document.querySelectorAll('.entity-card')).find(card => {
+                    const alpineData = Alpine.$data(card);
+                    return alpineData && !alpineData.deleted && alpineData.activeContactsCount === 0;
+                });
+                if (errorEntity) {
+                    const alpineData = Alpine.$data(errorEntity);
+                    if (alpineData) alpineData.editing = true;
                     errorEntity.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 return;
@@ -149,7 +230,34 @@
         },
         
         updateCounts() {
-             this.visibleEntitiesCount = document.querySelectorAll('.entity-card:not([style*="display: none"])').length;
+            let visibleEntities = 0;
+            let visibleAuthors = 0;
+            let mfgCount = 0;
+            let supCount = 0;
+            
+            document.querySelectorAll('.entity-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted) {
+                    visibleEntities++;
+                    // Only count roles for saved entities (not new ones being edited)
+                    if (!alpineData.isNew || !alpineData.editing) {
+                        if (alpineData.isManufacturer) mfgCount++;
+                        if (alpineData.isSupplier) supCount++;
+                    }
+                }
+            });
+            
+            document.querySelectorAll('.author-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (!alpineData || !alpineData.deleted) {
+                    visibleAuthors++;
+                }
+            });
+            
+            this.visibleEntitiesCount = visibleEntities;
+            this.visibleAuthorsCount = visibleAuthors;
+            this.manufacturerCount = mfgCount;
+            this.supplierCount = supCount;
         }
     }));
 
@@ -161,16 +269,15 @@
         websites: '',
         isManufacturer: true,
         isSupplier: true,
-        isAuthor: true,
         deleted: false,
         activeContactsCount: 0,
         touched: false,
+        contactsTouched: false,
         editing: false,
         isNew: false,
         snapshot: null,
         
         init() {
-            // Sync initial values from DOM inputs using specific prefix
             const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
             if (nameInput) this.name = nameInput.value.trim();
             
@@ -186,46 +293,100 @@
             const webInput = document.querySelector(`textarea[name="${prefix}-website_urls_text"]`);
             if (webInput) this.websites = webInput.value;
 
-            const mfgInput = document.querySelector(`input[name="${prefix}-is_manufacturer"]`);
-            const suppInput = document.querySelector(`input[name="${prefix}-is_supplier"]`);
-            const authInput = document.querySelector(`input[name="${prefix}-is_author"]`);
+            // Read initial roles from checkboxes (scoped to this component)
+            const mfgCheckbox = this.$root.querySelector(`input[name="${prefix}-is_manufacturer"]`);
+            const supCheckbox = this.$root.querySelector(`input[name="${prefix}-is_supplier"]`);
             
-            // Detect if this is a new entity (no name yet)
             this.isNew = !this.name;
             
-            // For existing entities, sync from DOM; for new entities, keep defaults (all true)
             if (!this.isNew) {
-                if (mfgInput) this.isManufacturer = mfgInput.checked;
-                if (suppInput) this.isSupplier = suppInput.checked;
-                if (authInput) this.isAuthor = authInput.checked;
+                // For existing entities, read from checkboxes (Django sets checked attribute)
+                if (mfgCheckbox) {
+                    this.isManufacturer = mfgCheckbox.checked || mfgCheckbox.hasAttribute('checked');
+                }
+                if (supCheckbox) {
+                    this.isSupplier = supCheckbox.checked || supCheckbox.hasAttribute('checked');
+                }
             } else {
-                // Apply defaults to the checkboxes for new entities
-                if (mfgInput) mfgInput.checked = true;
-                if (suppInput) suppInput.checked = true;
-                if (authInput) authInput.checked = true;
+                // For new entities, default to available roles
+                const parent = this.$el.closest('.profile-form');
+                const formData = parent ? Alpine.$data(parent) : null;
+                if (formData && (formData.manufacturerCount > 0 || formData.supplierCount > 0)) {
+                    // If there are existing entities, only default to available roles
+                    this.isManufacturer = formData.manufacturerCount < 1;
+                    this.isSupplier = formData.supplierCount < 1;
+                } else {
+                    // First entity on profile OR no form data: default both to true
+                    this.isManufacturer = true;
+                    this.isSupplier = true;
+                }
             }
             
             this.$watch('deleted', () => {
-                this.$dispatch('update-counts'); 
+                window.dispatchEvent(new CustomEvent('update-counts')); 
             });
             
-            // Watch editing state to create snapshot when editing starts
+            this.$watch('isManufacturer', () => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+            
+            this.$watch('isSupplier', () => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+            
             this.$watch('editing', (value) => {
                 if (value && !this.snapshot) {
                     this.createSnapshot();
                 }
+                // Update counts when entity is saved (editing becomes false)
+                if (!value) {
+                    window.dispatchEvent(new CustomEvent('update-counts'));
+                }
             });
             
             this.updateContactCount();
+            
+            // Trigger count update after entity initialization
+            this.$nextTick(() => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
         },
 
-        get hasRole() {
-            return this.isManufacturer || this.isSupplier || this.isAuthor;
+        get canSelectManufacturer() {
+            const parent = this.$el.closest('.profile-form');
+            if (!parent) return true;
+            const formData = Alpine.$data(parent);
+            if (!formData) return true;
+            // For new entities: only allow if no manufacturer exists
+            // For existing entities: allow if no other manufacturer OR this entity is already the manufacturer
+            if (this.isNew) {
+                return formData.manufacturerCount < 1;
+            }
+            return formData.manufacturerCount < 1 || this.isManufacturer;
+        },
+
+        get canSelectSupplier() {
+            const parent = this.$el.closest('.profile-form');
+            if (!parent) return true;
+            const formData = Alpine.$data(parent);
+            if (!formData) return true;
+            // For new entities: only allow if no supplier exists
+            // For existing entities: allow if no other supplier OR this entity is already the supplier
+            if (this.isNew) {
+                return formData.supplierCount < 1;
+            }
+            return formData.supplierCount < 1 || this.isSupplier;
         },
 
         get hasErrors() {
             if (this.deleted) return false;
-            return !this.name || !this.email || !this.hasRole;
+            return !this.name || !this.email || !this.isValidEmail(this.email) || (!this.isManufacturer && !this.isSupplier) || this.activeContactsCount === 0;
+        },
+
+        isValidEmail(email) {
+            if (!email) return false;
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            return emailRegex.test(email);
         },
 
         createSnapshot() {
@@ -236,44 +397,99 @@
                 address: this.address,
                 websites: this.websites,
                 isManufacturer: this.isManufacturer,
-                isSupplier: this.isSupplier,
-                isAuthor: this.isAuthor
+                isSupplier: this.isSupplier
             };
         },
 
         saveEdit() {
             this.touched = true;
+            this.contactsTouched = true;
             
-            // Use browser native validation for name and email
             const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
             const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
             
-            // Check name
+            // Validate name
             if (nameInput && !this.name) {
+                nameInput.focus();
                 nameInput.reportValidity();
                 return;
             }
             
-            // Check email
-            if (emailInput && !this.email) {
-                emailInput.reportValidity();
-                return;
+            // Validate email - required
+            if (emailInput) {
+                // Sync Alpine value to DOM
+                emailInput.value = this.email || '';
+                
+                if (!this.email) {
+                    emailInput.setCustomValidity('Please enter an email address');
+                    emailInput.focus();
+                    emailInput.reportValidity();
+                    // Clear custom validity on input
+                    const clearValidity = () => {
+                        emailInput.setCustomValidity('');
+                        emailInput.removeEventListener('input', clearValidity);
+                    };
+                    emailInput.addEventListener('input', clearValidity);
+                    return;
+                }
+                
+                // Validate email format
+                if (!this.isValidEmail(this.email)) {
+                    emailInput.setCustomValidity('Please enter a valid email address (e.g., contact@example.com)');
+                    emailInput.focus();
+                    emailInput.reportValidity();
+                    // Clear custom validity on input
+                    const clearValidity = () => {
+                        emailInput.setCustomValidity('');
+                        emailInput.removeEventListener('input', clearValidity);
+                    };
+                    emailInput.addEventListener('input', clearValidity);
+                    return;
+                }
+                
+                // Clear any previous custom validity
+                emailInput.setCustomValidity('');
             }
             
-            // Check roles (no native validation for checkboxes, show inline message and scroll)
-            if (!this.hasRole) {
-                // Use $nextTick to ensure DOM is updated before scrolling
-                this.$nextTick(() => {
-                    const mfgCheckbox = document.querySelector(`input[name="${prefix}-is_manufacturer"]`);
-                    if (mfgCheckbox) {
-                        mfgCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        mfgCheckbox.focus();
+            // Validate at least one role is selected
+            if (!this.isManufacturer && !this.isSupplier) {
+                this.touched = true;
+                const roleSection = this.$root.querySelector('.role-selection');
+                if (roleSection) {
+                    roleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Find first checkbox to show tooltip
+                    const firstCheckbox = roleSection.querySelector('input[type="checkbox"]');
+                    if (firstCheckbox) {
+                        firstCheckbox.setCustomValidity('Please select at least one role (Manufacturer or Supplier)');
+                        firstCheckbox.focus();
+                        firstCheckbox.reportValidity();
+                        const clearValidity = () => {
+                            firstCheckbox.setCustomValidity('');
+                            firstCheckbox.removeEventListener('change', clearValidity);
+                        };
+                        firstCheckbox.addEventListener('change', clearValidity);
                     }
-                });
+                }
                 return;
             }
             
-            // Validate contact fields before saving
+            // CycloneDX requirement: at least one contact per entity
+            this.updateContactCount();
+            if (this.activeContactsCount === 0) {
+                const addContactBtn = this.$root.querySelector('.add-contact-btn');
+                if (addContactBtn) {
+                    addContactBtn.setCustomValidity('Please add at least one contact person for this entity');
+                    addContactBtn.focus();
+                    addContactBtn.reportValidity();
+                    const clearValidity = () => {
+                        addContactBtn.setCustomValidity('');
+                        addContactBtn.removeEventListener('click', clearValidity);
+                    };
+                    addContactBtn.addEventListener('click', clearValidity);
+                }
+                return;
+            }
+            
             const contactPrefix = `${prefix}-contacts`;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             let hasContactError = false;
@@ -290,13 +506,11 @@
                 const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
                 const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
                 
-                // Skip deleted/hidden contacts
                 if (isDeleted || isHidden) return;
                 
                 const contactNameValue = contactNameInput.value.trim();
                 const contactEmailValue = contactEmailInput ? contactEmailInput.value.trim() : '';
                 
-                // If name is filled but email is empty
                 if (contactNameValue && !contactEmailValue) {
                     contactEmailInput.setCustomValidity('Email is required for this contact');
                     contactEmailInput.reportValidity();
@@ -304,7 +518,6 @@
                     return;
                 }
                 
-                // If email is filled but format is invalid
                 if (contactEmailValue && !emailRegex.test(contactEmailValue)) {
                     contactEmailInput.setCustomValidity('Please enter a valid email address');
                     contactEmailInput.reportValidity();
@@ -312,7 +525,6 @@
                     return;
                 }
                 
-                // Clear any previous custom validity
                 if (contactEmailInput) {
                     contactEmailInput.setCustomValidity('');
                 }
@@ -322,7 +534,6 @@
                 return;
             }
             
-            // Remove empty contact rows before saving
             document.querySelectorAll(`input[name^="${contactPrefix}-"][name$="-name"]`).forEach(nameInput => {
                 const contactCard = nameInput.closest('.contact-card');
                 if (!contactCard) return;
@@ -335,7 +546,6 @@
                 const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
                 const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
                 
-                // If both name and email are empty, mark as deleted
                 if (!nameValue && !emailValue && !isDeleted) {
                     if (deleteInput) {
                         deleteInput.value = 'true';
@@ -346,7 +556,6 @@
                     contactCard.style.display = 'none';
                 }
                 
-                // Also remove required from any already deleted/hidden contacts
                 if (isDeleted || isHidden) {
                     contactCard.querySelectorAll('input[required]').forEach(input => {
                         input.removeAttribute('required');
@@ -358,12 +567,10 @@
             this.snapshot = null;
             this.editing = false;
             
-            // Update contact count after removing empty contacts
             this.$nextTick(() => this.updateContactCount());
         },
 
         cancelEdit() {
-            // Revert to snapshot if exists
             if (this.snapshot) {
                 this.name = this.snapshot.name;
                 this.email = this.snapshot.email;
@@ -372,20 +579,30 @@
                 this.websites = this.snapshot.websites;
                 this.isManufacturer = this.snapshot.isManufacturer;
                 this.isSupplier = this.snapshot.isSupplier;
-                this.isAuthor = this.snapshot.isAuthor;
             }
-            // If new entity with no saved data, remove it
             if (this.isNew) {
                 this.deleted = true;
+                document.querySelectorAll(`input[name^="${prefix}-"][required]`).forEach(input => {
+                    input.removeAttribute('required');
+                });
             }
             this.snapshot = null;
             this.editing = false;
             this.touched = false;
+            this.contactsTouched = false;
         },
 
         removeEntity() {
-             this.deleted = true;
-             this.editing = false;
+            const entityName = this.name || 'this entity';
+            const self = this;
+            window.showDeleteConfirmation(entityName, function() {
+                self.deleted = true;
+                self.editing = false;
+                document.querySelectorAll(`input[name^="${prefix}-"][required]`).forEach(input => {
+                    input.removeAttribute('required');
+                });
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
         },
         
         addContact() {
@@ -410,7 +627,6 @@
                      let count = 0;
                      cards.forEach(card => {
                          const deleteInput = card.querySelector('input[name$="-DELETE"]');
-                         // Count if no delete input found (shouldn't happen) or if it's not marked deleted
                          if (!deleteInput || deleteInput.value !== 'true') {
                              count++;
                          }
@@ -428,14 +644,12 @@
         email: '',
         
         init() {
-            // Sync from DOM inputs
             const nameInput = this.$el.querySelector('input[name$="-name"]');
             const emailInput = this.$el.querySelector('input[name$="-email"]');
             
             if (nameInput) {
                 this.name = nameInput.value.trim();
                 this.isNew = !this.name;
-                // Watch for changes
                 nameInput.addEventListener('input', () => {
                     this.name = nameInput.value.trim();
                 });
@@ -456,10 +670,8 @@
         },
         
         checkEmpty() {
-            // Auto-remove new empty contacts when user leaves the fields
             if (this.isNew && this.isEmpty) {
                 this.$nextTick(() => {
-                    // Check again after a short delay to allow for tab navigation
                     setTimeout(() => {
                         if (this.isEmpty && !this.$el.contains(document.activeElement)) {
                             this.removeContact();
@@ -472,6 +684,30 @@
         removeContact() {
             this.deleted = true;
             this.$dispatch('contact-removed');
+        }
+    }));
+
+    Alpine.data('authorEntry', () => ({
+        deleted: false,
+        name: '',
+        
+        init() {
+            const nameInput = this.$el.querySelector('input[name$="-name"]');
+            if (nameInput) {
+                this.name = nameInput.value || '';
+                nameInput.addEventListener('input', () => {
+                    this.name = nameInput.value;
+                });
+            }
+        },
+        
+        removeAuthor() {
+            const authorName = this.name || 'this author';
+            const self = this;
+            window.showDeleteConfirmation(authorName, function() {
+                self.deleted = true;
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
         }
     }));
     
@@ -511,10 +747,12 @@
                 
                 if (query) {
                     const nameMatch = profile.name?.toLowerCase().includes(query);
-                    const entityNameMatch = (profile.entities || []).some(e => 
-                        e.name?.toLowerCase().includes(query)
+                    const mfgMatch = profile.manufacturer?.name?.toLowerCase().includes(query);
+                    const supMatch = profile.supplier?.name?.toLowerCase().includes(query);
+                    const authorMatch = (profile.authors || []).some(a => 
+                        a.name?.toLowerCase().includes(query)
                     );
-                    matches = nameMatch || entityNameMatch;
+                    matches = nameMatch || mfgMatch || supMatch || authorMatch;
                 }
                 
                 return {...profile, hidden: !matches};
@@ -531,21 +769,18 @@
 
     initAlpineComponents();
 
-    /* Helper function for adding contacts dynamically */
     window.addContactRow = function(container, entityPrefix) {
     if (!container) return;
     const contactPrefix = `${entityPrefix}-contacts`;
     const entityCard = container.closest('.entity-card');
     if (!entityCard) return;
 
-    // Look for the total forms input - it could be directly in the contacts-list or in the entity card
     let totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
     if (!totalInput) {
         totalInput = entityCard.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
     }
     
     if (!totalInput) {
-        // Create the management form if it doesn't exist
         const mgmtDiv = document.createElement('div');
         mgmtDiv.innerHTML = `
             <input type="hidden" name="${contactPrefix}-TOTAL_FORMS" value="0" id="id_${contactPrefix}-TOTAL_FORMS">
@@ -592,25 +827,25 @@
                 <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
                 <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
                 <div class="row g-2 align-items-start">
-                    <div class="col-md-4">
+                    <div class="col-12 col-sm-6 col-md-4">
                         <div class="form-floating">
                             <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm" placeholder="Name" required title="Please enter the contact name">
                             <label class="text-muted small" for="id_${newPrefix}-name">Name *</label>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-sm-6 col-md-4">
                         <div class="form-floating">
                             <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm" placeholder="Email" required title="Please enter a valid email address">
                             <label class="text-muted small" for="id_${newPrefix}-email">Email *</label>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-10 col-sm-5 col-md-3">
                         <div class="form-floating">
                             <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm" placeholder="Phone">
                             <label class="text-muted small" for="id_${newPrefix}-phone">Phone</label>
                         </div>
                     </div>
-                    <div class="col-md-1 d-flex justify-content-end align-items-center pt-2">
+                    <div class="col-2 col-sm-1 d-flex justify-content-end align-items-center pt-2">
                         <button type="button" class="btn btn-icon btn-sm btn-outline-danger" @click="removeContact" title="Remove Contact">
                             <i class="fas fa-times"></i>
                         </button>
@@ -627,17 +862,120 @@
     totalInput.value = index + 1;
 };
 
-    // Reinitialize Alpine on HTMX content swaps
     document.body.addEventListener('htmx:afterSettle', function(event) {
         if (event.detail.target.id === 'contact-profiles-content') {
-            // Ensure Alpine components are registered
             initAlpineComponents();
-            // Initialize Alpine on the new content with slight delay for DOM stability
             requestAnimationFrame(() => {
                 if (window.Alpine) {
                     Alpine.initTree(event.detail.target);
                 }
+                // Initialize Bootstrap tooltips
+                initTooltips(event.detail.target);
             });
         }
     });
+
+    function initTooltips(container) {
+        const tooltipTriggerList = (container || document).querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.forEach(el => {
+            if (!bootstrap.Tooltip.getInstance(el)) {
+                new bootstrap.Tooltip(el);
+            }
+        });
+    }
+
+    // Initialize tooltips on page load
+    document.addEventListener('DOMContentLoaded', () => initTooltips());
+    
+    // Delete confirmation modal functionality
+    (function() {
+        let deleteCallback = null;
+        let bsModalInstance = null;
+        
+        function getModal() {
+            return document.getElementById('delete-confirmation-modal');
+        }
+        
+        function getModalInstance() {
+            const modal = getModal();
+            if (!modal) return null;
+            if (!bsModalInstance) {
+                bsModalInstance = new bootstrap.Modal(modal, {
+                    backdrop: 'static',
+                    keyboard: true
+                });
+            }
+            return bsModalInstance;
+        }
+        
+        window.showDeleteConfirmation = function(itemName, callback) {
+            const modal = getModal();
+            if (!modal) return;
+            
+            const itemNameEl = document.getElementById('delete-item-name');
+            if (itemNameEl) {
+                itemNameEl.textContent = itemName;
+            }
+            deleteCallback = callback;
+            
+            const instance = getModalInstance();
+            if (instance) {
+                instance.show();
+            }
+        };
+        
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'confirm-delete-btn') {
+                if (deleteCallback) {
+                    deleteCallback();
+                    deleteCallback = null;
+                }
+                const instance = getModalInstance();
+                if (instance) {
+                    instance.hide();
+                }
+            }
+        });
+        
+        document.addEventListener('hidden.bs.modal', function(e) {
+            if (e.target && e.target.id === 'delete-confirmation-modal') {
+                deleteCallback = null;
+            }
+        });
+    })();
 </script>
+{# Delete Confirmation Modal for Entity/Author #}
+<div class="modal fade"
+     id="delete-confirmation-modal"
+     tabindex="-1"
+     aria-labelledby="delete-confirmation-modal-label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-danger-subtle p-3 me-3">
+                        <i class="fas fa-exclamation-triangle text-danger fa-lg"></i>
+                    </div>
+                    <h5 class="modal-title" id="delete-confirmation-modal-label">Confirm Deletion</h5>
+                </div>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="mb-1">
+                    Are you sure you want to remove <strong id="delete-item-name"></strong>?
+                </p>
+                <p class="text-muted small mb-0">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash-alt me-1"></i> Remove
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

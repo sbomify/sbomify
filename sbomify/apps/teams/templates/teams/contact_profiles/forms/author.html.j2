@@ -1,20 +1,23 @@
 {% load widget_tweaks %}
-<div class="contact-card border-bottom"
-     x-data="contactEntry"
+<div class="author-card border-bottom"
+     x-data="authorEntry"
      x-show="!deleted"
-     x-transition:leave="transition ease-in duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0">
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100">
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-    <input type="hidden" name="{{ form.prefix }}-DELETE" x-model="deleted">
+    <input type="hidden"
+           name="{{ form.prefix }}-DELETE"
+           x-model="deleted"
+           value="">
     <div class="d-flex align-items-center py-2 px-3 gap-3">
-        {# Contact avatar #}
+        {# Author avatar #}
         <div class="flex-shrink-0">
-            <div class="rounded-circle d-flex align-items-center justify-content-center"
+            <div class="rounded-circle bg-purple-subtle d-flex align-items-center justify-content-center"
                  style="width: 36px;
                         height: 36px;
-                        background-color: #e0f2f1">
-                <i class="fas fa-user" style="color: #00897b;"></i>
+                        background-color: #e8def8">
+                <i class="fas fa-user-pen" style="color: #7c4dff;"></i>
             </div>
         </div>
         {# Name field #}
@@ -35,8 +38,8 @@
         <div class="flex-shrink-0">
             <button type="button"
                     class="btn btn-sm btn-link p-1"
-                    @click="removeContact"
-                    title="Remove contact">
+                    @click="removeAuthor"
+                    title="Remove author">
                 <i class="fas fa-trash-alt text-danger"></i>
             </button>
         </div>

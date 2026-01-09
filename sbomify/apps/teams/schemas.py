@@ -153,8 +153,23 @@ class ContactProfileContactSchema(BaseModel):
     order: int | None = None
 
 
+class AuthorContactSchema(BaseModel):
+    """Schema representing an author contact (CycloneDX aligned).
+
+    Authors are individuals, not organizations, and link directly to the profile.
+    """
+
+    name: str
+    email: str  # Required
+    phone: str | None = None
+    order: int | None = None
+
+
 class ContactEntitySchema(BaseModel):
-    """Schema for a contact entity (organization/company/individual)."""
+    """Schema for a contact entity (organization/company).
+
+    An entity can be a manufacturer, supplier, or both.
+    """
 
     id: str
     name: str  # Required
@@ -164,20 +179,19 @@ class ContactEntitySchema(BaseModel):
     website_urls: list[str] = Field(default_factory=list)
     is_manufacturer: bool = False
     is_supplier: bool = False
-    is_author: bool = False
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
     @model_validator(mode="after")
-    def validate_at_least_one_role(self):
-        if not (self.is_manufacturer or self.is_supplier or self.is_author):
-            raise ValueError("At least one role flag must be True")
+    def validate_entity_role(self):
+        if not (self.is_manufacturer or self.is_supplier):
+            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
         return self
 
 
 class ContactEntityCreateSchema(BaseModel):
-    """Schema for creating a contact entity."""
+    """Schema for creating a contact entity (CycloneDX aligned)."""
 
     name: str = Field(..., max_length=255, min_length=1)  # Required
     email: str = Field(..., max_length=255)  # Required
@@ -186,18 +200,17 @@ class ContactEntityCreateSchema(BaseModel):
     website_urls: list[str] = Field(default_factory=list)
     is_manufacturer: bool = False
     is_supplier: bool = False
-    is_author: bool = False
     contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_at_least_one_role(self):
-        if not (self.is_manufacturer or self.is_supplier or self.is_author):
-            raise ValueError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+    def validate_entity_role(self):
+        if not (self.is_manufacturer or self.is_supplier):
+            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
         return self
 
 
 class ContactEntityUpdateSchema(BaseModel):
-    """Schema for updating a contact entity."""
+    """Schema for updating a contact entity (CycloneDX aligned)."""
 
     id: str | None = None  # For identifying existing entity
     name: str | None = Field(default=None, max_length=255, min_length=1)
@@ -207,41 +220,38 @@ class ContactEntityUpdateSchema(BaseModel):
     website_urls: list[str] | None = None
     is_manufacturer: bool | None = None
     is_supplier: bool | None = None
-    is_author: bool | None = None
     contacts: list[ContactProfileContactSchema] | None = None
 
     @model_validator(mode="after")
     def validate_roles(self):
-        """Ensure at least one role flag is True after update.
+        """Ensure entity has a valid role after update.
 
-        For partial updates, we only validate when all role fields are provided.
-        If all three role flags are explicitly set to False in a single update,
-        we raise an error to prevent turning off all roles at once. The model's
-        clean() method will enforce final validation before saving.
+        For partial updates, we only validate when both role fields are provided.
         """
         # If no role fields are provided, no validation needed (partial update preserves existing)
-        if self.is_manufacturer is None and self.is_supplier is None and self.is_author is None:
+        if self.is_manufacturer is None and self.is_supplier is None:
             return self
 
-        # If all three role flags are provided and all are False, reject the update
+        # If both role flags are provided and both are False, reject the update
         if (
             self.is_manufacturer is not None
             and self.is_supplier is not None
-            and self.is_author is not None
-            and not (self.is_manufacturer or self.is_supplier or self.is_author)
+            and not (self.is_manufacturer or self.is_supplier)
         ):
-            raise ValueError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+            raise ValueError("At least one role (Manufacturer or Supplier) must be selected")
 
         return self
 
 
 class ContactProfileSchema(BaseModel):
-    """Schema for returning workspace contact profiles."""
+    """Schema for returning workspace contact profiles (CycloneDX aligned)."""
 
     id: str
     name: str
-    # New field for entity-based structure
+    # Entity-based structure (manufacturer and supplier)
     entities: list[ContactEntitySchema] = Field(default_factory=list)
+    # Authors (individuals, not organizations) - CycloneDX aligned
+    authors: list[AuthorContactSchema] = Field(default_factory=list)
     # Legacy fields for backward compatibility (populated from first entity)
     company: str | None = None
     supplier_name: str | None = None
@@ -257,11 +267,13 @@ class ContactProfileSchema(BaseModel):
 
 
 class ContactProfileCreateSchema(BaseModel):
-    """Schema for creating a workspace contact profile."""
+    """Schema for creating a workspace contact profile (CycloneDX aligned)."""
 
     name: str = Field(..., max_length=255, min_length=1)
-    # New field for entity-based creation
+    # Entity-based creation (manufacturer and supplier)
     entities: list[ContactEntityCreateSchema] | None = None
+    # Authors (individuals) - CycloneDX aligned
+    authors: list[AuthorContactSchema] = Field(default_factory=list)
     # Legacy fields for backward compatibility
     company: str | None = Field(default=None, max_length=255)
     supplier_name: str | None = Field(default=None, max_length=255)
@@ -275,11 +287,13 @@ class ContactProfileCreateSchema(BaseModel):
 
 
 class ContactProfileUpdateSchema(BaseModel):
-    """Schema for updating a workspace contact profile."""
+    """Schema for updating a workspace contact profile (CycloneDX aligned)."""
 
     name: str | None = Field(default=None, max_length=255, min_length=1)
-    # New field for entity-based updates - accepts both update (existing) and create (new) schemas
+    # Entity-based updates - accepts both update (existing) and create (new) schemas
     entities: list[ContactEntityUpdateSchema | ContactEntityCreateSchema] | None = None
+    # Authors (individuals) - CycloneDX aligned
+    authors: list[AuthorContactSchema] | None = None
     # Legacy fields for backward compatibility
     company: str | None = Field(default=None, max_length=255)
     supplier_name: str | None = Field(default=None, max_length=255)

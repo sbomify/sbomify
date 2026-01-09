@@ -17,6 +17,7 @@ from sbomify.apps.teams.apis import (
     update_contact_profile,
 )
 from sbomify.apps.teams.forms import (
+    AuthorContactFormSet,
     ContactEntityFormSet,
     ContactProfileContactFormSet,
     ContactProfileForm,
@@ -24,6 +25,7 @@ from sbomify.apps.teams.forms import (
 )
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import (
+    AuthorContactSchema,
     ContactEntityCreateSchema,
     ContactEntityUpdateSchema,
     ContactProfileContactSchema,
@@ -80,12 +82,15 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             profile = profile_schema.model_dump()
 
             entities = profile.get("entities", [])
+            authors = profile.get("authors", [])
             profile["entity_count"] = len(entities)
+            profile["author_count"] = len(authors)
             # Calculate total contact count across all entities
             total_contacts = sum(len(entity.get("contacts", [])) for entity in entities)
             profile["contact_count"] = total_contacts
-            # Get first entity for quick access
-            profile["first_entity"] = entities[0] if entities else None
+            # Get manufacturer and supplier entities
+            profile["manufacturer"] = next((e for e in entities if e.get("is_manufacturer")), None)
+            profile["supplier"] = next((e for e in entities if e.get("is_supplier")), None)
             profiles_list.append(profile)
 
         return render(
@@ -152,6 +157,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         entities_formset = ContactEntityFormSet(instance=profile, prefix="entities")
+        authors_formset = AuthorContactFormSet(instance=profile, prefix="authors")
 
         # Attach nested contact formsets to each entity form
         for entity_form in entities_formset:
@@ -168,6 +174,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "team": team,
                 "form": ContactProfileModelForm(instance=profile),
                 "entities_formset": entities_formset,
+                "authors_formset": authors_formset,
                 "profile": profile,
                 "is_create": profile is None,
             },
@@ -180,7 +187,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def _validate_form_and_formsets(
         self, request: HttpRequest, team_key: str, profile=None
-    ) -> tuple[dict, list[ContactEntityCreateSchema | ContactEntityUpdateSchema]]:
+    ) -> tuple[dict, list[ContactEntityCreateSchema | ContactEntityUpdateSchema], list[AuthorContactSchema]]:
         form = ContactProfileModelForm(request.POST, instance=profile)
         if not form.is_valid():
             raise ValidationError(form.errors.as_text())
@@ -191,12 +198,18 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         fallback_email = _get_team_owner_email(team)
 
         entities_formset = ContactEntityFormSet(request.POST, instance=profile, prefix="entities")
+        authors_formset = AuthorContactFormSet(request.POST, instance=profile, prefix="authors")
 
         if not entities_formset.is_valid():
             raise ValidationError(_format_formset_errors(entities_formset))
 
+        if not authors_formset.is_valid():
+            raise ValidationError(_format_formset_errors(authors_formset))
+
         entities_data = []
         is_update = profile is not None
+        manufacturer_count = 0
+        supplier_count = 0
 
         for entity_form in entities_formset:
             if entity_form.cleaned_data.get("DELETE"):
@@ -235,9 +248,27 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     )
                 )
 
+            # Validate at least one contact per entity (CycloneDX requirement)
+            entity_name = entity_form.cleaned_data.get("name", "Entity")
+            if not contacts_data:
+                raise ValidationError(f"'{entity_name}' must have at least one contact.")
+
             # Prepare entity schema
             entity_cleaned_data = entity_form.cleaned_data
             website_urls = entity_cleaned_data.get("website_urls_text", [])
+
+            is_manufacturer = entity_cleaned_data.get("is_manufacturer", False)
+            is_supplier = entity_cleaned_data.get("is_supplier", False)
+
+            # Validate single manufacturer/supplier constraint (CycloneDX aligned)
+            if is_manufacturer:
+                manufacturer_count += 1
+                if manufacturer_count > 1:
+                    raise ValidationError("A profile can have only one manufacturer entity (CycloneDX requirement).")
+            if is_supplier:
+                supplier_count += 1
+                if supplier_count > 1:
+                    raise ValidationError("A profile can have only one supplier entity (CycloneDX requirement).")
 
             schema_cls = ContactEntityUpdateSchema if is_update and entity_instance else ContactEntityCreateSchema
 
@@ -247,9 +278,8 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "phone": entity_cleaned_data.get("phone"),
                 "address": entity_cleaned_data.get("address"),
                 "website_urls": website_urls,
-                "is_manufacturer": entity_cleaned_data.get("is_manufacturer", False),
-                "is_supplier": entity_cleaned_data.get("is_supplier", False),
-                "is_author": entity_cleaned_data.get("is_author", False),
+                "is_manufacturer": is_manufacturer,
+                "is_supplier": is_supplier,
                 "contacts": contacts_data,
             }
 
@@ -258,14 +288,27 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             entities_data.append(schema_cls(**entity_payload))
 
-        if not entities_data:
-            raise ValidationError("At least one entity is required.")
+        # Process authors (CycloneDX aligned - individuals, not organizations)
+        authors_data = []
+        for author_form in authors_formset:
+            author_data = author_form.cleaned_data
+            if author_data.get("DELETE") or not author_data.get("name"):
+                continue
 
-        return form.cleaned_data, entities_data
+            authors_data.append(
+                AuthorContactSchema(
+                    name=author_data["name"],
+                    email=author_data.get("email") or fallback_email,
+                    phone=author_data.get("phone") or None,
+                    order=author_data.get("order", 0),
+                )
+            )
+
+        return form.cleaned_data, entities_data, authors_data
 
     def _create_profile(self, request: HttpRequest, team_key: str) -> HttpResponse:
         try:
-            form_data, entities = self._validate_form_and_formsets(request, team_key)
+            form_data, entities, authors = self._validate_form_and_formsets(request, team_key)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
@@ -273,6 +316,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             name=form_data["name"],
             is_default=form_data.get("is_default", False),
             entities=entities,
+            authors=authors,
         )
 
         status_code, result = create_contact_profile(request, team_key, payload)
@@ -287,12 +331,15 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         try:
-            form_data, entities = self._validate_form_and_formsets(request, team_key, profile=profile)
+            form_data, entities, authors = self._validate_form_and_formsets(request, team_key, profile=profile)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
         payload = ContactProfileUpdateSchema(
-            name=form_data["name"], is_default=form_data.get("is_default", False), entities=entities
+            name=form_data["name"],
+            is_default=form_data.get("is_default", False),
+            entities=entities,
+            authors=authors,
         )
 
         status_code, result = update_contact_profile(request, team_key, profile_id, payload)
@@ -315,10 +362,14 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Convert Pydantic model to dict
             profile = profile_schema.model_dump()
             entities = profile.get("entities", [])
+            authors = profile.get("authors", [])
             profile["entity_count"] = len(entities)
+            profile["author_count"] = len(authors)
             total_contacts = sum(len(entity.get("contacts", [])) for entity in entities)
             profile["contact_count"] = total_contacts
-            profile["first_entity"] = entities[0] if entities else None
+            # Get manufacturer and supplier entities
+            profile["manufacturer"] = next((e for e in entities if e.get("is_manufacturer")), None)
+            profile["supplier"] = next((e for e in entities if e.get("is_supplier")), None)
             profiles_list.append(profile)
 
         response = render(

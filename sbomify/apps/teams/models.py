@@ -356,11 +356,12 @@ class ContactProfile(models.Model):
 
 
 class ContactEntity(models.Model):
-    """Entity (Organization/Company/Individual) within a contact profile.
+    """Entity (Organization/Company) within a contact profile.
 
-    Represents an organization, company, or individual associated with a contact profile.
-    Each entity can have one or more roles (manufacturer, supplier, author) and contains
-    contact information and a list of contact persons.
+    Represents an organization or company associated with a contact profile.
+    An entity can be a manufacturer, supplier, or both (same entity fulfilling both roles).
+    Each profile can have at most one manufacturer and one supplier entity.
+    Each entity must have at least one contact for communication info.
     """
 
     class Meta:
@@ -377,16 +378,32 @@ class ContactEntity(models.Model):
     website_urls = models.JSONField(default=list, blank=True)
     is_manufacturer = models.BooleanField(default=False)
     is_supplier = models.BooleanField(default=False)
-    is_author = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        """Ensure at least one role flag is True."""
+        """Validate entity constraints."""
         from django.core.exceptions import ValidationError
 
-        if not (self.is_manufacturer or self.is_supplier or self.is_author):
-            raise ValidationError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+        if not (self.is_manufacturer or self.is_supplier):
+            raise ValidationError("At least one role (Manufacturer or Supplier) must be selected")
+
+        if self.is_manufacturer:
+            existing = ContactEntity.objects.filter(profile=self.profile, is_manufacturer=True).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError("A profile can have only one manufacturer entity")
+
+        if self.is_supplier:
+            existing = ContactEntity.objects.filter(profile=self.profile, is_supplier=True).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError("A profile can have only one supplier entity")
+
+    def clean_contacts(self):
+        """Validate that entity has at least one contact (CycloneDX requirement)."""
+        from django.core.exceptions import ValidationError
+
+        if self.pk and not self.contacts.exists():
+            raise ValidationError("Each organization must have at least one contact")
 
     def save(self, *args, **kwargs):
         """Override save to ensure validation is always called."""
@@ -419,3 +436,28 @@ class ContactProfileContact(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.entity_id})"
+
+
+class AuthorContact(models.Model):
+    """Author contact information linked directly to a contact profile.
+
+    Represents an individual author of an SBOM (CycloneDX aligned).
+    Authors are individuals, not organizations, so they link directly to the profile
+    rather than through an entity.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_author_contacts"
+        unique_together = ("profile", "name", "email")
+        ordering = ["order", "name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="authors")
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.profile_id})"

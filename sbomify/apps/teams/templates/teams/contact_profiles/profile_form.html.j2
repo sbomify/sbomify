@@ -1,7 +1,8 @@
 {% load widget_tweaks %}
 <div class="profile-form mt-4"
-     x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
-     x-init="initForm()">
+     x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}', '{{ authors_formset.prefix|escapejs }}')"
+     x-init="initForm()"
+     @update-counts.window="updateCounts()">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="mb-0">
             {% if is_create %}
@@ -25,12 +26,19 @@
                 <div class="row g-4">
                     <div class="col-md-8">
                         <label class="form-label fw-bold">Profile Name *</label>
-                        {{ form.name|add_class:"form-control form-control-lg"|attr:"placeholder:e.g., Default Profile, Engineering Team"|attr:"required:required" }}
-                        <div class="form-text">A descriptive name for this collection of contacts.</div>
-                        {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>{% endif %}
+                        {{ form.name|add_class:"form-control form-control-lg"|attr:"placeholder:e.g., Default Profile, Engineering Team"|attr:"required:required"|attr:"title:A unique name to identify this contact profile" }}
+                        <div class="form-text">
+                            A descriptive name for this collection of contacts (e.g., "Default Profile", "Security Team").
+                        </div>
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback d-block">
+                                <i class="fas fa-exclamation-circle me-1"></i>{{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
                     </div>
                     <div class="col-md-4 d-flex align-items-center">
-                        <div class="form-check form-switch d-flex align-items-center gap-2 mb-0 pt-2">
+                        <div class="form-check form-switch d-flex align-items-center gap-2 mb-0 pt-2"
+                             title="Default profile will be automatically selected when creating new SBOMs">
                             {{ form.is_default|add_class:"form-check-input"|attr:"role:button" }}
                             <label class="form-check-label fw-bold cursor-pointer"
                                    for="{{ form.is_default.id_for_label }}">Set as Default Profile</label>
@@ -39,39 +47,82 @@
                 </div>
             </div>
         </div>
-        {# Entities Section #}
+        {# Entities Section (Manufacturer & Supplier) #}
         <div class="entities-section mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="text-uppercase text-muted fw-bold small ls-1 mb-0">Entities (Organizations / Suppliers / Authors)</h6>
+                <h6 class="text-uppercase text-muted fw-bold small ls-1 mb-0">
+                    <i class="fas fa-building me-2"></i>Entities (Manufacturer / Supplier)
+                </h6>
                 <button type="button"
                         class="btn btn-primary btn-sm rounded-pill"
-                        @click="addEntity">
+                        @click="addEntity"
+                        :disabled="manufacturerCount >= 1 && supplierCount >= 1"
+                        :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : (manufacturerCount >= 1 ? 'Add a supplier entity (manufacturer role is already assigned)' : (supplierCount >= 1 ? 'Add a manufacturer entity (supplier role is already assigned)' : 'Add an entity as manufacturer, supplier, or both'))">
                     <i class="fas fa-plus me-1"></i> Add Entity
                 </button>
             </div>
+            <p class="text-muted small mb-3">
+                <i class="fas fa-info-circle me-1"></i>
+                Each profile can have one manufacturer and one supplier. A single entity can fulfill both roles.
+            </p>
             {{ entities_formset.management_form }}
             <div id="entities-container">
-                {# Loop through existing forms in the formset #}
                 {% for entity_form in entities_formset %}
-                    {# Check if this form has a nested contact formset attached #}
-                    {# In the view we need to ensure we attach 'contacts_formset' to each entity form #}
                     {% include "teams/contact_profiles/forms/entity.html.j2" with form=entity_form contacts_formset=entity_form.contacts_formset %}
                 {% endfor %}
             </div>
-            {# Empty State #}
-            <div class="text-center p-5 bg-light rounded-3 border border-dashed"
+            {# Empty State for Entities #}
+            <div class="text-center p-4 bg-light rounded-3 border border-dashed"
                  x-show="visibleEntitiesCount === 0"
                  x-transition>
                 <div class="mb-3 text-muted opacity-50">
-                    <i class="fas fa-building fa-3x"></i>
+                    <i class="fas fa-building fa-2x"></i>
                 </div>
-                <h6>No Entities Added</h6>
-                <p class="text-muted small mb-3">
-                    A contact profile must have at least one entity (Manufacturer, Supplier, or Author).
-                </p>
+                <h6 class="mb-2">No Entities Added</h6>
+                <p class="text-muted small mb-3">Add an entity as manufacturer, supplier, or both.</p>
                 <button type="button"
                         class="btn btn-outline-primary btn-sm"
-                        @click="addEntity">Add First Entity</button>
+                        @click="addEntity"
+                        title="Add an entity as manufacturer, supplier, or both">
+                    <i class="fas fa-plus me-1"></i> Add Entity
+                </button>
+            </div>
+        </div>
+        {# Authors Section #}
+        <div class="authors-section mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="text-uppercase text-muted fw-bold small ls-1 mb-0">
+                    <i class="fas fa-user-edit me-2"></i>Authors
+                </h6>
+                <button type="button"
+                        class="btn btn-primary btn-sm rounded-pill"
+                        @click="addAuthor"
+                        title="Add an individual author of the SBOM">
+                    <i class="fas fa-plus me-1"></i> Add Author
+                </button>
+            </div>
+            {{ authors_formset.management_form }}
+            <div id="authors-container"
+                 class="card shadow-sm"
+                 x-show="visibleAuthorsCount > 0">
+                {% for author_form in authors_formset %}
+                    {% include "teams/contact_profiles/forms/author.html.j2" with form=author_form %}
+                {% endfor %}
+            </div>
+            {# Empty State for Authors #}
+            <div class="text-center py-4 bg-light rounded-3"
+                 x-show="visibleAuthorsCount === 0"
+                 x-transition>
+                <div class="text-muted opacity-50 mb-2">
+                    <i class="fas fa-user-edit fa-2x"></i>
+                </div>
+                <p class="text-muted small mb-3">No authors added yet.</p>
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        @click="addAuthor"
+                        title="Add an individual author">
+                    <i class="fas fa-plus me-1"></i> Add Author
+                </button>
             </div>
         </div>
         {# Action Buttons #}
@@ -89,8 +140,10 @@
         <template id="entity-template">
             {% include "teams/contact_profiles/forms/entity.html.j2" with form=entities_formset.empty_form contacts_formset=None %}
         </template>
+        <template id="author-template">
+            {% include "teams/contact_profiles/forms/author.html.j2" with form=authors_formset.empty_form %}
+        </template>
         <template id="contact-template">
-            {# Note: we use a placeholder form here, specialized logic in JS will adjust prefixes #}
             <div class="contact-template-placeholder"></div>
         </template>
     </form>

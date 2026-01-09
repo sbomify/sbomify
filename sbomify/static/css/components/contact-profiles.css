@@ -162,3 +162,56 @@ textarea {
 .entity-editor-content h6 {
   color: #1f2937;
 }
+
+/* Responsive styles */
+@media (max-width: 575.98px) {
+  .entity-card .card-body {
+    padding: 0.75rem !important;
+  }
+  
+  .entity-editor-content {
+    padding: 1rem !important;
+  }
+  
+  .entity-editor-content .p-4 {
+    padding: 1rem !important;
+  }
+  
+  .avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1rem;
+  }
+  
+  .contact-card .card-body {
+    padding: 0.75rem !important;
+  }
+  
+  .contacts-list {
+    padding: 0.75rem !important;
+  }
+  
+  .service-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  /* Stack buttons on very small screens */
+  .entity-editor-content .d-flex.justify-content-end.gap-2 {
+    flex-direction: column;
+  }
+  
+  .entity-editor-content .d-flex.justify-content-end.gap-2 button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .entity-editor-content .form-check {
+    padding-left: 1.5em;
+  }
+  
+  .entity-editor-content .d-flex.gap-4 {
+    gap: 1rem !important;
+  }
+}

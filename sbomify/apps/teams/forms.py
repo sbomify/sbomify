@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import AuthorContact, ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
 class AddTeamForm(forms.ModelForm):
@@ -216,7 +216,23 @@ class ContactProfileModelForm(forms.ModelForm):
 
 
 class ContactEntityModelForm(forms.ModelForm):
-    """Form for ContactEntity - contains organization/company details."""
+    """Form for ContactEntity - contains organization/company details.
+
+    An entity can be a manufacturer, supplier, or both.
+    At least one role must be selected.
+    """
+
+    is_manufacturer = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    is_supplier = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
 
     website_urls_text = forms.CharField(
         label="Website URLs",
@@ -240,7 +256,6 @@ class ContactEntityModelForm(forms.ModelForm):
             "address",
             "is_manufacturer",
             "is_supplier",
-            "is_author",
         ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
@@ -249,25 +264,25 @@ class ContactEntityModelForm(forms.ModelForm):
             "address": forms.Textarea(
                 attrs={"class": "form-control", "rows": 2, "placeholder": "Street, City, Country"}
             ),
-            "is_manufacturer": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-            "is_supplier": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-            "is_author": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if self.instance and self.instance.pk and self.instance.website_urls:
-            self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
+        if self.instance and self.instance.pk:
+            if self.instance.website_urls:
+                self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
+            # Set initial roles from instance
+            self.fields["is_manufacturer"].initial = self.instance.is_manufacturer
+            self.fields["is_supplier"].initial = self.instance.is_supplier
 
     def clean(self):
         cleaned_data = super().clean()
-        is_manufacturer = cleaned_data.get("is_manufacturer")
-        is_supplier = cleaned_data.get("is_supplier")
-        is_author = cleaned_data.get("is_author")
+        is_manufacturer = cleaned_data.get("is_manufacturer", False)
+        is_supplier = cleaned_data.get("is_supplier", False)
 
-        if not (is_manufacturer or is_supplier or is_author):
-            raise forms.ValidationError("At least one role (Manufacturer, Supplier, or Author) must be selected.")
+        if not is_manufacturer and not is_supplier:
+            raise forms.ValidationError("At least one role (Manufacturer or Supplier) must be selected.")
 
         return cleaned_data
 
@@ -280,6 +295,8 @@ class ContactEntityModelForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.website_urls = self.cleaned_data.get("website_urls_text", [])
+        instance.is_manufacturer = self.cleaned_data.get("is_manufacturer", False)
+        instance.is_supplier = self.cleaned_data.get("is_supplier", False)
         if commit:
             instance.save()
         return instance
@@ -313,6 +330,34 @@ ContactEntityFormSet = inlineformset_factory(
     ContactProfile,
     ContactEntity,
     form=ContactEntityModelForm,
+    extra=0,
+    can_delete=True,
+)
+
+
+class AuthorContactForm(forms.ModelForm):
+    """Form for AuthorContact - individual author contacts (CycloneDX aligned).
+
+    Authors are individuals, not organizations.
+    """
+
+    class Meta:
+        model = AuthorContact
+        fields = ["name", "email", "phone"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name", "required": True}),
+            "email": forms.EmailInput(
+                attrs={"class": "form-control", "placeholder": "email@example.com", "required": True}
+            ),
+            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
+        }
+
+
+# Formset for author contacts linked directly to a profile (CycloneDX aligned)
+AuthorContactFormSet = inlineformset_factory(
+    ContactProfile,
+    AuthorContact,
+    form=AuthorContactForm,
     extra=0,
     can_delete=True,
 )

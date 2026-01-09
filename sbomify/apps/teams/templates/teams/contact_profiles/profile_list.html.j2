@@ -1,15 +1,13 @@
 {% load static %}
 <div x-data="contactProfileList" x-init="init()">
-    {# Store profiles data as JSON script for JavaScript #}
     {{ profiles|json_script:"profiles-data" }}
-    {# Search Section #}
     {% if profiles %}
         <div class="mb-3">
             <label for="search-input" class="form-label small text-muted mb-1">Search</label>
             <input type="text"
                    id="search-input"
                    class="form-control"
-                   placeholder="Search by profile name or entity name..."
+                   placeholder="Search by profile name..."
                    x-model="searchQuery"
                    @input="filterProfiles()">
         </div>
@@ -31,11 +29,9 @@
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th scope="col" style="width: 35%;">Name</th>
-                        <th scope="col" style="width: 15%;">Entities</th>
-                        <th scope="col" style="width: 15%;">Contacts</th>
-                        <th scope="col" style="width: 15%;">Status</th>
-                        <th scope="col" class="text-end">Actions</th>
+                        <th scope="col">Name</th>
+                        <th scope="col" style="width: 120px;">Status</th>
+                        <th scope="col" class="text-end" style="width: 160px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -44,22 +40,6 @@
                             <td>
                                 <div class="fw-semibold" x-text="profile.name"></div>
                                 <div class="small text-muted" x-text="formatDate(profile.created_at)"></div>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-light text-dark border me-2"
-                                          x-text="profile.entity_count || 0"></span>
-                                    <i class="fas fa-building text-muted small"
-                                       title="Entities"
-                                       x-show="(profile.entity_count || 0) > 0"></i>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-light text-dark border me-2"
-                                          x-text="profile.contact_count || 0"></span>
-                                    <i class="fas fa-user-friends text-muted small" title="Total Contacts"></i>
-                                </div>
                             </td>
                             <td>
                                 <span class="badge bg-success-subtle text-success"
@@ -99,46 +79,32 @@
                             x-transition:leave="transition ease-in duration-150"
                             x-transition:leave-start="opacity-100"
                             x-transition:leave-end="opacity-0">
-                            <td colspan="5" class="bg-light p-4">
+                            <td colspan="3" class="bg-light p-4">
                                 <div class="row g-3">
-                                    <template x-if="!profile.entities || profile.entities.length === 0">
-                                        <div class="col-12">
-                                            <div class="text-center text-muted py-3">
-                                                <i class="fas fa-building fa-2x mb-2 opacity-50"></i>
-                                                <p class="mb-0">No entities in this profile</p>
-                                            </div>
-                                        </div>
-                                    </template>
-                                    <template x-for="entity in (profile.entities || [])">
-                                        <div class="col-md-6 col-lg-4">
+                                    {# Manufacturer Card #}
+                                    <template x-if="profile.manufacturer">
+                                        <div class="col-md-6">
                                             <div class="card h-100 border">
+                                                <div class="card-header bg-primary-subtle">
+                                                    <h6 class="mb-0 fw-bold text-primary">Manufacturer</h6>
+                                                </div>
                                                 <div class="card-body">
-                                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                                        <h6 class="card-title mb-0 fw-bold" x-text="entity.name"></h6>
-                                                    </div>
-                                                    <div class="d-flex gap-1 flex-wrap mb-2">
-                                                        <span class="badge bg-light text-secondary border small"
-                                                              x-show="entity.is_manufacturer">Manufacturer</span>
-                                                        <span class="badge bg-light text-secondary border small"
-                                                              x-show="entity.is_supplier">Supplier</span>
-                                                        <span class="badge bg-light text-secondary border small"
-                                                              x-show="entity.is_author">Author</span>
-                                                    </div>
+                                                    <h6 class="card-title mb-2" x-text="profile.manufacturer.name"></h6>
                                                     <div class="small text-muted mb-2">
-                                                        <div x-show="entity.email">
+                                                        <div x-show="profile.manufacturer.email">
                                                             <i class="fas fa-envelope me-1"></i>
-                                                            <span x-text="entity.email"></span>
+                                                            <span x-text="profile.manufacturer.email"></span>
                                                         </div>
-                                                        <div x-show="entity.phone" class="mt-1">
+                                                        <div x-show="profile.manufacturer.phone" class="mt-1">
                                                             <i class="fas fa-phone me-1"></i>
-                                                            <span x-text="entity.phone"></span>
+                                                            <span x-text="profile.manufacturer.phone"></span>
                                                         </div>
                                                     </div>
-                                                    <template x-if="entity.contacts && entity.contacts.length > 0">
+                                                    <template x-if="profile.manufacturer.contacts && profile.manufacturer.contacts.length > 0">
                                                         <div class="mt-2">
                                                             <small class="text-muted fw-bold">Contacts:</small>
                                                             <ul class="list-unstyled small mb-0 mt-1">
-                                                                <template x-for="contact in entity.contacts">
+                                                                <template x-for="contact in profile.manufacturer.contacts">
                                                                     <li class="mb-1">
                                                                         <i class="fas fa-user me-1 text-muted"></i>
                                                                         <span x-text="contact.name"></span>
@@ -148,13 +114,80 @@
                                                             </ul>
                                                         </div>
                                                     </template>
-                                                    <template x-if="!entity.contacts || entity.contacts.length === 0">
-                                                        <div class="small text-muted mt-2">
-                                                            <i class="fas fa-info-circle me-1"></i>
-                                                            No contacts
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    {# Supplier Card #}
+                                    <template x-if="profile.supplier">
+                                        <div class="col-md-6">
+                                            <div class="card h-100 border">
+                                                <div class="card-header bg-success-subtle">
+                                                    <h6 class="mb-0 fw-bold text-success">Supplier</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <h6 class="card-title mb-2" x-text="profile.supplier.name"></h6>
+                                                    <div class="small text-muted mb-2">
+                                                        <div x-show="profile.supplier.email">
+                                                            <i class="fas fa-envelope me-1"></i>
+                                                            <span x-text="profile.supplier.email"></span>
+                                                        </div>
+                                                        <div x-show="profile.supplier.phone" class="mt-1">
+                                                            <i class="fas fa-phone me-1"></i>
+                                                            <span x-text="profile.supplier.phone"></span>
+                                                        </div>
+                                                    </div>
+                                                    <template x-if="profile.supplier.contacts && profile.supplier.contacts.length > 0">
+                                                        <div class="mt-2">
+                                                            <small class="text-muted fw-bold">Contacts:</small>
+                                                            <ul class="list-unstyled small mb-0 mt-1">
+                                                                <template x-for="contact in profile.supplier.contacts">
+                                                                    <li class="mb-1">
+                                                                        <i class="fas fa-user me-1 text-muted"></i>
+                                                                        <span x-text="contact.name"></span>
+                                                                        <span class="text-muted ms-1" x-text="`(${contact.email})`"></span>
+                                                                    </li>
+                                                                </template>
+                                                            </ul>
                                                         </div>
                                                     </template>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    {# Authors Card #}
+                                    <template x-if="profile.authors && profile.authors.length > 0">
+                                        <div class="col-12">
+                                            <div class="card border">
+                                                <div class="card-header bg-info-subtle">
+                                                    <h6 class="mb-0 fw-bold text-info">
+                                                        <i class="fas fa-user-edit me-2"></i>Authors
+                                                    </h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row g-2">
+                                                        <template x-for="author in profile.authors">
+                                                            <div class="col-md-4 col-lg-3">
+                                                                <div class="d-flex align-items-center gap-2 p-2 bg-light rounded">
+                                                                    <i class="fas fa-user text-muted"></i>
+                                                                    <div class="small">
+                                                                        <div class="fw-semibold" x-text="author.name"></div>
+                                                                        <div class="text-muted" x-text="author.email"></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    {# Empty State #}
+                                    <template x-if="!profile.manufacturer && !profile.supplier && (!profile.authors || profile.authors.length === 0)">
+                                        <div class="col-12">
+                                            <div class="text-center text-muted py-3">
+                                                <i class="fas fa-address-card fa-2x mb-2 opacity-50"></i>
+                                                <p class="mb-0">No entities or authors in this profile</p>
                                             </div>
                                         </div>
                                     </template>
