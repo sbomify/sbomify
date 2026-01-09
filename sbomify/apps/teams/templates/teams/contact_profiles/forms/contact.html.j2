@@ -13,16 +13,16 @@
             {# Name Field #}
             <div class="col-md-4">
                 <div class="form-floating">
-                    {{ form.name|add_class:"form-control form-control-sm"|attr:"placeholder:Name"|attr:"required:required" }}
-                    <label class="text-muted small">{{ form.name.label }} *</label>
+                    {{ form.name|add_class:"form-control form-control-sm"|attr:"placeholder:Name"|attr:"required:required"|attr:"title:Please enter the contact name" }}
+                    <label class="text-muted small" for="{{ form.name.id_for_label }}">{{ form.name.label }} *</label>
                 </div>
                 {% if form.name.errors %}<div class="invalid-feedback d-block small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
             </div>
             {# Email Field #}
             <div class="col-md-4">
                 <div class="form-floating">
-                    {{ form.email|add_class:"form-control form-control-sm"|attr:"type:email"|attr:"placeholder:Email"|attr:"required:required" }}
-                    <label class="text-muted small">{{ form.email.label }} *</label>
+                    {{ form.email|add_class:"form-control form-control-sm"|attr:"type:email"|attr:"placeholder:Email"|attr:"required:required"|attr:"title:Please enter a valid email address" }}
+                    <label class="text-muted small" for="{{ form.email.id_for_label }}">{{ form.email.label }} *</label>
                 </div>
                 {% if form.email.errors %}<div class="invalid-feedback d-block small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
             </div>
@@ -30,13 +30,13 @@
             <div class="col-md-3">
                 <div class="form-floating">
                     {{ form.phone|add_class:"form-control form-control-sm"|attr:"placeholder:Phone" }}
-                    <label class="text-muted small">{{ form.phone.label }}</label>
+                    <label class="text-muted small" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
                 </div>
             </div>
             {# Remove Button #}
             <div class="col-md-1 d-flex justify-content-end align-items-center pt-2">
                 <button type="button"
-                        class="btn btn-icon btn-sm btn-ghost-danger"
+                        class="btn btn-icon btn-sm btn-outline-danger"
                         @click="removeContact"
                         title="Remove Contact">
                     <i class="fas fa-times"></i>

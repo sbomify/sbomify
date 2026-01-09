@@ -1,14 +1,14 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/contact-profiles.css' %}">
-<div class="card">
+<div class="card shadow-md">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">Contact Profiles</h5>
         <button class="btn btn-primary btn-sm"
                 hx-get="{% url 'teams:contact_profiles_form' team.key %}"
                 hx-target="#contact-profiles-content"
                 hx-swap="innerHTML">
-            <i class="fa-solid fa-plus me-1"></i>
+            <i class="fas fa-plus me-1"></i>
             Add Profile
         </button>
     </div>
@@ -17,8 +17,11 @@
              hx-get="{% url 'teams:contact_profiles_list' team.key %}"
              hx-trigger="load, refreshProfileList from:body"
              hx-swap="innerHTML">
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-spinner fa-spin me-2"></i>Loading contact profiles...
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading contact profiles...</p>
             </div>
         </div>
     </div>
@@ -103,6 +106,43 @@
         
         submitForm(e) {
             const form = this.$el.querySelector('form');
+            
+            // Remove required attributes from all deleted/hidden contacts before validation
+            document.querySelectorAll('.contact-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isHidden = card.style.display === 'none' || !card.offsetParent;
+                
+                if (isDeleted || isHidden) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            // Mark all entity forms as touched to show validation errors
+            document.querySelectorAll('.entity-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted) {
+                    alpineData.touched = true;
+                }
+            });
+            
+            // Check for entity-level validation (roles)
+            const hasRoleErrors = Array.from(document.querySelectorAll('.entity-card')).some(card => {
+                const alpineData = Alpine.$data(card);
+                return alpineData && !alpineData.deleted && !alpineData.hasRole;
+            });
+            
+            if (hasRoleErrors) {
+                // Find first entity with role error and scroll to it
+                const errorEntity = document.querySelector('.entity-card');
+                if (errorEntity) {
+                    errorEntity.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+            
             if (form.reportValidity()) {
                 htmx.trigger(form, 'htmx:submit');
             }
@@ -119,9 +159,9 @@
         phone: '',
         address: '',
         websites: '',
-        isManufacturer: false,
-        isSupplier: false,
-        isAuthor: false,
+        isManufacturer: true,
+        isSupplier: true,
+        isAuthor: true,
         deleted: false,
         activeContactsCount: 0,
         touched: false,
@@ -130,33 +170,40 @@
         snapshot: null,
         
         init() {
-            // Sync initial values from DOM inputs if present
-            const nameInput = this.$el.querySelector(`input[name$="-name"]`);
-            if (nameInput) this.name = nameInput.value;
+            // Sync initial values from DOM inputs using specific prefix
+            const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
+            if (nameInput) this.name = nameInput.value.trim();
             
-            const emailInput = this.$el.querySelector(`input[name$="-email"]`);
-            if (emailInput) this.email = emailInput.value;
+            const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
+            if (emailInput) this.email = emailInput.value.trim();
 
-            const phoneInput = this.$el.querySelector(`input[name$="-phone"]`);
-            if (phoneInput) this.phone = phoneInput.value;
+            const phoneInput = document.querySelector(`input[name="${prefix}-phone"]`);
+            if (phoneInput) this.phone = phoneInput.value.trim();
 
-            const addressInput = this.$el.querySelector(`input[name$="-address"]`);
-            if (addressInput) this.address = addressInput.value;
+            const addressInput = document.querySelector(`textarea[name="${prefix}-address"]`);
+            if (addressInput) this.address = addressInput.value.trim();
 
-            const webInput = this.$el.querySelector(`textarea[name$="-website_urls_text"]`);
+            const webInput = document.querySelector(`textarea[name="${prefix}-website_urls_text"]`);
             if (webInput) this.websites = webInput.value;
 
-            const mfgInput = this.$el.querySelector(`input[name$="-is_manufacturer"]`);
-            if (mfgInput) this.isManufacturer = mfgInput.checked;
-
-            const suppInput = this.$el.querySelector(`input[name$="-is_supplier"]`);
-            if (suppInput) this.isSupplier = suppInput.checked;
-
-            const authInput = this.$el.querySelector(`input[name$="-is_author"]`);
-            if (authInput) this.isAuthor = authInput.checked;
+            const mfgInput = document.querySelector(`input[name="${prefix}-is_manufacturer"]`);
+            const suppInput = document.querySelector(`input[name="${prefix}-is_supplier"]`);
+            const authInput = document.querySelector(`input[name="${prefix}-is_author"]`);
             
             // Detect if this is a new entity (no name yet)
             this.isNew = !this.name;
+            
+            // For existing entities, sync from DOM; for new entities, keep defaults (all true)
+            if (!this.isNew) {
+                if (mfgInput) this.isManufacturer = mfgInput.checked;
+                if (suppInput) this.isSupplier = suppInput.checked;
+                if (authInput) this.isAuthor = authInput.checked;
+            } else {
+                // Apply defaults to the checkboxes for new entities
+                if (mfgInput) mfgInput.checked = true;
+                if (suppInput) suppInput.checked = true;
+                if (authInput) authInput.checked = true;
+            }
             
             this.$watch('deleted', () => {
                 this.$dispatch('update-counts'); 
@@ -177,7 +224,8 @@
         },
 
         get hasErrors() {
-             return !this.deleted && (!this.name || !this.email || !this.hasRole);
+            if (this.deleted) return false;
+            return !this.name || !this.email || !this.hasRole;
         },
 
         createSnapshot() {
@@ -195,12 +243,123 @@
 
         saveEdit() {
             this.touched = true;
-            if (this.hasErrors) {
+            
+            // Use browser native validation for name and email
+            const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
+            const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
+            
+            // Check name
+            if (nameInput && !this.name) {
+                nameInput.reportValidity();
                 return;
             }
+            
+            // Check email
+            if (emailInput && !this.email) {
+                emailInput.reportValidity();
+                return;
+            }
+            
+            // Check roles (no native validation for checkboxes, show inline message and scroll)
+            if (!this.hasRole) {
+                // Use $nextTick to ensure DOM is updated before scrolling
+                this.$nextTick(() => {
+                    const mfgCheckbox = document.querySelector(`input[name="${prefix}-is_manufacturer"]`);
+                    if (mfgCheckbox) {
+                        mfgCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        mfgCheckbox.focus();
+                    }
+                });
+                return;
+            }
+            
+            // Validate contact fields before saving
+            const contactPrefix = `${prefix}-contacts`;
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            let hasContactError = false;
+            
+            document.querySelectorAll(`input[name^="${contactPrefix}-"][name$="-name"]`).forEach(contactNameInput => {
+                if (hasContactError) return;
+                
+                const contactCard = contactNameInput.closest('.contact-card');
+                if (!contactCard) return;
+                
+                const contactEmailInput = contactCard.querySelector('input[name$="-email"]');
+                const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
+                
+                // Skip deleted/hidden contacts
+                if (isDeleted || isHidden) return;
+                
+                const contactNameValue = contactNameInput.value.trim();
+                const contactEmailValue = contactEmailInput ? contactEmailInput.value.trim() : '';
+                
+                // If name is filled but email is empty
+                if (contactNameValue && !contactEmailValue) {
+                    contactEmailInput.setCustomValidity('Email is required for this contact');
+                    contactEmailInput.reportValidity();
+                    hasContactError = true;
+                    return;
+                }
+                
+                // If email is filled but format is invalid
+                if (contactEmailValue && !emailRegex.test(contactEmailValue)) {
+                    contactEmailInput.setCustomValidity('Please enter a valid email address');
+                    contactEmailInput.reportValidity();
+                    hasContactError = true;
+                    return;
+                }
+                
+                // Clear any previous custom validity
+                if (contactEmailInput) {
+                    contactEmailInput.setCustomValidity('');
+                }
+            });
+            
+            if (hasContactError) {
+                return;
+            }
+            
+            // Remove empty contact rows before saving
+            document.querySelectorAll(`input[name^="${contactPrefix}-"][name$="-name"]`).forEach(nameInput => {
+                const contactCard = nameInput.closest('.contact-card');
+                if (!contactCard) return;
+                
+                const emailInput = contactCard.querySelector('input[name$="-email"]');
+                const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                
+                const nameValue = nameInput.value.trim();
+                const emailValue = emailInput ? emailInput.value.trim() : '';
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
+                
+                // If both name and email are empty, mark as deleted
+                if (!nameValue && !emailValue && !isDeleted) {
+                    if (deleteInput) {
+                        deleteInput.value = 'true';
+                    }
+                    contactCard.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                    contactCard.style.display = 'none';
+                }
+                
+                // Also remove required from any already deleted/hidden contacts
+                if (isDeleted || isHidden) {
+                    contactCard.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
             this.isNew = false;
             this.snapshot = null;
             this.editing = false;
+            
+            // Update contact count after removing empty contacts
+            this.$nextTick(() => this.updateContactCount());
         },
 
         cancelEdit() {
@@ -264,6 +423,51 @@
     
     Alpine.data('contactEntry', () => ({
         deleted: false,
+        isNew: true,
+        name: '',
+        email: '',
+        
+        init() {
+            // Sync from DOM inputs
+            const nameInput = this.$el.querySelector('input[name$="-name"]');
+            const emailInput = this.$el.querySelector('input[name$="-email"]');
+            
+            if (nameInput) {
+                this.name = nameInput.value.trim();
+                this.isNew = !this.name;
+                // Watch for changes
+                nameInput.addEventListener('input', () => {
+                    this.name = nameInput.value.trim();
+                });
+                nameInput.addEventListener('blur', () => this.checkEmpty());
+            }
+            
+            if (emailInput) {
+                this.email = emailInput.value.trim();
+                emailInput.addEventListener('input', () => {
+                    this.email = emailInput.value.trim();
+                });
+                emailInput.addEventListener('blur', () => this.checkEmpty());
+            }
+        },
+        
+        get isEmpty() {
+            return !this.name && !this.email;
+        },
+        
+        checkEmpty() {
+            // Auto-remove new empty contacts when user leaves the fields
+            if (this.isNew && this.isEmpty) {
+                this.$nextTick(() => {
+                    // Check again after a short delay to allow for tab navigation
+                    setTimeout(() => {
+                        if (this.isEmpty && !this.$el.contains(document.activeElement)) {
+                            this.removeContact();
+                        }
+                    }, 200);
+                });
+            }
+        },
         
         removeContact() {
             this.deleted = true;
@@ -275,12 +479,9 @@
         profiles: [],
         filteredProfiles: [],
         searchQuery: '',
-        roleFilter: '',
         expandedProfiles: [],
         
         init() {
-            // Load profiles from JSON script tag
-            // Wait for next tick to ensure DOM is ready? x-init should be fine.
             this.$nextTick(() => {
                 const profilesScript = document.getElementById('profiles-data');
                 if (profilesScript) {
@@ -304,33 +505,16 @@
         
         filterProfiles() {
             const query = this.searchQuery.toLowerCase().trim();
-            const role = this.roleFilter.toLowerCase();
             
             this.filteredProfiles = this.profiles.map(profile => {
                 let matches = true;
                 
-                // Search filter
                 if (query) {
                     const nameMatch = profile.name?.toLowerCase().includes(query);
                     const entityNameMatch = (profile.entities || []).some(e => 
                         e.name?.toLowerCase().includes(query)
                     );
-                    const roleMatch = (profile.entities || []).some(e => 
-                        (e.is_manufacturer && 'manufacturer'.includes(query)) ||
-                        (e.is_supplier && 'supplier'.includes(query)) ||
-                        (e.is_author && 'author'.includes(query))
-                    );
-                    matches = nameMatch || entityNameMatch || roleMatch;
-                }
-                
-                // Role filter
-                if (role && matches) {
-                    matches = (profile.entities || []).some(e => {
-                        if (role === 'manufacturer') return e.is_manufacturer;
-                        if (role === 'supplier') return e.is_supplier;
-                        if (role === 'author') return e.is_author;
-                        return true;
-                    });
+                    matches = nameMatch || entityNameMatch;
                 }
                 
                 return {...profile, hidden: !matches};
@@ -410,24 +594,24 @@
                 <div class="row g-2 align-items-start">
                     <div class="col-md-4">
                         <div class="form-floating">
-                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm" placeholder="Name" required>
-                            <label class="text-muted small">Name *</label>
+                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm" placeholder="Name" required title="Please enter the contact name">
+                            <label class="text-muted small" for="id_${newPrefix}-name">Name *</label>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="form-floating">
-                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm" placeholder="Email" required>
-                            <label class="text-muted small">Email *</label>
+                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm" placeholder="Email" required title="Please enter a valid email address">
+                            <label class="text-muted small" for="id_${newPrefix}-email">Email *</label>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-floating">
                             <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm" placeholder="Phone">
-                            <label class="text-muted small">Phone</label>
+                            <label class="text-muted small" for="id_${newPrefix}-phone">Phone</label>
                         </div>
                     </div>
                     <div class="col-md-1 d-flex justify-content-end align-items-center pt-2">
-                        <button type="button" class="btn btn-icon btn-sm btn-ghost-danger" @click="removeContact" title="Remove Contact">
+                        <button type="button" class="btn btn-icon btn-sm btn-outline-danger" @click="removeContact" title="Remove Contact">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>

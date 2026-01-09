@@ -22,11 +22,11 @@
                 <h6 class="mb-0 fw-bold text-truncate" x-text="name || 'New Entity'"></h6>
                 <div class="d-flex gap-2 mt-1 small flex-wrap">
                     <span class="badge bg-light text-secondary border service-badge"
-                          x-show="isManufacturer"><i class="fas fa-industry me-1"></i>Mfr</span>
+                          x-show="isManufacturer">Manufacturer</span>
                     <span class="badge bg-light text-secondary border service-badge"
-                          x-show="isSupplier"><i class="fas fa-truck-loading me-1"></i>Sup</span>
+                          x-show="isSupplier">Supplier</span>
                     <span class="badge bg-light text-secondary border service-badge"
-                          x-show="isAuthor"><i class="fas fa-pen-nib me-1"></i>Auth</span>
+                          x-show="isAuthor">Author</span>
                     <span class="text-muted fst-italic" x-show="!hasRole">No roles selected</span>
                 </div>
                 <div class="text-danger small fw-bold" x-show="!hasRole && touched">Role required</div>
@@ -54,57 +54,64 @@
     {# Editor Content (Inline) #}
     <div class="entity-editor-content" x-show="editing" x-transition>
         <div class="p-4">
-            {# Roles Section #}
+            {# Roles Section - Checkboxes #}
             <div class="mb-4 pb-3 border-bottom">
-                <div class="d-flex gap-2 flex-wrap role-badges justify-content-center">
-                    <label class="role-badge" :class="{'active': isManufacturer}">
-                        {{ form.is_manufacturer|add_class:"form-check-input d-none"|attr:"x-model:isManufacturer" }}
-                        <i class="fas fa-industry me-1"></i> Manufacturer
-                    </label>
-                    <label class="role-badge" :class="{'active': isSupplier}">
-                        {{ form.is_supplier|add_class:"form-check-input d-none"|attr:"x-model:isSupplier" }}
-                        <i class="fas fa-truck-loading me-1"></i> Supplier
-                    </label>
-                    <label class="role-badge" :class="{'active': isAuthor}">
-                        {{ form.is_author|add_class:"form-check-input d-none"|attr:"x-model:isAuthor" }}
-                        <i class="fas fa-pen-nib me-1"></i> Author
-                    </label>
+                <label class="form-label d-block text-center mb-3">
+                    Entity Roles <span class="text-danger">*</span>
+                </label>
+                <div class="d-flex gap-4 flex-wrap justify-content-center">
+                    <div class="form-check">
+                        {{ form.is_manufacturer|add_class:"form-check-input"|attr:"x-model:isManufacturer" }}
+                        <label class="form-check-label"
+                               for="{{ form.is_manufacturer.id_for_label }}">Manufacturer</label>
+                    </div>
+                    <div class="form-check">
+                        {{ form.is_supplier|add_class:"form-check-input"|attr:"x-model:isSupplier" }}
+                        <label class="form-check-label" for="{{ form.is_supplier.id_for_label }}">Supplier</label>
+                    </div>
+                    <div class="form-check">
+                        {{ form.is_author|add_class:"form-check-input"|attr:"x-model:isAuthor" }}
+                        <label class="form-check-label" for="{{ form.is_author.id_for_label }}">Author</label>
+                    </div>
                 </div>
                 {% if form.non_field_errors %}
                     <div class="invalid-feedback d-block mt-2 text-center">{{ form.non_field_errors.0 }}</div>
                 {% endif %}
                 <div class="text-danger small mt-2 fw-semibold text-center"
-                     :class="{'d-block': !hasRole && touched}"
                      x-show="!hasRole && touched">At least one role must be selected</div>
             </div>
             {# Entity Details Grid #}
             <div class="row g-3 mb-4">
                 <div class="col-12">
-                    <label class="form-label">
+                    <label class="form-label" for="{{ form.name.id_for_label }}">
                         Entity / Company Name <span class="text-danger">*</span>
                     </label>
-                    {{ form.name|add_class:"form-control"|attr:"placeholder:e.g. Acme Corp"|attr:"x-model:name"|attr:"x-effect:$el.required = !deleted" }}
-                    {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>{% endif %}
+                    {{ form.name|add_class:"form-control"|attr:"placeholder:e.g. Acme Corp"|attr:"x-model.trim:name"|attr:"required:required" }}
+                    {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">
+                    <label class="form-label" for="{{ form.email.id_for_label }}">
                         Email Address <span class="text-danger">*</span>
                     </label>
-                    {{ form.email|add_class:"form-control"|attr:"type:email"|attr:"placeholder:contact@example.com"|attr:"x-effect:$el.required = !deleted"|attr:"x-model:email" }}
-                    {% if form.email.errors %}<div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>{% endif %}
+                    {{ form.email|add_class:"form-control"|attr:"type:email"|attr:"placeholder:contact@example.com"|attr:"x-model.trim:email"|attr:"required:required" }}
+                    {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Phone Number</label>
-                    {{ form.phone|add_class:"form-control"|attr:"placeholder:+1 555 123 4567"|attr:"x-model:phone" }}
+                    <label class="form-label" for="{{ form.phone.id_for_label }}">Phone Number</label>
+                    {{ form.phone|add_class:"form-control"|attr:"placeholder:+1 555 123 4567"|attr:"x-model.trim:phone" }}
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Address</label>
-                    {{ form.address|add_class:"form-control"|attr:"rows:2"|attr:"placeholder:Street, City, Country"|attr:"x-model:address" }}
+                    <label class="form-label" for="{{ form.address.id_for_label }}">Address</label>
+                    {{ form.address|add_class:"form-control"|attr:"rows:2"|attr:"placeholder:Street, City, Country"|attr:"x-model.trim:address" }}
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Website URLs</label>
-                    {{ form.website_urls_text|add_class:"form-control font-monospace small"|attr:"rows:2"|attr:"placeholder:Enter one URL per line\nhttps://example.com"|attr:"x-model:websites" }}
-                    <div class="form-text small text-muted">One URL per line</div>
+                    <label class="form-label" for="{{ form.website_urls_text.id_for_label }}">Website URLs</label>
+                    <textarea name="{{ form.website_urls_text.html_name }}"
+                              id="{{ form.website_urls_text.id_for_label }}"
+                              class="form-control font-monospace small"
+                              rows="3"
+                              x-model="websites"
+                              placeholder="Enter one URL per line https://example.com https://example.org">{{ form.website_urls_text.value|default:'' }}</textarea>
                 </div>
             </div>
             <hr class="my-4 border-light">
@@ -137,10 +144,7 @@
                 <button type="button"
                         class="btn btn-outline-secondary px-4"
                         @click="cancelEdit()">Cancel</button>
-                <button type="button"
-                        class="btn btn-primary px-4"
-                        @click="saveEdit()"
-                        :disabled="hasErrors">
+                <button type="button" class="btn btn-primary px-4" @click="saveEdit()">
                     <i class="fas fa-check me-1"></i> Done
                 </button>
             </div>

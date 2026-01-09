@@ -2,34 +2,16 @@
 <div x-data="contactProfileList" x-init="init()">
     {# Store profiles data as JSON script for JavaScript #}
     {{ profiles|json_script:"profiles-data" }}
-    {# Search and Filter Section #}
+    {# Search Section #}
     {% if profiles %}
         <div class="mb-3">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-8">
-                    <label for="search-input" class="form-label small text-muted mb-1">Search</label>
-                    <div class="input-group">
-                        <input type="text"
-                               id="search-input"
-                               class="form-control"
-                               placeholder="Search by profile name, entity name, or role..."
-                               x-model="searchQuery"
-                               @input="filterProfiles()">
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <label for="role-filter" class="form-label small text-muted mb-1">Filter by Role</label>
-                    <select id="role-filter"
-                            class="form-select"
-                            x-model="roleFilter"
-                            @change="filterProfiles()">
-                        <option value="">All Roles</option>
-                        <option value="manufacturer">Manufacturer</option>
-                        <option value="supplier">Supplier</option>
-                        <option value="author">Author</option>
-                    </select>
-                </div>
-            </div>
+            <label for="search-input" class="form-label small text-muted mb-1">Search</label>
+            <input type="text"
+                   id="search-input"
+                   class="form-control"
+                   placeholder="Search by profile name or entity name..."
+                   x-model="searchQuery"
+                   @input="filterProfiles()">
         </div>
     {% endif %}
     {% if not profiles %}
@@ -49,11 +31,10 @@
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th scope="col" style="width: 30%;">Name</th>
-                        <th scope="col" style="width: 12%;">Entities</th>
-                        <th scope="col" style="width: 12%;">Contacts</th>
-                        <th scope="col" style="width: 20%;">Roles</th>
-                        <th scope="col" style="width: 8%;">Status</th>
+                        <th scope="col" style="width: 35%;">Name</th>
+                        <th scope="col" style="width: 15%;">Entities</th>
+                        <th scope="col" style="width: 15%;">Contacts</th>
+                        <th scope="col" style="width: 15%;">Status</th>
                         <th scope="col" class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -78,24 +59,6 @@
                                     <span class="badge bg-light text-dark border me-2"
                                           x-text="profile.contact_count || 0"></span>
                                     <i class="fas fa-user-friends text-muted small" title="Total Contacts"></i>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="d-flex gap-1 flex-wrap">
-                                    <template x-for="entity in (profile.entities || []).slice(0, 3)"
-                                              :key="entity.id">
-                                        <span>
-                                            <i class="fas fa-industry text-secondary"
-                                               :title="`Manufacturer: ${entity.name}`"
-                                               x-show="entity.is_manufacturer"></i>
-                                            <i class="fas fa-truck-loading text-secondary"
-                                               :title="`Supplier: ${entity.name}`"
-                                               x-show="entity.is_supplier"></i>
-                                            <i class="fas fa-pen-nib text-secondary"
-                                               :title="`Author: ${entity.name}`"
-                                               x-show="entity.is_author"></i>
-                                        </span>
-                                    </template>
                                 </div>
                             </td>
                             <td>
@@ -136,7 +99,7 @@
                             x-transition:leave="transition ease-in duration-150"
                             x-transition:leave-start="opacity-100"
                             x-transition:leave-end="opacity-0">
-                            <td colspan="6" class="bg-light p-4">
+                            <td colspan="5" class="bg-light p-4">
                                 <div class="row g-3">
                                     <template x-if="!profile.entities || profile.entities.length === 0">
                                         <div class="col-12">
@@ -152,17 +115,14 @@
                                                 <div class="card-body">
                                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                                         <h6 class="card-title mb-0 fw-bold" x-text="entity.name"></h6>
-                                                        <div class="d-flex gap-1">
-                                                            <i class="fas fa-industry text-secondary"
-                                                               :title="`Manufacturer: ${entity.name}`"
-                                                               x-show="entity.is_manufacturer"></i>
-                                                            <i class="fas fa-truck-loading text-secondary"
-                                                               :title="`Supplier: ${entity.name}`"
-                                                               x-show="entity.is_supplier"></i>
-                                                            <i class="fas fa-pen-nib text-secondary"
-                                                               :title="`Author: ${entity.name}`"
-                                                               x-show="entity.is_author"></i>
-                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex gap-1 flex-wrap mb-2">
+                                                        <span class="badge bg-light text-secondary border small"
+                                                              x-show="entity.is_manufacturer">Manufacturer</span>
+                                                        <span class="badge bg-light text-secondary border small"
+                                                              x-show="entity.is_supplier">Supplier</span>
+                                                        <span class="badge bg-light text-secondary border small"
+                                                              x-show="entity.is_author">Author</span>
                                                     </div>
                                                     <div class="small text-muted mb-2">
                                                         <div x-show="entity.email">

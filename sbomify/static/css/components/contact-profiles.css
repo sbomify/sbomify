@@ -27,36 +27,30 @@
   border-bottom: 1px solid #f1f5f9;
 }
 
-/* Role Badges (Checkboxes styled as badges) */
-.role-badges .role-badge {
+/* Role Checkboxes */
+.entity-editor-content .form-check {
+  padding-left: 1.75em;
+}
+
+.entity-editor-content .form-check-input {
+  width: 1.2em;
+  height: 1.2em;
+  margin-top: 0.15em;
+}
+
+.entity-editor-content .form-check-label {
+  font-weight: 500;
+  color: #374151;
   cursor: pointer;
-  padding: 0.35rem 0.75rem;
-  border-radius: 50rem;
-  border: 1px solid #e2e8f0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #64748b;
-  background-color: #fff;
-  transition: all 0.2s;
-  user-select: none;
-  display: inline-flex;
-  align-items: center;
 }
 
-.role-badges .role-badge:hover {
-  background-color: #f8fafc;
-  color: #475569;
+.entity-editor-content .form-check-input:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
 }
 
-.role-badges .role-badge.active {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
-}
-
-.role-badges .role-badge i {
-  font-size: 0.85em;
-  opacity: 0.8;
+.entity-editor-content .form-check-input:focus {
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
 }
 
 /* Contact Cards */
@@ -125,15 +119,19 @@ textarea {
   border-top: 1px solid #e5e7eb;
 }
 
-/* Improved Role Badges */
-.entity-editor-content .role-badges .role-badge {
-  padding: 0.5rem 1rem;
+/* Validation feedback */
+.entity-editor-content .invalid-feedback {
   font-size: 0.8125rem;
-  border-radius: 0.5rem;
 }
 
-.entity-editor-content .role-badges .role-badge.active {
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.15);
+.entity-editor-content .form-control.is-invalid {
+  border-color: #dc3545;
+  background-image: none;
+}
+
+.entity-editor-content .form-control.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
 }
 
 /* Form styling */
