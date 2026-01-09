@@ -110,6 +110,10 @@ class TeamPricingService:
                 if hasattr(team, "key") and not hasattr(team, "pk"):
                     # Update the schema object with synced data
                     team.billing_plan_limits = billing_plan_limits
+
+                # Update local variables from refreshed data
+                billing_period = billing_plan_limits.get("billing_period")
+                next_billing_date = billing_plan_limits.get("next_billing_date")
             except Exception as e:
                 logger.warning(f"Failed to sync subscription for pricing display: {e}")
 
