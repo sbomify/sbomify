@@ -806,6 +806,10 @@
         return;
     }
     
+    if (typeof totalInput.value === 'undefined') {
+        console.error('addContactRow: TOTAL_FORMS input has no value to parse');
+        return;
+    }
     const index = parseInt(totalInput.value);
     const newPrefix = `${contactPrefix}-${index}`;
     
