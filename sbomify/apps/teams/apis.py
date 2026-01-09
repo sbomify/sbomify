@@ -430,8 +430,8 @@ def _upsert_entities(
             continue
         contacts = getattr(entity_data, "contacts", None)
         if not contacts:
-            entity_name = getattr(entity_data, "name", "Entity")
-            raise ValueError(f"'{entity_name}' must have at least one contact")
+            entity_name = getattr(entity_data, "name", None) or "Entity"
+            raise ValueError(f"Entity '{entity_name}' must have at least one contact")
 
     # Collect IDs of entities that are being updated (not new ones)
     existing_ids = [e.id for e in entities if getattr(e, "id", None)]
