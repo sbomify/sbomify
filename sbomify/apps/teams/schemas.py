@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from django.conf import settings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TeamUpdateSchema(BaseModel):
@@ -145,12 +145,97 @@ class UpdateTeamBrandingSchema(BaseModel):
 
 
 class ContactProfileContactSchema(BaseModel):
-    """Schema representing a contact tied to a workspace contact profile."""
+    """Schema representing a contact person tied to a contact entity."""
 
     name: str
-    email: str | None = None
+    email: str  # Required
     phone: str | None = None
     order: int | None = None
+
+
+class ContactEntitySchema(BaseModel):
+    """Schema for a contact entity (organization/company/individual)."""
+
+    id: str
+    name: str  # Required
+    email: str  # Required
+    phone: str | None = None
+    address: str | None = None
+    website_urls: list[str] = Field(default_factory=list)
+    is_manufacturer: bool = False
+    is_supplier: bool = False
+    is_author: bool = False
+    contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+    @model_validator(mode="after")
+    def validate_at_least_one_role(self):
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValueError("At least one role flag must be True")
+        return self
+
+
+class ContactEntityCreateSchema(BaseModel):
+    """Schema for creating a contact entity."""
+
+    name: str = Field(..., max_length=255, min_length=1)  # Required
+    email: str = Field(..., max_length=255)  # Required
+    phone: str | None = None
+    address: str | None = None
+    website_urls: list[str] = Field(default_factory=list)
+    is_manufacturer: bool = False
+    is_supplier: bool = False
+    is_author: bool = False
+    contacts: list[ContactProfileContactSchema] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_at_least_one_role(self):
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValueError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+        return self
+
+
+class ContactEntityUpdateSchema(BaseModel):
+    """Schema for updating a contact entity."""
+
+    id: str | None = None  # For identifying existing entity
+    name: str | None = Field(default=None, max_length=255, min_length=1)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = None
+    address: str | None = None
+    website_urls: list[str] | None = None
+    is_manufacturer: bool | None = None
+    is_supplier: bool | None = None
+    is_author: bool | None = None
+    contacts: list[ContactProfileContactSchema] | None = None
+
+    @model_validator(mode="after")
+    def validate_roles(self):
+        """Ensure at least one role flag is True after update.
+
+        For partial updates, we validate that if any role fields are provided,
+        at least one of the provided fields must be True. This prevents turning
+        off all roles in a single update. The model's clean() method will enforce
+        final validation before saving.
+        """
+        # If no role fields are provided, no validation needed (partial update preserves existing)
+        if self.is_manufacturer is None and self.is_supplier is None and self.is_author is None:
+            return self
+
+        # Check if all provided role fields are False
+        provided_manufacturer = self.is_manufacturer if self.is_manufacturer is not None else None
+        provided_supplier = self.is_supplier if self.is_supplier is not None else None
+        provided_author = self.is_author if self.is_author is not None else None
+
+        # Collect only the provided (non-None) values
+        provided_roles = [v for v in [provided_manufacturer, provided_supplier, provided_author] if v is not None]
+
+        # If we have provided role values and all are False, raise error
+        if provided_roles and not any(provided_roles):
+            raise ValueError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+
+        return self
 
 
 class ContactProfileSchema(BaseModel):
@@ -158,6 +243,9 @@ class ContactProfileSchema(BaseModel):
 
     id: str
     name: str
+    # New field for entity-based structure
+    entities: list[ContactEntitySchema] = Field(default_factory=list)
+    # Legacy fields for backward compatibility (populated from first entity)
     company: str | None = None
     supplier_name: str | None = None
     vendor: str | None = None
@@ -175,6 +263,9 @@ class ContactProfileCreateSchema(BaseModel):
     """Schema for creating a workspace contact profile."""
 
     name: str = Field(..., max_length=255, min_length=1)
+    # New field for entity-based creation
+    entities: list[ContactEntityCreateSchema] | None = None
+    # Legacy fields for backward compatibility
     company: str | None = Field(default=None, max_length=255)
     supplier_name: str | None = Field(default=None, max_length=255)
     vendor: str | None = Field(default=None, max_length=255)
@@ -190,6 +281,9 @@ class ContactProfileUpdateSchema(BaseModel):
     """Schema for updating a workspace contact profile."""
 
     name: str | None = Field(default=None, max_length=255, min_length=1)
+    # New field for entity-based updates - accepts both update (existing) and create (new) schemas
+    entities: list[ContactEntityUpdateSchema | ContactEntityCreateSchema] | None = None
+    # Legacy fields for backward compatibility
     company: str | None = Field(default=None, max_length=255)
     supplier_name: str | None = Field(default=None, max_length=255)
     vendor: str | None = Field(default=None, max_length=255)

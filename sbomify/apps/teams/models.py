@@ -319,7 +319,12 @@ class Invitation(models.Model):
 
 
 class ContactProfile(models.Model):
-    """Workspace-level contact profile shared across components."""
+    """Workspace-level contact profile shared across components.
+
+    A profile contains one or more ContactEntity objects, each representing
+    an organization, company, or individual with specific roles (manufacturer,
+    supplier, author) and their associated contact persons.
+    """
 
     class Meta:
         db_table = apps.get_app_config("teams").label + "_contact_profiles"
@@ -336,13 +341,6 @@ class ContactProfile(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles")
     name = models.CharField(max_length=255)
-    company = models.CharField(max_length=255, blank=True)
-    supplier_name = models.CharField(max_length=255, blank=True)
-    vendor = models.CharField(max_length=255, blank=True)
-    email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=50, blank=True)
-    address = models.TextField(blank=True)
-    website_urls = models.JSONField(default=list, blank=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -357,21 +355,67 @@ class ContactProfile(models.Model):
         return f"{self.name} ({self.team_id})"
 
 
+class ContactEntity(models.Model):
+    """Entity (Organization/Company/Individual) within a contact profile.
+
+    Represents an organization, company, or individual associated with a contact profile.
+    Each entity can have one or more roles (manufacturer, supplier, author) and contains
+    contact information and a list of contact persons.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_contact_entities"
+        unique_together = ("profile", "name")
+        ordering = ["name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="entities")
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    website_urls = models.JSONField(default=list, blank=True)
+    is_manufacturer = models.BooleanField(default=False)
+    is_supplier = models.BooleanField(default=False)
+    is_author = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Ensure at least one role flag is True."""
+        from django.core.exceptions import ValidationError
+
+        if not (self.is_manufacturer or self.is_supplier or self.is_author):
+            raise ValidationError("At least one of is_manufacturer, is_supplier, or is_author must be True")
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure validation is always called."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.profile_id})"
+
+
 class ContactProfileContact(models.Model):
-    """Contact person information associated with a workspace contact profile."""
+    """Contact person information associated with a contact entity.
+
+    Represents an individual contact person within an entity, such as a technical
+    lead, security contact, or business contact.
+    """
 
     class Meta:
         db_table = apps.get_app_config("teams").label + "_contact_profile_contacts"
-        unique_together = ("profile", "name", "email")
+        unique_together = ("entity", "name", "email")
         ordering = ["order", "name"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="contacts")
+    entity = models.ForeignKey(ContactEntity, on_delete=models.CASCADE, related_name="contacts")
     name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True, null=True)
+    email = models.EmailField()
     phone = models.CharField(max_length=50, blank=True, null=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.profile_id})"
+        return f"{self.name} ({self.entity_id})"

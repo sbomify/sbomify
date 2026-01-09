@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from sbomify.apps.teams.models import ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
 class AddTeamForm(forms.ModelForm):
@@ -204,49 +204,72 @@ class ContactProfileForm(forms.Form):
 
 
 class ContactProfileModelForm(forms.ModelForm):
+    """Form for ContactProfile - only contains profile-level fields."""
+
+    class Meta:
+        model = ContactProfile
+        fields = ["name", "is_default"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
+            "is_default": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class ContactEntityModelForm(forms.ModelForm):
+    """Form for ContactEntity - contains organization/company details."""
+
     website_urls_text = forms.CharField(
         label="Website URLs",
         required=False,
         widget=forms.Textarea(
             attrs={
                 "class": "form-control",
-                "rows": 3,
-                "placeholder": "Enter one URL per line\nhttps://example.com\nhttps://example.org",
+                "rows": 2,
+                "placeholder": "Enter one URL per line\nhttps://example.com",
             }
         ),
         help_text="Enter one URL per line",
     )
 
     class Meta:
-        model = ContactProfile
+        model = ContactEntity
         fields = [
             "name",
-            "company",
-            "supplier_name",
-            "vendor",
             "email",
             "phone",
             "address",
-            "is_default",
+            "is_manufacturer",
+            "is_supplier",
+            "is_author",
         ]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
-            "company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Company name"}),
-            "supplier_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Supplier name"}),
-            "vendor": forms.TextInput(attrs={"class": "form-control", "placeholder": "Vendor name"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
             "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
             "address": forms.Textarea(
-                attrs={"class": "form-control", "rows": 3, "placeholder": "Street, City, Country"}
+                attrs={"class": "form-control", "rows": 2, "placeholder": "Street, City, Country"}
             ),
-            "is_default": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_manufacturer": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_supplier": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "is_author": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if self.instance and self.instance.website_urls:
+        if self.instance and self.instance.pk and self.instance.website_urls:
             self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_manufacturer = cleaned_data.get("is_manufacturer")
+        is_supplier = cleaned_data.get("is_supplier")
+        is_author = cleaned_data.get("is_author")
+
+        if not (is_manufacturer or is_supplier or is_author):
+            raise forms.ValidationError("At least one role (Manufacturer, Supplier, or Author) must be selected.")
+
+        return cleaned_data
 
     def clean_website_urls_text(self):
         text = self.cleaned_data.get("website_urls_text")
@@ -267,18 +290,31 @@ class ContactProfileContactForm(forms.ModelForm):
         model = ContactProfileContact
         fields = ["name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name", "required": True}),
+            "email": forms.EmailInput(
+                attrs={"class": "form-control", "placeholder": "email@example.com", "required": True}
+            ),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
 
 
+# Formset for contacts linked to an entity (3-level hierarchy)
 ContactProfileContactFormSet = inlineformset_factory(
-    ContactProfile,
+    ContactEntity,
     ContactProfileContact,
     form=ContactProfileContactForm,
     extra=0,
-    can_delete=False,
+    can_delete=True,
+)
+
+
+# Formset for entities linked to a profile
+ContactEntityFormSet = inlineformset_factory(
+    ContactProfile,
+    ContactEntity,
+    form=ContactEntityModelForm,
+    extra=0,
+    can_delete=True,
 )
 
 

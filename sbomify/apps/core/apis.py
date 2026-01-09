@@ -27,8 +27,8 @@ from sbomify.apps.sboms.utils import (
     get_project_sbom_package,
     get_release_sbom_package,
 )
+from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
-from sbomify.apps.teams.schemas import ContactProfileContactSchema, ContactProfileSchema
 from sbomify.logging import getLogger
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
@@ -90,36 +90,6 @@ class ProductLookupResult:
 
     payload: dict
     instance: Product
-
-
-def _serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
-    contacts = [
-        ContactProfileContactSchema(
-            name=contact.name,
-            email=contact.email,
-            phone=contact.phone,
-            order=contact.order,
-        )
-        for contact in profile.contacts.all()
-    ]
-
-    urls = [url for url in (profile.website_urls or []) if url]
-
-    return ContactProfileSchema(
-        id=profile.id,
-        name=profile.name,
-        company=profile.company or None,
-        supplier_name=profile.supplier_name or None,
-        vendor=profile.vendor or None,
-        email=profile.email or None,
-        phone=profile.phone or None,
-        address=profile.address or None,
-        website_urls=urls,
-        contacts=contacts,
-        is_default=profile.is_default,
-        created_at=profile.created_at.isoformat(),
-        updated_at=profile.updated_at.isoformat(),
-    )
 
 
 # Creation schemas
@@ -1839,28 +1809,32 @@ def get_component_metadata(request, component_id: str):
 
     if component.contact_profile:
         profile = component.contact_profile
-        contact_profile_data = _serialize_contact_profile(profile)
+        # Ensure profile is prefetched with entities and contacts
+        if not hasattr(profile, "_prefetched_objects_cache"):
+            profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
+        contact_profile_data = serialize_contact_profile(profile)
 
-        if profile.supplier_name:
-            supplier["name"] = profile.supplier_name
-        elif profile.company:
-            supplier["name"] = profile.company
+        # Access fields via first entity (3-level hierarchy)
+        first_entity = profile.entities.first()
+        if first_entity:
+            if first_entity.name:
+                supplier["name"] = first_entity.name
 
-        urls = [url for url in (profile.website_urls or []) if url]
-        if urls:
-            supplier["url"] = urls
+            urls = [url for url in (first_entity.website_urls or []) if url]
+            if urls:
+                supplier["url"] = urls
 
-        if profile.address:
-            supplier["address"] = profile.address
+            if first_entity.address:
+                supplier["address"] = first_entity.address
 
-        supplier["contacts"] = []
-        for contact in profile.contacts.all():
-            contact_dict = {"name": contact.name}
-            if contact.email is not None:
-                contact_dict["email"] = contact.email
-            if contact.phone is not None:
-                contact_dict["phone"] = contact.phone
-            supplier["contacts"].append(contact_dict)
+            supplier["contacts"] = []
+            for contact in first_entity.contacts.all():
+                contact_dict = {"name": contact.name}
+                if contact.email is not None:
+                    contact_dict["email"] = contact.email
+                if contact.phone is not None:
+                    contact_dict["phone"] = contact.phone
+                supplier["contacts"].append(contact_dict)
 
         uses_custom_contact = False
     else:

@@ -13,10 +13,13 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
 from sbomify.apps.teams.schemas import (
     BrandingInfo,
     BrandingInfoWithUrls,
+    ContactEntityCreateSchema,
+    ContactEntitySchema,
+    ContactEntityUpdateSchema,
     ContactProfileContactSchema,
     ContactProfileCreateSchema,
     ContactProfileSchema,
@@ -384,44 +387,148 @@ def _clean_url_list(urls: list[str]) -> list[str]:
     return unique
 
 
-def _upsert_profile_contacts(profile: ContactProfile, contacts: list[ContactProfileContactSchema] | None):
-    profile.contacts.all().delete()
+def _get_team_owner_email(team: Team) -> str:
+    """Get the team owner's email for fallback purposes."""
+    owner = Member.objects.filter(team=team, role="owner").select_related("user").first()
+    return owner.user.email if owner and owner.user and owner.user.email else "no-reply@sbomify.com"
+
+
+def _upsert_entity_contacts(
+    entity: ContactEntity, contacts: list[ContactProfileContactSchema] | None, fallback_email: str
+):
+    """Create or update contacts for an entity."""
+    entity.contacts.all().delete()
     if not contacts:
         return
 
     for order, contact in enumerate(contacts):
         if not contact.name:
             continue
-        profile.contacts.create(
+        entity.contacts.create(
             name=contact.name,
-            email=contact.email,
+            email=contact.email or fallback_email,
             phone=contact.phone,
             order=order,
         )
 
 
+def _upsert_entities(
+    profile: ContactProfile,
+    entities: list[ContactEntityCreateSchema | ContactEntityUpdateSchema] | None,
+    fallback_email: str,
+    is_update: bool = False,
+):
+    """Create or update entities and their contacts."""
+    if entities is None:
+        return
+
+    # Collect IDs of entities that are being updated (not new ones)
+    existing_ids = [e.id for e in entities if getattr(e, "id", None)]
+
+    if is_update:
+        # Safety check: Ensure we're not deleting all entities (empty list should be caught earlier)
+        if len(entities) == 0:
+            raise ValueError("Cannot update to zero entities - at least one entity is required")
+        profile.entities.exclude(id__in=existing_ids).delete()
+
+    for entity_data in entities:
+        if not entity_data:
+            continue
+        entity_id = getattr(entity_data, "id", None) if is_update else None
+
+        if entity_id:
+            try:
+                entity = profile.entities.get(id=entity_id)
+                for field in ["name", "email", "phone", "address", "is_manufacturer", "is_supplier", "is_author"]:
+                    value = getattr(entity_data, field, None)
+                    if value is not None:
+                        setattr(entity, field, value)
+                if entity_data.website_urls is not None:
+                    entity.website_urls = _clean_url_list(entity_data.website_urls)
+                if not entity.email:
+                    entity.email = fallback_email
+                # Validate role flags before saving
+                entity.full_clean()
+                entity.save()
+            except ContactEntity.DoesNotExist:
+                continue
+        else:
+            # Create new entity - validation enforced by schema and model clean()
+            entity = ContactEntity(
+                profile=profile,
+                name=entity_data.name,
+                email=entity_data.email or fallback_email,
+                phone=entity_data.phone or "",
+                address=entity_data.address or "",
+                website_urls=_clean_url_list(entity_data.website_urls or []),
+                is_manufacturer=entity_data.is_manufacturer,
+                is_supplier=entity_data.is_supplier,
+                is_author=entity_data.is_author,
+            )
+            # Validate role flags before saving
+            entity.full_clean()
+            entity.save()
+
+        contacts = getattr(entity_data, "contacts", None)
+        if contacts is not None:
+            _upsert_entity_contacts(entity, contacts, fallback_email)
+
+
 def serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
-    contacts = [
-        ContactProfileContactSchema(
-            name=contact.name,
-            email=contact.email,
-            phone=contact.phone,
-            order=contact.order,
+    """Serialize a contact profile with entities and legacy fields for backward compatibility."""
+    entities = []
+    for entity in profile.entities.all():
+        entity_contacts = [
+            ContactProfileContactSchema(
+                name=c.name,
+                email=c.email,
+                phone=c.phone,
+                order=c.order,
+            )
+            for c in entity.contacts.all()
+        ]
+        entities.append(
+            ContactEntitySchema(
+                id=entity.id,
+                name=entity.name,
+                email=entity.email,
+                phone=entity.phone or None,
+                address=entity.address or None,
+                website_urls=_clean_url_list(entity.website_urls or []),
+                is_manufacturer=entity.is_manufacturer,
+                is_supplier=entity.is_supplier,
+                is_author=entity.is_author,
+                contacts=entity_contacts,
+                created_at=entity.created_at.isoformat(),
+                updated_at=entity.updated_at.isoformat(),
+            )
         )
-        for contact in profile.contacts.all()
-    ]
+
+    first_entity = profile.entities.first()
+    legacy_contacts = []
+    if first_entity:
+        legacy_contacts = [
+            ContactProfileContactSchema(
+                name=c.name,
+                email=c.email,
+                phone=c.phone,
+                order=c.order,
+            )
+            for c in first_entity.contacts.all()
+        ]
 
     return ContactProfileSchema(
         id=profile.id,
         name=profile.name,
-        company=profile.company or None,
-        supplier_name=profile.supplier_name or None,
-        vendor=profile.vendor or None,
-        email=profile.email or None,
-        phone=profile.phone or None,
-        address=profile.address or None,
-        website_urls=_clean_url_list(profile.website_urls or []),
-        contacts=contacts,
+        entities=entities,
+        company=first_entity.name if first_entity else None,
+        supplier_name=first_entity.name if first_entity else None,
+        vendor=first_entity.name if first_entity else None,
+        email=first_entity.email if first_entity else None,
+        phone=first_entity.phone if first_entity else None,
+        address=first_entity.address if first_entity else None,
+        website_urls=_clean_url_list(first_entity.website_urls or []) if first_entity else [],
+        contacts=legacy_contacts,
         is_default=profile.is_default,
         created_at=profile.created_at.isoformat(),
         updated_at=profile.updated_at.isoformat(),
@@ -442,7 +549,11 @@ def list_contact_profiles(request: HttpRequest, team_key: str):
         return error
 
     # Allow all team members to view contact profiles (for use in component metadata)
-    profiles = ContactProfile.objects.filter(team=team).prefetch_related("contacts").order_by("-is_default", "name")
+    profiles = (
+        ContactProfile.objects.filter(team=team)
+        .prefetch_related("entities", "entities__contacts")
+        .order_by("-is_default", "name")
+    )
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
@@ -461,7 +572,9 @@ def get_contact_profile(request: HttpRequest, team_key: str, profile_id: str, re
 
     # Allow all team members to view contact profiles (for use in component metadata)
     try:
-        profile = ContactProfile.objects.prefetch_related("contacts").get(team=team, pk=profile_id)
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
+            team=team, pk=profile_id
+        )
     except ContactProfile.DoesNotExist:
         return 404, {"detail": "Contact profile not found"}
 
@@ -487,17 +600,47 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
             profile = ContactProfile.objects.create(
                 team=team,
                 name=payload.name,
-                company=payload.company or "",
-                supplier_name=payload.supplier_name or "",
-                vendor=payload.vendor or "",
-                email=payload.email or None,
-                phone=payload.phone or "",
-                address=payload.address or "",
-                website_urls=_clean_url_list(payload.website_urls),
                 is_default=payload.is_default,
             )
 
-            _upsert_profile_contacts(profile, payload.contacts)
+            fallback_email = _get_team_owner_email(team)
+
+            # Handle entity-based structure (new API)
+            if payload.entities is not None:
+                if not payload.entities:
+                    return 400, {"detail": "At least one entity is required"}
+                _upsert_entities(profile, payload.entities, fallback_email)
+            elif any(
+                [
+                    payload.company,
+                    payload.supplier_name,
+                    payload.vendor,
+                    payload.email,
+                    payload.phone,
+                    payload.address,
+                    payload.website_urls is not None,
+                    payload.contacts is not None,
+                ]
+            ):
+                # Handle legacy flat fields (backward compatibility)
+                entity_name = payload.company or payload.supplier_name or payload.vendor or "Default Entity"
+                entity_email = payload.email or fallback_email
+                entity = profile.entities.create(
+                    name=entity_name,
+                    email=entity_email,
+                    phone=payload.phone or "",
+                    address=payload.address or "",
+                    website_urls=_clean_url_list(payload.website_urls or []),
+                    is_manufacturer=True,
+                    is_supplier=True,
+                    is_author=True,
+                )
+                if payload.contacts:
+                    _upsert_entity_contacts(entity, payload.contacts, fallback_email)
+            else:
+                # No entities provided and no legacy fields - require at least one entity
+                return 400, {"detail": "At least one entity is required. Provide 'entities' array or legacy fields."}
+
             profile.refresh_from_db()
 
         return 201, serialize_contact_profile(profile)
@@ -519,31 +662,78 @@ def update_contact_profile(request: HttpRequest, team_key: str, profile_id: str,
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
     try:
-        profile = ContactProfile.objects.get(team=team, pk=profile_id)
+        profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
+            team=team, pk=profile_id
+        )
     except ContactProfile.DoesNotExist:
         return 404, {"detail": "Contact profile not found"}
 
-    update_fields = {}
-    for field in ["name", "company", "supplier_name", "vendor", "email", "phone", "address"]:
-        value = getattr(payload, field)
-        if value is not None:
-            update_fields[field] = value or ""
-
-    if payload.website_urls is not None:
-        update_fields["website_urls"] = _clean_url_list(payload.website_urls)
-
-    if payload.is_default is not None:
-        update_fields["is_default"] = payload.is_default
-
     try:
         with transaction.atomic():
-            if update_fields:
-                for field, value in update_fields.items():
-                    setattr(profile, field, value)
-                profile.save()
+            # Update profile name if provided
+            if payload.name is not None:
+                profile.name = payload.name
+            if payload.is_default is not None:
+                profile.is_default = payload.is_default
+            profile.save()
 
-            if payload.contacts is not None:
-                _upsert_profile_contacts(profile, payload.contacts)
+            fallback_email = _get_team_owner_email(team)
+
+            # Handle entity-based structure (new API)
+            if payload.entities is not None:
+                if not payload.entities:
+                    return 400, {"detail": "At least one entity is required"}
+                _upsert_entities(profile, payload.entities, fallback_email, is_update=True)
+            # Handle legacy flat fields (backward compatibility)
+            elif any(
+                [
+                    payload.company,
+                    payload.supplier_name,
+                    payload.vendor,
+                    payload.email,
+                    payload.phone,
+                    payload.address,
+                    payload.website_urls is not None,
+                    payload.contacts is not None,
+                ]
+            ):
+                first_entity = profile.entities.first()
+                if first_entity:
+                    if payload.company is not None:
+                        first_entity.name = payload.company or first_entity.name
+                    if payload.email is not None:
+                        first_entity.email = payload.email or fallback_email
+                    if payload.phone is not None:
+                        first_entity.phone = payload.phone
+                    if payload.address is not None:
+                        first_entity.address = payload.address
+                    if payload.website_urls is not None:
+                        first_entity.website_urls = _clean_url_list(payload.website_urls)
+                    # Force all roles True for backward compatibility when using legacy fields
+                    first_entity.is_manufacturer = True
+                    first_entity.is_supplier = True
+                    first_entity.is_author = True
+                    first_entity.full_clean()
+                    first_entity.save()
+
+                    if payload.contacts is not None:
+                        _upsert_entity_contacts(first_entity, payload.contacts, fallback_email)
+                else:
+                    # No entity exists, create one from legacy fields
+                    entity_name = payload.company or payload.supplier_name or payload.vendor or "Default Entity"
+                    entity_email = payload.email or fallback_email
+                    entity = profile.entities.create(
+                        name=entity_name,
+                        email=entity_email,
+                        phone=payload.phone or "",
+                        address=payload.address or "",
+                        website_urls=_clean_url_list(payload.website_urls or []),
+                        is_manufacturer=True,
+                        is_supplier=True,
+                        is_author=True,
+                    )
+                    if payload.contacts:
+                        _upsert_entity_contacts(entity, payload.contacts, fallback_email)
 
             profile.refresh_from_db()
 

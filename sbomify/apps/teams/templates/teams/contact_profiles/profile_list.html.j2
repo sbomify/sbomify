@@ -1,79 +1,216 @@
 {% load static %}
-{% if not profiles %}
-    <div class="empty-state">
-        <i class="fas fa-address-book fa-3x text-muted mb-3"></i>
-        <h5 class="text-muted mb-2">No contact profiles yet</h5>
-        <p class="text-muted">Create a profile to reuse supplier information across components.</p>
-    </div>
-{% else %}
-    <div class="table-responsive">
-        <table class="table align-middle">
-            <thead>
-                <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Supplier</th>
-                    <th scope="col">Company</th>
-                    <th scope="col">Default</th>
-                    <th scope="col" class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for profile in profiles %}
+<div x-data="contactProfileList" x-init="init()">
+    {# Store profiles data as JSON script for JavaScript #}
+    {{ profiles|json_script:"profiles-data" }}
+    {# Search and Filter Section #}
+    {% if profiles %}
+        <div class="mb-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-8">
+                    <label for="search-input" class="form-label small text-muted mb-1">Search</label>
+                    <div class="input-group">
+                        <input type="text"
+                               id="search-input"
+                               class="form-control"
+                               placeholder="Search by profile name, entity name, or role..."
+                               x-model="searchQuery"
+                               @input="filterProfiles()">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label for="role-filter" class="form-label small text-muted mb-1">Filter by Role</label>
+                    <select id="role-filter"
+                            class="form-select"
+                            x-model="roleFilter"
+                            @change="filterProfiles()">
+                        <option value="">All Roles</option>
+                        <option value="manufacturer">Manufacturer</option>
+                        <option value="supplier">Supplier</option>
+                        <option value="author">Author</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    {% if not profiles %}
+        <div class="empty-state">
+            <i class="fas fa-address-book fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted mb-2">No contact profiles yet</h5>
+            <p class="text-muted">Create a profile to reuse supplier information across components.</p>
+            <button class="btn btn-primary mt-3"
+                    hx-get="{% url 'teams:contact_profiles_form' team.key %}"
+                    hx-target="#contact-profiles-content"
+                    hx-swap="innerHTML">
+                <i class="fas fa-plus me-1"></i> Create Profile
+            </button>
+        </div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
                     <tr>
-                        <td>
-                            <div class="fw-semibold">{{ profile.name }}</div>
-                            {% if profile.email %}
-                                <div class="text-muted small">
-                                    <i class="fas fa-envelope me-1"></i>{{ profile.email }}
-                                </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if profile.supplier_name %}
-                                <span class="badge bg-primary-subtle text-primary">{{ profile.supplier_name }}</span>
-                            {% else %}
-                                <span class="text-muted">Not set</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if profile.company %}
-                                <span>{{ profile.company }}</span>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if profile.is_default %}<span class="badge bg-success-subtle text-success">Default</span>{% endif %}
-                        </td>
-                        <td class="text-end">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button class="btn btn-outline-secondary"
-                                        hx-get="{% url 'teams:contact_profiles_detail_form' team.key profile.id %}"
-                                        hx-target="#contact-profiles-content"
-                                        hx-swap="innerHTML">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-outline-primary"
-                                        {% if profile.is_default %}disabled{% endif %}
-                                        hx-post="{% url 'teams:contact_profiles_list' team.key %}"
-                                        hx-vals='{"_method": "PATCH", "profile_id": "{{ profile.id }}"}'
-                                        hx-target="#contact-profiles-content"
-                                        hx-swap="innerHTML">
-                                    <i class="fas fa-star"></i>
-                                </button>
-                                <button class="btn btn-outline-danger"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#delete-contact-profile-modal"
-                                        data-form-profile_id="{{ profile.id }}"
-                                        data-display-name="{{ profile.name }}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
+                        <th scope="col" style="width: 30%;">Name</th>
+                        <th scope="col" style="width: 12%;">Entities</th>
+                        <th scope="col" style="width: 12%;">Contacts</th>
+                        <th scope="col" style="width: 20%;">Roles</th>
+                        <th scope="col" style="width: 8%;">Status</th>
+                        <th scope="col" class="text-end">Actions</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-{% endif %}
+                </thead>
+                <tbody>
+                    <template x-for="profile in filteredProfiles" :key="profile.id">
+                        <tr x-show="!profile.hidden" x-transition>
+                            <td>
+                                <div class="fw-semibold" x-text="profile.name"></div>
+                                <div class="small text-muted" x-text="formatDate(profile.created_at)"></div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-light text-dark border me-2"
+                                          x-text="profile.entity_count || 0"></span>
+                                    <i class="fas fa-building text-muted small"
+                                       title="Entities"
+                                       x-show="(profile.entity_count || 0) > 0"></i>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-light text-dark border me-2"
+                                          x-text="profile.contact_count || 0"></span>
+                                    <i class="fas fa-user-friends text-muted small" title="Total Contacts"></i>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <template x-for="entity in (profile.entities || []).slice(0, 3)"
+                                              :key="entity.id">
+                                        <span>
+                                            <i class="fas fa-industry text-secondary"
+                                               :title="`Manufacturer: ${entity.name}`"
+                                               x-show="entity.is_manufacturer"></i>
+                                            <i class="fas fa-truck-loading text-secondary"
+                                               :title="`Supplier: ${entity.name}`"
+                                               x-show="entity.is_supplier"></i>
+                                            <i class="fas fa-pen-nib text-secondary"
+                                               :title="`Author: ${entity.name}`"
+                                               x-show="entity.is_author"></i>
+                                        </span>
+                                    </template>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-success-subtle text-success"
+                                      x-show="profile.is_default">Default</span>
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-secondary"
+                                            :hx-get="`{% url 'teams:contact_profiles_detail_form' team.key '0000' %}`.replace('0000', profile.id)"
+                                            hx-target="#contact-profiles-content"
+                                            hx-swap="innerHTML">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-primary"
+                                            :disabled="profile.is_default"
+                                            hx-post="{% url 'teams:contact_profiles_list' team.key %}"
+                                            :hx-vals="JSON.stringify({'_method': 'PATCH', 'profile_id': profile.id})"
+                                            hx-target="#contact-profiles-content"
+                                            hx-swap="innerHTML">
+                                        <i class="fas fa-star"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#delete-contact-profile-modal"
+                                            :data-form-profile_id="profile.id"
+                                            :data-display-name="profile.name">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {# Collapsible Preview Row #}
+                        <tr x-show="expandedProfiles.includes(profile.id)"
+                            x-transition:enter="transition ease-out duration-200"
+                            x-transition:enter-start="opacity-0"
+                            x-transition:enter-end="opacity-100"
+                            x-transition:leave="transition ease-in duration-150"
+                            x-transition:leave-start="opacity-100"
+                            x-transition:leave-end="opacity-0">
+                            <td colspan="6" class="bg-light p-4">
+                                <div class="row g-3">
+                                    <template x-if="!profile.entities || profile.entities.length === 0">
+                                        <div class="col-12">
+                                            <div class="text-center text-muted py-3">
+                                                <i class="fas fa-building fa-2x mb-2 opacity-50"></i>
+                                                <p class="mb-0">No entities in this profile</p>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template x-for="entity in (profile.entities || [])">
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="card h-100 border">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <h6 class="card-title mb-0 fw-bold" x-text="entity.name"></h6>
+                                                        <div class="d-flex gap-1">
+                                                            <i class="fas fa-industry text-secondary"
+                                                               :title="`Manufacturer: ${entity.name}`"
+                                                               x-show="entity.is_manufacturer"></i>
+                                                            <i class="fas fa-truck-loading text-secondary"
+                                                               :title="`Supplier: ${entity.name}`"
+                                                               x-show="entity.is_supplier"></i>
+                                                            <i class="fas fa-pen-nib text-secondary"
+                                                               :title="`Author: ${entity.name}`"
+                                                               x-show="entity.is_author"></i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="small text-muted mb-2">
+                                                        <div x-show="entity.email">
+                                                            <i class="fas fa-envelope me-1"></i>
+                                                            <span x-text="entity.email"></span>
+                                                        </div>
+                                                        <div x-show="entity.phone" class="mt-1">
+                                                            <i class="fas fa-phone me-1"></i>
+                                                            <span x-text="entity.phone"></span>
+                                                        </div>
+                                                    </div>
+                                                    <template x-if="entity.contacts && entity.contacts.length > 0">
+                                                        <div class="mt-2">
+                                                            <small class="text-muted fw-bold">Contacts:</small>
+                                                            <ul class="list-unstyled small mb-0 mt-1">
+                                                                <template x-for="contact in entity.contacts">
+                                                                    <li class="mb-1">
+                                                                        <i class="fas fa-user me-1 text-muted"></i>
+                                                                        <span x-text="contact.name"></span>
+                                                                        <span class="text-muted ms-1" x-text="`(${contact.email})`"></span>
+                                                                    </li>
+                                                                </template>
+                                                            </ul>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!entity.contacts || entity.contacts.length === 0">
+                                                        <div class="small text-muted mt-2">
+                                                            <i class="fas fa-info-circle me-1"></i>
+                                                            No contacts
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <template x-if="filteredProfiles.length === 0 && profiles.length > 0">
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-search fa-2x mb-2 opacity-50"></i>
+                    <p class="mb-0">No profiles match your search criteria</p>
+                </div>
+            </template>
+        </div>
+    {% endif %}
+</div>
 {% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True %}

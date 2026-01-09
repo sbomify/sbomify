@@ -1,13 +1,47 @@
-<button type="button" class="btn btn-sm btn-danger delete-contact-btn">
-    <i class="fas fa-times"></i>
-</button>
-{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-{% for field in form.visible_fields %}
-    <div class="mb-2">
-        <label class="form-label small" for="{{ field.id_for_label }}">
-            {{ field.label }}
-            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-        </label>
-        {{ field }}
+{% load widget_tweaks %}
+<div class="card mb-2 shadow-none border contact-card"
+     x-data="contactEntry"
+     x-show="!deleted"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100 transform scale-100"
+     x-transition:leave-end="opacity-0 transform scale-95">
+    <div class="card-body p-3">
+        {# Hidden fields #}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+        <input type="hidden" name="{{ form.prefix }}-DELETE" x-model="deleted">
+        <div class="row g-2 align-items-start">
+            {# Name Field #}
+            <div class="col-md-4">
+                <div class="form-floating">
+                    {{ form.name|add_class:"form-control form-control-sm"|attr:"placeholder:Name"|attr:"required:required" }}
+                    <label class="text-muted small">{{ form.name.label }} *</label>
+                </div>
+                {% if form.name.errors %}<div class="invalid-feedback d-block small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+            </div>
+            {# Email Field #}
+            <div class="col-md-4">
+                <div class="form-floating">
+                    {{ form.email|add_class:"form-control form-control-sm"|attr:"type:email"|attr:"placeholder:Email"|attr:"required:required" }}
+                    <label class="text-muted small">{{ form.email.label }} *</label>
+                </div>
+                {% if form.email.errors %}<div class="invalid-feedback d-block small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+            </div>
+            {# Phone Field #}
+            <div class="col-md-3">
+                <div class="form-floating">
+                    {{ form.phone|add_class:"form-control form-control-sm"|attr:"placeholder:Phone" }}
+                    <label class="text-muted small">{{ form.phone.label }}</label>
+                </div>
+            </div>
+            {# Remove Button #}
+            <div class="col-md-1 d-flex justify-content-end align-items-center pt-2">
+                <button type="button"
+                        class="btn btn-icon btn-sm btn-ghost-danger"
+                        @click="removeContact"
+                        title="Remove Contact">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
     </div>
-{% endfor %}
+</div>

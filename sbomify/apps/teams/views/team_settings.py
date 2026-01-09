@@ -11,7 +11,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.teams.apis import get_team
+from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -155,6 +155,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Get branding info for trust center settings
         branding_info = team_obj.branding_info if team_obj else {}
 
+        # Fetch contact profiles for the settings tab
+        _, profiles = list_contact_profiles(request, team_key)
+
         return render(
             request,
             "teams/team_settings.html.j2",
@@ -174,6 +177,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "is_owner": is_owner,
                 # Trust center settings
                 "branding_info": branding_info,
+                # Contact Profiles tab
+                "profiles": profiles,
             },
         )
 

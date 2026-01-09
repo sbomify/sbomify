@@ -32,6 +32,7 @@ from sbomify.apps.teams.forms import (
     OnboardingCompanyForm,
 )
 from sbomify.apps.teams.models import (
+    ContactEntity,
     ContactProfile,
     ContactProfileContact,
     Invitation,
@@ -427,16 +428,15 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             company_name = form.cleaned_data["company_name"]
 
-            # Check for existing entities before attempting creation (short-circuit on first conflict)
+            # Check for conflicts - only for Product naming collisions if we want to be strict,
+            # but for idempotency we might want to allow reuse.
+            # However, if a DIFFERENT product exists with that name, it might be confusing.
+            # For now, we will allow reuse of resources if they match.
             conflict_msg = None
-            if ContactProfile.objects.filter(team=team, is_default=True).exists():
-                conflict_msg = "A default contact profile already exists."
-            elif Product.objects.filter(team=team, name=company_name).exists():
-                conflict_msg = f"A product named '{company_name}' already exists."
-            elif Project.objects.filter(team=team, name="Main Project").exists():
-                conflict_msg = "A project named 'Main Project' already exists."
-            elif Component.objects.filter(team=team, name="Main Component").exists():
-                conflict_msg = "A component named 'Main Component' already exists."
+            # Removed default profile check to allow idempotency
+            if Product.objects.filter(team=team, name=company_name).exists():
+                # We will try to reuse it, so no message here unless we want to force unique names for NEW products
+                pass
 
             if conflict_msg:
                 messages.warning(
@@ -467,49 +467,66 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
 
                 try:
                     with transaction.atomic():
-                        # 1. Create default ContactProfile (company = supplier = vendor)
+                        # 1. Get or Create default ContactProfile
                         website_url = form.cleaned_data.get("website")
                         contact_name = form.cleaned_data["contact_name"]
                         # Empty, None, or whitespace-only falls back to user email
                         contact_email = (form.cleaned_data.get("email") or "").strip() or request.user.email
-                        contact_profile = ContactProfile.objects.create(
-                            team=team,
-                            name="Default",
-                            company=company_name,
-                            supplier_name=company_name,
-                            vendor=company_name,
-                            email=contact_email,
-                            website_urls=[website_url] if website_url else [],
-                            is_default=True,
+
+                        # Use get_or_create to ensure we strictly have only 1 default profile
+                        contact_profile, created = ContactProfile.objects.get_or_create(
+                            team=team, is_default=True, defaults={"name": "Default"}
                         )
 
-                        # Create the contact person for NTIA compliance
-                        ContactProfileContact.objects.create(
+                        # 2. Get or Create Entity
+                        # Entity name is the company name (company > supplier_name > vendor priority)
+                        entity, entity_created = ContactEntity.objects.get_or_create(
                             profile=contact_profile,
-                            name=contact_name,
-                            email=contact_email,
+                            name=company_name,
+                            defaults={
+                                "email": contact_email,
+                                "website_urls": [website_url] if website_url else [],
+                                "is_manufacturer": True,
+                                "is_supplier": True,
+                                "is_author": True,
+                            },
                         )
+
+                        # Create the contact person for NTIA compliance (linked to entity)
+                        if not ContactProfileContact.objects.filter(entity=entity, email=contact_email).exists():
+                            ContactProfileContact.objects.create(
+                                entity=entity,
+                                name=contact_name,
+                                email=contact_email,
+                            )
 
                         # 2. Auto-create hierarchy with SBOM component type
                         # Set visibility based on billing plan: community plans must be public
                         is_public = not team.can_be_private()
-                        product = Product.objects.create(name=company_name, team=team, is_public=is_public)
-                        project = Project.objects.create(name="Main Project", team=team, is_public=is_public)
+                        product, _ = Product.objects.get_or_create(
+                            name=company_name, team=team, defaults={"is_public": is_public}
+                        )
+                        project, _ = Project.objects.get_or_create(
+                            name="Main Project", team=team, defaults={"is_public": is_public}
+                        )
 
                         component_metadata = create_default_component_metadata(
                             user=request.user, team_id=team.id, custom_metadata=None
                         )
 
-                        component = Component.objects.create(
+                        component, component_created = Component.objects.get_or_create(
                             name="Main Component",
                             team=team,
-                            component_type=Component.ComponentType.SBOM,
-                            metadata=component_metadata,
-                            is_public=is_public,
+                            defaults={
+                                "component_type": Component.ComponentType.SBOM,
+                                "metadata": component_metadata,
+                                "is_public": is_public,
+                            },
                         )
 
-                        # Populate native fields with default metadata
-                        populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+                        if component_created:
+                            # Populate native fields with default metadata
+                            populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
 
                         # Link hierarchy: product -> project -> component
                         product.projects.add(project)

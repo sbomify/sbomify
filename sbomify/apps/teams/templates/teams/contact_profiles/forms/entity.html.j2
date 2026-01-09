@@ -1,0 +1,150 @@
+{% load widget_tweaks %}
+<div class="card mb-3 entity-card shadow-sm"
+     x-data="contactEntity('{{ form.prefix|escapejs }}')"
+     x-show="!deleted"
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0 transform scale-95"
+     x-transition:enter-end="opacity-100 transform scale-100"
+     x-transition:enter-end="opacity-100 transform scale-100"
+     @start-edit="editing = true"
+     @contact-removed="updateContactCount">
+    {# Hidden fields for form management #}
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+    <input type="hidden" name="{{ form.prefix }}-DELETE" x-model="deleted">
+    {# Summary View (Visible when not editing) #}
+    <div class="card-body p-3 d-flex align-items-center justify-content-between"
+         x-show="!editing"
+         x-transition>
+        <div class="d-flex align-items-center gap-3 overflow-hidden">
+            <div class="avatar rounded-circle bg-primary-soft text-primary flex-shrink-0">
+                <i class="fas fa-building"></i>
+            </div>
+            <div class="min-w-0">
+                <h6 class="mb-0 fw-bold text-truncate" x-text="name || 'New Entity'"></h6>
+                <div class="d-flex gap-2 mt-1 small flex-wrap">
+                    <span class="badge bg-light text-secondary border service-badge"
+                          x-show="isManufacturer"><i class="fas fa-industry me-1"></i>Mfr</span>
+                    <span class="badge bg-light text-secondary border service-badge"
+                          x-show="isSupplier"><i class="fas fa-truck-loading me-1"></i>Sup</span>
+                    <span class="badge bg-light text-secondary border service-badge"
+                          x-show="isAuthor"><i class="fas fa-pen-nib me-1"></i>Auth</span>
+                    <span class="text-muted fst-italic" x-show="!hasRole">No roles selected</span>
+                </div>
+                <div class="text-danger small fw-bold" x-show="!hasRole && touched">Role required</div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="d-flex align-items-center text-muted small me-2"
+                 title="Contacts">
+                <i class="fas fa-users me-1"></i>
+                <span x-text="activeContactsCount"></span>
+            </div>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    @click="editing = true">
+                <i class="fas fa-edit"></i> Edit
+            </button>
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    @click="removeEntity"
+                    title="Remove Entity">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    </div>
+    {# Editor Content (Inline) #}
+    <div class="entity-editor-content" x-show="editing" x-transition>
+        <div class="p-4">
+            {# Roles Section #}
+            <div class="mb-4 pb-3 border-bottom">
+                <div class="d-flex gap-2 flex-wrap role-badges justify-content-center">
+                    <label class="role-badge" :class="{'active': isManufacturer}">
+                        {{ form.is_manufacturer|add_class:"form-check-input d-none"|attr:"x-model:isManufacturer" }}
+                        <i class="fas fa-industry me-1"></i> Manufacturer
+                    </label>
+                    <label class="role-badge" :class="{'active': isSupplier}">
+                        {{ form.is_supplier|add_class:"form-check-input d-none"|attr:"x-model:isSupplier" }}
+                        <i class="fas fa-truck-loading me-1"></i> Supplier
+                    </label>
+                    <label class="role-badge" :class="{'active': isAuthor}">
+                        {{ form.is_author|add_class:"form-check-input d-none"|attr:"x-model:isAuthor" }}
+                        <i class="fas fa-pen-nib me-1"></i> Author
+                    </label>
+                </div>
+                {% if form.non_field_errors %}
+                    <div class="invalid-feedback d-block mt-2 text-center">{{ form.non_field_errors.0 }}</div>
+                {% endif %}
+                <div class="text-danger small mt-2 fw-semibold text-center"
+                     :class="{'d-block': !hasRole && touched}"
+                     x-show="!hasRole && touched">At least one role must be selected</div>
+            </div>
+            {# Entity Details Grid #}
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label class="form-label">
+                        Entity / Company Name <span class="text-danger">*</span>
+                    </label>
+                    {{ form.name|add_class:"form-control"|attr:"placeholder:e.g. Acme Corp"|attr:"x-model:name"|attr:"x-effect:$el.required = !deleted" }}
+                    {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors.0 }}</div>{% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">
+                        Email Address <span class="text-danger">*</span>
+                    </label>
+                    {{ form.email|add_class:"form-control"|attr:"type:email"|attr:"placeholder:contact@example.com"|attr:"x-effect:$el.required = !deleted"|attr:"x-model:email" }}
+                    {% if form.email.errors %}<div class="invalid-feedback d-block">{{ form.email.errors.0 }}</div>{% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Phone Number</label>
+                    {{ form.phone|add_class:"form-control"|attr:"placeholder:+1 555 123 4567"|attr:"x-model:phone" }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    {{ form.address|add_class:"form-control"|attr:"rows:2"|attr:"placeholder:Street, City, Country"|attr:"x-model:address" }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Website URLs</label>
+                    {{ form.website_urls_text|add_class:"form-control font-monospace small"|attr:"rows:2"|attr:"placeholder:Enter one URL per line\nhttps://example.com"|attr:"x-model:websites" }}
+                    <div class="form-text small text-muted">One URL per line</div>
+                </div>
+            </div>
+            <hr class="my-4 border-light">
+            {# Contacts Section #}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fas fa-users me-2 text-muted"></i>Associated Contacts
+                    <span class="badge bg-light text-dark ms-2" x-text="activeContactsCount">0</span>
+                </h6>
+                <button type="button" class="btn btn-sm btn-soft-primary" @click="addContact">
+                    <i class="fas fa-plus me-1"></i> Add Contact
+                </button>
+            </div>
+            <div class="contacts-list bg-light rounded-3 p-3">
+                <div class="alert alert-info py-2 small"
+                     x-show="activeContactsCount === 0">
+                    <i class="fas fa-info-circle me-1"></i> No contacts added for this entity yet.
+                </div>
+                {% if contacts_formset %}
+                    {{ contacts_formset.management_form }}
+                    {% for contact_form in contacts_formset %}
+                        {% include "teams/contact_profiles/forms/contact.html.j2" with form=contact_form parent_prefix=form.prefix %}
+                    {% endfor %}
+                {% endif %}
+                <template x-if="false">
+                    <div class="contact-template"></div>
+                </template>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <button type="button"
+                        class="btn btn-outline-secondary px-4"
+                        @click="cancelEdit()">Cancel</button>
+                <button type="button"
+                        class="btn btn-primary px-4"
+                        @click="saveEdit()"
+                        :disabled="hasErrors">
+                    <i class="fas fa-check me-1"></i> Done
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

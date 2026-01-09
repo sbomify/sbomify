@@ -186,19 +186,24 @@ class TestOnboardingWizard:
 
         assert response.status_code == 302
 
-        # Verify ContactProfile was created correctly
+        # Verify ContactProfile was created correctly (3-level hierarchy)
         profile = ContactProfile.objects.filter(team=team).first()
         assert profile is not None
         assert profile.name == "Default"
-        assert profile.company == "Test Company"
-        assert profile.supplier_name == "Test Company"
-        assert profile.vendor == "Test Company"
-        assert profile.email == "contact@test.com"
-        assert profile.website_urls == ["https://test.com"]
         assert profile.is_default is True
 
-        # Verify ContactProfileContact was created for NTIA compliance
-        contact = profile.contacts.first()
+        # Entity should have the company details
+        entity = profile.entities.first()
+        assert entity is not None
+        assert entity.name == "Test Company"  # Entity name is the company name
+        assert entity.email == "contact@test.com"
+        assert entity.website_urls == ["https://test.com"]
+        assert entity.is_manufacturer is True
+        assert entity.is_supplier is True
+        assert entity.is_author is True
+
+        # Verify ContactProfileContact was created for NTIA compliance (linked to entity)
+        contact = entity.contacts.first()
         assert contact is not None
         assert contact.name == "John Doe"
         assert contact.email == "contact@test.com"
@@ -231,7 +236,10 @@ class TestOnboardingWizard:
 
         profile = ContactProfile.objects.filter(team=team).first()
         assert profile is not None
-        assert profile.email == sample_user.email
+        # Email is now on the entity, not the profile
+        entity = profile.entities.first()
+        assert entity is not None
+        assert entity.email == sample_user.email
 
     def test_product_project_component_auto_created(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -478,7 +486,10 @@ class TestOnboardingWizard:
 
         profile = ContactProfile.objects.filter(team=team).first()
         assert profile is not None
-        assert profile.website_urls == []
+        # website_urls is now on the entity, not the profile
+        entity = profile.entities.first()
+        assert entity is not None
+        assert entity.website_urls == []
 
     def test_invalid_website_url(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that invalid website URL is rejected."""

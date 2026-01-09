@@ -1024,18 +1024,31 @@ def test_component_metadata_with_contact_profile(
 ):
     client = Client()
 
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Shared Profile",
-        company="Example Corp",
-        supplier_name="Example Supplier",
+        is_default=True,
+    )
+    # Create entity with all roles for backward compatibility
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Example Supplier",
         email="profile@example.com",
         phone="+1 555 0100",
         address="123 Example Street",
         website_urls=["https://supplier.example.com"],
-        is_default=True,
+        is_manufacturer=True,
+        is_supplier=True,
+        is_author=True,
     )
-    profile.contacts.create(name="Profile Owner", email="owner@example.com", phone="555-1000")
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Profile Owner",
+        email="owner@example.com",
+        phone="555-1000",
+    )
 
     patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.patch(
@@ -1060,7 +1073,7 @@ def test_component_metadata_with_contact_profile(
     assert response_data["contact_profile_id"] == profile.id
     assert response_data["contact_profile"]["name"] == "Shared Profile"
     assert response_data["uses_custom_contact"] is False
-    assert response_data["supplier"]["name"] == "Example Supplier"
+    assert response_data["supplier"]["name"] == "Example Supplier"  # Entity name used for supplier
     assert response_data["supplier"]["address"] == "123 Example Street"
     assert response_data["supplier"]["url"] == ["https://supplier.example.com"]
     assert response_data["supplier"]["contacts"][0]["name"] == "Profile Owner"

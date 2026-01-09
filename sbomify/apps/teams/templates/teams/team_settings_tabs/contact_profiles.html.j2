@@ -23,3 +23,453 @@
         </div>
     </div>
 </div>
+<script>
+    function initAlpineComponents() {
+        if (!window.Alpine) {
+            document.addEventListener('alpine:init', initAlpineComponents);
+            return;
+        }
+
+        // Only register if not already registered (idempotent)
+        if (window._alpineContactProfilesInitialized) return;
+        window._alpineContactProfilesInitialized = true;
+
+    Alpine.data('contactProfileForm', (entitiesPrefix) => ({
+        entitiesPrefix: entitiesPrefix,
+        visibleEntitiesCount: 0,
+        
+        initForm() {
+            this.updateCounts();
+        },
+        
+        get hasErrors() {
+            return document.querySelectorAll('.is-invalid').length > 0;
+        },
+
+        addEntity() {
+            const container = document.getElementById('entities-container');
+            const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]'); 
+            const currentCount = parseInt(totalFormsInput.value);
+            
+            const template = document.getElementById('entity-template').content.cloneNode(true);
+            const newRow = document.createElement('div');
+            newRow.appendChild(template);
+            
+            // Replace prefix in inputs
+            const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
+            newRow.innerHTML = newHtml;
+
+            // Handle the nested contact formset management form
+            const entityPrefix = `${this.entitiesPrefix}-${currentCount}`;
+            const contactPrefix = `${entityPrefix}-contacts`;
+            
+            const mgmtDiv = document.createElement('div');
+            mgmtDiv.innerHTML = `
+                <input type="hidden" name="${contactPrefix}-TOTAL_FORMS" value="0" id="id_${contactPrefix}-TOTAL_FORMS">
+                <input type="hidden" name="${contactPrefix}-INITIAL_FORMS" value="0" id="id_${contactPrefix}-INITIAL_FORMS">
+                <input type="hidden" name="${contactPrefix}-MIN_NUM_FORMS" value="0" id="id_${contactPrefix}-MIN_NUM_FORMS">
+                <input type="hidden" name="${contactPrefix}-MAX_NUM_FORMS" value="1000" id="id_${contactPrefix}-MAX_NUM_FORMS">
+            `;
+            // Add management form to the contacts-list inside entity-editor-content
+            const contactsList = newRow.querySelector('.contacts-list');
+            if (contactsList) {
+                contactsList.insertBefore(mgmtDiv, contactsList.firstChild);
+            }
+
+            container.appendChild(newRow.firstElementChild);
+            const newEntityEl = container.lastElementChild;
+            
+            totalFormsInput.value = currentCount + 1;
+            
+            // Initialize Alpine on the new element
+            if (window.Alpine) {
+                Alpine.initTree(newEntityEl);
+            }
+            
+            this.updateCounts();
+            
+            // Auto-open the editor for the new entity (small delay to ensure Alpine is ready)
+            setTimeout(() => {
+                if (newEntityEl) {
+                    const alpineData = Alpine.$data(newEntityEl);
+                    if (alpineData) {
+                        alpineData.editing = true;
+                    }
+                    // Scroll to the new entity
+                    newEntityEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 50);
+        },
+        
+        submitForm(e) {
+            const form = this.$el.querySelector('form');
+            if (form.reportValidity()) {
+                htmx.trigger(form, 'htmx:submit');
+            }
+        },
+        
+        updateCounts() {
+             this.visibleEntitiesCount = document.querySelectorAll('.entity-card:not([style*="display: none"])').length;
+        }
+    }));
+
+    Alpine.data('contactEntity', (prefix) => ({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+        websites: '',
+        isManufacturer: false,
+        isSupplier: false,
+        isAuthor: false,
+        deleted: false,
+        activeContactsCount: 0,
+        touched: false,
+        editing: false,
+        isNew: false,
+        snapshot: null,
+        
+        init() {
+            // Sync initial values from DOM inputs if present
+            const nameInput = this.$el.querySelector(`input[name$="-name"]`);
+            if (nameInput) this.name = nameInput.value;
+            
+            const emailInput = this.$el.querySelector(`input[name$="-email"]`);
+            if (emailInput) this.email = emailInput.value;
+
+            const phoneInput = this.$el.querySelector(`input[name$="-phone"]`);
+            if (phoneInput) this.phone = phoneInput.value;
+
+            const addressInput = this.$el.querySelector(`input[name$="-address"]`);
+            if (addressInput) this.address = addressInput.value;
+
+            const webInput = this.$el.querySelector(`textarea[name$="-website_urls_text"]`);
+            if (webInput) this.websites = webInput.value;
+
+            const mfgInput = this.$el.querySelector(`input[name$="-is_manufacturer"]`);
+            if (mfgInput) this.isManufacturer = mfgInput.checked;
+
+            const suppInput = this.$el.querySelector(`input[name$="-is_supplier"]`);
+            if (suppInput) this.isSupplier = suppInput.checked;
+
+            const authInput = this.$el.querySelector(`input[name$="-is_author"]`);
+            if (authInput) this.isAuthor = authInput.checked;
+            
+            // Detect if this is a new entity (no name yet)
+            this.isNew = !this.name;
+            
+            this.$watch('deleted', () => {
+                this.$dispatch('update-counts'); 
+            });
+            
+            // Watch editing state to create snapshot when editing starts
+            this.$watch('editing', (value) => {
+                if (value && !this.snapshot) {
+                    this.createSnapshot();
+                }
+            });
+            
+            this.updateContactCount();
+        },
+
+        get hasRole() {
+            return this.isManufacturer || this.isSupplier || this.isAuthor;
+        },
+
+        get hasErrors() {
+             return !this.deleted && (!this.name || !this.email || !this.hasRole);
+        },
+
+        createSnapshot() {
+            this.snapshot = {
+                name: this.name,
+                email: this.email,
+                phone: this.phone,
+                address: this.address,
+                websites: this.websites,
+                isManufacturer: this.isManufacturer,
+                isSupplier: this.isSupplier,
+                isAuthor: this.isAuthor
+            };
+        },
+
+        saveEdit() {
+            this.touched = true;
+            if (this.hasErrors) {
+                return;
+            }
+            this.isNew = false;
+            this.snapshot = null;
+            this.editing = false;
+        },
+
+        cancelEdit() {
+            // Revert to snapshot if exists
+            if (this.snapshot) {
+                this.name = this.snapshot.name;
+                this.email = this.snapshot.email;
+                this.phone = this.snapshot.phone;
+                this.address = this.snapshot.address;
+                this.websites = this.snapshot.websites;
+                this.isManufacturer = this.snapshot.isManufacturer;
+                this.isSupplier = this.snapshot.isSupplier;
+                this.isAuthor = this.snapshot.isAuthor;
+            }
+            // If new entity with no saved data, remove it
+            if (this.isNew) {
+                this.deleted = true;
+            }
+            this.snapshot = null;
+            this.editing = false;
+            this.touched = false;
+        },
+
+        removeEntity() {
+             this.deleted = true;
+             this.editing = false;
+        },
+        
+        addContact() {
+             console.log('[Debug] addContact clicked. Prefix:', prefix);
+             // Use $root to ensure we select from the component root
+             const listContainer = this.$root.querySelector('.contacts-list');
+             console.log('[Debug] Root:', this.$root);
+             console.log('[Debug] listContainer found?', !!listContainer);
+
+             if (listContainer) {
+                 window.addContactRow(listContainer, prefix);
+                 this.$nextTick(() => {
+                     this.updateContactCount();
+                 });
+             } else {
+                 console.error('Contacts list not found in entity card');
+             }
+        },
+
+        updateContactCount() {
+             if (this.deleted) {
+                 this.activeContactsCount = 0;
+                 return;
+             }
+             this.$nextTick(() => {
+                 const list = this.$root.querySelector('.contacts-list');
+                 if (list) {
+                     const cards = list.querySelectorAll('.contact-card');
+                     let count = 0;
+                     cards.forEach(card => {
+                         const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                         // Count if no delete input found (shouldn't happen) or if it's not marked deleted
+                         if (!deleteInput || deleteInput.value !== 'true') {
+                             count++;
+                         }
+                     });
+                     this.activeContactsCount = count;
+                 }
+             });
+        }
+    }));
+    
+    Alpine.data('contactEntry', () => ({
+        deleted: false,
+        
+        removeContact() {
+            this.deleted = true;
+            this.$dispatch('contact-removed');
+        }
+    }));
+    
+    Alpine.data('contactProfileList', () => ({
+        profiles: [],
+        filteredProfiles: [],
+        searchQuery: '',
+        roleFilter: '',
+        expandedProfiles: [],
+        
+        init() {
+            // Load profiles from JSON script tag
+            // Wait for next tick to ensure DOM is ready? x-init should be fine.
+            this.$nextTick(() => {
+                const profilesScript = document.getElementById('profiles-data');
+                if (profilesScript) {
+                    try {
+                        this.profiles = JSON.parse(profilesScript.textContent);
+                         // Initialize filtered profiles here to ensure sync
+                        this.filteredProfiles = this.profiles.map(p => ({...p, hidden: false}));
+                    } catch (e) {
+                        console.error('Failed to parse profiles data:', e);
+                        this.profiles = [];
+                    }
+                }
+            });
+        },
+        
+        togglePreview(profileId) {
+            if (this.expandedProfiles.includes(profileId)) {
+                this.expandedProfiles = this.expandedProfiles.filter(id => id !== profileId);
+            } else {
+                this.expandedProfiles.push(profileId);
+            }
+        },
+        
+        filterProfiles() {
+            const query = this.searchQuery.toLowerCase().trim();
+            const role = this.roleFilter.toLowerCase();
+            
+            this.filteredProfiles = this.profiles.map(profile => {
+                let matches = true;
+                
+                // Search filter
+                if (query) {
+                    const nameMatch = profile.name?.toLowerCase().includes(query);
+                    const entityNameMatch = (profile.entities || []).some(e => 
+                        e.name?.toLowerCase().includes(query)
+                    );
+                    const roleMatch = (profile.entities || []).some(e => 
+                        (e.is_manufacturer && 'manufacturer'.includes(query)) ||
+                        (e.is_supplier && 'supplier'.includes(query)) ||
+                        (e.is_author && 'author'.includes(query))
+                    );
+                    matches = nameMatch || entityNameMatch || roleMatch;
+                }
+                
+                // Role filter
+                if (role && matches) {
+                    matches = (profile.entities || []).some(e => {
+                        if (role === 'manufacturer') return e.is_manufacturer;
+                        if (role === 'supplier') return e.is_supplier;
+                        if (role === 'author') return e.is_author;
+                        return true;
+                    });
+                }
+                
+                return {...profile, hidden: !matches};
+            });
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+    }));
+    }
+
+    initAlpineComponents();
+
+    /* Helper function for adding contacts dynamically */
+    window.addContactRow = function(container, entityPrefix) {
+    if (!container) {
+        console.error("addContactRow called with null container");
+        return;
+    }
+    const contactPrefix = `${entityPrefix}-contacts`;
+    const entityCard = container.closest('.entity-card');
+    
+    if (!entityCard) {
+        console.error("Entity parent card not found");
+        return;
+    }
+
+    // Look for the total forms input - it could be directly in the contacts-list or in the entity card
+    let totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    if (!totalInput) {
+        totalInput = entityCard.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    }
+    
+    if (!totalInput) {
+        // Create the management form if it doesn't exist
+        const mgmtDiv = document.createElement('div');
+        mgmtDiv.innerHTML = `
+            <input type="hidden" name="${contactPrefix}-TOTAL_FORMS" value="0" id="id_${contactPrefix}-TOTAL_FORMS">
+            <input type="hidden" name="${contactPrefix}-INITIAL_FORMS" value="0" id="id_${contactPrefix}-INITIAL_FORMS">
+            <input type="hidden" name="${contactPrefix}-MIN_NUM_FORMS" value="0" id="id_${contactPrefix}-MIN_NUM_FORMS">
+            <input type="hidden" name="${contactPrefix}-MAX_NUM_FORMS" value="1000" id="id_${contactPrefix}-MAX_NUM_FORMS">
+        `;
+        container.insertBefore(mgmtDiv, container.firstChild);
+        totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    }
+    
+    const index = parseInt(totalInput.value);
+    const newPrefix = `${contactPrefix}-${index}`;
+    
+    let newRow = null;
+    const existingContact = container.querySelector('.contact-card');
+    
+    if (existingContact) {
+        newRow = existingContact.cloneNode(true);
+        newRow.querySelectorAll('input, select, textarea').forEach(input => {
+            if (input.name) {
+                const nameMatch = input.name.match(/^(.+?)-(name|email|phone|DELETE|id)$/);
+                if (nameMatch) {
+                    input.name = `${newPrefix}-${nameMatch[2]}`;
+                    input.id = `id_${input.name}`;
+                }
+            }
+        });
+        newRow.querySelectorAll('input[type="text"], input[type="email"]').forEach(input => {
+            if (input.name && !input.name.includes('DELETE') && !input.name.includes('id')) {
+                input.value = '';
+            }
+        });
+        const deleteInput = newRow.querySelector(`input[name="${newPrefix}-DELETE"]`);
+        if (deleteInput) {
+            deleteInput.value = '';
+        }
+    } else {
+        newRow = document.createElement('div');
+        newRow.className = 'card mb-2 shadow-none border contact-card';
+        newRow.setAttribute('x-data', 'contactEntry');
+        newRow.innerHTML = `
+            <div class="card-body p-3">
+                <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
+                <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
+                <div class="row g-2 align-items-start">
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm" placeholder="Name" required>
+                            <label class="text-muted small">Name *</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-floating">
+                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm" placeholder="Email" required>
+                            <label class="text-muted small">Email *</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm" placeholder="Phone">
+                            <label class="text-muted small">Phone</label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 d-flex justify-content-end align-items-center pt-2">
+                        <button type="button" class="btn btn-icon btn-sm btn-ghost-danger" @click="removeContact" title="Remove Contact">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        if (window.Alpine) {
+            Alpine.initTree(newRow);
+        }
+    }
+    
+    container.appendChild(newRow);
+    totalInput.value = index + 1;
+};
+
+    // Reinitialize Alpine on HTMX content swaps
+    document.body.addEventListener('htmx:afterSettle', function(event) {
+        if (event.detail.target.id === 'contact-profiles-content') {
+            // Ensure Alpine components are registered
+            initAlpineComponents();
+            // Initialize Alpine on the new content with slight delay for DOM stability
+            requestAnimationFrame(() => {
+                if (window.Alpine) {
+                    Alpine.initTree(event.detail.target);
+                }
+            });
+        }
+    });
+</script>
