@@ -199,7 +199,11 @@ class TestCycloneDXValidation:
         assert timestamp_finding.status == "fail"
 
     def test_cyclonedx_with_tools_instead_of_authors(self) -> None:
-        """Test CycloneDX SBOM with tools field satisfies author requirement."""
+        """Test CycloneDX SBOM with only tools field fails author requirement.
+
+        NTIA "Author of SBOM Data" = "the entity that creates the SBOM".
+        Tools are software, not entities - they should not satisfy the author requirement.
+        """
         sbom_data = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -221,7 +225,7 @@ class TestCycloneDXValidation:
         result = self._assess_sbom(sbom_data)
 
         author_finding = next(f for f in result.findings if "sbom-author" in f.id)
-        assert author_finding.status == "pass"
+        assert author_finding.status == "fail"
 
     def test_cyclonedx_with_supplier_object(self) -> None:
         """Test CycloneDX SBOM with supplier.name instead of publisher."""
@@ -249,7 +253,11 @@ class TestCycloneDXValidation:
         assert supplier_finding.status == "pass"
 
     def test_cyclonedx_with_hashes_as_unique_id(self) -> None:
-        """Test CycloneDX SBOM with hashes satisfies unique identifier requirement."""
+        """Test CycloneDX SBOM with only hashes fails unique identifier requirement.
+
+        Hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM).
+        Valid unique identifiers are: PURL, CPE, SWID.
+        """
         sbom_data = {
             "bomFormat": "CycloneDX",
             "specVersion": "1.5",
@@ -259,6 +267,56 @@ class TestCycloneDXValidation:
                     "version": "1.0.0",
                     "publisher": "Example Corp",
                     "hashes": [{"alg": "SHA-256", "content": "abc123"}],  # Using hashes instead of purl
+                }
+            ],
+            "dependencies": [{"ref": "example-component", "dependsOn": []}],
+            "metadata": {
+                "authors": [{"name": "Example Developer"}],
+                "timestamp": "2023-01-01T00:00:00Z",
+            },
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "fail"
+
+    def test_cyclonedx_with_cpe_as_unique_id(self) -> None:
+        """Test CycloneDX SBOM with CPE satisfies unique identifier requirement."""
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "components": [
+                {
+                    "name": "example-component",
+                    "version": "1.0.0",
+                    "publisher": "Example Corp",
+                    "cpe": "cpe:2.3:a:example:component:1.0.0:*:*:*:*:*:*:*",
+                }
+            ],
+            "dependencies": [{"ref": "example-component", "dependsOn": []}],
+            "metadata": {
+                "authors": [{"name": "Example Developer"}],
+                "timestamp": "2023-01-01T00:00:00Z",
+            },
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "pass"
+
+    def test_cyclonedx_with_swid_as_unique_id(self) -> None:
+        """Test CycloneDX SBOM with SWID satisfies unique identifier requirement."""
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "components": [
+                {
+                    "name": "example-component",
+                    "version": "1.0.0",
+                    "publisher": "Example Corp",
+                    "swid": {"tagId": "example.com+example-component@1.0.0"},
                 }
             ],
             "dependencies": [{"ref": "example-component", "dependsOn": []}],
@@ -441,6 +499,121 @@ class TestSPDXValidation:
 
         timestamp_finding = next(f for f in result.findings if "timestamp" in f.id)
         assert timestamp_finding.status == "fail"
+
+    def test_spdx_with_invalid_external_ref_type(self) -> None:
+        """Test SPDX SBOM with invalid externalRef type fails unique identifier requirement.
+
+        Only purl, cpe22Type, cpe23Type, and swid are valid identifier types.
+        Other reference types (like security advisory, URL, etc.) should not count.
+        """
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package",
+                    "name": "example-package",
+                    "supplier": "Organization: Example Corp",
+                    "versionInfo": "1.0.0",
+                    "externalRefs": [
+                        {
+                            "referenceCategory": "SECURITY",
+                            "referenceType": "advisory",  # Invalid type for unique identifier
+                            "referenceLocator": "https://example.com/advisory/123",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Package",
+                }
+            ],
+            "creationInfo": {
+                "creators": ["Tool: example-tool"],
+                "created": "2023-01-01T00:00:00Z",
+            },
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "fail"
+
+    def test_spdx_with_cpe_external_ref(self) -> None:
+        """Test SPDX SBOM with CPE externalRef satisfies unique identifier requirement."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package",
+                    "name": "example-package",
+                    "supplier": "Organization: Example Corp",
+                    "versionInfo": "1.0.0",
+                    "externalRefs": [
+                        {
+                            "referenceCategory": "SECURITY",
+                            "referenceType": "cpe23Type",
+                            "referenceLocator": "cpe:2.3:a:example:package:1.0.0:*:*:*:*:*:*:*",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Package",
+                }
+            ],
+            "creationInfo": {
+                "creators": ["Tool: example-tool"],
+                "created": "2023-01-01T00:00:00Z",
+            },
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "pass"
+
+    def test_spdx_with_swid_external_ref(self) -> None:
+        """Test SPDX SBOM with SWID externalRef satisfies unique identifier requirement."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package",
+                    "name": "example-package",
+                    "supplier": "Organization: Example Corp",
+                    "versionInfo": "1.0.0",
+                    "externalRefs": [
+                        {
+                            "referenceCategory": "PACKAGE-MANAGER",
+                            "referenceType": "swid",
+                            "referenceLocator": "swid:example.com+example-package@1.0.0",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Package",
+                }
+            ],
+            "creationInfo": {
+                "creators": ["Tool: example-tool"],
+                "created": "2023-01-01T00:00:00Z",
+            },
+        }
+
+        result = self._assess_sbom(sbom_data)
+
+        unique_id_finding = next(f for f in result.findings if "unique-identifier" in f.id)
+        assert unique_id_finding.status == "pass"
 
     def _assess_sbom(self, sbom_data: dict) -> AssessmentResult:
         """Helper to write SBOM to temp file and assess it."""

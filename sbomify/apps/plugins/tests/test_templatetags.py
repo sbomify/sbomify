@@ -3,6 +3,7 @@
 from sbomify.apps.plugins.templatetags.plugins_extras import (
     format_finding_description,
     format_run_reason,
+    has_compliance_failures,
     status_border_class,
     status_icon,
     status_text_class,
@@ -199,3 +200,162 @@ class TestFormatFindingDescription:
         assert "pkg1" in result
         # No toggle needed for short lists
         assert "pkg-toggle" not in result
+
+
+class TestHasComplianceFailures:
+    """Tests for has_compliance_failures filter."""
+
+    def test_none_returns_false(self) -> None:
+        """None input returns False."""
+        assert has_compliance_failures(None) is False
+
+    def test_empty_dict_returns_false(self) -> None:
+        """Empty dict returns False."""
+        assert has_compliance_failures({}) is False
+
+    def test_empty_latest_runs_returns_false(self) -> None:
+        """Empty latest_runs list returns False."""
+        assert has_compliance_failures({"latest_runs": []}) is False
+
+    def test_no_compliance_runs_returns_false(self) -> None:
+        """Non-compliance runs don't trigger CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "security",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 5, "error_count": 0}},
+                },
+                {
+                    "category": "license",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 3, "error_count": 0}},
+                },
+            ]
+        }
+        assert has_compliance_failures(data) is False
+
+    def test_compliance_passing_returns_false(self) -> None:
+        """Passing compliance runs don't trigger CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 0, "error_count": 0}},
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is False
+
+    def test_compliance_with_fail_count_returns_true(self) -> None:
+        """Compliance run with fail_count > 0 triggers CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 2, "error_count": 0}},
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is True
+
+    def test_compliance_with_error_count_returns_true(self) -> None:
+        """Compliance run with error_count > 0 triggers CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 0, "error_count": 1}},
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is True
+
+    def test_compliance_run_failed_status_returns_true(self) -> None:
+        """Compliance run with 'failed' status (execution error) triggers CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "failed",
+                    "error_message": "Plugin execution failed",
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is True
+
+    def test_compliance_pending_returns_false(self) -> None:
+        """Pending compliance runs don't trigger CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "pending",
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is False
+
+    def test_compliance_running_returns_false(self) -> None:
+        """Running compliance runs don't trigger CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "running",
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is False
+
+    def test_mixed_runs_with_compliance_failure_returns_true(self) -> None:
+        """Mixed runs where one compliance run has failures triggers CTA."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "security",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 10, "error_count": 0}},
+                },
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 0, "error_count": 0}},
+                },
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {"summary": {"fail_count": 1, "error_count": 0}},
+                },
+            ]
+        }
+        assert has_compliance_failures(data) is True
+
+    def test_missing_result_returns_false(self) -> None:
+        """Compliance run with missing result doesn't crash."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": None,
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is False
+
+    def test_missing_summary_returns_false(self) -> None:
+        """Compliance run with missing summary doesn't crash."""
+        data = {
+            "latest_runs": [
+                {
+                    "category": "compliance",
+                    "status": "completed",
+                    "result": {},
+                }
+            ]
+        }
+        assert has_compliance_failures(data) is False
