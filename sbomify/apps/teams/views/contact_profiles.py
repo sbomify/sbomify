@@ -218,8 +218,11 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if entity_form.cleaned_data.get("DELETE"):
                 continue
 
+            name = (entity_form.cleaned_data.get("name") or "").strip()
+            email = (entity_form.cleaned_data.get("email") or "").strip()
+
             # Skip empty/incomplete forms (both name and email are required)
-            if not entity_form.cleaned_data.get("name") or not entity_form.cleaned_data.get("email"):
+            if not name or not email:
                 continue
 
             # Handle nested logic validation
