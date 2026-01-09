@@ -269,6 +269,8 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     elif field == "scheduled_downgrade_plan (cleared)":
                         billing_limits.pop("scheduled_downgrade_plan", None)
                         logger.debug("Cleared scheduled_downgrade_plan")
+                    elif field == "billing_period":
+                        billing_limits["billing_period"] = real_billing_period
                     elif field == "next_billing_date":
                         next_billing_date = get_period_end_from_subscription(subscription, stripe_sub_id)
                         if next_billing_date:

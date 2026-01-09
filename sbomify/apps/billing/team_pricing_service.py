@@ -106,10 +106,13 @@ class TeamPricingService:
                 next_billing_date = billing_plan_limits.get("next_billing_date")
                 last_payment_amount = billing_plan_limits.get("last_payment_amount")
                 last_payment_currency = billing_plan_limits.get("last_payment_currency", "usd")
+                billing_period = billing_plan_limits.get("billing_period")
+
                 # Also update team's billing_plan_limits if it's a schema
                 if hasattr(team, "key") and not hasattr(team, "pk"):
                     # Update the schema object with synced data
                     team.billing_plan_limits = billing_plan_limits
+
             except Exception as e:
                 logger.warning(f"Failed to sync subscription for pricing display: {e}")
 
