@@ -98,8 +98,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "teams/contact_profiles/profile_list.html.j2",
             {
                 "team": team,
-                "profiles": profiles_list,  # Original list for template iteration
-                "profiles_json": json.dumps(profiles_list),  # JSON string for JavaScript
+                "profiles": profiles_list,
                 "form": ContactProfileForm(),
             },
         )
@@ -378,7 +377,6 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             {
                 "team": team,
                 "profiles": profiles_list,
-                "profiles_json": json.dumps(profiles_list),
                 "form": ContactProfileForm(),
             },
         )

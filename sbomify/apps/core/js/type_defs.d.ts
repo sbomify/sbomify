@@ -22,7 +22,6 @@ export interface ContactEntity {
   website_urls: string[];
   is_manufacturer: boolean;
   is_supplier: boolean;
-  is_author: boolean;
   contacts: ContactInfo[];
   created_at: string;
   updated_at: string;

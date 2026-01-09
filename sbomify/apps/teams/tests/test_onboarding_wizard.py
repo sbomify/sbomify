@@ -200,13 +200,18 @@ class TestOnboardingWizard:
         assert entity.website_urls == ["https://test.com"]
         assert entity.is_manufacturer is True
         assert entity.is_supplier is True
-        assert entity.is_author is True
 
         # Verify ContactProfileContact was created for NTIA compliance (linked to entity)
         contact = entity.contacts.first()
         assert contact is not None
         assert contact.name == "John Doe"
         assert contact.email == "contact@test.com"
+
+        # Verify AuthorContact was created (CycloneDX 1.7)
+        author = profile.authors.first()
+        assert author is not None
+        assert author.name == "John Doe"
+        assert author.email == "contact@test.com"
 
     def test_contact_profile_uses_user_email_as_fallback(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan

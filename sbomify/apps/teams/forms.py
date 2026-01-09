@@ -269,9 +269,10 @@ class ContactEntityModelForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        if self.instance and self.instance.website_urls:
+            self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
+
         if self.instance and self.instance.pk:
-            if self.instance.website_urls:
-                self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
             # Set initial roles from instance
             self.fields["is_manufacturer"].initial = self.instance.is_manufacturer
             self.fields["is_supplier"].initial = self.instance.is_supplier

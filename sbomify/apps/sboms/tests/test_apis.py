@@ -1041,7 +1041,6 @@ def test_component_metadata_with_contact_profile(
         website_urls=["https://supplier.example.com"],
         is_manufacturer=True,
         is_supplier=True,
-        is_author=True,
     )
     ContactProfileContact.objects.create(
         entity=entity,

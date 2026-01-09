@@ -488,8 +488,16 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                                 "website_urls": [website_url] if website_url else [],
                                 "is_manufacturer": True,
                                 "is_supplier": True,
-                                "is_author": True,
                             },
+                        )
+
+                        # Create author (CycloneDX 1.7: authors are separate from entities)
+                        from sbomify.apps.teams.models import AuthorContact
+
+                        AuthorContact.objects.get_or_create(
+                            profile=contact_profile,
+                            name=contact_name,
+                            defaults={"email": contact_email},
                         )
 
                         # Create the contact person for NTIA compliance (linked to entity)
