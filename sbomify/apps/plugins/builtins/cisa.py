@@ -271,7 +271,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 version_failures.append(package_name)
 
             # 5. Software Identifiers (at least one required)
-            has_identifier = bool(package.get("externalRefs"))
+            # Only accept externalRefs with valid identifier types (purl, cpe22Type, cpe23Type, swid)
+            valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+            has_identifier = package.get("purl") or any(
+                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
+            )
             if not has_identifier:
                 identifier_failures.append(package_name)
 
@@ -568,15 +572,16 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 1. SBOM author (document-level)
+        # NTIA/CISA "Author of SBOM Data" = "the entity that creates the SBOM"
+        # Tools are software, not entities - only check metadata.authors
         authors = metadata.get("authors", [])
-        tools = metadata.get("tools", [])
-        has_author = bool(authors or tools)
+        has_author = bool(authors)
         findings.append(
             self._create_finding(
                 "sbom_author",
                 status="pass" if has_author else "fail",
-                details=None if has_author else "No authors or tools found in metadata",
-                remediation="Add authors or tools field in metadata section.",
+                details=None if has_author else "No authors found in metadata",
+                remediation="Add authors field in metadata section with organization or person information.",
             )
         )
 

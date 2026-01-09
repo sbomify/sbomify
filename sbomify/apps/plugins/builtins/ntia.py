@@ -223,11 +223,12 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             if not package.get("versionInfo"):
                 version_failures.append(package_name)
 
-            # 4. Unique identifiers (PURL, externalRefs, or checksums)
-            has_unique_id = (
-                package.get("externalRefs")
-                or package.get("purl")
-                or any(file.get("checksums") for file in data.get("files", []))
+            # 4. Unique identifiers (PURL, CPE, SWID via externalRefs)
+            # Only accept externalRefs with valid identifier types
+            # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
+            valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+            has_unique_id = package.get("purl") or any(
+                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
             )
             if not has_unique_id:
                 unique_id_failures.append(package_name)
@@ -346,10 +347,9 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             if not component.get("version"):
                 version_failures.append(component_name)
 
-            # 4. Unique identifiers (PURL, CPE, SWID, or hashes)
-            has_unique_id = (
-                component.get("purl") or component.get("cpe") or component.get("swid") or component.get("hashes")
-            )
+            # 4. Unique identifiers (PURL, CPE, SWID)
+            # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
+            has_unique_id = component.get("purl") or component.get("cpe") or component.get("swid")
             if not has_unique_id:
                 unique_id_failures.append(component_name)
 
@@ -386,7 +386,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
                 "unique_identifiers",
                 status="fail" if unique_id_failures else "pass",
                 details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
-                remediation="Add purl, cpe, swid, or hashes to components.",
+                remediation="Add purl, cpe, or swid to components.",
             )
         )
 
@@ -401,15 +401,16 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 6. SBOM author (document-level)
+        # NTIA "Author of SBOM Data" = "the entity that creates the SBOM"
+        # Tools are software, not entities - only check metadata.authors
         authors = metadata.get("authors", [])
-        tools = metadata.get("tools", [])
-        has_author = bool(authors or tools)
+        has_author = bool(authors)
         findings.append(
             self._create_finding(
                 "sbom_author",
                 status="pass" if has_author else "fail",
-                details=None if has_author else "No authors or tools found in metadata",
-                remediation="Add authors or tools field in metadata section.",
+                details=None if has_author else "No authors found in metadata",
+                remediation="Add authors field in metadata section with organization or person information.",
             )
         )
 

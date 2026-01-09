@@ -191,3 +191,38 @@ def format_finding_description(description: str) -> str:
     if prefix_text:
         return format_html("<span>{}</span> {}", prefix_text, packages_html)
     return packages_html
+
+
+@register.filter
+def has_compliance_failures(assessment_runs: dict) -> bool:
+    """Check if any compliance-category assessment has failures.
+
+    Used to conditionally show the consulting CTA banner only for
+    compliance assessments (NTIA, CISA, CRA, FDA), not for other
+    assessment types like security/vulnerabilities or license.
+
+    Args:
+        assessment_runs: Dict containing 'latest_runs' list of assessment runs.
+            Each run should have 'category', 'status', and optionally 'result'
+            with 'summary' containing 'fail_count' and 'error_count'.
+
+    Returns:
+        True if any compliance assessment has failures, False otherwise.
+    """
+    if not assessment_runs:
+        return False
+
+    latest_runs = assessment_runs.get("latest_runs", [])
+    for run in latest_runs:
+        if run.get("category") != "compliance":
+            continue
+        # Check if the run itself failed (execution error)
+        if run.get("status") == "failed":
+            return True
+        # Check if the run completed but has failing findings
+        if run.get("status") == "completed":
+            result = run.get("result") or {}
+            summary = result.get("summary") or {}
+            if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
+                return True
+    return False
