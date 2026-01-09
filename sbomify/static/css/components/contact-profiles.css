@@ -110,7 +110,7 @@ textarea {
   resize: vertical;
 }
 
-/* Animations handled by Alpine.js transition classes, but helper helpers here */
+/* Animations handled by Alpine.js transition classes, but helper utilities here */
 .opacity-50 {
   opacity: 0.5;
 }

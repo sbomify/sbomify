@@ -156,10 +156,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Attach nested contact formsets to each entity form
         for entity_form in entities_formset:
             # If the entity form corresponds to an existing instance, use it
-            # Check _state.adding to ensure the instance is actually persisted in DB
-            entity_instance = (
-                entity_form.instance if entity_form.instance.pk and not entity_form.instance._state.adding else None
-            )
+            entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
             entity_form.contacts_formset = ContactProfileContactFormSet(
                 instance=entity_instance, prefix=f"{entity_form.prefix}-contacts"
             )
@@ -212,11 +209,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Handle nested logic validation
             contact_prefix = f"{entity_form.prefix}-contacts"
             # Note: We need to pass the instance if it exists to properly update
-            # Check _state.adding to ensure the instance is actually persisted in DB
-            # (not just a new instance with a generated pk from default=generate_id)
-            entity_instance = (
-                entity_form.instance if entity_form.instance.pk and not entity_form.instance._state.adding else None
-            )
+            entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
             contacts_formset = ContactProfileContactFormSet(
                 request.POST, instance=entity_instance, prefix=contact_prefix
             )
@@ -229,34 +222,34 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             contacts_data = []
             for contact_form in contacts_formset:
-                c_data = contact_form.cleaned_data
-                if c_data.get("DELETE") or not c_data.get("name"):
+                contact_data = contact_form.cleaned_data
+                if contact_data.get("DELETE") or not contact_data.get("name"):
                     continue
 
                 contacts_data.append(
                     ContactProfileContactSchema(
-                        name=c_data["name"],
-                        email=c_data.get("email") or fallback_email,  # Use fallback instead of None
-                        phone=c_data.get("phone") or None,
-                        order=c_data.get("order", 0),
+                        name=contact_data["name"],
+                        email=contact_data.get("email") or fallback_email,
+                        phone=contact_data.get("phone") or None,
+                        order=contact_data.get("order", 0),
                     )
                 )
 
             # Prepare entity schema
-            e_data = entity_form.cleaned_data
-            website_urls = e_data.get("website_urls_text", [])
+            entity_cleaned_data = entity_form.cleaned_data
+            website_urls = entity_cleaned_data.get("website_urls_text", [])
 
             schema_cls = ContactEntityUpdateSchema if is_update and entity_instance else ContactEntityCreateSchema
 
             entity_payload = {
-                "name": e_data["name"],
-                "email": e_data.get("email") or fallback_email,
-                "phone": e_data.get("phone"),
-                "address": e_data.get("address"),
+                "name": entity_cleaned_data["name"],
+                "email": entity_cleaned_data.get("email") or fallback_email,
+                "phone": entity_cleaned_data.get("phone"),
+                "address": entity_cleaned_data.get("address"),
                 "website_urls": website_urls,
-                "is_manufacturer": e_data.get("is_manufacturer", False),
-                "is_supplier": e_data.get("is_supplier", False),
-                "is_author": e_data.get("is_author", False),
+                "is_manufacturer": entity_cleaned_data.get("is_manufacturer", False),
+                "is_supplier": entity_cleaned_data.get("is_supplier", False),
+                "is_author": entity_cleaned_data.get("is_author", False),
                 "contacts": contacts_data,
             }
 

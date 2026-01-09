@@ -618,8 +618,8 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
                     payload.email,
                     payload.phone,
                     payload.address,
-                    payload.website_urls is not None,
-                    payload.contacts is not None,
+                    payload.website_urls,
+                    payload.contacts,
                 ]
             ):
                 # Handle legacy flat fields (backward compatibility)

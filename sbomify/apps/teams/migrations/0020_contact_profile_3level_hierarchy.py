@@ -23,7 +23,7 @@ def migrate_data_forward(apps, schema_editor):
                 user = User.objects.filter(id=owner.user_id).first()
                 if user and user.email:
                     fallback_email = user.email
-        except Exception:  # nosec B110 - fallback email is acceptable default
+        except Exception:  # nosec B110 - intentionally ignore owner lookup errors and use static default email
             pass
 
         entity_name = profile.company or profile.supplier_name or profile.vendor or profile.name
@@ -49,8 +49,12 @@ def migrate_data_forward(apps, schema_editor):
 
 
 def migrate_data_backward(apps, schema_editor):
-    """Reverse migration: Move entity data back to profile."""
-    ContactProfile = apps.get_model('teams', 'ContactProfile')
+    """Reverse migration: Move entity data back to profile.
+
+    Note: If a profile has multiple entities, only the first entity's data is restored.
+    This is acceptable for rollback purposes as the original schema only supported one set
+    of these fields per profile.
+    """
     ContactEntity = apps.get_model('teams', 'ContactEntity')
     ContactProfileContact = apps.get_model('teams', 'ContactProfileContact')
 

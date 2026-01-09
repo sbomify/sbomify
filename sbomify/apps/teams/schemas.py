@@ -214,25 +214,22 @@ class ContactEntityUpdateSchema(BaseModel):
     def validate_roles(self):
         """Ensure at least one role flag is True after update.
 
-        For partial updates, we validate that if any role fields are provided,
-        at least one of the provided fields must be True. This prevents turning
-        off all roles in a single update. The model's clean() method will enforce
-        final validation before saving.
+        For partial updates, we only validate when all role fields are provided.
+        If all three role flags are explicitly set to False in a single update,
+        we raise an error to prevent turning off all roles at once. The model's
+        clean() method will enforce final validation before saving.
         """
         # If no role fields are provided, no validation needed (partial update preserves existing)
         if self.is_manufacturer is None and self.is_supplier is None and self.is_author is None:
             return self
 
-        # Check if all provided role fields are False
-        provided_manufacturer = self.is_manufacturer if self.is_manufacturer is not None else None
-        provided_supplier = self.is_supplier if self.is_supplier is not None else None
-        provided_author = self.is_author if self.is_author is not None else None
-
-        # Collect only the provided (non-None) values
-        provided_roles = [v for v in [provided_manufacturer, provided_supplier, provided_author] if v is not None]
-
-        # If we have provided role values and all are False, raise error
-        if provided_roles and not any(provided_roles):
+        # If all three role flags are provided and all are False, reject the update
+        if (
+            self.is_manufacturer is not None
+            and self.is_supplier is not None
+            and self.is_author is not None
+            and not (self.is_manufacturer or self.is_supplier or self.is_author)
+        ):
             raise ValueError("At least one of is_manufacturer, is_supplier, or is_author must be True")
 
         return self

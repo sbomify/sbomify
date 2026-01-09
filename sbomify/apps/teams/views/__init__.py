@@ -493,7 +493,10 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                         )
 
                         # Create the contact person for NTIA compliance (linked to entity)
-                        if not ContactProfileContact.objects.filter(entity=entity, email=contact_email).exists():
+                        # Check all three fields in unique_together constraint (entity, name, email)
+                        if not ContactProfileContact.objects.filter(
+                            entity=entity, name=contact_name, email=contact_email
+                        ).exists():
                             ContactProfileContact.objects.create(
                                 entity=entity,
                                 name=contact_name,

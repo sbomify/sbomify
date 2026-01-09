@@ -48,7 +48,7 @@
 
         addEntity() {
             const container = document.getElementById('entities-container');
-            const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]'); 
+            const totalFormsInput = document.querySelector(`input[name="${this.entitiesPrefix}-TOTAL_FORMS"]`);
             const currentCount = parseInt(totalFormsInput.value);
             
             const template = document.getElementById('entity-template').content.cloneNode(true);
