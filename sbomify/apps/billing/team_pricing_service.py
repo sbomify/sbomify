@@ -113,7 +113,6 @@ class TeamPricingService:
 
                 # Update local variables from refreshed data
                 billing_period = billing_plan_limits.get("billing_period")
-                next_billing_date = billing_plan_limits.get("next_billing_date")
             except Exception as e:
                 logger.warning(f"Failed to sync subscription for pricing display: {e}")
 
