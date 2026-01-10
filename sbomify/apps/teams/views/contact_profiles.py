@@ -222,6 +222,8 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             email = (entity_form.cleaned_data.get("email") or "").strip()
 
             # Detect partially filled forms to prevent silent data loss
+            # Note: Role flags (is_manufacturer, is_supplier) are excluded because they have default=True,
+            # so they don't indicate user intent to create an entity
             has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
             has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
             has_websites = bool((entity_form.cleaned_data.get("website_urls_text") or "").strip())

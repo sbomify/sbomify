@@ -772,7 +772,8 @@
     initAlpineComponents();
 
     window.addContactRow = function(container, entityPrefix) {
-    // Validate required DOM elements exist before proceeding
+    // Validate required DOM elements - these checks are for debugging edge cases
+    // The UI flow should always provide valid parameters; errors here indicate bugs
     if (!container) {
         console.warn('addContactRow: container element not found');
         return;

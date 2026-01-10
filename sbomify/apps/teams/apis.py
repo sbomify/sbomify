@@ -399,15 +399,15 @@ def _upsert_entity_contacts(
 ):
     """Create or update contacts for an entity.
 
-    Note: Caller must ensure at least one valid contact is provided.
-    This function validates that we don't leave an entity without contacts.
+    For backward compatibility, this function allows empty contacts for legacy API.
+    The new entity-based API enforces contacts in _upsert_entities().
     """
-    # Filter valid contacts first
+    # Filter valid contacts
     valid_contacts = [c for c in (contacts or []) if c and c.name]
 
-    # Validate we have at least one valid contact before deleting existing ones
+    # For backward compatibility, allow empty contacts (legacy API doesn't require them)
     if not valid_contacts:
-        raise ValueError(f"Entity '{entity.name}' must have at least one contact (CycloneDX requirement)")
+        return
 
     entity.contacts.all().delete()
 

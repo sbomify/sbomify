@@ -399,16 +399,13 @@ class ContactEntity(models.Model):
                 raise ValidationError("A profile can have only one supplier entity")
 
     def clean_contacts(self):
-        """Validate that entity has at least one contact (CycloneDX requirement).
+        """Validate contacts for CycloneDX compliance.
 
-        Note: This check only runs on updates (when self.pk exists) because during
-        creation, contacts can't exist yet (they require the entity's pk as foreign key).
-        Creation-time validation is enforced at the API level in _upsert_entities().
+        Note: For backward compatibility with legacy API, entities without contacts
+        are allowed. The new entity-based API enforces contacts in _upsert_entities().
+        This method is kept for documentation but doesn't enforce the constraint.
         """
-        from django.core.exceptions import ValidationError
-
-        if self.pk and not self.contacts.exists():
-            raise ValidationError("Each organization must have at least one contact")
+        pass
 
     def save(self, *args, **kwargs):
         """Override save to ensure validation is always called."""

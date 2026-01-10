@@ -227,6 +227,7 @@ class ContactEntityUpdateSchema(BaseModel):
         """Ensure entity has a valid role after update.
 
         For partial updates, we only validate when both role fields are provided.
+        The model's clean() method provides final validation before save.
         """
         # If no role fields are provided, no validation needed (partial update preserves existing)
         if self.is_manufacturer is None and self.is_supplier is None:
