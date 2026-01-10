@@ -8,7 +8,12 @@ import sbomify.apps.core.utils
 
 
 def migrate_data_forward(apps, schema_editor):
-    """Migrate data from ContactProfile to ContactEntity structure."""
+    """Migrate data from ContactProfile to ContactEntity structure.
+
+    Note: This migration has N+1 queries which is acceptable for one-time migrations.
+    Django historical models (via apps.get_model) have limited prefetch_related support.
+    For large datasets, consider running during low-traffic periods.
+    """
     ContactProfile = apps.get_model('teams', 'ContactProfile')
     ContactEntity = apps.get_model('teams', 'ContactEntity')
     ContactProfileContact = apps.get_model('teams', 'ContactProfileContact')
@@ -51,9 +56,10 @@ def migrate_data_forward(apps, schema_editor):
 def migrate_data_backward(apps, schema_editor):
     """Reverse migration: Move entity data back to profile.
 
-    Note: If a profile has multiple entities, only the first entity's data is restored.
-    This is acceptable for rollback purposes as the original schema only supported one set
-    of these fields per profile.
+    WARNING: If a profile has multiple entities, only the first entity's data is restored.
+    Data from additional entities will be LOST. This is acceptable for rollback purposes
+    as the original schema only supported one set of these fields per profile.
+    Consider backing up data before running reverse migration on production.
     """
     ContactEntity = apps.get_model('teams', 'ContactEntity')
     ContactProfileContact = apps.get_model('teams', 'ContactProfileContact')

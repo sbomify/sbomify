@@ -382,7 +382,12 @@ class ContactEntity(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        """Validate entity constraints."""
+        """Validate entity constraints.
+
+        Note: There's a theoretical race condition between validation and save.
+        This is mitigated by the API layer using transactions (atomic blocks).
+        For stricter enforcement, consider a database partial unique index.
+        """
         from django.core.exceptions import ValidationError
 
         if not (self.is_manufacturer or self.is_supplier):

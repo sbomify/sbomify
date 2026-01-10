@@ -412,6 +412,8 @@ def _upsert_entity_contacts(
     entity.contacts.all().delete()
 
     for order, contact in enumerate(valid_contacts):
+        # Email validation: schema validates contact.email format; fallback_email is either
+        # a validated user email from DB or static 'no-reply@sbomify.com'
         entity.contacts.create(
             name=contact.name,
             email=contact.email or fallback_email,

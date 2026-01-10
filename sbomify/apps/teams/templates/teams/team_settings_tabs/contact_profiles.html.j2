@@ -251,7 +251,7 @@
             
             document.querySelectorAll('.author-card').forEach(card => {
                 const alpineData = Alpine.$data(card);
-                if (!alpineData || !alpineData.deleted) {
+                if (alpineData && !alpineData.deleted) {
                     visibleAuthors++;
                 }
             });
