@@ -128,9 +128,9 @@ def test_contact_profile_crud_legacy_backward_compatibility(sample_team_with_own
     assert len(profile_data["entities"]) == 1
     # Entity name uses priority: company > supplier_name > vendor
     assert profile_data["entities"][0]["name"] == "Example Corp"
-    # Manufacturer flag set for backward compatibility (single role per entity)
+    # Roles derived from legacy fields: company/vendor => manufacturer, supplier_name => supplier
     assert profile_data["entities"][0]["is_manufacturer"] is True
-    assert profile_data["entities"][0]["is_supplier"] is False
+    assert profile_data["entities"][0]["is_supplier"] is True  # supplier_name was provided
 
     # Legacy fields should be populated
     assert profile_data["company"] == "Example Corp"

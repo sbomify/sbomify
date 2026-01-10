@@ -221,12 +221,11 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             name = (entity_form.cleaned_data.get("name") or "").strip()
             email = (entity_form.cleaned_data.get("email") or "").strip()
 
-            # Check if form has significant data beyond defaults
+            # Detect partially filled forms to prevent silent data loss
             has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
             has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
             has_websites = bool((entity_form.cleaned_data.get("website_urls_text") or "").strip())
 
-            # Check for nested contacts
             contact_prefix = f"{entity_form.prefix}-contacts"
             entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
             contacts_formset_check = ContactProfileContactFormSet(
@@ -240,7 +239,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             has_significant_data = has_phone or has_address or has_websites or has_contacts
 
-            # If form has significant data but missing required fields, raise error
+            # Error if form has data but missing required name/email
             if has_significant_data and (not name or not email):
                 missing = []
                 if not name:
@@ -252,7 +251,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "Please complete the entity or remove it."
                 )
 
-            # Skip truly empty forms (no significant data and no name/email)
+            # Skip empty forms
             if not name or not email:
                 continue
 
