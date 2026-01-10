@@ -221,17 +221,43 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             name = (entity_form.cleaned_data.get("name") or "").strip()
             email = (entity_form.cleaned_data.get("email") or "").strip()
 
-            # Skip empty/incomplete forms (both name and email are required)
+            # Check if form has significant data beyond defaults
+            has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
+            has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
+            has_websites = bool((entity_form.cleaned_data.get("website_urls_text") or "").strip())
+
+            # Check for nested contacts
+            contact_prefix = f"{entity_form.prefix}-contacts"
+            entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
+            contacts_formset_check = ContactProfileContactFormSet(
+                request.POST, instance=entity_instance, prefix=contact_prefix
+            )
+            has_contacts = any(
+                cf.cleaned_data.get("name") and not cf.cleaned_data.get("DELETE")
+                for cf in contacts_formset_check
+                if cf.cleaned_data
+            )
+
+            has_significant_data = has_phone or has_address or has_websites or has_contacts
+
+            # If form has significant data but missing required fields, raise error
+            if has_significant_data and (not name or not email):
+                missing = []
+                if not name:
+                    missing.append("name")
+                if not email:
+                    missing.append("email")
+                raise ValidationError(
+                    f"Entity has data but is missing required field(s): {', '.join(missing)}. "
+                    "Please complete the entity or remove it."
+                )
+
+            # Skip truly empty forms (no significant data and no name/email)
             if not name or not email:
                 continue
 
-            # Handle nested logic validation
-            contact_prefix = f"{entity_form.prefix}-contacts"
-            # Note: We need to pass the instance if it exists to properly update
-            entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
-            contacts_formset = ContactProfileContactFormSet(
-                request.POST, instance=entity_instance, prefix=contact_prefix
-            )
+            # Reuse the contacts formset we already created for the check
+            contacts_formset = contacts_formset_check
 
             if not contacts_formset.is_valid():
                 entity_name = entity_form.cleaned_data.get("name", "Unknown")

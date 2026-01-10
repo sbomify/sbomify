@@ -486,15 +486,12 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     )
 
                     # Create the contact person for NTIA compliance (linked to entity)
-                    # Check all three fields in unique_together constraint (entity, name, email)
-                    if not ContactProfileContact.objects.filter(
-                        entity=entity, name=contact_name, email=contact_email
-                    ).exists():
-                        ContactProfileContact.objects.create(
-                            entity=entity,
-                            name=contact_name,
-                            email=contact_email,
-                        )
+                    # Use get_or_create for idempotency and race condition safety
+                    ContactProfileContact.objects.get_or_create(
+                        entity=entity,
+                        name=contact_name,
+                        email=contact_email,
+                    )
 
                     # 2. Auto-create hierarchy with SBOM component type
                     # Set visibility based on billing plan: community plans must be public

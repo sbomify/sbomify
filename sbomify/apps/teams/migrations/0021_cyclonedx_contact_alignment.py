@@ -7,7 +7,16 @@ import sbomify.apps.core.utils
 
 
 def migrate_authors_forward(apps, schema_editor):
-    """Migrate author entity contacts to AuthorContact model."""
+    """Migrate author entity contacts to AuthorContact model.
+
+    Migration logic:
+    1. For ALL entities with is_author=True, migrate their contacts to the new AuthorContact model
+    2. Only DELETE entities that are EXCLUSIVELY authors (is_author=True AND is_manufacturer=False AND is_supplier=False)
+    3. Entities that are authors AND manufacturers/suppliers remain intact - they keep their role
+       as manufacturer/supplier while their author-related contacts are migrated to AuthorContact
+
+    This ensures no data loss for entities with multiple roles.
+    """
     ContactEntity = apps.get_model('teams', 'ContactEntity')
     ContactProfileContact = apps.get_model('teams', 'ContactProfileContact')
     AuthorContact = apps.get_model('teams', 'AuthorContact')
@@ -24,9 +33,10 @@ def migrate_authors_forward(apps, schema_editor):
                 order=contact.order,
             )
 
-        # If entity is ONLY an author (not manufacturer or supplier), delete it
+        # Only delete entity if it's EXCLUSIVELY an author (not also a manufacturer or supplier)
+        # Entities with multiple roles (e.g., is_author=True AND is_manufacturer=True) are preserved
         if not entity.is_manufacturer and not entity.is_supplier:
-            # Delete associated contacts first
+            # Delete associated contacts first (they've been migrated to AuthorContact)
             ContactProfileContact.objects.filter(entity=entity).delete()
             entity.delete()
 

@@ -777,6 +777,10 @@
         console.warn('addContactRow: container element not found');
         return;
     }
+    if (!entityPrefix) {
+        console.warn('addContactRow: entityPrefix is required');
+        return;
+    }
     const contactPrefix = `${entityPrefix}-contacts`;
     const entityCard = container.closest('.entity-card');
     if (!entityCard) {
