@@ -437,7 +437,10 @@ def _upsert_entities(
         # All entities are None/invalid - skip to prevent accidental deletion
         return
 
-    # Validate each entity has at least one contact (CycloneDX requirement)
+    # Validate each entity has at least one contact (CycloneDX requirement for new API)
+    # Note: This validation only applies to the new entity-based API (payload.entities).
+    # The legacy flat-field API (company, supplier_name, etc.) doesn't require contacts
+    # for backward compatibility - see _upsert_entity_contacts for that handling.
     for entity_data in valid_entities:
         contacts = getattr(entity_data, "contacts", None)
         if not contacts:
@@ -464,8 +467,7 @@ def _upsert_entities(
                     entity.website_urls = _clean_url_list(entity_data.website_urls)
                 if not entity.email:
                     entity.email = fallback_email
-                # Validate role flags before saving
-                entity.full_clean()
+                # Model's save() calls full_clean() automatically
                 entity.save()
             except ContactEntity.DoesNotExist:
                 logger.warning(
@@ -486,8 +488,7 @@ def _upsert_entities(
                 is_manufacturer=entity_data.is_manufacturer,
                 is_supplier=entity_data.is_supplier,
             )
-            # Validate role flags before saving
-            entity.full_clean()
+            # Model's save() calls full_clean() automatically
             entity.save()
 
         contacts = getattr(entity_data, "contacts", None)

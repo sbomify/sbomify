@@ -302,12 +302,12 @@
             this.isNew = !this.name;
             
             if (!this.isNew) {
-                // For existing entities, read from checkboxes (Django sets checked attribute)
+                // For existing entities, read from checkboxes
                 if (mfgCheckbox) {
-                    this.isManufacturer = mfgCheckbox.checked || mfgCheckbox.hasAttribute('checked');
+                    this.isManufacturer = mfgCheckbox.checked;
                 }
                 if (supCheckbox) {
-                    this.isSupplier = supCheckbox.checked || supCheckbox.hasAttribute('checked');
+                    this.isSupplier = supCheckbox.checked;
                 }
             } else {
                 // For new entities, default to available roles
