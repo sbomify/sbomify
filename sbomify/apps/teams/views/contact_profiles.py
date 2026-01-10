@@ -233,8 +233,10 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             contacts_formset_check = ContactProfileContactFormSet(
                 request.POST, instance=entity_instance, prefix=contact_prefix
             )
+            # Check if any contact has data (name, email, or phone) to detect partially filled contacts
             has_contacts = any(
-                cf.cleaned_data.get("name") and not cf.cleaned_data.get("DELETE")
+                (cf.cleaned_data.get("name") or cf.cleaned_data.get("email") or cf.cleaned_data.get("phone"))
+                and not cf.cleaned_data.get("DELETE")
                 for cf in contacts_formset_check
                 if cf.cleaned_data
             )
