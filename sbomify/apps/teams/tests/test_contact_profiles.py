@@ -347,7 +347,9 @@ def test_single_manufacturer_constraint(sample_team_with_owner_member, authentic
     from sbomify.apps.teams.models import ContactEntity
 
     profile = ContactProfile.objects.get(id=profile_id)
-    with pytest.raises(Exception):
+    from django.core.exceptions import ValidationError as DjangoValidationError
+
+    with pytest.raises(DjangoValidationError):
         entity = ContactEntity(
             profile=profile,
             name="Manufacturer Two",

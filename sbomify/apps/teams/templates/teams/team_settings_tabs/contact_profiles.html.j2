@@ -230,6 +230,8 @@
         },
         
         updateCounts() {
+            // Performance note: This iterates all cards but is acceptable since
+            // CycloneDX limits profiles to 1 manufacturer + 1 supplier (typically 1-2 entities)
             let visibleEntities = 0;
             let visibleAuthors = 0;
             let mfgCount = 0;
