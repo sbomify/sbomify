@@ -393,6 +393,11 @@ class ContactEntity(models.Model):
         if not (self.is_manufacturer or self.is_supplier):
             raise ValidationError("At least one role (Manufacturer or Supplier) must be selected")
 
+        # Skip duplicate checks if profile is not saved yet (new profile creation)
+        # For unsaved profiles, there can't be any existing entities anyway
+        if not self.profile or not self.profile.pk:
+            return
+
         if self.is_manufacturer:
             existing = ContactEntity.objects.filter(profile=self.profile, is_manufacturer=True).exclude(pk=self.pk)
             if existing.exists():

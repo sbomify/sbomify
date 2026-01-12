@@ -23,6 +23,7 @@ from sbomify.apps.teams.forms import (
     ContactProfileForm,
     ContactProfileModelForm,
 )
+from sbomify.apps.teams.models import ContactProfile
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import (
     AuthorContactSchema,
@@ -209,12 +210,24 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not authors_formset.is_valid():
             raise ValidationError(_format_formset_errors(authors_formset))
 
+        entities_data = self._process_entity_formset(request, entities_formset, fallback_email, profile)
+        authors_data = self._process_author_formset(authors_formset, fallback_email)
+
+        return form.cleaned_data, entities_data, authors_data
+
+    def _process_entity_formset(
+        self,
+        request: HttpRequest,
+        formset: ContactEntityFormSet,
+        fallback_email: str,
+        profile: ContactProfile | None,
+    ) -> list[ContactEntityCreateSchema | ContactEntityUpdateSchema]:
         entities_data = []
         is_update = profile is not None
         manufacturer_count = 0
         supplier_count = 0
 
-        for entity_form in entities_formset:
+        for entity_form in formset:
             if entity_form.cleaned_data.get("DELETE"):
                 continue
 
@@ -222,24 +235,48 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             email = (entity_form.cleaned_data.get("email") or "").strip()
 
             # Detect partially filled forms to prevent silent data loss
-            # Note: Role flags (is_manufacturer, is_supplier) are excluded because they have default=True,
-            # so they don't indicate user intent to create an entity
+            # Note: Role flags (is_manufacturer, is_supplier) are excluded because they have default=True
             has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
             has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
             has_websites = bool((entity_form.cleaned_data.get("website_urls_text") or "").strip())
 
             contact_prefix = f"{entity_form.prefix}-contacts"
-            entity_instance = entity_form.instance if entity_form.instance.pk is not None else None
-            contacts_formset_check = ContactProfileContactFormSet(
-                request.POST, instance=entity_instance, prefix=contact_prefix
+            entity_instance = entity_form.instance
+
+            # Special handling for models with UUID primary keys:
+            # Unlike AutoField, UUID PKs are set before save(), so pk is not None for new instances.
+            # We need to distinguish between new (unsaved) and existing (saved) instances to prevent
+            # Django formset from filtering by FK relationships on unsaved instances (raises ValueError).
+            #
+            # Note: _state.adding is semi-private but is the standard Django way to detect this.
+            # Django's own formsets use this internally. There's no public API alternative for this.
+            # See: django.forms.models.BaseInlineFormSet._construct_form()
+            is_new_instance = (
+                getattr(entity_instance._state, "adding", True) if hasattr(entity_instance, "_state") else True
             )
-            # Check if any contact has data (name, email, or phone) to detect partially filled contacts
-            has_contacts = any(
-                (cf.cleaned_data.get("name") or cf.cleaned_data.get("email") or cf.cleaned_data.get("phone"))
-                and not cf.cleaned_data.get("DELETE")
-                for cf in contacts_formset_check
-                if cf.cleaned_data
-            )
+
+            formset_kwargs = {"prefix": contact_prefix}
+
+            if not is_new_instance:
+                # Existing instance: formset can filter related objects by FK
+                formset_kwargs["instance"] = entity_instance
+            else:
+                # New instance: prevent FK filtering by using empty queryset
+                formset_kwargs["queryset"] = ContactProfileContactFormSet.model.objects.none()
+
+            contacts_formset_check = ContactProfileContactFormSet(request.POST, **formset_kwargs)
+            # Must call is_valid() before accessing cleaned_data
+            contacts_formset_check.is_valid()
+
+            # Check if any contact has data to detect partially filled contacts
+            has_contacts = False
+            for cf in contacts_formset_check:
+                if not cf.has_changed():
+                    continue
+                if hasattr(cf, "cleaned_data") and cf.cleaned_data.get("DELETE"):
+                    continue
+                has_contacts = True
+                break
 
             has_significant_data = has_phone or has_address or has_websites or has_contacts
 
@@ -323,9 +360,15 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             entities_data.append(schema_cls(**entity_payload))
 
-        # Process authors (CycloneDX aligned - individuals, not organizations)
+        return entities_data
+
+    def _process_author_formset(
+        self,
+        formset: AuthorContactFormSet,
+        fallback_email: str,
+    ) -> list[AuthorContactSchema]:
         authors_data = []
-        for author_form in authors_formset:
+        for author_form in formset:
             author_data = author_form.cleaned_data
             if author_data.get("DELETE") or not author_data.get("name"):
                 continue
@@ -338,8 +381,7 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     order=author_data.get("order", 0),
                 )
             )
-
-        return form.cleaned_data, entities_data, authors_data
+        return authors_data
 
     def _create_profile(self, request: HttpRequest, team_key: str) -> HttpResponse:
         try:

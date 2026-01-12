@@ -31,6 +31,7 @@
                     <tr>
                         <th scope="col">Name</th>
                         <th scope="col" style="width: 120px;">Status</th>
+                        <th scope="col" style="width: 150px;">Last Modified</th>
                         <th scope="col" class="text-end" style="width: 160px;">Actions</th>
                     </tr>
                 </thead>
@@ -39,34 +40,48 @@
                         <tr x-show="!profile.hidden" x-transition>
                             <td>
                                 <div class="fw-semibold" x-text="profile.name"></div>
-                                <div class="small text-muted" x-text="formatDate(profile.created_at)"></div>
                             </td>
                             <td>
                                 <span class="badge bg-success-subtle text-success"
                                       x-show="profile.is_default">Default</span>
                             </td>
+                            <td>
+                                <span class="text-muted small" x-text="formatDate(profile.updated_at)"></span>
+                            </td>
                             <td class="text-end">
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button class="btn btn-outline-secondary"
+                                <div class="d-flex gap-2 justify-content-end align-items-center"
+                                     role="group"
+                                     aria-label="Profile actions">
+                                    <button type="button"
+                                            class="btn-icon btn-icon-edit"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            data-bs-title="Edit Profile"
                                             :hx-get="`{% url 'teams:contact_profiles_detail_form' team.key '0000' %}`.replace('0000', profile.id)"
                                             hx-target="#contact-profiles-content"
                                             hx-swap="innerHTML">
-                                        <i class="fas fa-edit"></i>
+                                        <i class="far fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-outline-primary"
+                                    <button type="button"
+                                            :class="profile.is_default ? 'btn-icon btn-icon-star-active' : 'btn-icon btn-icon-star'"
+                                            :data-bs-title="profile.is_default ? 'Default Profile' : 'Set as Default'"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
                                             :disabled="profile.is_default"
                                             hx-post="{% url 'teams:contact_profiles_list' team.key %}"
                                             :hx-vals="JSON.stringify({'_method': 'PATCH', 'profile_id': profile.id})"
                                             hx-target="#contact-profiles-content"
                                             hx-swap="innerHTML">
-                                        <i class="fas fa-star"></i>
+                                        <i :class="profile.is_default ? 'fas fa-star' : 'far fa-star'"></i>
                                     </button>
-                                    <button class="btn btn-outline-danger"
+                                    <button type="button"
+                                            class="btn-icon btn-icon-delete"
+                                            title="Delete Profile"
                                             data-bs-toggle="modal"
                                             data-bs-target="#delete-contact-profile-modal"
                                             :data-form-profile_id="profile.id"
                                             :data-display-name="profile.name">
-                                        <i class="fas fa-trash"></i>
+                                        <i class="fas fa-trash-can"></i>
                                     </button>
                                 </div>
                             </td>
@@ -206,4 +221,4 @@
         </div>
     {% endif %}
 </div>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}

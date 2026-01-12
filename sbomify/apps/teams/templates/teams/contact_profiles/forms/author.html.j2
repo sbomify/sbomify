@@ -13,33 +13,35 @@
     <div class="d-flex align-items-center py-2 px-3 gap-3">
         {# Author avatar #}
         <div class="flex-shrink-0">
-            <div class="rounded-circle bg-purple-subtle d-flex align-items-center justify-content-center"
-                 style="width: 36px;
-                        height: 36px;
-                        background-color: #e8def8">
-                <i class="fas fa-user-pen" style="color: #7c4dff;"></i>
+            <div class="contact-avatar-circle">
+                <i class="fas fa-user-pen contact-icon-purple"></i>
             </div>
         </div>
         {# Name field #}
-        <div class="flex-shrink-0" style="min-width: 150px; max-width: 180px;">
-            {{ form.name|add_class:"form-control form-control-sm bg-light border-0 rounded-2"|attr:"placeholder:Name *"|attr:"required:required"|attr:"title:Click to edit name" }}
-            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+        <div class="flex-shrink-0 contact-field-name">
+            {{ form.name|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Name *"|attr:"required:required"|attr:"title:Click to edit name"|attr:"aria-label:Author Name" }}
+            {% if form.name.errors %}
+                <div class="text-danger small mt-1" role="alert" aria-live="polite">{{ form.name.errors.0 }}</div>
+            {% endif %}
         </div>
         {# Email field #}
-        <div class="flex-grow-1" style="min-width: 180px; max-width: 280px;">
-            {{ form.email|add_class:"form-control form-control-sm bg-light border-0 rounded-2"|attr:"placeholder:Email *"|attr:"required:required"|attr:"title:Click to edit email"|attr:"type:email" }}
-            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+        <div class="flex-grow-1 contact-field-email">
+            {{ form.email|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Email *"|attr:"required:required"|attr:"title:Please enter a valid email address (e.g., contact@example.com)"|attr:"type:email"|attr:"aria-label:Author Email" }}
+            {% if form.email.errors %}
+                <div class="text-danger small mt-1" role="alert" aria-live="polite">{{ form.email.errors.0 }}</div>
+            {% endif %}
         </div>
         {# Phone field #}
-        <div class="flex-shrink-0" style="min-width: 130px; max-width: 150px;">
-            {{ form.phone|add_class:"form-control form-control-sm bg-light border-0 rounded-2"|attr:"placeholder:Phone"|attr:"title:Click to edit phone" }}
+        <div class="flex-shrink-0 contact-field-phone">
+            {{ form.phone|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Phone"|attr:"title:Click to edit phone"|attr:"aria-label:Author Phone" }}
         </div>
         {# Remove button #}
         <div class="flex-shrink-0">
             <button type="button"
                     class="btn btn-sm btn-link p-1"
                     @click="removeAuthor"
-                    title="Remove author">
+                    title="Remove author"
+                    aria-label="Remove author">
                 <i class="fas fa-trash-alt text-danger"></i>
             </button>
         </div>

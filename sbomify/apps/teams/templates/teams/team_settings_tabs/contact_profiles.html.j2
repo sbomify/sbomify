@@ -43,12 +43,19 @@
         visibleAuthorsCount: 0,
         manufacturerCount: 0,
         supplierCount: 0,
+        isInitialized: false,
+        
+        init() {
+            // Wait for Alpine to fully initialize the component
+            this.$nextTick(() => {
+                this.isInitialized = true;
+                this.updateCounts();
+            });
+        },
         
         initForm() {
-            // Delay to ensure all entity components are initialized first
-            this.$nextTick(() => {
-                setTimeout(() => this.updateCounts(), 100);
-            });
+            // Legacy method - can be removed
+            this.updateCounts();
         },
         
         get hasErrors() {
@@ -136,8 +143,26 @@
         },
         
         submitForm(e) {
-            const form = this.$el.querySelector('form');
+            e.preventDefault();
             
+            // Find the form - try multiple strategies
+            let form = null;
+            if (this.$el) {
+                form = this.$el.querySelector('form');
+            }
+            if (!form && e.target) {
+                form = e.target.closest('form');
+            }
+            if (!form) {
+                form = document.querySelector('.profile-form form');
+            }
+            
+            if (!form) {
+                console.error('[submitForm] Could not find form element');
+                return;
+            }
+            
+            // First, remove 'required' from deleted/hidden items before validation
             const isElementVisible = (el) => {
                 if (!el) return false;
                 const style = window.getComputedStyle(el);
@@ -182,6 +207,7 @@
                 }
             });
             
+            // Mark entities as touched for custom validation display
             document.querySelectorAll('.entity-card').forEach(card => {
                 const alpineData = Alpine.$data(card);
                 if (alpineData && !alpineData.deleted) {
@@ -191,42 +217,108 @@
                 }
             });
             
-            // Check for role errors (at least one role must be selected)
-            const hasRoleErrors = Array.from(document.querySelectorAll('.entity-card')).some(card => {
-                const alpineData = Alpine.$data(card);
-                return alpineData && !alpineData.deleted && !alpineData.isManufacturer && !alpineData.isSupplier;
-            });
+            // ORDERED VALIDATION - Check each field in specific order
             
-            if (hasRoleErrors) {
-                const errorEntity = document.querySelector('.entity-card');
-                if (errorEntity) {
-                    errorEntity.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
+            // 1. Validate Profile Name first
+            const profileNameInput = form.querySelector('input[name="name"]');
+            if (profileNameInput && !profileNameInput.checkValidity()) {
+                profileNameInput.reportValidity();
+                profileNameInput.focus();
                 return;
             }
             
-            // Check for contact requirement (CycloneDX)
-            const hasContactErrors = Array.from(document.querySelectorAll('.entity-card')).some(card => {
+            // 2. Validate Entities in order (role, name, email, contacts)
+            const entityCards = Array.from(document.querySelectorAll('.entity-card'));
+            for (const card of entityCards) {
                 const alpineData = Alpine.$data(card);
-                return alpineData && !alpineData.deleted && alpineData.activeContactsCount === 0;
-            });
-            
-            if (hasContactErrors) {
-                const errorEntity = Array.from(document.querySelectorAll('.entity-card')).find(card => {
-                    const alpineData = Alpine.$data(card);
-                    return alpineData && !alpineData.deleted && alpineData.activeContactsCount === 0;
-                });
-                if (errorEntity) {
-                    const alpineData = Alpine.$data(errorEntity);
-                    if (alpineData) alpineData.editing = true;
-                    errorEntity.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (!alpineData || alpineData.deleted) continue;
+                
+                // 2a. Check entity role
+                if (!alpineData.isManufacturer && !alpineData.isSupplier) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
                 }
-                return;
+                
+                // 2b. Check entity name
+                const nameInput = card.querySelector('input[name$="-name"]');
+                if (nameInput && !nameInput.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    nameInput.reportValidity();
+                    nameInput.focus();
+                    return;
+                }
+                
+                // 2c. Check entity email
+                const emailInput = card.querySelector('input[name$="-email"]');
+                if (emailInput && !emailInput.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    emailInput.reportValidity();
+                    emailInput.focus();
+                    return;
+                }
+                
+                // 2d. Check entity has at least one contact
+                if (alpineData.activeContactsCount === 0) {
+                    alpineData.editing = true;
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                
+                // 2e. Validate contacts within this entity
+                const contactCards = card.querySelectorAll('.contact-card');
+                for (const contactCard of contactCards) {
+                    const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                    const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                    if (isDeleted || !isElementVisible(contactCard)) continue;
+                    
+                    // Check contact name
+                    const contactName = contactCard.querySelector('input[name$="-name"]');
+                    if (contactName && !contactName.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        contactName.reportValidity();
+                        contactName.focus();
+                        return;
+                    }
+                    
+                    // Check contact email
+                    const contactEmail = contactCard.querySelector('input[name$="-email"]');
+                    if (contactEmail && !contactEmail.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        contactEmail.reportValidity();
+                        contactEmail.focus();
+                        return;
+                    }
+                }
             }
             
-            if (form.reportValidity()) {
-                htmx.trigger(form, 'htmx:submit');
+            // 3. Validate Authors
+            const authorCards = Array.from(document.querySelectorAll('.author-card'));
+            for (const card of authorCards) {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                if (isDeleted || !isElementVisible(card)) continue;
+                
+                // Check author name
+                const authorName = card.querySelector('input[name$="-name"]');
+                if (authorName && !authorName.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    authorName.reportValidity();
+                    authorName.focus();
+                    return;
+                }
+                
+                // Check author email
+                const authorEmail = card.querySelector('input[name$="-email"]');
+                if (authorEmail && !authorEmail.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    authorEmail.reportValidity();
+                    authorEmail.focus();
+                    return;
+                }
             }
+            
+            // All validation passed, trigger HTMX submission
+            htmx.trigger(form, 'htmx:submit');
         },
         
         updateCounts() {
@@ -515,20 +607,50 @@
                 const contactNameValue = contactNameInput.value.trim();
                 const contactEmailValue = contactEmailInput ? contactEmailInput.value.trim() : '';
                 
-                if (contactNameValue && !contactEmailValue) {
+                // Validate name is required
+                if (!contactNameValue) {
+                    contactNameInput.setCustomValidity('Name is required for this contact');
+                    contactNameInput.focus();
+                    contactNameInput.reportValidity();
+                    const clearValidity = () => {
+                        contactNameInput.setCustomValidity('');
+                        contactNameInput.removeEventListener('input', clearValidity);
+                    };
+                    contactNameInput.addEventListener('input', clearValidity);
+                    hasContactError = true;
+                    return;
+                }
+                
+                // Validate email is required
+                if (!contactEmailValue) {
                     contactEmailInput.setCustomValidity('Email is required for this contact');
+                    contactEmailInput.focus();
                     contactEmailInput.reportValidity();
+                    const clearValidity = () => {
+                        contactEmailInput.setCustomValidity('');
+                        contactEmailInput.removeEventListener('input', clearValidity);
+                    };
+                    contactEmailInput.addEventListener('input', clearValidity);
                     hasContactError = true;
                     return;
                 }
                 
-                if (contactEmailValue && !emailRegex.test(contactEmailValue)) {
+                // Validate email format
+                if (!emailRegex.test(contactEmailValue)) {
                     contactEmailInput.setCustomValidity('Please enter a valid email address');
+                    contactEmailInput.focus();
                     contactEmailInput.reportValidity();
+                    const clearValidity = () => {
+                        contactEmailInput.setCustomValidity('');
+                        contactEmailInput.removeEventListener('input', clearValidity);
+                    };
+                    contactEmailInput.addEventListener('input', clearValidity);
                     hasContactError = true;
                     return;
                 }
                 
+                // Clear any previous validity
+                contactNameInput.setCustomValidity('');
                 if (contactEmailInput) {
                     contactEmailInput.setCustomValidity('');
                 }
@@ -732,6 +854,29 @@
                         this.profiles = [];
                     }
                 }
+                
+                // Initialize Bootstrap tooltips after profiles are loaded
+                this.$nextTick(() => {
+                    this.initTooltips();
+                });
+            });
+        },
+        
+        initTooltips() {
+            if (!window.bootstrap) return;
+            
+            const tooltipElements = this.$el.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach(el => {
+                // Dispose existing tooltip if any
+                const existing = window.bootstrap.Tooltip.getInstance(el);
+                if (existing) existing.dispose();
+                
+                // Initialize new tooltip
+                new window.bootstrap.Tooltip(el, {
+                    delay: { show: 300, hide: 100 },
+                    animation: true,
+                    trigger: 'hover focus'
+                });
             });
         },
         
@@ -847,36 +992,36 @@
         }
     } else {
         newRow = document.createElement('div');
-        newRow.className = 'card mb-2 shadow-none border contact-card';
+        newRow.className = 'contact-card border-bottom';
         newRow.setAttribute('x-data', 'contactEntry');
+        newRow.setAttribute('x-show', '!deleted');
         newRow.innerHTML = `
-            <div class="card-body p-3">
-                <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
-                <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
-                <div class="row g-2 align-items-start">
-                    <div class="col-12 col-sm-6 col-md-4">
-                        <div class="form-floating">
-                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm" placeholder="Name" required title="Please enter the contact name">
-                            <label class="text-muted small" for="id_${newPrefix}-name">Name *</label>
-                        </div>
+            <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
+            <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
+            <div class="d-flex align-items-center py-2 px-3 gap-3">
+                <!-- Contact avatar -->
+                <div class="flex-shrink-0">
+                    <div class="contact-avatar-circle">
+                        <i class="fas fa-user-pen contact-icon-purple"></i>
                     </div>
-                    <div class="col-12 col-sm-6 col-md-4">
-                        <div class="form-floating">
-                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm" placeholder="Email" required title="Please enter a valid email address">
-                            <label class="text-muted small" for="id_${newPrefix}-email">Email *</label>
-                        </div>
-                    </div>
-                    <div class="col-10 col-sm-5 col-md-3">
-                        <div class="form-floating">
-                            <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm" placeholder="Phone">
-                            <label class="text-muted small" for="id_${newPrefix}-phone">Phone</label>
-                        </div>
-                    </div>
-                    <div class="col-2 col-sm-1 d-flex justify-content-end align-items-center pt-2">
-                        <button type="button" class="btn btn-icon btn-sm btn-outline-danger" @click="removeContact" title="Remove Contact">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
+                </div>
+                <!-- Name field -->
+                <div class="flex-shrink-0 contact-field-name">
+                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" required title="Click to edit name" aria-label="Contact Name">
+                </div>
+                <!-- Email field -->
+                <div class="flex-grow-1 contact-field-email">
+                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" required title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
+                </div>
+                <!-- Phone field -->
+                <div class="flex-shrink-0 contact-field-phone">
+                    <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm bg-white rounded-2" placeholder="Phone" title="Click to edit phone" aria-label="Contact Phone">
+                </div>
+                <!-- Remove button -->
+                <div class="flex-shrink-0">
+                    <button type="button" class="btn btn-sm btn-link p-1" @click="removeContact" title="Remove contact" aria-label="Remove contact">
+                        <i class="fas fa-trash-alt text-danger"></i>
+                    </button>
                 </div>
             </div>
         `;
@@ -888,6 +1033,31 @@
     container.appendChild(newRow);
     totalInput.value = index + 1;
 };
+
+    // Use the centralized tooltip cleanup utility
+    document.body.addEventListener('htmx:beforeSwap', function(event) {
+        if (event.detail.target.id === 'contact-profiles-content') {
+            // Import and use the cleanup utility
+            // Note: In production, import this from the tooltip module
+            const container = event.detail.target;
+            
+            // Dispose all tooltip instances in the container
+            const tooltipElements = container.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach((el) => {
+                const instance = bootstrap?.Tooltip?.getInstance(el);
+                if (instance) instance.dispose();
+            });
+
+            // Remove orphaned tooltip elements
+            document.querySelectorAll('.tooltip.show').forEach((tooltipEl) => {
+                const id = tooltipEl.getAttribute('id');
+                if (id) {
+                    const trigger = container.querySelector(`[aria-describedby="${id}"]`);
+                    if (trigger) tooltipEl.remove();
+                }
+            });
+        }
+    });
 
     document.body.addEventListener('htmx:afterSettle', function(event) {
         if (event.detail.target.id === 'contact-profiles-content') {

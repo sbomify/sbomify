@@ -1,8 +1,8 @@
-// Force update for lifecycle chips
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
 import { isEmpty } from './utils';
 import type { ComponentMetaInfo } from './types';
+import { ComponentEvents, addComponentEventListener, dispatchComponentEvent, type ShowAlertEvent } from './events';
 
 interface WrapperProps {
     componentId: string;
@@ -16,8 +16,7 @@ export function registerComponentMetaInfo() {
         teamKey: props.teamKey,
         allowEdit: props.allowEdit,
         isEditing: false,
-        boundItemSelectedHandler: null as ((e: Event) => void) | null,
-        boundMetadataUpdatedHandler: null as ((e: Event) => void) | null,
+        cleanupEventListeners: [] as Array<() => void>,
 
         // Display Component State (lifted up or shared via events, but here managed locally for display reactivity)
         metadata: {
@@ -42,28 +41,26 @@ export function registerComponentMetaInfo() {
         init() {
             this.fetchMetadata();
 
-            this.boundItemSelectedHandler = (e: Event) => {
-                this.copyMetadataFrom((e as CustomEvent).detail.itemId);
-            };
-            this.boundMetadataUpdatedHandler = (e: Event) => {
-                if ((e as CustomEvent).detail.componentId === this.componentId) {
-                    this.refreshDisplay();
-                }
-            };
+            this.cleanupEventListeners.push(
+                addComponentEventListener('item-selected', (e) => {
+                    const detail = e.detail as { itemId: string };
+                    this.copyMetadataFrom(detail.itemId);
+                })
+            );
 
-            window.addEventListener('item-selected', this.boundItemSelectedHandler);
-            window.addEventListener('component-metadata-updated', this.boundMetadataUpdatedHandler);
+            this.cleanupEventListeners.push(
+                addComponentEventListener(ComponentEvents.METADATA_UPDATED, (e) => {
+                    const detail = e.detail as { componentId: string };
+                    if (detail.componentId === this.componentId) {
+                        this.refreshDisplay();
+                    }
+                })
+            );
         },
 
         destroy() {
-            if (this.boundItemSelectedHandler) {
-                window.removeEventListener('item-selected', this.boundItemSelectedHandler);
-                this.boundItemSelectedHandler = null;
-            }
-            if (this.boundMetadataUpdatedHandler) {
-                window.removeEventListener('component-metadata-updated', this.boundMetadataUpdatedHandler);
-                this.boundMetadataUpdatedHandler = null;
-            }
+            this.cleanupEventListeners.forEach(cleanup => cleanup());
+            this.cleanupEventListeners = [];
         },
 
         async fetchMetadata() {
@@ -72,18 +69,36 @@ export function registerComponentMetaInfo() {
                 if (response.ok) {
                     const data = await response.json();
                     this.metadata = { ...this.metadata, ...data };
+                    
+                    // Backwards compatibility: sync authors from profile if using a profile
+                    if (this.metadata.contact_profile_id && 
+                        this.metadata.contact_profile?.authors &&
+                        (!this.metadata.authors || this.metadata.authors.length === 0)) {
+                        this.metadata.authors = structuredClone(this.metadata.contact_profile.authors);
+                    }
+                } else {
+                    console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
+                    dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                        type: 'error',
+                        message: 'Failed to load component metadata'
+                    });
                 }
             } catch (error) {
                 console.error('Failed to fetch metadata', error);
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: 'Network error loading metadata'
+                });
             }
         },
 
         refreshDisplay() {
             this.isEditing = false;
             this.fetchMetadata();
-            window.dispatchEvent(new CustomEvent('show-alert', {
-                detail: { type: 'success', message: 'Metadata updated successfully' }
-            }));
+            dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                type: 'success',
+                message: 'Metadata updated successfully'
+            });
         },
 
         openCopyModal() {
@@ -125,15 +140,17 @@ export function registerComponentMetaInfo() {
                 if (!targetResponse.ok) throw new Error('Failed to update target metadata');
 
                 this.refreshDisplay();
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'success', message: 'Metadata copied successfully' }
-                }));
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'success',
+                    message: 'Metadata copied successfully'
+                });
 
             } catch (error) {
-                console.error(error);
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'error', message: 'Failed to copy metadata' }
-                }));
+                console.error('Failed to copy metadata:', error);
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: error instanceof Error ? error.message : 'Failed to copy metadata'
+                });
             }
         },
 

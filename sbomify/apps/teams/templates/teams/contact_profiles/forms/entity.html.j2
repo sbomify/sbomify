@@ -168,7 +168,7 @@
                               rows="3"
                               x-model="websites"
                               title="Organization website URLs"
-                              placeholder="Enter one URL per line https://example.com https://example.org">{{ form.website_urls_text.value|default:'' }}</textarea>
+                              placeholder="Enter one URL per line&#10;https://example.com&#10;https://example.org">{{ form.website_urls_text.value|default:'' }}</textarea>
                 </div>
             </div>
             <hr class="my-4 border-light">
@@ -190,17 +190,17 @@
                 <i class="fas fa-info-circle me-1"></i>
                 Add individuals who represent this organization (e.g., technical lead, security contact).
             </p>
-            <div class="contacts-list bg-light rounded-3 p-3">
-                <div class="alert alert-warning py-2 small mb-2"
-                     x-show="activeContactsCount === 0 && !contactsTouched">
-                    <i class="fas fa-exclamation-triangle me-1"></i>
-                    <strong>Required:</strong> Add at least one contact person for this entity.
-                </div>
-                <div class="alert alert-danger py-2 small mb-2"
-                     x-show="activeContactsCount === 0 && contactsTouched">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    <strong>Missing contacts:</strong> Please add at least one contact person before saving.
-                </div>
+            <div class="alert alert-warning py-2 small mb-3"
+                 x-show="activeContactsCount === 0 && !contactsTouched">
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                <strong>Required:</strong> Add at least one contact person for this entity.
+            </div>
+            <div class="alert alert-danger py-2 small mb-3"
+                 x-show="activeContactsCount === 0 && contactsTouched">
+                <i class="fas fa-exclamation-circle me-1"></i>
+                <strong>Missing contacts:</strong> Please add at least one contact person before saving.
+            </div>
+            <div class="contacts-list card shadow-sm" x-show="activeContactsCount > 0">
                 {% if contacts_formset %}
                     {{ contacts_formset.management_form }}
                     {% for contact_form in contacts_formset %}

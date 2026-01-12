@@ -222,6 +222,8 @@ class ContactEntityModelForm(forms.ModelForm):
     At least one role must be selected.
     """
 
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
     is_manufacturer = forms.BooleanField(
         required=False,
         initial=True,
@@ -250,6 +252,7 @@ class ContactEntityModelForm(forms.ModelForm):
     class Meta:
         model = ContactEntity
         fields = [
+            "id",
             "name",
             "email",
             "phone",
@@ -304,9 +307,11 @@ class ContactEntityModelForm(forms.ModelForm):
 
 
 class ContactProfileContactForm(forms.ModelForm):
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = ContactProfileContact
-        fields = ["name", "email", "phone"]
+        fields = ["id", "name", "email", "phone"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name", "required": True}),
             "email": forms.EmailInput(
@@ -342,9 +347,11 @@ class AuthorContactForm(forms.ModelForm):
     Authors are individuals, not organizations.
     """
 
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = AuthorContact
-        fields = ["name", "email", "phone"]
+        fields = ["id", "name", "email", "phone"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name", "required": True}),
             "email": forms.EmailInput(

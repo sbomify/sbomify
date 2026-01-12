@@ -1,6 +1,14 @@
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
 import type { ContactProfile, ComponentMetaInfo } from './types';
+import {
+    ComponentEvents,
+    dispatchComponentEvent,
+    type MetadataLoadedEvent,
+    type ContactsUpdatedEvent,
+    type MetadataUpdatedEvent,
+    type ShowAlertEvent
+} from './events';
 
 interface LifecyclePhase {
     value: string;
@@ -103,10 +111,14 @@ export function registerComponentMetaInfoEditor() {
 
         init() {
             this.originalMetadata = JSON.stringify(this.metadata);
-            this.loadMetadata();
-            this.loadContactProfiles();
             this.boundHandleBeforeUnload = this.handleBeforeUnload.bind(this);
             window.addEventListener('beforeunload', this.boundHandleBeforeUnload);
+
+            // Start async loads without blocking Alpine initialization
+            this.$nextTick(() => {
+                this.loadMetadata();
+                this.loadContactProfiles();
+            });
         },
 
         handleBeforeUnload(e: BeforeUnloadEvent) {
@@ -131,21 +143,28 @@ export function registerComponentMetaInfoEditor() {
                     this.selectedProfileId = this.metadata.contact_profile_id || '';
                     this.originalMetadata = JSON.stringify(this.metadata);
 
-                    // Dispatch event to notify child components (licenses editor, etc.) that metadata is loaded
-                    window.dispatchEvent(new CustomEvent('component-metadata-loaded', {
-                        detail: {
-                            metadata: this.metadata,
-                            licenses: this.metadata.licenses,
-                            supplier: this.metadata.supplier,
-                            authors: this.metadata.authors
-                        }
-                    }));
+                    dispatchComponentEvent<MetadataLoadedEvent>(ComponentEvents.METADATA_LOADED, {
+                        metadata: this.metadata,
+                        licenses: this.metadata.licenses,
+                        supplier: this.metadata.supplier,
+                        authors: this.metadata.authors
+                    });
 
                     this.hasUnsavedChanges = false;
+                    this.isInitializing = false;
+                    
+                    // Sync authors from profile if needed (after metadata is loaded)
+                    this.syncAuthorsFromProfile();
+                } else {
+                    console.error(`Failed to load metadata: ${response.status} ${response.statusText}`);
                     this.isInitializing = false;
                 }
             } catch (error) {
                 console.error('Failed to load metadata:', error);
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: 'Failed to load component metadata'
+                });
                 this.isInitializing = false;
             }
         },
@@ -168,22 +187,47 @@ export function registerComponentMetaInfoEditor() {
                         this.contactProfiles.push(this.metadata.contact_profile);
                     }
 
-                    // Ensure selectedProfileId is set after profiles are loaded
                     if (this.metadata.contact_profile_id) {
                         this.selectedProfileId = this.metadata.contact_profile_id;
+                        this.syncAuthorsFromProfile();
                     }
                 } else if (response.status === 403) {
-                    // User doesn't have permission to view contact profiles, but that's okay
-                    // They can still use custom contact info
                     this.contactProfiles = [];
                 } else {
                     console.error(`Failed to load contact profiles: ${response.status} ${response.statusText}`);
                     this.contactProfiles = [];
                 }
             } catch (error) {
-                // Silently fail - user can still use custom contact info
                 console.error('Failed to load contact profiles:', error);
                 this.contactProfiles = [];
+            }
+        },
+
+        /**
+         * Synchronizes authors from the selected profile to component metadata.
+         * This ensures components using a profile have the profile's authors loaded.
+         * Only syncs if metadata.authors is empty to avoid overwriting manual edits.
+         */
+        syncAuthorsFromProfile() {
+            if (!this.metadata.contact_profile_id || !this.contactProfiles.length) {
+                return;
+            }
+
+            const profile = this.contactProfiles.find(p => p.id === this.metadata.contact_profile_id);
+            if (!profile?.authors?.length) {
+                return;
+            }
+
+            // Only sync if authors are empty (backwards compatibility for legacy components)
+            if (!this.metadata.authors || this.metadata.authors.length === 0) {
+                this.metadata.authors = structuredClone(profile.authors);
+                
+                // Use $nextTick to ensure component is ready to receive events
+                this.$nextTick(() => {
+                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                        contacts: this.metadata.authors
+                    });
+                });
             }
         },
 
@@ -195,14 +239,25 @@ export function registerComponentMetaInfoEditor() {
 
             if (nextId === null) {
                 this.metadata.contact_profile = null;
-                // clear supplier name when switching to custom
                 if (this.metadata.supplier) {
                     this.metadata.supplier.name = null;
                 }
+                this.metadata.authors = [];
+                dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                    contacts: []
+                });
             } else {
                 const profile = this.contactProfiles.find(p => p.id === nextId);
                 this.metadata.contact_profile = profile || null;
                 this.validationErrors.supplier = {};
+
+                if (profile) {
+                    const authors = profile.authors ? structuredClone(profile.authors) : [];
+                    this.metadata.authors = authors;
+                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                        contacts: authors
+                    });
+                }
             }
         },
 
@@ -283,17 +338,20 @@ export function registerComponentMetaInfoEditor() {
                 this.hasUnsavedChanges = false;
                 this.originalMetadata = JSON.stringify(this.metadata);
                 this.$dispatch('metadata-saved');
-                window.dispatchEvent(new CustomEvent('component-metadata-updated', {
-                    detail: { componentId: this.componentId }
-                }));
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'success', message: 'Metadata saved successfully' }
-                }));
+                
+                dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
+                    componentId: this.componentId
+                });
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'success',
+                    message: 'Metadata saved successfully'
+                });
             } catch (error) {
                 console.error('Save error:', error);
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'error', message: 'Failed to save metadata' }
-                }));
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: error instanceof Error ? error.message : 'Failed to save metadata'
+                });
             } finally {
                 this.isSaving = false;
             }
