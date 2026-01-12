@@ -8,6 +8,17 @@ import './navbar-search';
 
 import { registerDeleteModal } from './components/delete-modal';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
+import { registerStandardCard } from './components/standard-card';
+import { registerConfirmAction } from './components/confirm-action';
+import { registerCopyToken } from './components/copy-token';
+import { registerSiteNotifications } from './components/site-notifications';
+import { registerPlanCard } from './components/plan-card';
+import { registerEditableSingleField } from './components/editable-single-field';
+import { registerProductIdentifiers } from './components/product-identifiers';
+import { registerItemsListTable } from './components/items-list-table';
+import { registerItemAssignmentManager } from './components/item-assignment-manager';
+import { registerProductReleases } from './components/product-releases';
+import { registerReleaseArtifacts } from './components/release-artifacts';
 import { registerCopyableValue } from './components/copyable-value';
 import { registerPublicStatusToggle } from './components/public-status-toggle';
 import { registerAccessTokensList } from './components/access-tokens-list';
@@ -49,6 +60,17 @@ registerContactsEditor();
 registerSupplierEditor();
 registerDeleteModal();
 registerPlanSelection();
+registerStandardCard();
+registerConfirmAction();
+registerCopyToken();
+registerSiteNotifications();
+registerPlanCard();
+registerEditableSingleField();
+registerProductIdentifiers();
+registerItemsListTable();
+registerItemAssignmentManager();
+registerProductReleases();
+registerReleaseArtifacts();
 
 void initializeAlpine();
 

@@ -14,6 +14,8 @@
     justify-content: center;
     z-index: 1050;
     padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .delete-modal {
@@ -23,6 +25,16 @@
     max-width: 500px;
     width: 100%;
     max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.delete-modal > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -32,6 +44,7 @@
     align-items: flex-start;
     gap: 1rem;
     position: relative;
+    flex-shrink: 0;
 }
 
 .delete-modal-icon {
@@ -80,6 +93,11 @@
 
 .delete-modal-body {
     padding: 0 1.5rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .delete-modal-message {
@@ -109,6 +127,7 @@
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 .delete-modal-button {

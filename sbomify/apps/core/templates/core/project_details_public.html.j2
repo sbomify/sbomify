@@ -1,0 +1,74 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load breadcrumb_tags %}
+{% load django_vite %}
+{% load static %}
+{% load public_url_tags %}
+{% block title %}{{ project.name }} - SBOM & Security{% endblock %}
+{% block meta_description %}
+    {{ project.name }} - Software Bill of Materials (SBOM) for this project. View components and download SBOMs.
+{% endblock %}
+{% block og_title %}{{ project.name }} - Software Bill of Materials{% endblock %}
+{% block og_description %}
+    {{ project.name }} - View components and download Software Bill of Materials (SBOM) for this project.
+{% endblock %}
+{% block breadcrumb %}
+    {% breadcrumb project 'project' %}
+{% endblock %}
+{% block content %}
+    <div class="public-item-header">
+        {% if workspace_public_url %}
+            <a href="{{ workspace_public_url }}" class="back-link">
+                <i class="fas fa-arrow-left"></i>Back to Trust Center
+            </a>
+        {% endif %}
+        <h1 class="public-item-title">
+            <span class="public-item-title-icon icon-project">
+                <i class="fas fa-diagram-project"></i>
+            </span>
+            {{ project.name }}
+        </h1>
+        {% if public_components %}
+            <div class="public-item-badges">
+                <span class="public-badge badge-count">
+                    <i class="fas fa-cube"></i>
+                    {{ public_components|length }} Component{{ public_components|length|pluralize }}
+                </span>
+            </div>
+        {% endif %}
+    </div>
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-cube"></i>Components
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                {% if public_components %}
+                    <ul class="component-list">
+                        {% for component in public_components %}
+                            <li class="component-item">
+                                <a href="{{ component.public_url }}" class="component-link">
+                                    <span class="component-icon">
+                                        <i class="fas fa-cube"></i>
+                                    </span>
+                                    <span class="component-name">{{ component.name }}</span>
+                                    <span class="component-type">{{ component.component_type_display }}</span>
+                                    <i class="fas fa-chevron-right component-arrow"></i>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="no-components text-center py-5">
+                        <i class="fas fa-cube fa-3x text-muted mb-3 d-block"></i>
+                        <p class="text-muted mb-0">No public components in this project</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+{% endblock %}

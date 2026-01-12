@@ -9,45 +9,40 @@
                     <i class="fas fa-link"></i>Resources & Links
                 </h4>
             </div>
-            <div class="card-body p-0">
-                <ul class="public-list">
-                    {% for link in product_links %}
-                        <li class="public-list-item">
-                            <div class="public-list-item-icon icon-{{ link.link_type|default:'default' }}">
-                                {% if link.link_type == 'website' %}
-                                    <i class="fas fa-globe"></i>
-                                {% elif link.link_type == 'documentation' %}
-                                    <i class="fas fa-book"></i>
-                                {% elif link.link_type == 'support' %}
-                                    <i class="fas fa-life-ring"></i>
-                                {% elif link.link_type == 'repository' %}
-                                    <i class="fab fa-github"></i>
-                                {% elif link.link_type == 'license' %}
-                                    <i class="fas fa-balance-scale"></i>
-                                {% elif link.link_type == 'security' %}
-                                    <i class="fas fa-shield-alt"></i>
-                                {% elif link.link_type == 'changelog' %}
-                                    <i class="fas fa-history"></i>
-                                {% elif link.link_type == 'api' %}
-                                    <i class="fas fa-code"></i>
-                                {% else %}
-                                    <i class="fas fa-external-link-alt"></i>
-                                {% endif %}
-                            </div>
-                            <div class="public-list-item-content">
-                                <div class="public-list-item-type">{{ link.link_type_display }}</div>
-                                <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="public-list-item-title-link">
-                                    {{ link.title }}
-                                    <i class="fas fa-external-link-alt ms-1"></i>
-                                </a>
-                                {% if link.description %}<div class="public-list-item-description">{{ link.description }}</div>{% endif %}
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ul>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 public-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th>Title</th>
+                                <th>URL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for link in product_links %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ link.link_type_display }}</span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ link.title }}</strong>
+                                        {% if link.description %}<div class="small text-muted">{{ link.description }}</div>{% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-primary text-decoration-none">
+                                            {{ link.url }}
+                                            <i class="fas fa-external-link-alt ms-1"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

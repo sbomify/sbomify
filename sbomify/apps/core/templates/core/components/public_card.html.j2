@@ -1,0 +1,54 @@
+{#
+PublicCard Component - A wrapper around StandardCard for public-facing pages
+
+Usage:
+{% include 'core/components/public_card.html.j2' with {
+    title: 'Card Title',
+    subtitle: 'Optional subtitle',
+    icon: 'fas fa-info-circle',
+    variant: 'primary',
+    size: 'md',
+    hoverable: true,
+    padded: true
+} %}
+
+Parameters:
+- title: Card title (optional)
+- subtitle: Subtitle text shown as info notice (optional)
+- icon: Icon class (default: 'fas fa-info-circle')
+- variant: 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'
+- size: 'sm' | 'md' | 'lg'
+- hoverable: Enable hover effect (default: false)
+- padded: Add body padding (default: true)
+#}
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/standard-card.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/public-card.css' %}">
+{% with container_class='mt-3' variant_class='public-card--default' hoverable_class='' shadow_class='shadow-sm' body_class='' %}
+    <div class="public-card-wrapper {{ variant_class }} {{ hoverable_class }}">
+        <div class="standard-card {{ container_class }}">
+            <div class="card {{ shadow_class }}">
+                {% if title or header_content %}
+                    <div class="card-header">
+                        <div class="header-content">
+                            {% if title %}<h4 class="card-title mb-0">{{ title }}</h4>{% endif %}
+                            {% if header_content %}<div class="header-actions">{{ header_content }}</div>{% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="card-body {{ body_class }}">
+                    {% if subtitle %}
+                        <div class="augmentation-notice d-flex align-items-center mb-3">
+                            <i class="{{ icon|default:'fas fa-info-circle' }} me-2"
+                               style="color: var(--brand-primary)"></i>
+                            <span class="text-muted">{{ subtitle }}</span>
+                        </div>
+                    {% endif %}
+                    {{ content }}
+                </div>
+                {% if footer_content %}<div class="card-footer">{{ footer_content }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+{% endwith %}

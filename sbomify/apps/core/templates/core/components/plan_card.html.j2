@@ -1,0 +1,75 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/standard-card.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/plan-card.css' %}">
+<div class="standard-card mt-3"
+     x-data="planCard({ isCurrentPlan: {{ is_current_plan|yesno:'true,false' }}, buttonDisabled: {{ button_disabled|yesno:'true,false' }}, loading: {{ loading|yesno:'true,false' }} })">
+    <div class="card plan-card {% if is_current_plan %}plan-emphasis shadow-md{% else %}shadow-sm{% endif %}">
+        <div class="card-header {% if is_current_plan %}bg-emphasis text-emphasis border-emphasis{% endif %}">
+            <div class="header-content">
+                <h4 class="card-title mb-0">{{ plan_name }}</h4>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="plan-content">
+                <div class="plan-pricing">
+                    <h1 class="pricing-title">
+                        {% if price == 0 %}
+                            Community
+                        {% elif price > 0 %}
+                            ${{ price }}<small class="pricing-period">{{ price_period|default:"/mo" }}</small>
+                        {% else %}
+                            Contact Us
+                        {% endif %}
+                    </h1>
+                </div>
+                {% if description %}
+                    <div class="plan-description">
+                        <p class="text-muted">{{ description }}</p>
+                    </div>
+                {% endif %}
+                {% if features %}
+                    <div class="plan-features">
+                        <ul class="list-unstyled">
+                            {% for feature in features %}
+                                <li class="feature-item">
+                                    <i class="fas fa-check text-success me-2"></i>
+                                    {{ feature.label }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+                {% if custom_content %}<div class="plan-custom-content">{{ custom_content }}</div>{% endif %}
+                {% if warning_message %}
+                    <div class="alert alert-warning mb-3" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        {{ warning_message }}
+                    </div>
+                {% endif %}
+                {% if info_message %}
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {{ info_message }}
+                    </div>
+                {% endif %}
+                <div class="plan-actions">
+                    {% if form_controls %}<div class="plan-form-controls mb-3">{{ form_controls }}</div>{% endif %}
+                    <div class="d-grid gap-2">
+                        <button type="button"
+                                class="btn w-100"
+                                :class="buttonClasses"
+                                :disabled="isButtonDisabled"
+                                @click="handleAction">
+                            {% if button_icon %}<i class="{{ button_icon }} me-2"></i>{% endif %}
+                            {{ button_text|default:"Select Plan" }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% if footer_content %}
+            <div class="card-footer {% if is_current_plan %}border-emphasis{% endif %}">{{ footer_content }}</div>
+        {% endif %}
+    </div>
+</div>

@@ -29,6 +29,10 @@ class ComponentDetailsPublicView(View):
         if not component_obj:
             return error_response(request, HttpResponseNotFound("Component not found"))
 
+        # Check if component is public - private components should not be accessible via public URL
+        if not component_obj.is_public:
+            return error_response(request, HttpResponseNotFound("Component not found"))
+
         # Use the resolved component's ID for API calls
         resolved_id = component_obj.id
 

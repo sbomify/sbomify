@@ -990,14 +990,15 @@ body.workspace-modal-open .sidebar {
 #notificationsModal .modal-dialog,
 #notificationsModal .modal-dialog-slide-left {
   position: fixed !important;
-  top: var(--topnav-height, 60px) !important;
+  top: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
   left: auto !important;
   width: 320px !important;
   max-width: 90vw !important;
   margin: 0 !important;
-  max-height: calc(100vh - var(--topnav-height, 60px)) !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
   transform: translateX(100%) !important;
   transition: transform 0.3s ease-out !important;
   will-change: transform;

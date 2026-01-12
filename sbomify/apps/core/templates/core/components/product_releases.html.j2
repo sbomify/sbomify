@@ -1,0 +1,179 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/releases-list.css' %}">
+<div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
+     x-init="loadReleases()">
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="card-title mb-0">
+                <i class="fas fa-tag me-2"></i>Releases
+            </h4>
+            {% if can_create %}
+                <button type="button"
+                        class="btn btn-primary btn-sm"
+                        @click="openCreateModal()">
+                    <i class="fas fa-plus me-1"></i>Create Release
+                </button>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <div x-show="isLoading" class="text-center py-4">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p class="mt-2 text-muted">Loading releases...</p>
+            </div>
+            <div x-show="!isLoading && releases.length === 0"
+                 class="text-center py-4 text-muted">
+                <i class="fas fa-tag fa-3x mb-3"></i>
+                <p class="mb-0">No releases yet</p>
+                {% if can_create %}<small>Create your first release to get started</small>{% endif %}
+            </div>
+            <div x-show="!isLoading && releases.length > 0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th class="text-center">Visibility</th>
+                                <th>Artifacts</th>
+                                <th>Created</th>
+                                {% if can_edit or can_delete %}<th class="text-end">Actions</th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="release in releases" :key="release.id">
+                                <tr>
+                                    <td>
+                                        <a :href="getReleaseUrl(release)"
+                                           class="text-decoration-none fw-semibold fs-5"
+                                           x-text="release.name"></a>
+                                        <span x-show="release.is_latest" class="badge bg-success ms-2">Latest</span>
+                                    </td>
+                                    <td>
+                                        <span x-show="release.is_prerelease" class="badge bg-warning text-dark">Pre-release</span>
+                                        <span x-show="!release.is_prerelease" class="badge bg-primary">Stable</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span x-show="release.is_public"
+                                              class="badge bg-success-subtle text-success">Public</span>
+                                        <span x-show="!release.is_public"
+                                              class="badge bg-secondary-subtle text-secondary">Private</span>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted"
+                                              x-text="(release.artifact_count || 0) + ' artifacts'"></span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted" x-text="formatDate(release.created_at)"></small>
+                                    </td>
+                                    {% if can_edit or can_delete %}
+                                        <td class="text-end">
+                                            <div class="btn-group btn-group-sm">
+                                                {% if can_edit %}
+                                                    <button type="button"
+                                                            class="btn btn-outline-primary"
+                                                            title="Edit"
+                                                            @click="openEditModal(release)">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                {% endif %}
+                                                {% if can_delete %}
+                                                    <button type="button"
+                                                            class="btn btn-outline-danger"
+                                                            title="Delete"
+                                                            @click="deleteRelease(release)">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div x-show="totalPages > 1" class="mt-3">{% include 'core/components/pagination_controls.html.j2' %}</div>
+            </div>
+        </div>
+    </div>
+    {% if can_create or can_edit %}
+        <!-- Create/Edit Release Modal -->
+        <template x-if="showModal">
+            <div class="modal-backdrop"
+                 style="position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: rgba(0,0,0,0.5);
+                        z-index: 1040"
+                 @click="closeModal()"></div>
+        </template>
+        <template x-if="showModal">
+            <div class="modal d-block"
+                 tabindex="-1"
+                 style="position: fixed;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        z-index: 1050;
+                        overflow-y: auto">
+                <div class="modal-dialog modal-dialog-centered" @click.stop>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"
+                                x-text="form.id ? 'Edit Release' : 'Create New Release'"></h5>
+                            <button type="button" class="btn-close" @click="closeModal()"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Release Name</label>
+                                <input type="text"
+                                       x-model="form.name"
+                                       class="form-control"
+                                       placeholder="e.g., v1.0.0, 2024.1, beta-3"
+                                       required>
+                                <div class="form-text">Enter a unique name for this release</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Description (Optional)</label>
+                                <textarea x-model="form.description"
+                                          class="form-control"
+                                          rows="3"
+                                          placeholder="Describe what's included in this release..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Created Date</label>
+                                <input type="datetime-local" x-model="form.created_at" class="form-control">
+                                <div class="form-text">Defaults to the moment you create the release</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Release Date</label>
+                                <input type="datetime-local" x-model="form.released_at" class="form-control">
+                                <div class="form-text">This date determines when the release is shown as available</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                           x-model="form.is_prerelease"
+                                           class="form-check-input"
+                                           id="isPrereleaseCheck">
+                                    <label class="form-check-label" for="isPrereleaseCheck">Mark as pre-release</label>
+                                </div>
+                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @click="closeModal()">Cancel</button>
+                            <button type="button" class="btn btn-primary" @click="submitRelease()">
+                                <span x-text="form.id ? 'Update Release' : 'Create Release'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    {% endif %}
+</div>

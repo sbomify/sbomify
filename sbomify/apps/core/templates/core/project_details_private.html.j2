@@ -22,10 +22,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
             <div class="title-section">
                 <h1 class="item-title">
                     {% if project.has_crud_permissions %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="project"
-                              data-item-id="{{ project.id }}"
-                              data-item-value="{{ project.name }}"></span>
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='project' item_id=project.id item_value=project.name %}
                     {% else %}
                         {{ project.name }}
                     {% endif %}
@@ -56,10 +53,7 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-item-assignment-manager"
-                 data-parent-type="project"
-                 data-parent-id="{{ project.id }}"
-                 data-has-crud-permissions="{% if project.has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='project' parent_id=project.id child_type='component' can_edit=project.has_crud_permissions %}
         </div>
     </div>
     <div class="row mt-3">

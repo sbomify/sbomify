@@ -137,7 +137,8 @@ def _get_product_links(product_id: str) -> list:
 class ProductDetailsPublicView(View):
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         # Resolve product by slug (on custom domains) or ID (on main app)
-        product_obj = resolve_product_identifier(request, product_id)
+        # require_public=True filters at query level, preventing race conditions
+        product_obj = resolve_product_identifier(request, product_id, require_public=True)
         if not product_obj:
             return error_response(request, HttpResponseNotFound("Product not found"))
 
@@ -167,7 +168,9 @@ class ProductDetailsPublicView(View):
 
         # Prepare server-side data for Django templates (replacing Vue components)
         public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
-        public_releases = _get_public_releases(resolved_id, is_custom_domain, product.get("slug") or resolved_id)
+        public_releases = _get_public_releases(
+            resolved_id, is_custom_domain, product.get("slug") or resolved_id, limit=3
+        )
         product_identifiers = _get_product_identifiers(resolved_id)
         product_links = _get_product_links(resolved_id)
 

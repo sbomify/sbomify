@@ -74,8 +74,7 @@ export function registerProductIdentifiersBarcodes(): void {
         this.barcodeRendered[id] = true;
         this.barcodeErrors[id] = false;
 
-      } catch (err) {
-        console.warn(`Failed to generate barcode for ${type}: ${value}`, err);
+      } catch {
         this.barcodeErrors[id] = true;
         this.barcodeRendered[id] = false;
       }

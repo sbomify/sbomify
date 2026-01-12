@@ -36,9 +36,7 @@
     </div>
     <div class="row">
         <div class="col-12">
-            <div class="vc-product-releases"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
         </div>
     </div>
     {% if product.has_crud_permissions %}
@@ -97,7 +95,17 @@
                                        name="released_at"
                                        placeholder="Select release date and time"
                                        value="{{ default_release_datetime|date:'Y-m-d\\TH:i' }}">
-                                <div class="form-text">This date is shown on public and private release pages</div>
+                                <div class="form-text">This date determines when the release is shown as available</div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                           class="form-check-input"
+                                           id="releaseIsPrerelease"
+                                           name="is_prerelease">
+                                    <label class="form-check-label" for="releaseIsPrerelease">Mark as pre-release</label>
+                                </div>
+                                <div class="form-text">Pre-releases are typically alpha, beta, or release candidate versions</div>
                             </div>
                         </div>
                         <div class="modal-footer">
