@@ -166,7 +166,7 @@ class ProductDetailsPublicView(View):
         # Get workspace public URL for breadcrumbs
         workspace_public_url = get_workspace_public_url(request, team)
 
-        # Prepare server-side data for Django templates (replacing Vue components)
+        # Prepare server-side data for Django templates
         public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
         public_releases = _get_public_releases(
             resolved_id, is_custom_domain, product.get("slug") or resolved_id, limit=3
@@ -191,7 +191,7 @@ class ProductDetailsPublicView(View):
             "brand": brand,
             "has_downloadable_content": has_downloadable_content,
             "product": product,
-            # Server-side rendered data (replacing Vue components)
+            # Server-side rendered data
             "public_projects": public_projects,
             "public_releases": public_releases,
             "product_identifiers": product_identifiers,

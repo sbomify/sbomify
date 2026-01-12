@@ -131,7 +131,7 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:products_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the expected elements
     content = response.content.decode()
     assert 'class="products-list' in content
     assert 'id="addProductModal"' in content
@@ -160,7 +160,7 @@ def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  #
     response = client.get(reverse("core:projects_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the expected elements
     content = response.content.decode()
     assert 'class="projects-list' in content
     assert 'id="addProjectForm"' in content
@@ -189,7 +189,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     response = client.get(reverse("core:components_dashboard"))
     assert response.status_code == 200
 
-    # Check that the page contains the Vue component containers
+    # Check that the page contains the expected elements
     content = response.content.decode()
     assert 'class="components-list' in content
     assert 'id="addComponentForm"' in content

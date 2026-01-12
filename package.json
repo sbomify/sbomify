@@ -8,12 +8,12 @@
     "copy-bootstrap": "cp node_modules/bootstrap/dist/css/bootstrap.min.css sbomify/static/css/ && cp node_modules/bootstrap/dist/css/bootstrap.min.css.map sbomify/static/css/",
     "copy-fontawesome": "cp -r node_modules/@fortawesome/fontawesome-free/webfonts sbomify/static/ && cp node_modules/@fortawesome/fontawesome-free/css/all.min.css sbomify/static/css/fontawesome.min.css",
     "copy-deps": "bun run copy-bootstrap && bun run copy-fontawesome",
-    "build": "bun run copy-deps && vue-tsc -b && vite build",
+    "build": "bun run copy-deps && tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint \"sbomify/apps/core/js/**/*.{js,ts,vue}\" \"sbomify/apps/sboms/js/**/*.{js,ts,vue}\" \"sbomify/apps/teams/js/**/*.{js,ts,vue}\" \"sbomify/apps/billing/js/**/*.{js,ts,vue}\" \"sbomify/apps/documents/js/**/*.{js,ts,vue}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts,vue}\" \"sbomify/apps/plugins/js/**/*.{js,ts,vue}\" \"*.{js,ts}\"",
-    "lint-fix": "eslint \"sbomify/apps/core/js/**/*.{js,ts,vue}\" \"sbomify/apps/sboms/js/**/*.{js,ts,vue}\" \"sbomify/apps/teams/js/**/*.{js,ts,vue}\" \"sbomify/apps/billing/js/**/*.{js,ts,vue}\" \"sbomify/apps/documents/js/**/*.{js,ts,vue}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts,vue}\" \"sbomify/apps/plugins/js/**/*.{js,ts,vue}\" \"*.{js,ts}\" --fix",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,html}\" --ignore-path .gitignore",
-    "type-check": "vue-tsc --noEmit --skipLibCheck -p tsconfig.app.json",
+    "lint": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\"",
+    "lint-fix": "eslint \"sbomify/apps/core/js/**/*.{js,ts}\" \"sbomify/apps/sboms/js/**/*.{js,ts}\" \"sbomify/apps/teams/js/**/*.{js,ts}\" \"sbomify/apps/billing/js/**/*.{js,ts}\" \"sbomify/apps/documents/js/**/*.{js,ts}\" \"sbomify/apps/vulnerability_scanning/js/**/*.{js,ts}\" \"sbomify/apps/plugins/js/**/*.{js,ts}\" \"*.{js,ts}\" --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,css,scss,html}\" --ignore-path .gitignore",
+    "type-check": "tsc --noEmit --skipLibCheck -p tsconfig.app.json",
     "test": "bun test",
     "test:run": "bun test"
   },
@@ -23,7 +23,6 @@
     "@types/bun": "^1.3.2",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^25.0.0",
-    "@vitejs/plugin-vue": "^6.0.1",
     "alpinejs": "3.15.3",
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
@@ -37,11 +36,7 @@
     "sweetalert2": "^11.26.3",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
-    "vite-plugin-pwa": "^1.1.0",
-    "vue": "^3.5.24",
-    "vue-chartjs": "^5.3.3",
-    "vue-tsc": "^3.1.3",
-    "vuetify": "^3.10.11"
+    "vite-plugin-pwa": "^1.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -52,10 +47,8 @@
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
-    "eslint-plugin-vue": "^10.5.1",
     "globals": "^17.0.0",
     "markdownlint-cli": "0.47.0",
-    "prettier": "^3.6.2",
-    "vue-eslint-parser": "^10.2.0"
+    "prettier": "^3.6.2"
   }
 }

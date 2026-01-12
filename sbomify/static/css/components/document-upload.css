@@ -1,4 +1,4 @@
-/* StandardCard styles matching Vue component */
+/* StandardCard styles */
 .document-upload-wrapper .standard-card {
     margin-bottom: 1rem;
 }
@@ -51,7 +51,7 @@
     display: block;
 }
 
-/* Info Notice - matching augmentation-notice from Vue */
+/* Info Notice - augmentation-notice styling */
 .document-upload-wrapper .augmentation-notice {
     font-size: 0.9rem;
     background: #f8fafc;
