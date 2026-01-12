@@ -590,7 +590,7 @@ def test_workspace_public_view_filters_private_items(sample_team_with_owner_memb
     product2.projects.add(private_project)
 
     # 3. Private product - SHOULD NOT SHOW
-    product3 = Product.objects.create(name="Private Product", team=team, is_public=False)
+    Product.objects.create(name="Private Product", team=team, is_public=False)
 
     # Import view helpers
     from sbomify.apps.core.views.workspace_public import _list_public_products

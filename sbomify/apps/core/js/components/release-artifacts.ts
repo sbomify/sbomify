@@ -67,6 +67,12 @@ interface ReleaseArtifactsParams {
     isLatest?: boolean;
 }
 
+function formatSbomDisplay(format?: string, version?: string): string {
+    const normalizedFormat = format || 'unknown';
+    const formatDisplay = normalizedFormat === 'cyclonedx' ? 'CycloneDX' : normalizedFormat.toUpperCase();
+    return `${formatDisplay} ${version || ''}`.trim();
+}
+
 export function registerReleaseArtifacts() {
     Alpine.data('releaseArtifacts', ({
         releaseId,
@@ -256,17 +262,14 @@ export function registerReleaseArtifacts() {
 
             getArtifactFormat(artifact: Artifact): string {
                 if (artifact.sbom) {
-                    const format = artifact.sbom.format || 'unknown';
-                    const formatDisplay = format === 'cyclonedx' ? 'CycloneDX' : format.toUpperCase();
-                    return `${formatDisplay} ${artifact.sbom.format_version || ''}`.trim();
+                    return formatSbomDisplay(artifact.sbom.format, artifact.sbom.format_version);
                 }
                 if (artifact.document) {
                     const type = artifact.document.document_type || 'unknown';
                     return type.charAt(0).toUpperCase() + type.slice(1);
                 }
                 if (artifact.artifact_type === 'sbom' && artifact.sbom_format) {
-                    const formatDisplay = artifact.sbom_format === 'cyclonedx' ? 'CycloneDX' : artifact.sbom_format.toUpperCase();
-                    return `${formatDisplay} ${artifact.sbom_format_version || ''}`.trim();
+                    return formatSbomDisplay(artifact.sbom_format, artifact.sbom_format_version);
                 }
                 if (artifact.artifact_type === 'document' && artifact.document_type) {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);
@@ -354,9 +357,8 @@ export function registerReleaseArtifacts() {
             },
 
             getAvailableArtifactFormat(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom' && artifact.format && artifact.format_version) {
-                    const formatDisplay = artifact.format === 'cyclonedx' ? 'CycloneDX' : artifact.format.toUpperCase();
-                    return `${formatDisplay} ${artifact.format_version}`;
+                if (artifact.artifact_type === 'sbom' && artifact.format) {
+                    return formatSbomDisplay(artifact.format, artifact.format_version);
                 }
                 if (artifact.artifact_type === 'document' && artifact.document_type) {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);

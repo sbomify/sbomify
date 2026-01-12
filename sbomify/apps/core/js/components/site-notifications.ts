@@ -2,6 +2,9 @@ import Alpine from 'alpinejs';
 import $axios from '../utils';
 import { showError, showWarning, showInfo } from '../alerts';
 
+const POLLING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_POLLING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
 interface Notification {
     id: string;
     type: string;
@@ -17,8 +20,8 @@ export function registerSiteNotifications() {
         processedNotifications: new Set<string>(),
         intervalId: null as ReturnType<typeof setInterval> | null,
         consecutiveErrors: 0,
-        baseIntervalMs: 5 * 60 * 1000,
-        maxIntervalMs: 30 * 60 * 1000,
+        baseIntervalMs: POLLING_INTERVAL_MS,
+        maxIntervalMs: MAX_POLLING_INTERVAL_MS,
 
         init() {
             this.fetchNotifications(true);

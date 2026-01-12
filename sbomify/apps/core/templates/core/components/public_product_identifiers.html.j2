@@ -30,7 +30,7 @@
                                     <td class="text-center">
                                         {% if identifier.identifier_type in barcode_types %}
                                             <div class="barcode-wrapper identifier-card-barcode"
-                                                 x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
+                                                 x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                                 <svg data-barcode-id="{{ identifier.id }}"
                                                      class="barcode-svg"
                                                      x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
