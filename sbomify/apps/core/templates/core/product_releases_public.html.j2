@@ -52,7 +52,7 @@
                                 <div class="release-card-header">
                                     <div class="release-card-left">
                                         <span class="release-name">{{ release.name }}</span>
-                                        {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
+                                        {% if loop.first %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
                                         {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
                                     </div>
                                     <div class="release-card-meta">

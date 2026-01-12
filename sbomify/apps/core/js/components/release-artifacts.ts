@@ -286,7 +286,7 @@ export function registerReleaseArtifacts() {
                     const sbomId = artifact.sbom.id;
                     const componentId = artifact.sbom.component?.id;
                     if (!sbomId || !componentId) return '#';
-                    return isPublicView ? `/public/component/${componentId}/sbom/${sbomId}/` : `/component/${componentId}/sbom/${sbomId}/`;
+                    return isPublicView ? `/public/components/${componentId}/sboms/${sbomId}/` : `/components/${componentId}/sboms/${sbomId}/`;
                 }
                 if (artifact.document) {
                     const documentId = artifact.document.id;
@@ -296,7 +296,7 @@ export function registerReleaseArtifacts() {
                 }
                 // Handle flat API response
                 if (artifact.artifact_type === 'sbom' && artifact.sbom_id && artifact.component_id) {
-                    return isPublicView ? `/public/component/${artifact.component_id}/sbom/${artifact.sbom_id}/` : `/component/${artifact.component_id}/sbom/${artifact.sbom_id}/`;
+                    return isPublicView ? `/public/components/${artifact.component_id}/sboms/${artifact.sbom_id}/` : `/components/${artifact.component_id}/sboms/${artifact.sbom_id}/`;
                 }
                 if (artifact.artifact_type === 'document' && artifact.document_id && artifact.component_id) {
                     return isPublicView ? `/public/component/${artifact.component_id}/document/${artifact.document_id}/` : `/component/${artifact.component_id}/document/${artifact.document_id}/`;
