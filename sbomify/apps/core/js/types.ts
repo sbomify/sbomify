@@ -31,6 +31,7 @@ export interface ContactProfile {
     address?: string;
     website_urls?: string[];
     contacts?: ContactInfo[];
+    authors?: ContactInfo[];
 }
 
 export interface ComponentMetaInfo {

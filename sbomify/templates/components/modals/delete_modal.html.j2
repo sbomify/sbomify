@@ -40,7 +40,12 @@
                         data-bs-dismiss="modal">Cancel</button>
                 <form id="{{ modal_id }}-form"
                       style="display:inline"
-                      {% if use_htmx %} hx-post="{{ form_action }}" hx-swap="none" {% else %} method="post" action="{{ form_action }}" {% endif %}>
+                      {% if use_htmx %} hx-post="{{ form_action }}" {% if hx_target %}hx-target="{{ hx_target }}"{% endif %}
+                      {% if hx_swap %}hx-swap="{{ hx_swap }}"{% else %}hx-swap="none"{% endif %}
+                      {% else %}
+                      method="post"
+                      action="{{ form_action }}"
+                      {% endif %}>
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="DELETE">
                     {% for field in form %}{{ field }}{% endfor %}

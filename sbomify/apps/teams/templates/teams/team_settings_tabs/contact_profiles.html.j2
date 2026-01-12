@@ -1,14 +1,14 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/contact-profiles.css' %}">
-<div class="card">
+<div class="card shadow-md">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">Contact Profiles</h5>
         <button class="btn btn-primary btn-sm"
                 hx-get="{% url 'teams:contact_profiles_form' team.key %}"
                 hx-target="#contact-profiles-content"
                 hx-swap="innerHTML">
-            <i class="fa-solid fa-plus me-1"></i>
+            <i class="fas fa-plus me-1"></i>
             Add Profile
         </button>
     </div>
@@ -17,8 +17,1161 @@
              hx-get="{% url 'teams:contact_profiles_list' team.key %}"
              hx-trigger="load, refreshProfileList from:body"
              hx-swap="innerHTML">
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-spinner fa-spin me-2"></i>Loading contact profiles...
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading contact profiles...</p>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function initAlpineComponents() {
+        if (!window.Alpine) {
+            document.addEventListener('alpine:init', initAlpineComponents);
+            return;
+        }
+
+        if (window._alpineContactProfilesInitialized) return;
+        window._alpineContactProfilesInitialized = true;
+
+    Alpine.data('contactProfileForm', (entitiesPrefix, authorsPrefix) => ({
+        entitiesPrefix: entitiesPrefix,
+        authorsPrefix: authorsPrefix,
+        visibleEntitiesCount: 0,
+        visibleAuthorsCount: 0,
+        manufacturerCount: 0,
+        supplierCount: 0,
+        isInitialized: false,
+        
+        init() {
+            // Wait for Alpine to fully initialize the component
+            this.$nextTick(() => {
+                this.isInitialized = true;
+                this.updateCounts();
+            });
+        },
+        
+        initForm() {
+            // Legacy method - can be removed
+            this.updateCounts();
+        },
+        
+        get hasErrors() {
+            return document.querySelectorAll('.is-invalid').length > 0;
+        },
+
+        addEntity() {
+            const container = document.getElementById('entities-container');
+            const totalFormsInput = document.querySelector(`input[name="${this.entitiesPrefix}-TOTAL_FORMS"]`);
+            const currentCount = parseInt(totalFormsInput.value);
+            
+            const template = document.getElementById('entity-template').content.cloneNode(true);
+            const newRow = document.createElement('div');
+            newRow.appendChild(template);
+            
+            const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
+            newRow.innerHTML = newHtml;
+
+            const entityPrefix = `${this.entitiesPrefix}-${currentCount}`;
+            const contactPrefix = `${entityPrefix}-contacts`;
+            
+            const mgmtDiv = document.createElement('div');
+            mgmtDiv.innerHTML = `
+                <input type="hidden" name="${contactPrefix}-TOTAL_FORMS" value="0" id="id_${contactPrefix}-TOTAL_FORMS">
+                <input type="hidden" name="${contactPrefix}-INITIAL_FORMS" value="0" id="id_${contactPrefix}-INITIAL_FORMS">
+                <input type="hidden" name="${contactPrefix}-MIN_NUM_FORMS" value="0" id="id_${contactPrefix}-MIN_NUM_FORMS">
+                <input type="hidden" name="${contactPrefix}-MAX_NUM_FORMS" value="1000" id="id_${contactPrefix}-MAX_NUM_FORMS">
+            `;
+            const contactsList = newRow.querySelector('.contacts-list');
+            if (contactsList) {
+                contactsList.insertBefore(mgmtDiv, contactsList.firstChild);
+            }
+
+            container.appendChild(newRow.firstElementChild);
+            const newEntityEl = container.lastElementChild;
+            
+            totalFormsInput.value = currentCount + 1;
+            
+            if (window.Alpine) {
+                Alpine.initTree(newEntityEl);
+            }
+            
+            this.updateCounts();
+            
+            setTimeout(() => {
+                if (newEntityEl) {
+                    const alpineData = Alpine.$data(newEntityEl);
+                    if (alpineData) {
+                        alpineData.editing = true;
+                    }
+                    newEntityEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 50);
+        },
+
+        addAuthor() {
+            const container = document.getElementById('authors-container');
+            const totalFormsInput = document.querySelector(`input[name="${this.authorsPrefix}-TOTAL_FORMS"]`);
+            const currentCount = parseInt(totalFormsInput.value);
+            
+            const template = document.getElementById('author-template').content.cloneNode(true);
+            const newRow = document.createElement('div');
+            newRow.appendChild(template);
+            
+            const newHtml = newRow.innerHTML.replace(/__prefix__/g, currentCount);
+            newRow.innerHTML = newHtml;
+
+            container.appendChild(newRow.firstElementChild);
+            const newAuthorEl = container.lastElementChild;
+            
+            totalFormsInput.value = currentCount + 1;
+            
+            if (window.Alpine) {
+                Alpine.initTree(newAuthorEl);
+            }
+            
+            this.updateCounts();
+            
+            setTimeout(() => {
+                if (newAuthorEl) {
+                    const nameInput = newAuthorEl.querySelector('input[name$="-name"]');
+                    if (nameInput) nameInput.focus();
+                }
+            }, 50);
+        },
+        
+        submitForm(e) {
+            e.preventDefault();
+            
+            // Find the form - try multiple strategies
+            let form = null;
+            if (this.$el) {
+                form = this.$el.querySelector('form');
+            }
+            if (!form && e.target) {
+                form = e.target.closest('form');
+            }
+            if (!form) {
+                form = document.querySelector('.profile-form form');
+            }
+            
+            if (!form) {
+                console.error('[submitForm] Could not find form element');
+                return;
+            }
+            
+            // First, remove 'required' from deleted/hidden items before validation
+            const isElementVisible = (el) => {
+                if (!el) return false;
+                const style = window.getComputedStyle(el);
+                return style.display !== 'none' && 
+                       style.visibility !== 'hidden' && 
+                       el.offsetParent !== null;
+            };
+            
+            document.querySelectorAll('.entity-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isVisible = isElementVisible(card);
+                
+                if (isDeleted || !isVisible) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            document.querySelectorAll('.author-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isVisible = isElementVisible(card);
+                
+                if (isDeleted || !isVisible) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            document.querySelectorAll('.contact-card').forEach(card => {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isVisible = isElementVisible(card);
+                
+                if (isDeleted || !isVisible) {
+                    card.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            // Mark entities as touched for custom validation display
+            document.querySelectorAll('.entity-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted) {
+                    alpineData.touched = true;
+                    alpineData.contactsTouched = true;
+                    alpineData.updateContactCount();
+                }
+            });
+            
+            // ORDERED VALIDATION - Check each field in specific order
+            
+            // 1. Validate Profile Name first
+            const profileNameInput = form.querySelector('input[name="name"]');
+            if (profileNameInput && !profileNameInput.checkValidity()) {
+                profileNameInput.reportValidity();
+                profileNameInput.focus();
+                return;
+            }
+            
+            // 2. Validate Entities in order (role, name, email, contacts)
+            const entityCards = Array.from(document.querySelectorAll('.entity-card'));
+            for (const card of entityCards) {
+                const alpineData = Alpine.$data(card);
+                if (!alpineData || alpineData.deleted) continue;
+                
+                // 2a. Check entity role
+                if (!alpineData.isManufacturer && !alpineData.isSupplier) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                
+                // 2b. Check entity name
+                const nameInput = card.querySelector('input[name$="-name"]');
+                if (nameInput && !nameInput.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    nameInput.reportValidity();
+                    nameInput.focus();
+                    return;
+                }
+                
+                // 2c. Check entity email
+                const emailInput = card.querySelector('input[name$="-email"]');
+                if (emailInput && !emailInput.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    emailInput.reportValidity();
+                    emailInput.focus();
+                    return;
+                }
+                
+                // 2d. Check entity has at least one contact
+                if (alpineData.activeContactsCount === 0) {
+                    alpineData.editing = true;
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                
+                // 2e. Validate contacts within this entity
+                const contactCards = card.querySelectorAll('.contact-card');
+                for (const contactCard of contactCards) {
+                    const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                    const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                    if (isDeleted || !isElementVisible(contactCard)) continue;
+                    
+                    // Check contact name
+                    const contactName = contactCard.querySelector('input[name$="-name"]');
+                    if (contactName && !contactName.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        contactName.reportValidity();
+                        contactName.focus();
+                        return;
+                    }
+                    
+                    // Check contact email
+                    const contactEmail = contactCard.querySelector('input[name$="-email"]');
+                    if (contactEmail && !contactEmail.checkValidity()) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        contactEmail.reportValidity();
+                        contactEmail.focus();
+                        return;
+                    }
+                }
+            }
+            
+            // 3. Validate Authors
+            const authorCards = Array.from(document.querySelectorAll('.author-card'));
+            for (const card of authorCards) {
+                const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                if (isDeleted || !isElementVisible(card)) continue;
+                
+                // Check author name
+                const authorName = card.querySelector('input[name$="-name"]');
+                if (authorName && !authorName.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    authorName.reportValidity();
+                    authorName.focus();
+                    return;
+                }
+                
+                // Check author email
+                const authorEmail = card.querySelector('input[name$="-email"]');
+                if (authorEmail && !authorEmail.checkValidity()) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    authorEmail.reportValidity();
+                    authorEmail.focus();
+                    return;
+                }
+            }
+            
+            // All validation passed, trigger HTMX submission
+            htmx.trigger(form, 'htmx:submit');
+        },
+        
+        updateCounts() {
+            // Performance note: This iterates all cards but is acceptable since
+            // CycloneDX limits profiles to 1 manufacturer + 1 supplier (typically 1-2 entities)
+            let visibleEntities = 0;
+            let visibleAuthors = 0;
+            let mfgCount = 0;
+            let supCount = 0;
+            
+            document.querySelectorAll('.entity-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted) {
+                    visibleEntities++;
+                    // Only count roles for saved entities (not new ones being edited)
+                    if (!alpineData.isNew || !alpineData.editing) {
+                        if (alpineData.isManufacturer) mfgCount++;
+                        if (alpineData.isSupplier) supCount++;
+                    }
+                }
+            });
+            
+            document.querySelectorAll('.author-card').forEach(card => {
+                const alpineData = Alpine.$data(card);
+                if (alpineData && !alpineData.deleted) {
+                    visibleAuthors++;
+                }
+            });
+            
+            this.visibleEntitiesCount = visibleEntities;
+            this.visibleAuthorsCount = visibleAuthors;
+            this.manufacturerCount = mfgCount;
+            this.supplierCount = supCount;
+        }
+    }));
+
+    Alpine.data('contactEntity', (prefix) => ({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+        websites: '',
+        isManufacturer: true,
+        isSupplier: true,
+        deleted: false,
+        activeContactsCount: 0,
+        touched: false,
+        contactsTouched: false,
+        editing: false,
+        isNew: false,
+        snapshot: null,
+        
+        init() {
+            const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
+            if (nameInput) this.name = nameInput.value.trim();
+            
+            const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
+            if (emailInput) this.email = emailInput.value.trim();
+
+            const phoneInput = document.querySelector(`input[name="${prefix}-phone"]`);
+            if (phoneInput) this.phone = phoneInput.value.trim();
+
+            const addressInput = document.querySelector(`textarea[name="${prefix}-address"]`);
+            if (addressInput) this.address = addressInput.value.trim();
+
+            const webInput = document.querySelector(`textarea[name="${prefix}-website_urls_text"]`);
+            if (webInput) this.websites = webInput.value;
+
+            // Read initial roles from checkboxes (scoped to this component)
+            const mfgCheckbox = this.$root.querySelector(`input[name="${prefix}-is_manufacturer"]`);
+            const supCheckbox = this.$root.querySelector(`input[name="${prefix}-is_supplier"]`);
+            
+            this.isNew = !this.name;
+            
+            if (!this.isNew) {
+                // For existing entities, read from checkboxes
+                if (mfgCheckbox) {
+                    this.isManufacturer = mfgCheckbox.checked;
+                }
+                if (supCheckbox) {
+                    this.isSupplier = supCheckbox.checked;
+                }
+            } else {
+                // For new entities, default to available roles
+                const parent = this.$el.closest('.profile-form');
+                const formData = parent ? Alpine.$data(parent) : null;
+                if (formData && (formData.manufacturerCount > 0 || formData.supplierCount > 0)) {
+                    // If there are existing entities, only default to available roles
+                    this.isManufacturer = formData.manufacturerCount < 1;
+                    this.isSupplier = formData.supplierCount < 1;
+                } else {
+                    // First entity on profile OR no form data: default both to true
+                    this.isManufacturer = true;
+                    this.isSupplier = true;
+                }
+            }
+            
+            this.$watch('deleted', () => {
+                window.dispatchEvent(new CustomEvent('update-counts')); 
+            });
+            
+            this.$watch('isManufacturer', () => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+            
+            this.$watch('isSupplier', () => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+            
+            this.$watch('editing', (value) => {
+                if (value && !this.snapshot) {
+                    this.createSnapshot();
+                }
+                // Update counts when entity is saved (editing becomes false)
+                if (!value) {
+                    window.dispatchEvent(new CustomEvent('update-counts'));
+                }
+            });
+            
+            this.updateContactCount();
+            
+            // Trigger count update after entity initialization
+            this.$nextTick(() => {
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+        },
+
+        get canSelectManufacturer() {
+            const parent = this.$el.closest('.profile-form');
+            if (!parent) return true;
+            const formData = Alpine.$data(parent);
+            if (!formData) return true;
+            // For new entities: only allow if no manufacturer exists
+            // For existing entities: allow if no other manufacturer OR this entity is already the manufacturer
+            if (this.isNew) {
+                return formData.manufacturerCount < 1;
+            }
+            return formData.manufacturerCount < 1 || this.isManufacturer;
+        },
+
+        get canSelectSupplier() {
+            const parent = this.$el.closest('.profile-form');
+            if (!parent) return true;
+            const formData = Alpine.$data(parent);
+            if (!formData) return true;
+            // For new entities: only allow if no supplier exists
+            // For existing entities: allow if no other supplier OR this entity is already the supplier
+            if (this.isNew) {
+                return formData.supplierCount < 1;
+            }
+            return formData.supplierCount < 1 || this.isSupplier;
+        },
+
+        get hasErrors() {
+            if (this.deleted) return false;
+            return !this.name || !this.email || !this.isValidEmail(this.email) || (!this.isManufacturer && !this.isSupplier) || this.activeContactsCount === 0;
+        },
+
+        isValidEmail(email) {
+            if (!email) return false;
+            const input = document.createElement('input');
+            input.type = 'email';
+            input.value = email;
+            return input.checkValidity();
+        },
+
+        createSnapshot() {
+            this.snapshot = {
+                name: this.name,
+                email: this.email,
+                phone: this.phone,
+                address: this.address,
+                websites: this.websites,
+                isManufacturer: this.isManufacturer,
+                isSupplier: this.isSupplier
+            };
+        },
+
+        saveEdit() {
+            this.touched = true;
+            this.contactsTouched = true;
+            
+            const nameInput = document.querySelector(`input[name="${prefix}-name"]`);
+            const emailInput = document.querySelector(`input[name="${prefix}-email"]`);
+            
+            // Validate name
+            if (nameInput && !this.name) {
+                nameInput.focus();
+                nameInput.reportValidity();
+                return;
+            }
+            
+            // Validate email - required
+            if (emailInput) {
+                // Sync Alpine value to DOM
+                emailInput.value = this.email || '';
+                
+                if (!this.email) {
+                    emailInput.setCustomValidity('Please enter an email address');
+                    emailInput.focus();
+                    emailInput.reportValidity();
+                    // Clear custom validity on input
+                    const clearValidity = () => {
+                        emailInput.setCustomValidity('');
+                        emailInput.removeEventListener('input', clearValidity);
+                    };
+                    emailInput.addEventListener('input', clearValidity);
+                    return;
+                }
+                
+                // Validate email format
+                if (!this.isValidEmail(this.email)) {
+                    emailInput.setCustomValidity('Please enter a valid email address (e.g., contact@example.com)');
+                    emailInput.focus();
+                    emailInput.reportValidity();
+                    // Clear custom validity on input
+                    const clearValidity = () => {
+                        emailInput.setCustomValidity('');
+                        emailInput.removeEventListener('input', clearValidity);
+                    };
+                    emailInput.addEventListener('input', clearValidity);
+                    return;
+                }
+                
+                // Clear any previous custom validity
+                emailInput.setCustomValidity('');
+            }
+            
+            // Validate at least one role is selected
+            if (!this.isManufacturer && !this.isSupplier) {
+                this.touched = true;
+                const roleSection = this.$root.querySelector('.role-selection');
+                if (roleSection) {
+                    roleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Find first checkbox to show tooltip
+                    const firstCheckbox = roleSection.querySelector('input[type="checkbox"]');
+                    if (firstCheckbox) {
+                        firstCheckbox.setCustomValidity('Please select at least one role (Manufacturer or Supplier)');
+                        firstCheckbox.focus();
+                        firstCheckbox.reportValidity();
+                        const clearValidity = () => {
+                            firstCheckbox.setCustomValidity('');
+                            firstCheckbox.removeEventListener('change', clearValidity);
+                        };
+                        firstCheckbox.addEventListener('change', clearValidity);
+                    }
+                }
+                return;
+            }
+            
+            // CycloneDX requirement: at least one contact per entity
+            this.updateContactCount();
+            if (this.activeContactsCount === 0) {
+                const addContactBtn = this.$root.querySelector('.add-contact-btn');
+                if (addContactBtn) {
+                    addContactBtn.setCustomValidity('Please add at least one contact person for this entity');
+                    addContactBtn.focus();
+                    addContactBtn.reportValidity();
+                    const clearValidity = () => {
+                        addContactBtn.setCustomValidity('');
+                        addContactBtn.removeEventListener('click', clearValidity);
+                    };
+                    addContactBtn.addEventListener('click', clearValidity);
+                }
+                return;
+            }
+            
+            const contactPrefix = `${prefix}-contacts`;
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            let hasContactError = false;
+            
+            document.querySelectorAll(`input[name^="${contactPrefix}-"][name$="-name"]`).forEach(contactNameInput => {
+                if (hasContactError) return;
+                
+                const contactCard = contactNameInput.closest('.contact-card');
+                if (!contactCard) return;
+                
+                const contactEmailInput = contactCard.querySelector('input[name$="-email"]');
+                const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
+                
+                if (isDeleted || isHidden) return;
+                
+                const contactNameValue = contactNameInput.value.trim();
+                const contactEmailValue = contactEmailInput ? contactEmailInput.value.trim() : '';
+                
+                // Validate name is required
+                if (!contactNameValue) {
+                    contactNameInput.setCustomValidity('Name is required for this contact');
+                    contactNameInput.focus();
+                    contactNameInput.reportValidity();
+                    const clearValidity = () => {
+                        contactNameInput.setCustomValidity('');
+                        contactNameInput.removeEventListener('input', clearValidity);
+                    };
+                    contactNameInput.addEventListener('input', clearValidity);
+                    hasContactError = true;
+                    return;
+                }
+                
+                // Validate email is required
+                if (!contactEmailValue) {
+                    contactEmailInput.setCustomValidity('Email is required for this contact');
+                    contactEmailInput.focus();
+                    contactEmailInput.reportValidity();
+                    const clearValidity = () => {
+                        contactEmailInput.setCustomValidity('');
+                        contactEmailInput.removeEventListener('input', clearValidity);
+                    };
+                    contactEmailInput.addEventListener('input', clearValidity);
+                    hasContactError = true;
+                    return;
+                }
+                
+                // Validate email format
+                if (!emailRegex.test(contactEmailValue)) {
+                    contactEmailInput.setCustomValidity('Please enter a valid email address');
+                    contactEmailInput.focus();
+                    contactEmailInput.reportValidity();
+                    const clearValidity = () => {
+                        contactEmailInput.setCustomValidity('');
+                        contactEmailInput.removeEventListener('input', clearValidity);
+                    };
+                    contactEmailInput.addEventListener('input', clearValidity);
+                    hasContactError = true;
+                    return;
+                }
+                
+                // Clear any previous validity
+                contactNameInput.setCustomValidity('');
+                if (contactEmailInput) {
+                    contactEmailInput.setCustomValidity('');
+                }
+            });
+            
+            if (hasContactError) {
+                return;
+            }
+            
+            document.querySelectorAll(`input[name^="${contactPrefix}-"][name$="-name"]`).forEach(nameInput => {
+                const contactCard = nameInput.closest('.contact-card');
+                if (!contactCard) return;
+                
+                const emailInput = contactCard.querySelector('input[name$="-email"]');
+                const deleteInput = contactCard.querySelector('input[name$="-DELETE"]');
+                
+                const nameValue = nameInput.value.trim();
+                const emailValue = emailInput ? emailInput.value.trim() : '';
+                const isDeleted = deleteInput && (deleteInput.value === 'true' || deleteInput.value === true);
+                const isHidden = contactCard.style.display === 'none' || !contactCard.offsetParent;
+                
+                if (!nameValue && !emailValue && !isDeleted) {
+                    if (deleteInput) {
+                        deleteInput.value = 'true';
+                    }
+                    contactCard.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                    contactCard.style.display = 'none';
+                }
+                
+                if (isDeleted || isHidden) {
+                    contactCard.querySelectorAll('input[required]').forEach(input => {
+                        input.removeAttribute('required');
+                    });
+                }
+            });
+            
+            this.isNew = false;
+            this.snapshot = null;
+            this.editing = false;
+            
+            this.$nextTick(() => this.updateContactCount());
+        },
+
+        cancelEdit() {
+            if (this.snapshot) {
+                this.name = this.snapshot.name;
+                this.email = this.snapshot.email;
+                this.phone = this.snapshot.phone;
+                this.address = this.snapshot.address;
+                this.websites = this.snapshot.websites;
+                this.isManufacturer = this.snapshot.isManufacturer;
+                this.isSupplier = this.snapshot.isSupplier;
+            }
+            if (this.isNew) {
+                this.deleted = true;
+                document.querySelectorAll(`input[name^="${prefix}-"][required]`).forEach(input => {
+                    input.removeAttribute('required');
+                });
+            }
+            this.snapshot = null;
+            this.editing = false;
+            this.touched = false;
+            this.contactsTouched = false;
+        },
+
+        removeEntity() {
+            const entityName = this.name || 'this entity';
+            const self = this;
+            window.showDeleteConfirmation(entityName, function() {
+                self.deleted = true;
+                self.editing = false;
+                document.querySelectorAll(`input[name^="${prefix}-"][required]`).forEach(input => {
+                    input.removeAttribute('required');
+                });
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+        },
+        
+        addContact() {
+             const listContainer = this.$root.querySelector('.contacts-list');
+             if (listContainer) {
+                 window.addContactRow(listContainer, prefix);
+                 this.$nextTick(() => {
+                     this.updateContactCount();
+                 });
+             }
+        },
+
+        updateContactCount() {
+             if (this.deleted) {
+                 this.activeContactsCount = 0;
+                 return;
+             }
+             this.$nextTick(() => {
+                 const list = this.$root.querySelector('.contacts-list');
+                 if (list) {
+                     const cards = list.querySelectorAll('.contact-card');
+                     let count = 0;
+                     cards.forEach(card => {
+                         const deleteInput = card.querySelector('input[name$="-DELETE"]');
+                         if (!deleteInput || deleteInput.value !== 'true') {
+                             count++;
+                         }
+                     });
+                     this.activeContactsCount = count;
+                 }
+             });
+        }
+    }));
+    
+    Alpine.data('contactEntry', () => ({
+        deleted: false,
+        isNew: true,
+        name: '',
+        email: '',
+        
+        init() {
+            const nameInput = this.$el.querySelector('input[name$="-name"]');
+            const emailInput = this.$el.querySelector('input[name$="-email"]');
+            
+            if (nameInput) {
+                this.name = nameInput.value.trim();
+                this.isNew = !this.name;
+                nameInput.addEventListener('input', () => {
+                    this.name = nameInput.value.trim();
+                });
+                nameInput.addEventListener('blur', () => this.checkEmpty());
+            }
+            
+            if (emailInput) {
+                this.email = emailInput.value.trim();
+                emailInput.addEventListener('input', () => {
+                    this.email = emailInput.value.trim();
+                });
+                emailInput.addEventListener('blur', () => this.checkEmpty());
+            }
+        },
+        
+        get isEmpty() {
+            return !this.name && !this.email;
+        },
+        
+        checkEmpty() {
+            if (this.isNew && this.isEmpty) {
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        if (this.isEmpty && !this.$el.contains(document.activeElement)) {
+                            this.removeContact();
+                        }
+                    }, 200);
+                });
+            }
+        },
+        
+        removeContact() {
+            this.deleted = true;
+            this.$dispatch('contact-removed');
+        }
+    }));
+
+    Alpine.data('authorEntry', () => ({
+        deleted: false,
+        name: '',
+        
+        init() {
+            const nameInput = this.$el.querySelector('input[name$="-name"]');
+            if (nameInput) {
+                this.name = nameInput.value || '';
+                nameInput.addEventListener('input', () => {
+                    this.name = nameInput.value;
+                });
+            }
+        },
+        
+        removeAuthor() {
+            const authorName = this.name || 'this author';
+            const self = this;
+            window.showDeleteConfirmation(authorName, function() {
+                self.deleted = true;
+                window.dispatchEvent(new CustomEvent('update-counts'));
+            });
+        }
+    }));
+    
+    Alpine.data('contactProfileList', () => ({
+        profiles: [],
+        filteredProfiles: [],
+        searchQuery: '',
+        expandedProfiles: [],
+        
+        init() {
+            this.$nextTick(() => {
+                const profilesScript = document.getElementById('profiles-data');
+                if (profilesScript) {
+                    try {
+                        this.profiles = JSON.parse(profilesScript.textContent);
+                        this.filteredProfiles = this.profiles.map(p => ({...p, hidden: false}));
+                    } catch (e) {
+                        this.profiles = [];
+                    }
+                }
+                
+                // Initialize Bootstrap tooltips after profiles are loaded
+                this.$nextTick(() => {
+                    this.initTooltips();
+                });
+            });
+        },
+        
+        initTooltips() {
+            if (!window.bootstrap) return;
+            
+            const tooltipElements = this.$el.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach(el => {
+                // Dispose existing tooltip if any
+                const existing = window.bootstrap.Tooltip.getInstance(el);
+                if (existing) existing.dispose();
+                
+                // Initialize new tooltip
+                new window.bootstrap.Tooltip(el, {
+                    delay: { show: 300, hide: 100 },
+                    animation: true,
+                    trigger: 'hover focus'
+                });
+            });
+        },
+        
+        togglePreview(profileId) {
+            if (this.expandedProfiles.includes(profileId)) {
+                this.expandedProfiles = this.expandedProfiles.filter(id => id !== profileId);
+            } else {
+                this.expandedProfiles.push(profileId);
+            }
+        },
+        
+        filterProfiles() {
+            const query = this.searchQuery.toLowerCase().trim();
+            
+            this.filteredProfiles = this.profiles.map(profile => {
+                let matches = true;
+                
+                if (query) {
+                    const nameMatch = profile.name?.toLowerCase().includes(query);
+                    const mfgMatch = profile.manufacturer?.name?.toLowerCase().includes(query);
+                    const supMatch = profile.supplier?.name?.toLowerCase().includes(query);
+                    const authorMatch = (profile.authors || []).some(a => 
+                        a.name?.toLowerCase().includes(query)
+                    );
+                    matches = nameMatch || mfgMatch || supMatch || authorMatch;
+                }
+                
+                return {...profile, hidden: !matches};
+            });
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+    }));
+    }
+
+    initAlpineComponents();
+
+    window.addContactRow = function(container, entityPrefix) {
+    // Validate required DOM elements - these checks are for debugging edge cases
+    // The UI flow should always provide valid parameters; errors here indicate bugs
+    if (!container) {
+        console.warn('addContactRow: container element not found');
+        return;
+    }
+    if (!entityPrefix) {
+        console.warn('addContactRow: entityPrefix is required');
+        return;
+    }
+    const contactPrefix = `${entityPrefix}-contacts`;
+    const entityCard = container.closest('.entity-card');
+    if (!entityCard) {
+        console.warn('addContactRow: entity-card element not found');
+        return;
+    }
+
+    let totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    if (!totalInput) {
+        totalInput = entityCard.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    }
+    
+    // Create management form inputs if they don't exist
+    if (!totalInput) {
+        const mgmtDiv = document.createElement('div');
+        mgmtDiv.innerHTML = `
+            <input type="hidden" name="${contactPrefix}-TOTAL_FORMS" value="0" id="id_${contactPrefix}-TOTAL_FORMS">
+            <input type="hidden" name="${contactPrefix}-INITIAL_FORMS" value="0" id="id_${contactPrefix}-INITIAL_FORMS">
+            <input type="hidden" name="${contactPrefix}-MIN_NUM_FORMS" value="0" id="id_${contactPrefix}-MIN_NUM_FORMS">
+            <input type="hidden" name="${contactPrefix}-MAX_NUM_FORMS" value="1000" id="id_${contactPrefix}-MAX_NUM_FORMS">
+        `;
+        container.insertBefore(mgmtDiv, container.firstChild);
+        totalInput = container.querySelector(`input[name="${contactPrefix}-TOTAL_FORMS"]`);
+    }
+    
+    // Final safety check after creating management form
+    if (!totalInput) {
+        console.error('addContactRow: failed to create/find TOTAL_FORMS input');
+        return;
+    }
+    
+    if (typeof totalInput.value === 'undefined') {
+        console.error('addContactRow: TOTAL_FORMS input has no value to parse');
+        return;
+    }
+    const index = parseInt(totalInput.value);
+    const newPrefix = `${contactPrefix}-${index}`;
+    
+    let newRow = null;
+    const existingContact = container.querySelector('.contact-card');
+    
+    if (existingContact) {
+        newRow = existingContact.cloneNode(true);
+        newRow.querySelectorAll('input, select, textarea').forEach(input => {
+            if (input.name) {
+                const nameMatch = input.name.match(/^(.+?)-(name|email|phone|DELETE|id)$/);
+                if (nameMatch) {
+                    input.name = `${newPrefix}-${nameMatch[2]}`;
+                    input.id = `id_${input.name}`;
+                }
+            }
+        });
+        newRow.querySelectorAll('input[type="text"], input[type="email"]').forEach(input => {
+            if (input.name && !input.name.includes('DELETE') && !input.name.includes('id')) {
+                input.value = '';
+            }
+        });
+        const deleteInput = newRow.querySelector(`input[name="${newPrefix}-DELETE"]`);
+        if (deleteInput) {
+            deleteInput.value = '';
+        }
+    } else {
+        newRow = document.createElement('div');
+        newRow.className = 'contact-card border-bottom';
+        newRow.setAttribute('x-data', 'contactEntry');
+        newRow.setAttribute('x-show', '!deleted');
+        newRow.innerHTML = `
+            <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
+            <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
+            <div class="d-flex align-items-center py-2 px-3 gap-3">
+                <!-- Contact avatar -->
+                <div class="flex-shrink-0">
+                    <div class="contact-avatar-circle">
+                        <i class="fas fa-user-pen contact-icon-purple"></i>
+                    </div>
+                </div>
+                <!-- Name field -->
+                <div class="flex-shrink-0 contact-field-name">
+                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" required title="Click to edit name" aria-label="Contact Name">
+                </div>
+                <!-- Email field -->
+                <div class="flex-grow-1 contact-field-email">
+                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" required title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
+                </div>
+                <!-- Phone field -->
+                <div class="flex-shrink-0 contact-field-phone">
+                    <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="form-control form-control-sm bg-white rounded-2" placeholder="Phone" title="Click to edit phone" aria-label="Contact Phone">
+                </div>
+                <!-- Remove button -->
+                <div class="flex-shrink-0">
+                    <button type="button" class="btn btn-sm btn-link p-1" @click="removeContact" title="Remove contact" aria-label="Remove contact">
+                        <i class="fas fa-trash-alt text-danger"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        if (window.Alpine) {
+            Alpine.initTree(newRow);
+        }
+    }
+    
+    container.appendChild(newRow);
+    totalInput.value = index + 1;
+};
+
+    // Use the centralized tooltip cleanup utility
+    document.body.addEventListener('htmx:beforeSwap', function(event) {
+        if (event.detail.target.id === 'contact-profiles-content') {
+            // Import and use the cleanup utility
+            // Note: In production, import this from the tooltip module
+            const container = event.detail.target;
+            
+            // Dispose all tooltip instances in the container
+            const tooltipElements = container.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach((el) => {
+                const instance = bootstrap?.Tooltip?.getInstance(el);
+                if (instance) instance.dispose();
+            });
+
+            // Remove orphaned tooltip elements
+            document.querySelectorAll('.tooltip.show').forEach((tooltipEl) => {
+                const id = tooltipEl.getAttribute('id');
+                if (id) {
+                    const trigger = container.querySelector(`[aria-describedby="${id}"]`);
+                    if (trigger) tooltipEl.remove();
+                }
+            });
+        }
+    });
+
+    document.body.addEventListener('htmx:afterSettle', function(event) {
+        if (event.detail.target.id === 'contact-profiles-content') {
+            initAlpineComponents();
+            requestAnimationFrame(() => {
+                if (window.Alpine) {
+                    Alpine.initTree(event.detail.target);
+                }
+                // Initialize Bootstrap tooltips
+                initTooltips(event.detail.target);
+            });
+        }
+    });
+
+    function initTooltips(container) {
+        const tooltipTriggerList = (container || document).querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.forEach(el => {
+            if (!bootstrap.Tooltip.getInstance(el)) {
+                new bootstrap.Tooltip(el);
+            }
+        });
+    }
+
+    // Initialize tooltips on page load
+    document.addEventListener('DOMContentLoaded', () => initTooltips());
+    
+    // Delete confirmation modal functionality
+    (function() {
+        let deleteCallback = null;
+        let bsModalInstance = null;
+        
+        function getModal() {
+            return document.getElementById('delete-confirmation-modal');
+        }
+        
+        function getModalInstance() {
+            const modal = getModal();
+            if (!modal) return null;
+            if (!bsModalInstance) {
+                bsModalInstance = new bootstrap.Modal(modal, {
+                    backdrop: 'static',
+                    keyboard: true
+                });
+            }
+            return bsModalInstance;
+        }
+        
+        window.showDeleteConfirmation = function(itemName, callback) {
+            const modal = getModal();
+            if (!modal) return;
+            
+            const itemNameEl = document.getElementById('delete-item-name');
+            if (itemNameEl) {
+                itemNameEl.textContent = itemName;
+            }
+            deleteCallback = callback;
+            
+            const instance = getModalInstance();
+            if (instance) {
+                instance.show();
+            }
+        };
+        
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'confirm-delete-btn') {
+                if (deleteCallback) {
+                    deleteCallback();
+                    deleteCallback = null;
+                }
+                const instance = getModalInstance();
+                if (instance) {
+                    instance.hide();
+                }
+            }
+        });
+        
+        document.addEventListener('hidden.bs.modal', function(e) {
+            if (e.target && e.target.id === 'delete-confirmation-modal') {
+                deleteCallback = null;
+            }
+        });
+    })();
+</script>
+{# Delete Confirmation Modal for Entity/Author #}
+<div class="modal fade"
+     id="delete-confirmation-modal"
+     tabindex="-1"
+     aria-labelledby="delete-confirmation-modal-label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle bg-danger-subtle p-3 me-3">
+                        <i class="fas fa-exclamation-triangle text-danger fa-lg"></i>
+                    </div>
+                    <h5 class="modal-title" id="delete-confirmation-modal-label">Confirm Deletion</h5>
+                </div>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="mb-1">
+                    Are you sure you want to remove <strong id="delete-item-name"></strong>?
+                </p>
+                <p class="text-muted small mb-0">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash-alt me-1"></i> Remove
+                </button>
             </div>
         </div>
     </div>

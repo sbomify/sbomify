@@ -8,7 +8,7 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
 
-from .models import ContactProfile, ContactProfileContact, Member, Team
+from .models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
 @pytest.fixture
@@ -97,14 +97,25 @@ def sample_team_with_guest_member(
 def sample_contact_profile_with_contacts(
     sample_team: Team,
 ) -> Generator[ContactProfile, Any, None]:
+    # Create profile (3-level hierarchy: Profile -> Entity -> Contact)
+    # CycloneDX aligned: entities are manufacturer/supplier, authors are separate
     profile = ContactProfile.objects.create(
         team=sample_team,
         name="Test Profile",
-        company="Test Company",
     )
 
-    ContactProfileContact.objects.create(
+    # Create entity with manufacturer and supplier roles (CycloneDX aligned)
+    entity = ContactEntity.objects.create(
         profile=profile,
+        name="Test Company",
+        email="company@example.com",
+        is_manufacturer=True,
+        is_supplier=False,
+    )
+
+    # Create contact linked to entity
+    ContactProfileContact.objects.create(
+        entity=entity,
         name="John Doe",
         email="john@example.com",
         order=0,
