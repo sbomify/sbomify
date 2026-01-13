@@ -1936,7 +1936,11 @@ def test_component_metadata_author_information(sample_component: Component, samp
 def test_component_metadata_syncs_authors_from_profile(
     sample_component: Component, sample_access_token: AccessToken  # noqa: F811
 ):
-    """Test that when a component has a contact profile, authors are synced from the profile on metadata load."""
+    """Test that the API response includes profile authors in contact_profile.authors for frontend syncing.
+    
+    This test verifies the API response structure, not database-level syncing.
+    The frontend is responsible for syncing authors from profile to component display.
+    """
     from sbomify.apps.teams.models import AuthorContact, ContactProfile
 
     client = Client()
@@ -1991,7 +1995,12 @@ def test_component_metadata_syncs_authors_from_profile(
 def test_component_metadata_reflects_profile_author_changes(
     sample_component: Component, sample_access_token: AccessToken  # noqa: F811
 ):
-    """Test that when profile authors change, the component reflects those changes on next load."""
+    """Test that when profile authors change, the API response reflects those changes.
+    
+    This test verifies the API response structure includes updated profile authors
+    in contact_profile.authors for frontend consumption. The frontend handles
+    syncing these to the component display.
+    """
     from sbomify.apps.teams.models import AuthorContact, ContactProfile
 
     client = Client()
@@ -2054,7 +2063,12 @@ def test_component_metadata_reflects_profile_author_changes(
 def test_component_metadata_clears_authors_when_profile_has_none(
     sample_component: Component, sample_access_token: AccessToken  # noqa: F811
 ):
-    """Test that when a profile has no authors, component authors are cleared appropriately."""
+    """Test that when a profile has no authors, the API response includes empty authors list.
+    
+    This test verifies the API response structure shows empty authors in contact_profile.authors
+    when the profile has no authors. The frontend handles syncing this to the component display.
+    Note: This does not verify database-level clearing - the API only returns the response structure.
+    """
     from sbomify.apps.sboms.models import ComponentAuthor
     from sbomify.apps.teams.models import ContactProfile
 

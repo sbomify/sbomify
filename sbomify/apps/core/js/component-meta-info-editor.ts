@@ -214,12 +214,12 @@ export function registerComponentMetaInfoEditor() {
             }
 
             const profile = this.contactProfiles.find(p => p.id === this.metadata.contact_profile_id);
-            if (!profile?.authors) {
+            // Check if profile has no authors (handles both undefined/null and empty array)
+            if (!profile?.authors?.length) {
                 // Profile has no authors, clear component authors
                 if (this.metadata.authors?.length > 0) {
                     this.metadata.authors = [];
-                    // Update originalMetadata to reflect the cleared state
-                    this.originalMetadata = JSON.stringify(this.metadata);
+                    // Don't update originalMetadata - let user save to persist the change
                     this.$nextTick(() => {
                         dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
                             contacts: []
@@ -238,9 +238,8 @@ export function registerComponentMetaInfoEditor() {
             if (JSON.stringify(this.metadata.authors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
                 
-                // Update originalMetadata to reflect the synced state
-                // This ensures change detection works correctly after syncing
-                this.originalMetadata = JSON.stringify(this.metadata);
+                // Don't update originalMetadata - synced authors should be detected as changes
+                // so user can save to persist them to the database
                 
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {

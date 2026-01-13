@@ -72,7 +72,7 @@ export function registerComponentMetaInfo() {
                     
                     // Always sync authors from profile when a profile is selected
                     // This ensures the display shows the latest authors from the profile
-                    if (this.metadata.contact_profile_id && this.metadata.contact_profile?.authors) {
+                    if (this.metadata.contact_profile_id && this.metadata.contact_profile?.authors?.length) {
                         // Use JSON serialization instead of structuredClone due to DataCloneError
                         // with complex author objects. Authors are simple JSON-serializable objects
                         // (name, email, phone) without functions, symbols, or circular references.
@@ -82,8 +82,8 @@ export function registerComponentMetaInfo() {
                         if (JSON.stringify(this.metadata.authors) !== JSON.stringify(profileAuthors)) {
                             this.metadata.authors = profileAuthors;
                         }
-                    } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors) {
-                        // Profile has no authors, clear component authors
+                    } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors?.length) {
+                        // Profile has no authors (handles both undefined/null and empty array), clear component authors
                         if (this.metadata.authors?.length > 0) {
                             this.metadata.authors = [];
                         }
