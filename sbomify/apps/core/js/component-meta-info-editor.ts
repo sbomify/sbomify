@@ -219,6 +219,8 @@ export function registerComponentMetaInfoEditor() {
                 // Profile has no authors, clear component authors
                 if (this.metadata.authors?.length > 0) {
                     this.metadata.authors = [];
+                    // Mark as unsaved changes so user knows to save
+                    this.hasUnsavedChanges = true;
                     // Don't update originalMetadata - let user save to persist the change
                     this.$nextTick(() => {
                         dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
@@ -237,6 +239,9 @@ export function registerComponentMetaInfoEditor() {
             // Only update if authors have actually changed
             if (JSON.stringify(this.metadata.authors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
+                
+                // Mark as unsaved changes so user knows to save
+                this.hasUnsavedChanges = true;
                 
                 // Don't update originalMetadata - synced authors should be detected as changes
                 // so user can save to persist them to the database
