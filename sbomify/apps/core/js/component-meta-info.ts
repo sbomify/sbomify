@@ -84,7 +84,7 @@ export function registerComponentMetaInfo() {
                         }
                     } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors?.length) {
                         // Profile has no authors (handles both undefined/null and empty array), clear component authors
-                        if (this.metadata.authors?.length > 0) {
+                        if (this.metadata.authors?.length) {
                             this.metadata.authors = [];
                         }
                     }
