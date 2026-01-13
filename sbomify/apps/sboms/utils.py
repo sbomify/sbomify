@@ -1630,7 +1630,7 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
     if custom_metadata is None:
         default_profile = (
             ContactProfile.objects.filter(team_id=component.team_id, is_default=True)
-            .prefetch_related("entities", "entities__contacts")
+            .prefetch_related("entities", "entities__contacts", "authors")
             .first()
         )
         if default_profile:
@@ -1654,6 +1654,16 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
                         phone=contact.phone,
                         order=order,
                     )
+
+            # Copy authors from profile to component
+            component.authors.all().delete()
+            for order, author in enumerate(default_profile.authors.all()):
+                component.authors.create(
+                    name=author.name,
+                    email=author.email,
+                    phone=author.phone,
+                    order=order,
+                )
     else:
         component.contact_profile = None
 
@@ -1669,8 +1679,9 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
             # Use user name as supplier if no company
             component.supplier_name = f"{user.first_name} {user.last_name}".strip()
 
-    # Create default author if we have user name and email
-    if user.first_name and user.last_name and user.email:
+    # Create default author from user if no authors exist yet
+    # (only if profile had no authors or no profile was used)
+    if not component.authors.exists() and user.first_name and user.last_name and user.email:
         user_name = f"{user.first_name} {user.last_name}".strip()
         component.authors.create(
             name=user_name,

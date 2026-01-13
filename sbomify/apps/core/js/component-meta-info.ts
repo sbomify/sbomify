@@ -70,14 +70,23 @@ export function registerComponentMetaInfo() {
                     const data = await response.json();
                     this.metadata = { ...this.metadata, ...data };
                     
-                    // Backwards compatibility: sync authors from profile if using a profile
-                    if (this.metadata.contact_profile_id && 
-                        this.metadata.contact_profile?.authors &&
-                        (!this.metadata.authors || this.metadata.authors.length === 0)) {
+                    // Always sync authors from profile when a profile is selected
+                    // This ensures the display shows the latest authors from the profile
+                    if (this.metadata.contact_profile_id && this.metadata.contact_profile?.authors) {
                         // Use JSON serialization instead of structuredClone due to DataCloneError
                         // with complex author objects. Authors are simple JSON-serializable objects
                         // (name, email, phone) without functions, symbols, or circular references.
-                        this.metadata.authors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
+                        const profileAuthors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
+                        
+                        // Only update if authors have actually changed
+                        if (JSON.stringify(this.metadata.authors) !== JSON.stringify(profileAuthors)) {
+                            this.metadata.authors = profileAuthors;
+                        }
+                    } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors) {
+                        // Profile has no authors, clear component authors
+                        if (this.metadata.authors?.length > 0) {
+                            this.metadata.authors = [];
+                        }
                     }
                 } else {
                     console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
