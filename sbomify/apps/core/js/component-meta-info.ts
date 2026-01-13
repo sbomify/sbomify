@@ -74,7 +74,10 @@ export function registerComponentMetaInfo() {
                     if (this.metadata.contact_profile_id && 
                         this.metadata.contact_profile?.authors &&
                         (!this.metadata.authors || this.metadata.authors.length === 0)) {
-                        this.metadata.authors = structuredClone(this.metadata.contact_profile.authors);
+                        // Use JSON serialization instead of structuredClone due to DataCloneError
+                        // with complex author objects. Authors are simple JSON-serializable objects
+                        // (name, email, phone) without functions, symbols, or circular references.
+                        this.metadata.authors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
                     }
                 } else {
                     console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);

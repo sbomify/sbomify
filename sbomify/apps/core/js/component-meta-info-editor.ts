@@ -220,7 +220,9 @@ export function registerComponentMetaInfoEditor() {
 
             // Only sync if authors are empty (backwards compatibility for legacy components)
             if (!this.metadata.authors || this.metadata.authors.length === 0) {
-                this.metadata.authors = structuredClone(profile.authors);
+                // Use JSON serialization instead of structuredClone due to DataCloneError
+                // with complex author objects. Authors are simple JSON-serializable objects.
+                this.metadata.authors = JSON.parse(JSON.stringify(profile.authors));
                 
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {
@@ -243,8 +245,10 @@ export function registerComponentMetaInfoEditor() {
                     this.metadata.supplier.name = null;
                 }
                 this.metadata.authors = [];
-                dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                    contacts: []
+                this.$nextTick(() => {
+                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                        contacts: []
+                    });
                 });
             } else {
                 const profile = this.contactProfiles.find(p => p.id === nextId);
@@ -252,10 +256,14 @@ export function registerComponentMetaInfoEditor() {
                 this.validationErrors.supplier = {};
 
                 if (profile) {
-                    const authors = profile.authors ? structuredClone(profile.authors) : [];
+                    // Use JSON serialization instead of structuredClone due to DataCloneError.
+                    // Authors are simple objects (name, email, phone) suitable for JSON cloning.
+                    const authors = profile.authors ? JSON.parse(JSON.stringify(profile.authors)) : [];
                     this.metadata.authors = authors;
-                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                        contacts: authors
+                    this.$nextTick(() => {
+                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                            contacts: authors
+                        });
                     });
                 }
             }
