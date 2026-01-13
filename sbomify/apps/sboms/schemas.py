@@ -380,6 +380,8 @@ class ComponentMetaData(BaseModel):
         if self.licenses:
             licenses_list = []
             for component_license in self.licenses:
+                cdx_lic: CycloneDx.License | None = None
+
                 if isinstance(component_license, CustomLicenseSchema):
                     cdx_lic = component_license.to_cyclonedx(spec_version)
                 elif isinstance(component_license, (str, LicenseSchema)):
@@ -407,6 +409,9 @@ class ComponentMetaData(BaseModel):
                         "Skipping unknown license type %s during CycloneDX conversion",
                         type(component_license).__name__,
                     )
+
+                # Skip if no license was created (unknown type)
+                if cdx_lic is None:
                     continue
 
                 # CycloneDX 1.7+ requires licenses to be wrapped in LicenseChoice1/2
