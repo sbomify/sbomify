@@ -1348,3 +1348,174 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
         if "$schema" in product_sbom_content:
             product_sbom_data = json.loads(product_sbom_content)
             assert "$schema" in product_sbom_data, "If schema is present, it must be '$schema'"
+
+
+@pytest.mark.django_db
+def test_populate_component_metadata_copies_authors_from_profile(
+    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+):
+    """Test that authors are correctly copied from default profile to component."""
+    from sbomify.apps.sboms.models import ComponentAuthor
+    from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    # Create default profile with authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Default Profile",
+        is_default=True,
+    )
+    # Create authors in profile
+    author1 = AuthorContact.objects.create(
+        profile=profile,
+        name="Author One",
+        email="author1@example.com",
+        phone="123-456-7890",
+        order=0,
+    )
+    author2 = AuthorContact.objects.create(
+        profile=profile,
+        name="Author Two",
+        email="author2@example.com",
+        phone="987-654-3210",
+        order=1,
+    )
+
+    # Ensure component has no authors initially
+    assert sample_component.authors.count() == 0
+
+    # Populate metadata
+    populate_component_metadata_native_fields(sample_component, sample_user)
+
+    # Verify authors were copied from profile
+    assert sample_component.authors.count() == 2
+    component_authors = list(sample_component.authors.order_by("order"))
+    assert component_authors[0].name == author1.name
+    assert component_authors[0].email == author1.email
+    assert component_authors[0].phone == author1.phone
+    assert component_authors[0].order == 0
+    assert component_authors[1].name == author2.name
+    assert component_authors[1].email == author2.email
+    assert component_authors[1].phone == author2.phone
+    assert component_authors[1].order == 1
+
+
+@pytest.mark.django_db
+def test_populate_component_metadata_replaces_existing_authors(
+    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+):
+    """Test that existing component authors are replaced when profile has authors."""
+    from sbomify.apps.sboms.models import ComponentAuthor
+    from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    # Create existing authors on component
+    ComponentAuthor.objects.create(
+        component=sample_component,
+        name="Old Author",
+        email="old@example.com",
+        order=0,
+    )
+    assert sample_component.authors.count() == 1
+
+    # Create default profile with different authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Default Profile",
+        is_default=True,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="New Author",
+        email="new@example.com",
+        order=0,
+    )
+
+    # Populate metadata
+    populate_component_metadata_native_fields(sample_component, sample_user)
+
+    # Verify old authors were deleted and new ones created
+    assert sample_component.authors.count() == 1
+    assert sample_component.authors.first().name == "New Author"
+    assert sample_component.authors.first().email == "new@example.com"
+
+
+@pytest.mark.django_db
+def test_populate_component_metadata_creates_user_author_when_no_profile_authors(
+    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+):
+    """Test that user author is created as fallback only when no profile authors exist."""
+    from sbomify.apps.sboms.models import ComponentAuthor
+    from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
+    from sbomify.apps.teams.models import ContactProfile
+
+    # Create default profile without authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Default Profile",
+        is_default=True,
+    )
+    assert profile.authors.count() == 0
+
+    # Ensure user has name and email
+    sample_user.first_name = "Test"
+    sample_user.last_name = "User"
+    sample_user.email = "testuser@example.com"
+    sample_user.save()
+
+    # Populate metadata
+    populate_component_metadata_native_fields(sample_component, sample_user)
+
+    # Verify user author was created as fallback
+    assert sample_component.authors.count() == 1
+    author = sample_component.authors.first()
+    assert author.name == "Test User"
+    assert author.email == "testuser@example.com"
+
+
+@pytest.mark.django_db
+def test_populate_component_metadata_preserves_author_order(
+    sample_component, sample_user, sample_team_with_owner_member  # noqa: F811
+):
+    """Test that the order attribute is correctly set for authors copied from profile."""
+    from sbomify.apps.sboms.utils import populate_component_metadata_native_fields
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    # Create default profile with authors in specific order
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Default Profile",
+        is_default=True,
+    )
+    # Create authors with non-sequential order to test ordering
+    author1 = AuthorContact.objects.create(
+        profile=profile,
+        name="First Author",
+        email="first@example.com",
+        order=0,
+    )
+    author2 = AuthorContact.objects.create(
+        profile=profile,
+        name="Second Author",
+        email="second@example.com",
+        order=1,
+    )
+    author3 = AuthorContact.objects.create(
+        profile=profile,
+        name="Third Author",
+        email="third@example.com",
+        order=2,
+    )
+
+    # Populate metadata
+    populate_component_metadata_native_fields(sample_component, sample_user)
+
+    # Verify authors are copied with correct order
+    component_authors = list(sample_component.authors.order_by("order"))
+    assert len(component_authors) == 3
+    assert component_authors[0].order == 0
+    assert component_authors[0].name == author1.name
+    assert component_authors[1].order == 1
+    assert component_authors[1].name == author2.name
+    assert component_authors[2].order == 2
+    assert component_authors[2].name == author3.name

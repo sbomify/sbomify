@@ -205,8 +205,8 @@ export function registerComponentMetaInfoEditor() {
 
         /**
          * Synchronizes authors from the selected profile to component metadata.
-         * This ensures components using a profile have the profile's authors loaded.
-         * Only syncs if metadata.authors is empty to avoid overwriting manual edits.
+         * This ensures components using a profile always have the latest authors from the profile.
+         * When a profile is selected, component authors should reflect the profile's current state.
          */
         syncAuthorsFromProfile() {
             if (!this.metadata.contact_profile_id || !this.contactProfiles.length) {
@@ -214,15 +214,47 @@ export function registerComponentMetaInfoEditor() {
             }
 
             const profile = this.contactProfiles.find(p => p.id === this.metadata.contact_profile_id);
+            // Check if profile has no authors (handles both undefined/null and empty array)
             if (!profile?.authors?.length) {
+                // Profile has no authors, clear component authors
+                if (this.metadata.authors?.length) {
+                    this.metadata.authors = [];
+                    // Only mark as unsaved if not during initial load
+                    // During initial load, synced state becomes the baseline
+                    if (!this.isInitializing) {
+                        this.hasUnsavedChanges = true;
+                    } else {
+                        // Update originalMetadata during initial load so synced state is baseline
+                        this.originalMetadata = JSON.stringify(this.metadata);
+                    }
+                    this.$nextTick(() => {
+                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
+                            contacts: []
+                        });
+                    });
+                }
                 return;
             }
 
-            // Only sync if authors are empty (backwards compatibility for legacy components)
-            if (!this.metadata.authors || this.metadata.authors.length === 0) {
-                // Use JSON serialization instead of structuredClone due to DataCloneError
-                // with complex author objects. Authors are simple JSON-serializable objects.
-                this.metadata.authors = JSON.parse(JSON.stringify(profile.authors));
+            // Always sync authors from profile to keep them up-to-date
+            // Use JSON serialization instead of structuredClone due to DataCloneError
+            // with complex author objects. Authors are simple JSON-serializable objects.
+            const profileAuthors = JSON.parse(JSON.stringify(profile.authors));
+            
+            // Only update if authors have actually changed
+            // Handle undefined/null case for metadata.authors
+            const currentAuthors = this.metadata.authors ?? [];
+            if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
+                this.metadata.authors = profileAuthors;
+                
+                // Only mark as unsaved if not during initial load
+                // During initial load, synced state becomes the baseline
+                if (!this.isInitializing) {
+                    this.hasUnsavedChanges = true;
+                } else {
+                    // Update originalMetadata during initial load so synced state is baseline
+                    this.originalMetadata = JSON.stringify(this.metadata);
+                }
                 
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {

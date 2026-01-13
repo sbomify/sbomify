@@ -288,6 +288,44 @@ class TestOnboardingWizard:
         assert project in product.projects.all()
         assert component in project.components.all()
 
+    def test_component_has_contact_profile_persisted(
+        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
+    ) -> None:
+        """Test that component created during onboarding has contact_profile correctly assigned and persisted."""
+        client.force_login(sample_user)
+        team = sample_team_with_owner_member.team
+
+        session = client.session
+        session["current_team"] = {
+            "key": team.key,
+            "role": "owner",
+            "has_completed_wizard": False,
+        }
+        session.save()
+
+        response = client.post(
+            reverse("teams:onboarding_wizard"),
+            {
+                "company_name": "Profile Persistence Test",
+                "contact_name": "Test Contact",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify default profile was created
+        default_profile = ContactProfile.objects.filter(team=team, is_default=True).first()
+        assert default_profile is not None
+
+        # Verify component was created and has contact_profile assigned
+        component = Component.objects.filter(team=team, name="Main Component").first()
+        assert component is not None
+        # Refresh from database to ensure we have the latest state
+        component.refresh_from_db()
+        assert component.contact_profile is not None
+        assert component.contact_profile.id == default_profile.id
+        assert component.contact_profile.is_default is True
+
     def test_component_has_sbom_type(self, client: Client, sample_user, sample_team_with_owner_member, community_plan) -> None:
         """Test that auto-created component has component_type=SBOM."""
         client.force_login(sample_user)

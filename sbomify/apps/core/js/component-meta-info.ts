@@ -70,14 +70,25 @@ export function registerComponentMetaInfo() {
                     const data = await response.json();
                     this.metadata = { ...this.metadata, ...data };
                     
-                    // Backwards compatibility: sync authors from profile if using a profile
-                    if (this.metadata.contact_profile_id && 
-                        this.metadata.contact_profile?.authors &&
-                        (!this.metadata.authors || this.metadata.authors.length === 0)) {
+                    // Always sync authors from profile when a profile is selected
+                    // This ensures the display shows the latest authors from the profile
+                    if (this.metadata.contact_profile_id && this.metadata.contact_profile?.authors?.length) {
                         // Use JSON serialization instead of structuredClone due to DataCloneError
                         // with complex author objects. Authors are simple JSON-serializable objects
                         // (name, email, phone) without functions, symbols, or circular references.
-                        this.metadata.authors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
+                        const profileAuthors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
+                        
+                        // Only update if authors have actually changed
+                        // Handle undefined/null case for metadata.authors
+                        const currentAuthors = this.metadata.authors ?? [];
+                        if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
+                            this.metadata.authors = profileAuthors;
+                        }
+                    } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors?.length) {
+                        // Profile has no authors (handles both undefined/null and empty array), clear component authors
+                        if (this.metadata.authors?.length) {
+                            this.metadata.authors = [];
+                        }
                     }
                 } else {
                     console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);

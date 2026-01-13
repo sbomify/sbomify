@@ -520,6 +520,8 @@ def onboarding_wizard(request: HttpRequest) -> HttpResponse:
                     if component_created:
                         # Populate native fields with default metadata
                         populate_component_metadata_native_fields(component, request.user, custom_metadata=None)
+                        # Save the component to persist contact_profile and other metadata fields
+                        component.save()
 
                     # Link hierarchy: product -> project -> component
                     product.projects.add(project)
