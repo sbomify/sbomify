@@ -959,13 +959,14 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["id"] == sample_component.id
     assert response_json["name"] == sample_component.name
     assert response_json["supplier"] == {"contacts": []}
+    assert response_json["manufacturer"] == {"contacts": []}
     assert response_json["authors"] == []
     assert response_json["licenses"] == []
     assert response_json["lifecycle_phase"] is None
     assert response_json["contact_profile_id"] is None
     assert response_json["contact_profile"] is None
     assert response_json["uses_custom_contact"] is True
-    assert len(response_json.keys()) == 9
+    assert len(response_json.keys()) == 10
 
     # Set component metadata
     component_metadata = {
@@ -1072,10 +1073,101 @@ def test_component_metadata_with_contact_profile(
     assert response_data["contact_profile_id"] == profile.id
     assert response_data["contact_profile"]["name"] == "Shared Profile"
     assert response_data["uses_custom_contact"] is False
-    assert response_data["supplier"]["name"] == "Example Supplier"  # Entity name used for supplier
+    # Entity is both supplier and manufacturer
+    assert response_data["supplier"]["name"] == "Example Supplier"
     assert response_data["supplier"]["address"] == "123 Example Street"
     assert response_data["supplier"]["url"] == ["https://supplier.example.com"]
     assert response_data["supplier"]["contacts"][0]["name"] == "Profile Owner"
+    # Manufacturer should also be populated from the same entity
+    assert response_data["manufacturer"]["name"] == "Example Supplier"
+    assert response_data["manufacturer"]["address"] == "123 Example Street"
+    assert response_data["manufacturer"]["url"] == ["https://supplier.example.com"]
+    assert response_data["manufacturer"]["contacts"][0]["name"] == "Profile Owner"
+
+
+@pytest.mark.django_db
+def test_component_metadata_separate_manufacturer_supplier(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test component metadata with separate manufacturer and supplier entities."""
+    client = Client()
+
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Separate Entities Profile",
+        is_default=False,
+    )
+    # Create manufacturer entity
+    manufacturer_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Acme Manufacturing Corp",
+        email="info@acme-mfg.com",
+        phone="+1 555 1000",
+        address="100 Factory Lane",
+        website_urls=["https://acme-mfg.com"],
+        is_manufacturer=True,
+        is_supplier=False,
+    )
+    ContactProfileContact.objects.create(
+        entity=manufacturer_entity,
+        name="John Manufacturer",
+        email="john@acme-mfg.com",
+        phone="555-1001",
+    )
+    # Create supplier entity
+    supplier_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Global Supply Inc",
+        email="info@global-supply.com",
+        phone="+1 555 2000",
+        address="200 Distribution Road",
+        website_urls=["https://global-supply.com"],
+        is_manufacturer=False,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=supplier_entity,
+        name="Jane Supplier",
+        email="jane@global-supply.com",
+        phone="555-2001",
+    )
+
+    patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        patch_url,
+        json.dumps({"contact_profile_id": profile.id}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
+
+    get_url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        get_url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["contact_profile_id"] == profile.id
+    assert response_data["uses_custom_contact"] is False
+
+    # Manufacturer should come from manufacturer entity
+    assert response_data["manufacturer"]["name"] == "Acme Manufacturing Corp"
+    assert response_data["manufacturer"]["address"] == "100 Factory Lane"
+    assert response_data["manufacturer"]["url"] == ["https://acme-mfg.com"]
+    assert response_data["manufacturer"]["contacts"][0]["name"] == "John Manufacturer"
+
+    # Supplier should come from supplier entity (different from manufacturer)
+    assert response_data["supplier"]["name"] == "Global Supply Inc"
+    assert response_data["supplier"]["address"] == "200 Distribution Road"
+    assert response_data["supplier"]["url"] == ["https://global-supply.com"]
+    assert response_data["supplier"]["contacts"][0]["name"] == "Jane Supplier"
 
 
 @pytest.mark.django_db
@@ -1178,8 +1270,15 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
         "lifecycle_phase": "post-build",
     }
 
-    sample_component.metadata = component_metadata
-    sample_component.save()
+    # Use PATCH endpoint to set metadata through native fields
+    metadata_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        metadata_url,
+        json.dumps(component_metadata),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
 
     sbom_metadata = {
         "timestamp": "2024-05-31T13:08:16Z",
@@ -1403,6 +1502,124 @@ def test_cyclonedx_1_7_metadata_endpoint(
     response_json = response.json()
     # In 1.7, version should be a Version object (like 1.6)
     assert response_json["component"]["version"] == "3.0.0"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_metadata_with_manufacturer(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that manufacturer is included in CycloneDX 1.6+ metadata generation."""
+    client = Client()
+
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    # Create profile with separate manufacturer and supplier entities
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Manufacturer Test Profile",
+    )
+    manufacturer_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Manufacturer Inc",
+        email="info@test-mfg.com",
+        phone="+1 555 3000",
+        address="300 Manufacturing Blvd",
+        website_urls=["https://test-mfg.com"],
+        is_manufacturer=True,
+        is_supplier=False,
+    )
+    ContactProfileContact.objects.create(
+        entity=manufacturer_entity,
+        name="Mfg Contact",
+        email="mfg@test-mfg.com",
+        phone="555-3001",
+    )
+    supplier_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Supplier LLC",
+        email="info@test-supplier.com",
+        phone="+1 555 4000",
+        address="400 Supply Ave",
+        website_urls=["https://test-supplier.com"],
+        is_manufacturer=False,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=supplier_entity,
+        name="Supplier Contact",
+        email="supplier@test-supplier.com",
+        phone="555-4001",
+    )
+
+    # Link contact profile to component
+    patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        patch_url,
+        json.dumps({"contact_profile_id": profile.id}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
+
+    # Test CycloneDX 1.6 metadata generation (manufacturer supported)
+    sbom_metadata = {
+        "timestamp": "2025-12-01T00:00:00+00:00",
+        "component": {
+            "bom-ref": "test-component",
+            "type": "application",
+            "name": "test-app",
+            "version": "1.0.0",
+        },
+    }
+
+    url = reverse(
+        "api-1:get_cyclonedx_component_metadata",
+        kwargs={"spec_version": "1.6", "component_id": sample_component.id},
+    )
+    response = client.post(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # Verify manufacturer is in the response (CycloneDX 1.6+)
+    assert "manufacturer" in response_json
+    assert response_json["manufacturer"]["name"] == "Test Manufacturer Inc"
+    assert response_json["manufacturer"]["url"] == ["https://test-mfg.com"]
+    assert response_json["manufacturer"]["address"]["streetAddress"] == "300 Manufacturing Blvd"
+    assert response_json["manufacturer"]["contact"][0]["name"] == "Mfg Contact"
+    assert response_json["manufacturer"]["contact"][0]["email"] == "mfg@test-mfg.com"
+
+    # Verify supplier is also present and different
+    assert "supplier" in response_json
+    assert response_json["supplier"]["name"] == "Test Supplier LLC"
+    assert response_json["supplier"]["url"] == ["https://test-supplier.com"]
+
+    # Test CycloneDX 1.5 (manufacturer NOT supported in metadata)
+    url_1_5 = reverse(
+        "api-1:get_cyclonedx_component_metadata",
+        kwargs={"spec_version": "1.5", "component_id": sample_component.id},
+    )
+    response = client.post(
+        url_1_5,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # manufacturer should NOT be in 1.5 response
+    assert "manufacturer" not in response_json
+    # supplier should still be present
+    assert "supplier" in response_json
+    assert response_json["supplier"]["name"] == "Test Supplier LLC"
 
 
 @pytest.mark.django_db
