@@ -1996,10 +1996,11 @@ def test_component_metadata_api_includes_updated_profile_authors(
     sample_component: Component, sample_access_token: AccessToken  # noqa: F811
 ):
     """Test that when profile authors change, the API response includes updated profile authors.
-    
-    This test verifies the API response structure includes updated profile authors
-    in contact_profile.authors for frontend consumption. The frontend handles
-    syncing these to the component display.
+
+    This test verifies that the API response structure exposes up-to-date profile
+    authors in contact_profile.authors for frontend consumption. Actual syncing of
+    component metadata, including authors, occurs in multiple places (for example,
+    via backend logic such as populate_component_metadata_native_fields()).
     """
     from sbomify.apps.teams.models import AuthorContact, ContactProfile
 
