@@ -1933,6 +1933,172 @@ def test_component_metadata_author_information(sample_component: Component, samp
 
 
 @pytest.mark.django_db
+def test_component_metadata_syncs_authors_from_profile(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that when a component has a contact profile, authors are synced from the profile on metadata load."""
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    client = Client()
+
+    # Create a profile with authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Test Profile",
+        is_default=False,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="Profile Author One",
+        email="profile1@example.com",
+        phone="111-111-1111",
+        order=0,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="Profile Author Two",
+        email="profile2@example.com",
+        phone="222-222-2222",
+        order=1,
+    )
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return authors from profile
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["contact_profile_id"] == profile.id
+    # Verify profile authors are available in contact_profile field for frontend syncing
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert len(response_data["contact_profile"]["authors"]) == 2
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Profile Author One"
+    assert response_data["contact_profile"]["authors"][0]["email"] == "profile1@example.com"
+    assert response_data["contact_profile"]["authors"][1]["name"] == "Profile Author Two"
+    assert response_data["contact_profile"]["authors"][1]["email"] == "profile2@example.com"
+
+
+@pytest.mark.django_db
+def test_component_metadata_reflects_profile_author_changes(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that when profile authors change, the component reflects those changes on next load."""
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    client = Client()
+
+    # Create a profile with initial authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Test Profile",
+        is_default=False,
+    )
+    author1 = AuthorContact.objects.create(
+        profile=profile,
+        name="Original Author",
+        email="original@example.com",
+        order=0,
+    )
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return initial author
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 200
+    response_data = response.json()
+    # Verify profile authors are available in contact_profile field
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert len(response_data["contact_profile"]["authors"]) == 1
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
+
+    # Add new author to profile
+    AuthorContact.objects.create(
+        profile=profile,
+        name="New Author",
+        email="new@example.com",
+        order=1,
+    )
+
+    # Get metadata again - should reflect new author in contact_profile
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 200
+    response_data = response.json()
+    # Verify updated profile authors are available for frontend syncing
+    assert len(response_data["contact_profile"]["authors"]) == 2
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
+    assert response_data["contact_profile"]["authors"][1]["name"] == "New Author"
+
+
+@pytest.mark.django_db
+def test_component_metadata_clears_authors_when_profile_has_none(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that when a profile has no authors, component authors are cleared appropriately."""
+    from sbomify.apps.sboms.models import ComponentAuthor
+    from sbomify.apps.teams.models import ContactProfile
+
+    client = Client()
+
+    # Create component with existing authors
+    ComponentAuthor.objects.create(
+        component=sample_component,
+        name="Component Author",
+        email="component@example.com",
+        order=0,
+    )
+    assert sample_component.authors.count() == 1
+
+    # Create a profile without authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Empty Profile",
+        is_default=False,
+    )
+    assert profile.authors.count() == 0
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return empty authors list
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["contact_profile_id"] == profile.id
+    # Verify profile has no authors (empty list in contact_profile.authors)
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert response_data["contact_profile"]["authors"] == []
+
+
+@pytest.mark.django_db
 def test_sbom_upload_file_cyclonedx(
     sample_user,  # noqa: F811
     sample_component: Component,  # noqa: F811
