@@ -217,7 +217,7 @@ export function registerComponentMetaInfoEditor() {
             // Check if profile has no authors (handles both undefined/null and empty array)
             if (!profile?.authors?.length) {
                 // Profile has no authors, clear component authors
-                if (this.metadata.authors?.length > 0) {
+                if (this.metadata.authors?.length) {
                     this.metadata.authors = [];
                     // Mark as unsaved changes so user knows to save
                     this.hasUnsavedChanges = true;
