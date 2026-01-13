@@ -1679,8 +1679,9 @@ def populate_component_metadata_native_fields(component, user, custom_metadata: 
             # Use user name as supplier if no company
             component.supplier_name = f"{user.first_name} {user.last_name}".strip()
 
-    # Create default author from user if no authors exist yet
-    # (only if profile had no authors or no profile was used)
+    # Create default author from user if no authors exist yet.
+    # This can happen if the contact profile had no authors, if no profile was used,
+    # or if custom_metadata was provided but did not supply any authors.
     if not component.authors.exists() and user.first_name and user.last_name and user.email:
         user_name = f"{user.first_name} {user.last_name}".strip()
         component.authors.create(
