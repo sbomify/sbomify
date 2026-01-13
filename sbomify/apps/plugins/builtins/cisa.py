@@ -11,8 +11,13 @@ accordingly when the final standard is released.
 Standard Reference:
     - Name: CISA 2025 Minimum Elements for a Software Bill of Materials (SBOM)
     - Version: 2025-08 (August 2025 Public Comment Draft)
-    - URL: https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf
+    - Official URL: https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf
     - Status: PUBLIC COMMENT DRAFT (Pre-decisional)
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/cisa-minimum-elements/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
+    - CISA Framing: https://sbomify.com/compliance/cisa-framing/
 
 The eleven CISA 2025 minimum data fields are:
     1. SBOM Author - Name of entity that creates the SBOM data for this component

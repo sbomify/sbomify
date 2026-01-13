@@ -7,7 +7,12 @@ Devices: Quality System Considerations and Content of Premarket Submissions"
 Standard Reference:
     - Name: FDA Cybersecurity in Medical Devices
     - Version: 2025-06 (June 2025)
-    - URL: https://www.fda.gov/media/119933/download
+    - Official URL: https://www.fda.gov/media/119933/download
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/fda-medical-device/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
+    - CLE Standard: https://sbomify.com/compliance/cle/
 
 The FDA guidance requires SBOMs to include:
     1. NTIA Minimum Elements (7 elements from NTIA 2021 report)

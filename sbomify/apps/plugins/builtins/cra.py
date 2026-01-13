@@ -6,7 +6,12 @@ requirements for software bill of materials as defined in Annex I Part II and An
 Standard Reference:
     - Name: EU Cyber Resilience Act (CRA) - Regulation (EU) 2024/2847
     - Version: 2024/2847 (23 October 2024)
-    - URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847
+    - Official URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/eu-cra/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
+    - Related NIS2: https://sbomify.com/compliance/eu-nis2/
 
 The CRA SBOM requirements validated by this plugin:
 
