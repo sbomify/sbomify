@@ -237,7 +237,9 @@ export function registerComponentMetaInfoEditor() {
             const profileAuthors = JSON.parse(JSON.stringify(profile.authors));
             
             // Only update if authors have actually changed
-            if (JSON.stringify(this.metadata.authors) !== JSON.stringify(profileAuthors)) {
+            // Handle undefined/null case for metadata.authors
+            const currentAuthors = this.metadata.authors ?? [];
+            if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
                 
                 // Mark as unsaved changes so user knows to save
