@@ -16,7 +16,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
@@ -1742,8 +1742,9 @@ def get_component_metadata(request, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
 
-    # Build supplier information from contact profile or component fields
+    # Build supplier and manufacturer information from contact profile or component fields
     supplier = {"contacts": []}
+    manufacturer = {"contacts": []}
     contact_profile_data = None
 
     if component.contact_profile:
@@ -1753,27 +1754,18 @@ def get_component_metadata(request, component_id: str):
             profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         contact_profile_data = serialize_contact_profile(profile)
 
-        # Access fields via first entity (3-level hierarchy)
-        first_entity = profile.entities.first()
-        if first_entity:
-            if first_entity.name:
-                supplier["name"] = first_entity.name
+        # Find supplier and manufacturer entities from contact profile
+        supplier_entity = None
+        manufacturer_entity = None
+        for entity in profile.entities.all():
+            if entity.is_supplier and supplier_entity is None:
+                supplier_entity = entity
+            if entity.is_manufacturer and manufacturer_entity is None:
+                manufacturer_entity = entity
 
-            urls = [url for url in (first_entity.website_urls or []) if url]
-            if urls:
-                supplier["url"] = urls
-
-            if first_entity.address:
-                supplier["address"] = first_entity.address
-
-            supplier["contacts"] = []
-            for contact in first_entity.contacts.all():
-                contact_dict = {"name": contact.name}
-                if contact.email is not None:
-                    contact_dict["email"] = contact.email
-                if contact.phone is not None:
-                    contact_dict["phone"] = contact.phone
-                supplier["contacts"].append(contact_dict)
+        # Build supplier and manufacturer using shared utility
+        supplier = build_entity_info_dict(supplier_entity)
+        manufacturer = build_entity_info_dict(manufacturer_entity)
 
         uses_custom_contact = False
     else:
@@ -1796,8 +1788,9 @@ def get_component_metadata(request, component_id: str):
 
         uses_custom_contact = True
 
-    # Remove empty supplier fields while keeping contacts list intact
+    # Remove empty supplier/manufacturer fields while keeping contacts list intact
     supplier_schema = SupplierSchema.model_validate(supplier)
+    manufacturer_schema = SupplierSchema.model_validate(manufacturer)
 
     # Build authors information from native fields
     authors = []
@@ -1821,6 +1814,7 @@ def get_component_metadata(request, component_id: str):
         "id": component.id,
         "name": component.name,
         "supplier": supplier_schema,
+        "manufacturer": manufacturer_schema,
         "authors": authors,
         "licenses": licenses,
         "lifecycle_phase": component.lifecycle_phase,

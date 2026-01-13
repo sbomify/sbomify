@@ -523,6 +523,7 @@ class ComponentMetadataCore(BaseModel):
     id: str
     name: str
     supplier: SupplierInfo = Field(default_factory=SupplierInfo)
+    manufacturer: SupplierInfo = Field(default_factory=SupplierInfo)
     authors: list[ContactInfo] = Field(default_factory=list)
     licenses: list[str] = Field(default_factory=list)
     lifecycle_phase: str | None = None
