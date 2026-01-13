@@ -360,6 +360,7 @@ def add_custom_domain_to_context(
 def resolve_product_identifier(
     request: HttpRequest,
     identifier: str,
+    require_public: bool = False,
 ) -> "Product | None":
     """
     Resolve a product by identifier (slug on custom domains, ID otherwise).
@@ -371,6 +372,7 @@ def resolve_product_identifier(
     Args:
         request: The HTTP request
         identifier: The product identifier (slug or ID)
+        require_public: If True, only return public products (for public views)
 
     Returns:
         Product instance or None if not found
@@ -394,15 +396,18 @@ def resolve_product_identifier(
 
         # Fallback: try by ID within the team (for backward compatibility)
         try:
-            return Product.objects.get(pk=identifier, team=custom_domain_team)
+            return Product.objects.get(pk=identifier, team=custom_domain_team, is_public=True)
         except Product.DoesNotExist:
             pass
 
         return None
     else:
-        # On main app: find by ID only
+        # On main app: find by ID, optionally filtering for public
         try:
-            return Product.objects.get(pk=identifier)
+            filters: dict = {"pk": identifier}
+            if require_public:
+                filters["is_public"] = True
+            return Product.objects.get(**filters)
         except Product.DoesNotExist:
             return None
 
@@ -410,6 +415,7 @@ def resolve_product_identifier(
 def resolve_project_identifier(
     request: HttpRequest,
     identifier: str,
+    require_public: bool = False,
 ) -> "Project | None":
     """
     Resolve a project by identifier (slug on custom domains, ID otherwise).
@@ -421,6 +427,7 @@ def resolve_project_identifier(
     Args:
         request: The HTTP request
         identifier: The project identifier (slug or ID)
+        require_public: If True, only return public projects (for public views)
 
     Returns:
         Project instance or None if not found
@@ -441,15 +448,18 @@ def resolve_project_identifier(
 
         # Fallback: try by ID within the team
         try:
-            return Project.objects.get(pk=identifier, team=custom_domain_team)
+            return Project.objects.get(pk=identifier, team=custom_domain_team, is_public=True)
         except Project.DoesNotExist:
             pass
 
         return None
     else:
-        # On main app: find by ID only
+        # On main app: find by ID, optionally filtering for public
         try:
-            return Project.objects.get(pk=identifier)
+            filters: dict = {"pk": identifier}
+            if require_public:
+                filters["is_public"] = True
+            return Project.objects.get(**filters)
         except Project.DoesNotExist:
             return None
 

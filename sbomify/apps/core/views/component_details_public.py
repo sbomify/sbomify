@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
 
@@ -28,6 +28,10 @@ class ComponentDetailsPublicView(View):
         component_obj = resolve_component_identifier(request, component_id)
         if not component_obj:
             return error_response(request, HttpResponseNotFound("Component not found"))
+
+        # Check if component is public - private components should not be accessible via public URL
+        if not component_obj.is_public:
+            return error_response(request, HttpResponseForbidden("Access denied"))
 
         # Use the resolved component's ID for API calls
         resolved_id = component_obj.id

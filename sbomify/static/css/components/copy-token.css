@@ -1,0 +1,49 @@
+.copy-btn-pro {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.copy-btn-pro:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+    color: #1f2937;
+}
+
+.copy-btn-pro:active {
+    background: #f3f4f6;
+    transform: scale(0.98);
+}
+
+.copy-btn-pro:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.copy-btn-pro.copied {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.copy-btn-pro i {
+    font-size: 0.6875rem;
+}
+
+.copy-btn-pro span {
+    font-size: 0.75rem;
+    line-height: 1;
+    font-weight: 500;
+}

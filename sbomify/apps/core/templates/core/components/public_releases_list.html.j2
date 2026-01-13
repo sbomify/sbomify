@@ -14,61 +14,27 @@
                     </a>
                 {% endif %}
             </div>
-            <div class="card-body p-0">
-                <ul class="public-list">
+            <div class="card-body p-3">
+                <div class="releases-grid">
                     {% for release in public_releases %}
-                        <li class="public-list-item">
-                            <div class="public-list-item-icon {% if release.is_latest %}icon-release-latest{% elif release.is_prerelease %}icon-release-prerelease{% else %}icon-release{% endif %}">
-                                {% if release.is_latest %}
-                                    <i class="fas fa-check"></i>
-                                {% elif release.is_prerelease %}
-                                    <i class="fas fa-flask"></i>
-                                {% else %}
-                                    <i class="fas fa-tag"></i>
-                                {% endif %}
-                            </div>
-                            <div class="public-list-item-content">
-                                <div style="display: flex;
-                                            align-items: flex-start;
-                                            justify-content: space-between;
-                                            gap: 1rem;
-                                            margin-bottom: 0.25rem">
-                                    <div style="display: flex;
-                                                align-items: center;
-                                                flex-wrap: wrap;
-                                                gap: 0.5rem">
-                                        <a href="{{ release.public_url }}"
-                                           class="public-list-item-title"
-                                           style="margin: 0">{{ release.name }}</a>
-                                        {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
-                                        {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
-                                    </div>
-                                    <div class="public-list-item-type" style="white-space: nowrap;">
-                                        <i class="far fa-clock me-1"></i>{{ release.released_at|default:release.created_at|naturaltime }}
-                                    </div>
+                        <a href="{{ release.public_url }}" class="release-card">
+                            <div class="release-card-header">
+                                <div class="release-card-left">
+                                    <span class="release-name">{{ release.name }}</span>
+                                    {% if loop.first %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
+                                    {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
                                 </div>
-                                {% if release.description %}
-                                    <p class="public-list-item-description">{{ release.description|truncatechars:150 }}</p>
-                                {% endif %}
-                                <div class="public-list-item-footer">
-                                    {% if release.artifacts_count %}
-                                        <span class="public-badge badge-count">
-                                            <i class="fas fa-puzzle-piece"></i>
-                                            {{ release.artifacts_count }} Artifact{{ release.artifacts_count|pluralize }}
-                                        </span>
-                                    {% endif %}
-                                    {% if release.has_sboms %}
-                                        <a href="/api/v1/releases/{{ release.id }}/download"
-                                           class="public-action-btn btn-right"
-                                           title="Download release SBOM">
-                                            <i class="fas fa-download"></i>Download SBOM
-                                        </a>
-                                    {% endif %}
+                                <div class="release-card-meta">
+                                    <i class="far fa-clock"></i>
+                                    {{ release.released_at|default:release.created_at|naturaltime }}
                                 </div>
                             </div>
-                        </li>
+                            {% if release.description %}
+                                <p class="release-card-description">{{ release.description|truncatechars:100 }}</p>
+                            {% endif %}
+                        </a>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
         </div>
     </div>

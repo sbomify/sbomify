@@ -1,0 +1,35 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/standard-card.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/public-download-card.css' %}">
+<div class="standard-card mt-3">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <div class="header-content">
+                <h4 class="card-title mb-0">{{ title|default:'Download' }}</h4>
+            </div>
+        </div>
+        <div class="card-body text-center">
+            {% if description %}<p class="text-muted mb-3">{{ description }}</p>{% endif %}
+            <a href="{{ download_url }}" class="btn btn-primary download-btn">
+                {% if download_icon %}
+                    <i class="{{ download_icon }} me-2"></i>
+                {% else %}
+                    <i class="fas fa-download me-2"></i>
+                {% endif %}
+                {{ download_text|default:'Download' }}
+            </a>
+            {% if file_info %}
+                <div class="file-info mt-2">
+                    <small class="text-muted">{{ file_info }}</small>
+                </div>
+            {% endif %}
+            {% if additional_info %}
+                <div class="additional-info mt-2">
+                    <small class="text-muted">{{ additional_info }}</small>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

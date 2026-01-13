@@ -2,7 +2,6 @@ import path from 'path'
 import { resolve } from 'path'
 import fs from 'fs'
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
 import { config } from 'dotenv'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -33,7 +32,6 @@ export default defineConfig({
     noExternal: ['license-expressions']
   },
   plugins: [
-    vue(),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {

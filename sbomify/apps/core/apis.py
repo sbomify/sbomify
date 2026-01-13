@@ -640,18 +640,6 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If making product public, check if it has private projects
-            if new_is_public and not product.is_public:
-                private_projects = product.projects.filter(is_public=False)
-                if private_projects.exists():
-                    project_names = ", ".join(private_projects.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make product public because it contains private projects: {project_names}. "
-                            "Please make all projects public first."
-                        )
-                    }
-
             # If updating project relationships, validate constraints
             if project_ids is not None:
                 # Verify all projects exist and belong to the same team
@@ -663,18 +651,6 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 for project in projects:
                     if not verify_item_access(request, project, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify project {project.name}"}
-
-                # If product is (or will be) public, ensure no private projects are being assigned
-                if new_is_public:
-                    private_projects = [p for p in projects if not p.is_public]
-                    if private_projects:
-                        project_names = ", ".join([p.name for p in private_projects])
-                        return 400, {
-                            "detail": (
-                                f"Cannot assign private projects to a public product: {project_names}. "
-                                "Please make these projects public first or keep the product private."
-                            )
-                        }
 
                 # Update relationships
                 product.projects.set(projects)
@@ -1398,18 +1374,6 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
             if not new_is_public and project.is_public and not _private_items_allowed(project.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If making project public, check if it has private components
-            if new_is_public and not project.is_public:
-                private_components = project.components.filter(is_public=False)
-                if private_components.exists():
-                    component_names = ", ".join(private_components.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make project public because it contains private components: {component_names}. "
-                            "Please make all components public first."
-                        )
-                    }
-
             # If making project private, check if it's assigned to any public products
             if not new_is_public and project.is_public:
                 public_products = project.product_set.filter(is_public=True)
@@ -1433,18 +1397,6 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                 for component in components:
                     if not verify_item_access(request, component, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify component {component.name}"}
-
-                # If project is (or will be) public, ensure no private components are being assigned
-                if new_is_public:
-                    private_components = [component for component in components if not component.is_public]
-                    if private_components:
-                        component_names = ", ".join([component.name for component in private_components])
-                        return 400, {
-                            "detail": (
-                                f"Cannot assign private components to a public project: {component_names}. "
-                                "Please make these components public first or keep the project private."
-                            )
-                        }
 
                 # Enforce scope exclusivity: If assigning to a project, components cannot be global
                 # We automatically demote them from global scope
@@ -1700,19 +1652,6 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             # Check billing plan restrictions when trying to make items private
             if not new_is_public and component.is_public and not _private_items_allowed(component.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
-
-            # If making component private, check if it's assigned to any public projects
-            if not new_is_public and component.is_public:
-                public_projects = component.project_set.filter(is_public=True)
-                if public_projects.exists():
-                    project_names = ", ".join(public_projects.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make component private because it's assigned to public projects: "
-                            f"{project_names}. Please remove it from these projects first or make the "
-                            f"projects private."
-                        )
-                    }
 
             # Only update fields that were provided
             for field, value in update_data.items():

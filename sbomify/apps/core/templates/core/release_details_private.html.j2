@@ -16,10 +16,7 @@
             <div class="title-section">
                 <h1 class="item-title">
                     {% if release.has_crud_permissions and not release.is_latest %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="release"
-                              data-item-id="{{ release.id }}"
-                              data-item-value="{{ release.name }}"></span>
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.name %}
                     {% else %}
                         {{ release.name }}
                     {% endif %}
@@ -28,35 +25,20 @@
                 {% if release.description %}
                     <p class="item-subtitle">
                         {% if release.has_crud_permissions and not release.is_latest %}
-                            <span class="vc-editable-single-field"
-                                  data-item-type="release"
-                                  data-item-id="{{ release.id }}"
-                                  data-field-name="description"
-                                  data-item-value="{{ release.description }}"></span>
+                            {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
                         {% else %}
                             {{ release.description }}
                         {% endif %}
                     </p>
                 {% elif release.has_crud_permissions and not release.is_latest %}
                     <p class="item-subtitle">
-                        <span class="vc-editable-single-field text-muted"
-                              data-item-type="release"
-                              data-item-id="{{ release.id }}"
-                              data-field-name="description"
-                              data-item-value=""
-                              data-placeholder="Click to add description..."></span>
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
                     </p>
                 {% endif %}
                 <div class="created-info text-muted">
                     <i class="fas fa-calendar-plus me-2"></i>
                     {% if release.has_crud_permissions and not release.is_latest %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="release"
-                              data-item-id="{{ release.id }}"
-                              data-field-name="created_at"
-                              data-field-type="datetime"
-                              data-item-value="{{ release.created_at|date:'Y-m-d\\TH:i' }}"
-                              data-display-value="Created {{ release.created_at|date:'M d, Y' }}">Created {{ release.created_at|date:"M d, Y" }}</span>
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value='Created '|add:release.created_at|date:'M d, Y' %}
                     {% else %}
                         <span>Created {{ release.created_at|date:"M d, Y" }}</span>
                     {% endif %}
@@ -67,13 +49,7 @@
             <span class="meta-item">
                 <i class="fas fa-calendar me-2 text-primary"></i>
                 {% if release.has_crud_permissions and not release.is_latest %}
-                    <span class="vc-editable-single-field meta-label"
-                          data-item-type="release"
-                          data-item-id="{{ release.id }}"
-                          data-field-name="released_at"
-                          data-field-type="datetime"
-                          data-item-value="{{ release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' }}"
-                          data-display-value="Released {{ release.released_at|default_if_none:release.created_at|date:'M d, Y' }}">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
+                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value='Released '|add:release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
                 {% else %}
                     <span class="meta-label">Released {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}</span>
                 {% endif %}
@@ -113,11 +89,7 @@
     {% endif %}
     <div class="row">
         <div class="col-12">
-            <div class="vc-release-artifacts"
-                 data-release-id="{{ release.id }}"
-                 data-product-id="{{ release.product.id }}"
-                 data-has-crud-permissions="{% if release.has_crud_permissions %}true{% else %}false{% endif %}"
-                 data-is-latest-release="{% if release.is_latest %}true{% else %}false{% endif %}"></div>
+            {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
         </div>
     </div>
     {% if release.has_crud_permissions and not release.is_latest %}

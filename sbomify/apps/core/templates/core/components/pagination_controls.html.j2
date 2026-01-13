@@ -14,7 +14,8 @@
                 <select x-model="pageSize"
                         @change="handlePageSizeChange($event)"
                         class="form-select form-select-sm"
-                        style="width: auto">
+                        style="width: auto;
+                               padding-right: 2rem">
                     <template x-for="size in pageSizeOptions" :key="size">
                         <option :value="size" x-text="size"></option>
                     </template>

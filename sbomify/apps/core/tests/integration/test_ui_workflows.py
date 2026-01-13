@@ -8,7 +8,7 @@ from sbomify.apps.billing.models import BillingPlan
 @pytest.mark.django_db
 class TestUIWorkflows:
     def test_dashboard_stats_load(self, client: Client, sample_user, sample_team_with_owner_member):
-        """Test that dashboard stats load correctly with Vue component"""
+        """Test that dashboard stats load correctly"""
         client.login(username=sample_user.username, password="test")  # nosec B106
         team = sample_team_with_owner_member.team
 
@@ -36,7 +36,7 @@ class TestUIWorkflows:
         response = client.get(reverse("core:dashboard"))
         content = response.content.decode()
 
-        # Check Vue component mounting point exists
+        # Check dashboard container exists
         assert 'class="dashboard"' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
@@ -138,11 +138,11 @@ class TestUIWorkflows:
         assert response.status_code == 200
         content = response.content.decode()
 
-        # Verify the Vue component mount point exists for the add form
+        # Verify the component list and add form exist
         assert 'class="components-list' in content
         assert 'id="addComponentForm"' in content
 
-        # Test API-based component creation (what the Vue component does)
+        # Test API-based component creation
         import json
         component_name = "Test Component 123"
         response = client.post(

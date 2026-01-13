@@ -120,7 +120,6 @@
 }
 
 /* Lifecycle Phase Badges - Matching Bootstrap badge system with unique colors */
-/* Based on Vue component from master: badge-warning, badge-success, badge-danger */
 /* Each lifecycle now has a unique color for better visual distinction */
 
 .badge.lifecycle-badge-design {
@@ -131,7 +130,7 @@
 }
 
 .badge.lifecycle-badge-pre-build {
-    /* Orange/Yellow - matches badge-warning-subtle (from Vue: badge-warning) */
+    /* Orange/Yellow - matches badge-warning-subtle */
     background-color: #fffbeb;
     color: var(--brand-warning);
     border: 1px solid #fed7aa;
@@ -145,14 +144,14 @@
 }
 
 .badge.lifecycle-badge-post-build {
-    /* Green - matches badge-success-subtle (from Vue: badge-success) */
+    /* Green - matches badge-success-subtle */
     background-color: #ecfdf5;
     color: var(--brand-success);
     border: 1px solid #d1fae5;
 }
 
 .badge.lifecycle-badge-operations {
-    /* Cyan - matches badge-info-subtle (from Vue: badge-success for operations) */
+    /* Cyan - matches badge-info-subtle */
     background-color: #f0f9ff;
     color: var(--brand-info);
     border: 1px solid #bae6fd;
@@ -166,7 +165,7 @@
 }
 
 .badge.lifecycle-badge-decommission {
-    /* Red - matches badge-danger-subtle (from Vue: badge-danger) */
+    /* Red - matches badge-danger-subtle */
     background-color: #fef2f2;
     color: var(--brand-danger);
     border: 1px solid #fecaca;

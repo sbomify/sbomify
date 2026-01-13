@@ -15,10 +15,7 @@
             <div class="title-section">
                 <h1 class="item-title">
                     {% if product.has_crud_permissions %}
-                        <span class="vc-editable-single-field"
-                              data-item-type="product"
-                              data-item-id="{{ product.id }}"
-                              data-item-value="{{ product.name }}"></span>
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.name %}
                     {% else %}
                         {{ product.name }}
                     {% endif %}
@@ -29,7 +26,9 @@
                 {% endif %}
             </div>
             {% if product.has_crud_permissions %}
-                <div class="description-section" x-data="{ editing: false }">
+                <div class="description-section"
+                     x-data="{ editing: false, isPublic: {{ product.is_public|yesno:'true,false' }} }"
+                     @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic">
                     <template x-if="!editing">
                         <div class="description-display" @click="editing = true">
                             {% if product.description %}
@@ -62,9 +61,6 @@
                             </div>
                         </form>
                     </template>
-                    <small class="description-hint">
-                        <i class="fas fa-globe me-1"></i>Displayed on public Trust Center
-                    </small>
                 </div>
             {% elif product.description %}
                 <p class="text-muted mb-0 mt-2">{{ product.description }}</p>
@@ -95,10 +91,7 @@
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-item-assignment-manager"
-                 data-parent-type="product"
-                 data-parent-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='project' can_edit=product.has_crud_permissions %}
         </div>
     </div>
     <div class="row mt-3">
@@ -127,9 +120,7 @@
     </div>
     <div class="row mt-3">
         <div class="col-12">
-            <div class="vc-product-releases"
-                 data-product-id="{{ product.id }}"
-                 data-has-crud-permissions="{% if product.has_crud_permissions %}true{% else %}false{% endif %}"></div>
+            {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
         </div>
     </div>
     <div class="row mt-3">

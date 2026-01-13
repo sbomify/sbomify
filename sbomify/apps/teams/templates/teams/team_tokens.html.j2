@@ -21,7 +21,7 @@
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <label class="form-label fw-semibold mb-0">Your New Token</label>
-                        <div class="vc-copy-token"></div>
+                        {% include 'core/components/copy_token.html.j2' %}
                     </div>
                     <div id="access-token" class="form-control token-display" readonly>{{ new_encoded_access_token }}</div>
                 </div>

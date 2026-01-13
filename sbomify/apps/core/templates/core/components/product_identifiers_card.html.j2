@@ -51,15 +51,19 @@
                                     {% if identifier.identifier_type in barcode_types %}
                                         <div class="barcode-wrapper"
                                              x-data="productIdentifiersBarcodes()"
-                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value }}', '{{ identifier.identifier_type }}')">
-                                            <svg data-barcode-id="{{ identifier.id }}" class="barcode-svg">
+                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')"
+                                             :class="{ 'barcode-error': barcodeErrors['{{ identifier.id }}'] }">
+                                            <svg data-barcode-id="{{ identifier.id }}"
+                                                 class="barcode-svg"
+                                                 x-show="!barcodeErrors['{{ identifier.id }}']">
                                             </svg>
-                                            <template x-if="barcodeErrors['{{ identifier.id }}']">
-                                                <div class="barcode-error-state">
-                                                    <i class="fas fa-exclamation-triangle"></i>
-                                                    <span class="small">Invalid barcode</span>
-                                                </div>
-                                            </template>
+                                            <div class="barcode-error-state"
+                                                 x-show="barcodeErrors['{{ identifier.id }}']"
+                                                 x-cloak>
+                                                <i class="fas fa-exclamation-triangle"></i>
+                                                <span>Invalid barcode format</span>
+                                                <small>The value is not a valid {{ identifier.identifier_type_display }} format</small>
+                                            </div>
                                         </div>
                                     {% else %}
                                         <span class="text-muted">—</span>
@@ -71,7 +75,7 @@
                                             <button type="button"
                                                     class="btn btn-outline-primary btn-sm"
                                                     title="Edit"
-                                                    @click="editId = '{{ identifier.id }}'; editType = '{{ identifier.identifier_type }}'; editValue = '{{ identifier.value }}'; showEditModal = true">
+                                                    @click="editId = '{{ identifier.id }}'; editType = '{{ identifier.identifier_type }}'; editValue = '{{ identifier.value|escapejs }}'; showEditModal = true">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <button type="button"
@@ -124,12 +128,6 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="create">
                         <div class="delete-modal-header">
-                            <div class="delete-modal-icon"
-                                 style="background: #eff6ff;
-                                        border-color: #bfdbfe;
-                                        color: #2563eb">
-                                <i class="fas fa-plus"></i>
-                            </div>
                             <h3 class="delete-modal-title">Add Identifier</h3>
                             <button type="button"
                                     class="delete-modal-close"

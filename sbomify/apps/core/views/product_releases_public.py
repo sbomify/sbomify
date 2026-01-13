@@ -20,7 +20,8 @@ from sbomify.apps.teams.models import Team
 class ProductReleasesPublicView(View):
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         # Resolve product by slug (on custom domains) or ID (on main app)
-        product_obj = resolve_product_identifier(request, product_id)
+        # require_public=True filters at query level, preventing race conditions
+        product_obj = resolve_product_identifier(request, product_id, require_public=True)
         if not product_obj:
             return error_response(request, HttpResponseNotFound("Product not found"))
 

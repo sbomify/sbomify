@@ -1,9 +1,4 @@
-import { describe, test, expect, mock } from 'bun:test'
-
-// Mock the ItemsListTable component
-mock.module('./ItemsListTable.vue', () => ({
-  default: {}
-}))
+import { describe, test, expect } from 'bun:test'
 
 describe('ComponentsList Component', () => {
   describe('Props Configuration', () => {

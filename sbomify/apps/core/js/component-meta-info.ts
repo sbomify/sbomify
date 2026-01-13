@@ -188,12 +188,6 @@ export function registerComponentMetaInfo() {
 
         async removeSupplierContact(index: number) {
             if (!this.metadata.supplier?.contacts) return;
-            // In the Vue component this was a "TODO: Save changes"
-            // so we just update local state for now, assuming edit mode is for saving.
-            // But wait, the display component had these X buttons?
-            // Yes, "removeSupplierContact" was in display component.
-            // It says "TODO: Save changes" in the Vue code.
-            // So I will just update local state same as Vue.
             this.metadata.supplier.contacts.splice(index, 1);
         },
 

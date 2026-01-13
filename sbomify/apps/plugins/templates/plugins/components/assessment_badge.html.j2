@@ -28,7 +28,10 @@
             </div>
         {% endif %}
         <template x-if="showDetailsModal">
-            <div class="modal fade show assessment-modal"
+            <div class="modal fade assessment-modal"
+                 :class="{ 'show': showDetailsModal }"
+                 style="display: block;
+                        background: rgba(0,0,0,0.5)"
                  tabindex="-1"
                  @click.self="showDetailsModal = false"
                  x-init="initModal($el)">
