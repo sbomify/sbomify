@@ -220,6 +220,8 @@ export function registerComponentMetaInfoEditor() {
 
             // Only sync if authors are empty (backwards compatibility for legacy components)
             if (!this.metadata.authors || this.metadata.authors.length === 0) {
+                // Use JSON serialization instead of structuredClone due to DataCloneError
+                // with complex author objects. Authors are simple JSON-serializable objects.
                 this.metadata.authors = JSON.parse(JSON.stringify(profile.authors));
                 
                 // Use $nextTick to ensure component is ready to receive events
@@ -254,6 +256,8 @@ export function registerComponentMetaInfoEditor() {
                 this.validationErrors.supplier = {};
 
                 if (profile) {
+                    // Use JSON serialization instead of structuredClone due to DataCloneError.
+                    // Authors are simple objects (name, email, phone) suitable for JSON cloning.
                     const authors = profile.authors ? JSON.parse(JSON.stringify(profile.authors)) : [];
                     this.metadata.authors = authors;
                     this.$nextTick(() => {
