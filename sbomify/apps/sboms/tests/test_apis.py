@@ -2002,7 +2002,7 @@ def test_component_metadata_reflects_profile_author_changes(
         name="Test Profile",
         is_default=False,
     )
-    author1 = AuthorContact.objects.create(
+    AuthorContact.objects.create(
         profile=profile,
         name="Original Author",
         email="original@example.com",
