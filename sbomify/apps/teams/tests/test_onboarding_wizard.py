@@ -320,7 +320,6 @@ class TestOnboardingWizard:
         # Verify component was created and has contact_profile assigned
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
-        
         # Refresh from database to ensure we have the latest state
         component.refresh_from_db()
         assert component.contact_profile is not None
