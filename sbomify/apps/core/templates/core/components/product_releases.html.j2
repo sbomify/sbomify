@@ -47,7 +47,7 @@
                                         <a :href="getReleaseUrl(release)"
                                            class="text-decoration-none fw-semibold fs-5"
                                            x-text="release.name"></a>
-                                        <span x-show="index === 0" class="badge bg-success ms-2">Latest</span>
+                                        <span x-show="release.is_latest" class="badge bg-success ms-2">Latest</span>
                                     </td>
                                     <td>
                                         <span x-show="release.is_prerelease" class="badge bg-warning text-dark">Pre-release</span>

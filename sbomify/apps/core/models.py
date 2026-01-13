@@ -192,7 +192,7 @@ class Component(SbomComponent):
         """
         # Components are related to products through projects
         # Component -> Projects -> Products
-        return Product.objects.filter(projects__components=self).distinct()
+        return Product.objects.filter(projects__components=self).order_by("id").distinct("id")
 
 
 class ProductProject(SbomProductProject):
@@ -316,7 +316,7 @@ class Release(models.Model):
         self.artifacts.all().delete()
 
         # Get all components that belong to this product (via projects)
-        components = Component.objects.filter(projects__products=self.product).distinct()
+        components = Component.objects.filter(projects__products=self.product).order_by("id").distinct("id")
 
         for component in components:
             # Add latest artifacts from each component
