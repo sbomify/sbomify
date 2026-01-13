@@ -6,7 +6,11 @@ Bill of Materials as defined in the July 2021 report.
 Standard Reference:
     - Name: NTIA Minimum Elements for a Software Bill of Materials (SBOM)
     - Version: 2021-07 (July 2021)
-    - URL: https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom
+    - Official URL: https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/ntia-minimum-elements/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
 
 The seven NTIA minimum data fields are:
     1. Supplier Name - Name of entity that creates, defines, and identifies components

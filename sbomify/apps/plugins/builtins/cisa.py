@@ -11,8 +11,13 @@ accordingly when the final standard is released.
 Standard Reference:
     - Name: CISA 2025 Minimum Elements for a Software Bill of Materials (SBOM)
     - Version: 2025-08 (August 2025 Public Comment Draft)
-    - URL: https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf
+    - Official URL: https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf
     - Status: PUBLIC COMMENT DRAFT (Pre-decisional)
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/cisa-minimum-elements/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
+    - CISA Framing: https://sbomify.com/compliance/cisa-framing/
 
 The eleven CISA 2025 minimum data fields are:
     1. SBOM Author - Name of entity that creates the SBOM data for this component
@@ -55,16 +60,26 @@ logger = getLogger(__name__)
 
 # Valid generation context values
 # CISA defines: "before build, during build, after build"
+# CycloneDX lifecycle phases: design, pre-build, build, post-build, operations,
+#   discovery, decommission
 # We also accept common synonyms used in tooling:
 #   - "source" = before_build (source code analysis)
 #   - "analyzed" = post_build (binary analysis)
 GENERATION_CONTEXT_VALUES = {
+    # CISA terminology (underscore format)
     "before_build",
     "build",
     "post_build",
-    # Synonyms
-    "source",  # equivalent to before_build
-    "analyzed",  # equivalent to post_build
+    # CycloneDX lifecycle phases (hyphen format)
+    "design",
+    "pre-build",
+    "post-build",
+    "operations",
+    "discovery",
+    "decommission",
+    # Common synonyms
+    "source",  # equivalent to before_build/pre-build
+    "analyzed",  # equivalent to post_build/post-build
 }
 
 
@@ -406,16 +421,18 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             )
         )
 
-        # 11. Generation Context (NEW - check annotations)
+        # 11. Generation Context (NEW - check comments and annotations)
         has_generation_context = self._spdx_has_generation_context(data)
         findings.append(
             self._create_finding(
                 "generation_context",
                 status="pass" if has_generation_context else "fail",
-                details=None if has_generation_context else "No generation context annotation found",
+                details=None if has_generation_context else "No generation context found",
                 remediation=(
-                    "Add annotation with comment 'cisa:generationContext=<context>' "
-                    "where context is: before_build, build, post_build, source, or analyzed."
+                    "Add generation context in creationInfo.comment (CreatorComment) or "
+                    "document-level comment (DocumentComment) with lifecycle phase "
+                    "(e.g., 'build', 'pre-build', 'post-build'). Alternatively, add "
+                    "annotation with 'cisa:generationContext=<context>'."
                 ),
             )
         )
@@ -423,15 +440,32 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         return findings
 
     def _spdx_has_generation_context(self, data: dict[str, Any]) -> bool:
-        """Check if SPDX document has generation context annotation.
+        """Check if SPDX document has generation context information.
+
+        Checks (per https://sbomify.com/compliance/schema-crosswalk/):
+        - creationInfo.comment (CreatorComment)
+        - document-level comment (DocumentComment)
+        - document-level annotations with cisa:generationContext
 
         Args:
             data: Full SPDX document dictionary.
 
         Returns:
-            True if valid generation context annotation found.
+            True if valid generation context found.
         """
-        # Check document-level annotations
+        # Check CreatorComment (creationInfo.comment)
+        # See: https://sbomify.com/compliance/schema-crosswalk/
+        creator_comment = data.get("creationInfo", {}).get("comment", "").lower()
+        if any(ctx in creator_comment for ctx in GENERATION_CONTEXT_VALUES):
+            return True
+
+        # Check DocumentComment (document-level comment)
+        # See: https://sbomify.com/compliance/schema-crosswalk/
+        document_comment = data.get("comment", "").lower()
+        if any(ctx in document_comment for ctx in GENERATION_CONTEXT_VALUES):
+            return True
+
+        # Check document-level annotations for explicit cisa:generationContext
         for annotation in data.get("annotations", []):
             if annotation.get("annotationType") == "OTHER":
                 comment = annotation.get("comment", "")
@@ -441,6 +475,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                             context = part.split("=", 1)[1].lower().strip()
                             if context in GENERATION_CONTEXT_VALUES:
                                 return True
+
         return False
 
     def _validate_cyclonedx(self, data: dict[str, Any]) -> list[Finding]:
@@ -617,10 +652,11 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             self._create_finding(
                 "generation_context",
                 status="pass" if has_generation_context else "fail",
-                details=None if has_generation_context else "No generation context found in metadata properties",
+                details=None if has_generation_context else "No generation context found in metadata",
                 remediation=(
-                    "Add property 'cdx:sbom:generationContext' in metadata.properties "
-                    "with value: before_build, build, post_build, source, or analyzed."
+                    "Add metadata.lifecycles[].phase (preferred) with value: design, pre-build, "
+                    "build, post-build, operations, discovery, or decommission. Alternatively, "
+                    "add property 'cdx:sbom:generationContext' in metadata.properties."
                 ),
             )
         )
@@ -652,18 +688,34 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
     def _cyclonedx_has_generation_context(self, metadata: dict[str, Any]) -> bool:
         """Check if CycloneDX metadata has generation context property.
 
+        Checks both (per https://sbomify.com/compliance/schema-crosswalk/):
+        - metadata.lifecycles[].phase (preferred)
+        - metadata.properties[] with name "cdx:sbom:generationContext"
+
         Args:
             metadata: CycloneDX metadata dictionary.
 
         Returns:
             True if valid generation context property found.
         """
+        # Check metadata.lifecycles[].phase (preferred per schema crosswalk)
+        # CycloneDX 1.5+ supports lifecycle phases: design, pre-build, build,
+        # post-build, operations, discovery, decommission
+        # See: https://sbomify.com/compliance/schema-crosswalk/
+        lifecycles = metadata.get("lifecycles", [])
+        for lifecycle in lifecycles:
+            phase = lifecycle.get("phase", "").lower().strip()
+            if phase in GENERATION_CONTEXT_VALUES:
+                return True
+
+        # Check metadata.properties[] for custom generation context property
         properties = metadata.get("properties", [])
         for prop in properties:
             if prop.get("name") == "cdx:sbom:generationContext":
                 value = prop.get("value", "").lower().strip()
                 if value in GENERATION_CONTEXT_VALUES:
                     return True
+
         return False
 
     def _validate_timestamp(self, timestamp: str | None) -> bool:
