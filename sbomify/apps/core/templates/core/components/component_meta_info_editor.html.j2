@@ -115,6 +115,22 @@
                                                         </div>
                                                     </div>
                                                 </template>
+                                                <template x-if="selectedProfile.authors && selectedProfile.authors.length > 0">
+                                                    <div class="mb-0">
+                                                        <strong>Authors:</strong>
+                                                        <div class="mt-1">
+                                                            <template x-for="author in selectedProfile.authors"
+                                                                      :key="author.name + (author.email || '')">
+                                                                <div class="mb-1">
+                                                                    <span x-text="author.name"></span>
+                                                                    <template x-if="author.email">
+                                                                        <span x-text="' (' + author.email + ')'"></span>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </template>
                                         <template x-if="!selectedProfile">
@@ -191,7 +207,8 @@
                                     </h6>
                                 </div>
                                 <div class="card-body">
-                                    <div x-data="contactsEditor({ contacts: (metadata && metadata.authors) ? metadata.authors : [], contactType: 'author' })"
+                                    <div x-data="contactsEditor({ contacts: metadata.authors || [], contactType: 'author' })"
+                                         x-init="$watch('$root.metadata.authors', (value) => { if (value && JSON.stringify(value) !== JSON.stringify(contacts) && !addingContact) { initializeContacts(value); } })"
                                          @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
                                         {% include 'sboms/components/contacts_editor_base.html.j2' %}
                                     </div>
