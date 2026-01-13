@@ -231,11 +231,16 @@
                                         (<span x-text="selectedArtifacts.size"></span> selected)
                                     </span>
                                 </small>
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-primary"
-                                        :disabled="filteredAvailableArtifacts.length === 0"
-                                        @click="allFilteredSelected ? clearSelection() : selectAllFiltered()"
-                                        x-text="allFilteredSelected ? 'Deselect All' : 'Select All'"></button>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button"
+                                            class="btn btn-outline-primary"
+                                            :disabled="filteredAvailableArtifacts.length === 0"
+                                            @click="selectAllFiltered()">Select All</button>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            :disabled="selectedArtifacts.size === 0"
+                                            @click="clearSelection()">Clear</button>
+                                </div>
                             </div>
                             <!-- Loading State -->
                             <div x-show="isLoadingAvailable" class="text-center py-4">
@@ -331,9 +336,7 @@
                                     @click="addSelectedArtifacts()"
                                     :disabled="selectedArtifacts.size === 0 || isSubmitting">
                                 <span x-show="isSubmitting" class="spinner-border spinner-border-sm me-2"></span>
-                                <span>
-                                    Add&nbsp;<span x-text="selectedArtifacts.size"></span>&nbsp;Artifact<span x-show="selectedArtifacts.size !== 1">s</span>
-                                </span>
+                                Add <span x-text="selectedArtifacts.size"></span> Artifact<span x-show="selectedArtifacts.size !== 1">s</span>
                             </button>
                         </div>
                     </div>

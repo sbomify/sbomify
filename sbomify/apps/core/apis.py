@@ -2841,11 +2841,9 @@ def list_release_artifacts(
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 
-        product_components = (
-            Component.objects.filter(projects__products=release.product, team_id=release.product.team_id)
-            .order_by("id")
-            .distinct("id")
-        )
+        product_components = Component.objects.filter(
+            projects__products=release.product, team_id=release.product.team_id
+        ).distinct()
 
         # Get existing artifacts in this release to exclude them
         existing_sbom_ids = set(
