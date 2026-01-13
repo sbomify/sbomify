@@ -208,7 +208,6 @@
                                 </div>
                                 <div class="card-body">
                                     <div x-data="contactsEditor({ contacts: metadata.authors || [], contactType: 'author' })"
-                                         x-init="$watch('$root.metadata.authors', (value) => { if (value && JSON.stringify(value) !== JSON.stringify(contacts) && !addingContact) { initializeContacts(value); } })"
                                          @contacts-updated.window="metadata.authors = $event.detail.contacts; hasUnsavedChanges = true">
                                         {% include 'sboms/components/contacts_editor_base.html.j2' %}
                                     </div>

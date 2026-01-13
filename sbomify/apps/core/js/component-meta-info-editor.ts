@@ -181,11 +181,6 @@ export function registerComponentMetaInfoEditor() {
                 if (response.ok) {
                     const data = await response.json();
                     this.contactProfiles = data || [];
-                    
-                    console.log('✅ [DEBUG] Loaded contact profiles:', this.contactProfiles.length);
-                    this.contactProfiles.forEach(profile => {
-                        console.log(`  Profile: ${profile.name}, Authors:`, profile.authors?.length || 0, profile.authors);
-                    });
 
                     // If there's a selected profile from metadata that's not in the list, add it
                     if (this.metadata.contact_profile && !this.contactProfiles.some(p => p.id === this.metadata.contact_profile?.id)) {
@@ -238,39 +233,30 @@ export function registerComponentMetaInfoEditor() {
 
         handleProfileChange() {
             const nextId = this.selectedProfileId || null;
-            console.log('🔄 [DEBUG] Profile changed to:', nextId);
-            
             this.metadata.contact_profile_id = nextId;
             this.metadata.uses_custom_contact = nextId === null;
             this.hasUnsavedChanges = true;
 
             if (nextId === null) {
-                console.log('  Clearing profile and authors');
                 this.metadata.contact_profile = null;
                 if (this.metadata.supplier) {
                     this.metadata.supplier.name = null;
                 }
                 this.metadata.authors = [];
                 this.$nextTick(() => {
-                    console.log('  Dispatching CONTACTS_UPDATED with empty authors');
                     dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
                         contacts: []
                     });
                 });
             } else {
                 const profile = this.contactProfiles.find(p => p.id === nextId);
-                console.log('  Found profile:', profile?.name);
-                console.log('  Profile authors:', profile?.authors);
-                
                 this.metadata.contact_profile = profile || null;
                 this.validationErrors.supplier = {};
 
                 if (profile) {
                     const authors = profile.authors ? JSON.parse(JSON.stringify(profile.authors)) : [];
-                    console.log('  Setting metadata.authors to:', authors);
                     this.metadata.authors = authors;
                     this.$nextTick(() => {
-                        console.log('  Dispatching CONTACTS_UPDATED event with', authors.length, 'authors');
                         dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
                             contacts: authors
                         });
