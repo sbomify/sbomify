@@ -219,9 +219,14 @@ export function registerComponentMetaInfoEditor() {
                 // Profile has no authors, clear component authors
                 if (this.metadata.authors?.length) {
                     this.metadata.authors = [];
-                    // Mark as unsaved changes so user knows to save
-                    this.hasUnsavedChanges = true;
-                    // Don't update originalMetadata - let user save to persist the change
+                    // Only mark as unsaved if not during initial load
+                    // During initial load, synced state becomes the baseline
+                    if (!this.isInitializing) {
+                        this.hasUnsavedChanges = true;
+                    } else {
+                        // Update originalMetadata during initial load so synced state is baseline
+                        this.originalMetadata = JSON.stringify(this.metadata);
+                    }
                     this.$nextTick(() => {
                         dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
                             contacts: []
@@ -242,11 +247,14 @@ export function registerComponentMetaInfoEditor() {
             if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
                 this.metadata.authors = profileAuthors;
                 
-                // Mark as unsaved changes so user knows to save
-                this.hasUnsavedChanges = true;
-                
-                // Don't update originalMetadata - synced authors should be detected as changes
-                // so user can save to persist them to the database
+                // Only mark as unsaved if not during initial load
+                // During initial load, synced state becomes the baseline
+                if (!this.isInitializing) {
+                    this.hasUnsavedChanges = true;
+                } else {
+                    // Update originalMetadata during initial load so synced state is baseline
+                    this.originalMetadata = JSON.stringify(this.metadata);
+                }
                 
                 // Use $nextTick to ensure component is ready to receive events
                 this.$nextTick(() => {
