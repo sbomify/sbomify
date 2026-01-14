@@ -233,7 +233,7 @@ class DeleteAwareModelFormMixin:
         from django.core.exceptions import ValidationError
 
         model = self._meta.model
-        # Only unpack unique_checks since date_checks are not needed for this validation
+        # Unpack only unique_checks; date_checks are handled by Django's standard validation
         unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
 
         errors = []
@@ -393,6 +393,8 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
         # First pass: identify which forms are marked for deletion
         for form in self.forms:
             # Check if form has data indicating deletion
+            # Django formsets use "on" for checked checkboxes, but we also check
+            # string representations that might come from x-model bindings or other sources
             delete_key = f"{form.prefix}-DELETE"
             if self.data.get(delete_key) in ("on", "True", "true", "1"):
                 # This form is being deleted - get its instance PK if it exists

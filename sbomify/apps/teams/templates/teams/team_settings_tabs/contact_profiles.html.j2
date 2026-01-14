@@ -776,6 +776,19 @@
             return parent !== null && parent.offsetParent !== null;
         },
         
+        get editing() {
+            // Access parent entity's editing state
+            // Contacts should only be required when their parent entity is in editing mode
+            const parent = this.$el.closest('.entity-card');
+            if (!parent) return false;
+            try {
+                const parentData = Alpine.$data(parent);
+                return parentData ? parentData.editing : false;
+            } catch (e) {
+                return false;
+            }
+        },
+        
         init() {
             const nameInput = this.$el.querySelector('input[name$="-name"]');
             const emailInput = this.$el.querySelector('input[name$="-email"]');
