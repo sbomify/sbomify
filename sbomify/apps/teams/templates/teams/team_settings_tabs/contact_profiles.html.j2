@@ -816,6 +816,10 @@
         
         removeContact() {
             this.deleted = true;
+            this.$el.querySelectorAll('input, select, textarea').forEach(input => {
+                input.setCustomValidity('');
+                input.removeAttribute('required');
+            });
             this.$dispatch('contact-removed');
         }
     }));
@@ -839,6 +843,10 @@
             const self = this;
             window.showDeleteConfirmation(authorName, function() {
                 self.deleted = true;
+                self.$el.querySelectorAll('input, select, textarea').forEach(input => {
+                    input.setCustomValidity('');
+                    input.removeAttribute('required');
+                });
                 window.dispatchEvent(new CustomEvent('update-counts'));
             });
         }
@@ -1014,11 +1022,11 @@
                 </div>
                 <!-- Name field -->
                 <div class="flex-shrink-0 contact-field-name">
-                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" required title="Click to edit name" aria-label="Contact Name">
+                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" :required="!deleted && editing" title="Click to edit name" aria-label="Contact Name">
                 </div>
                 <!-- Email field -->
                 <div class="flex-grow-1 contact-field-email">
-                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" required title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
+                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" :required="!deleted && editing" title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
                 </div>
                 <!-- Phone field -->
                 <div class="flex-shrink-0 contact-field-phone">
