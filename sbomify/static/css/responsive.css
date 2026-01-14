@@ -849,11 +849,7 @@
 
   /* Make search bar compact on small screens */
   .navbar-search {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    max-width: 120px !important;
-    margin: 0 0.25rem !important;
-    order: 2 !important;
+    max-width: 180px !important;
   }
 
   .search-input {
@@ -1038,11 +1034,7 @@
 
   /* Make search bar ultra-compact on very small screens */
   .navbar-search {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
     max-width: 100px !important;
-    margin: 0 0.25rem !important;
-    order: 2 !important;
   }
 
   /* Hide help dropdown on very small screens */
