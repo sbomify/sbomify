@@ -194,7 +194,7 @@ export function registerCiCdInfo() {
             if (this.config.enrich) lines.push('    ENRICH: true');
             if (this.config.outputFile) lines.push('    OUTPUT_FILE: sbom.cdx.json');
 
-            lines.push('  script:', '    - /sbomify.sh');
+            lines.push('  script:', '    - sbomify-action');
 
             return lines.join('\n');
         },
@@ -215,7 +215,7 @@ export function registerCiCdInfo() {
             }
 
             lines.push('        script:',
-                '          - /sbomify.sh',
+                '          - sbomify-action',
                 '        env:',
                 `          TOKEN: $SBOMIFY_TOKEN`,
                 `          COMPONENT_ID: '${this.componentId}'`,
