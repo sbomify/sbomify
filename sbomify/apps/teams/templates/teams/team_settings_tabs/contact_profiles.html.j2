@@ -769,6 +769,19 @@
         name: '',
         email: '',
         
+        get editing() {
+            // Access parent entity's editing state
+            // Contacts should only be required when their parent entity is in editing mode
+            const parent = this.$el.closest('.entity-card');
+            if (!parent) return false;
+            try {
+                const parentData = Alpine.$data(parent);
+                return parentData ? parentData.editing : false;
+            } catch (e) {
+                return false;
+            }
+        },
+        
         init() {
             const nameInput = this.$el.querySelector('input[name$="-name"]');
             const emailInput = this.$el.querySelector('input[name$="-email"]');
@@ -809,6 +822,10 @@
         
         removeContact() {
             this.deleted = true;
+            this.$el.querySelectorAll('input, select, textarea').forEach(input => {
+                input.setCustomValidity('');
+                input.removeAttribute('required');
+            });
             this.$dispatch('contact-removed');
         }
     }));
@@ -832,6 +849,10 @@
             const self = this;
             window.showDeleteConfirmation(authorName, function() {
                 self.deleted = true;
+                self.$el.querySelectorAll('input, select, textarea').forEach(input => {
+                    input.setCustomValidity('');
+                    input.removeAttribute('required');
+                });
                 window.dispatchEvent(new CustomEvent('update-counts'));
             });
         }
@@ -978,6 +999,16 @@
                 if (nameMatch) {
                     input.name = `${newPrefix}-${nameMatch[2]}`;
                     input.id = `id_${input.name}`;
+                    
+                    // Clear the ID field value to prevent duplicate primary key conflicts
+                    // when creating new contacts from cloned rows. Empty IDs allow Django
+                    // to generate new unique IDs for the new contact instances.
+                    // This is handled here (inside the nameMatch block) because the regex
+                    // already identifies 'id' fields, so we can clear them as part of the
+                    // same renaming operation for efficiency.
+                    if (nameMatch[2] === 'id') {
+                        input.value = '';
+                    }
                 }
             }
         });
@@ -1007,11 +1038,11 @@
                 </div>
                 <!-- Name field -->
                 <div class="flex-shrink-0 contact-field-name">
-                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" required title="Click to edit name" aria-label="Contact Name">
+                    <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="form-control form-control-sm bg-white rounded-2" placeholder="Name *" :required="!deleted && editing" title="Click to edit name" aria-label="Contact Name">
                 </div>
                 <!-- Email field -->
                 <div class="flex-grow-1 contact-field-email">
-                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" required title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
+                    <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="form-control form-control-sm bg-white rounded-2" placeholder="Email *" :required="!deleted && editing" title="Please enter a valid email address (e.g., contact@example.com)" aria-label="Contact Email">
                 </div>
                 <!-- Phone field -->
                 <div class="flex-shrink-0 contact-field-phone">
