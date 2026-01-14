@@ -51,6 +51,18 @@
             {% endfor %}
         </div>
     </div>
+    <!-- Component Identifiers (public view) -->
+    <div class="public-section">
+        <div hx-get="{% url 'core:component_identifiers' component.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="public-section">
         <div class="card">
             <div class="card-header">

@@ -4,13 +4,13 @@ Unit tests for TEA mapper functions.
 
 import pytest
 
-from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.models import Release
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.mappers import (
     IDENTIFIER_TYPE_TO_TEA,
-    PURLParseError,
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
+    PURLParseError,
     TEIParseError,
     build_tea_server_url,
     parse_purl,
@@ -464,3 +464,143 @@ class TestTeaIdentifierTypeMapping:
     def test_unknown_type_returns_empty(self):
         """Test that unknown type returns empty list via get()."""
         assert TEA_IDENTIFIER_TYPE_MAPPING.get("UNKNOWN", []) == []
+
+
+@pytest.mark.django_db
+class TestTeaComponentIdentifierMapper:
+    """Tests for Component identifier to TEA format mapping."""
+
+    def test_component_identifier_mapper_purl(self, sample_component):
+        """Test mapping component PURL identifier."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:npm/@example/component-package",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 1
+        assert identifiers[0]["idType"] == "PURL"
+        assert identifiers[0]["idValue"] == "pkg:npm/@example/component-package"
+
+    def test_component_identifier_mapper_cpe(self, sample_component):
+        """Test mapping component CPE identifier."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.CPE,
+            value="cpe:2.3:a:example:component:1.0:*:*:*:*:*:*:*",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 1
+        assert identifiers[0]["idType"] == "CPE"
+
+    def test_component_identifier_mapper_gtin_merged(self, sample_component):
+        """Test that different GTIN types are all mapped to GTIN for components."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_8,
+            value="12345678",
+        )
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
+            value="1234567890123",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 2
+        assert all(i["idType"] == "GTIN" for i in identifiers)
+
+    def test_component_identifier_mapper_multiple_types(self, sample_component):
+        """Test mapping multiple component identifier types."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.PURL,
+            value="pkg:npm/@example/component",
+        )
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.CPE,
+            value="cpe:2.3:a:example:component:*:*:*:*:*:*:*:*",
+        )
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.ASIN,
+            value="B08N5WRWNW",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 3
+        id_types = {i["idType"] for i in identifiers}
+        assert id_types == {"PURL", "CPE", "ASIN"}
+
+    def test_component_identifier_mapper_skips_unsupported_types(self, sample_component):
+        """Test that unsupported identifier types are skipped for components."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.SKU,
+            value="SKU-COMPONENT-12345",
+        )
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.MPN,
+            value="MPN-COMPONENT-12345",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 0
+
+    def test_component_identifier_mapper_no_duplicates(self, sample_component):
+        """Test that duplicate component identifiers are not included."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        # Create a single GTIN-13
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
+            value="1234567890123",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        values = [i["idValue"] for i in identifiers]
+        assert len(values) == len(set(values))
+
+    def test_component_identifier_mapper_empty(self, sample_component):
+        """Test mapping component with no identifiers."""
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert identifiers == []
+
+    def test_component_identifier_mapper_asin(self, sample_component):
+        """Test mapping component ASIN identifier."""
+        from sbomify.apps.sboms.models import ComponentIdentifier
+        from sbomify.apps.tea.mappers import tea_component_identifier_mapper
+
+        ComponentIdentifier.objects.create(
+            component=sample_component,
+            identifier_type=ProductIdentifier.IdentifierType.ASIN,
+            value="B08N5WRWNW",
+        )
+
+        identifiers = tea_component_identifier_mapper(sample_component)
+        assert len(identifiers) == 1
+        assert identifiers[0]["idType"] == "ASIN"
+        assert identifiers[0]["idValue"] == "B08N5WRWNW"
