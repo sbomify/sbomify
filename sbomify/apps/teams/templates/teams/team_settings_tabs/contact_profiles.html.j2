@@ -999,12 +999,16 @@
                 if (nameMatch) {
                     input.name = `${newPrefix}-${nameMatch[2]}`;
                     input.id = `id_${input.name}`;
-                }
-                // Clear the ID field value to prevent duplicate primary key conflicts
-                // when creating new contacts from cloned rows. Empty IDs allow Django
-                // to generate new unique IDs for the new contact instances.
-                if (input.name.endsWith('-id')) {
-                    input.value = '';
+                    
+                    // Clear the ID field value to prevent duplicate primary key conflicts
+                    // when creating new contacts from cloned rows. Empty IDs allow Django
+                    // to generate new unique IDs for the new contact instances.
+                    // This is handled here (inside the nameMatch block) because the regex
+                    // already identifies 'id' fields, so we can clear them as part of the
+                    // same renaming operation for efficiency.
+                    if (nameMatch[2] === 'id') {
+                        input.value = '';
+                    }
                 }
             }
         });

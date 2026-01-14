@@ -256,8 +256,12 @@ class DeleteAwareModelFormMixin:
         # Unpack only unique_checks; date_checks are intentionally omitted.
         # The models using this mixin (ContactEntity, ContactProfileContact, AuthorContact)
         # do not use date-based unique constraints (unique_for_date, unique_for_month, unique_for_year),
-        # so date_checks will be empty. If date_checks were needed, they would need to be
-        # handled separately or by calling super().validate_unique() for date validation only.
+        # so date_checks will be empty.
+        #
+        # NOTE: If date-based unique constraints are added to any model using this mixin in the future,
+        # the validate_unique method would need to be updated to handle date_checks, or tests should
+        # verify that date validation still works correctly (e.g., by calling super().validate_unique()
+        # for date validation only, or by implementing custom date validation logic).
         unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
 
         errors = []
