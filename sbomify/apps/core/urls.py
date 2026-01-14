@@ -1,4 +1,4 @@
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 from . import views
@@ -108,6 +108,11 @@ urlpatterns = [
         "public/workspace/",
         views.WorkspacePublicView.as_view(),
         name="workspace_public_current",
+    ),
+    # TEA (Transparency Exchange API) endpoints for non-branded trust centers
+    path(
+        "public/<str:workspace_key>/tea/v1/",
+        include("sbomify.apps.tea.urls"),
     ),
     path(
         "component/<str:component_id>/transfer",

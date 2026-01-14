@@ -189,6 +189,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if request.POST.get("trust_center_description_action") == "update":
             return self._update_trust_center_description(request, team_key)
 
+        if request.POST.get("tea_action") == "update":
+            return self._update_tea_enabled(request, team_key)
+
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
                 return self._delete_member(request, team_key)
@@ -309,6 +312,29 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, "Trust center description updated.")
         else:
             messages.success(request, "Trust center description cleared. Using default description.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_tea_enabled(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=request.user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change TEA settings")
+            return self._redirect_with_tab(request, team_key)
+
+        tea_values = request.POST.getlist("tea_enabled")
+        desired_tea_enabled = self._parse_checkbox_value(tea_values, default=team.tea_enabled)
+
+        team.tea_enabled = desired_tea_enabled
+        team.save()
+
+        refresh_current_team_session(request, team)
+
+        messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
         return self._redirect_with_tab(request, team_key)
 
     @staticmethod

@@ -104,6 +104,84 @@
         </div>
     </div>
 {% endif %}
+{# TEA Section - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
+<!-- Transparency Exchange API (TEA) Section -->
+{% if team.is_public %}
+    <div class="standard-card mb-4">
+        <div class="card settings-card shadow-md">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-exchange-alt me-2"></i>
+                    Transparency Exchange API (TEA)
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="visibility-wrapper">
+                    <div class="copy">
+                        <p class="eyebrow">TEA API</p>
+                        <h3 class="title">Enable or disable the TEA API</h3>
+                        <p class="description">
+                            The Transparency Exchange API (TEA) provides standardized access to your software transparency
+                            information via a well-known discovery endpoint and REST API.
+                            <a href="https://github.com/CycloneDX/transparency-exchange-api"
+                               target="_blank"
+                               rel="noopener">Learn more</a>
+                        </p>
+                        <span class="status-pill {{ team_obj.tea_enabled|yesno:'public,private' }}">
+                            <i class="fas {{ team_obj.tea_enabled|yesno:'fa-check-circle,fa-times-circle' }}"></i>
+                            {{ team_obj.tea_enabled|yesno:'Enabled,Disabled' }}
+                        </span>
+                        {% if team_obj.tea_enabled and team_obj.custom_domain and team_obj.custom_domain_validated %}
+                            <div class="mt-2">
+                                <small class="text-muted">TEA discovery endpoint:</small>
+                                <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                                    <code class="public-url-display">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
+                                    <button type="button"
+                                            class="copy-url-btn visibility-copy-btn"
+                                            title="Copy TEA discovery URL"
+                                            aria-label="Copy TEA discovery URL"
+                                            data-public-url="https://{{ team_obj.custom_domain }}/.well-known/tea">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        {% elif team_obj.tea_enabled %}
+                            <div class="mt-2 text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Configure a custom domain to enable TEA discovery via <code>.well-known/tea</code>.
+                            </div>
+                        {% endif %}
+                        {% if not is_owner %}
+                            <div class="text-muted mt-2 small">Only workspace owners can change TEA settings.</div>
+                        {% endif %}
+                    </div>
+                    <div class="control">
+                        <form method="post"
+                              action="{% url 'teams:team_settings' team.key %}"
+                              class="d-inline-block">
+                            {% csrf_token %}
+                            <input type="hidden" name="tea_action" value="update">
+                            <input type="hidden" name="tea_enabled" value="false">
+                            <input type="hidden" name="active_tab" value="trust-center">
+                            <div class="form-check form-switch">
+                                <input id="tea-toggle"
+                                       class="form-check-input"
+                                       type="checkbox"
+                                       name="tea_enabled"
+                                       value="true"
+                                       {% if team_obj.tea_enabled %}checked{% endif %}
+                                       {% if not is_owner %}disabled{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="tea-toggle">{{ team_obj.tea_enabled|yesno:'Enabled,Disabled' }}</label>
+                            </div>
+                            <button type="submit" class="visually-hidden">Save TEA setting</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
 <!-- Custom Domain Section -->
 {% if team.is_public %}
     <!-- HTMX loaded when Trust Center is enabled -->
