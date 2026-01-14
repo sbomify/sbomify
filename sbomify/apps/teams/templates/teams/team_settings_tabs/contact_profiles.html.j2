@@ -771,7 +771,7 @@
         
         get isParentEntityVisible() {
             // Check if the parent entity card is visible
-            // This is more performant than an inline function and caches the result
+            // This is more performant than an inline function
             const parent = this.$el.closest('.entity-card');
             return parent !== null && parent.offsetParent !== null;
         },

@@ -402,6 +402,8 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
                     self._deleted_pks.add(form.instance.pk)
 
         # Inject deleted PKs into each form so they can exclude them from unique checks
+        # Note: self.forms is populated during formset construction, so it's available
+        # before super().full_clean() is called. This is standard Django formset behavior.
         for form in self.forms:
             form._exclude_pks_from_unique = self._deleted_pks
 
