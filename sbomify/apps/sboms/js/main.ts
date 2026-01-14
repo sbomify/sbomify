@@ -6,7 +6,6 @@ import { registerSupplierEditor } from './supplier-editor'
 import { registerLicensesEditor } from './licenses-editor'
 import { registerReleaseList } from '../../core/js/components/release-list'
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge'
-import { registerSiteNotifications } from '../../core/js/components/site-notifications'
 import { initializeAlpine } from '../../core/js/alpine-init'
 
 registerSbomsTable()
@@ -17,6 +16,5 @@ registerSupplierEditor()
 registerLicensesEditor()
 registerReleaseList()
 registerAssessmentBadge()
-registerSiteNotifications()
 
 void initializeAlpine()
