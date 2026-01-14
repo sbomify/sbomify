@@ -3,8 +3,8 @@
       href="{% static 'css/components/standard-card.css' %}">
 <link rel="stylesheet" href="{% static 'css/components/sbom-upload.css' %}">
 <div class="standard-card"
-     x-data="sbomUpload('{{ component_id }}')"
-     x-init="expanded = localStorage.getItem('sbom-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
+     x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0)"
+     x-init="$watch('expanded', val => localStorage.setItem('sbom-upload-expanded', val ? 'true' : 'false'))">
     <div class="card shadow-sm" :class="{ 'card-collapsed': !expanded }">
         <div class="card-header collapsible-header sbom-upload-header"
              @click="expanded = !expanded">
