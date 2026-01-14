@@ -1034,7 +1034,7 @@
 
   /* Make search bar ultra-compact on very small screens */
   .navbar-search {
-    max-width: 100px !important;
+    max-width: 120px !important;
   }
 
   /* Hide help dropdown on very small screens */
