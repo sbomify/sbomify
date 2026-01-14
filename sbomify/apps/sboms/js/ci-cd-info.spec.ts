@@ -231,7 +231,7 @@ describe('CI/CD Info Business Logic', () => {
             if (config.enrich) lines.push('    ENRICH: true')
             if (config.outputFile) lines.push('    OUTPUT_FILE: sbom.cdx.json')
 
-            lines.push('  script:', '    - /entrypoint.sh')
+            lines.push('  script:', '    - /sbomify.sh')
 
             return lines.join('\n')
         }
@@ -246,7 +246,7 @@ describe('CI/CD Info Business Logic', () => {
             expect(yaml).toContain('image: sbomifyhub/sbomify-action')
             expect(yaml).toContain(`COMPONENT_ID: '${testComponentId}'`)
             expect(yaml).toContain("LOCK_FILE: 'poetry.lock'")
-            expect(yaml).toContain('/entrypoint.sh')
+            expect(yaml).toContain('/sbomify.sh')
         })
 
         test('should add Docker-in-Docker services for docker source', () => {
@@ -284,7 +284,7 @@ describe('CI/CD Info Business Logic', () => {
             }
 
             lines.push('        script:',
-                '          - /entrypoint.sh',
+                '          - /sbomify.sh',
                 '        env:',
                 `          TOKEN: $SBOMIFY_TOKEN`,
                 `          COMPONENT_ID: '${componentId}'`,
@@ -333,21 +333,233 @@ describe('CI/CD Info Business Logic', () => {
         })
     })
 
-    describe('Azure and Jenkins Placeholders', () => {
-        test('should return placeholder for Azure', () => {
-            const generateAzureYaml = (): string => {
-                return '# Azure Pipelines configuration coming soon...'
+    describe('Azure Pipelines YAML Generation', () => {
+        const generateAzureYaml = (
+            componentId: string,
+            componentName: string,
+            sourceType: string,
+            config: Config
+        ): string => {
+            const lines = [
+                'trigger:',
+                '  - main',
+                '',
+                'pool:',
+                '  vmImage: ubuntu-latest',
+                '',
+                'steps:',
+                '  - checkout: self',
+                '',
+                '  - script: |'
+            ]
+
+            const dockerLines: string[] = []
+            dockerLines.push('      docker run --rm -v $(Build.SourcesDirectory):/code \\')
+
+            if (sourceType === 'docker') {
+                dockerLines.push('        -v /var/run/docker.sock:/var/run/docker.sock \\')
             }
 
-            expect(generateAzureYaml()).toBe('# Azure Pipelines configuration coming soon...')
+            dockerLines.push(
+                '        -e TOKEN=$(SBOMIFY_TOKEN) \\',
+                `        -e COMPONENT_ID='${componentId}' \\`,
+                `        -e COMPONENT_NAME='${componentName}' \\`,
+                '        -e COMPONENT_VERSION=$(Build.SourceBranchName)-$(Build.SourceVersion) \\'
+            )
+
+            switch (sourceType) {
+                case 'sbom':
+                    dockerLines.push('        -e SBOM_FILE=/code/path/to/sbom.cdx.json \\')
+                    break
+                case 'lock':
+                    dockerLines.push('        -e LOCK_FILE=/code/poetry.lock \\     # Or package-lock.json, Gemfile.lock, etc.')
+                    break
+                case 'docker':
+                    dockerLines.push("        -e DOCKER_IMAGE='your-image:tag' \\")
+                    break
+            }
+
+            if (config.augment) dockerLines.push('        -e AUGMENT=true \\')
+            if (config.enrich) dockerLines.push('        -e ENRICH=true \\')
+            if (config.outputFile) dockerLines.push('        -e OUTPUT_FILE=/code/sbom.cdx.json \\')
+
+            const lastLine = dockerLines[dockerLines.length - 1]
+            dockerLines[dockerLines.length - 1] = lastLine.replace(/ \\$/, '')
+            dockerLines.push('        sbomifyhub/sbomify-action')
+
+            lines.push(...dockerLines)
+
+            lines.push(
+                '    displayName: Upload SBOM',
+                '    env:',
+                '      SBOMIFY_TOKEN: $(SBOMIFY_TOKEN)'
+            )
+
+            return lines.join('\n')
+        }
+
+        test('should generate valid Azure Pipelines YAML with lock file source', () => {
+            const yaml = generateAzureYaml(testComponentId, testComponentName, 'lock', {
+                augment: true,
+                enrich: true,
+                outputFile: true
+            })
+
+            expect(yaml).toContain('trigger:')
+            expect(yaml).toContain('vmImage: ubuntu-latest')
+            expect(yaml).toContain('docker run --rm -v $(Build.SourcesDirectory):/code')
+            expect(yaml).toContain(`COMPONENT_ID='${testComponentId}'`)
+            expect(yaml).toContain(`COMPONENT_NAME='${testComponentName}'`)
+            expect(yaml).toContain('LOCK_FILE=/code/poetry.lock')
+            expect(yaml).toContain('AUGMENT=true')
+            expect(yaml).toContain('ENRICH=true')
+            expect(yaml).toContain('OUTPUT_FILE=/code/sbom.cdx.json')
+            expect(yaml).toContain('sbomifyhub/sbomify-action')
+            expect(yaml).toContain('displayName: Upload SBOM')
         })
 
-        test('should return placeholder for Jenkins', () => {
-            const generateJenkinsfile = (): string => {
-                return '# Jenkins Pipelines configuration coming soon...'
+        test('should generate Azure YAML with SBOM file source', () => {
+            const yaml = generateAzureYaml(testComponentId, testComponentName, 'sbom', {
+                augment: false,
+                enrich: false,
+                outputFile: false
+            })
+
+            expect(yaml).toContain('SBOM_FILE=/code/path/to/sbom.cdx.json')
+            expect(yaml).not.toContain('AUGMENT=true')
+            expect(yaml).not.toContain('ENRICH=true')
+            expect(yaml).not.toContain('OUTPUT_FILE')
+        })
+
+        test('should generate Azure YAML with Docker image source', () => {
+            const yaml = generateAzureYaml(testComponentId, testComponentName, 'docker', {
+                augment: true,
+                enrich: false,
+                outputFile: true
+            })
+
+            expect(yaml).toContain('/var/run/docker.sock:/var/run/docker.sock')
+            expect(yaml).toContain("DOCKER_IMAGE='your-image:tag'")
+            expect(yaml).toContain('AUGMENT=true')
+            expect(yaml).not.toContain('ENRICH=true')
+        })
+    })
+
+    describe('Jenkins Pipeline Generation', () => {
+        const generateJenkinsfile = (
+            componentId: string,
+            componentName: string,
+            sourceType: string,
+            config: Config
+        ): string => {
+            const lines = [
+                'pipeline {',
+                '    agent any',
+                '',
+                '    environment {',
+                "        SBOMIFY_TOKEN = credentials('sbomify-token')",
+                `        COMPONENT_ID = '${componentId}'`,
+                `        COMPONENT_NAME = '${componentName}'`,
+                '    }',
+                '',
+                '    stages {',
+                "        stage('Upload SBOM') {",
+                '            steps {',
+                '                script {',
+                '                    def version = env.TAG_NAME ?: "${env.BRANCH_NAME}-${env.GIT_COMMIT}"'
+            ]
+
+            lines.push('                    sh """')
+            lines.push('                        docker run --rm -v $WORKSPACE:/code \\\\')
+
+            if (sourceType === 'docker') {
+                lines.push('                          -v /var/run/docker.sock:/var/run/docker.sock \\\\')
             }
 
-            expect(generateJenkinsfile()).toBe('# Jenkins Pipelines configuration coming soon...')
+            lines.push(
+                '                          -e TOKEN=$SBOMIFY_TOKEN \\\\',
+                '                          -e COMPONENT_ID=$COMPONENT_ID \\\\',
+                '                          -e COMPONENT_NAME=$COMPONENT_NAME \\\\',
+                '                          -e COMPONENT_VERSION=$version \\\\'
+            )
+
+            switch (sourceType) {
+                case 'sbom':
+                    lines.push('                          -e SBOM_FILE=/code/path/to/sbom.cdx.json \\\\')
+                    break
+                case 'lock':
+                    lines.push('                          -e LOCK_FILE=/code/poetry.lock \\\\')
+                    break
+                case 'docker':
+                    lines.push("                          -e DOCKER_IMAGE='your-image:tag' \\\\")
+                    break
+            }
+
+            if (config.augment) lines.push('                          -e AUGMENT=true \\\\')
+            if (config.enrich) lines.push('                          -e ENRICH=true \\\\')
+            if (config.outputFile) lines.push('                          -e OUTPUT_FILE=/code/sbom.cdx.json \\\\')
+
+            const lastLine = lines[lines.length - 1]
+            lines[lines.length - 1] = lastLine.replace(/ \\\\$/, '')
+            lines.push('                          sbomifyhub/sbomify-action')
+
+            lines.push(
+                '                    """',
+                '                }',
+                '            }',
+                '        }',
+                '    }',
+                '}'
+            )
+
+            return lines.join('\n')
+        }
+
+        test('should generate valid Jenkinsfile with lock file source', () => {
+            const jenkinsfile = generateJenkinsfile(testComponentId, testComponentName, 'lock', {
+                augment: true,
+                enrich: true,
+                outputFile: true
+            })
+
+            expect(jenkinsfile).toContain('pipeline {')
+            expect(jenkinsfile).toContain('agent any')
+            expect(jenkinsfile).toContain("credentials('sbomify-token')")
+            expect(jenkinsfile).toContain(`COMPONENT_ID = '${testComponentId}'`)
+            expect(jenkinsfile).toContain(`COMPONENT_NAME = '${testComponentName}'`)
+            expect(jenkinsfile).toContain("stage('Upload SBOM')")
+            expect(jenkinsfile).toContain('docker run --rm -v $WORKSPACE:/code')
+            expect(jenkinsfile).toContain('LOCK_FILE=/code/poetry.lock')
+            expect(jenkinsfile).toContain('AUGMENT=true')
+            expect(jenkinsfile).toContain('ENRICH=true')
+            expect(jenkinsfile).toContain('OUTPUT_FILE=/code/sbom.cdx.json')
+            expect(jenkinsfile).toContain('sbomifyhub/sbomify-action')
+        })
+
+        test('should generate Jenkinsfile with SBOM file source', () => {
+            const jenkinsfile = generateJenkinsfile(testComponentId, testComponentName, 'sbom', {
+                augment: false,
+                enrich: false,
+                outputFile: false
+            })
+
+            expect(jenkinsfile).toContain('SBOM_FILE=/code/path/to/sbom.cdx.json')
+            expect(jenkinsfile).not.toContain('AUGMENT=true')
+            expect(jenkinsfile).not.toContain('ENRICH=true')
+            expect(jenkinsfile).not.toContain('OUTPUT_FILE')
+        })
+
+        test('should generate Jenkinsfile with Docker image source', () => {
+            const jenkinsfile = generateJenkinsfile(testComponentId, testComponentName, 'docker', {
+                augment: true,
+                enrich: false,
+                outputFile: true
+            })
+
+            expect(jenkinsfile).toContain('/var/run/docker.sock:/var/run/docker.sock')
+            expect(jenkinsfile).toContain("DOCKER_IMAGE='your-image:tag'")
+            expect(jenkinsfile).toContain('AUGMENT=true')
+            expect(jenkinsfile).not.toContain('ENRICH=true')
         })
     })
 
