@@ -34,6 +34,7 @@ import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
 import { registerPlanSelection } from '../../billing/js/plan-selection'; // Import billing plan selection logic
 import { initializeAlpine } from './alpine-init';
+import { registerHtmxConfig } from './htmx-config';
 
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerCiCdInfo } from '../../sboms/js/ci-cd-info';
@@ -61,6 +62,7 @@ window.eventBus = eventBus;
 window.EVENTS = EVENTS;
 
 // Register components
+registerHtmxConfig();
 registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();

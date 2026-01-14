@@ -6,6 +6,7 @@ import requests
 from django.utils import timezone
 
 from sbomify.apps.teams.models import Team
+from sbomify.task_utils import record_task_breadcrumb
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def verify_custom_domains():
     If the number of domains grows further, implement batching/pagination.
     """
     now = timezone.now()
+    record_task_breadcrumb("verify_custom_domains", "start")
 
     # Get unvalidated domains
     teams = Team.objects.filter(custom_domain__isnull=False, custom_domain_validated=False).exclude(custom_domain="")
@@ -51,6 +53,11 @@ def verify_custom_domains():
                 continue
 
         logger.info(f"Probing custom domain {team.custom_domain} for team {team.key}")
+        record_task_breadcrumb(
+            "verify_custom_domains",
+            "probe",
+            data={"team_id": str(team.id), "domain": team.custom_domain},
+        )
 
         try:
             # Send a probe request
@@ -100,4 +107,4 @@ def verify_custom_domains():
 
 # Import cron module at end of file to ensure cron tasks are registered when this module is autodiscovered
 # This must be at the end to avoid circular import (cron imports verify_custom_domains from this module)
-from . import cron as _cron  # noqa: F401, E402
+from .. import cron as _cron  # noqa: F401, E402

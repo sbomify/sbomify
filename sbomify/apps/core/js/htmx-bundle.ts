@@ -6,6 +6,7 @@ import './alerts-global';
 import './clipboard-global';
 import './navbar-search';
 
+import { registerHtmxConfig } from './htmx-config';
 import { registerDeleteModal } from './components/delete-modal';
 import { registerWorkspaceSwitcher } from './components/workspace-switcher';
 import { registerStandardCard } from './components/standard-card';
@@ -49,6 +50,7 @@ registerCopyableValue();
 registerPublicStatusToggle();
 registerWorkspaceSwitcher();
 registerAccessTokensList();
+registerHtmxConfig();
 registerSbomUpload();
 registerSbomsTable();
 registerDocumentUpload();

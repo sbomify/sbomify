@@ -15,6 +15,7 @@ from sbomify.apps.sboms.utils import verify_download_token
 
 from .models import Document
 from .schemas import DocumentResponseSchema, DocumentUpdateRequest, DocumentUploadRequest
+from .services.documents import delete_document_record, get_document_detail, update_document_metadata
 
 log = logging.getLogger(__name__)
 
@@ -130,47 +131,11 @@ def create_document(
 )
 def update_document(request: HttpRequest, document_id: str, payload: DocumentUpdateRequest):
     """Update document metadata."""
-    try:
-        document = Document.objects.select_related("component").get(pk=document_id)
-    except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+    result = update_document_metadata(request, document_id, payload)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update documents"}
-
-    # Update only provided fields
-    update_fields = []
-    if payload.name is not None:
-        document.name = payload.name
-        update_fields.append("name")
-    if payload.version is not None:
-        document.version = payload.version
-        update_fields.append("version")
-    if payload.document_type is not None:
-        document.document_type = payload.document_type
-        update_fields.append("document_type")
-    if payload.description is not None:
-        document.description = payload.description
-        update_fields.append("description")
-
-    if update_fields:
-        document.save(update_fields=update_fields)
-
-    return 200, {
-        "id": document.id,
-        "name": document.name,
-        "version": document.version,
-        "document_filename": document.document_filename,
-        "created_at": document.created_at,
-        "source": document.source,
-        "component_id": document.component.id,
-        "component_name": document.component.name,
-        "document_type": document.document_type,
-        "description": document.description,
-        "content_type": document.content_type,
-        "file_size": document.file_size,
-        "source_display": document.source_display,
-    }
+    return 200, result.value
 
 
 @router.get(
@@ -179,32 +144,11 @@ def update_document(request: HttpRequest, document_id: str, payload: DocumentUpd
 )
 def get_document(request: HttpRequest, document_id: str):
     """Get a specific document by ID."""
-    try:
-        document = Document.objects.select_related("component").get(pk=document_id)
-    except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+    result = get_document_detail(request, document_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    # For public documents, allow access without authentication
-    # For private documents, verify access permissions
-    if not document.component.is_public:
-        if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
-
-    return 200, {
-        "id": document.id,
-        "name": document.name,
-        "version": document.version,
-        "document_filename": document.document_filename,
-        "created_at": document.created_at,
-        "source": document.source,
-        "component_id": document.component.id,
-        "component_name": document.component.name,
-        "document_type": document.document_type,
-        "description": document.description,
-        "content_type": document.content_type,
-        "file_size": document.file_size,
-        "source_display": document.source_display,
-    }
+    return 200, result.value
 
 
 @router.get(
@@ -344,17 +288,8 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
 )
 def delete_document(request: HttpRequest, document_id: str):
     """Delete a document."""
-    try:
-        document = Document.objects.select_related("component").get(pk=document_id)
-    except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+    result = delete_document_record(request, document_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete documents"}
-
-    try:
-        document.delete()
-        return 204, None
-    except Exception as e:
-        log.error(f"Error deleting document {document_id}: {e}")
-        return 400, {"detail": "Invalid request"}
+    return 204, None

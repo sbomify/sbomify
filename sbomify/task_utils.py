@@ -21,6 +21,29 @@ from tenacity import (
 
 logger = logging.getLogger(__name__)
 
+try:  # Optional Sentry integration
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional dependency
+    sentry_sdk = None
+
+
+def record_task_breadcrumb(
+    task_name: str, message: str, level: str = "info", data: Dict[str, Any] | None = None
+) -> None:
+    """Add a Sentry breadcrumb for task execution when Sentry is configured."""
+    if sentry_sdk is None:
+        return
+    try:
+        sentry_sdk.add_breadcrumb(
+            category="tasks",
+            message=f"{task_name}: {message}",
+            level=level,
+            data=data or {},
+        )
+    except Exception:
+        # Breadcrumbs should never break task execution
+        return
+
 
 def sbom_processing_task(
     queue_name: str = "sbom_processing",
@@ -64,11 +87,13 @@ def sbom_processing_task(
             with transaction.atomic():
                 connection.ensure_connection()
                 try:
+                    record_task_breadcrumb(func.__name__, "start", data={"args_count": len(args)})
                     return func(*args, **kwargs)
                 except Exception as e:
                     # Log the error with task context
                     task_name = func.__name__
                     logger.error(f"[TASK_{task_name}] Task failed with error: {e}", exc_info=True)
+                    record_task_breadcrumb(task_name, "error", level="error", data={"error": str(e)})
                     # Re-raise to allow Dramatiq retry logic to handle it
                     raise
 
