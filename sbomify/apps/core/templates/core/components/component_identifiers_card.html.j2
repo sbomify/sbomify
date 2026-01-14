@@ -5,7 +5,7 @@
       href="{% static 'css/components/delete_modal.css' %}">
 <div class="card shadow-sm"
      id="component-identifiers-card"
-     x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '' }">
+     x-data="componentIdentifiers()">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h4 class="card-title mb-0">
             <i class="fas fa-barcode me-2"></i>Component Identifiers
@@ -124,7 +124,7 @@
                  style="display: none">
                 <div class="delete-modal" @click.stop>
                     <form id="add-component-identifier-form"
-                          @submit.prevent=" fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showAddModal = false; }); ">
+                          @submit.prevent="submitForm($el, 'showAddModal')">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="create">
                         <div class="delete-modal-header">
@@ -192,7 +192,7 @@
                  style="display: none">
                 <div class="delete-modal" @click.stop>
                     <form id="edit-component-identifier-form"
-                          @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showEditModal = false; }); ">
+                          @submit.prevent="submitForm($el, 'showEditModal')">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="update">
                         <input type="hidden" name="identifier_id" :value="editId">
@@ -292,7 +292,8 @@
                                 @click="showDeleteModal = false">Cancel</button>
                         <button type="button"
                                 class="delete-modal-button delete-modal-button--danger"
-                                @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:component_identifiers' component.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('component-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
+                                :disabled="isSubmitting"
+                                @click="deleteIdentifier()">
                             <i class="fas fa-trash me-2"></i>Delete
                         </button>
                     </div>
@@ -301,3 +302,86 @@
         </template>
     {% endif %}
 </div>
+<script>
+    function componentIdentifiers() {
+        return {
+            showAddModal: false,
+            showEditModal: false,
+            showDeleteModal: false,
+            editId: '',
+            editType: '',
+            editValue: '',
+            deleteId: '',
+            deleteName: '',
+            isSubmitting: false,
+
+            async submitForm(formEl, closeModal) {
+                if (this.isSubmitting) return;
+                this.isSubmitting = true;
+
+                try {
+                    const response = await fetch('{% url "core:component_identifiers" component.id %}', {
+                        method: 'POST',
+                        body: new FormData(formEl),
+                    });
+
+                    if (!response.ok) {
+                        const text = await response.text();
+                        // Check if it's an HTMX error response
+                        if (text.includes('alert-danger') || text.includes('error')) {
+                            document.getElementById('component-identifiers-card').outerHTML = text;
+                        } else {
+                            alert('An error occurred. Please try again.');
+                        }
+                        return;
+                    }
+
+                    const html = await response.text();
+                    document.getElementById('component-identifiers-card').outerHTML = html;
+                    this[closeModal] = false;
+                } catch (error) {
+                    console.error('Error submitting form:', error);
+                    alert('A network error occurred. Please try again.');
+                } finally {
+                    this.isSubmitting = false;
+                }
+            },
+
+            async deleteIdentifier() {
+                if (this.isSubmitting) return;
+                this.isSubmitting = true;
+
+                try {
+                    const formData = new FormData();
+                    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                    formData.append('action', 'delete');
+                    formData.append('identifier_id', this.deleteId);
+
+                    const response = await fetch('{% url "core:component_identifiers" component.id %}', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        const text = await response.text();
+                        if (text.includes('alert-danger') || text.includes('error')) {
+                            document.getElementById('component-identifiers-card').outerHTML = text;
+                        } else {
+                            alert('An error occurred. Please try again.');
+                        }
+                        return;
+                    }
+
+                    const html = await response.text();
+                    document.getElementById('component-identifiers-card').outerHTML = html;
+                    this.showDeleteModal = false;
+                } catch (error) {
+                    console.error('Error deleting identifier:', error);
+                    alert('A network error occurred. Please try again.');
+                } finally {
+                    this.isSubmitting = false;
+                }
+            }
+        };
+    }
+</script>

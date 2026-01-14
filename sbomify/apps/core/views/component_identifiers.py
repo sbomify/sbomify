@@ -32,6 +32,9 @@ IDENTIFIER_TYPES = {
 # Types that can render barcodes
 BARCODE_TYPES = ["gtin_12", "gtin_13", "gtin_14", "gtin_8"]
 
+# Allowed actions for POST operations
+ALLOWED_ACTIONS = {"create", "update", "delete"}
+
 
 class ComponentIdentifiersView(View):
     """View for component identifiers HTMX partial.
@@ -123,6 +126,10 @@ class ComponentIdentifiersView(View):
             return htmx_error_response("Authentication required")
 
         action = request.POST.get("action")
+
+        # Validate action against allowed values
+        if action not in ALLOWED_ACTIONS:
+            return htmx_error_response("Invalid action")
 
         if action == "create":
             identifier_type = request.POST.get("identifier_type", "").strip()
