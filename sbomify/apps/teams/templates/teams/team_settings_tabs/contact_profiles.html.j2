@@ -1000,6 +1000,9 @@
                     input.name = `${newPrefix}-${nameMatch[2]}`;
                     input.id = `id_${input.name}`;
                 }
+                // Clear the ID field value to prevent duplicate primary key conflicts
+                // when creating new contacts from cloned rows. Empty IDs allow Django
+                // to generate new unique IDs for the new contact instances.
                 if (input.name.endsWith('-id')) {
                     input.value = '';
                 }

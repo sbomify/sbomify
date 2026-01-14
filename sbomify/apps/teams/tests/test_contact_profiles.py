@@ -529,7 +529,6 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
 
     # CONTROL TEST: Without exclusion, a duplicate should be detected
     # Verify that a duplicate exists in the database (this proves the control case)
-    from sbomify.apps.teams.models import ContactProfileContact
     lookup_kwargs = {
         'entity': entity,
         'name': 'John Doe',

@@ -253,7 +253,11 @@ class DeleteAwareModelFormMixin:
         from django.core.exceptions import ValidationError
 
         model = self._meta.model
-        # Unpack only unique_checks; date_checks are handled by Django's standard validation
+        # Unpack only unique_checks; date_checks are intentionally omitted.
+        # The models using this mixin (ContactEntity, ContactProfileContact, AuthorContact)
+        # do not use date-based unique constraints (unique_for_date, unique_for_month, unique_for_year),
+        # so date_checks will be empty. If date_checks were needed, they would need to be
+        # handled separately or by calling super().validate_unique() for date validation only.
         unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
 
         errors = []
