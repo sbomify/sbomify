@@ -151,7 +151,7 @@
                            class="form-control"
                            placeholder="contact@example.com"
                            x-model.trim="email"
-                           x-bind:required="!deleted"
+                           :required="!deleted"
                            title="Please enter a valid email address (e.g., contact@example.com)"
                            value="{{ form.email.value|default:'' }}">
                     {% if form.email.errors %}
