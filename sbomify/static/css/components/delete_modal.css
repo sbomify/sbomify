@@ -33,7 +33,7 @@
     overflow: hidden;
 }
 
-.delete-modal>form {
+.delete-modal > form {
     display: flex;
     flex-direction: column;
     flex: 1;

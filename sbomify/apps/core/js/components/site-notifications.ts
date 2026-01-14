@@ -14,7 +14,18 @@ interface Notification {
     created_at: string;
 }
 
+// Track registration to prevent duplicate polling intervals
+let isRegistered = false;
+
 export function registerSiteNotifications() {
+    // Idempotent registration: only register once to avoid duplicate polling intervals
+    // This is safe to call multiple times since Alpine.data() overwrites previous registrations,
+    // but we want to avoid unnecessary re-registrations
+    if (isRegistered) {
+        return;
+    }
+    isRegistered = true;
+    
     Alpine.data('siteNotifications', () => ({
         notifications: [] as Notification[],
         processedNotifications: new Set<string>(),

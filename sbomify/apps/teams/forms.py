@@ -233,7 +233,8 @@ class DeleteAwareModelFormMixin:
         from django.core.exceptions import ValidationError
 
         model = self._meta.model
-        unique_checks, date_checks = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
+        # Only unpack unique_checks since date_checks are not needed for this validation
+        unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
 
         errors = []
         for model_class, unique_check in unique_checks:

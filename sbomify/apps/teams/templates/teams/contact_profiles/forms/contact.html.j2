@@ -26,7 +26,7 @@
                    class="form-control form-control-sm bg-white rounded-2"
                    placeholder="Name *"
                    maxlength="255"
-                   :required="!deleted && $el.closest('.entity-card')?.offsetParent !== null"
+                   :required="!deleted && (function() { var parent = $el.closest('.entity-card'); return parent !== null && parent.offsetParent !== null; })()"
                    title="Click to edit name"
                    aria-label="Contact Name">
             {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
@@ -40,7 +40,7 @@
                    class="form-control form-control-sm bg-white rounded-2"
                    placeholder="Email *"
                    maxlength="254"
-                   :required="!deleted && $el.closest('.entity-card')?.offsetParent !== null"
+                   :required="!deleted && (function() { var parent = $el.closest('.entity-card'); return parent !== null && parent.offsetParent !== null; })()"
                    title="Please enter a valid email address (e.g., contact@example.com)"
                    aria-label="Contact Email">
             {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}

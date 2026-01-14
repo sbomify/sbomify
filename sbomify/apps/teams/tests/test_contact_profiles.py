@@ -495,3 +495,165 @@ def test_authors_crud(sample_team_with_owner_member, authenticated_api_client):
 
     assert len(updated["authors"]) == 1
     assert updated["authors"][0]["name"] == "Updated Author"
+
+
+@pytest.mark.django_db
+def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
+    sample_team_with_owner_member,
+):
+    """Test that DeleteAwareModelFormMixin excludes deleted PKs from unique validation."""
+    from sbomify.apps.teams.forms import ContactEntityModelForm
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile
+
+    team = sample_team_with_owner_member.team
+    profile = ContactProfile.objects.create(team=team, name="Test Profile")
+
+    # Create an entity with a unique name
+    entity1 = ContactEntity.objects.create(
+        profile=profile,
+        name="Unique Entity",
+        email="entity1@example.com",
+        is_manufacturer=True,
+    )
+
+    # Create a form for a new entity with the same name
+    form_data = {
+        "name": "Unique Entity",
+        "email": "entity2@example.com",
+        "is_manufacturer": True,
+        "is_supplier": False,
+    }
+    form = ContactEntityModelForm(data=form_data)
+    form.instance.profile = profile
+
+    # Without the mixin's exclusion, this would fail due to unique constraint
+    # But since we're not deleting anything, it should still fail
+    assert not form.is_valid()
+    assert "name" in form.errors
+
+    # Now simulate deleting entity1 and adding a new one with the same name
+    form._exclude_pks_from_unique = {entity1.pk}
+    form = ContactEntityModelForm(data=form_data)
+    form.instance.profile = profile
+    form._exclude_pks_from_unique = {entity1.pk}
+
+    # With the mixin excluding the deleted PK, validation should pass
+    form.validate_unique()
+    assert form.is_valid() or "name" not in form.errors
+
+
+@pytest.mark.django_db
+def test_base_delete_aware_inline_formset_excludes_deleted_forms(
+    sample_team_with_owner_member,
+):
+    """Test that BaseDeleteAwareInlineFormSet excludes deleted forms from validation."""
+    from sbomify.apps.teams.forms import ContactEntityFormSet
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile
+
+    team = sample_team_with_owner_member.team
+    profile = ContactProfile.objects.create(team=team, name="Test Profile")
+
+    # Create two entities with the same name (should normally fail unique validation)
+    entity1 = ContactEntity.objects.create(
+        profile=profile, name="Same Name", email="entity1@example.com", is_manufacturer=True
+    )
+    entity2 = ContactEntity.objects.create(
+        profile=profile, name="Same Name", email="entity2@example.com", is_manufacturer=False, is_supplier=True
+    )
+
+    # Create formset data that deletes entity1 and adds a new entity with the same name
+    formset_data = {
+        "entities-TOTAL_FORMS": "2",
+        "entities-INITIAL_FORMS": "2",
+        "entities-MIN_NUM_FORMS": "0",
+        "entities-MAX_NUM_FORMS": "1000",
+        "entities-0-id": str(entity1.pk),
+        "entities-0-name": "Same Name",
+        "entities-0-email": "entity1@example.com",
+        "entities-0-is_manufacturer": "on",
+        "entities-0-DELETE": "on",  # Mark entity1 for deletion
+        "entities-1-id": str(entity2.pk),
+        "entities-1-name": "Same Name",
+        "entities-1-email": "entity2@example.com",
+        "entities-1-is_supplier": "on",
+    }
+
+    formset = ContactEntityFormSet(formset_data, instance=profile, queryset=ContactEntity.objects.filter(profile=profile))
+
+    # The formset should be valid because entity1 is marked for deletion
+    # and the new entity with the same name won't conflict with the deleted one
+    assert formset.is_valid()
+
+
+@pytest.mark.django_db
+def test_base_delete_aware_inline_formset_multiple_deletions(
+    sample_team_with_owner_member,
+):
+    """Test that BaseDeleteAwareInlineFormSet handles multiple deletions correctly."""
+    from sbomify.apps.teams.forms import ContactProfileContactFormSet
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+
+    team = sample_team_with_owner_member.team
+    profile = ContactProfile.objects.create(team=team, name="Test Profile")
+    entity = ContactEntity.objects.create(
+        profile=profile, name="Test Entity", email="entity@example.com", is_manufacturer=True
+    )
+
+    # Create two contacts with the same name
+    contact1 = ContactProfileContact.objects.create(
+        entity=entity, name="Same Contact", email="contact1@example.com"
+    )
+    contact2 = ContactProfileContact.objects.create(
+        entity=entity, name="Same Contact", email="contact2@example.com"
+    )
+
+    # Create formset data that deletes both contacts and adds a new one with the same name
+    formset_data = {
+        "contacts-TOTAL_FORMS": "3",
+        "contacts-INITIAL_FORMS": "2",
+        "contacts-MIN_NUM_FORMS": "0",
+        "contacts-MAX_NUM_FORMS": "1000",
+        "contacts-0-id": str(contact1.pk),
+        "contacts-0-name": "Same Contact",
+        "contacts-0-email": "contact1@example.com",
+        "contacts-0-DELETE": "on",
+        "contacts-1-id": str(contact2.pk),
+        "contacts-1-name": "Same Contact",
+        "contacts-1-email": "contact2@example.com",
+        "contacts-1-DELETE": "on",
+        "contacts-2-name": "Same Contact",
+        "contacts-2-email": "newcontact@example.com",
+    }
+
+    formset = ContactProfileContactFormSet(
+        formset_data, instance=entity, queryset=ContactProfileContact.objects.filter(entity=entity)
+    )
+
+    # Should be valid because both existing contacts are marked for deletion
+    assert formset.is_valid()
+
+
+@pytest.mark.django_db
+def test_delete_aware_mixin_without_excluded_pks_uses_default_validation(
+    sample_team_with_owner_member,
+):
+    """Test that DeleteAwareModelFormMixin falls back to default validation when no PKs are excluded."""
+    from sbomify.apps.teams.forms import ContactEntityModelForm
+    from sbomify.apps.teams.models import ContactProfile
+
+    team = sample_team_with_owner_member.team
+    profile = ContactProfile.objects.create(team=team, name="Test Profile")
+
+    # Create form without _exclude_pks_from_unique set
+    form_data = {
+        "name": "Test Entity",
+        "email": "test@example.com",
+        "is_manufacturer": True,
+        "is_supplier": False,
+    }
+    form = ContactEntityModelForm(data=form_data)
+    form.instance.profile = profile
+
+    # Should use default validation (no _exclude_pks_from_unique attribute)
+    # This should work for a new entity
+    assert form.is_valid()
