@@ -231,7 +231,7 @@ describe('CI/CD Info Business Logic', () => {
             if (config.enrich) lines.push('    ENRICH: true')
             if (config.outputFile) lines.push('    OUTPUT_FILE: sbom.cdx.json')
 
-            lines.push('  script:', '    - /sbomify.sh')
+            lines.push('  script:', '    - sbomify-action')
 
             return lines.join('\n')
         }
@@ -246,7 +246,7 @@ describe('CI/CD Info Business Logic', () => {
             expect(yaml).toContain('image: sbomifyhub/sbomify-action')
             expect(yaml).toContain(`COMPONENT_ID: '${testComponentId}'`)
             expect(yaml).toContain("LOCK_FILE: 'poetry.lock'")
-            expect(yaml).toContain('/sbomify.sh')
+            expect(yaml).toContain('sbomify-action')
         })
 
         test('should add Docker-in-Docker services for docker source', () => {
@@ -284,7 +284,7 @@ describe('CI/CD Info Business Logic', () => {
             }
 
             lines.push('        script:',
-                '          - /sbomify.sh',
+                '          - sbomify-action',
                 '        env:',
                 `          TOKEN: $SBOMIFY_TOKEN`,
                 `          COMPONENT_ID: '${componentId}'`,
