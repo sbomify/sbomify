@@ -22,6 +22,10 @@
                   content="{% block meta_keywords %}SBOM, Software Bill of Materials, security, compliance, vulnerability management{% endblock %}">
             <meta name="author"
                   content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}">
+            <meta name="robots"
+                  content="{% block meta_robots %}index, follow{% endblock %}">
+            <!-- Canonical URL -->
+            <link rel="canonical" href="{{ request.build_absolute_uri }}">
             <!-- Favicon -->
             <link rel="apple-touch-icon"
                   sizes="180x180"
@@ -40,24 +44,32 @@
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
             <!-- Schema.org metadata -->
             {% schema_org_metadata %}
-            <!-- Open Graph / Facebook -->
-            <meta property="og:type" content="website">
-            <meta property="og:url" content="{{ request.build_absolute_uri }}">
-            <meta property="og:title"
-                  content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="og:description"
-                  content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="og:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
-            <!-- Twitter -->
-            <meta property="twitter:card" content="summary_large_image">
-            <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-            <meta property="twitter:title"
-                  content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="twitter:description"
-                  content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
-            <meta property="twitter:image"
-                  content="{% if brand.brand_image %}{{ brand.brand_image }}{% else %}{% static 'img/favicons/android-chrome-512x512.png' %}{% endif %}">
+            <!-- Social media image: use brand image or absolute fallback URL -->
+            {% static 'img/favicons/android-chrome-512x512.png' as default_logo %}
+            {% with fallback_url=request.scheme|add:"://"|add:request.get_host|add:default_logo %}
+                {% with social_image=brand.brand_image|default:fallback_url %}
+                    {% with brand_name=brand.name|default:"sbomify" %}
+                        <!-- Open Graph / Facebook -->
+                        <meta property="og:type" content="website">
+                        <meta property="og:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="og:title"
+                              content="{% block og_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:description"
+                              content="{% block og_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="og:image" content="{{ social_image }}">
+                        <meta property="og:image:alt" content="{{ brand_name }} Logo">
+                        <!-- Twitter -->
+                        <meta property="twitter:card" content="summary_large_image">
+                        <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+                        <meta property="twitter:title"
+                              content="{% block twitter_title %}{% if brand.name %}{{ brand.name }} Trust Center{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:description"
+                              content="{% block twitter_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
+                        <meta property="twitter:image" content="{{ social_image }}">
+                        <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
+                    {% endwith %}
+                {% endwith %}
+            {% endwith %}
             <!-- Fonts -->
             <link rel="preconnect" href="https://fonts.gstatic.com">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
@@ -79,17 +91,18 @@
             <link href="{% static 'css/components/standard-card.css' %}"
                   rel="stylesheet">
             <link href="{% static 'css/public-base.css' %}" rel="stylesheet">
+            <link href="{% static 'css/public-pages.css' %}" rel="stylesheet">
             <!-- Custom CSS Variables for Branding -->
             <style>
             :root {
-                --brand-color: {{ brand.brand_color|default:'#4f46e5' }};
-                --accent-color: {{ brand.accent_color|default:'#7c8b9d' }};
-                --brand-color-rgb: {{ brand.brand_color|default:'#4f46e5'|hex_to_rgb }};
-                --accent-color-rgb: {{ brand.accent_color|default:'#7c8b9d'|hex_to_rgb }};
-                --brand-color-light: {{ brand.brand_color|default:'#4f46e5'|lighten:0.1 }};
-                --brand-color-dark: {{ brand.brand_color|default:'#4f46e5'|darken:0.1 }};
-                --accent-color-light: {{ brand.accent_color|default:'#7c8b9d'|lighten:0.1 }};
-                --accent-color-dark: {{ brand.accent_color|default:'#7c8b9d'|darken:0.1 }};
+                --brand-color: {{ brand.brand_color|default:'#3b7ddd' }};
+                --accent-color: {{ brand.accent_color|default:'#3b7ddd' }};
+                --brand-color-rgb: {{ brand.brand_color|default:'#3b7ddd'|hex_to_rgb }};
+                --accent-color-rgb: {{ brand.accent_color|default:'#3b7ddd'|hex_to_rgb }};
+                --brand-color-light: {{ brand.brand_color|default:'#3b7ddd'|lighten:0.1 }};
+                --brand-color-dark: {{ brand.brand_color|default:'#3b7ddd'|darken:0.1 }};
+                --accent-color-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1 }};
+                --accent-color-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1 }};
                 --text-primary: #1a202c;
                 --text-secondary: #64748b;
                 --text-muted: #94a3b8;
@@ -267,15 +280,35 @@
                 padding: 2rem 1.5rem;
             }
 
-            /* Enhanced Footer */
+            /* Modern Footer */
             .public-footer {
-                background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-                border-top: 1px solid #e2e8f0;
-                padding: 3rem 0 1.5rem;
-                margin-top: 4rem;
+                background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
+                border-top: 1px solid var(--border-color-light, #f0f0f0);
+                margin-top: auto;
+                position: relative;
+                overflow: hidden;
             }
 
-            .public-footer-container,
+            .public-footer::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 3px;
+                background: linear-gradient(90deg,
+                    var(--brand-color, #6366f1) 0%,
+                    color-mix(in srgb, var(--brand-color, #6366f1), #fff 30%) 50%,
+                    var(--brand-color, #6366f1) 100%);
+                opacity: 0.6;
+            }
+
+            .public-footer-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 0 1.5rem;
+            }
+
             .public-header-container,
             .public-content-container {
                 max-width: 1200px;
@@ -289,159 +322,58 @@
             }
 
             .footer-content-wrapper {
-                display: flex;
-                flex-direction: column;
-                gap: 2rem;
+                padding: 2rem 0;
             }
 
-            .footer-main {
-                display: grid;
-                grid-template-columns: 1fr 2fr;
-                gap: 3rem;
-                padding-bottom: 2rem;
-                border-bottom: 1px solid #e2e8f0;
-            }
-
-            .footer-branding-section {
-                display: flex;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-
-            .footer-logo img {
-                height: 32px;
-                width: auto;
-                opacity: 0.9;
-            }
-
-            .footer-brand-text {
-                display: flex;
-                flex-direction: column;
-                gap: 0.25rem;
-            }
-
-            .footer-brand-name {
-                font-size: 1.125rem;
-                font-weight: 700;
-                color: #0f172a;
-            }
-
-            .footer-tagline {
-                font-size: 0.875rem;
-                color: #64748b;
-            }
-
-            .footer-info {
-                display: flex;
-                gap: 3rem;
-            }
-
-            .footer-section {
-                flex: 1;
-            }
-
-            .footer-section-title {
-                font-size: 0.875rem;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #0f172a;
-                margin-bottom: 0.75rem;
-            }
-
-            .footer-section-text {
-                font-size: 0.875rem;
-                line-height: 1.6;
-                color: #64748b;
-                margin: 0;
-            }
-
-            .footer-security-badges {
-                display: flex;
-                flex-direction: column;
-                gap: 0.75rem;
-            }
-
-            .security-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem 0.75rem;
-                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                font-size: 0.75rem;
+            .footer-title {
+                font-size: 1rem;
                 font-weight: 600;
-                color: #475569;
-            }
-
-            .security-badge i {
-                color: #6366f1;
-                font-size: 0.875rem;
-            }
-
-            .footer-workspace-section {
+                color: var(--text-primary, #0f172a);
                 text-align: center;
-                padding-bottom: 1.5rem;
-                border-bottom: 1px solid #e2e8f0;
                 margin-bottom: 1.5rem;
             }
 
-            .footer-workspace-name {
-                font-size: 1.125rem;
-                font-weight: 600;
-                color: #0f172a;
+            .footer-divider-full {
+                height: 1px;
+                background: linear-gradient(90deg, 
+                    transparent 0%, 
+                    var(--border-color, #e2e8f0) 10%, 
+                    var(--border-color, #e2e8f0) 90%, 
+                    transparent 100%);
+                margin-bottom: 1.5rem;
             }
 
-            .footer-bottom {
+            .footer-bottom-row {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                flex-wrap: wrap;
-                gap: 1rem;
+            }
+
+            .footer-copyright {
+                font-size: 0.875rem;
+                color: var(--text-muted, #64748b);
             }
 
             .footer-powered {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 0.8125rem;
-                color: #64748b;
+                font-size: 0.875rem;
+                color: var(--text-muted, #64748b);
             }
 
             .footer-powered a {
-                color: #6366f1;
+                color: var(--brand-color, #6366f1);
                 text-decoration: none;
-                font-weight: 600;
+                font-weight: 500;
                 transition: color 0.2s ease;
             }
 
             .footer-powered a:hover {
-                color: #4f46e5;
+                color: color-mix(in srgb, var(--brand-color, #6366f1), #000 15%);
             }
 
-            .footer-separator {
-                color: #cbd5e1;
-            }
-
-            .footer-meta {
-                font-size: 0.8125rem;
-                color: #64748b;
-            }
-
-            @media (max-width: 768px) {
-                .footer-main {
-                    grid-template-columns: 1fr;
-                    gap: 2rem;
-                }
-
-                .footer-info {
+            @media (max-width: 576px) {
+                .footer-bottom-row {
                     flex-direction: column;
-                    gap: 2rem;
-                }
-
-                .footer-bottom {
-                    flex-direction: column;
+                    gap: 0.75rem;
                     text-align: center;
                 }
             }
@@ -513,32 +445,35 @@
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Enhanced Footer -->
+            <!-- Footer -->
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
-                        {% block footer_branding %}
-                            <div class="footer-workspace-section">
-                                <div class="footer-workspace-name">
-                                    {% if brand.name %}
-                                        {{ brand.name }}
-                                    {% else %}
-                                        sbomify
-                                    {% endif %}
-                                    Trust Center
-                                </div>
-                            </div>
-                        {% endblock %}
-                        <div class="footer-bottom">
-                            <div class="footer-meta">
-                                <span>© {% now "Y" %} sbomify</span>
+                        <div class="footer-title">
+                            {% if brand.name %}
+                                {{ brand.name }}
+                            {% else %}
+                                sbomify
+                            {% endif %}
+                            Trust Center
+                        </div>
+                        <div class="footer-divider-full"></div>
+                        <div class="footer-bottom-row">
+                            <div class="footer-copyright">
+                                © {% now "Y" %}
+                                {% if brand.name %}
+                                    {{ brand.name }}
+                                {% else %}
+                                    sbomify
+                                {% endif %}
                             </div>
                             <div class="footer-powered">
-                                <span>Powered by <a href="https://sbomify.com" target="_blank" rel="noopener">sbomify</a></span>
+                                Powered by <a href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
+    target="_blank"
+    rel="noopener noreferrer">sbomify</a>
                             </div>
                         </div>
                     </div>
-                    {% block footer_content %}{% endblock %}
                 </div>
             </footer>
         </div>

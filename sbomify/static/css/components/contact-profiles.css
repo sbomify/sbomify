@@ -11,38 +11,312 @@
   padding-top: 1.5rem;
 }
 
-.profile-form textarea {
+/* Entity Cards */
+.entity-card {
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #e5e7eb;
+}
+
+.entity-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.entity-card .card-header {
+  background-color: rgba(248, 250, 252, 0.5);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* Role Checkboxes */
+.entity-editor-content .form-check {
+  padding-left: 1.75em;
+}
+
+.entity-editor-content .form-check-input {
+  width: 1.2em;
+  height: 1.2em;
+  margin-top: 0.15em;
+}
+
+.entity-editor-content .form-check-label {
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+}
+
+.entity-editor-content .form-check-input:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.entity-editor-content .form-check-input:focus {
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+}
+
+/* Contact Cards - Inline Style */
+.contact-card {
+  background-color: transparent;
+}
+
+.contacts-list {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Typography & Layout */
+.ls-1 {
+  letter-spacing: 0.05em;
+}
+
+.bg-translucent {
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+.avatar {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.font-monospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Form Controls */
+.form-control::placeholder {
+  color: #cbd5e1;
+}
+
+.form-control:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+textarea {
   resize: vertical;
 }
 
-.btn-group .btn {
-  min-width: 2.5rem;
+/* Animations handled by Alpine.js transition classes, but helper utilities here */
+.opacity-50 {
+  opacity: 0.5;
 }
 
-.input-group .btn {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+[x-cloak] {
+  display: none !important;
 }
 
-.input-group .form-control {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+/* Entity Editor Inline */
+.entity-editor-content {
+  background-color: #f8fafc;
+  border-top: 1px solid #e5e7eb;
 }
 
-.contact-form-row {
-  background-color: #f8f9fa;
+/* Validation feedback */
+.entity-editor-content .invalid-feedback {
+  font-size: 0.8125rem;
 }
 
-.contact-form-row .form-label {
+.entity-editor-content .form-control.is-invalid {
+  border-color: #dc3545;
+  background-image: none;
+}
+
+.entity-editor-content .form-control.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+/* Form styling */
+.entity-editor-content .form-label {
   font-weight: 500;
-  color: #495057;
-  margin-bottom: 0.25rem;
-}
-
-.contact-form-row .form-control {
+  color: #374151;
   font-size: 0.875rem;
+  margin-bottom: 0.375rem;
 }
 
-.delete-contact-btn {
-  margin-left: auto;
+.entity-editor-content .form-control {
+  border-radius: 0.5rem;
+  border-color: #e5e7eb;
+  padding: 0.625rem 0.875rem;
+}
+
+.entity-editor-content .form-control:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Contacts section */
+.entity-editor-content .contacts-list {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.entity-editor-content h6 {
+  color: #1f2937;
+}
+
+/* Minimal Square Icon Buttons */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6c757d;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  padding: 0;
+}
+
+.btn-icon:hover {
+  background: #f8f9fa;
+  transform: translateY(-1px);
+}
+
+.btn-icon:active {
+  transform: translateY(0);
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Edit Button - Subtle Blue on Hover */
+.btn-icon-edit:hover {
+  color: #0d6efd;
+  background: #e7f1ff;
+}
+
+/* Star Button - Primary Blue States */
+.btn-icon-star:hover {
+  color: #0d6efd;
+  background: #e7f1ff;
+}
+
+.btn-icon-star-active {
+  background: #0d6efd;
+  color: white;
+}
+
+.btn-icon-star-active:disabled {
+  background: #0d6efd;
+  opacity: 1;
+  cursor: default;
+}
+
+/* Delete Button - Subtle Red on Hover */
+.btn-icon-delete:hover {
+  color: #dc3545;
+  background: #ffebee;
+}
+
+/* Responsive styles */
+.contact-avatar-circle {
+  width: 36px;
+  height: 36px;
+  background-color: #e8def8;
+  /* bg-purple-subtle context */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contact-icon-purple {
+  color: #7c4dff;
+}
+
+/* Contact Field Widths */
+.contact-field-name {
+  min-width: 150px;
+  max-width: 180px;
+}
+
+.contact-field-email {
+  min-width: 180px;
+  max-width: 280px;
+}
+
+.contact-field-phone {
+  min-width: 130px;
+  max-width: 150px;
+}
+
+@media (max-width: 768px) {
+  .btn-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .entity-card .card-body {
+    padding: 0.75rem !important;
+  }
+
+  .entity-editor-content {
+    padding: 1rem !important;
+  }
+
+  .entity-editor-content .p-4 {
+    padding: 1rem !important;
+  }
+
+  .avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1rem;
+  }
+
+  .contacts-list {
+    padding: 0 !important;
+  }
+
+  .service-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  /* Stack buttons on very small screens */
+  .entity-editor-content .d-flex.justify-content-end.gap-2 {
+    flex-direction: column;
+  }
+
+  .entity-editor-content .d-flex.justify-content-end.gap-2 button {
+    width: 100%;
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .entity-editor-content .form-check {
+    padding-left: 1.5em;
+  }
+
+  .entity-editor-content .d-flex.gap-4 {
+    gap: 1rem !important;
+  }
 }

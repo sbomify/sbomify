@@ -1,0 +1,41 @@
+input.editable-field {
+    border: none;
+    border-bottom: 1px solid #ccc;
+    background-color: transparent;
+    font-size: 20pt;
+}
+
+input.editable-field[type="date"] {
+    font-size: 16pt;
+    padding: 4px 0;
+}
+
+textarea.editable-textarea {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: transparent;
+    font-size: 14px;
+    padding: 8px;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.editing-block {
+    display: block;
+    width: 100%;
+}
+
+.editing-block .editable-textarea {
+    margin-bottom: 8px;
+}
+
+.editable-placeholder {
+    color: #6c757d;
+    font-style: italic;
+    cursor: pointer;
+}
+
+.editable-placeholder:hover {
+    color: #495057;
+}

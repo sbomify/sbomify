@@ -11,14 +11,14 @@
     <div class="releases-display"
          x-data="releaseList('{{ document_id }}', '{{ releases|jsonify|escapejs }}')">
         <div class="releases-list">
-            <template x-for="release in displayedReleases" :key="release.id">
+            <template x-for="(release, index) in displayedReleases" :key="release.id">
                 <a :href="`{{ base_url }}`.replace('0', release.product_id)"
                    class="release-link">
                     <span class="product-name" x-text="release.product_name"></span>
                     <span class="version-info">
                         <span class="version-text"
-                              :class="{ 'is-latest': release.is_latest }"
-                              x-text="release.is_latest ? 'latest' : release.name"></span>
+                              :class="{ 'is-latest': index === 0 }"
+                              x-text="index === 0 ? 'latest' : release.name"></span>
                         <span x-show="release.is_prerelease" x-cloak class="prerelease-label">pre</span>
                     </span>
                 </a>

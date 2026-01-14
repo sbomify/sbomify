@@ -1,0 +1,21 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/standard-card.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/export-data-card.css' %}">
+<div class="standard-card mt-3">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <div class="header-content">
+                <h4 class="card-title mb-0">Export Data</h4>
+            </div>
+        </div>
+        <div class="card-body text-center">
+            <p class="text-muted mb-3">Download all SBOMs associated with this project as a ZIP archive</p>
+            <a class="btn btn-primary download-btn"
+               href="/api/v1/projects/{{ project_id }}/download">
+                <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
+            </a>
+        </div>
+    </div>
+</div>

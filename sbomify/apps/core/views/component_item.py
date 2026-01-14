@@ -10,11 +10,13 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
     get_public_path,
+    get_workspace_public_url,
     resolve_component_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.documents.apis import get_document
+from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assessments, passing_assessments_to_dict
 from sbomify.apps.sboms.apis import get_sbom
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.vulnerability_scanning.models import VulnerabilityScanResult
@@ -71,11 +73,23 @@ class ComponentItemPublicView(View):
 
         brand = build_branding_context(component.team)
 
+        # Get workspace public URL for breadcrumbs
+        workspace_public_url = get_workspace_public_url(request, component.team)
+
+        # Get passing assessments for SBOMs
+        passing_assessments = []
+        if item_type == "sboms":
+            sbom_passing = get_sbom_passing_assessments(item_id)
+            passing_assessments = passing_assessments_to_dict(sbom_passing)
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "brand": brand,
             "item": item,
+            "item_type": item_type,
             "component": _build_item_response(request, component, "component"),
+            "passing_assessments": passing_assessments,
+            "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, component.team)
 

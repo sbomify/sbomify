@@ -47,6 +47,10 @@ export function registerPublicStatusToggle() {
           return
         }
         this.isPublic = response.is_public
+
+        window.dispatchEvent(new CustomEvent('public-status-changed', {
+          detail: { itemType: this.itemType, itemId: this.itemId, isPublic: this.isPublic }
+        }))
       },
 
       async copyToClipboard(): Promise<void> {

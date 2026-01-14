@@ -57,7 +57,8 @@
                         hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
                         successMessage: '{{ success_message|default:'Deleted successfully!' }}',
                         csrfToken: '{{ csrf_token }}',
-                        redirectUrl: '{{ redirect_url|default:'' }}'
+                        redirectUrl: '{{ redirect_url|default:'' }}',
+                        refreshEvent: '{{ refresh_event|default:'' }}'
                     })"
                     @click="handleDelete()"
                     :disabled="isLoading"

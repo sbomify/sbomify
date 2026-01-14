@@ -1,5 +1,16 @@
 /* Trust Center Settings Styles */
 
+/* Public URL display */
+.trust-center-visibility .public-url-display {
+    background: #f1f5f9;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
 .trust-center-visibility .visibility-wrapper {
     display: flex;
     align-items: center;
@@ -200,6 +211,146 @@
 
     .trust-center-visibility .control {
         padding: 0.75rem;
+    }
+}
+
+/* DNS Instructions Component */
+.dns-instructions {
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-top: 0.5rem;
+}
+
+.dns-instructions-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #0369a1;
+    font-size: 0.9375rem;
+    margin-bottom: 0.75rem;
+}
+
+.dns-instructions-header i {
+    font-size: 1rem;
+}
+
+.dns-instructions-text {
+    color: #334155;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.dns-record-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e2e8f0;
+}
+
+.dns-record-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 150px;
+}
+
+.dns-record-label {
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.dns-record-value {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+code.dns-record-value {
+    background: #f1f5f9;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+.dns-instructions-notes {
+    border-top: 1px solid #bae6fd;
+    padding-top: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.dns-instructions-notes p {
+    font-size: 0.8125rem;
+    color: #475569;
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+    padding-left: 1.25rem;
+    position: relative;
+}
+
+.dns-instructions-notes p:last-child {
+    margin-bottom: 0;
+}
+
+.dns-instructions-notes p > i:first-child {
+    position: absolute;
+    left: 0;
+    top: 0.125rem;
+    color: #0ea5e9;
+}
+
+.dns-instructions-notes code {
+    background: #f1f5f9;
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    color: #334155;
+    white-space: nowrap;
+}
+
+/* DNS Instructions Responsive */
+@media (max-width: 768px) {
+    .dns-instructions {
+        padding: 1rem;
+    }
+
+    .dns-record-display {
+        flex-direction: column;
+        gap: 0.625rem;
+        padding: 0.875rem;
+    }
+
+    .dns-record-item {
+        min-width: 100%;
+        justify-content: space-between;
+    }
+
+    .dns-instructions-notes p {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .dns-instructions {
+        padding: 0.875rem;
+        border-radius: 8px;
+    }
+
+    .dns-instructions-header {
+        font-size: 0.875rem;
+    }
+
+    .dns-record-value {
+        font-size: 0.8125rem;
     }
 }
 

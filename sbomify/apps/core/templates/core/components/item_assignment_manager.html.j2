@@ -1,0 +1,135 @@
+{% load static %}
+<link rel="stylesheet"
+      href="{% static 'css/components/items-list-table.css' %}">
+<link rel="stylesheet"
+      href="{% static 'css/components/item-assignment-manager.css' %}">
+<div x-data="itemAssignmentManager({ parentType: '{{ parent_type }}', parentId: '{{ parent_id }}', childType: '{{ child_type }}', canEdit: {{ can_edit|yesno:'true,false' }} })">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h4 class="card-title mb-0">
+                <i class="fas fa-{% if child_type == 'project' %}project-diagram{% else %}cube{% endif %} me-2"></i>
+                {{ child_type|title }}s
+            </h4>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="assignment-panel assigned-panel">
+                        <div class="assignment-panel-header">
+                            <div class="panel-title">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <span>Assigned</span>
+                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                      x-text="assignedItems.length"></span>
+                            </div>
+                            <div class="panel-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" x-model="assignedSearch" placeholder="Search...">
+                            </div>
+                        </div>
+                        <div class="assignment-panel-body"
+                             @dragover="onDragOver($event)"
+                             @drop="onDrop($event, 'assigned')">
+                            <div x-show="isLoading" class="panel-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Loading...</span>
+                            </div>
+                            <div x-show="!isLoading" class="assignment-list">
+                                <template x-for="item in filteredAssigned" :key="item.id">
+                                    <div class="assignment-item"
+                                         draggable="true"
+                                         @dragstart="onDragStart($event, item, 'assigned')"
+                                         @dragend="onDragEnd">
+                                        <div class="item-content">
+                                            <div class="item-name" x-text="item.name"></div>
+                                            <div class="item-meta" x-show="!item.is_public">
+                                                <span class="visibility-badge is-private">
+                                                    <i class="fas fa-lock"></i>
+                                                    <span>Private</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {% if can_edit %}
+                                            <button @click="removeItem(item)"
+                                                    class="item-action remove"
+                                                    title="Remove from assigned">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                                <div x-show="filteredAssigned.length === 0" class="panel-empty">
+                                    <i class="fas fa-inbox"></i>
+                                    <span>No assigned {{ child_type }}s</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="assignment-panel available-panel">
+                        <div class="assignment-panel-header">
+                            <div class="panel-title">
+                                <i class="fas fa-list me-2"></i>
+                                <span>Available</span>
+                                <span class="badge bg-secondary-subtle text-secondary ms-2"
+                                      x-text="availableItems.length"></span>
+                            </div>
+                            <div class="panel-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" x-model="availableSearch" placeholder="Search...">
+                            </div>
+                        </div>
+                        <div class="assignment-panel-body"
+                             @dragover="onDragOver($event)"
+                             @drop="onDrop($event, 'available')">
+                            <div x-show="isLoading" class="panel-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Loading...</span>
+                            </div>
+                            <div x-show="!isLoading" class="assignment-list">
+                                <template x-for="item in filteredAvailable" :key="item.id">
+                                    <div class="assignment-item"
+                                         draggable="true"
+                                         @dragstart="onDragStart($event, item, 'available')"
+                                         @dragend="onDragEnd">
+                                        <div class="item-content">
+                                            <div class="item-name" x-text="item.name"></div>
+                                            <div class="item-meta" x-show="!item.is_public">
+                                                <span class="visibility-badge is-private">
+                                                    <i class="fas fa-lock"></i>
+                                                    <span>Private</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {% if can_edit %}
+                                            <button @click="addItem(item)"
+                                                    class="item-action add"
+                                                    title="Add to assigned">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                                <div x-show="filteredAvailable.length === 0" class="panel-empty">
+                                    <i class="fas fa-inbox"></i>
+                                    <span>No available {{ child_type }}s</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <p class="text-muted small mb-1">
+                    <i class="fas fa-arrows-alt me-1"></i>
+                    Drag and drop items between lists to assign or unassign
+                </p>
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-lock me-1"></i>
+                    Only public {{ child_type }}s can be assigned to a public {{ parent_type }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

@@ -2,95 +2,65 @@
 {% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
-{% block title %}{{ component.name }}{% endblock %}
+{% block title %}{{ component.name }} - {{ component.component_type_display }}{% endblock %}
 {% block meta_description %}
     {{ component.name }} - {{ component.component_type_display }} component.
     {% block meta_description_suffix %}{% endblock %}
 {% endblock %}
-{% block extra_css %}
-    <style>
-  .meta-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(var(--brand-color-rgb), 0.05);
-    border: 1px solid rgba(var(--brand-color-rgb), 0.1);
-    color: var(--brand-color);
-    font-weight: 600;
-  }
-  .meta-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-  .title-icon {
-    color: var(--brand-color);
-  }
-    </style>
+{% block og_title %}{{ component.name }} - {{ component.component_type_display }}{% endblock %}
+{% block og_description %}
+    {{ component.name }} - {{ component.component_type_display }} component. View and download security artifacts.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb component 'component' %}
 {% endblock %}
 {% block content %}
-    <div class="public-page-layout">
-        <div class="content-wrapper">
-            <div class="content-container">
-                <div class="public-page-header">
-                    <div class="page-header-content">
-                        {% if workspace_public_url and component.is_global %}
-                            <div class="mb-2">
-                                <a class="btn btn-outline-secondary btn-sm"
-                                   href="{{ workspace_public_url }}">
-                                    <i class="fas fa-arrow-left me-1"></i> Back to Trust Center
-                                </a>
-                            </div>
-                        {% endif %}
-                        <p class="eyebrow text-muted mb-1">Public component</p>
-                        <h1 class="page-title">
-                            <i class="fas fa-cube title-icon"></i>
-                            {{ component.name }}
-                        </h1>
-                        <div class="meta-row">
-                            <span class="meta-chip">
-                                <i class="fas fa-tag"></i>
-                                {{ component.component_type_display }}
-                            </span>
-                            {% if component.is_global %}
-                                <span class="meta-chip">
-                                    <i class="fas fa-building"></i>
-                                    Workspace-wide
-                                </span>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                <div class="public-main-content">
-                    <div class="content-section">
-                        <div class="component-content">
-                            <div class="public-card-wrapper public-card--default">
-                                <div class="standard-card mt-4">
-                                    <div class="card shadow-sm">
-                                        <div class="card-header">
-                                            <div class="header-content">
-                                                <h4 class="card-title mb-0">{{ component.component_type_display }} items</h4>
-                                            </div>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="augmentation-notice d-flex align-items-center mb-3">
-                                                {% block table_icon %}{% endblock %}
-                                                <span class="text-muted">{{ component.component_type_display }} items for this component</span>
-                                            </div>
-                                            {% block table_section %}{% endblock %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <div class="public-item-header">
+        {% if parent_product_url %}
+            <a href="{{ parent_product_url }}" class="back-link">
+                <i class="fas fa-arrow-left"></i>Back to {{ parent_product.name }}
+            </a>
+        {% elif workspace_public_url and component.is_global %}
+            <a href="{{ workspace_public_url }}" class="back-link">
+                <i class="fas fa-arrow-left"></i>Back to Trust Center
+            </a>
+        {% endif %}
+        <h1 class="public-item-title">
+            <span class="public-item-title-icon icon-component">
+                <i class="fas fa-cube"></i>
+            </span>
+            {{ component.name }}
+        </h1>
+        <div class="public-item-badges">
+            <span class="public-badge badge-type">
+                <i class="fas fa-tag"></i>
+                {{ component.component_type_display }}
+            </span>
+            {% if component.is_global %}
+                <span class="public-badge badge-workspace">
+                    <i class="fas fa-building"></i>
+                    Workspace-wide
+                </span>
+            {% endif %}
+            {% for assessment in passing_assessments %}
+                <span class="public-badge badge-compliance"
+                      title="{{ assessment.display_name }}: All checks passed">
+                    <i class="fas fa-check-circle"></i>
+                    {{ assessment.display_name }}
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    {% block table_icon %}<i class="fas fa-list"></i>{% endblock %}
+                    {{ component.component_type_display }} Items
+                </h4>
+            </div>
+            <div class="card-body">
+                {% block table_section %}{% endblock %}
             </div>
         </div>
     </div>

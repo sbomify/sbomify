@@ -76,9 +76,11 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
 
 
 def _list_public_products(team: Team) -> list[dict]:
+    """List public products that have at least one public project."""
     products = (
         Product.objects.filter(team=team, is_public=True)
         .annotate(public_project_count=Count("projects", filter=Q(projects__is_public=True), distinct=True))
+        .filter(public_project_count__gt=0)  # Only show products with public projects
         .order_by("name")
     )
     return [

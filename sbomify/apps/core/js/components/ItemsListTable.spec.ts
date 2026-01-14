@@ -24,37 +24,24 @@ mock.module('../alerts', () => ({
   showError: mockShowError
 }))
 
-// Mock StandardCard component
-mock.module('./StandardCard.vue', () => ({
-  default: {}
-}))
-
 // Mock global eventBus
 const mockEventBus = {
-  on: mock<(event: string, callback: () => void) => void>()
-}
-
-// Extend global Window interface for tests
-declare global {
-  interface Window {
-    eventBus?: {
-      on: (event: string, callback: () => void) => void
-    }
-    EVENTS?: {
-      REFRESH_PRODUCTS: string
-      REFRESH_PROJECTS: string
-      REFRESH_COMPONENTS: string
-    }
-  }
+  on: mock<(event: string, callback: () => void) => void>(),
+  off: mock<(event: string, callback: () => void) => void>(),
+  emit: mock<(event: string) => void>()
 }
 
 // Set up global window mock
+type WindowWithMocks = typeof globalThis & { eventBus?: unknown; EVENTS?: unknown }
 global.window = global.window || ({} as Window & typeof globalThis)
-global.window.eventBus = mockEventBus
-global.window.EVENTS = {
+;(global.window as WindowWithMocks).eventBus = mockEventBus
+;(global.window as WindowWithMocks).EVENTS = {
   REFRESH_PRODUCTS: 'refresh_products',
   REFRESH_PROJECTS: 'refresh_projects',
-  REFRESH_COMPONENTS: 'refresh_components'
+  REFRESH_COMPONENTS: 'refresh_components',
+  ITEM_CREATED: 'item_created',
+  ITEM_UPDATED: 'item_updated',
+  ITEM_DELETED: 'item_deleted'
 }
 
 describe('ItemsListTable Business Logic', () => {
@@ -320,8 +307,9 @@ describe('ItemsListTable Business Logic', () => {
 
     test('should handle missing event bus gracefully', () => {
       // Temporarily remove eventBus
-      const originalEventBus = global.window.eventBus
-      delete (global.window as Window & typeof globalThis & { eventBus?: unknown }).eventBus
+      const windowWithMocks = global.window as WindowWithMocks
+      const originalEventBus = windowWithMocks.eventBus
+      windowWithMocks.eventBus = undefined
 
       const setupEventListeners = () => {
         if (window.eventBus && window.EVENTS) {
@@ -333,7 +321,7 @@ describe('ItemsListTable Business Logic', () => {
       expect(setupEventListeners()).toBe(false)
 
       // Restore eventBus
-      global.window.eventBus = originalEventBus
+      windowWithMocks.eventBus = originalEventBus
     })
   })
 

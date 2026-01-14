@@ -7,14 +7,30 @@ export interface CustomLicense {
 }
 
 export interface ContactInfo {
-  name: string | null;
-  email: string | null;
+  name: string;
+  email: string;
   phone: string | null;
+  order?: number | null;
+}
+
+export interface ContactEntity {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  website_urls: string[];
+  is_manufacturer: boolean;
+  is_supplier: boolean;
+  contacts: ContactInfo[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ContactProfile {
   id: string;
   name: string;
+  entities: ContactEntity[];
   company: string | null;
   supplier_name: string | null;
   vendor: string | null;
@@ -24,8 +40,8 @@ export interface ContactProfile {
   website_urls: string[];
   contacts: ContactInfo[];
   is_default: boolean;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SupplierInfo {

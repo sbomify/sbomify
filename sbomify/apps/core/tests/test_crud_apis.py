@@ -712,12 +712,22 @@ def test_crud_operations_require_authentication():
 
 
 @pytest.mark.django_db
-def test_crud_operations_require_billing_plan(
+def test_crud_operations_default_billing_plan_behavior(
     sample_access_token: AccessToken,  # noqa: F811
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    """Test that CRUD operations require an active billing plan when using access tokens."""
+    """Test that CRUD operations work with default (community) limits when no plan is set."""
     client = Client()
+
+    # Create community plan to allow fallback
+    BillingPlan.objects.create(
+        key="community", 
+        name="Community", 
+        description="Default Plan",
+        max_products=10, 
+        max_projects=10, 
+        max_components=10
+    )
 
     # Set up authentication but no team session - API will fall back to user's first team
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -727,16 +737,19 @@ def test_crud_operations_require_billing_plan(
     session.pop("current_team", None)
     session.pop("user_teams", None)
     session.save()
+    
+    # Ensure team has no billing plan
+    team = sample_team_with_owner_member.team
+    team.billing_plan = None
+    team.save()
 
     create_urls = [
         reverse("api-1:create_product"),
-        reverse("api-1:create_project"),
-        reverse("api-1:create_component"),
     ]
 
     payload = {"name": "Test Item"}
 
-    # Test create operations - these require billing plan validation
+    # Test create operations - these should now SUCCEED with default community limits
     for url in create_urls:
         response = client.post(
             url,
@@ -744,8 +757,7 @@ def test_crud_operations_require_billing_plan(
             content_type="application/json",
             **get_api_headers(sample_access_token),
         )
-        assert response.status_code == 403
-        assert "No active billing plan" in response.json()["detail"]
+        assert response.status_code == 201
 
 
 # =============================================================================
@@ -1372,6 +1384,8 @@ class TestBillingPlanLimitsAPI:
 
     def _setup_team_with_plan(self, team: Member, plan_data: dict) -> BillingPlan:
         """Helper to set up team with billing plan."""
+        if "description" not in plan_data:
+            plan_data["description"] = f"Description for {plan_data.get('name', 'Plan')}"
         plan = BillingPlan.objects.create(**plan_data)
         team.billing_plan = plan.key
         team.save()
@@ -2469,11 +2483,11 @@ def test_create_product_link_success(
 
 
 @pytest.mark.django_db
-def test_create_product_link_duplicate_url(
+def test_create_product_link_duplicate_url_allowed(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test creating duplicate link fails."""
+    """Test creating duplicate link is allowed (multiple links to same target supported)."""
     # Create initial link
     ProductLink.objects.create(
         product=sample_product,
@@ -2505,8 +2519,10 @@ def test_create_product_link_duplicate_url(
         **get_api_headers(sample_access_token),
     )
 
-    assert response.status_code == 400
-    assert "already exists" in response.json()["detail"]
+    # Duplicate links are now allowed
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Another Website"
 
 
 @pytest.mark.django_db
@@ -2878,12 +2894,11 @@ def test_product_link_not_found(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_product_link_validation(
+def test_product_link_allows_duplicates(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
-    """Test validation of product link fields."""
+    """Test that duplicate links (same type and URL) are allowed for the same product."""
     import uuid
-    from django.db import IntegrityError, transaction
 
     unique_suffix = str(uuid.uuid4())[:8]
 
@@ -2892,31 +2907,33 @@ def test_product_link_validation(
         team=sample_team_with_owner_member.team,
     )
 
-    # Test unique constraint within product
+    # Create first link
     link1 = ProductLink.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
         link_type="website",
         title="Website",
         url=f"https://unique-{unique_suffix}.example.com",
-        description="Unique URL",
+        description="First link",
     )
 
-    # Creating another link with same type and URL for same product should fail
-    # Use separate atomic block for this test to handle the rollback
-    with pytest.raises(IntegrityError):
-        with transaction.atomic():
-            ProductLink.objects.create(
-                product=product,
-                team=sample_team_with_owner_member.team,
-                link_type="website",
-                title="Another Website",
-                url=f"https://unique-{unique_suffix}.example.com",
-                description="Duplicate URL",
-            )
-
-    # But same URL with different type should be allowed
+    # Creating another link with same type and URL for same product should succeed
+    # (duplicate links are allowed to support multiple links to the same target)
     link2 = ProductLink.objects.create(
+        product=product,
+        team=sample_team_with_owner_member.team,
+        link_type="website",
+        title="Another Website",
+        url=f"https://unique-{unique_suffix}.example.com",
+        description="Duplicate URL - allowed",
+    )
+
+    assert link1.id != link2.id
+    assert link1.url == link2.url
+    assert link1.link_type == link2.link_type
+
+    # Different type with different URL should also work
+    link3 = ProductLink.objects.create(
         product=product,
         team=sample_team_with_owner_member.team,
         link_type="support",
@@ -2925,7 +2942,7 @@ def test_product_link_validation(
         description="Different URL",
     )
 
-    assert link1.id != link2.id
+    assert link3.id not in [link1.id, link2.id]
 
 
 @pytest.mark.django_db(transaction=True)

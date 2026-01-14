@@ -192,6 +192,37 @@ class Team(models.Model):
 
         return False
 
+    @property
+    def is_in_grace_period(self):
+        """Check if team is in payment grace period."""
+        from django.conf import settings
+
+        limits = self.billing_plan_limits or {}
+        if limits.get("subscription_status") != "past_due":
+            return False
+
+        failed_at_str = limits.get("payment_failed_at")
+        if not failed_at_str:
+            # If past_due but no date, assume grace period (safe default vs lockout)
+            return True
+
+        try:
+            import datetime
+
+            failed_at = datetime.datetime.fromisoformat(failed_at_str)
+            grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
+            return (timezone.now() - failed_at).days <= grace_days
+        except (ValueError, TypeError):
+            return True
+
+    @property
+    def is_payment_restricted(self):
+        """Check if team is restricted due to payment failure (past grace period)."""
+        limits = self.billing_plan_limits or {}
+        if limits.get("subscription_status") != "past_due":
+            return False
+        return not self.is_in_grace_period
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()
@@ -288,7 +319,12 @@ class Invitation(models.Model):
 
 
 class ContactProfile(models.Model):
-    """Workspace-level contact profile shared across components."""
+    """Workspace-level contact profile shared across components.
+
+    A profile contains one or more ContactEntity objects, each representing
+    an organization, company, or individual with specific roles (manufacturer,
+    supplier, author) and their associated contact persons.
+    """
 
     class Meta:
         db_table = apps.get_app_config("teams").label + "_contact_profiles"
@@ -305,13 +341,6 @@ class ContactProfile(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles")
     name = models.CharField(max_length=255)
-    company = models.CharField(max_length=255, blank=True)
-    supplier_name = models.CharField(max_length=255, blank=True)
-    vendor = models.CharField(max_length=255, blank=True)
-    email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=50, blank=True)
-    address = models.TextField(blank=True)
-    website_urls = models.JSONField(default=list, blank=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -326,18 +355,118 @@ class ContactProfile(models.Model):
         return f"{self.name} ({self.team_id})"
 
 
+class ContactEntity(models.Model):
+    """Entity (Organization/Company) within a contact profile.
+
+    Represents an organization or company associated with a contact profile.
+    An entity can be a manufacturer, supplier, or both (same entity fulfilling both roles).
+    Each profile can have at most one manufacturer and one supplier entity.
+    Each entity must have at least one contact for communication info.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_contact_entities"
+        unique_together = ("profile", "name")
+        ordering = ["name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="entities")
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    website_urls = models.JSONField(default=list, blank=True)
+    is_manufacturer = models.BooleanField(default=False)
+    is_supplier = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        """Validate entity constraints.
+
+        Note: There's a theoretical race condition between validation and save.
+        This is mitigated by the API layer using transactions (atomic blocks).
+        For stricter enforcement, consider a database partial unique index.
+        """
+        from django.core.exceptions import ValidationError
+
+        if not (self.is_manufacturer or self.is_supplier):
+            raise ValidationError("At least one role (Manufacturer or Supplier) must be selected")
+
+        # Skip duplicate checks if profile is not saved yet (new profile creation)
+        # For unsaved profiles, there can't be any existing entities anyway
+        if not self.profile or not self.profile.pk:
+            return
+
+        if self.is_manufacturer:
+            existing = ContactEntity.objects.filter(profile=self.profile, is_manufacturer=True).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError("A profile can have only one manufacturer entity")
+
+        if self.is_supplier:
+            existing = ContactEntity.objects.filter(profile=self.profile, is_supplier=True).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError("A profile can have only one supplier entity")
+
+    def clean_contacts(self):
+        """Validate contacts for CycloneDX compliance.
+
+        Note: For backward compatibility with legacy API, entities without contacts
+        are allowed. The new entity-based API enforces contacts in _upsert_entities().
+        This method is kept for documentation but doesn't enforce the constraint.
+        """
+        pass
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure validation is always called."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.profile_id})"
+
+
 class ContactProfileContact(models.Model):
-    """Contact person information associated with a workspace contact profile."""
+    """Contact person information associated with a contact entity.
+
+    Represents an individual contact person within an entity, such as a technical
+    lead, security contact, or business contact.
+    """
 
     class Meta:
         db_table = apps.get_app_config("teams").label + "_contact_profile_contacts"
+        unique_together = ("entity", "name", "email")
+        ordering = ["order", "name"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    entity = models.ForeignKey(ContactEntity, on_delete=models.CASCADE, related_name="contacts")
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.entity_id})"
+
+
+class AuthorContact(models.Model):
+    """Author contact information linked directly to a contact profile.
+
+    Represents an individual author of an SBOM (CycloneDX aligned).
+    Authors are individuals, not organizations, so they link directly to the profile
+    rather than through an entity.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_author_contacts"
         unique_together = ("profile", "name", "email")
         ordering = ["order", "name"]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="contacts")
+    profile = models.ForeignKey(ContactProfile, on_delete=models.CASCADE, related_name="authors")
     name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True, null=True)
+    email = models.EmailField()
     phone = models.CharField(max_length=50, blank=True, null=True)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

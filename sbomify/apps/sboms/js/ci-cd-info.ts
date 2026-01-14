@@ -16,6 +16,7 @@ interface Config {
 interface Props {
     componentId: string;
     componentName: string;
+    hasSboms: boolean;
 }
 
 import Alpine from '../../core/js/alpine-init';
@@ -24,7 +25,7 @@ export function registerCiCdInfo() {
     Alpine.data('ciCdInfo', (props: Props) => ({
         componentId: props.componentId,
         componentName: props.componentName,
-        expanded: true,
+        expanded: !props.hasSboms,
         activeTab: 'github',
         sourceType: 'lock',
         config: {
@@ -193,7 +194,7 @@ export function registerCiCdInfo() {
             if (this.config.enrich) lines.push('    ENRICH: true');
             if (this.config.outputFile) lines.push('    OUTPUT_FILE: sbom.cdx.json');
 
-            lines.push('  script:', '    - /entrypoint.sh');
+            lines.push('  script:', '    - sbomify-action');
 
             return lines.join('\n');
         },
@@ -214,7 +215,7 @@ export function registerCiCdInfo() {
             }
 
             lines.push('        script:',
-                '          - /entrypoint.sh',
+                '          - sbomify-action',
                 '        env:',
                 `          TOKEN: $SBOMIFY_TOKEN`,
                 `          COMPONENT_ID: '${this.componentId}'`,
@@ -241,11 +242,134 @@ export function registerCiCdInfo() {
         },
 
         generateAzureYaml(): string {
-            return '# Azure Pipelines configuration coming soon...';
+            const lines = [
+                'trigger:',
+                '  - main',
+                '',
+                'pool:',
+                '  vmImage: ubuntu-latest',
+                '',
+                'steps:',
+                '  - checkout: self',
+                '',
+                '  - script: |'
+            ];
+
+            // Build the docker run command
+            const dockerLines: string[] = [];
+            dockerLines.push('      docker run --rm -v $(Build.SourcesDirectory):/code \\');
+
+            if (this.sourceType === 'docker') {
+                dockerLines.push('        -v /var/run/docker.sock:/var/run/docker.sock \\');
+            }
+
+            dockerLines.push(
+                '        -e TOKEN=$(SBOMIFY_TOKEN) \\',
+                `        -e COMPONENT_ID='${this.componentId}' \\`,
+                `        -e COMPONENT_NAME='${this.componentName}' \\`,
+                '        -e COMPONENT_VERSION=$(Build.SourceBranchName)-$(Build.SourceVersion) \\'
+            );
+
+            // Add source-specific configuration
+            switch (this.sourceType) {
+                case 'sbom':
+                    dockerLines.push(`        -e SBOM_FILE=/code/path/to/sbom.cdx.json \\`);
+                    break;
+                case 'lock':
+                    dockerLines.push(`        -e LOCK_FILE=/code/poetry.lock \\     # Or package-lock.json, Gemfile.lock, etc.`);
+                    break;
+                case 'docker':
+                    dockerLines.push(`        -e DOCKER_IMAGE='your-image:tag' \\`);
+                    break;
+            }
+
+            // Add boolean configurations
+            if (this.config.augment) dockerLines.push('        -e AUGMENT=true \\');
+            if (this.config.enrich) dockerLines.push('        -e ENRICH=true \\');
+            if (this.config.outputFile) dockerLines.push('        -e OUTPUT_FILE=/code/sbom.cdx.json \\');
+
+            // Add the image name (remove trailing backslash from last line)
+            const lastLine = dockerLines[dockerLines.length - 1];
+            dockerLines[dockerLines.length - 1] = lastLine.replace(/ \\$/, '');
+            dockerLines.push('        sbomifyhub/sbomify-action');
+
+            lines.push(...dockerLines);
+
+            lines.push(
+                '    displayName: Upload SBOM',
+                '    env:',
+                '      SBOMIFY_TOKEN: $(SBOMIFY_TOKEN)'
+            );
+
+            return lines.join('\n');
         },
 
         generateJenkinsfile(): string {
-            return '# Jenkins Pipelines configuration coming soon...';
+            const lines = [
+                'pipeline {',
+                '    agent any',
+                '',
+                '    environment {',
+                '        SBOMIFY_TOKEN = credentials(\'sbomify-token\')',
+                `        COMPONENT_ID = '${this.componentId}'`,
+                `        COMPONENT_NAME = '${this.componentName}'`,
+                '    }',
+                '',
+                '    stages {',
+                '        stage(\'Upload SBOM\') {',
+                '            steps {',
+                '                script {',
+                '                    def version = env.TAG_NAME ?: "${env.BRANCH_NAME}-${env.GIT_COMMIT}"'
+            ];
+
+            // Build the docker run command
+            lines.push('                    sh """');
+            lines.push('                        docker run --rm -v $WORKSPACE:/code \\\\');
+
+            if (this.sourceType === 'docker') {
+                lines.push('                          -v /var/run/docker.sock:/var/run/docker.sock \\\\');
+            }
+
+            lines.push(
+                '                          -e TOKEN=$SBOMIFY_TOKEN \\\\',
+                '                          -e COMPONENT_ID=$COMPONENT_ID \\\\',
+                '                          -e COMPONENT_NAME=$COMPONENT_NAME \\\\',
+                '                          -e COMPONENT_VERSION=$version \\\\'
+            );
+
+            // Add source-specific configuration
+            switch (this.sourceType) {
+                case 'sbom':
+                    lines.push('                          -e SBOM_FILE=/code/path/to/sbom.cdx.json \\\\');
+                    break;
+                case 'lock':
+                    lines.push('                          -e LOCK_FILE=/code/poetry.lock \\\\');
+                    break;
+                case 'docker':
+                    lines.push('                          -e DOCKER_IMAGE=\'your-image:tag\' \\\\');
+                    break;
+            }
+
+            // Add boolean configurations
+            if (this.config.augment) lines.push('                          -e AUGMENT=true \\\\');
+            if (this.config.enrich) lines.push('                          -e ENRICH=true \\\\');
+            if (this.config.outputFile) lines.push('                          -e OUTPUT_FILE=/code/sbom.cdx.json \\\\');
+
+            // Remove trailing backslash from last line and add image
+            const lastLine = lines[lines.length - 1];
+            lines[lines.length - 1] = lastLine.replace(/ \\\\$/, '');
+            lines.push('                          sbomifyhub/sbomify-action');
+
+            lines.push(
+                '                    """',
+                '                }',
+                '            }',
+                '        }',
+                '    }',
+                '}'
+            );
+
+            return lines.join('\n');
         }
     }));
 }

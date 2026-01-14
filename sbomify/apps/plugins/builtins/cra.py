@@ -6,7 +6,12 @@ requirements for software bill of materials as defined in Annex I Part II and An
 Standard Reference:
     - Name: EU Cyber Resilience Act (CRA) - Regulation (EU) 2024/2847
     - Version: 2024/2847 (23 October 2024)
-    - URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847
+    - Official URL: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847
+
+sbomify Compliance Guide:
+    - Overview: https://sbomify.com/compliance/eu-cra/
+    - Schema Crosswalk: https://sbomify.com/compliance/schema-crosswalk/
+    - Related NIS2: https://sbomify.com/compliance/eu-nis2/
 
 The CRA SBOM requirements validated by this plugin:
 
@@ -318,8 +323,12 @@ class CRACompliancePlugin(AssessmentPlugin):
             if not package.get("supplier"):
                 supplier_failures.append(package_name)
 
-            # 4. Unique identifiers (PURL, externalRefs)
-            has_identifier = bool(package.get("externalRefs"))
+            # 4. Unique identifiers (PURL, CPE, SWID via externalRefs)
+            # Only accept externalRefs with valid identifier types
+            valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+            has_identifier = package.get("purl") or any(
+                ref.get("referenceType") in valid_identifier_types for ref in package.get("externalRefs", [])
+            )
             if not has_identifier:
                 identifier_failures.append(package_name)
 

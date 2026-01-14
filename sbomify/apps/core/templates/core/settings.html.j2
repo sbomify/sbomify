@@ -68,7 +68,7 @@
                         <div class="token-display-container">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <label class="form-label mb-0">Personal Access Token</label>
-                                <div class="vc-copy-token"></div>
+                                {% include 'core/components/copy_token.html.j2' %}
                             </div>
                             <div id="access-token"
                                  class="form-control bg-light font-monospace"
@@ -127,9 +127,10 @@
                         </div>
                         <!-- Delete Confirmation Modal -->
                         <div x-show="showDeleteModal"
-                             style="display: none;
-                                    background-color: rgba(0,0,0,0.5)"
-                             class="modal fade show d-block"
+                             x-cloak
+                             :style="showDeleteModal ? 'display: block; background-color: rgba(0,0,0,0.5)' : 'display: none'"
+                             class="modal fade"
+                             :class="{ 'show': showDeleteModal }"
                              tabindex="-1"
                              role="dialog"
                              aria-modal="true"
@@ -180,8 +181,6 @@
             </div>
         </div>
     </div>
-    <!-- Site notifications component -->
-    <div class="vc-site-notifications"></div>
     <style>
         .settings-page-header {
             margin-bottom: 2rem;

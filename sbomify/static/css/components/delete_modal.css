@@ -12,8 +12,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1050;
+    z-index: 9999;
     padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: 0;
 }
 
 .delete-modal {
@@ -23,6 +26,16 @@
     max-width: 500px;
     width: 100%;
     max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.delete-modal > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -32,6 +45,7 @@
     align-items: flex-start;
     gap: 1rem;
     position: relative;
+    flex-shrink: 0;
 }
 
 .delete-modal-icon {
@@ -80,6 +94,11 @@
 
 .delete-modal-body {
     padding: 0 1.5rem 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .delete-modal-message {
@@ -109,6 +128,7 @@
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 .delete-modal-button {
@@ -143,53 +163,4 @@
 
 .delete-modal-button--danger:hover {
     background: #b91c1c;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    .delete-modal {
-        background: #1f2937;
-        color: #f9fafb;
-    }
-
-    .delete-modal-title {
-        color: #f9fafb;
-    }
-
-    .delete-modal-name {
-        color: #e5e7eb;
-    }
-
-    .delete-modal-close {
-        color: #9ca3af;
-    }
-
-    .delete-modal-close:hover {
-        background: #374151;
-        color: #d1d5db;
-    }
-
-    .delete-modal-message {
-        color: #d1d5db;
-    }
-
-    .delete-modal-warning {
-        color: #9ca3af;
-    }
-
-    .delete-modal-footer {
-        background: #111827;
-        border-top-color: #374151;
-    }
-
-    .delete-modal-button--secondary {
-        background: #374151;
-        color: #e5e7eb;
-        border-color: #4b5563;
-    }
-
-    .delete-modal-button--secondary:hover {
-        background: #4b5563;
-        border-color: #6b7280;
-    }
 }

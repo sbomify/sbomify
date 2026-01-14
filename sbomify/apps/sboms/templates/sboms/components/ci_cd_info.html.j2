@@ -1,6 +1,6 @@
 {% load static %}
 <link rel="stylesheet" href="{% static 'css/components/ci-cd-info.css' %}">
-<div x-data="ciCdInfo({componentId: '{{ component.id|escapejs }}', componentName: '{{ component.name|escapejs }}'})"
+<div x-data="ciCdInfo({componentId: '{{ component.id|escapejs }}', componentName: '{{ component.name|escapejs }}', hasSboms: {{ component.sbom_count|default:0 }} > 0})"
      class="card sbom-card"
      :class="{'collapsed': !expanded}">
     <div class="card-header clickable" @click="expanded = !expanded">

@@ -128,15 +128,17 @@ class TestCustomDomainRouting:
         assert response.status_code == 200
         assert product_with_custom_domain.name.encode() in response.content
 
-    def test_project_detail_clean_url(self, client, project_with_custom_domain):
-        """Test that /project/{id}/ works on custom domain."""
+    def test_project_detail_redirects_to_product(self, client, project_with_custom_domain):
+        """Test that /project/{id}/ redirects to product page on custom domain."""
         project_id = project_with_custom_domain.id
         response = client.get(
             f"/project/{project_id}/",
             HTTP_HOST="trust.example.com"
         )
 
-        assert response.status_code == 200
+        # Projects now redirect to their parent product page
+        assert response.status_code == 302
+        assert "/product/" in response.url
 
     def test_component_detail_clean_url(self, client, component_with_custom_domain):
         """Test that /component/{id}/ works on custom domain."""

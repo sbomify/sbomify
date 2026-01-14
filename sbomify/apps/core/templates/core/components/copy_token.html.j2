@@ -1,0 +1,10 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/components/copy-token.css' %}">
+<button x-data="copyToken()"
+        class="copy-btn-pro"
+        :class="{ copied: showCopied }"
+        title="Copy token to clipboard"
+        @click="copyToken()">
+    <i :class="showCopied ? 'fas fa-check' : 'far fa-copy'"></i>
+    <span x-text="showCopied ? 'Copied!' : 'Copy'"></span>
+</button>

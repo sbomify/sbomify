@@ -137,6 +137,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "accent_color": DEFAULT_ACCENT_COLOR,
             "brand_color_rgb": "79, 70, 229",  # Pre-computed for DEFAULT_BRAND_COLOR
             "accent_color_rgb": "124, 139, 157",  # Pre-computed for DEFAULT_ACCENT_COLOR
+            "trust_center_description": "",
         }
 
     raw_branding = (getattr(team, "branding_info", {}) or {}).copy()
@@ -172,6 +173,7 @@ def build_branding_context(team: "Team | None") -> dict:
             "accent_color": DEFAULT_ACCENT_COLOR,
             "brand_color_rgb": f"{default_brand_rgb[0]}, {default_brand_rgb[1]}, {default_brand_rgb[2]}",
             "accent_color_rgb": f"{default_accent_rgb[0]}, {default_accent_rgb[1]}, {default_accent_rgb[2]}",
+            "trust_center_description": branding_info.trust_center_description,
         }
 
     # Sanitize colors to prevent XSS attacks via CSS injection

@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms import inlineformset_factory
 
-from sbomify.apps.teams.models import ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import AuthorContact, ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 
 
 class AddTeamForm(forms.ModelForm):
@@ -204,42 +204,162 @@ class ContactProfileForm(forms.Form):
 
 
 class ContactProfileModelForm(forms.ModelForm):
+    """Form for ContactProfile - only contains profile-level fields.
+
+    Note: We explicitly set required=True on name field to ensure server-side
+    validation works even if JavaScript is disabled. While Django ModelForm
+    would normally infer this from the model (blank=False), being explicit
+    ensures data integrity regardless of client-side validation state.
+    """
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
+    )
+
+    class Meta:
+        model = ContactProfile
+        fields = ["name", "is_default"]
+        widgets = {
+            "is_default": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+
+class DeleteAwareModelFormMixin:
+    """Mixin for ModelForms to exclude deleted PKs from unique validation.
+
+    When used with BaseDeleteAwareInlineFormSet, this mixin enables forms to
+    skip database unique validation for records that are being deleted in the
+    same formset submission.
+    """
+
+    def validate_unique(self):
+        """Override to exclude PKs being deleted from unique validation query.
+
+        Returns:
+            None: If validation passes (no unique constraint violations).
+
+        Raises:
+            ValidationError: If a unique constraint violation is detected
+                (excluding the PKs specified in _exclude_pks_from_unique).
+        """
+        exclude_pks = getattr(self, "_exclude_pks_from_unique", set())
+        if not exclude_pks:
+            return super().validate_unique()
+
+        # Manually perform unique validation, excluding the deleted PKs
+        from django.core.exceptions import ValidationError
+
+        model = self._meta.model
+        # Unpack only unique_checks; date_checks are intentionally omitted.
+        # The models using this mixin (ContactEntity, ContactProfileContact, AuthorContact)
+        # do not use date-based unique constraints (unique_for_date, unique_for_month, unique_for_year),
+        # so date_checks will be empty.
+        #
+        # NOTE: If date-based unique constraints are added to any model using this mixin in the future,
+        # the validate_unique method would need to be updated to handle date_checks, or tests should
+        # verify that date validation still works correctly (e.g., by calling super().validate_unique()
+        # for date validation only, or by implementing custom date validation logic).
+        unique_checks, _ = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
+
+        errors = []
+        for model_class, unique_check in unique_checks:
+            # Build lookup kwargs for this unique constraint
+            lookup_kwargs = {}
+            for field_name in unique_check:
+                if field_name == model._meta.pk.name:
+                    continue
+                field = model._meta.get_field(field_name)
+                lookup_value = getattr(self.instance, field.attname, None)
+                if lookup_value is None:
+                    # Null values don't trigger unique violations
+                    break
+                lookup_kwargs[field.name] = lookup_value
+            else:
+                if lookup_kwargs:
+                    # Query for duplicates, excluding the current instance and deleted PKs
+                    qs = model_class._default_manager.filter(**lookup_kwargs)
+                    if self.instance.pk:
+                        qs = qs.exclude(pk=self.instance.pk)
+                    if exclude_pks:
+                        qs = qs.exclude(pk__in=exclude_pks)
+
+                    if qs.exists():
+                        errors.append(self.unique_error_message(model_class, unique_check))
+
+        if errors:
+            raise ValidationError(errors)
+
+
+class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
+    """Form for ContactEntity - contains organization/company details.
+
+    An entity can be a manufacturer, supplier, or both.
+    At least one role must be selected.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
+    """
+
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
+    )
+
+    is_manufacturer = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    is_supplier = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
     website_urls_text = forms.CharField(
         label="Website URLs",
         required=False,
         widget=forms.Textarea(
             attrs={
                 "class": "form-control",
-                "rows": 3,
-                "placeholder": "Enter one URL per line\nhttps://example.com\nhttps://example.org",
+                "rows": 2,
+                "placeholder": "Enter one URL per line\nhttps://example.com",
             }
         ),
         help_text="Enter one URL per line",
     )
 
     class Meta:
-        model = ContactProfile
+        model = ContactEntity
         fields = [
+            "id",
             "name",
-            "company",
-            "supplier_name",
-            "vendor",
             "email",
             "phone",
             "address",
-            "is_default",
+            "is_manufacturer",
+            "is_supplier",
         ]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
-            "company": forms.TextInput(attrs={"class": "form-control", "placeholder": "Company name"}),
-            "supplier_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Supplier name"}),
-            "vendor": forms.TextInput(attrs={"class": "form-control", "placeholder": "Vendor name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
             "address": forms.Textarea(
-                attrs={"class": "form-control", "rows": 3, "placeholder": "Street, City, Country"}
+                attrs={"class": "form-control", "rows": 2, "placeholder": "Street, City, Country"}
             ),
-            "is_default": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -247,6 +367,21 @@ class ContactProfileModelForm(forms.ModelForm):
 
         if self.instance and self.instance.website_urls:
             self.fields["website_urls_text"].initial = "\n".join(self.instance.website_urls)
+
+        if self.instance and self.instance.pk:
+            # Set initial roles from instance
+            self.fields["is_manufacturer"].initial = self.instance.is_manufacturer
+            self.fields["is_supplier"].initial = self.instance.is_supplier
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_manufacturer = cleaned_data.get("is_manufacturer", False)
+        is_supplier = cleaned_data.get("is_supplier", False)
+
+        if not is_manufacturer and not is_supplier:
+            raise forms.ValidationError("At least one role (Manufacturer or Supplier) must be selected.")
+
+        return cleaned_data
 
     def clean_website_urls_text(self):
         text = self.cleaned_data.get("website_urls_text")
@@ -257,28 +392,177 @@ class ContactProfileModelForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.website_urls = self.cleaned_data.get("website_urls_text", [])
+        instance.is_manufacturer = self.cleaned_data.get("is_manufacturer", False)
+        instance.is_supplier = self.cleaned_data.get("is_supplier", False)
         if commit:
             instance.save()
         return instance
 
 
-class ContactProfileContactForm(forms.ModelForm):
+class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
+    """Form for ContactProfileContact - individual contacts within an entity.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
+    """
+
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+    )
+
     class Meta:
         model = ContactProfileContact
-        fields = ["name", "email", "phone"]
+        fields = ["id", "name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
 
 
+class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
+    """Base formset that excludes deleted forms from unique validation.
+
+    Django's default validation has two issues when deleting and re-adding items:
+    1. Formset-level: validate_unique() checks across ALL forms including deleted ones
+    2. Form-level: Each ModelForm's validate_unique() checks the database, but deleted
+       items haven't been removed yet during validation
+
+    This class fixes both by:
+    1. Overriding validate_unique() to exclude deleted forms
+    2. Collecting deleted PKs and passing them to forms for database query exclusion
+    """
+
+    def full_clean(self):
+        """Override to collect deleted PKs before form validation.
+
+        Collects primary keys of forms marked for deletion and injects them
+        into each form's _exclude_pks_from_unique attribute so they can be
+        excluded from unique validation checks.
+
+        Returns:
+            None: This method returns None, following Django's formset conventions.
+                  Validation errors are stored in formset.errors and form.errors.
+
+        Raises:
+            ValidationError: If validation fails, this is raised by super().full_clean().
+        """
+        # Collect PKs of forms marked for deletion BEFORE validation
+        # We need to do this early because forms need this info during their validate_unique
+        # Note: self.forms is populated during formset construction, so it's available
+        # before super().full_clean() is called. This is standard Django formset behavior.
+        self._deleted_pks = set()
+
+        # First pass: identify which forms are marked for deletion
+        for form in self.forms:
+            # Check if form has data indicating deletion
+            # Django formsets use "on" for checked checkboxes, but we also check
+            # string representations that might come from x-model bindings or other sources
+            delete_key = f"{form.prefix}-DELETE"
+            if self.data.get(delete_key) in ("on", "True", "true", "1"):
+                # This form is being deleted - get its instance PK if it exists
+                if form.instance and form.instance.pk:
+                    self._deleted_pks.add(form.instance.pk)
+
+        # Inject deleted PKs into each form so they can exclude them from unique checks
+        # Note: self.forms is populated during formset construction, so it's available
+        # before super().full_clean() is called. This is standard Django formset behavior.
+        for form in self.forms:
+            form._exclude_pks_from_unique = self._deleted_pks
+
+        super().full_clean()
+
+    def validate_unique(self):
+        """Override to exclude deleted forms from formset-level unique validation.
+
+        Returns:
+            None: If validation passes (no unique constraint violations).
+
+        Raises:
+            ValidationError: If a unique constraint violation is detected
+                (excluding forms marked for deletion).
+        """
+        original_forms = self.forms
+        self.forms = [f for f in self.forms if not self._should_delete_form(f)]
+        try:
+            super().validate_unique()
+        finally:
+            self.forms = original_forms
+
+
+# Formset for contacts linked to an entity (3-level hierarchy)
 ContactProfileContactFormSet = inlineformset_factory(
-    ContactProfile,
+    ContactEntity,
     ContactProfileContact,
     form=ContactProfileContactForm,
+    formset=BaseDeleteAwareInlineFormSet,
     extra=0,
-    can_delete=False,
+    can_delete=True,
+)
+
+
+# Formset for entities linked to a profile
+ContactEntityFormSet = inlineformset_factory(
+    ContactProfile,
+    ContactEntity,
+    form=ContactEntityModelForm,
+    formset=BaseDeleteAwareInlineFormSet,
+    extra=0,
+    can_delete=True,
+)
+
+
+class AuthorContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
+    """Form for AuthorContact - individual author contacts (CycloneDX aligned).
+
+    Authors are individuals, not organizations.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
+    """
+
+    id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+    )
+
+    class Meta:
+        model = AuthorContact
+        fields = ["id", "name", "email", "phone"]
+        widgets = {
+            "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
+        }
+
+
+# Formset for author contacts linked directly to a profile (CycloneDX aligned)
+AuthorContactFormSet = inlineformset_factory(
+    ContactProfile,
+    AuthorContact,
+    form=AuthorContactForm,
+    formset=BaseDeleteAwareInlineFormSet,
+    extra=0,
+    can_delete=True,
 )
 
 

@@ -448,16 +448,33 @@
     display: none !important;
   }
 
-  /* Adjust search on mobile */
+  /* Adjust search on mobile - show on medium mobile, hide on smaller */
   .navbar-search {
     flex: 1 1 auto !important;
     min-width: 0 !important;
-    max-width: 200px !important;
-    margin: 0 0.5rem !important;
+    max-width: 180px !important;
+    margin: 0 0.375rem !important;
     order: 2 !important;
     position: relative !important;
     overflow: visible !important;
     z-index: 100 !important;
+  }
+
+  /* Hide "New" text on mobile */
+  .btn-new span {
+    display: none !important;
+  }
+
+  .btn-new {
+    padding: 0.375rem 0.625rem !important;
+  }
+
+  .btn-new i {
+    margin-right: 0 !important;
+  }
+
+  .btn-new.dropdown-toggle::after {
+    margin-left: 0.25rem !important;
   }
 
   .search-input {
@@ -817,29 +834,67 @@
 
   /* Navbar structure improvements - refine spacing */
   .navbar {
-    padding: 0.625rem 0.875rem !important;
-    gap: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.375rem !important;
   }
 
   /* Hamburger menu positioning - ensure proper spacing */
   .sidebar-toggle {
     order: 1 !important;
-    margin-right: 0.5rem !important;
+    margin-right: 0.375rem !important;
     flex-shrink: 0 !important;
-    width: 2.25rem !important;
-    height: 2.25rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
   }
 
-  /* Search bar refinement */
+  /* Make search bar compact on small screens */
   .navbar-search {
     max-width: 180px !important;
-    margin: 0 0.375rem !important;
+  }
+
+  .search-input {
+    font-size: 0.75rem !important;
+    padding: 0.375rem 0.5rem 0.375rem 1.75rem !important;
+  }
+
+  .search-input::placeholder {
+    font-size: 0.75rem !important;
+  }
+
+  .search-icon {
+    left: 0.5rem !important;
+    font-size: 0.75rem !important;
   }
 
   /* Navbar actions refinement */
   .navbar-actions {
-    gap: 0.375rem !important;
-    margin-left: 0.375rem !important;
+    gap: 0.25rem !important;
+    margin-left: auto !important;
+  }
+
+  /* Hide "New" text - icon only on small screens */
+  .btn-new span {
+    display: none !important;
+  }
+
+  .btn-new {
+    padding: 0.375rem 0.5rem !important;
+    min-width: 2rem !important;
+  }
+
+  .btn-new i {
+    margin-right: 0 !important;
+  }
+
+  .btn-new.dropdown-toggle::after {
+    display: none !important;
+  }
+
+  /* Icon buttons smaller */
+  .btn-icon {
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
   }
 
   /* Workspace selector positioning and styling */
@@ -977,13 +1032,14 @@
     padding: 0 !important;
   }
 
-  /* Search bar - reduce size on very small screens */
+  /* Make search bar ultra-compact on very small screens */
   .navbar-search {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
     max-width: 120px !important;
-    margin: 0 0.25rem !important;
-    order: 2 !important;
+  }
+
+  /* Hide help dropdown on very small screens */
+  .btn-help {
+    display: none !important;
   }
 
   .search-input {

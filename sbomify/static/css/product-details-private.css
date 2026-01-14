@@ -7,6 +7,8 @@
 }
 
 .header-main {
+    display: flex;
+    flex-direction: column;
     border-bottom: 1px solid #e2e8f0;
     padding-bottom: 1.5rem;
 }
@@ -17,6 +19,70 @@
     justify-content: space-between;
     gap: 1.5rem;
     flex-wrap: wrap;
+    width: 100%;
+}
+
+.description-section {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.description-display {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    margin-left: -0.5rem;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.description-display:hover {
+    background-color: #f8fafc;
+}
+
+.description-display:hover .edit-icon {
+    opacity: 1;
+}
+
+.description-text {
+    color: #475569;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.description-placeholder {
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.edit-icon {
+    color: #94a3b8;
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-top: 0.25rem;
+}
+
+.description-form {
+    width: 100%;
+    max-width: 600px;
+}
+
+.description-form textarea {
+    font-size: 0.95rem;
+}
+
+.description-hint {
+    display: block;
+    margin-top: 0.25rem;
+    color: #94a3b8;
+    font-size: 0.75rem;
 }
 
 .item-title {

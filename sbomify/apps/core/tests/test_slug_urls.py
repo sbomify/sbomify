@@ -142,13 +142,15 @@ class TestSlugRoutingOnCustomDomain:
         assert response.status_code == 200
         assert product_with_slug.name.encode() in response.content
 
-    def test_project_by_slug(self, client, project_with_slug):
-        """Test that /project/{slug}/ works on custom domain."""
+    def test_project_by_slug_redirects_to_product(self, client, project_with_slug):
+        """Test that /project/{slug}/ redirects to product page on custom domain."""
         response = client.get(
             f"/project/{project_with_slug.slug}/",
             HTTP_HOST="trust.example.com"
         )
-        assert response.status_code == 200
+        # Projects now redirect to their parent product page
+        assert response.status_code == 302
+        assert "/product/" in response.url
 
     def test_component_by_slug(self, client, component_with_slug):
         """Test that /component/{slug}/ works on custom domain."""
@@ -211,13 +213,12 @@ class TestSlugRoutingOnMainDomain:
         assert parsed.netloc == "trust.example.com"
         assert f"/product/{product_with_slug.slug}/" in response.url
 
-    def test_project_by_id_on_main_domain(self, client, project_with_slug):
-        """Test that /public/project/{id}/ redirects to custom domain."""
+    def test_project_by_id_on_main_domain_redirects_to_product(self, client, project_with_slug):
+        """Test that /public/project/{id}/ redirects to parent product."""
         response = client.get(f"/public/project/{project_with_slug.id}/")
-        # Should redirect to custom domain
+        # Projects now redirect to their parent product page
         assert response.status_code == 302
-        parsed = urlparse(response.url)
-        assert parsed.netloc == "trust.example.com"
+        assert "/product/" in response.url
 
     def test_component_by_id_on_main_domain(self, client, component_with_slug):
         """Test that /public/component/{id}/ redirects to custom domain."""

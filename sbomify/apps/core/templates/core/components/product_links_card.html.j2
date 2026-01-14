@@ -1,0 +1,321 @@
+{% load static utils %}
+<link rel="stylesheet"
+      href="{% static 'css/components/delete_modal.css' %}">
+<div class="card shadow-sm"
+     id="product-links-card"
+     x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editTitle: '', editUrl: '', editDescription: '', deleteId: '', deleteName: '' }">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">
+            <i class="fas fa-link me-2"></i>Product Links
+        </h4>
+        {% if can_manage_links %}
+            <button type="button"
+                    class="btn btn-primary btn-sm"
+                    @click="showAddModal = true">
+                <i class="fas fa-plus me-1"></i>Add Link
+            </button>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if links %}
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%">Type</th>
+                            <th style="width: 25%">Title</th>
+                            <th style="width: 45%">URL</th>
+                            {% if can_manage_links %}
+                                <th style="width: 15%" class="text-end">Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for link in links %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary-subtle text-secondary">
+                                        {{ link_types|get_item:link.link_type|default:link.link_type }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>{{ link.title }}</strong>
+                                    {% if link.description %}<div class="text-muted small">{{ link.description }}</div>{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ link.url }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="text-primary text-decoration-none">
+                                        {% if link.url|length > 50 %}
+                                            {{ link.url|truncatechars:50 }}
+                                        {% else %}
+                                            {{ link.url }}
+                                        {% endif %}
+                                        <i class="fas fa-external-link-alt ms-1 small"></i>
+                                    </a>
+                                </td>
+                                {% if can_manage_links %}
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button"
+                                                    class="btn btn-outline-primary btn-sm"
+                                                    title="Edit"
+                                                    @click="editId = '{{ link.id }}'; editType = '{{ link.link_type }}'; editTitle = '{{ link.title|escapejs }}'; editUrl = '{{ link.url|escapejs }}'; editDescription = '{{ link.description|default:''|escapejs }}'; showEditModal = true">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-outline-danger btn-sm"
+                                                    title="Delete"
+                                                    @click="deleteId = '{{ link.id }}'; deleteName = '{{ link.title|escapejs }}'; showDeleteModal = true">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-link fa-2x mb-3"></i>
+                {% if not has_crud_permissions %}
+                    <p class="mb-0">No product links available</p>
+                    <small>This product does not have any links defined</small>
+                {% else %}
+                    <p class="mb-0">No product links added</p>
+                    <small>Add links like website, support, documentation, etc. to provide additional information about this product</small>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+    {% if can_manage_links %}
+        <!-- Add Link Modal -->
+        <template x-teleport="body">
+            <div x-show="showAddModal"
+                 class="delete-modal-overlay"
+                 @click.self="showAddModal = false"
+                 @keydown.escape.window="showAddModal = false"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 style="display: none">
+                <div class="delete-modal" style="max-width: 600px;" @click.stop>
+                    <form id="add-link-form"
+                          @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="create">
+                        <div class="delete-modal-header">
+                            <h3 class="delete-modal-title">Add Link</h3>
+                            <button type="button"
+                                    class="delete-modal-close"
+                                    @click="showAddModal = false"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="delete-modal-body">
+                            <div class="mb-3">
+                                <label for="add-link-type" class="form-label">
+                                    Link Type <span class="text-danger">*</span>
+                                </label>
+                                <select id="add-link-type" name="link_type" class="form-select" required>
+                                    <option value="">Select type...</option>
+                                    {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-link-title" class="form-label">
+                                    Title <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                       id="add-link-title"
+                                       name="title"
+                                       class="form-control"
+                                       placeholder="Enter link title"
+                                       required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-link-url" class="form-label">
+                                    URL <span class="text-danger">*</span>
+                                </label>
+                                <input type="url"
+                                       id="add-link-url"
+                                       name="url"
+                                       class="form-control"
+                                       placeholder="https://example.com"
+                                       required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-link-description" class="form-label">Description</label>
+                                <textarea id="add-link-description"
+                                          name="description"
+                                          class="form-control"
+                                          rows="3"
+                                          placeholder="Optional description of this link"></textarea>
+                            </div>
+                        </div>
+                        <div class="delete-modal-footer">
+                            <button type="button"
+                                    class="delete-modal-button delete-modal-button--secondary"
+                                    @click="showAddModal = false">Cancel</button>
+                            <button type="submit"
+                                    class="delete-modal-button"
+                                    style="background: #2563eb;
+                                           color: white">
+                                <i class="fas fa-plus me-2"></i>Add
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </template>
+        <!-- Edit Link Modal -->
+        <template x-teleport="body">
+            <div x-show="showEditModal"
+                 class="delete-modal-overlay"
+                 @click.self="showEditModal = false"
+                 @keydown.escape.window="showEditModal = false"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 style="display: none">
+                <div class="delete-modal" style="max-width: 600px;" @click.stop>
+                    <form id="edit-link-form"
+                          @submit.prevent=" const formData = new FormData($el); formData.set('link_id', editId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showEditModal = false; }); ">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update">
+                        <input type="hidden" name="link_id" :value="editId">
+                        <div class="delete-modal-header">
+                            <div class="delete-modal-icon"
+                                 style="background: #eff6ff;
+                                        border-color: #bfdbfe;
+                                        color: #2563eb">
+                                <i class="fas fa-edit"></i>
+                            </div>
+                            <h3 class="delete-modal-title">Edit Link</h3>
+                            <button type="button"
+                                    class="delete-modal-close"
+                                    @click="showEditModal = false"
+                                    aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="delete-modal-body">
+                            <div class="mb-3">
+                                <label for="edit-link-type" class="form-label">
+                                    Link Type <span class="text-danger">*</span>
+                                </label>
+                                <select id="edit-link-type"
+                                        name="link_type"
+                                        class="form-select"
+                                        required
+                                        x-model="editType">
+                                    <option value="">Select type...</option>
+                                    {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-link-title" class="form-label">
+                                    Title <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                       id="edit-link-title"
+                                       name="title"
+                                       class="form-control"
+                                       placeholder="Enter link title"
+                                       required
+                                       x-model="editTitle">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-link-url" class="form-label">
+                                    URL <span class="text-danger">*</span>
+                                </label>
+                                <input type="url"
+                                       id="edit-link-url"
+                                       name="url"
+                                       class="form-control"
+                                       placeholder="https://example.com"
+                                       required
+                                       x-model="editUrl">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit-link-description" class="form-label">Description</label>
+                                <textarea id="edit-link-description"
+                                          name="description"
+                                          class="form-control"
+                                          rows="3"
+                                          placeholder="Optional description of this link"
+                                          x-model="editDescription"></textarea>
+                            </div>
+                        </div>
+                        <div class="delete-modal-footer">
+                            <button type="button"
+                                    class="delete-modal-button delete-modal-button--secondary"
+                                    @click="showEditModal = false">Cancel</button>
+                            <button type="submit"
+                                    class="delete-modal-button"
+                                    style="background: #2563eb;
+                                           color: white">
+                                <i class="fas fa-save me-2"></i>Update
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </template>
+        <!-- Delete Link Modal -->
+        <template x-teleport="body">
+            <div x-show="showDeleteModal"
+                 class="delete-modal-overlay"
+                 @click.self="showDeleteModal = false"
+                 @keydown.escape.window="showDeleteModal = false"
+                 x-transition:enter="transition ease-out duration-150"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-100"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 style="display: none">
+                <div class="delete-modal" @click.stop>
+                    <div class="delete-modal-header">
+                        <div class="delete-modal-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h3 class="delete-modal-title">Delete Link</h3>
+                        <button type="button"
+                                class="delete-modal-close"
+                                @click="showDeleteModal = false"
+                                aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="delete-modal-body">
+                        <p class="delete-modal-message">
+                            Are you sure you want to delete <span class="delete-modal-name" x-text="deleteName"></span>?
+                        </p>
+                        <p class="delete-modal-warning">This action cannot be undone and will permanently remove this link.</p>
+                    </div>
+                    <div class="delete-modal-footer">
+                        <button type="button"
+                                class="delete-modal-button delete-modal-button--secondary"
+                                @click="showDeleteModal = false">Cancel</button>
+                        <button type="button"
+                                class="delete-modal-button delete-modal-button--danger"
+                                @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('link_id', deleteId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showDeleteModal = false; }); ">
+                            <i class="fas fa-trash me-2"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    {% endif %}
+</div>

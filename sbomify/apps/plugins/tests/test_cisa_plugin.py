@@ -268,6 +268,41 @@ class TestCycloneDXValidation:
         context_finding = next(f for f in result.findings if "generation-context" in f.id)
         assert context_finding.status == "fail"
 
+    def test_cyclonedx_generation_context_via_lifecycles(self) -> None:
+        """Test CycloneDX generation context via metadata.lifecycles[].phase.
+
+        Per https://sbomify.com/compliance/schema-crosswalk/, Generation Context
+        maps to metadata.lifecycles[].phase in CycloneDX.
+        """
+        sbom_data = self._create_base_cyclonedx_sbom()
+        # Remove properties-based generation context
+        del sbom_data["metadata"]["properties"]
+        # Add lifecycle-based generation context
+        sbom_data["metadata"]["lifecycles"] = [{"phase": "build"}]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_cyclonedx_generation_context_lifecycle_phases(self) -> None:
+        """Test all valid CycloneDX lifecycle phase values.
+
+        CycloneDX 1.5+ supports: design, pre-build, build, post-build,
+        operations, discovery, decommission.
+        """
+        valid_phases = ["design", "pre-build", "build", "post-build", "operations", "discovery", "decommission"]
+
+        for phase in valid_phases:
+            sbom_data = self._create_base_cyclonedx_sbom()
+            del sbom_data["metadata"]["properties"]
+            sbom_data["metadata"]["lifecycles"] = [{"phase": phase}]
+
+            result = self._assess_sbom(sbom_data)
+
+            context_finding = next(f for f in result.findings if "generation-context" in f.id)
+            assert context_finding.status == "pass", f"Lifecycle phase '{phase}' should be valid"
+
     def _create_base_cyclonedx_sbom(self) -> dict:
         """Create a base compliant CycloneDX SBOM for testing."""
         return {
@@ -470,6 +505,58 @@ class TestSPDXValidation:
 
             context_finding = next(f for f in result.findings if "generation-context" in f.id)
             assert context_finding.status == "pass", f"Context '{context}' should be valid"
+
+    def test_spdx_generation_context_via_creator_comment(self) -> None:
+        """Test SPDX generation context via creationInfo.comment (CreatorComment).
+
+        Per https://sbomify.com/compliance/schema-crosswalk/, Generation Context
+        can be specified in CreatorComment or DocumentComment.
+        """
+        sbom_data = self._create_base_spdx_sbom()
+        # Remove annotation-based generation context
+        del sbom_data["annotations"]
+        # Add CreatorComment with generation context
+        sbom_data["creationInfo"]["comment"] = "SBOM generated during build phase"
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx_generation_context_via_document_comment(self) -> None:
+        """Test SPDX generation context via document-level comment (DocumentComment).
+
+        Per https://sbomify.com/compliance/schema-crosswalk/, Generation Context
+        can be specified in CreatorComment or DocumentComment.
+        """
+        sbom_data = self._create_base_spdx_sbom()
+        # Remove annotation-based generation context
+        del sbom_data["annotations"]
+        # Add DocumentComment with generation context
+        sbom_data["comment"] = "This SBOM was created post-build from binary analysis"
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx_generation_context_lifecycle_phases(self) -> None:
+        """Test SPDX with CycloneDX-style lifecycle phase values in comments.
+
+        For compatibility, the plugin accepts CycloneDX lifecycle phase names
+        in SPDX comments (design, pre-build, post-build, etc.).
+        """
+        valid_phases = ["design", "pre-build", "build", "post-build", "operations", "discovery", "decommission"]
+
+        for phase in valid_phases:
+            sbom_data = self._create_base_spdx_sbom()
+            del sbom_data["annotations"]
+            sbom_data["creationInfo"]["comment"] = f"Generated in {phase} phase"
+
+            result = self._assess_sbom(sbom_data)
+
+            context_finding = next(f for f in result.findings if "generation-context" in f.id)
+            assert context_finding.status == "pass", f"Lifecycle phase '{phase}' should be valid in comment"
 
     def _create_base_spdx_sbom(self) -> dict:
         """Create a base compliant SPDX SBOM for testing."""

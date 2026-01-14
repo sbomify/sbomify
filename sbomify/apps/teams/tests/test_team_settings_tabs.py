@@ -50,6 +50,7 @@ def test_delete_invitation_redirects_to_members_tab(sample_team_with_owner_membe
         key="business",
         defaults={
             "name": "Business Plan",
+            "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
             "max_projects": 100,
@@ -114,6 +115,7 @@ def test_delete_member_redirects_to_active_tab(sample_team_with_owner_member: Me
         key="business",
         defaults={
             "name": "Business Plan",
+            "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
             "max_projects": 100,
@@ -212,4 +214,113 @@ class TestRedirectToTeamSettingsHelper:
             response = redirect_to_team_settings(invalid_key, "members")
             # Should redirect to teams dashboard when team_key doesn't exist
             assert response.url == "/workspaces/"
+
+
+@pytest.mark.django_db
+class TestTrustCenterDescription:
+    """Tests for trust center description settings."""
+
+    def test_update_trust_center_description(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """Owner should be able to update trust center description."""
+        client = Client()
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+
+        setup_authenticated_client_session(client, team, user)
+
+        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        response = client.post(
+            uri,
+            {
+                "trust_center_description_action": "update",
+                "trust_center_description": "Custom description for our trust center.",
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code == 302
+        assert response.url.endswith("#trust-center")
+
+        # Verify description was saved
+        team.refresh_from_db()
+        assert team.branding_info.get("trust_center_description") == "Custom description for our trust center."
+
+    def test_clear_trust_center_description(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """Owner should be able to clear trust center description."""
+        client = Client()
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+
+        # Set initial description
+        team.branding_info = {"trust_center_description": "Initial description"}
+        team.save()
+
+        setup_authenticated_client_session(client, team, user)
+
+        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        response = client.post(
+            uri,
+            {
+                "trust_center_description_action": "update",
+                "trust_center_description": "",
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify description was cleared
+        team.refresh_from_db()
+        assert team.branding_info.get("trust_center_description") == ""
+
+    def test_trust_center_description_max_length(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """Trust center description should be limited to 500 characters."""
+        client = Client()
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+
+        setup_authenticated_client_session(client, team, user)
+
+        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        response = client.post(
+            uri,
+            {
+                "trust_center_description_action": "update",
+                "trust_center_description": "x" * 501,  # Over the limit
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify description was NOT saved (too long)
+        team.refresh_from_db()
+        assert team.branding_info.get("trust_center_description", "") != "x" * 501
+
+    def test_non_owner_cannot_update_description(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """Non-owner should not be able to update trust center description."""
+        client = Client()
+        team = sample_team_with_owner_member.team
+
+        # Create a non-owner member
+        admin_user = User.objects.create_user(username="adminuser", email="admin@example.com", password="testpass")
+        Member.objects.create(team=team, user=admin_user, role="admin")
+
+        setup_authenticated_client_session(client, team, admin_user)
+
+        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        response = client.post(
+            uri,
+            {
+                "trust_center_description_action": "update",
+                "trust_center_description": "Should not be saved",
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code == 302
+
+        # Verify description was NOT saved
+        team.refresh_from_db()
+        assert team.branding_info.get("trust_center_description", "") != "Should not be saved"
 

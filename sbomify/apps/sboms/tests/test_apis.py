@@ -959,13 +959,14 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["id"] == sample_component.id
     assert response_json["name"] == sample_component.name
     assert response_json["supplier"] == {"contacts": []}
+    assert response_json["manufacturer"] == {"contacts": []}
     assert response_json["authors"] == []
     assert response_json["licenses"] == []
     assert response_json["lifecycle_phase"] is None
     assert response_json["contact_profile_id"] is None
     assert response_json["contact_profile"] is None
     assert response_json["uses_custom_contact"] is True
-    assert len(response_json.keys()) == 9
+    assert len(response_json.keys()) == 10
 
     # Set component metadata
     component_metadata = {
@@ -1024,18 +1025,30 @@ def test_component_metadata_with_contact_profile(
 ):
     client = Client()
 
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
     profile = ContactProfile.objects.create(
         team=sample_component.team,
         name="Shared Profile",
-        company="Example Corp",
-        supplier_name="Example Supplier",
+        is_default=True,
+    )
+    # Create entity with all roles for backward compatibility
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Example Supplier",
         email="profile@example.com",
         phone="+1 555 0100",
         address="123 Example Street",
         website_urls=["https://supplier.example.com"],
-        is_default=True,
+        is_manufacturer=True,
+        is_supplier=True,
     )
-    profile.contacts.create(name="Profile Owner", email="owner@example.com", phone="555-1000")
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Profile Owner",
+        email="owner@example.com",
+        phone="555-1000",
+    )
 
     patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
     response = client.patch(
@@ -1060,10 +1073,101 @@ def test_component_metadata_with_contact_profile(
     assert response_data["contact_profile_id"] == profile.id
     assert response_data["contact_profile"]["name"] == "Shared Profile"
     assert response_data["uses_custom_contact"] is False
+    # Entity is both supplier and manufacturer
     assert response_data["supplier"]["name"] == "Example Supplier"
     assert response_data["supplier"]["address"] == "123 Example Street"
     assert response_data["supplier"]["url"] == ["https://supplier.example.com"]
     assert response_data["supplier"]["contacts"][0]["name"] == "Profile Owner"
+    # Manufacturer should also be populated from the same entity
+    assert response_data["manufacturer"]["name"] == "Example Supplier"
+    assert response_data["manufacturer"]["address"] == "123 Example Street"
+    assert response_data["manufacturer"]["url"] == ["https://supplier.example.com"]
+    assert response_data["manufacturer"]["contacts"][0]["name"] == "Profile Owner"
+
+
+@pytest.mark.django_db
+def test_component_metadata_separate_manufacturer_supplier(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test component metadata with separate manufacturer and supplier entities."""
+    client = Client()
+
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Separate Entities Profile",
+        is_default=False,
+    )
+    # Create manufacturer entity
+    manufacturer_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Acme Manufacturing Corp",
+        email="info@acme-mfg.com",
+        phone="+1 555 1000",
+        address="100 Factory Lane",
+        website_urls=["https://acme-mfg.com"],
+        is_manufacturer=True,
+        is_supplier=False,
+    )
+    ContactProfileContact.objects.create(
+        entity=manufacturer_entity,
+        name="John Manufacturer",
+        email="john@acme-mfg.com",
+        phone="555-1001",
+    )
+    # Create supplier entity
+    supplier_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Global Supply Inc",
+        email="info@global-supply.com",
+        phone="+1 555 2000",
+        address="200 Distribution Road",
+        website_urls=["https://global-supply.com"],
+        is_manufacturer=False,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=supplier_entity,
+        name="Jane Supplier",
+        email="jane@global-supply.com",
+        phone="555-2001",
+    )
+
+    patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        patch_url,
+        json.dumps({"contact_profile_id": profile.id}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
+
+    get_url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        get_url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+
+    assert response_data["contact_profile_id"] == profile.id
+    assert response_data["uses_custom_contact"] is False
+
+    # Manufacturer should come from manufacturer entity
+    assert response_data["manufacturer"]["name"] == "Acme Manufacturing Corp"
+    assert response_data["manufacturer"]["address"] == "100 Factory Lane"
+    assert response_data["manufacturer"]["url"] == ["https://acme-mfg.com"]
+    assert response_data["manufacturer"]["contacts"][0]["name"] == "John Manufacturer"
+
+    # Supplier should come from supplier entity (different from manufacturer)
+    assert response_data["supplier"]["name"] == "Global Supply Inc"
+    assert response_data["supplier"]["address"] == "200 Distribution Road"
+    assert response_data["supplier"]["url"] == ["https://global-supply.com"]
+    assert response_data["supplier"]["contacts"][0]["name"] == "Jane Supplier"
 
 
 @pytest.mark.django_db
@@ -1166,8 +1270,15 @@ def test_metadata_enrichment(sample_component: Component, sample_access_token: A
         "lifecycle_phase": "post-build",
     }
 
-    sample_component.metadata = component_metadata
-    sample_component.save()
+    # Use PATCH endpoint to set metadata through native fields
+    metadata_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        metadata_url,
+        json.dumps(component_metadata),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
 
     sbom_metadata = {
         "timestamp": "2024-05-31T13:08:16Z",
@@ -1391,6 +1502,124 @@ def test_cyclonedx_1_7_metadata_endpoint(
     response_json = response.json()
     # In 1.7, version should be a Version object (like 1.6)
     assert response_json["component"]["version"] == "3.0.0"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_metadata_with_manufacturer(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Test that manufacturer is included in CycloneDX 1.6+ metadata generation."""
+    client = Client()
+
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    # Create profile with separate manufacturer and supplier entities
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Manufacturer Test Profile",
+    )
+    manufacturer_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Manufacturer Inc",
+        email="info@test-mfg.com",
+        phone="+1 555 3000",
+        address="300 Manufacturing Blvd",
+        website_urls=["https://test-mfg.com"],
+        is_manufacturer=True,
+        is_supplier=False,
+    )
+    ContactProfileContact.objects.create(
+        entity=manufacturer_entity,
+        name="Mfg Contact",
+        email="mfg@test-mfg.com",
+        phone="555-3001",
+    )
+    supplier_entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Test Supplier LLC",
+        email="info@test-supplier.com",
+        phone="+1 555 4000",
+        address="400 Supply Ave",
+        website_urls=["https://test-supplier.com"],
+        is_manufacturer=False,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=supplier_entity,
+        name="Supplier Contact",
+        email="supplier@test-supplier.com",
+        phone="555-4001",
+    )
+
+    # Link contact profile to component
+    patch_url = reverse("api-1:patch_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.patch(
+        patch_url,
+        json.dumps({"contact_profile_id": profile.id}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 204
+
+    # Test CycloneDX 1.6 metadata generation (manufacturer supported)
+    sbom_metadata = {
+        "timestamp": "2025-12-01T00:00:00+00:00",
+        "component": {
+            "bom-ref": "test-component",
+            "type": "application",
+            "name": "test-app",
+            "version": "1.0.0",
+        },
+    }
+
+    url = reverse(
+        "api-1:get_cyclonedx_component_metadata",
+        kwargs={"spec_version": "1.6", "component_id": sample_component.id},
+    )
+    response = client.post(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # Verify manufacturer is in the response (CycloneDX 1.6+)
+    assert "manufacturer" in response_json
+    assert response_json["manufacturer"]["name"] == "Test Manufacturer Inc"
+    assert response_json["manufacturer"]["url"] == ["https://test-mfg.com"]
+    assert response_json["manufacturer"]["address"]["streetAddress"] == "300 Manufacturing Blvd"
+    assert response_json["manufacturer"]["contact"][0]["name"] == "Mfg Contact"
+    assert response_json["manufacturer"]["contact"][0]["email"] == "mfg@test-mfg.com"
+
+    # Verify supplier is also present and different
+    assert "supplier" in response_json
+    assert response_json["supplier"]["name"] == "Test Supplier LLC"
+    assert response_json["supplier"]["url"] == ["https://test-supplier.com"]
+
+    # Test CycloneDX 1.5 (manufacturer NOT supported in metadata)
+    url_1_5 = reverse(
+        "api-1:get_cyclonedx_component_metadata",
+        kwargs={"spec_version": "1.5", "component_id": sample_component.id},
+    )
+    response = client.post(
+        url_1_5,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+        data=json.dumps(sbom_metadata),
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    # manufacturer should NOT be in 1.5 response
+    assert "manufacturer" not in response_json
+    # supplier should still be present
+    assert "supplier" in response_json
+    assert response_json["supplier"]["name"] == "Test Supplier LLC"
 
 
 @pytest.mark.django_db
@@ -1701,6 +1930,189 @@ def test_component_metadata_author_information(sample_component: Component, samp
     assert response_data["authors"][2]["name"] == "Bob Wilson"
     assert "email" not in response_data["authors"][2] or response_data["authors"][2]["email"] == ""
     assert response_data["authors"][2]["phone"] == "987-654-3210"
+
+
+@pytest.mark.django_db
+def test_component_metadata_includes_profile_authors_in_response(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that the API response includes profile authors in contact_profile.authors for frontend syncing.
+    
+    This test verifies the API response structure, not database-level syncing.
+    The frontend is responsible for syncing authors from profile to component display.
+    """
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    client = Client()
+
+    # Create a profile with authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Test Profile",
+        is_default=False,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="Profile Author One",
+        email="profile1@example.com",
+        phone="111-111-1111",
+        order=0,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="Profile Author Two",
+        email="profile2@example.com",
+        phone="222-222-2222",
+        order=1,
+    )
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return authors from profile
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["contact_profile_id"] == profile.id
+    # Verify profile authors are available in contact_profile field for frontend syncing
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert len(response_data["contact_profile"]["authors"]) == 2
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Profile Author One"
+    assert response_data["contact_profile"]["authors"][0]["email"] == "profile1@example.com"
+    assert response_data["contact_profile"]["authors"][1]["name"] == "Profile Author Two"
+    assert response_data["contact_profile"]["authors"][1]["email"] == "profile2@example.com"
+
+
+@pytest.mark.django_db
+def test_component_metadata_api_includes_updated_profile_authors(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that the component metadata API exposes current profile authors in contact_profile.
+
+    This test only verifies that the API response includes the profile's current
+    authors in the contact_profile.authors field for frontend consumption. It does
+    not assert that Component.authors in the database are automatically updated
+    when profile authors change. That syncing only occurs when backend logic such
+    as populate_component_metadata_native_fields() is invoked or when the frontend
+    user saves the component after viewing the metadata.
+    """
+    from sbomify.apps.teams.models import AuthorContact, ContactProfile
+
+    client = Client()
+
+    # Create a profile with initial authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Test Profile",
+        is_default=False,
+    )
+    AuthorContact.objects.create(
+        profile=profile,
+        name="Original Author",
+        email="original@example.com",
+        order=0,
+    )
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return initial author
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 200
+    response_data = response.json()
+    # Verify profile authors are available in contact_profile field
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert len(response_data["contact_profile"]["authors"]) == 1
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
+
+    # Add new author to profile
+    AuthorContact.objects.create(
+        profile=profile,
+        name="New Author",
+        email="new@example.com",
+        order=1,
+    )
+
+    # Get metadata again - should reflect new author in contact_profile
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert response.status_code == 200
+    response_data = response.json()
+    # Verify updated profile authors are available for frontend syncing
+    assert len(response_data["contact_profile"]["authors"]) == 2
+    assert response_data["contact_profile"]["authors"][0]["name"] == "Original Author"
+    assert response_data["contact_profile"]["authors"][1]["name"] == "New Author"
+
+
+@pytest.mark.django_db
+def test_component_metadata_api_returns_empty_authors_when_profile_has_none(
+    sample_component: Component, sample_access_token: AccessToken  # noqa: F811
+):
+    """Test that when a profile has no authors, the API response includes empty authors list.
+    
+    This test verifies the API response structure shows empty authors in contact_profile.authors
+    when the profile has no authors. The frontend handles syncing this to the component display.
+    Note: This does not verify database-level clearing - the API only returns the response structure.
+    """
+    from sbomify.apps.sboms.models import ComponentAuthor
+    from sbomify.apps.teams.models import ContactProfile
+
+    client = Client()
+
+    # Create component with existing authors
+    ComponentAuthor.objects.create(
+        component=sample_component,
+        name="Component Author",
+        email="component@example.com",
+        order=0,
+    )
+    assert sample_component.authors.count() == 1
+
+    # Create a profile without authors
+    profile = ContactProfile.objects.create(
+        team=sample_component.team,
+        name="Empty Profile",
+        is_default=False,
+    )
+    assert profile.authors.count() == 0
+
+    # Assign profile to component
+    sample_component.contact_profile = profile
+    sample_component.save()
+
+    # Get metadata - should return empty authors list
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    response = client.get(
+        url,
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["contact_profile_id"] == profile.id
+    # Verify profile has no authors (empty list in contact_profile.authors)
+    assert "contact_profile" in response_data
+    assert "authors" in response_data["contact_profile"]
+    assert response_data["contact_profile"]["authors"] == []
 
 
 @pytest.mark.django_db
@@ -2040,7 +2452,7 @@ def test_patch_public_status_billing_plan_restrictions(
     business_plan = BillingPlan.objects.create(
         key="business",
         name="Business",
-        description="Pro plan",
+        description="Business plan for medium teams",
         max_products=5,
         max_projects=10,
         max_components=200,

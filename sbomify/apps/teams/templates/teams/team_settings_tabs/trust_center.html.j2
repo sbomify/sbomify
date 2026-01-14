@@ -23,7 +23,7 @@
                     {% if team.is_public %}
                         {% trust_center_absolute_url team as public_url %}
                         <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
-                            <code class="bg-light px-2 py-1 rounded small">{{ public_url }}</code>
+                            <code class="public-url-display">{{ public_url }}</code>
                             <button type="button"
                                     class="copy-url-btn visibility-copy-btn"
                                     title="Copy public URL"
@@ -66,15 +66,73 @@
         </div>
     </div>
 </div>
-<!-- Custom Domain Section (HTMX loaded) -->
-<div id="team-custom-domain-wrapper"
-     hx-get="{% url 'teams:team_custom_domain' team.key %}"
-     hx-trigger="load, refreshTeamCustomDomain from:body"
-     hx-swap="innerHTML">
-    <div class="text-center py-4">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+<!-- Trust Center Description Section -->
+{% if team.is_public %}
+    <div class="standard-card mb-4">
+        <div class="card settings-card shadow-md">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Trust Center Description</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Customize the description shown on your Trust Center landing page. Leave empty to use the default description.
+                </p>
+                <form method="post"
+                      action="{% url 'teams:team_settings' team.key %}"
+                      class="d-inline-block w-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="trust_center_description_action" value="update">
+                    <input type="hidden" name="active_tab" value="trust-center">
+                    <div class="mb-3">
+                        <label for="trust_center_description" class="form-label fw-semibold">Description</label>
+                        <textarea id="trust_center_description"
+                                  class="form-control"
+                                  name="trust_center_description"
+                                  rows="3"
+                                  maxlength="500"
+                                  placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
+                                  {% if not is_owner %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
+                        <div class="form-text">Max 500 characters</div>
+                    </div>
+                    <button type="submit"
+                            class="btn btn-primary"
+                            {% if not is_owner %}disabled{% endif %}>
+                        <i class="fas fa-save me-2"></i>Save Description
+                    </button>
+                </form>
+            </div>
         </div>
-        <p class="mt-2 text-muted">Loading custom domain settings...</p>
     </div>
-</div>
+{% endif %}
+<!-- Custom Domain Section -->
+{% if team.is_public %}
+    <!-- HTMX loaded when Trust Center is enabled -->
+    <div id="team-custom-domain-wrapper"
+         hx-get="{% url 'teams:team_custom_domain' team.key %}"
+         hx-trigger="load, refreshTeamCustomDomain from:body"
+         hx-swap="innerHTML">
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading custom domain settings...</p>
+        </div>
+    </div>
+{% else %}
+    <!-- Disabled state when Trust Center is disabled -->
+    <div class="standard-card">
+        <div class="card settings-card shadow-md">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Custom Domain</h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-4">
+                    <i class="fas fa-globe text-muted mb-3"
+                       style="font-size: 2.5rem;
+                              opacity: 0.5"></i>
+                    <p class="text-muted mb-0">Enable your Trust Center to configure a custom domain.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

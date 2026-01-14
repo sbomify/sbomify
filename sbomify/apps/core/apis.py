@@ -14,8 +14,9 @@ from pydantic import BaseModel, ValidationError
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.utils import verify_item_access
+from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
     ComponentMetaDataPatch,
@@ -26,8 +27,8 @@ from sbomify.apps.sboms.utils import (
     get_project_sbom_package,
     get_release_sbom_package,
 )
+from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
-from sbomify.apps.teams.schemas import ContactProfileContactSchema, ContactProfileSchema
 from sbomify.logging import getLogger
 
 from .models import Component, Product, Project, Release, ReleaseArtifact
@@ -89,36 +90,6 @@ class ProductLookupResult:
 
     payload: dict
     instance: Product
-
-
-def _serialize_contact_profile(profile: ContactProfile) -> ContactProfileSchema:
-    contacts = [
-        ContactProfileContactSchema(
-            name=contact.name,
-            email=contact.email,
-            phone=contact.phone,
-            order=contact.order,
-        )
-        for contact in profile.contacts.all()
-    ]
-
-    urls = [url for url in (profile.website_urls or []) if url]
-
-    return ContactProfileSchema(
-        id=profile.id,
-        name=profile.name,
-        company=profile.company or None,
-        supplier_name=profile.supplier_name or None,
-        vendor=profile.vendor or None,
-        email=profile.email or None,
-        phone=profile.phone or None,
-        address=profile.address or None,
-        website_urls=urls,
-        contacts=contacts,
-        is_default=profile.is_default,
-        created_at=profile.created_at.isoformat(),
-        updated_at=profile.updated_at.isoformat(),
-    )
 
 
 # Creation schemas
@@ -322,10 +293,12 @@ def _paginate_queryset(queryset, page: int = 1, page_size: int = 15):
 def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
     """
     Check if team has reached billing limits for the given resource type.
+    Also checks for suspended accounts due to payment failure.
 
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
+    # If billing is disabled, bypass all checks - treat all teams as enterprise
     if not is_billing_enabled():
         return True, "", None
 
@@ -334,8 +307,105 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     except Team.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
+    # Check for payment failure / suspended account
+    if team.is_payment_restricted:
+        return (
+            False,
+            "Your account is suspended due to payment failure. Please update your payment method to create resources.",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
+
+    # If billing plan is None, set it to community plan first
     if not team.billing_plan:
-        return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
+        try:
+            plan = BillingPlan.objects.get(key="community")
+            team.billing_plan = "community"
+            if not team.billing_plan_limits:
+                team.billing_plan_limits = {}
+            team.billing_plan_limits.update(
+                {
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+            )
+            team.save(update_fields=["billing_plan", "billing_plan_limits"])
+            log.info(f"Set billing_plan to community for team {team.key} (was None)")
+        except BillingPlan.DoesNotExist:
+            return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
+
+    # CHECK SCHEDULED DOWNGRADE LIMITS
+    billing_limits = team.billing_plan_limits or {}
+    cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
+    scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan", "community")
+    stripe_subscription_id = billing_limits.get("stripe_subscription_id")
+
+    if cancel_at_period_end and scheduled_downgrade_plan:
+        # Fetch real-time subscription data from Stripe to verify cancel_at_period_end status
+        real_cancel_at_period_end = get_subscription_cancel_at_period_end(
+            stripe_subscription_id, team.key, fallback_value=cancel_at_period_end
+        )
+
+        # If user cancelled the cancellation (reactivated subscription)
+        if not real_cancel_at_period_end:
+            # Clear scheduled_downgrade_plan flag
+            billing_limits.pop("scheduled_downgrade_plan", None)
+            invalidate_subscription_cache(stripe_subscription_id, team.key)
+            team.billing_plan_limits = billing_limits
+            team.save()
+            log.info(f"User reactivated subscription for team {team.key}, cleared scheduled downgrade")
+        else:
+            # Still scheduled, check against target plan limits
+            try:
+                target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
+            except BillingPlan.DoesNotExist:
+                log.warning("Target plan not found for scheduled downgrade, skipping check")
+            else:
+                # Get current usage
+                if resource_type == "product":
+                    current_count = Product.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_products
+                elif resource_type == "project":
+                    current_count = Project.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_projects
+                elif resource_type == "component":
+                    current_count = Component.objects.filter(team_id=team_id).count()
+                    max_allowed = target_plan.max_components
+                else:
+                    max_allowed = None
+
+                # Check if creating this resource would exceed target plan limits
+                if max_allowed is not None and (current_count + 1) > max_allowed:
+                    error_message = (
+                        f"You cannot create this {resource_type} because your scheduled downgrade to "
+                        f"{target_plan.name} would exceed the plan limit of {max_allowed} {resource_type}s. "
+                        f"Please reduce your usage or continue with your current plan."
+                    )
+                    return False, error_message, ErrorCode.BILLING_LIMIT_EXCEEDED
+
+    # At this point, billing_plan should be set (handled above)
+    # But double-check in case it wasn't saved properly
+    if not team.billing_plan:
+        try:
+            plan = BillingPlan.objects.get(key="community")
+            team.billing_plan = "community"
+            if not team.billing_plan_limits:
+                team.billing_plan_limits = {}
+            team.billing_plan_limits.update(
+                {
+                    "max_products": plan.max_products,
+                    "max_projects": plan.max_projects,
+                    "max_components": plan.max_components,
+                    "subscription_status": "active",
+                    "last_updated": timezone.now().isoformat(),
+                }
+            )
+            team.save(update_fields=["billing_plan", "billing_plan_limits"])
+            log.warning(f"billing_plan was still None for team {team.key}, set to community")
+        except BillingPlan.DoesNotExist:
+            return False, "No active billing plan", ErrorCode.NO_BILLING_PLAN
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
@@ -359,11 +429,13 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     if plan.key == "enterprise" or max_allowed is None:
         return True, "", None
 
-    # Check if limit is reached
-    if current_count >= max_allowed:
+    # Check if creating this resource would exceed the limit
+    # We check (current_count + 1) > max_allowed to prevent creating one more that would exceed
+    if max_allowed is not None and (current_count + 1) > max_allowed:
         return (
             False,
-            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan",
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan. "
+            f"You currently have {current_count} {resource_type}s.",
             ErrorCode.BILLING_LIMIT_EXCEEDED,
         )
 
@@ -568,18 +640,6 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If making product public, check if it has private projects
-            if new_is_public and not product.is_public:
-                private_projects = product.projects.filter(is_public=False)
-                if private_projects.exists():
-                    project_names = ", ".join(private_projects.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make product public because it contains private projects: {project_names}. "
-                            "Please make all projects public first."
-                        )
-                    }
-
             # If updating project relationships, validate constraints
             if project_ids is not None:
                 # Verify all projects exist and belong to the same team
@@ -591,18 +651,6 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 for project in projects:
                     if not verify_item_access(request, project, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify project {project.name}"}
-
-                # If product is (or will be) public, ensure no private projects are being assigned
-                if new_is_public:
-                    private_projects = [p for p in projects if not p.is_public]
-                    if private_projects:
-                        project_names = ", ".join([p.name for p in private_projects])
-                        return 400, {
-                            "detail": (
-                                f"Cannot assign private projects to a public product: {project_names}. "
-                                "Please make these projects public first or keep the product private."
-                            )
-                        }
 
                 # Update relationships
                 product.projects.set(projects)
@@ -954,10 +1002,11 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError:
+    except IntegrityError as e:
+        log.error(f"IntegrityError creating product link: {e}")
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product"),
-            "error_code": ErrorCode.DUPLICATE_NAME,
+            "detail": "Failed to create link due to data integrity issue",
+            "error_code": ErrorCode.INTERNAL_ERROR,
         }
     except Exception as e:
         log.error(f"Error creating product link: {e}")
@@ -1051,9 +1100,11 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError:
+    except IntegrityError as e:
+        log.error(f"IntegrityError updating product link {link_id}: {e}")
         return 400, {
-            "detail": (f"A link of type {payload.link_type} with URL '{payload.url}' already exists for this product")
+            "detail": "Failed to update link due to data integrity issue",
+            "error_code": ErrorCode.INTERNAL_ERROR,
         }
     except Exception as e:
         log.error(f"Error updating product link {link_id}: {e}")
@@ -1323,18 +1374,6 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
             if not new_is_public and project.is_public and not _private_items_allowed(project.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If making project public, check if it has private components
-            if new_is_public and not project.is_public:
-                private_components = project.components.filter(is_public=False)
-                if private_components.exists():
-                    component_names = ", ".join(private_components.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make project public because it contains private components: {component_names}. "
-                            "Please make all components public first."
-                        )
-                    }
-
             # If making project private, check if it's assigned to any public products
             if not new_is_public and project.is_public:
                 public_products = project.product_set.filter(is_public=True)
@@ -1358,18 +1397,6 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                 for component in components:
                     if not verify_item_access(request, component, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify component {component.name}"}
-
-                # If project is (or will be) public, ensure no private components are being assigned
-                if new_is_public:
-                    private_components = [component for component in components if not component.is_public]
-                    if private_components:
-                        component_names = ", ".join([component.name for component in private_components])
-                        return 400, {
-                            "detail": (
-                                f"Cannot assign private components to a public project: {component_names}. "
-                                "Please make these components public first or keep the project private."
-                            )
-                        }
 
                 # Enforce scope exclusivity: If assigning to a project, components cannot be global
                 # We automatically demote them from global scope
@@ -1626,19 +1653,6 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             if not new_is_public and component.is_public and not _private_items_allowed(component.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If making component private, check if it's assigned to any public projects
-            if not new_is_public and component.is_public:
-                public_projects = component.project_set.filter(is_public=True)
-                if public_projects.exists():
-                    project_names = ", ".join(public_projects.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make component private because it's assigned to public projects: "
-                            f"{project_names}. Please remove it from these projects first or make the "
-                            f"projects private."
-                        )
-                    }
-
             # Only update fields that were provided
             for field, value in update_data.items():
                 setattr(component, field, value)
@@ -1719,7 +1733,13 @@ def get_component_metadata(request, component_id: str):
     try:
         component = (
             Component.objects.select_related("contact_profile")
-            .prefetch_related("supplier_contacts", "authors", "licenses", "contact_profile__contacts")
+            .prefetch_related(
+                "supplier_contacts",
+                "authors",
+                "licenses",
+                "contact_profile__entities__contacts",
+                "contact_profile__authors",
+            )
             .get(pk=component_id)
         )
     except Component.DoesNotExist:
@@ -1728,34 +1748,32 @@ def get_component_metadata(request, component_id: str):
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
         return 403, {"detail": "Forbidden"}
 
-    # Build supplier information from contact profile or component fields
+    # Build supplier and manufacturer information from contact profile or component fields
     supplier = {"contacts": []}
+    manufacturer = {"contacts": []}
     contact_profile_data = None
 
     if component.contact_profile:
         profile = component.contact_profile
-        contact_profile_data = _serialize_contact_profile(profile)
+        # Ensure profile is prefetched with entities, contacts, and authors
+        if not hasattr(profile, "_prefetched_objects_cache"):
+            profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts", "authors").get(
+                pk=profile.pk
+            )
+        contact_profile_data = serialize_contact_profile(profile)
 
-        if profile.supplier_name:
-            supplier["name"] = profile.supplier_name
-        elif profile.company:
-            supplier["name"] = profile.company
+        # Find supplier and manufacturer entities from contact profile
+        supplier_entity = None
+        manufacturer_entity = None
+        for entity in profile.entities.all():
+            if entity.is_supplier and supplier_entity is None:
+                supplier_entity = entity
+            if entity.is_manufacturer and manufacturer_entity is None:
+                manufacturer_entity = entity
 
-        urls = [url for url in (profile.website_urls or []) if url]
-        if urls:
-            supplier["url"] = urls
-
-        if profile.address:
-            supplier["address"] = profile.address
-
-        supplier["contacts"] = []
-        for contact in profile.contacts.all():
-            contact_dict = {"name": contact.name}
-            if contact.email is not None:
-                contact_dict["email"] = contact.email
-            if contact.phone is not None:
-                contact_dict["phone"] = contact.phone
-            supplier["contacts"].append(contact_dict)
+        # Build supplier and manufacturer using shared utility
+        supplier = build_entity_info_dict(supplier_entity)
+        manufacturer = build_entity_info_dict(manufacturer_entity)
 
         uses_custom_contact = False
     else:
@@ -1778,8 +1796,9 @@ def get_component_metadata(request, component_id: str):
 
         uses_custom_contact = True
 
-    # Remove empty supplier fields while keeping contacts list intact
+    # Remove empty supplier/manufacturer fields while keeping contacts list intact
     supplier_schema = SupplierSchema.model_validate(supplier)
+    manufacturer_schema = SupplierSchema.model_validate(manufacturer)
 
     # Build authors information from native fields
     authors = []
@@ -1803,6 +1822,7 @@ def get_component_metadata(request, component_id: str):
         "id": component.id,
         "name": component.name,
         "supplier": supplier_schema,
+        "manufacturer": manufacturer_schema,
         "authors": authors,
         "licenses": licenses,
         "lifecycle_phase": component.lifecycle_phase,
@@ -2823,9 +2843,11 @@ def list_release_artifacts(
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 
-        product_components = Component.objects.filter(
-            projects__products=release.product, team_id=release.product.team_id
-        ).distinct()
+        product_components = (
+            Component.objects.filter(projects__products=release.product, team_id=release.product.team_id)
+            .order_by("id")
+            .distinct("id")
+        )
 
         # Get existing artifacts in this release to exclude them
         existing_sbom_ids = set(

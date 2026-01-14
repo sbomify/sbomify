@@ -389,6 +389,46 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
     return {"created": True, "replaced": False, "artifact": new_artifact, "replaced_info": None}
 
 
+def build_entity_info_dict(entity) -> dict:
+    """Build a supplier/manufacturer info dictionary from a ContactEntity.
+
+    This is a shared utility used by both core.apis and sboms.apis to extract
+    contact information from ContactProfile entities in a consistent format.
+
+    Args:
+        entity: A ContactEntity object (from sbomify.apps.teams.models.ContactEntity)
+                with optional prefetched contacts.
+
+    Returns:
+        A dictionary with keys: name, url, address, contacts (always present as list).
+        Empty/None fields are omitted except for contacts which is always included.
+    """
+    result: dict = {"contacts": []}
+
+    if entity is None:
+        return result
+
+    if entity.name:
+        result["name"] = entity.name
+
+    urls = [url for url in (entity.website_urls or []) if url]
+    if urls:
+        result["url"] = urls
+
+    if entity.address:
+        result["address"] = entity.address
+
+    for contact in entity.contacts.all():
+        contact_dict = {"name": contact.name}
+        if contact.email is not None:
+            contact_dict["email"] = contact.email
+        if contact.phone is not None:
+            contact_dict["phone"] = contact.phone
+        result["contacts"].append(contact_dict)
+
+    return result
+
+
 def create_release_download_response(release):
     """
     Create an HTTP response for downloading a release's SBOM content.

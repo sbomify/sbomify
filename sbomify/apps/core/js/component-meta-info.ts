@@ -1,8 +1,8 @@
-// Force update for lifecycle chips
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
 import { isEmpty } from './utils';
 import type { ComponentMetaInfo } from './types';
+import { ComponentEvents, addComponentEventListener, dispatchComponentEvent, type ShowAlertEvent } from './events';
 
 interface WrapperProps {
     componentId: string;
@@ -16,8 +16,7 @@ export function registerComponentMetaInfo() {
         teamKey: props.teamKey,
         allowEdit: props.allowEdit,
         isEditing: false,
-        boundItemSelectedHandler: null as ((e: Event) => void) | null,
-        boundMetadataUpdatedHandler: null as ((e: Event) => void) | null,
+        cleanupEventListeners: [] as Array<() => void>,
 
         // Display Component State (lifted up or shared via events, but here managed locally for display reactivity)
         metadata: {
@@ -42,28 +41,26 @@ export function registerComponentMetaInfo() {
         init() {
             this.fetchMetadata();
 
-            this.boundItemSelectedHandler = (e: Event) => {
-                this.copyMetadataFrom((e as CustomEvent).detail.itemId);
-            };
-            this.boundMetadataUpdatedHandler = (e: Event) => {
-                if ((e as CustomEvent).detail.componentId === this.componentId) {
-                    this.refreshDisplay();
-                }
-            };
+            this.cleanupEventListeners.push(
+                addComponentEventListener('item-selected', (e) => {
+                    const detail = e.detail as { itemId: string };
+                    this.copyMetadataFrom(detail.itemId);
+                })
+            );
 
-            window.addEventListener('item-selected', this.boundItemSelectedHandler);
-            window.addEventListener('component-metadata-updated', this.boundMetadataUpdatedHandler);
+            this.cleanupEventListeners.push(
+                addComponentEventListener(ComponentEvents.METADATA_UPDATED, (e) => {
+                    const detail = e.detail as { componentId: string };
+                    if (detail.componentId === this.componentId) {
+                        this.refreshDisplay();
+                    }
+                })
+            );
         },
 
         destroy() {
-            if (this.boundItemSelectedHandler) {
-                window.removeEventListener('item-selected', this.boundItemSelectedHandler);
-                this.boundItemSelectedHandler = null;
-            }
-            if (this.boundMetadataUpdatedHandler) {
-                window.removeEventListener('component-metadata-updated', this.boundMetadataUpdatedHandler);
-                this.boundMetadataUpdatedHandler = null;
-            }
+            this.cleanupEventListeners.forEach(cleanup => cleanup());
+            this.cleanupEventListeners = [];
         },
 
         async fetchMetadata() {
@@ -72,18 +69,50 @@ export function registerComponentMetaInfo() {
                 if (response.ok) {
                     const data = await response.json();
                     this.metadata = { ...this.metadata, ...data };
+                    
+                    // Always sync authors from profile when a profile is selected
+                    // This ensures the display shows the latest authors from the profile
+                    if (this.metadata.contact_profile_id && this.metadata.contact_profile?.authors?.length) {
+                        // Use JSON serialization instead of structuredClone due to DataCloneError
+                        // with complex author objects. Authors are simple JSON-serializable objects
+                        // (name, email, phone) without functions, symbols, or circular references.
+                        const profileAuthors = JSON.parse(JSON.stringify(this.metadata.contact_profile.authors));
+                        
+                        // Only update if authors have actually changed
+                        // Handle undefined/null case for metadata.authors
+                        const currentAuthors = this.metadata.authors ?? [];
+                        if (JSON.stringify(currentAuthors) !== JSON.stringify(profileAuthors)) {
+                            this.metadata.authors = profileAuthors;
+                        }
+                    } else if (this.metadata.contact_profile_id && !this.metadata.contact_profile?.authors?.length) {
+                        // Profile has no authors (handles both undefined/null and empty array), clear component authors
+                        if (this.metadata.authors?.length) {
+                            this.metadata.authors = [];
+                        }
+                    }
+                } else {
+                    console.error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
+                    dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                        type: 'error',
+                        message: 'Failed to load component metadata'
+                    });
                 }
             } catch (error) {
                 console.error('Failed to fetch metadata', error);
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: 'Network error loading metadata'
+                });
             }
         },
 
         refreshDisplay() {
             this.isEditing = false;
             this.fetchMetadata();
-            window.dispatchEvent(new CustomEvent('show-alert', {
-                detail: { type: 'success', message: 'Metadata updated successfully' }
-            }));
+            dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                type: 'success',
+                message: 'Metadata updated successfully'
+            });
         },
 
         openCopyModal() {
@@ -125,15 +154,17 @@ export function registerComponentMetaInfo() {
                 if (!targetResponse.ok) throw new Error('Failed to update target metadata');
 
                 this.refreshDisplay();
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'success', message: 'Metadata copied successfully' }
-                }));
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'success',
+                    message: 'Metadata copied successfully'
+                });
 
             } catch (error) {
-                console.error(error);
-                window.dispatchEvent(new CustomEvent('show-alert', {
-                    detail: { type: 'error', message: 'Failed to copy metadata' }
-                }));
+                console.error('Failed to copy metadata:', error);
+                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
+                    type: 'error',
+                    message: error instanceof Error ? error.message : 'Failed to copy metadata'
+                });
             }
         },
 
@@ -171,12 +202,6 @@ export function registerComponentMetaInfo() {
 
         async removeSupplierContact(index: number) {
             if (!this.metadata.supplier?.contacts) return;
-            // In the Vue component this was a "TODO: Save changes"
-            // so we just update local state for now, assuming edit mode is for saving.
-            // But wait, the display component had these X buttons?
-            // Yes, "removeSupplierContact" was in display component.
-            // It says "TODO: Save changes" in the Vue code.
-            // So I will just update local state same as Vue.
             this.metadata.supplier.contacts.splice(index, 1);
         },
 

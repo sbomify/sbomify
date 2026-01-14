@@ -1,13 +1,63 @@
-<button type="button" class="btn btn-sm btn-danger delete-contact-btn">
-    <i class="fas fa-times"></i>
-</button>
-{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-{% for field in form.visible_fields %}
-    <div class="mb-2">
-        <label class="form-label small" for="{{ field.id_for_label }}">
-            {{ field.label }}
-            {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-        </label>
-        {{ field }}
+{% load widget_tweaks %}
+<div class="contact-card border-bottom"
+     x-data="contactEntry"
+     x-show="!deleted"
+     x-transition:enter="transition ease-out duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100">
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+    <input type="hidden"
+           name="{{ form.prefix }}-DELETE"
+           x-model="deleted"
+           value="">
+    <div class="d-flex align-items-center py-2 px-3 gap-3">
+        {# Contact avatar #}
+        <div class="flex-shrink-0">
+            <div class="contact-avatar-circle">
+                <i class="fas fa-user-pen contact-icon-purple"></i>
+            </div>
+        </div>
+        {# Name field - required only if contact is not deleted AND parent entity is visible #}
+        <div class="flex-shrink-0 contact-field-name">
+            <input type="text"
+                   name="{{ form.name.html_name }}"
+                   id="{{ form.name.id_for_label }}"
+                   value="{{ form.name.value|default:'' }}"
+                   class="form-control form-control-sm bg-white rounded-2"
+                   placeholder="Name *"
+                   maxlength="255"
+                   :required="!deleted && editing"
+                   title="Click to edit name"
+                   aria-label="Contact Name">
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+        </div>
+        {# Email field #}
+        <div class="flex-grow-1 contact-field-email">
+            <input type="email"
+                   name="{{ form.email.html_name }}"
+                   id="{{ form.email.id_for_label }}"
+                   value="{{ form.email.value|default:'' }}"
+                   class="form-control form-control-sm bg-white rounded-2"
+                   placeholder="Email *"
+                   maxlength="254"
+                   :required="!deleted && editing"
+                   title="Please enter a valid email address (e.g., contact@example.com)"
+                   aria-label="Contact Email">
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+        </div>
+        {# Phone field #}
+        <div class="flex-shrink-0 contact-field-phone">
+            {{ form.phone|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Phone"|attr:"title:Click to edit phone"|attr:"aria-label:Contact Phone" }}
+        </div>
+        {# Remove button #}
+        <div class="flex-shrink-0">
+            <button type="button"
+                    class="btn btn-sm btn-link p-1"
+                    @click="removeContact"
+                    title="Remove contact"
+                    aria-label="Remove contact">
+                <i class="fas fa-trash-alt text-danger"></i>
+            </button>
+        </div>
     </div>
-{% endfor %}
+</div>

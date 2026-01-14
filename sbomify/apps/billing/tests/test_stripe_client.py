@@ -265,7 +265,7 @@ class TestStripeClient:
         result = self.client.get_subscription("sub_123")
 
         assert result == mock_subscription
-        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent"])
+        mock_retrieve.assert_called_once_with("sub_123", expand=["latest_invoice.payment_intent", "items.data.price"])
 
     # Checkout session tests
     @patch("stripe.checkout.Session.create")
@@ -309,60 +309,6 @@ class TestStripeClient:
 
         call_args = mock_create.call_args[1]
         assert call_args["metadata"] == {"team_key": "team_123"}
-
-    @patch("stripe.checkout.Session.create")
-    def test_create_checkout_session_with_promo_code(self, mock_create):
-        """Test checkout session creation with promo code."""
-        mock_session = MagicMock()
-        mock_session.url = "https://checkout.stripe.com/test"
-        mock_create.return_value = mock_session
-
-        result = self.client.create_checkout_session(
-            customer_id="cus_123",
-            price_id="price_123",
-            success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-            promo_code="SAVE20",
-        )
-
-        assert result == mock_session
-        call_args = mock_create.call_args[1]
-        assert call_args["discounts"] == [{"coupon": "SAVE20"}]
-
-    @patch("stripe.checkout.Session.create")
-    def test_create_checkout_session_with_promo_code_and_metadata(self, mock_create):
-        """Test checkout session creation with both promo code and metadata."""
-        mock_session = MagicMock()
-        mock_create.return_value = mock_session
-
-        self.client.create_checkout_session(
-            customer_id="cus_123",
-            price_id="price_123",
-            success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-            metadata={"team_key": "team_123"},
-            promo_code="SAVE20",
-        )
-
-        call_args = mock_create.call_args[1]
-        assert call_args["metadata"] == {"team_key": "team_123"}
-        assert call_args["discounts"] == [{"coupon": "SAVE20"}]
-
-    @patch("stripe.checkout.Session.create")
-    def test_create_checkout_session_without_promo_code(self, mock_create):
-        """Test checkout session creation without promo code (existing behavior)."""
-        mock_session = MagicMock()
-        mock_create.return_value = mock_session
-
-        self.client.create_checkout_session(
-            customer_id="cus_123",
-            price_id="price_123",
-            success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-        )
-
-        call_args = mock_create.call_args[1]
-        assert "discounts" not in call_args
 
     @patch("stripe.checkout.Session.retrieve")
     def test_get_checkout_session_success(self, mock_retrieve):

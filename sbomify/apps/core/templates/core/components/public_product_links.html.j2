@@ -1,0 +1,49 @@
+{# Public Product Links - server-rendered #}
+{% load static %}
+{% load utils %}
+{% if product_links %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-link"></i>Resources & Links
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 public-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th>Title</th>
+                                <th>URL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for link in product_links %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ link.link_type_display }}</span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ link.title }}</strong>
+                                        {% if link.description %}<div class="small text-muted">{{ link.description }}</div>{% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-primary text-decoration-none">
+                                            Visit Link
+                                            <i class="fas fa-external-link-alt ms-1"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

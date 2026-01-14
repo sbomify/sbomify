@@ -1,4 +1,4 @@
-{% load static %}
+{% load static plugins_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/assessment-results-card.css' %}">
 <div id="assessment-results" class="standard-card mt-3">
@@ -53,6 +53,21 @@
                             <div class="stat-label">Total</div>
                         </div>
                     </div>
+                    <!-- Consulting CTA for compliance failures -->
+                    {% if assessment_runs|has_compliance_failures %}
+                        <div class="assessment-cta-banner">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="cta-message">
+                                    <i class="fas fa-hands-helping me-2 text-primary"></i>
+                                    <span>Need help resolving these compliance issues? Our experts can help.</span>
+                                </div>
+                                <a href="{% url 'core:support_contact' %}"
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-envelope me-1"></i>Contact Us
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
                     <!-- Plugin Results -->
                     <div class="plugin-results-section">
                         <h6 class="section-title">

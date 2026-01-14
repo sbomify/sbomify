@@ -1,0 +1,13 @@
+{# Public compliance badge - shows only PASSING assessments #}
+{# Never displays failures on public pages #}
+{% if passing_assessments %}
+    <div class="public-compliance-badges">
+        {% for assessment in passing_assessments %}
+            <span class="compliance-badge compliance-badge--pass"
+                  title="{{ assessment.display_name }}: All checks passed">
+                <i class="fas fa-check-circle"></i>
+                <span class="badge-text">{{ assessment.display_name }}</span>
+            </span>
+        {% endfor %}
+    </div>
+{% endif %}

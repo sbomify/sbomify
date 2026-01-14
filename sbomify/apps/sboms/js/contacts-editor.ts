@@ -1,11 +1,14 @@
 import Alpine from '../../core/js/alpine-init';
 import type { ContactInfo } from '../../core/js/types';
+import { ComponentEvents, addComponentEventListener } from '../../core/js/events';
 
 interface ContactsEditorProps {
     contacts: ContactInfo[];
     contactType: string;
 }
 
+// More permissive email validation - backend is source of truth
+// This allows common formats like user+tag@domain.co.uk
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function registerContactsEditor() {
@@ -19,7 +22,7 @@ export function registerContactsEditor() {
             phone: ''
         } as ContactInfo,
         formErrors: {} as Record<string, string>,
-        boundMetadataLoadedHandler: null as ((e: Event) => void) | null,
+        cleanupEventListeners: [] as Array<() => void>,
 
         get capitalizedContactType(): string {
             if (!this.contactType) return '';
@@ -43,28 +46,42 @@ export function registerContactsEditor() {
                 }
             });
 
-            this.boundMetadataLoadedHandler = (e: Event) => {
-                const detail = (e as CustomEvent).detail;
-                if (this.contactType === 'author' && detail && detail.authors) {
-                    const newAuthors = Array.isArray(detail.authors) ? detail.authors : [];
-                    if (JSON.stringify(newAuthors) !== JSON.stringify(this.contacts)) {
-                        this.initializeContacts(newAuthors);
+            // Listen for metadata loaded events
+            this.cleanupEventListeners.push(
+                addComponentEventListener(ComponentEvents.METADATA_LOADED, (e) => {
+                    const detail = e.detail as {
+                        authors?: ContactInfo[];
+                        supplier?: { contacts?: ContactInfo[] };
+                    };
+                    if (this.contactType === 'author' && detail?.authors) {
+                        const newAuthors = Array.isArray(detail.authors) ? detail.authors : [];
+                        if (JSON.stringify(newAuthors) !== JSON.stringify(this.contacts)) {
+                            this.initializeContacts(newAuthors);
+                        }
+                    } else if (this.contactType === 'contact' && detail?.supplier?.contacts) {
+                        const newContacts = Array.isArray(detail.supplier.contacts) ? detail.supplier.contacts : [];
+                        if (JSON.stringify(newContacts) !== JSON.stringify(this.contacts)) {
+                            this.initializeContacts(newContacts);
+                        }
                     }
-                } else if (this.contactType === 'contact' && detail && detail.supplier && detail.supplier.contacts) {
-                    const newContacts = Array.isArray(detail.supplier.contacts) ? detail.supplier.contacts : [];
-                    if (JSON.stringify(newContacts) !== JSON.stringify(this.contacts)) {
-                        this.initializeContacts(newContacts);
+                })
+            );
+
+            // Listen for contact update events
+            this.cleanupEventListeners.push(
+                addComponentEventListener(ComponentEvents.CONTACTS_UPDATED, (e) => {
+                    const detail = e.detail as { contacts?: ContactInfo[] };
+                    if (this.contactType === 'author' && detail?.contacts) {
+                        this.initializeContacts(detail.contacts);
                     }
-                }
-            };
-            window.addEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
+                })
+            );
         },
 
         destroy() {
-            if (this.boundMetadataLoadedHandler) {
-                window.removeEventListener('component-metadata-loaded', this.boundMetadataLoadedHandler);
-                this.boundMetadataLoadedHandler = null;
-            }
+            // Clean up all event listeners
+            this.cleanupEventListeners.forEach(cleanup => cleanup());
+            this.cleanupEventListeners = [];
         },
 
         initializeContacts(contacts: ContactInfo[]) {

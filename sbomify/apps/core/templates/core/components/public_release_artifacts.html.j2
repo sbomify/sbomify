@@ -1,0 +1,107 @@
+{% load humanize %}
+{% if release.artifacts %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table artifacts-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Component</th>
+                                <th>Format</th>
+                                <th>Version</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for artifact in release.artifacts %}
+                                <tr>
+                                    <td>
+                                        <span class="artifact-type-icon {% if artifact.artifact_type == 'sbom' %}sbom-icon{% elif artifact.artifact_type == 'document' %}document-icon{% else %}unknown-icon{% endif %}">
+                                            <i class="fas {% if artifact.artifact_type == 'sbom' %}fa-file-code{% elif artifact.artifact_type == 'document' %}fa-file-alt{% else %}fa-file{% endif %}"></i>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="artifact-name">
+                                            <div class="fw-medium">{{ artifact.artifact_name|default:"Unnamed artifact" }}</div>
+                                            <div class="artifact-type-badge">
+                                                {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                                    SBOM •
+                                                    {% if artifact.sbom_format == 'cyclonedx' %}
+                                                        CycloneDX
+                                                    {% elif artifact.sbom_format == 'spdx' %}
+                                                        SPDX
+                                                    {% else %}
+                                                        {{ artifact.sbom_format|title }}
+                                                    {% endif %}
+                                                {% elif artifact.artifact_type == 'document' and artifact.document_type %}
+                                                    Document • {{ artifact.document_type|title }}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="component-name">{{ artifact.component_name|default:"—" }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="format-text">
+                                            {% if artifact.artifact_type == 'sbom' and artifact.sbom_format %}
+                                                {% if artifact.sbom_format == 'cyclonedx' %}
+                                                    CycloneDX
+                                                {% elif artifact.sbom_format == 'spdx' %}
+                                                    SPDX
+                                                {% else %}
+                                                    {{ artifact.sbom_format|title }}
+                                                {% endif %}
+                                                {{ artifact.sbom_format_version|default:"" }}
+                                            {% elif artifact.artifact_type == 'document' and artifact.document_type %}
+                                                {{ artifact.document_type|title }}
+                                            {% else %}
+                                                —
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if artifact.artifact_type == 'sbom' and artifact.sbom_version %}
+                                            <span title="{{ artifact.sbom_version }}">{{ artifact.sbom_version|truncatechars:23 }}</span>
+                                        {% elif artifact.artifact_type == 'document' and artifact.document_version %}
+                                            <span title="{{ artifact.document_version }}">{{ artifact.document_version|truncatechars:23 }}</span>
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ artifact.created_at|date:"M d, Y" }}</small>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-puzzle-piece"></i>Artifacts in this Release
+                </h4>
+            </div>
+            <div class="card-body public-empty-state">
+                <i class="fas fa-puzzle-piece fa-3x public-empty-state-icon"></i>
+                <h5 class="public-empty-state-title">No artifacts in this release</h5>
+                <p class="mb-0 public-empty-state-text">This release doesn't contain any artifacts yet.</p>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{# Styles are in public-pages.css #}

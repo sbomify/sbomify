@@ -18,17 +18,13 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner", "admin", "member"]
 
     def _get_team_tokens_context(self, team: dict, request: HttpRequest, extra_context: dict = None) -> dict:
-        access_tokens = AccessToken.objects.filter(user=request.user).only("id", "description", "created_at").all()
-        # Serialize access tokens for Vue component
-        access_tokens_data = [
-            {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
-            for token in access_tokens
-        ]
+        # Return queryset objects directly for Django template rendering
+        access_tokens = AccessToken.objects.filter(user=request.user).order_by("-created_at")
 
         context = {
             "team": team,
             "create_access_token_form": CreateAccessTokenForm(),
-            "access_tokens": access_tokens_data,
+            "access_tokens": access_tokens,
         }
         if extra_context:
             context.update(extra_context)

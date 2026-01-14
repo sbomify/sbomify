@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 
 const $axios = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'X-CSRFToken': Cookies.get('csrftoken') || '',

@@ -33,14 +33,14 @@ class TestBillingReturnView:
         """Set up test environment."""
         self.client = Client()
 
-    @patch("stripe.checkout.Session.retrieve")
-    @patch("stripe.Subscription.retrieve")
-    @patch("stripe.Customer.retrieve")
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
+    @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
+    @patch("sbomify.apps.billing.views.stripe_client.get_customer")
     def test_billing_return_success(
         self,
-        mock_customer_retrieve,
-        mock_subscription_retrieve,
-        mock_session_retrieve,
+        mock_get_customer,
+        mock_get_subscription,
+        mock_get_checkout_session,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -51,20 +51,31 @@ class TestBillingReturnView:
         mock_session.payment_status = "paid"
         mock_session.subscription = "sub_123"
         mock_session.customer = "cus_123"
-        mock_session.metadata = {"team_key": team_with_business_plan.key}
-        mock_session_retrieve.return_value = mock_session
+        mock_session.metadata = {
+            "team_key": team_with_business_plan.key,
+            "plan_key": "business",
+        }
+        mock_get_checkout_session.return_value = mock_session
 
         # Mock subscription data
         mock_subscription = MagicMock()
         mock_subscription.id = "sub_123"
         mock_subscription.status = "active"
-        mock_subscription.get.return_value = {"data": [{"plan": {"interval": "month"}}]}
-        mock_subscription_retrieve.return_value = mock_subscription
+        mock_subscription.cancel_at_period_end = False
+        mock_subscription.cancel_at = None
+        # Set up attribute access for items.data[0].plan.interval
+        mock_plan = MagicMock()
+        mock_plan.interval = "month"
+        mock_item = MagicMock()
+        mock_item.plan = mock_plan
+        mock_subscription.items = MagicMock()
+        mock_subscription.items.data = [mock_item]
+        mock_get_subscription.return_value = mock_subscription
 
         # Mock customer data
         mock_customer = MagicMock()
         mock_customer.id = "cus_123"
-        mock_customer_retrieve.return_value = mock_customer
+        mock_get_customer.return_value = mock_customer
 
         self.client.force_login(sample_user)
 
@@ -81,14 +92,15 @@ class TestBillingReturnView:
         assert "stripe_customer_id" in team_with_business_plan.billing_plan_limits
         assert "stripe_subscription_id" in team_with_business_plan.billing_plan_limits
 
-    @patch("stripe.checkout.Session.retrieve")
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_payment_not_paid(
-        self, mock_session_retrieve, sample_user: AbstractBaseUser  # noqa: F811
+        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
     ):
         """Test billing return with non-paid payment status."""
         mock_session = MagicMock()
         mock_session.payment_status = "failed"
-        mock_session_retrieve.return_value = mock_session
+        mock_session.metadata = {"team_key": "test_team"}
+        mock_get_checkout_session.return_value = mock_session
 
         self.client.force_login(sample_user)
 
@@ -97,10 +109,13 @@ class TestBillingReturnView:
         )
 
         assert response.status_code == 302
-        assert response.url == reverse("core:dashboard")
+        # Should redirect to select_plan when payment not paid
+        assert "select-plan" in response.url
 
-    @patch("stripe.checkout.Session.retrieve")
-    def test_billing_return_no_session_id(self, mock_session_retrieve, sample_user: AbstractBaseUser):  # noqa: F811
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
+    def test_billing_return_no_session_id(
+        self, mock_get_checkout_session, sample_user: AbstractBaseUser
+    ):  # noqa: F811
         """Test billing return without session ID."""
         self.client.force_login(sample_user)
 
@@ -108,14 +123,16 @@ class TestBillingReturnView:
 
         assert response.status_code == 302
         assert response.url == reverse("core:dashboard")
-        mock_session_retrieve.assert_not_called()
+        mock_get_checkout_session.assert_not_called()
 
-    @patch("stripe.checkout.Session.retrieve")
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_stripe_error(
-        self, mock_session_retrieve, sample_user: AbstractBaseUser  # noqa: F811
+        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
     ):
         """Test billing return with Stripe error."""
-        mock_session_retrieve.side_effect = stripe.error.StripeError("API error")
+        from sbomify.apps.billing.stripe_client import StripeError
+
+        mock_get_checkout_session.side_effect = StripeError("API error")
 
         self.client.force_login(sample_user)
 
@@ -126,15 +143,15 @@ class TestBillingReturnView:
         assert response.status_code == 302
         assert response.url == reverse("core:dashboard")
 
-    @patch("stripe.checkout.Session.retrieve")
+    @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     def test_billing_return_no_team_key_in_metadata(
-        self, mock_session_retrieve, sample_user: AbstractBaseUser  # noqa: F811
+        self, mock_get_checkout_session, sample_user: AbstractBaseUser  # noqa: F811
     ):
         """Test billing return with missing team key in metadata."""
         mock_session = MagicMock()
         mock_session.payment_status = "paid"
         mock_session.metadata = {}  # No team_key
-        mock_session_retrieve.return_value = mock_session
+        mock_get_checkout_session.return_value = mock_session
 
         self.client.force_login(sample_user)
 
@@ -248,6 +265,10 @@ class TestBillingRedirectEdgeCases:
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test billing redirect creating new customer."""
+        # Clear existing billing limits to force new customer creation
+        team_with_business_plan.billing_plan_limits = {}
+        team_with_business_plan.save()
+
         # Mock customer doesn't exist
         mock_customer_retrieve.side_effect = stripe.error.InvalidRequestError(
             message="No such customer", param="id"

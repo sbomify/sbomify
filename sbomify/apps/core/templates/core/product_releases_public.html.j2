@@ -2,87 +2,83 @@
 {% load breadcrumb_tags %}
 {% load static %}
 {% load public_url_tags %}
+{% load humanize %}
 {% block title %}{{ product.name }} - Releases{% endblock %}
-{% block extra_css %}
-    <link rel="stylesheet"
-          href="{% static 'css/product-releases-public.css' %}">
-    <style>
-        .meta-item i {
-            color: var(--brand-color) !important;
-        }
-    </style>
+{% block meta_description %}
+    All software releases for {{ product.name }}. Browse release history, download SBOMs, and view release artifacts.
+{% endblock %}
+{% block og_title %}{{ product.name }} - Release History{% endblock %}
+{% block og_description %}
+    All software releases for {{ product.name }}. Browse release history, download SBOMs, and view release artifacts.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb releases 'releases' %}
 {% endblock %}
 {% block content %}
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="page-header mb-4">
-                    <div class="header-main mb-3">
-                        <div class="title-section">
-                            <h1 class="item-title">Releases</h1>
-                            <p class="item-subtitle">Software releases for {{ product.name }}</p>
-                        </div>
-                    </div>
-                    <div class="header-meta">
-                        <span class="meta-item">
-                            <i class="fas fa-tag me-2"></i>
-                            <span class="meta-label">{{ releases|length }} Release{{ releases|length|pluralize }}</span>
-                        </span>
-                    </div>
+    <div class="public-item-header">
+        <a href="{% url 'core:product_details_public' product.id %}"
+           class="back-link">
+            <i class="fas fa-arrow-left"></i>Back to {{ product.name }}
+        </a>
+        <h1 class="public-item-title">
+            <span class="public-item-title-icon icon-release">
+                <i class="fas fa-tags"></i>
+            </span>
+            Releases
+        </h1>
+        <p class="public-item-description">All software releases for {{ product.name }}</p>
+        {% if releases %}
+            <div class="public-item-badges">
+                <span class="public-badge badge-count">
+                    <i class="fas fa-tag"></i>
+                    {{ releases|length }} Release{{ releases|length|pluralize }}
+                </span>
+            </div>
+        {% endif %}
+    </div>
+    {% if releases %}
+        <div class="public-section">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title">
+                        <i class="fas fa-history"></i>Release History
+                    </h4>
                 </div>
-                {% if releases %}
+                <div class="card-body p-3">
                     <div class="releases-grid">
                         {% for release in releases %}
-                            <div class="release-card">
-                                <div class="release-header">
-                                    <div class="release-title">
-                                        <h3 class="release-name">
-                                            <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}">{{ release.name }}</a>
-                                            {% if release.is_latest %}<span class="badge bg-success ms-2">Latest</span>{% endif %}
-                                        </h3>
-                                        {% if release.description %}<p class="release-description">{{ release.description }}</p>{% endif %}
+                            <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}"
+                               class="release-card">
+                                <div class="release-card-header">
+                                    <div class="release-card-left">
+                                        <span class="release-name">{{ release.name }}</span>
+                                        {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
+                                        {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
                                     </div>
-                                    <div class="release-meta">
-                                        <small class="text-muted">
-                                            <i class="fas fa-clock me-1"></i>
-                                            {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
-                                        </small>
+                                    <div class="release-card-meta">
+                                        <i class="far fa-clock"></i>
+                                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                                     </div>
                                 </div>
-                                <div class="release-content">
-                                    <div class="release-stats">
-                                        <div class="stat-item">
-                                            <i class="fas fa-puzzle-piece me-1"></i>
-                                            <span class="stat-value">{{ release.artifacts.count }}</span>
-                                            <span class="stat-label">Artifact{{ release.artifacts.count|pluralize }}</span>
-                                        </div>
-                                        {% with sbom_count=release.artifacts.filter|length %}
-                                            {% if sbom_count > 0 %}
-                                                <div class="stat-item">
-                                                    <i class="fas fa-download me-1"></i>
-                                                    <a href="{% url 'api-1:download_release' release.id %}"
-                                                       class="download-link">Download SBOM</a>
-                                                </div>
-                                            {% endif %}
-                                        {% endwith %}
-                                    </div>
-                                </div>
-                            </div>
+                                {% if release.description %}
+                                    <p class="release-card-description">{{ release.description|truncatechars:200 }}</p>
+                                {% endif %}
+                            </a>
                         {% endfor %}
                     </div>
-                {% else %}
-                    <div class="empty-state">
-                        <div class="empty-icon">
-                            <i class="fas fa-tag"></i>
-                        </div>
-                        <h3>No releases available</h3>
-                        <p class="text-muted">This product doesn't have any releases yet.</p>
-                    </div>
-                {% endif %}
+                </div>
             </div>
         </div>
-    </div>
+    {% else %}
+        <div class="public-section">
+            <div class="card">
+                <div class="card-body" style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-tags fa-3x"
+                       style="color: var(--text-muted);
+                              margin-bottom: 1rem"></i>
+                    <p style="color: var(--text-secondary);">No releases available for this product yet.</p>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 {% endblock %}

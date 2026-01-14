@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
 
@@ -14,6 +14,10 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
+from sbomify.apps.plugins.public_assessment_utils import (
+    get_component_assessment_status,
+    passing_assessments_to_dict,
+)
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Team
 
@@ -24,6 +28,10 @@ class ComponentDetailsPublicView(View):
         component_obj = resolve_component_identifier(request, component_id)
         if not component_obj:
             return error_response(request, HttpResponseNotFound("Component not found"))
+
+        # Check if component is public - private components should not be accessible via public URL
+        if not component_obj.is_public:
+            return error_response(request, HttpResponseForbidden("Access denied"))
 
         # Use the resolved component's ID for API calls
         resolved_id = component_obj.id
@@ -42,9 +50,36 @@ class ComponentDetailsPublicView(View):
             path = get_public_path("component", resolved_id, is_custom_domain=True, slug=component_obj.slug)
             return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
 
+        # Get assessment status for this component (only passing assessments)
+        assessment_status = get_component_assessment_status(component_obj)
+        passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
+
+        # Find the parent product (via project) for the back link
+        is_custom_domain = getattr(request, "is_custom_domain", False)
+        parent_product = None
+        parent_product_url = None
+        public_projects = component_obj.projects.filter(is_public=True)
+        if public_projects.exists():
+            project = public_projects.first()
+            public_products = project.products.filter(is_public=True)
+            if public_products.exists():
+                parent_product = public_products.first()
+                if is_custom_domain:
+                    parent_product_url = f"/product/{parent_product.slug or parent_product.id}/"
+                else:
+                    from django.urls import reverse
+
+                    parent_product_url = reverse(
+                        "core:product_details_public", kwargs={"product_id": parent_product.id}
+                    )
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "passing_assessments": passing_assessments,
+            "has_passing_assessments": assessment_status.all_pass,
+            "parent_product": parent_product,
+            "parent_product_url": parent_product_url,
         }
 
         brand = build_branding_context(team)

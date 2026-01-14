@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from enum import Enum
 from types import ModuleType
@@ -17,6 +18,8 @@ from .sbom_format_schemas import cyclonedx_1_5 as cdx15
 from .sbom_format_schemas import cyclonedx_1_6 as cdx16
 from .sbom_format_schemas import cyclonedx_1_7 as cdx17
 from .sbom_format_schemas.spdx import Schema as LicenseSchema
+
+logger = logging.getLogger(__name__)
 
 
 class PublicStatusSchema(Schema):
@@ -275,6 +278,7 @@ class ComponentMetaData(BaseModel):
     id: str
     name: str
     supplier: SupplierSchema = Field(default_factory=SupplierSchema)
+    manufacturer: SupplierSchema = Field(default_factory=SupplierSchema)
     authors: list[ComponentAuthorSchema] = Field(default_factory=list)
     licenses: list[LicenseSchema | CustomLicenseSchema | str] = Field(default_factory=list)
     lifecycle_phase: str | None = Field(default=None, serialization_exclude_when_none=False)
@@ -331,6 +335,41 @@ class ComponentMetaData(BaseModel):
                     )
                     result.supplier.contact.append(c)
 
+        # Component Manufacturer handling:
+        # - 1.3-1.5: use metadata.manufacture (canonical field for component manufacturer)
+        # - 1.6-1.7: use metadata.manufacturer (forward-looking, with PostalAddress support)
+        if self.manufacturer and (
+            self.manufacturer.name or self.manufacturer.url or self.manufacturer.address or self.manufacturer.contacts
+        ):
+            mfg_entity = CycloneDx.OrganizationalEntity()
+            set_values_if_not_empty(mfg_entity, name=self.manufacturer.name)
+
+            if self.manufacturer.url:
+                mfg_entity.url = self.manufacturer.url
+
+            if self.manufacturer.contacts:
+                mfg_entity.contact = []
+                for contact_data in self.manufacturer.contacts:
+                    c = CycloneDx.OrganizationalContact()
+                    set_values_if_not_empty(
+                        c, name=contact_data.name, email=contact_data.email, phone=contact_data.phone
+                    )
+                    mfg_entity.contact.append(c)
+
+            # Version-specific field assignment
+            if spec_version in [
+                CycloneDXSupportedVersion.v1_3,
+                CycloneDXSupportedVersion.v1_4,
+                CycloneDXSupportedVersion.v1_5,
+            ]:
+                # Use metadata.manufacture for 1.3-1.5
+                result.manufacture = mfg_entity
+            else:
+                # Use metadata.manufacturer for 1.6+ (with PostalAddress support)
+                if self.manufacturer.address:
+                    mfg_entity.address = CycloneDx.PostalAddress(streetAddress=self.manufacturer.address)
+                result.manufacturer = mfg_entity
+
         if self.authors:
             result.authors = []
             for author_data in self.authors:
@@ -341,8 +380,10 @@ class ComponentMetaData(BaseModel):
         if self.licenses:
             licenses_list = []
             for component_license in self.licenses:
+                cdx_lic: CycloneDx.License | None = None
+
                 if isinstance(component_license, CustomLicenseSchema):
-                    licenses_list.append(component_license.to_cyclonedx(spec_version))
+                    cdx_lic = component_license.to_cyclonedx(spec_version)
                 elif isinstance(component_license, (str, LicenseSchema)):
                     if isinstance(component_license, Enum):
                         license_identifier = component_license.value
@@ -362,6 +403,22 @@ class ComponentMetaData(BaseModel):
                         except Exception:  # Broad catch, consider pydantic.ValidationError if possible
                             # Fallback for non-SPDX IDs or other cases
                             cdx_lic = CycloneDx.License(name=license_identifier)
+                else:
+                    # Log warning for unexpected license types that are being skipped
+                    logger.warning(
+                        "Skipping unknown license type %s during CycloneDX conversion",
+                        type(component_license).__name__,
+                    )
+
+                # Skip if no license was created (unknown type)
+                if cdx_lic is None:
+                    continue
+
+                # CycloneDX 1.7+ requires licenses to be wrapped in LicenseChoice1/2
+                if spec_version == CycloneDXSupportedVersion.v1_7:
+                    # Wrap License in LicenseChoice1
+                    licenses_list.append(CycloneDx.LicenseChoice1(license=cdx_lic))
+                else:
                     licenses_list.append(cdx_lic)
 
             if licenses_list:

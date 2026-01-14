@@ -1,0 +1,41 @@
+{# Public Releases List - server-rendered #}
+{% load static %}
+{% load humanize %}
+{% if public_releases %}
+    <div class="public-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-tags"></i>Releases
+                </h4>
+                {% if view_all_releases_url %}
+                    <a href="{{ view_all_releases_url }}" class="public-view-all-btn">
+                        View All<i class="fas fa-arrow-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-3">
+                <div class="releases-grid">
+                    {% for release in public_releases %}
+                        <a href="{{ release.public_url }}" class="release-card">
+                            <div class="release-card-header">
+                                <div class="release-card-left">
+                                    <span class="release-name">{{ release.name }}</span>
+                                    {% if release.is_latest %}<span class="public-release-badge badge-latest">Latest</span>{% endif %}
+                                    {% if release.is_prerelease %}<span class="public-release-badge badge-prerelease">Pre-release</span>{% endif %}
+                                </div>
+                                <div class="release-card-meta">
+                                    <i class="far fa-clock"></i>
+                                    {{ release.released_at|default:release.created_at|naturaltime }}
+                                </div>
+                            </div>
+                            {% if release.description %}
+                                <p class="release-card-description">{{ release.description|truncatechars:100 }}</p>
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

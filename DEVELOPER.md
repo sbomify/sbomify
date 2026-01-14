@@ -65,86 +65,12 @@ Ensure that Bun is installed before proceeding.
 
 ## Card Components
 
-We have implemented a unified card component system to ensure consistency across the application. The approach differs between Django templates (server-rendered) and Vue components (client-rendered).
+We have implemented a unified card component system to ensure consistency across the application using Django templates with HTMX and Alpine.js.
 
 ### Available Components
 
-#### For Vue Components
-
-**StandardCard (`vc-standard-card`)**
-The main card component with multiple variants:
-
-```vue
-<StandardCard
-  title="Card Title"
-  variant="settings"
-  size="large"
-  :collapsible="true">
-  <template #header-actions>
-    <button class="btn btn-primary">Action</button>
-  </template>
-  <!-- Content -->
-</StandardCard>
-```
-
-**DangerZone Card**
-For dangerous actions like deletions and transfers:
-
-```vue
-<StandardCard
-  title="Danger Zone"
-  variant="dangerzone"
-  :collapsible="true"
-  :defaultExpanded="false"
-  storageKey="danger-zone"
-  infoIcon="fas fa-exclamation-triangle">
-  <div class="danger-section delete-section">
-    <div class="section-header">
-      <div class="section-icon delete-icon">
-        <i class="fas fa-trash-alt"></i>
-      </div>
-      <div class="section-content">
-        <h6 class="section-title">Delete Item</h6>
-        <p class="section-description">Permanently remove this item</p>
-      </div>
-    </div>
-    <button class="btn btn-danger modern-btn delete-btn">
-      <i class="fas fa-trash-alt me-2"></i>Delete
-    </button>
-  </div>
-</StandardCard>
-```
-
-**StatCard (`vc-stat-card`)**
-Specialized for displaying statistics and metrics:
-
-```vue
-<StatCard
-  title="Active Users"
-  :value="1234"
-  subtitle="Last 30 days"
-  trend="positive"
-  color-scheme="primary"
-/>
-```
-
-**PlanCard (`vc-plan-card`)**
-Specialized for billing plans and pricing:
-
-```vue
-<PlanCard
-  plan-name="Professional"
-  :price="29"
-  price-period="month"
-  :features="['Feature 1', 'Feature 2']"
-  button-text="Choose Plan"
-/>
-```
-
-#### For Django Templates
-
 **Standard Card Structure**
-Use HTML with the appropriate CSS classes that match our Vue components:
+Use HTML with the appropriate CSS classes:
 
 ```html
 <div class="card settings-card" data-shadow="md">
@@ -248,7 +174,7 @@ For dangerous actions that require special styling:
 </div>
 ```
 
-**After (Django Template):**
+**After (Django Template with proper CSS classes):**
 
 ```html
 <div class="card settings-card" data-shadow="md">
@@ -261,54 +187,21 @@ For dangerous actions that require special styling:
 </div>
 ```
 
-**After (Vue Component):**
-
-```vue
-<StandardCard title="Title" variant="settings" shadow="md">
-  Content
-</StandardCard>
-```
-
-**DangerZone Migration (Vue Component):**
-
-```vue
-<!-- Before: Custom danger zone styling -->
-<div class="card border-danger">
-  <div class="card-header bg-danger text-white">
-    <h5>Danger Zone</h5>
-  </div>
-  <!-- Content -->
-</div>
-
-<!-- After: StandardCard with dangerzone variant -->
-<StandardCard
-  title="Danger Zone"
-  variant="dangerzone"
-  :collapsible="true"
-  :defaultExpanded="false"
-  infoIcon="fas fa-exclamation-triangle">
-  <!-- Content -->
-</StandardCard>
-```
-
 ### Best Practices
 
-1. **Django Templates**: Use HTML structure with proper CSS classes
-2. **Vue Components**: Use the provided Vue components (StandardCard, StatCard, PlanCard)
-3. Choose the appropriate variant for your use case
-4. Use StatCard for metrics and dashboard stats
-5. Use PlanCard for pricing/billing displays
-6. **Use DangerZone Cards for destructive actions**:
-   - Always use `variant="dangerzone"` for delete, transfer, or other potentially destructive operations
+1. Use HTML structure with proper CSS classes in Django templates
+2. Choose the appropriate card variant for your use case
+3. **Use DangerZone Cards for destructive actions**:
+   - Use `dangerzone-card` class for delete, transfer, or other potentially destructive operations
    - Include appropriate warning icons (`fas fa-exclamation-triangle` in header)
-   - Use collapsible behavior (`defaultExpanded="false"`) to prevent accidental clicks
    - Structure content in `danger-section` divs with proper semantic classes
-7. Leverage slots for complex header actions or custom content
-8. Maintain consistent shadow and spacing usage
+4. Use Alpine.js for interactive components (collapsible behavior, modals)
+5. Use HTMX for server-driven updates without full page reloads
+6. Maintain consistent shadow and spacing usage
 
 ### Implemented DangerZone Components
 
-The dangerzone components have been migrated from Vue to Django templates with HTMX/Alpine.js. The following templates are available in `sbomify/apps/core/templates/components/`:
+The dangerzone components use Django templates with HTMX/Alpine.js. The following templates are available in `sbomify/apps/core/templates/components/`:
 
 - **Components**: `component_danger_zone.html.j2` (transfer + delete functionality)
 - **Projects**: `project_danger_zone.html.j2` (delete only)
@@ -321,10 +214,9 @@ Each component uses Alpine.js for collapsible behavior and HTMX-based confirmati
 
 ### Important Notes
 
-- Vue components (`vc-standard-card`, `vc-stat-card`, etc.) only work within Vue applications
-- Django templates are server-rendered and require HTML structure
-- Both approaches use the same underlying CSS for consistent styling
-- **DangerZone Cards**: The `dangerzone` variant provides card-level theming (red border, warning header), while section content styling is handled by individual components due to CSS scoping
+- All components use Django templates (server-rendered)
+- Alpine.js is used for client-side interactivity (state, collapsible behavior)
+- HTMX is used for server-driven updates
 - Always test functionality after making changes to ensure cards render correctly
 
 ## Development Standards

@@ -3,7 +3,7 @@ import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.http import HttpRequest, HttpResponse
 
-from sbomify.apps.billing.billing_processing import can_downgrade_to_plan, check_billing_limits
+from sbomify.apps.billing.billing_processing import check_billing_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product, Project, ProductProject, ProjectComponent
 from sbomify.apps.teams.models import Team
@@ -28,54 +28,7 @@ def test_billing_plan_str_representation(business_plan: BillingPlan):
     assert str(business_plan) == "Business (business)"
 
 
-@pytest.mark.django_db
-def test_can_downgrade_to_enterprise_plan(
-    team_with_business_plan: Team, enterprise_plan: BillingPlan
-):
-    """
-    Test that any team can upgrade to enterprise plan.
 
-    Enterprise plan is not a downgrade but it is good the have this test.
-    """
-    can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, enterprise_plan)
-    assert can_downgrade is True
-    assert message == ""
-
-
-@pytest.mark.django_db
-def test_cannot_downgrade_with_too_many_products(
-    team_with_business_plan: Team,
-    community_plan: BillingPlan,
-    multiple_products: list[Product]
-):
-    """Test downgrade prevention when team has more products than plan allows."""
-    can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
-    assert can_downgrade is False
-    assert "products" in message.lower()
-
-
-@pytest.mark.django_db
-def test_cannot_downgrade_with_too_many_projects(
-    team_with_business_plan: Team,
-    community_plan: BillingPlan,
-    multiple_projects: list[Project]
-):
-    """Test downgrade prevention when team has more projects than plan allows."""
-    can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
-    assert can_downgrade is False
-    assert "projects" in message.lower()
-
-
-@pytest.mark.django_db
-def test_cannot_downgrade_with_too_many_components(
-    team_with_business_plan: Team,
-    community_plan: BillingPlan,
-    multiple_components: list[Component]
-):
-    """Test downgrade prevention when team has more components than plan allows."""
-    can_downgrade, message = can_downgrade_to_plan(team_with_business_plan, community_plan)
-    assert can_downgrade is False
-    assert "components" in message.lower()
 
 
 @pytest.mark.django_db

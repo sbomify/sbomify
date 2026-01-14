@@ -1,0 +1,63 @@
+{# Public Product Identifiers - server-rendered #}
+{% load static %}
+{% if product_identifiers %}
+    <div class="public-section" x-data="productIdentifiersBarcodes()">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">
+                    <i class="fas fa-fingerprint"></i>Product Identifiers
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 public-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th>Value</th>
+                                <th class="text-center">Barcode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for identifier in product_identifiers %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary">{{ identifier.identifier_type_display }}</span>
+                                    </td>
+                                    <td>
+                                        <code class="text-primary">{{ identifier.value }}</code>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if identifier.identifier_type in barcode_types %}
+                                            <div class="barcode-wrapper identifier-card-barcode"
+                                                 x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
+                                                <svg data-barcode-id="{{ identifier.id }}"
+                                                     class="barcode-svg"
+                                                     x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                                                     style="max-width: 150px;
+                                                            height: auto">
+                                                </svg>
+                                                <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                                                      class="text-muted">
+                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                </span>
+                                                <span x-show="barcodeErrors['{{ identifier.id }}']"
+                                                      class="badge bg-secondary-subtle text-secondary">
+                                                    <i class="fas fa-info-circle me-1"></i>Not Applicable
+                                                </span>
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-secondary-subtle text-secondary">
+                                                <i class="fas fa-info-circle me-1"></i>Not Applicable
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
