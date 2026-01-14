@@ -293,18 +293,28 @@ def tea_identifier_mapper(product: Product) -> list[dict]:
 
 def tea_component_identifier_mapper(component: Component) -> list[dict]:
     """
-    Convert sbomify Component identifiers to TEA identifier format.
-
-    Note: This is a stub until issue #402 (Component Identifiers) is implemented.
+    Convert sbomify ComponentIdentifiers to TEA identifier format.
 
     Args:
         component: The Component to get identifiers for
 
     Returns:
-        Empty list for now. Will return identifiers once #402 is implemented.
+        List of dicts with keys: idType, idValue
+        GTIN_* types are merged into single "GTIN" type.
+        Types without TEA equivalents are excluded.
     """
-    # TODO: Implement once #402 (Component Identifiers) is done
-    return []
+    identifiers = []
+    seen = set()  # Track unique (idType, idValue) pairs
+
+    for identifier in component.identifiers.all():
+        tea_type = IDENTIFIER_TYPE_TO_TEA.get(identifier.identifier_type)
+        if tea_type:
+            key = (tea_type, identifier.value)
+            if key not in seen:
+                seen.add(key)
+                identifiers.append({"idType": tea_type, "idValue": identifier.value})
+
+    return identifiers
 
 
 def build_tea_server_url(team: Team, workspace_key: str | None = None) -> str:
