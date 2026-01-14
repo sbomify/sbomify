@@ -16,6 +16,11 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.services.querysets import (
+    optimize_component_queryset,
+    optimize_product_queryset,
+    optimize_project_queryset,
+)
 from sbomify.apps.core.utils import build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import (
     ComponentMetaData,
@@ -139,6 +144,20 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
     return None
 
 
+def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
+    """Resolve CRUD permission for a team once to avoid per-item membership queries."""
+    if not request.user or not request.user.is_authenticated:
+        return False
+
+    from sbomify.apps.teams.models import Member
+
+    member = Member.objects.filter(user=request.user, team_id=team_id).only("role").first()
+    if not member:
+        return False
+
+    return member.role in ["owner", "admin"]
+
+
 def _private_items_allowed(team: Team) -> bool:
     return team.can_be_private()
 
@@ -165,7 +184,7 @@ def _ensure_latest_release_exists(product: "Product") -> None:
         log.warning(f"Failed to ensure latest release for product {product.id}: {e}")
 
 
-def _build_item_response(request: HttpRequest, item, item_type: str):
+def _build_item_response(request: HttpRequest, item, item_type: str, has_crud_permissions: bool | None = None):
     """Build a standardized response for items."""
     base_response = {
         "id": item.id,
@@ -174,12 +193,16 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
         "team_id": str(item.team_id),
         "is_public": item.is_public,
         "created_at": item.created_at.isoformat(),
-        "has_crud_permissions": verify_item_access(request, item, ["owner", "admin"]),
+        "has_crud_permissions": (
+            has_crud_permissions
+            if has_crud_permissions is not None
+            else verify_item_access(request, item, ["owner", "admin"])
+        ),
     }
 
     if item_type == "product":
         base_response["description"] = item.description
-        base_response["project_count"] = item.projects.count()
+        base_response["project_count"] = item.project_count if hasattr(item, "project_count") else item.projects.count()
         # Include actual projects data for frontend
         base_response["projects"] = [
             {
@@ -213,7 +236,9 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             for link in item.links.all()
         ]
     elif item_type == "project":
-        base_response["component_count"] = item.components.count()
+        base_response["component_count"] = (
+            item.component_count if hasattr(item, "component_count") else item.components.count()
+        )
         base_response["metadata"] = item.metadata
         # Include actual components data for frontend
         base_response["components"] = [
@@ -229,7 +254,7 @@ def _build_item_response(request: HttpRequest, item, item_type: str):
             for component in item.components.all()
         ]
     elif item_type == "component":
-        base_response["sbom_count"] = item.sbom_set.count()
+        base_response["sbom_count"] = item.sbom_count if hasattr(item, "sbom_count") else item.sbom_set.count()
         base_response["metadata"] = item.metadata
         base_response["component_type"] = item.component_type
         base_response["component_type_display"] = item.get_component_type_display()
@@ -507,14 +532,12 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
             if not team_id:
                 return 403, {"detail": "No current team selected"}
 
-            products_queryset = Product.objects.filter(team_id=team_id).prefetch_related(
-                "projects", "identifiers", "links"
-            )
+            products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
+            has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
             # For unauthenticated users, show only public products
-            products_queryset = Product.objects.filter(is_public=True).prefetch_related(
-                "projects", "identifiers", "links"
-            )
+            products_queryset = optimize_product_queryset(Product.objects.filter(is_public=True))
+            has_crud_permissions = False
 
         # Apply pagination
         paginated_products, pagination_meta = _paginate_queryset(products_queryset, page, page_size)
@@ -524,7 +547,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
             _ensure_latest_release_exists(product)
 
         # Build response items
-        items = [_build_item_response(request, product, "product") for product in paginated_products]
+        items = [
+            _build_item_response(request, product, "product", has_crud_permissions) for product in paginated_products
+        ]
 
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -535,12 +560,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
 def _get_product_with_instance(request: HttpRequest, product_id: str) -> tuple[int, ProductLookupResult | dict]:
     """Internal helper that returns both serialized payload and ORM instance."""
     try:
-        # Use select_related to avoid N+1 query when team is accessed later
-        product = (
-            Product.objects.prefetch_related("projects", "identifiers", "links")
-            .select_related("team")
-            .get(pk=product_id)
-        )
+        product = optimize_product_queryset(Product.objects.filter(pk=product_id)).get()
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
@@ -1264,16 +1284,20 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
             if not team_id:
                 return 403, {"detail": "No current team selected"}
 
-            projects_queryset = Project.objects.filter(team_id=team_id).prefetch_related("components")
+            projects_queryset = optimize_project_queryset(Project.objects.filter(team_id=team_id))
+            has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
             # For unauthenticated users, show only public projects
-            projects_queryset = Project.objects.filter(is_public=True).prefetch_related("components")
+            projects_queryset = optimize_project_queryset(Project.objects.filter(is_public=True))
+            has_crud_permissions = False
 
         # Apply pagination
         paginated_projects, pagination_meta = _paginate_queryset(projects_queryset, page, page_size)
 
         # Build response items
-        items = [_build_item_response(request, project, "project") for project in paginated_projects]
+        items = [
+            _build_item_response(request, project, "project", has_crud_permissions) for project in paginated_projects
+        ]
 
         return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -1291,7 +1315,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
 def get_project(request: HttpRequest, project_id: str):
     """Get a specific project by ID."""
     try:
-        project = Project.objects.prefetch_related("components").get(pk=project_id)
+        project = optimize_project_queryset(Project.objects.filter(pk=project_id)).get()
     except Project.DoesNotExist:
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
@@ -1522,16 +1546,21 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
             if not team_id:
                 return 403, {"detail": "No current team selected"}
 
-            components_queryset = Component.objects.filter(team_id=team_id).prefetch_related("sbom_set")
+            components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+            has_crud_permissions = _get_team_crud_permission(request, team_id)
         else:
             # For unauthenticated users, show only public components
-            components_queryset = Component.objects.filter(is_public=True).prefetch_related("sbom_set")
+            components_queryset = optimize_component_queryset(Component.objects.filter(is_public=True))
+            has_crud_permissions = False
 
         # Apply pagination
         paginated_components, pagination_meta = _paginate_queryset(components_queryset, page, page_size)
 
         # Build response items
-        items = [_build_item_response(request, component, "component") for component in paginated_components]
+        items = [
+            _build_item_response(request, component, "component", has_crud_permissions)
+            for component in paginated_components
+        ]
 
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
     except Exception as e:
@@ -1549,7 +1578,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
 def get_component(request: HttpRequest, component_id: str, return_instance: bool = False):
     """Get a specific component by ID."""
     try:
-        component = Component.objects.prefetch_related("sbom_set").get(pk=component_id)
+        component = optimize_component_queryset(Component.objects.filter(pk=component_id)).get()
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 

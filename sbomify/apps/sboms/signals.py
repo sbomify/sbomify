@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -32,16 +33,18 @@ def trigger_plugin_assessments(sender, instance, created, **kwargs):
 
             logger.info(f"Triggering plugin assessments for SBOM {instance.id} (team: {team.key})")
 
-            enqueued = enqueue_assessments_for_sbom(
-                sbom_id=instance.id,
-                team_id=team.id,
-                run_reason=RunReason.ON_UPLOAD,
-            )
+            def _enqueue_assessments():
+                enqueued = enqueue_assessments_for_sbom(
+                    sbom_id=instance.id,
+                    team_id=team.id,
+                    run_reason=RunReason.ON_UPLOAD,
+                )
+                if enqueued:
+                    logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")
+                else:
+                    logger.debug(f"No plugin assessments enqueued for SBOM {instance.id} (no plugins enabled)")
 
-            if enqueued:
-                logger.info(f"Enqueued {len(enqueued)} plugin assessments for SBOM {instance.id}: {enqueued}")
-            else:
-                logger.debug(f"No plugin assessments enqueued for SBOM {instance.id} (no plugins enabled)")
+            transaction.on_commit(_enqueue_assessments)
 
         except (AttributeError, ImportError) as e:
             logger.error(f"Failed to trigger plugin assessments for SBOM {instance.id}: {e}", exc_info=True)
@@ -75,7 +78,9 @@ def trigger_vulnerability_scan(sender, instance, created, **kwargs):
             logger.info(f"Triggering vulnerability scan for SBOM {instance.id} - team {team.key} with {plan_info}")
 
             # Add a 90 second delay to ensure transaction is committed and to stagger after NTIA compliance
-            scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)
+            transaction.on_commit(
+                lambda: scan_sbom_for_vulnerabilities_unified.send_with_options(args=[instance.id], delay=90000)
+            )
 
         except (AttributeError, ImportError) as e:
             logger.error(f"Failed to trigger vulnerability scan for SBOM {instance.id}: {e}", exc_info=True)
