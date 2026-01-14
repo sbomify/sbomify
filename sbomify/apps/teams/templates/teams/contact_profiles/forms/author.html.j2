@@ -19,14 +19,32 @@
         </div>
         {# Name field #}
         <div class="flex-shrink-0 contact-field-name">
-            {{ form.name|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Name *"|attr:"required:required"|attr:"title:Click to edit name"|attr:"aria-label:Author Name" }}
+            <input type="text"
+                   name="{{ form.name.html_name }}"
+                   id="{{ form.name.id_for_label }}"
+                   value="{{ form.name.value|default:'' }}"
+                   class="form-control form-control-sm bg-white rounded-2"
+                   placeholder="Name *"
+                   maxlength="255"
+                   :required="!deleted"
+                   title="Click to edit name"
+                   aria-label="Author Name">
             {% if form.name.errors %}
                 <div class="text-danger small mt-1" role="alert" aria-live="polite">{{ form.name.errors.0 }}</div>
             {% endif %}
         </div>
         {# Email field #}
         <div class="flex-grow-1 contact-field-email">
-            {{ form.email|add_class:"form-control form-control-sm bg-white rounded-2"|attr:"placeholder:Email *"|attr:"required:required"|attr:"title:Please enter a valid email address (e.g., contact@example.com)"|attr:"type:email"|attr:"aria-label:Author Email" }}
+            <input type="email"
+                   name="{{ form.email.html_name }}"
+                   id="{{ form.email.id_for_label }}"
+                   value="{{ form.email.value|default:'' }}"
+                   class="form-control form-control-sm bg-white rounded-2"
+                   placeholder="Email *"
+                   maxlength="254"
+                   :required="!deleted"
+                   title="Please enter a valid email address (e.g., contact@example.com)"
+                   aria-label="Author Email">
             {% if form.email.errors %}
                 <div class="text-danger small mt-1" role="alert" aria-live="polite">{{ form.email.errors.0 }}</div>
             {% endif %}

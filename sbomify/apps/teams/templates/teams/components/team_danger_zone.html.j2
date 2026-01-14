@@ -47,9 +47,11 @@
             </div>
         </div>
     </div>
-    <!-- Custom Delete Modal for Workspace - using x-if for proper rendering -->
-    <template x-if="showDeleteModal">
-        <div class="delete-modal-overlay"
+    <!-- Custom Delete Modal for Workspace - teleported to body for proper positioning -->
+    <template x-teleport="body">
+        <div x-show="showDeleteModal"
+             x-cloak
+             class="delete-modal-overlay"
              tabindex="-1"
              @click.self="showDeleteModal = false; confirmText = ''"
              @keydown.escape.window="showDeleteModal = false; confirmText = ''">

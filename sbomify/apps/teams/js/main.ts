@@ -6,6 +6,7 @@ import { registerFileDragAndDrop } from '../../core/js/components/file-drag-and-
 import { registerWorkspaceSwitcher } from '../../core/js/components/workspace-switcher';
 import { registerOnboardingWizard } from './onboarding-wizard';
 import { registerTeamGeneral } from './team-general';
+import { registerSiteNotifications } from '../../core/js/components/site-notifications';
 import { initializeAlpine } from '../../core/js/alpine-init';
 
 registerCopyableValue();
@@ -15,4 +16,5 @@ registerTeamBranding();
 registerCustomDomain();
 registerOnboardingWizard();
 registerTeamGeneral();
+registerSiteNotifications();
 initializeAlpine();

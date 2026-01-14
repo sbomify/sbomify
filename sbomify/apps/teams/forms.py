@@ -215,7 +215,56 @@ class ContactProfileModelForm(forms.ModelForm):
         }
 
 
-class ContactEntityModelForm(forms.ModelForm):
+class DeleteAwareModelFormMixin:
+    """Mixin for ModelForms to exclude deleted PKs from unique validation.
+
+    When used with BaseDeleteAwareInlineFormSet, this mixin enables forms to
+    skip database unique validation for records that are being deleted in the
+    same formset submission.
+    """
+
+    def validate_unique(self):
+        """Override to exclude PKs being deleted from unique validation query."""
+        exclude_pks = getattr(self, "_exclude_pks_from_unique", set())
+        if not exclude_pks:
+            return super().validate_unique()
+
+        # Manually perform unique validation, excluding the deleted PKs
+        from django.core.exceptions import ValidationError
+
+        model = self._meta.model
+        unique_checks, date_checks = self.instance._get_unique_checks(exclude=self._get_validation_exclusions())
+
+        errors = []
+        for model_class, unique_check in unique_checks:
+            # Build lookup kwargs for this unique constraint
+            lookup_kwargs = {}
+            for field_name in unique_check:
+                if field_name == model._meta.pk.name:
+                    continue
+                field = model._meta.get_field(field_name)
+                lookup_value = getattr(self.instance, field.attname, None)
+                if lookup_value is None:
+                    # Null values don't trigger unique violations
+                    break
+                lookup_kwargs[field.name] = lookup_value
+            else:
+                if lookup_kwargs:
+                    # Query for duplicates, excluding the current instance and deleted PKs
+                    qs = model_class._default_manager.filter(**lookup_kwargs)
+                    if self.instance.pk:
+                        qs = qs.exclude(pk=self.instance.pk)
+                    if exclude_pks:
+                        qs = qs.exclude(pk__in=exclude_pks)
+
+                    if qs.exists():
+                        errors.append(self.unique_error_message(model_class, unique_check))
+
+        if errors:
+            raise ValidationError(errors)
+
+
+class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
     """Form for ContactEntity - contains organization/company details.
 
     An entity can be a manufacturer, supplier, or both.
@@ -306,19 +355,61 @@ class ContactEntityModelForm(forms.ModelForm):
         return instance
 
 
-class ContactProfileContactForm(forms.ModelForm):
+class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
     id = forms.CharField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = ContactProfileContact
         fields = ["id", "name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name", "required": True}),
-            "email": forms.EmailInput(
-                attrs={"class": "form-control", "placeholder": "email@example.com", "required": True}
-            ),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
+            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
+
+
+class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
+    """Base formset that excludes deleted forms from unique validation.
+
+    Django's default validation has two issues when deleting and re-adding items:
+    1. Formset-level: validate_unique() checks across ALL forms including deleted ones
+    2. Form-level: Each ModelForm's validate_unique() checks the database, but deleted
+       items haven't been removed yet during validation
+
+    This class fixes both by:
+    1. Overriding validate_unique() to exclude deleted forms
+    2. Collecting deleted PKs and passing them to forms for database query exclusion
+    """
+
+    def full_clean(self):
+        """Override to collect deleted PKs before form validation."""
+        # Collect PKs of forms marked for deletion BEFORE validation
+        # We need to do this early because forms need this info during their validate_unique
+        self._deleted_pks = set()
+
+        # First pass: identify which forms are marked for deletion
+        for form in self.forms:
+            # Check if form has data indicating deletion
+            delete_key = f"{form.prefix}-DELETE"
+            if self.data.get(delete_key) in ("on", "True", "true", "1"):
+                # This form is being deleted - get its instance PK if it exists
+                if form.instance and form.instance.pk:
+                    self._deleted_pks.add(form.instance.pk)
+
+        # Inject deleted PKs into each form so they can exclude them from unique checks
+        for form in self.forms:
+            form._exclude_pks_from_unique = self._deleted_pks
+
+        super().full_clean()
+
+    def validate_unique(self):
+        """Override to exclude deleted forms from formset-level unique validation."""
+        original_forms = self.forms
+        self.forms = [f for f in self.forms if not self._should_delete_form(f)]
+        try:
+            super().validate_unique()
+        finally:
+            self.forms = original_forms
 
 
 # Formset for contacts linked to an entity (3-level hierarchy)
@@ -326,6 +417,7 @@ ContactProfileContactFormSet = inlineformset_factory(
     ContactEntity,
     ContactProfileContact,
     form=ContactProfileContactForm,
+    formset=BaseDeleteAwareInlineFormSet,
     extra=0,
     can_delete=True,
 )
@@ -336,12 +428,13 @@ ContactEntityFormSet = inlineformset_factory(
     ContactProfile,
     ContactEntity,
     form=ContactEntityModelForm,
+    formset=BaseDeleteAwareInlineFormSet,
     extra=0,
     can_delete=True,
 )
 
 
-class AuthorContactForm(forms.ModelForm):
+class AuthorContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
     """Form for AuthorContact - individual author contacts (CycloneDX aligned).
 
     Authors are individuals, not organizations.
@@ -353,10 +446,8 @@ class AuthorContactForm(forms.ModelForm):
         model = AuthorContact
         fields = ["id", "name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name", "required": True}),
-            "email": forms.EmailInput(
-                attrs={"class": "form-control", "placeholder": "email@example.com", "required": True}
-            ),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name"}),
+            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
 
@@ -366,6 +457,7 @@ AuthorContactFormSet = inlineformset_factory(
     ContactProfile,
     AuthorContact,
     form=AuthorContactForm,
+    formset=BaseDeleteAwareInlineFormSet,
     extra=0,
     can_delete=True,
 )

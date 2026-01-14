@@ -238,7 +238,9 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Note: Role flags (is_manufacturer, is_supplier) are excluded because they have default=True
             has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
             has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
-            has_websites = bool((entity_form.cleaned_data.get("website_urls_text") or "").strip())
+            # website_urls_text is cleaned to a list by clean_website_urls_text
+            website_urls_value = entity_form.cleaned_data.get("website_urls_text") or []
+            has_websites = bool(isinstance(website_urls_value, list) and website_urls_value)
 
             contact_prefix = f"{entity_form.prefix}-contacts"
             entity_instance = entity_form.instance
