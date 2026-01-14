@@ -502,6 +502,7 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     sample_team_with_owner_member,
 ):
     """Test that DeleteAwareModelFormMixin excludes deleted PKs from unique validation."""
+    from django.core.exceptions import ValidationError
     from sbomify.apps.teams.forms import ContactProfileContactForm
     from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 
@@ -525,25 +526,80 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
         "email": "john@example.com",
         "phone": "",
     }
-    form = ContactProfileContactForm(data=form_data)
-    form.instance.entity = entity
-    form._exclude_pks_from_unique = {contact1.pk}
 
-    # The mixin should exclude contact1.pk from unique validation
-    # Verify that the mixin has the exclude_pks attribute set
-    assert hasattr(form, "_exclude_pks_from_unique")
-    assert contact1.pk in form._exclude_pks_from_unique
-
-    # When the form is validated, it should not raise a unique constraint error
-    # for contact1 since it's in the excluded PKs
-    # We test this by checking that the mixin's validate_unique method
-    # would exclude contact1 from the query
-    form.full_clean()
+    # CONTROL TEST: Without exclusion, a duplicate should be detected
+    # Verify that a duplicate exists in the database (this proves the control case)
+    from sbomify.apps.teams.models import ContactProfileContact
+    lookup_kwargs = {
+        'entity': entity,
+        'name': 'John Doe',
+        'email': 'john@example.com'
+    }
+    # Without exclusion, this query should find contact1 (the duplicate)
+    duplicates_without_exclusion = ContactProfileContact.objects.filter(**lookup_kwargs)
+    assert duplicates_without_exclusion.exists(), (
+        "Control test: Expected to find duplicate contact without exclusion. "
+        "This proves that validate_unique should detect the duplicate when exclude_pks doesn't include it."
+    )
+    assert contact1.pk in duplicates_without_exclusion.values_list('pk', flat=True)
     
-    # If we get here without a ValidationError about the unique constraint,
-    # the mixin is working (or the constraint isn't checked at form level)
-    # The key test is that _exclude_pks_from_unique is set and used
-    assert form._exclude_pks_from_unique == {contact1.pk}
+    # Verify the mixin's query logic (used by validate_unique) would find the duplicate
+    # when contact1.pk is not excluded. This simulates what validate_unique() does internally.
+    form_without_exclusion = ContactProfileContactForm(data=form_data)
+    form_without_exclusion.instance.entity = entity
+    form_without_exclusion.instance.entity_id = entity.pk
+    
+    # Populate cleaned_data and set instance values so validate_unique can access them
+    form_without_exclusion.is_valid()
+    if form_without_exclusion.is_valid():
+        form_without_exclusion.instance.name = form_without_exclusion.cleaned_data['name']
+        form_without_exclusion.instance.email = form_without_exclusion.cleaned_data['email']
+    
+    # Set _exclude_pks_from_unique to a non-empty set that doesn't include contact1.pk
+    # This forces the mixin to use its custom logic, but contact1.pk is not excluded
+    form_without_exclusion._exclude_pks_from_unique = {999999}  # Non-existent PK, so contact1 won't be excluded
+    
+    # Verify the mixin's query logic would find the duplicate (this simulates what validate_unique does)
+    test_lookup = {
+        'entity': form_without_exclusion.instance.entity,
+        'name': form_without_exclusion.instance.name,
+        'email': form_without_exclusion.instance.email
+    }
+    # Without excluding contact1.pk, the query should find it
+    test_duplicates = ContactProfileContact.objects.filter(**test_lookup).exclude(pk__in={999999})
+    assert test_duplicates.exists(), (
+        "Control test: The mixin's query logic should find the duplicate when it's not excluded. "
+        f"Lookup: {test_lookup}"
+    )
+    assert contact1.pk in test_duplicates.values_list('pk', flat=True), (
+        "Control test: contact1.pk should be found by the query when not excluded. "
+        "This proves that validate_unique() would normally fail (raise ValidationError) "
+        "when a duplicate exists and is not excluded."
+    )
+
+    # TEST CASE: With exclusion, validate_unique should NOT raise ValidationError
+    form_with_exclusion = ContactProfileContactForm(data=form_data)
+    form_with_exclusion.instance.entity = entity
+    # Ensure entity_id is set (ForeignKey uses entity_id as attname)
+    form_with_exclusion.instance.entity_id = entity.pk
+    form_with_exclusion._exclude_pks_from_unique = {contact1.pk}
+
+    # Verify that the mixin has the exclude_pks attribute set
+    assert hasattr(form_with_exclusion, "_exclude_pks_from_unique")
+    assert contact1.pk in form_with_exclusion._exclude_pks_from_unique
+
+    # Populate cleaned_data and set instance values
+    form_with_exclusion.is_valid()
+    if form_with_exclusion.is_valid():
+        form_with_exclusion.instance.name = form_with_exclusion.cleaned_data['name']
+        form_with_exclusion.instance.email = form_with_exclusion.cleaned_data['email']
+    
+    # validate_unique should complete without raising ValidationError
+    # because contact1.pk is excluded from the unique check query
+    form_with_exclusion.validate_unique()  # Should not raise ValidationError
+    
+    # If we get here without a ValidationError, the mixin is working correctly
+    assert form_with_exclusion._exclude_pks_from_unique == {contact1.pk}
 
 
 @pytest.mark.django_db
@@ -617,8 +673,18 @@ def test_base_delete_aware_inline_formset_excludes_deleted_forms(
         
         # The formset should not have unique constraint errors on name
         # when the entity with that name is marked for deletion
+        # We check that there's NO unique constraint error on the name field by ensuring
+        # that if "already exists" appears, it's not related to the "name" field
         error_messages = str(errors) + str(non_field_errors) + str(form_errors)
-        assert "already exists" not in error_messages or "name" not in error_messages.lower()
+        error_messages_lower = error_messages.lower()
+        
+        # Use AND logic: fail only if BOTH "already exists" AND "name" are present
+        # This correctly verifies there's no unique constraint error on the name field
+        has_name_unique_error = "already exists" in error_messages_lower and "name" in error_messages_lower
+        assert not has_name_unique_error, (
+            f"Expected no unique constraint error on name field when entity is deleted. "
+            f"Got errors: {error_messages}"
+        )
     else:
         # If valid, that's perfect
         assert True

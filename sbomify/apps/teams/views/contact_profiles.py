@@ -239,8 +239,9 @@ class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             has_phone = bool((entity_form.cleaned_data.get("phone") or "").strip())
             has_address = bool((entity_form.cleaned_data.get("address") or "").strip())
             # website_urls_text is cleaned to a list by clean_website_urls_text
-            # The isinstance check ensures type safety in case clean_website_urls_text
-            # ever returns a non-list value (which would indicate a bug in the form)
+            # The isinstance check ensures type safety and prevents errors if clean_website_urls_text
+            # ever returns a non-list value (which would indicate a bug in the form's clean method).
+            # This defensive check prevents runtime errors while making bugs visible during testing.
             website_urls_value = entity_form.cleaned_data.get("website_urls_text") or []
             if not isinstance(website_urls_value, list):
                 # This should never happen if clean_website_urls_text works correctly

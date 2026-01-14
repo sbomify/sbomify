@@ -204,13 +204,25 @@ class ContactProfileForm(forms.Form):
 
 
 class ContactProfileModelForm(forms.ModelForm):
-    """Form for ContactProfile - only contains profile-level fields."""
+    """Form for ContactProfile - only contains profile-level fields.
+
+    Note: We explicitly set required=True on name field to ensure server-side
+    validation works even if JavaScript is disabled. While Django ModelForm
+    would normally infer this from the model (blank=False), being explicit
+    ensures data integrity regardless of client-side validation state.
+    """
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
+    )
 
     class Meta:
         model = ContactProfile
         fields = ["name", "is_default"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Profile name"}),
             "is_default": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
@@ -224,7 +236,15 @@ class DeleteAwareModelFormMixin:
     """
 
     def validate_unique(self):
-        """Override to exclude PKs being deleted from unique validation query."""
+        """Override to exclude PKs being deleted from unique validation query.
+
+        Returns:
+            None: If validation passes (no unique constraint violations).
+
+        Raises:
+            ValidationError: If a unique constraint violation is detected
+                (excluding the PKs specified in _exclude_pks_from_unique).
+        """
         exclude_pks = getattr(self, "_exclude_pks_from_unique", set())
         if not exclude_pks:
             return super().validate_unique()
@@ -270,9 +290,26 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
 
     An entity can be a manufacturer, supplier, or both.
     At least one role must be selected.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
     """
 
     id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
+    )
 
     is_manufacturer = forms.BooleanField(
         required=False,
@@ -311,8 +348,6 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
             "is_supplier",
         ]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Entity name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "contact@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
             "address": forms.Textarea(
                 attrs={"class": "form-control", "rows": 2, "placeholder": "Street, City, Country"}
@@ -357,14 +392,32 @@ class ContactEntityModelForm(DeleteAwareModelFormMixin, forms.ModelForm):
 
 
 class ContactProfileContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
+    """Form for ContactProfileContact - individual contacts within an entity.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
+    """
+
     id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+    )
 
     class Meta:
         model = ContactProfileContact
         fields = ["id", "name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Contact name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
 
@@ -383,7 +436,19 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
     """
 
     def full_clean(self):
-        """Override to collect deleted PKs before form validation."""
+        """Override to collect deleted PKs before form validation.
+
+        Collects primary keys of forms marked for deletion and injects them
+        into each form's _exclude_pks_from_unique attribute so they can be
+        excluded from unique validation checks.
+
+        Returns:
+            None: This method returns None, following Django's formset conventions.
+                  Validation errors are stored in formset.errors and form.errors.
+
+        Raises:
+            ValidationError: If validation fails, this is raised by super().full_clean().
+        """
         # Collect PKs of forms marked for deletion BEFORE validation
         # We need to do this early because forms need this info during their validate_unique
         # Note: self.forms is populated during formset construction, so it's available
@@ -410,7 +475,15 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
         super().full_clean()
 
     def validate_unique(self):
-        """Override to exclude deleted forms from formset-level unique validation."""
+        """Override to exclude deleted forms from formset-level unique validation.
+
+        Returns:
+            None: If validation passes (no unique constraint violations).
+
+        Raises:
+            ValidationError: If a unique constraint violation is detected
+                (excluding forms marked for deletion).
+        """
         original_forms = self.forms
         self.forms = [f for f in self.forms if not self._should_delete_form(f)]
         try:
@@ -445,16 +518,31 @@ class AuthorContactForm(DeleteAwareModelFormMixin, forms.ModelForm):
     """Form for AuthorContact - individual author contacts (CycloneDX aligned).
 
     Authors are individuals, not organizations.
+
+    Note: We explicitly set required=True on name and email fields to ensure
+    server-side validation works even if JavaScript is disabled. While Django
+    ModelForm would normally infer this from the model (blank=False), being
+    explicit ensures data integrity regardless of client-side validation state.
     """
 
     id = forms.CharField(required=False, widget=forms.HiddenInput())
+
+    # Explicitly set required=True for server-side validation (works even if JavaScript is disabled)
+    name = forms.CharField(
+        required=True,
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name"}),
+    )
+
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
+    )
 
     class Meta:
         model = AuthorContact
         fields = ["id", "name", "email", "phone"]
         widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Author name"}),
-            "email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "email@example.com"}),
             "phone": forms.TextInput(attrs={"class": "form-control", "placeholder": "+1 555 123 4567"}),
         }
 

@@ -769,13 +769,6 @@
         name: '',
         email: '',
         
-        get isParentEntityVisible() {
-            // Check if the parent entity card is visible
-            // This is more performant than an inline function
-            const parent = this.$el.closest('.entity-card');
-            return parent !== null && parent.offsetParent !== null;
-        },
-        
         get editing() {
             // Access parent entity's editing state
             // Contacts should only be required when their parent entity is in editing mode
@@ -1006,6 +999,9 @@
                 if (nameMatch) {
                     input.name = `${newPrefix}-${nameMatch[2]}`;
                     input.id = `id_${input.name}`;
+                }
+                if (input.name.endsWith('-id')) {
+                    input.value = '';
                 }
             }
         });
