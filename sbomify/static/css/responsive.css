@@ -847,9 +847,27 @@
     height: 2rem !important;
   }
 
-  /* Hide search bar on small screens - use sidebar search instead */
+  /* Make search bar compact on small screens */
   .navbar-search {
-    display: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 120px !important;
+    margin: 0 0.25rem !important;
+    order: 2 !important;
+  }
+
+  .search-input {
+    font-size: 0.75rem !important;
+    padding: 0.375rem 0.5rem 0.375rem 1.75rem !important;
+  }
+
+  .search-input::placeholder {
+    font-size: 0.7rem !important;
+  }
+
+  .search-icon {
+    left: 0.5rem !important;
+    font-size: 0.75rem !important;
   }
 
   /* Navbar actions refinement */
@@ -1018,9 +1036,13 @@
     padding: 0 !important;
   }
 
-  /* Hide search bar on very small screens */
+  /* Make search bar ultra-compact on very small screens */
   .navbar-search {
-    display: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100px !important;
+    margin: 0 0.25rem !important;
+    order: 2 !important;
   }
 
   /* Hide help dropdown on very small screens */
