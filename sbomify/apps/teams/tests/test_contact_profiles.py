@@ -558,6 +558,9 @@ def test_base_delete_aware_inline_formset_excludes_deleted_forms(
     profile = ContactProfile.objects.create(team=team, name="Test Profile")
 
     # Create an entity with a unique name
+    # Note: We're not creating duplicate entities here - we create one entity,
+    # then use the formset to delete it and add a new one with the same name.
+    # The formset's delete-aware validation should allow this.
     entity1 = ContactEntity.objects.create(
         profile=profile,
         name="Original Entity",

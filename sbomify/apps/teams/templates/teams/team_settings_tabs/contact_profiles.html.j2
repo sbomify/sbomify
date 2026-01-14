@@ -769,6 +769,13 @@
         name: '',
         email: '',
         
+        get isParentEntityVisible() {
+            // Check if the parent entity card is visible
+            // This is more performant than an inline function and caches the result
+            const parent = this.$el.closest('.entity-card');
+            return parent !== null && parent.offsetParent !== null;
+        },
+        
         init() {
             const nameInput = this.$el.querySelector('input[name$="-name"]');
             const emailInput = this.$el.querySelector('input[name$="-email"]');

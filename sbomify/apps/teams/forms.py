@@ -386,6 +386,8 @@ class BaseDeleteAwareInlineFormSet(forms.BaseInlineFormSet):
         """Override to collect deleted PKs before form validation."""
         # Collect PKs of forms marked for deletion BEFORE validation
         # We need to do this early because forms need this info during their validate_unique
+        # Note: self.forms is populated during formset construction, so it's available
+        # before super().full_clean() is called. This is standard Django formset behavior.
         self._deleted_pks = set()
 
         # First pass: identify which forms are marked for deletion
