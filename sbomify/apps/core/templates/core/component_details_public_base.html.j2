@@ -117,6 +117,18 @@
             </div>
         {% endif %}
     </div>
+    <!-- Component Identifiers (public view) -->
+    <div class="public-section">
+        <div hx-get="{% url 'core:component_identifiers' component.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="public-section">
         <div class="tw-card">
             <div class="px-6 py-4 border-b border-border">

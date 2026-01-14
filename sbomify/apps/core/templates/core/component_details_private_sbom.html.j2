@@ -7,6 +7,19 @@
 {% endblock %}
 {% block content_after_header %}
     <div>{% include "core/components/component_meta_info.html.j2" %}</div>
+    <!-- Component Identifiers -->
+    <div class="mt-4">
+        <div hx-get="{% url 'core:component_identifiers' component.id %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="text-center py-4">
+                <div class="animate-spin w-6 h-6 border-4 border-primary border-t-transparent rounded-full mx-auto"
+                     role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Vulnerability Time Series Chart -->
     <div class="tw-card"
          hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?component_id={{ component.id }}&hide_recent_scans=true"
