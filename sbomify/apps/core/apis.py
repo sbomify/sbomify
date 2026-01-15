@@ -3625,7 +3625,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 if plugin_settings:
                     # Check if enabled_plugins list exists and has items
                     enabled_plugins = plugin_settings.enabled_plugins
-                    team_has_enabled_plugins = bool(enabled_plugins) and len(enabled_plugins) > 0
+                    team_has_enabled_plugins = bool(enabled_plugins)
         except Exception as e:
             # If we can't determine plugin status, default to False
             team_id = getattr(component, "team_id", None) or "unknown"
@@ -3663,7 +3663,6 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
             # Get assessment data for badge
             # If no plugins are enabled, set status to "no_plugins_enabled" instead of "no_assessments"
             default_status = "no_plugins_enabled" if not team_has_enabled_plugins else "no_assessments"
-            assessment_data = {"overall_status": default_status, "total_assessments": 0, "plugins": []}
             try:
                 # Get latest run per plugin
                 from django.db.models import OuterRef, Subquery
@@ -3683,7 +3682,12 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
 
                 # Determine final status based on whether plugins are enabled and runs exist
-                # IMPORTANT: This logic determines whether to show "Checking..." or "No plugins enabled"
+                # IMPORTANT: This logic determines whether to show "Checking..." or "No plugins enabled".
+                # When plugins are enabled but assessments haven't run yet (which can happen if the signal
+                # handler hasn't completed or if there's a delay), we show "Checking..." rather than
+                # "No plugins enabled" to avoid confusion. This distinguishes between:
+                # - "no_assessments": Plugins are enabled, assessments are pending/running
+                # - "no_plugins_enabled": No plugins configured, so no assessments will ever run
                 if not latest_runs:
                     # No assessment runs exist yet
                     if team_has_enabled_plugins:
@@ -3715,7 +3719,10 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     status_summary = _compute_status_summary(latest_runs)
                     final_overall_status = status_summary.overall_status
                     log.info(
-                        f"SBOM {sbom.id}: Has {len(latest_runs)} runs -> using computed status: {final_overall_status}"
+                        "SBOM %s: Has %d runs -> using computed status: %s",
+                        sbom.id,
+                        len(latest_runs),
+                        final_overall_status,
                     )
 
                 plugins = []
