@@ -322,10 +322,8 @@ class TestFileDigestCalculation:
 
         result = plugin._calculate_file_digest(test_file)
 
-        # SHA256 of empty string is well-known
         expected = hashlib.sha256(b"").hexdigest()
         assert result == expected
-        assert result == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
     def test_calculate_digest_large_file(self, tmp_path):
         """Test SHA256 digest calculation for file larger than chunk size."""
