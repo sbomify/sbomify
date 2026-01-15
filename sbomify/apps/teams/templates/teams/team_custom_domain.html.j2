@@ -91,7 +91,13 @@
                         <span>DNS Configuration Required</span>
                     </div>
                     <p class="dns-instructions-text">
-                        To use a custom domain, create the following <strong>CNAME</strong> record{{ dcv_hostname|yesno:'s,' }} in your DNS provider:
+                        To use a custom domain, create the following <strong>CNAME</strong>
+                        {% if dcv_hostname %}
+                            records
+                        {% else %}
+                            record
+                        {% endif %}
+                        in your DNS provider:
                     </p>
                     <!-- Primary CNAME Record -->
                     <h6 class="dns-record-title mt-3 mb-2">1. Domain CNAME Record</h6>
