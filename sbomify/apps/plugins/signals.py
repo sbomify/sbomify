@@ -30,13 +30,28 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
     - The instance is created with plugins enabled, or
     - An update explicitly touches the ``enabled_plugins`` field.
     """
+
+    To avoid unnecessary work, this handler only runs when the instance is
+    created with plugins enabled, or when an update explicitly touches the
+    ``enabled_plugins`` field.
+    """
     # Determine the current set of enabled plugins
     enabled_plugins = instance.enabled_plugins or []
 
-    # Early return if no plugins are enabled to avoid unnecessary work
-    if not enabled_plugins:
-        return
-
+    if created:
+        # On creation, only proceed if plugins are actually enabled
+        if not enabled_plugins:
+            # No plugins enabled on creation, nothing to do
+            return
+    else:
+        # On update, only proceed if enabled_plugins may have changed
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "enabled_plugins" not in update_fields:
+            # enabled_plugins was not part of this update, nothing to do
+            return
+        if not enabled_plugins:
+            # Plugins have been disabled or are empty, nothing to do
+            return
     # On update, only proceed if enabled_plugins may have changed
     if not created:
         update_fields = kwargs.get("update_fields")
