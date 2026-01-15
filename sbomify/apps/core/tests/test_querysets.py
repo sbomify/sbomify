@@ -13,8 +13,9 @@ def test_optimize_component_queryset_annotations(sample_team):
     from sbomify.apps.sboms.models import SBOM
 
     component = Component.objects.create(name="Component A", team=sample_team)
-    SBOM.objects.create(name="SBOM A", component=component)
-    SBOM.objects.create(name="SBOM B", component=component)
+    # Create SBOMs with different versions to satisfy unique constraint
+    SBOM.objects.create(name="SBOM A", component=component, version="1.0.0")
+    SBOM.objects.create(name="SBOM B", component=component, version="2.0.0")
 
     optimized = optimize_component_queryset(Component.objects.filter(id=component.id)).first()
     assert optimized is not None
