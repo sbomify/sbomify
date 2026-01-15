@@ -195,7 +195,7 @@ class TestAssessmentRun:
     @pytest.fixture
     def sample_component(self, test_team: Team):
         """Create a sample component for testing."""
-        from sbomify.apps.sboms.models import Component
+        from sbomify.apps.core.models import Component
 
         component = Component.objects.create(
             team=test_team,
