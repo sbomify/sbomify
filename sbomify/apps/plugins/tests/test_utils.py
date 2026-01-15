@@ -1,6 +1,14 @@
 """Tests for plugin utility functions."""
 
-from sbomify.apps.plugins.utils import compute_config_hash, compute_content_digest
+from unittest.mock import patch
+
+from sbomify.apps.plugins.utils import (
+    compute_config_hash,
+    compute_content_digest,
+    get_http_session,
+    get_sbomify_version,
+    get_user_agent,
+)
 
 
 class TestComputeConfigHash:
@@ -86,3 +94,115 @@ class TestComputeContentDigest:
         digest = compute_content_digest(b"test content")
 
         assert len(digest) == 64  # SHA256 hex length
+
+
+class TestGetSbomifyVersion:
+    """Tests for get_sbomify_version function."""
+
+    def test_returns_version_string(self) -> None:
+        """Test that a version string is returned."""
+        version = get_sbomify_version()
+
+        assert isinstance(version, str)
+        assert len(version) > 0
+
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_returns_package_version_when_available(self, mock_get_version) -> None:
+        """Test that package version is returned when available."""
+        mock_get_version.return_value = "1.2.3"
+
+        version = get_sbomify_version()
+
+        assert version == "1.2.3"
+        mock_get_version.assert_called_once_with("sbomify")
+
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_fallback_to_unknown(self, mock_get_version) -> None:
+        """Test fallback to 'unknown' when no version sources available."""
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
+
+        version = get_sbomify_version()
+
+        assert version == "unknown"
+
+    @patch.dict("os.environ", {"SBOMIFY_VERSION": "1.0.0"}, clear=True)
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_fallback_to_env_version(self, mock_get_version) -> None:
+        """Test fallback to SBOMIFY_VERSION environment variable."""
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
+
+        version = get_sbomify_version()
+
+        assert version == "1.0.0"
+
+    @patch.dict("os.environ", {"SBOMIFY_GIT_COMMIT_SHORT": "abc1234"}, clear=True)
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_fallback_to_git_commit(self, mock_get_version) -> None:
+        """Test fallback to SBOMIFY_GIT_COMMIT_SHORT environment variable."""
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
+
+        version = get_sbomify_version()
+
+        assert version == "abc1234"
+
+
+class TestGetUserAgent:
+    """Tests for get_user_agent function."""
+
+    def test_user_agent_format(self) -> None:
+        """Test User-Agent follows expected format."""
+        user_agent = get_user_agent()
+
+        assert user_agent.startswith("sbomify/")
+        assert "hello@sbomify.com" in user_agent
+        assert "(" in user_agent
+        assert ")" in user_agent
+
+    @patch("sbomify.apps.plugins.utils.get_sbomify_version")
+    def test_user_agent_with_specific_version(self, mock_version) -> None:
+        """Test User-Agent uses correct version."""
+        mock_version.return_value = "1.2.3"
+
+        user_agent = get_user_agent()
+
+        assert user_agent == "sbomify/1.2.3 (hello@sbomify.com)"
+
+
+class TestGetHttpSession:
+    """Tests for get_http_session function."""
+
+    def test_returns_session(self) -> None:
+        """Test that a requests Session is returned."""
+        import requests
+
+        session = get_http_session()
+
+        assert isinstance(session, requests.Session)
+
+    def test_session_has_user_agent(self) -> None:
+        """Test that session has User-Agent header set."""
+        session = get_http_session()
+
+        assert "User-Agent" in session.headers
+        assert session.headers["User-Agent"].startswith("sbomify/")
+
+    def test_session_user_agent_matches_get_user_agent(self) -> None:
+        """Test that session User-Agent matches get_user_agent() output."""
+        session = get_http_session()
+        expected_user_agent = get_user_agent()
+
+        assert session.headers["User-Agent"] == expected_user_agent
+
+    def test_each_call_returns_new_session(self) -> None:
+        """Test that each call returns a new session instance."""
+        session1 = get_http_session()
+        session2 = get_http_session()
+
+        assert session1 is not session2

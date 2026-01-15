@@ -1,11 +1,20 @@
 """Utility functions for the plugin framework.
 
 This module provides helper functions used across the plugin framework,
-including configuration hashing for reproducibility tracking.
+including configuration hashing for reproducibility tracking and HTTP utilities.
 """
 
 import hashlib
 import json
+import os
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_package_version
+
+import requests
+
+# Module-level constants
+UNKNOWN_VERSION = "unknown"  # Default version when package metadata is unavailable
+SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"  # Contact email for User-Agent header
 
 
 def compute_config_hash(config: dict | None) -> str:
@@ -56,3 +65,72 @@ def compute_content_digest(content: bytes) -> str:
         64-character hexadecimal SHA256 hash string.
     """
     return hashlib.sha256(content).hexdigest()
+
+
+# HTTP Client Utilities
+
+
+def get_sbomify_version() -> str:
+    """Get the current sbomify package version.
+
+    Tries multiple sources in order:
+    1. Package metadata (from pyproject.toml via importlib.metadata)
+    2. SBOMIFY_VERSION environment variable (set in Dockerfile via CI/CD build args)
+    3. SBOMIFY_GIT_COMMIT_SHORT environment variable (git hash fallback)
+    4. UNKNOWN_VERSION constant
+
+    The SBOMIFY_* environment variables are defined in the Dockerfile and populated
+    during container builds via ARG/ENV directives from CI/CD pipelines.
+
+    Returns:
+        Version string (e.g., "0.24" or "abc1234").
+    """
+    try:
+        return get_package_version("sbomify")
+    except PackageNotFoundError:
+        # Try build-time environment variables (see Dockerfile for definitions)
+        version = os.environ.get("SBOMIFY_VERSION")
+        if version:
+            return version
+
+        git_commit = os.environ.get("SBOMIFY_GIT_COMMIT_SHORT")
+        if git_commit:
+            return git_commit
+
+        return UNKNOWN_VERSION
+
+
+def get_user_agent() -> str:
+    """Get the standard sbomify User-Agent string.
+
+    The User-Agent follows the format: sbomify/{version} (hello@sbomify.com)
+
+    This should be used for all external HTTP requests to properly
+    identify sbomify as the client.
+
+    Returns:
+        User-Agent string (e.g., "sbomify/0.24 (hello@sbomify.com)").
+
+    Example:
+        >>> get_user_agent()
+        'sbomify/0.24 (hello@sbomify.com)'
+    """
+    return f"sbomify/{get_sbomify_version()} ({SBOMIFY_CONTACT_EMAIL})"
+
+
+def get_http_session() -> requests.Session:
+    """Get a pre-configured requests Session with sbomify User-Agent.
+
+    Creates a new requests.Session with the standard sbomify User-Agent
+    header already set. Use this for making external HTTP requests.
+
+    Returns:
+        Configured requests.Session instance.
+
+    Example:
+        >>> session = get_http_session()
+        >>> response = session.get("https://api.example.com/data")
+    """
+    session = requests.Session()
+    session.headers.update({"User-Agent": get_user_agent()})
+    return session
