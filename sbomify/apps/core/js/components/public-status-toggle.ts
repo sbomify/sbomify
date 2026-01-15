@@ -62,6 +62,23 @@ export function registerPublicStatusToggle() {
           showError('Failed to copy URL to clipboard')
         }
       },
+
+      copyBadgeToClipboard(): void {
+        const badgeSvgUrl = 'https://sbomify.com/assets/images/logo/badge.svg'
+        const publicUrl = new URL(this.publicUrl, window.location.origin).href
+        const markdown = `[![sbomified](${badgeSvgUrl})](${publicUrl})`
+
+        navigator.clipboard.writeText(markdown).then(() => {
+          this.$dispatch('messages', {
+            value: [{ type: 'success', message: 'Badge markdown copied to clipboard' }]
+          })
+        }).catch(err => {
+          console.error('Failed to copy badge:', err)
+          this.$dispatch('messages', {
+            value: [{ type: 'error', message: 'Failed to copy badge to clipboard' }]
+          })
+        })
+      },
     }
   })
 }
