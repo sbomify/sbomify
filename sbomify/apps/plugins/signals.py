@@ -3,7 +3,6 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.transactions import run_on_commit
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunReason
@@ -30,11 +29,6 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
     - The instance is created with plugins enabled, or
     - An update explicitly touches the ``enabled_plugins`` field.
     """
-
-    To avoid unnecessary work, this handler only runs when the instance is
-    created with plugins enabled, or when an update explicitly touches the
-    ``enabled_plugins`` field.
-    """
     # Determine the current set of enabled plugins
     enabled_plugins = instance.enabled_plugins or []
 
@@ -52,12 +46,6 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
         if not enabled_plugins:
             # Plugins have been disabled or are empty, nothing to do
             return
-    # On update, only proceed if enabled_plugins may have changed
-    if not created:
-        update_fields = kwargs.get("update_fields")
-        if update_fields is not None and "enabled_plugins" not in update_fields:
-            # enabled_plugins was not part of this update, nothing to do
-            return
 
     # Trigger assessments for all SBOMs that don't have runs yet
     # The task will check if runs already exist to avoid duplicates
@@ -71,10 +59,11 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
         # Get all SBOMs for this team that don't have assessment runs yet
         # We'll check each SBOM to see if it needs assessments
-
-        components = Component.objects.filter(team=team, component_type="sbom")
-        sboms = list(SBOM.objects.filter(component__in=components))
-        sbom_ids = [sbom.id for sbom in sboms]
+        # Use a more efficient single query to get SBOM IDs directly
+        sbom_ids = list(
+            SBOM.objects.filter(component__team=team, component__component_type="sbom").values_list("id", flat=True)
+        )
+        sboms = list(SBOM.objects.filter(id__in=sbom_ids)) if sbom_ids else []
 
         def _enqueue_for_existing_sboms():
             enqueued_count = 0

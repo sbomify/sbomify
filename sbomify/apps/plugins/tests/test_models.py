@@ -369,7 +369,7 @@ class TestTeamPluginSettingsSignal:
         self, test_team: Team, sample_sbom
     ) -> None:
         """Test that the signal doesn't trigger when no plugins are enabled."""
-        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
             # Create settings with no plugins enabled
             TeamPluginSettings.objects.create(
                 team=test_team,
@@ -453,15 +453,16 @@ class TestTeamPluginSettingsSignal:
                 enabled_plugins=["checksum"],
             )
             
-            # Make Component.objects.filter raise an exception to trigger error handling
-            from sbomify.apps.core.models import Component
-            with patch.object(Component.objects, "filter", side_effect=Exception("Database error")):
+            # Make SBOM.objects.filter raise an exception to trigger error handling
+            from sbomify.apps.sboms.models import SBOM
+            with patch.object(SBOM.objects, "filter", side_effect=Exception("Database error")):
                 # Import the signal handler
                 from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
 
-                # Call the signal handler - should not raise an exception
+                # Call the signal handler as if the instance was just created
+                # This ensures the main logic (including the SBOM query) runs
                 trigger_assessments_for_existing_sboms(
-                    sender=TeamPluginSettings, instance=settings, created=False
+                    sender=TeamPluginSettings, instance=settings, created=True
                 )
 
                 # Verify that error was logged
