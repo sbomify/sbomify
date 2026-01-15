@@ -106,6 +106,16 @@ class TestGetSbomifyVersion:
         assert isinstance(version, str)
         assert len(version) > 0
 
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_returns_package_version_when_available(self, mock_get_version) -> None:
+        """Test that package version is returned when available."""
+        mock_get_version.return_value = "1.2.3"
+
+        version = get_sbomify_version()
+
+        assert version == "1.2.3"
+        mock_get_version.assert_called_once_with("sbomify")
+
     @patch.dict("os.environ", {}, clear=True)
     @patch("sbomify.apps.plugins.utils.get_package_version")
     def test_fallback_to_unknown(self, mock_get_version) -> None:
@@ -182,6 +192,13 @@ class TestGetHttpSession:
 
         assert "User-Agent" in session.headers
         assert session.headers["User-Agent"].startswith("sbomify/")
+
+    def test_session_user_agent_matches_get_user_agent(self) -> None:
+        """Test that session User-Agent matches get_user_agent() output."""
+        session = get_http_session()
+        expected_user_agent = get_user_agent()
+
+        assert session.headers["User-Agent"] == expected_user_agent
 
     def test_each_call_returns_new_session(self) -> None:
         """Test that each call returns a new session instance."""

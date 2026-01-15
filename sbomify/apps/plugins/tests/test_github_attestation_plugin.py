@@ -281,6 +281,92 @@ class TestGitHubURLParsing:
         assert result is None
 
 
+class TestFileDigestCalculation:
+    """Tests for _calculate_file_digest method."""
+
+    def test_calculate_digest_simple_content(self, tmp_path):
+        """Test SHA256 digest calculation for simple content."""
+        import hashlib
+
+        plugin = GitHubAttestationPlugin()
+        test_file = tmp_path / "test.txt"
+        content = b"Hello, World!"
+        test_file.write_bytes(content)
+
+        result = plugin._calculate_file_digest(test_file)
+
+        expected = hashlib.sha256(content).hexdigest()
+        assert result == expected
+
+    def test_calculate_digest_json_content(self, tmp_path):
+        """Test SHA256 digest calculation for JSON content."""
+        import hashlib
+
+        plugin = GitHubAttestationPlugin()
+        test_file = tmp_path / "sbom.json"
+        content = b'{"bomFormat": "CycloneDX", "specVersion": "1.4"}'
+        test_file.write_bytes(content)
+
+        result = plugin._calculate_file_digest(test_file)
+
+        expected = hashlib.sha256(content).hexdigest()
+        assert result == expected
+
+    def test_calculate_digest_empty_file(self, tmp_path):
+        """Test SHA256 digest calculation for empty file."""
+        import hashlib
+
+        plugin = GitHubAttestationPlugin()
+        test_file = tmp_path / "empty.txt"
+        test_file.write_bytes(b"")
+
+        result = plugin._calculate_file_digest(test_file)
+
+        # SHA256 of empty string is well-known
+        expected = hashlib.sha256(b"").hexdigest()
+        assert result == expected
+        assert result == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+    def test_calculate_digest_large_file(self, tmp_path):
+        """Test SHA256 digest calculation for file larger than chunk size."""
+        import hashlib
+
+        plugin = GitHubAttestationPlugin()
+        test_file = tmp_path / "large.bin"
+        # Create content larger than SBOM_FILE_READ_CHUNK_SIZE (8192 bytes)
+        content = b"x" * 20000
+        test_file.write_bytes(content)
+
+        result = plugin._calculate_file_digest(test_file)
+
+        expected = hashlib.sha256(content).hexdigest()
+        assert result == expected
+
+    def test_calculate_digest_deterministic(self, tmp_path):
+        """Test that digest calculation is deterministic."""
+        plugin = GitHubAttestationPlugin()
+        test_file = tmp_path / "test.txt"
+        test_file.write_bytes(b"consistent content")
+
+        result1 = plugin._calculate_file_digest(test_file)
+        result2 = plugin._calculate_file_digest(test_file)
+
+        assert result1 == result2
+
+    def test_calculate_digest_different_content_different_hash(self, tmp_path):
+        """Test that different content produces different digests."""
+        plugin = GitHubAttestationPlugin()
+        file1 = tmp_path / "file1.txt"
+        file2 = tmp_path / "file2.txt"
+        file1.write_bytes(b"content one")
+        file2.write_bytes(b"content two")
+
+        digest1 = plugin._calculate_file_digest(file1)
+        digest2 = plugin._calculate_file_digest(file2)
+
+        assert digest1 != digest2
+
+
 class TestAttestationBundleDownload:
     """Tests for attestation bundle download from GitHub API."""
 
