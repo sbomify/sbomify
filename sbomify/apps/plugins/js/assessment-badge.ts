@@ -10,7 +10,7 @@ interface PluginResult {
 
 interface AssessmentsData {
   sbom_id: string
-  overall_status: 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments'
+  overall_status: 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments' | 'no_plugins_enabled'
   total_assessments: number
   passing_count: number
   failing_count: number
@@ -75,6 +75,8 @@ export function registerAssessmentBadge() {
           case 'pending':
           case 'in_progress':
             return 'bg-info-subtle text-info assessment-checking'
+          case 'no_plugins_enabled':
+            return 'bg-secondary-subtle text-secondary'
           case 'no_assessments':
           default:
             if (this.isAssessmentAvailable) {
@@ -97,6 +99,8 @@ export function registerAssessmentBadge() {
           case 'pending':
           case 'in_progress':
             return 'fas fa-clock fa-pulse'
+          case 'no_plugins_enabled':
+            return 'fas fa-puzzle-piece'
           case 'no_assessments':
           default:
             if (this.isAssessmentAvailable) {
@@ -119,6 +123,8 @@ export function registerAssessmentBadge() {
           case 'pending':
           case 'in_progress':
             return 'Checking...'
+          case 'no_plugins_enabled':
+            return 'No plugins enabled'
           case 'no_assessments':
           default:
             if (this.isAssessmentAvailable) {
@@ -148,6 +154,8 @@ export function registerAssessmentBadge() {
           case 'pending':
           case 'in_progress':
             return 'Assessments are being processed. This usually takes a few minutes.'
+          case 'no_plugins_enabled':
+            return 'No assessment plugins are enabled for this workspace. Enable plugins in workspace settings to run assessments.'
           case 'no_assessments':
           default:
             if (this.isAssessmentAvailable) {

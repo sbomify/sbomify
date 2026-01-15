@@ -8,7 +8,7 @@ mock.module('alpinejs', () => ({
     }
 }))
 
-type OverallStatus = 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments'
+type OverallStatus = 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments' | 'no_plugins_enabled'
 type PluginStatus = 'pass' | 'fail' | 'pending' | 'error'
 
 interface PluginResult {
@@ -49,6 +49,8 @@ describe('Assessment Badge', () => {
                     case 'pending':
                     case 'in_progress':
                         return 'bg-info-subtle text-info assessment-checking'
+                    case 'no_plugins_enabled':
+                        return 'bg-secondary-subtle text-secondary'
                     default:
                         return 'bg-secondary-subtle text-secondary'
                 }
@@ -57,6 +59,7 @@ describe('Assessment Badge', () => {
             expect(getBadgeClasses('all_pass', true)).toBe('bg-success-subtle text-success')
             expect(getBadgeClasses('has_failures', true)).toBe('bg-warning-subtle text-warning')
             expect(getBadgeClasses('pending', true)).toBe('bg-info-subtle text-info assessment-checking')
+            expect(getBadgeClasses('no_plugins_enabled', true)).toBe('bg-secondary-subtle text-secondary')
             expect(getBadgeClasses('no_assessments', false)).toBe('bg-secondary-subtle text-secondary')
         })
     })
@@ -76,6 +79,8 @@ describe('Assessment Badge', () => {
                     case 'pending':
                     case 'in_progress':
                         return 'fas fa-clock fa-pulse'
+                    case 'no_plugins_enabled':
+                        return 'fas fa-puzzle-piece'
                     default:
                         return 'fas fa-lock'
                 }
@@ -84,6 +89,7 @@ describe('Assessment Badge', () => {
             expect(getBadgeIconClass('all_pass', true)).toBe('fas fa-check-circle')
             expect(getBadgeIconClass('has_failures', true)).toBe('fas fa-exclamation-triangle')
             expect(getBadgeIconClass('pending', true)).toBe('fas fa-clock fa-pulse')
+            expect(getBadgeIconClass('no_plugins_enabled', true)).toBe('fas fa-puzzle-piece')
             expect(getBadgeIconClass('no_assessments', false)).toBe('fas fa-lock')
         })
     })
@@ -108,6 +114,8 @@ describe('Assessment Badge', () => {
                     case 'pending':
                     case 'in_progress':
                         return 'Checking...'
+                    case 'no_plugins_enabled':
+                        return 'No plugins enabled'
                     default:
                         return 'Upgrade'
                 }
@@ -116,6 +124,7 @@ describe('Assessment Badge', () => {
             expect(getBadgeText('all_pass', true, 5, 0)).toBe('5 Passed')
             expect(getBadgeText('has_failures', true, 3, 2)).toBe('2 Failed')
             expect(getBadgeText('pending', true, 0, 0)).toBe('Checking...')
+            expect(getBadgeText('no_plugins_enabled', true, 0, 0)).toBe('No plugins enabled')
             expect(getBadgeText('no_assessments', false, 0, 0)).toBe('Upgrade')
         })
     })
@@ -140,6 +149,8 @@ describe('Assessment Badge', () => {
                     case 'pending':
                     case 'in_progress':
                         return 'Assessments are being processed. This usually takes a few minutes.'
+                    case 'no_plugins_enabled':
+                        return 'No assessment plugins are enabled for this workspace. Enable plugins in workspace settings to run assessments.'
                     default:
                         return 'No assessments available.'
                 }
@@ -149,6 +160,7 @@ describe('Assessment Badge', () => {
             expect(getTooltipText('all_pass', true, 5, 0)).toContain('5 assessments passed')
             expect(getTooltipText('has_failures', true, 3, 2)).toContain('2 assessments failed')
             expect(getTooltipText('pending', true, 0, 0)).toContain('being processed')
+            expect(getTooltipText('no_plugins_enabled', true, 0, 0)).toContain('No assessment plugins are enabled')
             expect(getTooltipText('no_assessments', false, 0, 0)).toContain('Business and Enterprise')
         })
     })
