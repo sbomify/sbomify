@@ -1,6 +1,7 @@
 """Tests for plugin models."""
 
 from datetime import timedelta
+from unittest.mock import patch, MagicMock
 
 import pytest
 from django.utils import timezone
@@ -294,3 +295,203 @@ class TestAssessmentRun:
         )
 
         assert run.is_successful is False
+
+
+@pytest.mark.django_db
+class TestTeamPluginSettingsSignal:
+    """Tests for TeamPluginSettings signal handler that triggers assessments for existing SBOMs."""
+
+    @pytest.fixture
+    def sample_component(self, test_team: Team):
+        """Create a sample component for testing."""
+        from sbomify.apps.core.models import Component
+
+        component = Component.objects.create(
+            team=test_team,
+            name="Test Component",
+            component_type="sbom",
+        )
+        yield component
+        component.delete()
+
+    @pytest.fixture
+    def sample_sbom(self, sample_component):
+        """Create a sample SBOM for testing."""
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.create(
+            name="test-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="test.json",
+            component=sample_component,
+        )
+        yield sbom
+        sbom.delete()
+
+    @pytest.fixture
+    def registered_plugin(self, db):
+        """Create a registered plugin for testing."""
+        plugin = RegisteredPlugin.objects.create(
+            name="checksum",
+            display_name="Checksum Plugin",
+            description="Computes SBOM checksum",
+            category=AssessmentCategory.COMPLIANCE.value,
+            version="1.0.0",
+            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            is_enabled=True,
+        )
+        yield plugin
+        plugin.delete()
+
+    def test_signal_triggers_when_plugins_enabled_first_time(
+        self, test_team: Team, sample_sbom, registered_plugin
+    ) -> None:
+        """Test that assessments are triggered when plugins are enabled for the first time."""
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            # Create settings with plugins enabled - this should trigger the signal
+            # run_on_commit runs immediately in tests, so the callback executes right away
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum"],
+            )
+
+            # Verify that enqueue_assessment was called for the SBOM
+            assert mock_enqueue.called
+            # Check that it was called with the correct parameters
+            call_args = mock_enqueue.call_args
+            assert call_args[1]["sbom_id"] == str(sample_sbom.id)
+            assert call_args[1]["plugin_name"] == "checksum"
+            assert call_args[1]["run_reason"] == RunReason.CONFIG_CHANGE
+
+    def test_signal_does_not_trigger_when_no_plugins_enabled(
+        self, test_team: Team, sample_sbom
+    ) -> None:
+        """Test that the signal doesn't trigger when no plugins are enabled."""
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            # Create settings with no plugins enabled
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=[],
+            )
+
+            # Verify that enqueue_assessment was not called
+            assert not mock_enqueue.called
+
+    def test_signal_only_enqueues_for_sboms_without_existing_runs(
+        self, test_team: Team, sample_sbom, registered_plugin
+    ) -> None:
+        """Test that assessments are only enqueued for SBOMs without existing runs for those plugins."""
+        # Create an existing assessment run for this SBOM and plugin
+        AssessmentRun.objects.create(
+            sbom=sample_sbom,
+            plugin_name="checksum",
+            plugin_version="1.0.0",
+            plugin_config_hash="x" * 64,
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+        )
+
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            # Create settings with plugins enabled
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum"],
+            )
+
+            # Verify that enqueue_assessment was NOT called since a run already exists
+            assert not mock_enqueue.called
+
+    def test_signal_enqueues_for_re_enabled_plugins(
+        self, test_team: Team, sample_sbom, registered_plugin
+    ) -> None:
+        """Test that re-enabling plugins triggers new assessments."""
+        # Create an existing assessment run for a different plugin
+        AssessmentRun.objects.create(
+            sbom=sample_sbom,
+            plugin_name="ntia",
+            plugin_version="1.0.0",
+            plugin_config_hash="x" * 64,
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+        )
+
+        # Create a registered plugin for checksum
+        RegisteredPlugin.objects.create(
+            name="ntia",
+            display_name="NTIA Plugin",
+            category=AssessmentCategory.COMPLIANCE.value,
+            version="1.0.0",
+            plugin_class_path="test.path.NTIAPlugin",
+            is_enabled=True,
+        )
+
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            # Create settings with checksum enabled (but ntia already has a run)
+            # run_on_commit runs immediately in tests, so the callback executes right away
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum", "ntia"],
+            )
+
+            # Verify that enqueue_assessment was called for checksum (no existing run)
+            # but not for ntia (has existing run)
+            assert mock_enqueue.called
+            # Check that it was only called for checksum
+            call_args_list = mock_enqueue.call_args_list
+            plugin_names = [call[1]["plugin_name"] for call in call_args_list]
+            assert "checksum" in plugin_names
+            assert "ntia" not in plugin_names
+
+    def test_signal_handles_errors_gracefully(self, test_team: Team) -> None:
+        """Test that the signal handles errors gracefully."""
+        with patch("sbomify.apps.plugins.signals.logger") as mock_logger:
+            # Create a real TeamPluginSettings instance but make Component query fail
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum"],
+            )
+            
+            # Make Component.objects.filter raise an exception to trigger error handling
+            from sbomify.apps.core.models import Component
+            with patch.object(Component.objects, "filter", side_effect=Exception("Database error")):
+                # Import the signal handler
+                from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
+
+                # Call the signal handler - should not raise an exception
+                trigger_assessments_for_existing_sboms(
+                    sender=TeamPluginSettings, instance=settings, created=False
+                )
+
+                # Verify that error was logged
+                error_calls = [str(call) for call in mock_logger.error.call_args_list]
+                assert any("Failed to trigger assessments" in call or "Unexpected error" in call for call in error_calls)
+
+    def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom, registered_plugin) -> None:
+        """Test that the signal correctly uses run_on_commit to defer execution."""
+        # Patch run_on_commit where it's used in the signals module
+        with patch("sbomify.apps.plugins.signals.run_on_commit") as mock_run_on_commit:
+            # Create settings with plugins enabled
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum"],
+            )
+
+            # Verify that run_on_commit was called
+            assert mock_run_on_commit.called
+
+    def test_signal_handles_no_sboms_gracefully(
+        self, test_team: Team, registered_plugin
+    ) -> None:
+        """Test that the signal handles teams with no SBOMs gracefully."""
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            # Create settings with plugins enabled but no SBOMs exist
+            # run_on_commit runs immediately in tests, so the callback executes right away
+            settings = TeamPluginSettings.objects.create(
+                team=test_team,
+                enabled_plugins=["checksum"],
+            )
+
+            # Verify that enqueue_assessment was not called (no SBOMs to process)
+            assert not mock_enqueue.called

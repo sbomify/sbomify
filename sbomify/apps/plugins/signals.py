@@ -32,7 +32,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
     try:
         from sbomify.apps.plugins.sdk.enums import RunReason
-        from sbomify.apps.plugins.tasks import enqueue_assessments_for_sbom
+        from sbomify.apps.plugins.tasks import enqueue_assessment
         from sbomify.apps.sboms.models import SBOM
 
         team = instance.team
@@ -44,33 +44,57 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
         # Get all SBOMs for this team that don't have assessment runs yet
         # We'll check each SBOM to see if it needs assessments
         from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import AssessmentRun
 
         components = Component.objects.filter(team=team, component_type="sbom")
-        sboms = SBOM.objects.filter(component__in=components)
+        sboms = list(SBOM.objects.filter(component__in=components))
+        sbom_ids = [sbom.id for sbom in sboms]
 
         def _enqueue_for_existing_sboms():
             enqueued_count = 0
+
+            if not sbom_ids:
+                # No SBOMs to process
+                logger.debug(f"No existing SBOMs found for team {team.key} when triggering plugin assessments")
+                return
+
+            # Fetch all existing assessment runs for these SBOMs and enabled plugins in a single query
+            # Group by (sbom_id, plugin_name) to check which specific plugins have runs for which SBOMs
+            existing_runs = {
+                (run["sbom_id"], run["plugin_name"])
+                for run in AssessmentRun.objects.filter(
+                    sbom_id__in=sbom_ids,
+                    plugin_name__in=enabled_plugins,
+                ).values("sbom_id", "plugin_name")
+            }
+
+            # Get plugin configs from settings
+            settings = instance
+
             for sbom in sboms:
-                # Check if this SBOM already has assessment runs for the enabled plugins
-                from sbomify.apps.plugins.models import AssessmentRun
+                # Check which enabled plugins don't have runs for this SBOM
+                # This allows re-enabling plugins to trigger new assessments
+                plugins_needing_runs = [plugin for plugin in enabled_plugins if (sbom.id, plugin) not in existing_runs]
 
-                existing_runs = AssessmentRun.objects.filter(sbom_id=sbom.id, plugin_name__in=enabled_plugins).exists()
+                if not plugins_needing_runs:
+                    # All enabled plugins already have runs for this SBOM
+                    continue
 
-                # Only enqueue if there are no existing runs for enabled plugins
-                # This avoids re-running assessments that already completed
-                if not existing_runs:
-                    enqueued = enqueue_assessments_for_sbom(
+                # Enqueue only the plugins that need runs for this SBOM
+                for plugin_name in plugins_needing_runs:
+                    plugin_config = settings.get_plugin_config(plugin_name)
+                    enqueue_assessment(
                         sbom_id=sbom.id,
-                        team_id=str(team.id),
+                        plugin_name=plugin_name,
                         run_reason=RunReason.CONFIG_CHANGE,
+                        config=plugin_config or None,
                     )
-                    if enqueued:
-                        enqueued_count += len(enqueued)
-                        logger.info(f"Enqueued {len(enqueued)} assessments for existing SBOM {sbom.id}: {enqueued}")
+                    enqueued_count += 1
+                    logger.debug(f"Enqueued assessment for plugin {plugin_name} on SBOM {sbom.id}")
 
             if enqueued_count > 0:
                 logger.info(
-                    f"Triggered assessments for {enqueued_count} plugin(s) across {sboms.count()} existing SBOM(s) "
+                    f"Triggered assessments for {enqueued_count} plugin(s) across {len(sboms)} existing SBOM(s) "
                     f"for team {team.key}"
                 )
             else:
