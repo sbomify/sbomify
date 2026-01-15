@@ -6,10 +6,14 @@ including configuration hashing for reproducibility tracking and HTTP utilities.
 
 import hashlib
 import json
+import os
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
 
 import requests
+
+# Version fallback when package metadata is unavailable
+FALLBACK_VERSION = "unknown"
 
 
 def compute_config_hash(config: dict | None) -> str:
@@ -69,14 +73,28 @@ SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"
 def get_sbomify_version() -> str:
     """Get the current sbomify package version.
 
+    Tries multiple sources in order:
+    1. Package metadata (from pyproject.toml via importlib.metadata)
+    2. SBOMIFY_VERSION environment variable (set at Docker build time)
+    3. SBOMIFY_GIT_COMMIT_SHORT environment variable (git hash fallback)
+    4. FALLBACK_VERSION constant
+
     Returns:
-        Version string (e.g., "0.24").
+        Version string (e.g., "0.24" or "abc1234").
     """
     try:
         return get_package_version("sbomify")
     except PackageNotFoundError:
-        # Fallback if package metadata is not available
-        return "0.0.0"
+        # Try build-time environment variables from Dockerfile
+        version = os.environ.get("SBOMIFY_VERSION")
+        if version:
+            return version
+
+        git_commit = os.environ.get("SBOMIFY_GIT_COMMIT_SHORT")
+        if git_commit:
+            return git_commit
+
+        return FALLBACK_VERSION
 
 
 def get_user_agent() -> str:

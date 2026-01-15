@@ -106,16 +106,41 @@ class TestGetSbomifyVersion:
         assert isinstance(version, str)
         assert len(version) > 0
 
+    @patch.dict("os.environ", {}, clear=True)
     @patch("sbomify.apps.plugins.utils.get_package_version")
-    def test_fallback_on_error(self, mock_get_version) -> None:
-        """Test fallback version when package metadata unavailable."""
+    def test_fallback_to_unknown(self, mock_get_version) -> None:
+        """Test fallback to 'unknown' when no version sources available."""
         from importlib.metadata import PackageNotFoundError
 
         mock_get_version.side_effect = PackageNotFoundError("sbomify")
 
         version = get_sbomify_version()
 
-        assert version == "0.0.0"
+        assert version == "unknown"
+
+    @patch.dict("os.environ", {"SBOMIFY_VERSION": "1.0.0"}, clear=True)
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_fallback_to_env_version(self, mock_get_version) -> None:
+        """Test fallback to SBOMIFY_VERSION environment variable."""
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
+
+        version = get_sbomify_version()
+
+        assert version == "1.0.0"
+
+    @patch.dict("os.environ", {"SBOMIFY_GIT_COMMIT_SHORT": "abc1234"}, clear=True)
+    @patch("sbomify.apps.plugins.utils.get_package_version")
+    def test_fallback_to_git_commit(self, mock_get_version) -> None:
+        """Test fallback to SBOMIFY_GIT_COMMIT_SHORT environment variable."""
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
+
+        version = get_sbomify_version()
+
+        assert version == "abc1234"
 
 
 class TestGetUserAgent:

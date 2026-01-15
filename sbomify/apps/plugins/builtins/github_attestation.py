@@ -33,6 +33,9 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# File reading chunk size for digest calculation
+FILE_READ_CHUNK_SIZE = 8192
+
 
 class GitHubAttestationError(Exception):
     """Exception raised for GitHub attestation verification errors."""
@@ -418,7 +421,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         """
         sha256_hash = hashlib.sha256()
         with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
+            for chunk in iter(lambda: f.read(FILE_READ_CHUNK_SIZE), b""):
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
 
