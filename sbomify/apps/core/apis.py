@@ -3771,8 +3771,12 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 log.warning(f"Error fetching assessment data for SBOM {sbom.id}: {e}")
                 # On error, still use the correct default status based on plugin settings
                 assessment_data = {
+                    "sbom_id": str(sbom.id),
                     "overall_status": default_status,
                     "total_assessments": 0,
+                    "passing_count": 0,
+                    "failing_count": 0,
+                    "pending_count": 0,
                     "plugins": [],
                 }
 
