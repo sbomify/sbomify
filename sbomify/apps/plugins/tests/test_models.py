@@ -447,27 +447,31 @@ class TestTeamPluginSettingsSignal:
     def test_signal_handles_errors_gracefully(self, test_team: Team) -> None:
         """Test that the signal handles errors gracefully."""
         with patch("sbomify.apps.plugins.signals.logger") as mock_logger:
-            # Create a real TeamPluginSettings instance but make Component query fail
+            # Create a real TeamPluginSettings instance
             settings = TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=["checksum"],
             )
             
             # Make SBOM.objects.filter raise an exception to trigger error handling
+            # The exception will occur at line 64 in signals.py when querying for SBOMs,
+            # which is in the outer try-except block, so it will be caught and logged.
             from sbomify.apps.sboms.models import SBOM
             with patch.object(SBOM.objects, "filter", side_effect=Exception("Database error")):
                 # Import the signal handler
                 from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
 
                 # Call the signal handler as if the instance was just created
-                # This ensures the main logic (including the SBOM query) runs
+                # The exception will occur during the SBOM query (line 64), before the
+                # _enqueue_for_existing_sboms callback is created, and will be caught
+                # by the outer exception handler.
                 trigger_assessments_for_existing_sboms(
                     sender=TeamPluginSettings, instance=settings, created=True
                 )
 
-                # Verify that error was logged
+                # Verify that error was logged by the outer exception handler
                 error_calls = [str(call) for call in mock_logger.error.call_args_list]
-                assert any("Failed to trigger assessments" in call or "Unexpected error" in call for call in error_calls)
+                assert any("Unexpected error" in call for call in error_calls)
 
     def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom, registered_plugin) -> None:
         """Test that the signal correctly uses run_on_commit to defer execution."""

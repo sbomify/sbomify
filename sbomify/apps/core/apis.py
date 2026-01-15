@@ -3616,7 +3616,8 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         from sbomify.apps.plugins.sdk.enums import RunStatus
 
         # Check if team has any enabled plugins (only need to check once per API call for this component)
-        # We check plugin settings for the team to determine the correct assessment status for all SBOMs in this component
+        # We check plugin settings for the team to determine the correct assessment status
+        # for all SBOMs in this component
         team_has_enabled_plugins = False
         try:
             team = component.team
