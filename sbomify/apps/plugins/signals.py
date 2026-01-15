@@ -99,7 +99,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
                 for plugin_name in plugins_needing_runs:
                     plugin_config = settings.get_plugin_config(plugin_name)
                     enqueue_assessment(
-                        sbom_id=sbom.id,
+                        sbom_id=str(sbom.id),
                         plugin_name=plugin_name,
                         run_reason=RunReason.CONFIG_CHANGE,
                         config=plugin_config,
