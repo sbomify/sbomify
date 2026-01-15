@@ -75,9 +75,12 @@ def get_sbomify_version() -> str:
 
     Tries multiple sources in order:
     1. Package metadata (from pyproject.toml via importlib.metadata)
-    2. SBOMIFY_VERSION environment variable (set at Docker build time)
+    2. SBOMIFY_VERSION environment variable (set in Dockerfile via CI/CD build args)
     3. SBOMIFY_GIT_COMMIT_SHORT environment variable (git hash fallback)
     4. UNKNOWN_VERSION constant
+
+    The SBOMIFY_* environment variables are defined in the Dockerfile and populated
+    during container builds via ARG/ENV directives from CI/CD pipelines.
 
     Returns:
         Version string (e.g., "0.24" or "abc1234").
@@ -85,7 +88,7 @@ def get_sbomify_version() -> str:
     try:
         return get_package_version("sbomify")
     except PackageNotFoundError:
-        # Try build-time environment variables from Dockerfile
+        # Try build-time environment variables (see Dockerfile for definitions)
         version = os.environ.get("SBOMIFY_VERSION")
         if version:
             return version
