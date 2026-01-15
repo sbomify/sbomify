@@ -33,10 +33,10 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-# File reading chunk size for digest calculation.
+# File reading chunk size for SBOM digest calculation.
 # 8192 bytes (8 KiB) is a common default that aligns with typical OS
 # page/block sizes and standard I/O buffering.
-FILE_READ_CHUNK_SIZE = 8192
+SBOM_FILE_READ_CHUNK_SIZE = 8192
 
 
 class GitHubAttestationError(Exception):
@@ -423,7 +423,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         """
         sha256_hash = hashlib.sha256()
         with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(FILE_READ_CHUNK_SIZE), b""):
+            for chunk in iter(lambda: f.read(SBOM_FILE_READ_CHUNK_SIZE), b""):
                 sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
 
@@ -507,20 +507,20 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             # Write bundle to temporary file with secure permissions.
             # mkstemp creates files with 0o600 permissions by default, avoiding
             # the race condition of setting permissions after file creation.
-            path = None
+            temp_path = None
             try:
-                fd, path = tempfile.mkstemp(suffix=".json")
+                fd, temp_path = tempfile.mkstemp(suffix=".json")
                 with os.fdopen(fd, "w") as f:
                     json.dump(bundle, f)
                 return {
                     "success": True,
-                    "bundle_path": Path(path),
+                    "bundle_path": Path(temp_path),
                 }
             except Exception as e:
                 # Clean up temp file if it was created
-                if path:
+                if temp_path:
                     try:
-                        os.unlink(path)
+                        os.unlink(temp_path)
                     except OSError:
                         pass
                 return {

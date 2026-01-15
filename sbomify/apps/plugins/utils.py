@@ -100,7 +100,7 @@ def get_sbomify_version() -> str:
 def get_user_agent() -> str:
     """Get the standard sbomify User-Agent string.
 
-    The User-Agent follows the format: sbomify/{version} ({contact_email})
+    The User-Agent follows the format: sbomify/{version} (hello@sbomify.com)
 
     This should be used for all external HTTP requests to properly
     identify sbomify as the client.
