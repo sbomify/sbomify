@@ -1,0 +1,37 @@
+{# Public assessment badge - shows only PASSING assessments with category-aware icons #}
+{# Never displays failures on public pages #}
+{#
+   Usage: {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+   
+   Expected assessment dict:
+   - display_name: str
+   - category: str (attestation, compliance, security, license)
+#}
+{% if assessment %}
+    {% if assessment.category == 'attestation' %}
+        <span class="public-badge badge-attestation"
+              title="{{ assessment.display_name }}: Attestation verified">
+            <i class="fas fa-certificate"></i>
+            {{ assessment.display_name }}
+        </span>
+    {% elif assessment.category == 'security' %}
+        <span class="public-badge badge-security"
+              title="{{ assessment.display_name }}: All checks passed">
+            <i class="fas fa-shield-halved"></i>
+            {{ assessment.display_name }}
+        </span>
+    {% elif assessment.category == 'license' %}
+        <span class="public-badge badge-license"
+              title="{{ assessment.display_name }}: All checks passed">
+            <i class="fas fa-scale-balanced"></i>
+            {{ assessment.display_name }}
+        </span>
+    {% else %}
+        {# Default: compliance or unknown category #}
+        <span class="public-badge badge-compliance"
+              title="{{ assessment.display_name }}: All checks passed">
+            <i class="fas fa-check-circle"></i>
+            {{ assessment.display_name }}
+        </span>
+    {% endif %}
+{% endif %}

@@ -4,6 +4,7 @@ from .checksum import ChecksumPlugin
 from .cisa import CISAMinimumElementsPlugin
 from .cra import CRACompliancePlugin
 from .fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
+from .github_attestation import GitHubAttestationPlugin
 from .ntia import NTIAMinimumElementsPlugin
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "CISAMinimumElementsPlugin",
     "CRACompliancePlugin",
     "FDAMedicalDevicePlugin",
+    "GitHubAttestationPlugin",
     "NTIAMinimumElementsPlugin",
 ]
