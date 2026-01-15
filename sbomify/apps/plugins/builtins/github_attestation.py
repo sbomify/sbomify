@@ -282,15 +282,17 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 ref_type = ref.get("referenceType", "").lower()
                 if ref_type == "vcs":
                     locator = ref.get("referenceLocator", "")
-                    if locator and "github.com" in locator:
+                    if locator:
+                        # Use _parse_github_url for proper URL validation
                         result = self._parse_github_url(locator)
-                        # Try to extract commit from comment
-                        comment = ref.get("comment", "")
-                        if comment and "commit:" in comment.lower():
-                            match = re.search(r"commit:\s*([a-f0-9]+)", comment, re.IGNORECASE)
-                            if match:
-                                commit_sha = match.group(1)
-                        break
+                        if result:
+                            # Try to extract commit from comment
+                            comment = ref.get("comment", "")
+                            if comment and "commit:" in comment.lower():
+                                match = re.search(r"commit:\s*([a-f0-9]+)", comment, re.IGNORECASE)
+                                if match:
+                                    commit_sha = match.group(1)
+                            break
 
         # Try to extract commit from sourceInfo
         if result and not commit_sha:
@@ -355,14 +357,41 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             url = ref.get("url", "")
 
             # CycloneDX uses "vcs" type
-            if ref_type == "vcs" and "github.com" in url:
+            if ref_type == "vcs" and self._is_github_url(url):
                 return url
 
             # Also check for git type
-            if ref_type == "git" and "github.com" in url:
+            if ref_type == "git" and self._is_github_url(url):
                 return url
 
         return None
+
+    def _is_github_url(self, url: str) -> bool:
+        """Check if URL is a valid GitHub URL using proper URL parsing.
+
+        This method prevents URL bypass attacks by properly parsing the URL
+        and checking the hostname, rather than using substring matching.
+
+        Args:
+            url: URL string to check.
+
+        Returns:
+            True if URL is from github.com, False otherwise.
+        """
+        if not url:
+            return False
+
+        # Handle SSH URLs (git@github.com:...)
+        if url.startswith("git@github.com:"):
+            return True
+
+        # Parse HTTPS URLs properly
+        try:
+            parsed = urlparse(url)
+            # Check that the hostname is exactly github.com (not a subdomain or different domain)
+            return parsed.netloc == "github.com" or parsed.netloc == "www.github.com"
+        except Exception:
+            return False
 
     def _parse_github_url(self, url: str) -> dict[str, str] | None:
         """Parse GitHub URL to extract org and repo.
@@ -389,7 +418,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         # Handle HTTPS URLs
         try:
             parsed = urlparse(url)
-            if "github.com" not in parsed.netloc:
+            # Properly validate hostname to prevent bypass attacks
+            if parsed.netloc not in ("github.com", "www.github.com"):
                 return None
 
             path = parsed.path.strip("/").rstrip(".git")
