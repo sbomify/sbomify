@@ -3620,6 +3620,8 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         team_has_enabled_plugins = False
         try:
             team = component.team
+            # Components are expected to always have an associated team; this check is defensive
+            # in case of legacy or inconsistent data where component.team could be missing.
             if team:
                 plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
                 if plugin_settings:
