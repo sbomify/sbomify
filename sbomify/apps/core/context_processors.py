@@ -56,8 +56,7 @@ def pending_invitations_context(request):
     sanitized_email = email.lower().strip()
     if len(sanitized_email) > 254:
         logger.warning(
-            "User email exceeds 254 characters; truncating for pending invitations cache key. "
-            "length=%d, user_id=%s",
+            "User email exceeds 254 characters; truncating for pending invitations cache key. length=%d, user_id=%s",
             len(sanitized_email),
             getattr(getattr(request, "user", None), "id", None),
         )
