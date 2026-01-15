@@ -112,7 +112,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
             if enqueued_count > 0:
                 logger.info(
-                    f"Triggered assessments for {enqueued_count} plugin(s) across {len(sboms)} existing SBOM(s) "
+                    f"Enqueued {enqueued_count} assessment(s) across {len(sboms)} existing SBOM(s) "
                     f"for team {team.key}"
                 )
             else:
