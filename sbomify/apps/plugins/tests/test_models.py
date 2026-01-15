@@ -452,21 +452,21 @@ class TestTeamPluginSettingsSignal:
             )
             
             # Make SBOM.objects.filter raise an exception to trigger error handling
-            # The exception will occur in the SBOM.objects.filter block (lines 64–68)
-            # in signals.py, which is in the outer try-except block, so it will be caught and logged.
+            # The exception will occur during the SBOM.objects.filter call in signals.py
+            # and will be handled by the generic Exception handler that logs "Unexpected error".
             with patch.object(SBOM.objects, "filter", side_effect=Exception("Database error")):
                 # Import the signal handler
                 from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
 
                 # Call the signal handler as if the instance was just created
-                # The exception will occur during the SBOM query (lines 64–68), before the
+                # The exception will occur during the SBOM query before the
                 # _enqueue_for_existing_sboms callback is created, and will be caught
-                # by the outer exception handler.
+                # by the generic Exception handler in signals.py.
                 trigger_assessments_for_existing_sboms(
                     sender=TeamPluginSettings, instance=settings, created=True
                 )
 
-                # Verify that error was logged by the outer exception handler
+                # Verify that the error was logged by the generic "Unexpected error" handler
                 error_calls = [str(call) for call in mock_logger.error.call_args_list]
                 assert any("Unexpected error" in call for call in error_calls)
 
