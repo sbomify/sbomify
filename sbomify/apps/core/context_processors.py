@@ -51,7 +51,10 @@ def pending_invitations_context(request):
     from sbomify.apps.teams.models import Invitation
 
     email = request.user.email or ""
-    cache_key = f"pending_invitations:{email.lower()}"
+    # Sanitize email for cache key: lowercase, strip, and limit length
+    # This prevents cache key injection and excessively long keys
+    sanitized_email = email.lower().strip()[:254]  # Max email length per RFC 5321
+    cache_key = f"pending_invitations:{sanitized_email}"
     cached = cache.get(cache_key)
     if cached is not None:
         count = cached

@@ -18,12 +18,19 @@ declare global {
 }
 
 // Register plugins
+// morph: Enables DOM morphing for smooth transitions when updating elements
 Alpine.plugin(morph);
+// mask: Provides input masking for formatted inputs (phone numbers, dates, etc.)
 Alpine.plugin(mask);
+// persist: Automatically persists Alpine.js data to localStorage
 Alpine.plugin(persist);
+// focus: Enhances focus management and trap focus within modals/dropdowns
 Alpine.plugin(focus);
+// intersect: Triggers callbacks when elements enter/exit the viewport
 Alpine.plugin(intersect);
+// collapse: Provides smooth collapse/expand animations for elements
 Alpine.plugin(collapse);
+// anchor: Enables smooth scrolling to anchor links
 Alpine.plugin(anchor);
 
 if (!window.Alpine) {

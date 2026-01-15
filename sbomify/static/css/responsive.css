@@ -1557,6 +1557,8 @@
   .form-control,
   .form-select,
   input[type="text"],
+  /* Use !important to prevent iOS Safari from zooming on input focus.
+     This is a standard pattern for mobile-friendly forms. */
   input[type="email"],
   input[type="password"],
   input[type="search"],

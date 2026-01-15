@@ -147,6 +147,8 @@ export function initHtmxLifecycle(): void {
         const xhr = event.detail.xhr as XMLHttpRequest;
 
         // Log error for debugging
+        // Note: In production, consider integrating with an error tracking service (e.g., Sentry)
+        // For now, console.error is appropriate for client-side debugging and browser dev tools
         console.error('[HTMX Error]', {
             status: xhr.status,
             statusText: xhr.statusText,
@@ -174,6 +176,8 @@ export function initHtmxLifecycle(): void {
     document.body.addEventListener('htmx:sendError', ((event: CustomEvent) => {
         const target = event.detail.elt as HTMLElement;
 
+        // Log network error for debugging
+        // Note: In production, consider integrating with an error tracking service (e.g., Sentry)
         console.error('[HTMX Send Error]', event.detail);
 
         // Show network error toast

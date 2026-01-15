@@ -86,7 +86,13 @@ def _invalidate_pending_invites_cache(email: str | None) -> None:
 
     from django.core.cache import cache
 
-    cache.delete(f"pending_invitations:{email.lower()}")
+    # Sanitize email for cache key: lowercase, strip, and limit length
+    # This prevents cache key injection and excessively long keys
+    sanitized_email = email.lower().strip()[:254]  # Max email length per RFC 5321
+    if not sanitized_email:
+        return
+
+    cache.delete(f"pending_invitations:{sanitized_email}")
 
 
 @receiver(post_save, sender=Invitation)

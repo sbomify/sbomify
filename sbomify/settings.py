@@ -533,13 +533,33 @@ EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
 
 def _sentry_traces_sampler(sampling_context: dict) -> float:
-    base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    """Sample traces for Sentry with fallback to default on invalid values."""
+    try:
+        base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    except (ValueError, TypeError):
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
+        base_rate = 0.1
+
     if base_rate <= 0:
         return 0.0
 
-    api_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_API", base_rate))
-    htmx_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_HTMX", base_rate))
-    job_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_JOBS", base_rate))
+    try:
+        api_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_API", base_rate))
+    except (ValueError, TypeError):
+        api_rate = base_rate
+
+    try:
+        htmx_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_HTMX", base_rate))
+    except (ValueError, TypeError):
+        htmx_rate = base_rate
+
+    try:
+        job_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_JOBS", base_rate))
+    except (ValueError, TypeError):
+        job_rate = base_rate
 
     wsgi_environ = sampling_context.get("wsgi_environ")
     if wsgi_environ:

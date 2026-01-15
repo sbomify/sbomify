@@ -85,6 +85,7 @@
 
   --line-height-normal: 1.5;
   --line-height-tight: 1.25;
+  /* Intentionally set to 1.75 for improved readability and spacing */
   --line-height-relaxed: 1.75;
 
   /* ===== SPACING ===== */

@@ -113,25 +113,23 @@ def check_billing_limits(resource_type: str):
                         else:
                             max_allowed = get_resource_limit(target_plan, resource_type)
 
-                            current_count = (
-                                get_team_asset_count(team.id, resource_type) if max_allowed is not None else 0
-                            )
+                            if max_allowed is not None:
+                                current_count = get_team_asset_count(team.id, resource_type)
+                                if (current_count + 1) > max_allowed:
+                                    error_message = (
+                                        f"You cannot create this {resource_type} because your scheduled downgrade to "
+                                        f"{target_plan.name} would exceed the plan limit of "
+                                        f"{max_allowed} {resource_type}s. "
+                                        "Please reduce your usage or continue with your current plan."
+                                    )
 
-                            if max_allowed is not None and (current_count + 1) > max_allowed:
-                                error_message = (
-                                    f"You cannot create this {resource_type} because your scheduled downgrade to "
-                                    f"{target_plan.name} would exceed the plan limit of "
-                                    f"{max_allowed} {resource_type}s. "
-                                    "Please reduce your usage or continue with your current plan."
-                                )
-
-                                is_ajax = (
-                                    request.headers.get("Accept") == "application/json"
-                                    or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-                                )
-                                if is_ajax:
-                                    return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
-                                return HttpResponseForbidden(error_message)
+                                    is_ajax = (
+                                        request.headers.get("Accept") == "application/json"
+                                        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
+                                    )
+                                    if is_ajax:
+                                        return JsonResponse({"error": error_message, "limit_reached": True}, status=403)
+                                    return HttpResponseForbidden(error_message)
 
                 if subscription_status == "past_due":
                     failed_at_str = billing_limits.get("payment_failed_at")
