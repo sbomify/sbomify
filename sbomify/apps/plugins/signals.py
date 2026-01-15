@@ -130,13 +130,6 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
             f"Missing required attribute when triggering assessments for team {team_id}: {e}",
             exc_info=True,
         )
-    except ImportError as e:
-        # Failed to import required module
-        team_id = getattr(instance, "team_id", None) or "unknown"
-        logger.error(
-            f"Failed to import required module when triggering assessments for team {team_id}: {e}",
-            exc_info=True,
-        )
     except Exception as e:
         # Unexpected error
         team_id = getattr(instance, "team_id", None) or "unknown"
