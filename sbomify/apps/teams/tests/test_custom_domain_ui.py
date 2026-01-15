@@ -220,3 +220,58 @@ class TestTeamBrandingViewCustomDomain:
         # Should show DNS configuration instructions
         assert "CNAME" in content
 
+    @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="abc123.dcv.cloudflare.com")
+    def test_dcv_hostname_shown_when_configured(self, business_team, sample_user):
+        """DCV delegation instructions should appear when CLOUDFLARE_DCV_HOSTNAME is configured."""
+        client = Client()
+        setup_authenticated_client_session(client, business_team, sample_user)
+
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        assert response.status_code == 200
+
+        content = response.content.decode()
+        # Check DCV hostname appears in the instructions
+        assert "abc123.dcv.cloudflare.com" in content
+        # Check _acme-challenge prefix is shown
+        assert "_acme-challenge." in content
+        # Check the DCV section title is present
+        assert "SSL Certificate CNAME Record" in content
+        assert "DCV Delegation" in content
+        # Check the explanatory note is present
+        assert "automatic SSL certificate issuance" in content
+
+    @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="")
+    def test_dcv_section_hidden_when_not_configured(self, business_team, sample_user):
+        """DCV delegation section should be hidden when CLOUDFLARE_DCV_HOSTNAME is empty."""
+        client = Client()
+        setup_authenticated_client_session(client, business_team, sample_user)
+
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        assert response.status_code == 200
+
+        content = response.content.decode()
+        # DCV-specific content should not appear
+        assert "_acme-challenge." not in content
+        assert "SSL Certificate CNAME Record" not in content
+        assert "DCV Delegation" not in content
+        # But regular CNAME instructions should still be present
+        assert "CNAME" in content
+        assert "app.sbomify.io" in content
+
+    @override_settings(APP_BASE_URL="https://app.sbomify.io", CLOUDFLARE_DCV_HOSTNAME="test.dcv.cloudflare.com")
+    def test_dcv_instructions_show_both_records(self, business_team, sample_user):
+        """Both CNAME records should be displayed when DCV is configured."""
+        client = Client()
+        setup_authenticated_client_session(client, business_team, sample_user)
+
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        assert response.status_code == 200
+
+        content = response.content.decode()
+        # Check both record titles are present
+        assert "1. Domain CNAME Record" in content
+        assert "2. SSL Certificate CNAME Record" in content
+        # Check both targets are present
+        assert "app.sbomify.io" in content
+        assert "test.dcv.cloudflare.com" in content
+

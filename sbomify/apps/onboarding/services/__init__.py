@@ -7,8 +7,8 @@ from django.core.mail import send_mail
 
 from sbomify.logging import getLogger
 
-from .models import OnboardingEmail, OnboardingStatus
-from .utils import get_email_context, render_email_templates
+from ..models import OnboardingEmail, OnboardingStatus
+from ..utils import get_email_context, render_email_templates
 
 logger = getLogger(__name__)
 

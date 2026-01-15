@@ -8,6 +8,8 @@ import requests
 from django import forms
 from django.conf import settings
 
+from sbomify.apps.core.integrations.http import post_form
+
 
 class EnterpriseContactForm(forms.Form):
     """Form for enterprise contact inquiries."""
@@ -193,13 +195,12 @@ class PublicEnterpriseContactForm(EnterpriseContactForm):
 
         # Verify token with Cloudflare
         try:
-            response = requests.post(
+            response = post_form(
                 "https://challenges.cloudflare.com/turnstile/v0/siteverify",
                 data={
                     "secret": settings.TURNSTILE_SECRET_KEY,
                     "response": token,
                 },
-                timeout=10,
             )
             result = response.json()
 

@@ -1,5 +1,5 @@
 {% load static %}
-<div x-data="contactProfileList" x-init="init()">
+<div x-cloak x-data="contactProfileList" x-init="init()">
     {{ profiles|json_script:"profiles-data" }}
     {% if profiles %}
         <div class="mb-3">
@@ -20,7 +20,7 @@
             <button class="btn btn-primary mt-3"
                     hx-get="{% url 'teams:contact_profiles_form' team.key %}"
                     hx-target="#contact-profiles-content"
-                    hx-swap="innerHTML">
+                    hx-swap="morph">
                 <i class="fas fa-plus me-1"></i> Create Profile
             </button>
         </div>
@@ -59,7 +59,7 @@
                                             data-bs-title="Edit Profile"
                                             :hx-get="`{% url 'teams:contact_profiles_detail_form' team.key '0000' %}`.replace('0000', profile.id)"
                                             hx-target="#contact-profiles-content"
-                                            hx-swap="innerHTML">
+                                            hx-swap="morph">
                                         <i class="far fa-edit"></i>
                                     </button>
                                     <button type="button"
@@ -69,9 +69,10 @@
                                             data-bs-placement="top"
                                             :disabled="profile.is_default"
                                             hx-post="{% url 'teams:contact_profiles_list' team.key %}"
+                                            hx-disabled-elt="this"
                                             :hx-vals="JSON.stringify({'_method': 'PATCH', 'profile_id': profile.id})"
                                             hx-target="#contact-profiles-content"
-                                            hx-swap="innerHTML">
+                                            hx-swap="morph">
                                         <i :class="profile.is_default ? 'fas fa-star' : 'far fa-star'"></i>
                                     </button>
                                     <button type="button"
@@ -221,4 +222,4 @@
         </div>
     {% endif %}
 </div>
-{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}
+{% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete Contact Profile" message_text="Are you sure you want to delete" warning_text="This action cannot be undone. The contact profile will be permanently removed." form_action=request.path form=form submit_text="Delete Profile" use_htmx=True hx_target="#contact-profiles-content" hx_swap="morph" %}

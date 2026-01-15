@@ -5,6 +5,7 @@
       href="{% static 'css/components/trust-center-settings.css' %}">
 <div class="standard-card">
     <div class="card settings-card shadow-md"
+         x-cloak
          x-data="customDomain({ teamKey: '{{ team.key }}', initialDomain: '{{ team.custom_domain|default:''|escapejs }}', isValidated: {{ team.custom_domain_validated|yesno:'true,false' }}, lastCheckedAt: '{{ team.custom_domain_last_checked_at|date:'c'|default:'' }}', hasAccess: {{ has_custom_domain_access|yesno:'true,false' }} })">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
@@ -90,8 +91,16 @@
                         <span>DNS Configuration Required</span>
                     </div>
                     <p class="dns-instructions-text">
-                        To use a custom domain, create a <strong>CNAME</strong> record in your DNS provider:
+                        To use a custom domain, create the following <strong>CNAME</strong>
+                        {% if dcv_hostname %}
+                            records
+                        {% else %}
+                            record
+                        {% endif %}
+                        in your DNS provider:
                     </p>
+                    <!-- Primary CNAME Record -->
+                    <h6 class="dns-record-title mt-3 mb-2">1. Domain CNAME Record</h6>
                     <div class="dns-record-display">
                         <div class="dns-record-item">
                             <span class="dns-record-label">Type:</span>
@@ -106,7 +115,31 @@
                             <code class="dns-record-value">{{ app_hostname }}</code>
                         </div>
                     </div>
-                    <div class="dns-instructions-notes">
+                    {% if dcv_hostname %}
+                        <!-- DCV Delegation CNAME Record -->
+                        <h6 class="dns-record-title mt-4 mb-2">2. SSL Certificate CNAME Record (DCV Delegation)</h6>
+                        <div class="dns-record-display">
+                            <div class="dns-record-item">
+                                <span class="dns-record-label">Type:</span>
+                                <span class="dns-record-value">CNAME</span>
+                            </div>
+                            <div class="dns-record-item">
+                                <span class="dns-record-label">Name:</span>
+                                <code class="dns-record-value">_acme-challenge.<span x-text="localDomain || 'trust'"></span></code>
+                            </div>
+                            <div class="dns-record-item">
+                                <span class="dns-record-label">Target:</span>
+                                <code class="dns-record-value">{{ dcv_hostname }}</code>
+                            </div>
+                        </div>
+                        <p class="dns-instructions-note mt-2 mb-0">
+                            <small class="text-muted">
+                                <i class="fas fa-shield-alt me-1"></i>
+                                This record enables automatic SSL certificate issuance and renewal for your custom domain.
+                            </small>
+                        </p>
+                    {% endif %}
+                    <div class="dns-instructions-notes mt-3">
                         <p>
                             <i class="fas fa-lightbulb"></i>
                             <strong>Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <code>trust.example.com</code> in zone <code>example.com</code>, enter <code>trust</code>).

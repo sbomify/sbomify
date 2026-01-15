@@ -1,7 +1,6 @@
 import json
 import logging
 
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -34,6 +33,7 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
+from .services.sboms import delete_sbom_record, get_sbom_detail
 
 log = logging.getLogger(__name__)
 
@@ -449,30 +449,11 @@ def get_cyclonedx_component_metadata(
 )
 def get_sbom(request: HttpRequest, sbom_id: str):
     """Get a specific SBOM by ID."""
-    try:
-        sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
+    result = get_sbom_detail(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
-    # For public SBOMs, allow access without authentication
-    # For private SBOMs, verify access permissions
-    if not sbom.component.is_public:
-        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
-            return 403, {"detail": "Forbidden"}
-
-    return 200, {
-        "id": str(sbom.id),
-        "name": sbom.name,
-        "version": sbom.version,
-        "format": sbom.format,
-        "format_version": sbom.format_version,
-        "sbom_filename": sbom.sbom_filename,
-        "created_at": sbom.created_at,
-        "source": sbom.source,
-        "component_id": str(sbom.component.id),
-        "component_name": sbom.component.name,
-        "source_display": sbom.source_display,
-    }
+    return 200, result.value
 
 
 @router.get(
@@ -812,25 +793,8 @@ router.patch(
 )
 def delete_sbom(request: HttpRequest, sbom_id: str):
     """Delete an SBOM by ID."""
-    try:
-        sbom = SBOM.objects.get(pk=sbom_id)
-    except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
-
-    # Check if user has permission to delete this SBOM (must be owner/admin of component)
-    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners or admins of the component can delete SBOMs"}
-
-    # Delete the SBOM file from S3 if it exists
-    if sbom.sbom_filename:
-        try:
-            s3 = S3Client("SBOMS")
-            s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
-        except Exception as e:
-            log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {str(e)}")
-            # Continue with database deletion even if S3 deletion fails
-
-    # Delete the SBOM record from database
-    sbom.delete()
+    result = delete_sbom_record(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
     return 204, None

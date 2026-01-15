@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import time
 from typing import TYPE_CHECKING, Callable, Protocol
 
 from django.conf import settings
@@ -34,6 +35,41 @@ class CustomDomainRequest(Protocol):
 
 
 logger = logging.getLogger(__name__)
+performance_logger = logging.getLogger("sbomify.performance")
+
+
+class RequestTimingLoggingMiddleware:
+    """Log request duration and query count for non-production profiling."""
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if not getattr(settings, "REQUEST_TIMING_LOGGING_ENABLED", False):
+            return self.get_response(request)
+
+        start_time = time.monotonic()
+        response = self.get_response(request)
+        duration_ms = (time.monotonic() - start_time) * 1000
+
+        query_count = None
+        try:
+            from django.db import connections
+
+            query_count = sum(len(conn.queries) for conn in connections.all())
+        except Exception:
+            query_count = None
+
+        performance_logger.info(
+            "request_timing method=%s path=%s status=%s duration_ms=%.2f queries=%s",
+            request.method,
+            request.path,
+            response.status_code,
+            duration_ms,
+            query_count,
+        )
+
+        return response
 
 
 class DynamicHostValidationMiddleware:
