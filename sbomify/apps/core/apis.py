@@ -3628,7 +3628,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     team_has_enabled_plugins = bool(enabled_plugins) and len(enabled_plugins) > 0
         except Exception as e:
             # If we can't determine plugin status, default to False
-            team_id = component.team.id if hasattr(component, "team") and component.team else "unknown"
+            team_id = getattr(component, "team_id", None) or "unknown"
             log.warning(f"Error checking plugin settings for team {team_id}: {e}")
             team_has_enabled_plugins = False
 
