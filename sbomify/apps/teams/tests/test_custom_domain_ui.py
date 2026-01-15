@@ -230,8 +230,8 @@ class TestTeamBrandingViewCustomDomain:
         assert response.status_code == 200
 
         content = response.content.decode()
-        # Check DCV hostname appears in the instructions
-        assert "abc123.dcv.cloudflare.com" in content
+        # Check DCV hostname appears in the instructions (target is <domain>.<dcv_hostname>)
+        assert ".abc123.dcv.cloudflare.com" in content
         # Check _acme-challenge prefix is shown
         assert "_acme-challenge." in content
         # Check the DCV section title is present
@@ -271,7 +271,7 @@ class TestTeamBrandingViewCustomDomain:
         # Check both record titles are present
         assert "1. Domain CNAME Record" in content
         assert "2. SSL Certificate CNAME Record" in content
-        # Check both targets are present
+        # Check both targets are present (DCV target is <domain>.<dcv_hostname>)
         assert "app.sbomify.io" in content
-        assert "test.dcv.cloudflare.com" in content
+        assert ".test.dcv.cloudflare.com" in content
 
