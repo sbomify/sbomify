@@ -7,7 +7,7 @@ from sbomify.apps.core.services.transactions import run_on_commit
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.tasks import enqueue_assessment
-from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.logging import getLogger
 
 from .models import TeamPluginSettings
@@ -63,7 +63,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
         sboms = list(
             SBOM.objects.filter(
                 component__team=team,
-                component__component_type="sbom",
+                component__component_type=Component.ComponentType.SBOM,
             ).select_related("component")
         )
         sbom_ids = [sbom.id for sbom in sboms]
@@ -112,8 +112,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
             if enqueued_count > 0:
                 logger.info(
-                    f"Enqueued {enqueued_count} assessment(s) across {len(sboms)} existing SBOM(s) "
-                    f"for team {team.key}"
+                    f"Enqueued {enqueued_count} assessment(s) across {len(sboms)} existing SBOM(s) for team {team.key}"
                 )
             else:
                 logger.debug(

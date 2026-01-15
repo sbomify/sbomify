@@ -7,12 +7,14 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.core.models import Component
 from sbomify.apps.plugins.models import (
     AssessmentRun,
     RegisteredPlugin,
     TeamPluginSettings,
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Team
 
 
@@ -36,6 +38,59 @@ def test_team(db) -> Team:
     )
     yield team
     team.delete()
+
+
+@pytest.fixture
+def sample_component(test_team: Team) -> Component:
+    """Create a sample component for testing."""
+    component = Component.objects.create(
+        team=test_team,
+        name="Test Component",
+    )
+    yield component
+    component.delete()
+
+
+@pytest.fixture
+def sample_component_sbom(test_team: Team) -> Component:
+    """Create a sample component with component_type='sbom' for testing."""
+    component = Component.objects.create(
+        team=test_team,
+        name="Test Component",
+        component_type="sbom",
+    )
+    yield component
+    component.delete()
+
+
+@pytest.fixture
+def sample_sbom(sample_component: Component) -> SBOM:
+    """Create a sample SBOM for testing."""
+    sbom = SBOM.objects.create(
+        name="test-sbom",
+        version="1.0.0",
+        format="cyclonedx",
+        format_version="1.5",
+        sbom_filename="test.json",
+        component=sample_component,
+    )
+    yield sbom
+    sbom.delete()
+
+
+@pytest.fixture
+def sample_sbom_with_sbom_component(sample_component_sbom: Component) -> SBOM:
+    """Create a sample SBOM with component_type='sbom' for testing."""
+    sbom = SBOM.objects.create(
+        name="test-sbom",
+        version="1.0.0",
+        format="cyclonedx",
+        format_version="1.5",
+        sbom_filename="test.json",
+        component=sample_component_sbom,
+    )
+    yield sbom
+    sbom.delete()
 
 
 @pytest.mark.django_db
@@ -192,34 +247,6 @@ class TestTeamPluginSettings:
 class TestAssessmentRun:
     """Tests for AssessmentRun model."""
 
-    @pytest.fixture
-    def sample_component(self, test_team: Team):
-        """Create a sample component for testing."""
-        from sbomify.apps.core.models import Component
-
-        component = Component.objects.create(
-            team=test_team,
-            name="Test Component",
-        )
-        yield component
-        component.delete()
-
-    @pytest.fixture
-    def sample_sbom(self, sample_component):
-        """Create a sample SBOM for testing."""
-        from sbomify.apps.sboms.models import SBOM
-
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="test.json",
-            component=sample_component,
-        )
-        yield sbom
-        sbom.delete()
-
     def test_create_assessment_run(self, sample_sbom) -> None:
         """Test creating an assessment run."""
         run = AssessmentRun.objects.create(
@@ -302,35 +329,6 @@ class TestTeamPluginSettingsSignal:
     """Tests for TeamPluginSettings signal handler that triggers assessments for existing SBOMs."""
 
     @pytest.fixture
-    def sample_component(self, test_team: Team):
-        """Create a sample component for testing."""
-        from sbomify.apps.core.models import Component
-
-        component = Component.objects.create(
-            team=test_team,
-            name="Test Component",
-            component_type="sbom",
-        )
-        yield component
-        component.delete()
-
-    @pytest.fixture
-    def sample_sbom(self, sample_component):
-        """Create a sample SBOM for testing."""
-        from sbomify.apps.sboms.models import SBOM
-
-        sbom = SBOM.objects.create(
-            name="test-sbom",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="test.json",
-            component=sample_component,
-        )
-        yield sbom
-        sbom.delete()
-
-    @pytest.fixture
     def registered_plugin(self, db):
         """Create a registered plugin for testing."""
         plugin = RegisteredPlugin.objects.create(
@@ -346,7 +344,7 @@ class TestTeamPluginSettingsSignal:
         plugin.delete()
 
     def test_signal_triggers_when_plugins_enabled_first_time(
-        self, test_team: Team, sample_sbom, registered_plugin
+        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
     ) -> None:
         """Test that assessments are triggered when plugins are enabled for the first time."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
@@ -361,12 +359,12 @@ class TestTeamPluginSettingsSignal:
             assert mock_enqueue.called
             # Check that it was called with the correct parameters
             call_args = mock_enqueue.call_args
-            assert call_args[1]["sbom_id"] == str(sample_sbom.id)
+            assert call_args[1]["sbom_id"] == str(sample_sbom_with_sbom_component.id)
             assert call_args[1]["plugin_name"] == "checksum"
             assert call_args[1]["run_reason"] == RunReason.CONFIG_CHANGE
 
     def test_signal_does_not_trigger_when_no_plugins_enabled(
-        self, test_team: Team, sample_sbom
+        self, test_team: Team, sample_sbom_with_sbom_component
     ) -> None:
         """Test that the signal doesn't trigger when no plugins are enabled."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
@@ -380,12 +378,12 @@ class TestTeamPluginSettingsSignal:
             assert not mock_enqueue.called
 
     def test_signal_only_enqueues_for_sboms_without_existing_runs(
-        self, test_team: Team, sample_sbom, registered_plugin
+        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
     ) -> None:
         """Test that assessments are only enqueued for SBOMs without existing runs for those plugins."""
         # Create an existing assessment run for this SBOM and plugin
         AssessmentRun.objects.create(
-            sbom=sample_sbom,
+            sbom=sample_sbom_with_sbom_component,
             plugin_name="checksum",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
@@ -404,12 +402,12 @@ class TestTeamPluginSettingsSignal:
             assert not mock_enqueue.called
 
     def test_signal_enqueues_for_re_enabled_plugins(
-        self, test_team: Team, sample_sbom, registered_plugin
+        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
     ) -> None:
         """Test that re-enabling plugins triggers new assessments."""
         # Create an existing assessment run for a different plugin
         AssessmentRun.objects.create(
-            sbom=sample_sbom,
+            sbom=sample_sbom_with_sbom_component,
             plugin_name="ntia",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
@@ -456,7 +454,6 @@ class TestTeamPluginSettingsSignal:
             # Make SBOM.objects.filter raise an exception to trigger error handling
             # The exception will occur in the SBOM.objects.filter block (lines 64–68)
             # in signals.py, which is in the outer try-except block, so it will be caught and logged.
-            from sbomify.apps.sboms.models import SBOM
             with patch.object(SBOM.objects, "filter", side_effect=Exception("Database error")):
                 # Import the signal handler
                 from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
@@ -473,7 +470,7 @@ class TestTeamPluginSettingsSignal:
                 error_calls = [str(call) for call in mock_logger.error.call_args_list]
                 assert any("Unexpected error" in call for call in error_calls)
 
-    def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom, registered_plugin) -> None:
+    def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin) -> None:
         """Test that the signal correctly uses run_on_commit to defer execution."""
         # Patch run_on_commit where it's used in the signals module
         with patch("sbomify.apps.plugins.signals.run_on_commit") as mock_run_on_commit:
