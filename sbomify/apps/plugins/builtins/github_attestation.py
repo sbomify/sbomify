@@ -508,24 +508,25 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             # mkstemp creates files with 0o600 permissions by default, avoiding
             # the race condition of setting permissions after file creation.
             bundle_path = None
+            fd = None
             try:
                 fd, path = tempfile.mkstemp(suffix=".json")
-                try:
-                    with os.fdopen(fd, "w") as f:
-                        json.dump(bundle, f)
-                    bundle_path = Path(path)
-                    return {
-                        "success": True,
-                        "bundle_path": bundle_path,
-                    }
-                except Exception:
-                    # Ensure file descriptor is closed if error occurs
+                with os.fdopen(fd, "w") as f:
+                    fd = None  # fd is now owned by the file object
+                    json.dump(bundle, f)
+                bundle_path = Path(path)
+                return {
+                    "success": True,
+                    "bundle_path": bundle_path,
+                }
+            except Exception as e:
+                # Clean up file descriptor if not yet transferred to file object
+                if fd is not None:
                     try:
                         os.close(fd)
                     except OSError:
                         pass
-                    raise
-            except Exception as e:
+                # Clean up temp file if it was created
                 if bundle_path and bundle_path.exists():
                     bundle_path.unlink()
                 return {

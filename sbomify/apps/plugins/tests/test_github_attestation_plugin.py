@@ -130,8 +130,8 @@ class TestVCSInfoExtraction:
 
         assert result is None
 
-    def test_extract_vcs_with_git_type(self):
-        """Test extracting VCS info with git type reference."""
+    def test_extract_vcs_with_git_reference_type(self):
+        """Test extracting VCS info when external reference type is 'git'."""
         plugin = GitHubAttestationPlugin()
         sbom_data = {
             "bomFormat": "CycloneDX",
