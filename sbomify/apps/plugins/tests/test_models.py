@@ -79,8 +79,8 @@ def sample_sbom(sample_component: Component) -> SBOM:
 
 
 @pytest.fixture
-def sample_sbom_with_sbom_component(sample_component_sbom: Component) -> SBOM:
-    """Create a sample SBOM with component_type='sbom' for testing."""
+def sample_sbom_for_sbom_component(sample_component_sbom: Component) -> SBOM:
+    """Create a sample SBOM for a component with component_type='sbom' for testing."""
     sbom = SBOM.objects.create(
         name="test-sbom",
         version="1.0.0",
