@@ -504,20 +504,30 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                     "error": "Attestation response missing bundle data",
                 }
 
-            # Write bundle to temporary file with secure permissions
+            # Write bundle to temporary file with secure permissions.
+            # mkstemp creates files with 0o600 permissions by default, avoiding
+            # the race condition of setting permissions after file creation.
             bundle_path = None
             try:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
-                    os.chmod(tmp.name, 0o600)  # Restrict access to owner only
-                    json.dump(bundle, tmp)
-                    bundle_path = tmp.name
-                return {
-                    "success": True,
-                    "bundle_path": Path(bundle_path),
-                }
+                fd, path = tempfile.mkstemp(suffix=".json")
+                try:
+                    with os.fdopen(fd, "w") as f:
+                        json.dump(bundle, f)
+                    bundle_path = Path(path)
+                    return {
+                        "success": True,
+                        "bundle_path": bundle_path,
+                    }
+                except Exception:
+                    # Ensure file descriptor is closed if error occurs
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                    raise
             except Exception as e:
-                if bundle_path and os.path.exists(bundle_path):
-                    os.unlink(bundle_path)
+                if bundle_path and bundle_path.exists():
+                    bundle_path.unlink()
                 return {
                     "success": False,
                     "error": f"Failed to write bundle file: {e}",
