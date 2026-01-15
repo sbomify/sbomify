@@ -77,9 +77,9 @@ def _env_bool(value: str | None, default: bool) -> bool:
     return value.lower() in ("true", "1", "yes")
 
 
-REQUEST_TIMING_LOGGING_ENABLED = _env_bool(
-    os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=(DEBUG or LOCAL_DEV)
-)
+# Request timing logging is disabled by default to avoid performance impact
+# Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
+REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
 PENDING_INVITATIONS_CACHE_TTL = int(os.environ.get("PENDING_INVITATIONS_CACHE_TTL", "60"))
 
 # ALLOWED_HOSTS set to wildcard - actual host validation done in middleware

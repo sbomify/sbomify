@@ -48,19 +48,16 @@ def pending_invitations_context(request):
     from django.core.cache import cache
     from django.utils import timezone
 
+    from sbomify.apps.core.utils import sanitize_email_for_cache_key
     from sbomify.apps.teams.models import Invitation
 
     email = request.user.email or ""
-    # Sanitize email for cache key: lowercase, strip, and limit length
-    # This prevents cache key injection and excessively long keys
-    sanitized_email = email.lower().strip()
-    if len(sanitized_email) > 254:
-        logger.warning(
-            "User email exceeds 254 characters; truncating for pending invitations cache key. length=%d, user_id=%s",
-            len(sanitized_email),
-            getattr(getattr(request, "user", None), "id", None),
-        )
-        sanitized_email = sanitized_email[:254]  # Max email length per RFC 5321
+    sanitized_email = sanitize_email_for_cache_key(email, user_id=getattr(getattr(request, "user", None), "id", None))
+    if not sanitized_email:
+        return {
+            "pending_invitations_count": 0,
+            "has_pending_invitations": False,
+        }
     cache_key = f"pending_invitations:{sanitized_email}"
     cached = cache.get(cache_key)
     if cached is not None:

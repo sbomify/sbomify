@@ -148,7 +148,7 @@ export function initHtmxLifecycle(): void {
 
         // Log error only in development to avoid polluting production logs
         // TODO: Integrate with error tracking service (e.g., Sentry) for production
-        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+        if (import.meta.env.DEV) {
             console.error('[HTMX Error]', {
                 status: xhr.status,
                 statusText: xhr.statusText,
@@ -179,7 +179,7 @@ export function initHtmxLifecycle(): void {
 
         // Log network error only in development to avoid polluting production logs
         // TODO: Integrate with error tracking service (e.g., Sentry) for production
-        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+        if (import.meta.env.DEV) {
             console.error('[HTMX Send Error]', event.detail);
         }
 

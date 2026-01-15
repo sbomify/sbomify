@@ -277,7 +277,7 @@ class Member(models.Model):
         db_table = apps.get_app_config("teams").label + "_members"
         unique_together = ("user", "team")
         indexes = [
-            models.Index(fields=["team", "role"]),
+            models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
