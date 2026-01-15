@@ -16,7 +16,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.services.querysets import (
+from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
     optimize_project_queryset,

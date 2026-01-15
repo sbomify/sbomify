@@ -70,66 +70,21 @@
         {% endblock %}
         {% vite_hmr_client %}
     </head>
-    <body>
+    <body hx-ext="alpine-morph">
         {% block main %}
-            {% if request.user.is_authenticated %}
-                <!-- AdminKit-style Layout -->
-                <div class="wrapper">
-                    <!-- Sidebar -->
-                    {% cache 300 'sidebar' request.user.id request.session.current_team.id request.session.user_teams_version request.resolver_match.url_name %}
-                    {% include "core/components/sidebar.html.j2" %}
-                {% endcache %}
-                <!-- Main content area -->
-                <div class="main">
-                    <!-- Top navigation -->
-                    {% cache 300 'header_with_teams' request.user.id request.session.current_team.id has_pending_invitations request.session.user_teams_version %}
-                    {% include "core/components/topnav.html.j2" %}
-                {% endcache %}
-                <!-- Main content -->
-                <main class="content">
-                    <div class="container-fluid p-0">
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                        {% include "core/components/site_notifications.html.j2" %}
-                        {% block content %}{% endblock %}
-                    </div>
-                </main>
-                {% include "core/components/footer.html.j2" %}
-            </div>
+            {% block content %}{% endblock %}
+        {% endblock %}
+        <!-- Global Modals -->
+        <div id="global-modal-container">
+            {% if add_workspace_form %}
+                {% url 'teams:teams_dashboard' as teams_dashboard_url %}
+                {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
+            {% endif %}
         </div>
-    {% else %}
-        <!-- Login layout -->
-        <div class="bg-light min-vh-100 d-flex align-items-center">
-            <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-md-6 col-lg-4">
-                        <div class="text-center mb-4">
-                            <img src="{% static 'img/logo.svg' %}"
-                                 alt="sbomify Logo"
-                                 class="img-fluid mb-3 login-logo"
-                                 width="200"
-                                 height="36">
-                        </div>
-                        <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                        <div class="card shadow">
-                            <div class="card-body p-4">
-                                {% block login_content %}{% endblock %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
-{% endblock %}
-<!-- Global Modals -->
-<div id="global-modal-container">
-    {% if add_workspace_form %}
-        {% url 'teams:teams_dashboard' as teams_dashboard_url %}
-        {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
-    {% endif %}
-</div>
-<!-- Scripts now managed via Vite bundles -->
-{% block scripts %}{% endblock %}
-{% vite_asset 'sbomify/apps/core/js/main.ts' %}
-</body>
+        <!-- Scripts now managed via Vite bundles -->
+        {% block scripts %}{% endblock %}
+        <!-- HTMX Alpine-Morph Extension -->
+        <script src="https://unpkg.com/htmx-ext-alpine-morph@2.0.0/alpine-morph.js"></script>
+        {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+    </body>
 </html>

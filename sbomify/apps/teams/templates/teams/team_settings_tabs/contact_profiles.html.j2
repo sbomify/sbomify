@@ -16,7 +16,7 @@
         <div id="contact-profiles-content"
              hx-get="{% url 'teams:contact_profiles_list' team.key %}"
              hx-trigger="load, refreshProfileList from:body"
-             hx-swap="innerHTML">
+             hx-swap="morph">
             <div class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>

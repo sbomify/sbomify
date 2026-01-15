@@ -11,7 +11,8 @@ from django.db import models, transaction
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
@@ -82,17 +83,15 @@ def check_billing_limits(resource_type: str):
                         except BillingPlan.DoesNotExist:
                             logger.warning("Target plan not found for scheduled downgrade, skipping check")
                         else:
-                            if resource_type == "product":
-                                current_count = Product.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_products
-                            elif resource_type == "project":
-                                current_count = Project.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_projects
-                            elif resource_type == "component":
-                                current_count = Component.objects.filter(team=team).count()
-                                max_allowed = target_plan.max_components
-                            else:
-                                max_allowed = None
+                            max_allowed = {
+                                "product": target_plan.max_products,
+                                "project": target_plan.max_projects,
+                                "component": target_plan.max_components,
+                            }.get(resource_type)
+
+                            current_count = (
+                                get_team_asset_count(team.id, resource_type) if max_allowed is not None else 0
+                            )
 
                             if max_allowed is not None and (current_count + 1) > max_allowed:
                                 error_message = (
@@ -150,17 +149,16 @@ def check_billing_limits(resource_type: str):
             except BillingPlan.DoesNotExist:
                 return HttpResponseForbidden("Invalid billing plan")
 
-            if resource_type == "product":
-                current_count = Product.objects.filter(team=team).count()
-                max_allowed = plan.max_products
-            elif resource_type == "project":
-                current_count = Project.objects.filter(team=team).count()
-                max_allowed = plan.max_projects
-            elif resource_type == "component":
-                current_count = Component.objects.filter(team=team).count()
-                max_allowed = plan.max_components
-            else:
+            max_allowed = {
+                "product": plan.max_products,
+                "project": plan.max_projects,
+                "component": plan.max_components,
+            }.get(resource_type)
+
+            if max_allowed is None:
                 return HttpResponseForbidden("Invalid resource type")
+
+            current_count = get_team_asset_count(team.id, resource_type)
 
             if plan.key == "enterprise" or max_allowed is None:
                 return view_func(request, *args, **kwargs)
@@ -519,9 +517,10 @@ def handle_subscription_deleted(subscription, event=None):
                     team.billing_plan_limits = billing_limits
                     team.save()
             else:
-                product_count = Product.objects.filter(team=team).count()
-                project_count = Project.objects.filter(product__team=team).count()
-                component_count = Component.objects.filter(team=team).count()
+                counts = get_team_asset_counts(team.id)
+                product_count = counts["products"]
+                project_count = counts["projects"]
+                component_count = counts["components"]
 
                 usage_exceeds_limits = False
                 exceeded_resources = []

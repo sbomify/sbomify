@@ -5,6 +5,7 @@
 <div class="standard-card">
     <div id="team-branding-content"
          class="card settings-card shadow-md"
+         x-cloak
          x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4 class="card-title mb-0">Workspace Branding</h4>
@@ -30,6 +31,7 @@
                   method="post"
                   enctype="multipart/form-data"
                   hx-post="{% url 'teams:team_branding' team.key %}"
+                  hx-disabled-elt="find button[type='submit']"
                   hx-swap="none">
                 {% csrf_token %}
                 <div class="section-card">

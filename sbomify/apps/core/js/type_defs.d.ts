@@ -1,5 +1,7 @@
 import { LifecyclePhase } from './enums';
 
+// Alpine.js plugin type declarations - see alpine-declarations.d.ts
+
 export interface CustomLicense {
   name: string | null;
   url: string | null;

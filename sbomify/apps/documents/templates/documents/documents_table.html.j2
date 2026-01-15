@@ -2,7 +2,8 @@
 {% load json_extras %}
 <link rel="stylesheet"
       href="{% static 'css/components/documents-table.css' %}">
-<div x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
+<div x-cloak
+     x-data="documentsTable('{{ component_id }}', '{{ documents|jsonify|escapejs }}')">
     {% if not is_public_view %}
         <div class="standard-card mt-3">
             <div class="card shadow-sm">

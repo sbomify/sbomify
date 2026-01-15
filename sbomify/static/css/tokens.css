@@ -43,11 +43,17 @@
   --text-title: #1f2937;
   --text-link: #3b7ddd;
   --text-link-hover: #2f64b1;
+  --text-inverse: #ffffff;
 
   --bg-primary: #f9fbfd;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f8f9fa;
   --bg-glass: rgba(255, 255, 255, 0.8);
+
+  /* Surface Colors (for Layout) */
+  --surface-card: #ffffff;
+  --surface-card-muted: #f8f9fa;
+  --surface-border: #e5e7eb;
 
   --border-color: #e5e7eb;
   --border-color-light: #f0f0f0;
@@ -78,9 +84,10 @@
   --font-weight-bold: 700;
 
   --line-height-normal: 1.5;
-  --line-height-relaxed: 1.6;
+  --line-height-tight: 1.25;
+  --line-height-relaxed: 1.75;
 
-  /* ===== SPACING SYSTEM ===== */
+  /* ===== SPACING ===== */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
@@ -89,36 +96,34 @@
   --spacing-2xl: 3rem;
 
   /* ===== BORDER RADIUS ===== */
-  --radius-sm: 0.25rem;
+  --radius-sm: 0.2rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
 
   /* ===== SHADOWS ===== */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 0 0.875rem 0 rgba(33, 37, 41, 0.05);
 
-  /* ===== Z-INDEX SCALE ===== */
+  /* ===== Z-INDEX ===== */
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
-  --z-modal-backdrop: 1050;
-  --z-modal: 1055;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
   --z-tooltip: 1070;
 
   /* ===== TRANSITIONS ===== */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.2s ease;
-  --transition-slow: 0.3s ease;
+  --transition-base: all 0.2s ease-in-out;
+  --transition-fast: all 0.1s ease-in-out;
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-  /* ===== SURFACE HELPERS ===== */
-  --surface-card: var(--white);
-  --surface-card-muted: var(--gray-50);
-  --surface-elevated: var(--bg-secondary);
-  --surface-border: var(--border-color);
-  --surface-border-strong: var(--border-color-dark);
-  --surface-overlay: rgba(15, 23, 42, 0.4);
-  --text-inverse: #ffffff;
+/* Alpine.js Utility - Prevent flicker on load */
+[x-cloak] {
+  display: none !important;
 }

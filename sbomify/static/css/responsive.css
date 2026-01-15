@@ -54,6 +54,7 @@
 
 /* Enhanced dashboard cards for mobile */
 @media (max-width: 767.98px) {
+
   /* Single column layout for mobile dashboard stats */
   .dashboard-stats .row {
     margin-left: 0;
@@ -136,6 +137,7 @@
 
 /* Mobile content optimizations */
 @media (max-width: 767.98px) {
+
   /* Page titles and headers */
   .page-title {
     font-size: 1.75rem !important;
@@ -247,6 +249,7 @@
 
 /* Mobile-first table styling */
 @media (max-width: 767.98px) {
+
   /* Convert tables to card layout on mobile */
   .dashboard-table {
     border: none;
@@ -791,6 +794,7 @@
 
 /* Very small mobile devices (phones in portrait) */
 @media (max-width: 480px) {
+
   /* Ultra-compact mobile layout */
   .content {
     padding: 0.75rem 0.5rem !important;
@@ -1013,6 +1017,7 @@
 
 /* ===== IPHONE SE AND VERY SMALL DEVICES (320px) ===== */
 @media (max-width: 375px) {
+
   /* Ultra-compact navbar for iPhone SE */
   .navbar {
     padding: 0.5rem 0.75rem !important;
@@ -1168,6 +1173,7 @@
 
 /* ===== MOBILE EMPTY STATE AND GENERAL OPTIMIZATIONS (ALL MOBILE) ===== */
 @media (max-width: 767.98px) {
+
   /* Better empty state layout */
   .dashboard-empty {
     padding: 2rem 1rem !important;
@@ -1254,6 +1260,7 @@
 /* ===== TABLET OPTIMIZATIONS ===== */
 
 @media (min-width: 768px) and (max-width: 1199.98px) {
+
   /* Tablet-specific dashboard layout */
   .dashboard-tablet {
     display: grid;
@@ -1286,10 +1293,12 @@
 /* ===== LARGE SCREEN ENHANCEMENTS ===== */
 
 @media (min-width: 1200px) {
+
   /* Enhanced sidebar for large screens */
   .sidebar-large {
     width: 300px;
   }
+
   /* Large screen dashboard grid */
   .dashboard-large {
     display: grid;
@@ -1326,6 +1335,7 @@
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -1333,6 +1343,7 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
   .sidebar,
   .main,
   .card,
@@ -1365,6 +1376,7 @@
 /* ===== PRINT OPTIMIZATIONS ===== */
 
 @media print {
+
   .sidebar,
   .navbar,
   .sidebar-toggle,
@@ -1532,5 +1544,183 @@
 @media (min-width: 768px) {
   .scroll-container-mobile {
     overflow-x: visible;
+  }
+}
+
+/* ===== iOS SAFARI SEARCH INPUT FIXES ===== */
+/* Ensure search input is always visible and properly styled on iOS */
+
+/* Prevent iOS from zooming on input focus (font-size >= 16px) */
+@media (max-width: 767.98px) {
+
+  .search-input,
+  .form-control,
+  .form-select,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* iOS Safari specific fixes for search input visibility */
+@supports (-webkit-touch-callout: none) {
+
+  /* iOS Safari specific styles */
+  .navbar-search {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .search-input {
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0.5rem;
+    line-height: 1.4;
+    min-height: 44px;
+  }
+
+  /* Ensure proper focus state on iOS */
+  .search-input:focus {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  /* Fix for iOS where inputs can become invisible */
+  .navbar-search .search-input-wrapper {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+}
+
+/* ===== ENHANCED MOBILE ACCESSIBILITY ===== */
+
+/* Improved focus visibility for keyboard navigation */
+@media (max-width: 767.98px) {
+  *:focus-visible {
+    outline: 3px solid var(--brand-primary, #3b7ddd);
+    outline-offset: 2px;
+  }
+
+  /* Ensure focus states are visible on all interactive elements */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--brand-primary, #3b7ddd);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(59, 125, 221, 0.2);
+  }
+
+  /* Remove inner focus ring that can interfere */
+  button:focus:not(:focus-visible),
+  a:focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* ===== IMPROVED TOUCH TARGET SIZES ===== */
+
+/* Ensure all interactive elements meet minimum touch target size */
+@media (pointer: coarse) {
+
+  button,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Table action buttons - ensure they're tappable */
+  .dashboard-table .actions a,
+  .dashboard-table .actions button,
+  .data-table .actions a,
+  .data-table .actions button {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+  }
+
+  /* Dropdown items */
+  .dropdown-item {
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+  }
+
+  /* Nav links */
+  .sidebar-link {
+    min-height: 48px;
+  }
+}
+
+/* ===== HTMX LOADING STATES (MOBILE) ===== */
+
+/* Show loading indicator during HTMX requests on mobile */
+@media (max-width: 767.98px) {
+
+  /* Full-width loading bar at top of screen */
+  .htmx-request .htmx-indicator-bar,
+  .htmx-indicator-bar.htmx-request {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+        transparent,
+        var(--brand-primary, #3b7ddd),
+        transparent);
+    animation: loading-bar 1.5s infinite;
+    z-index: 9999;
+  }
+
+  @keyframes loading-bar {
+    0% {
+      transform: translateX(-100%);
+    }
+
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Button loading state - prevent layout shift */
+  button[type="submit"].htmx-request,
+  .htmx-request button[type="submit"] {
+    opacity: 0.7;
+    pointer-events: none;
+    position: relative;
+  }
+
+  button[type="submit"].htmx-request::after,
+  .htmx-request button[type="submit"]::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1rem;
+    height: 1rem;
+    margin: -0.5rem 0 0 -0.5rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 }

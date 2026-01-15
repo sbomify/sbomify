@@ -5,6 +5,7 @@ import dramatiq
 import requests
 from django.utils import timezone
 
+from sbomify.apps.core.integrations.http import request_with_retry
 from sbomify.apps.teams.models import Team
 from sbomify.task_utils import record_task_breadcrumb
 
@@ -75,7 +76,7 @@ def verify_custom_domains():
             url = f"{protocol}://{team.custom_domain}/.well-known/com.sbomify.domain-check"
 
             try:
-                response = requests.get(url, headers=headers, timeout=10, verify=True)
+                response = request_with_retry("GET", url, headers=headers, timeout=10, verify=True)
                 logger.debug(f"Probe response status: {response.status_code}")
                 # If we get a response (even 404), it means DNS is likely configured
                 # and pointing to a server. If it points to US, our middleware
