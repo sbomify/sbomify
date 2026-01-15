@@ -389,7 +389,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         try:
             parsed = urlparse(url)
             # Check that the hostname is exactly github.com (not a subdomain or different domain)
-            return parsed.netloc == "github.com" or parsed.netloc == "www.github.com"
+            return parsed.netloc == "github.com"
         except Exception:
             return False
 
@@ -419,7 +419,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         try:
             parsed = urlparse(url)
             # Properly validate hostname to prevent bypass attacks
-            if parsed.netloc not in ("github.com", "www.github.com"):
+            if parsed.netloc != "github.com":
                 return None
 
             path = parsed.path.strip("/").rstrip(".git")
