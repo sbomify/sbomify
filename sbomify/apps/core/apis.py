@@ -3718,7 +3718,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                     # Assessment runs exist, compute status from them
                     status_summary = _compute_status_summary(latest_runs)
                     final_overall_status = status_summary.overall_status
-                    log.info(
+                    log.debug(
                         "SBOM %s: Has %d runs -> using computed status: %s",
                         sbom.id,
                         len(latest_runs),
