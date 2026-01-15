@@ -83,7 +83,8 @@ def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, 
     billing_limits = team_with_business_plan.billing_plan_limits or {}
     billing_limits["cancel_at_period_end"] = False
     billing_limits["scheduled_downgrade_plan"] = None
-    # Clear Stripe IDs to avoid API calls - must clear both to satisfy valid_billing_relationship constraint
+    # Clear Stripe IDs to avoid API calls — both must be cleared together to satisfy the
+    # Team.valid_billing_relationship constraint defined in sbomify.apps.teams.models
     billing_limits.pop("stripe_subscription_id", None)
     billing_limits.pop("stripe_customer_id", None)
     billing_limits.update({
