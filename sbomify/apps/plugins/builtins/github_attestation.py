@@ -1,19 +1,24 @@
 """GitHub Attestation plugin for verifying SBOM attestations.
 
-This plugin verifies that an SBOM has a valid GitHub attestation by:
+This plugin verifies that an SBOM file itself has a valid GitHub attestation by:
 1. Extracting VCS (GitHub) information from the SBOM's externalReferences
-2. Running `cosign verify-attestation` against the derived artifact
-3. Returning pass/fail findings based on verification result
+2. Downloading the attestation bundle from GitHub's public API
+3. Running `cosign verify-blob-attestation` against the SBOM file
+4. Returning pass/fail findings based on verification result
 """
 
+import hashlib
 import json
-import re
+import os
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+import requests
 
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -23,6 +28,7 @@ from sbomify.apps.plugins.sdk.results import (
     Finding,
     PluginMetadata,
 )
+from sbomify.apps.plugins.utils import get_user_agent
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -35,19 +41,25 @@ class GitHubAttestationError(Exception):
 
 
 class GitHubAttestationPlugin(AssessmentPlugin):
-    """Plugin for verifying GitHub attestations on SBOMs.
+    """Plugin for verifying GitHub attestations on SBOM files.
 
     This plugin extracts VCS information from the SBOM and verifies
-    that the associated artifact has a valid GitHub attestation using
+    that the SBOM file itself has a valid GitHub attestation using
     Sigstore/cosign.
+
+    The verification flow:
+    1. Extract GitHub org/repo from the SBOM's VCS references
+    2. Calculate SHA256 digest of the SBOM file
+    3. Download the attestation bundle from GitHub's public API
+    4. Verify the SBOM file using `cosign verify-blob-attestation`
+
+    No authentication is required for public repositories.
 
     Configuration options:
         certificate_identity_regexp: Pattern for certificate identity
             (default: GitHub Actions pattern for the extracted repo)
         certificate_oidc_issuer: Expected OIDC issuer
             (default: https://token.actions.githubusercontent.com)
-        attestation_type: Type of attestation to verify
-            (default: https://slsa.dev/provenance/v1)
 
     Example:
         >>> plugin = GitHubAttestationPlugin()
@@ -60,7 +72,6 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
     # Default configuration
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
-    DEFAULT_ATTESTATION_TYPE = "https://slsa.dev/provenance/v1"
     DEFAULT_TIMEOUT = 60  # seconds
 
     def __init__(self, config: dict | None = None) -> None:
@@ -70,12 +81,10 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             config: Plugin configuration with optional keys:
                 - certificate_identity_regexp: Custom identity pattern
                 - certificate_oidc_issuer: Custom OIDC issuer
-                - attestation_type: Custom attestation type
-                - timeout: Timeout in seconds for cosign verification (default: 60)
+                - timeout: Timeout in seconds for verification (default: 60)
         """
         super().__init__(config)
         self.certificate_oidc_issuer = self.config.get("certificate_oidc_issuer", self.DEFAULT_CERTIFICATE_OIDC_ISSUER)
-        self.attestation_type = self.config.get("attestation_type", self.DEFAULT_ATTESTATION_TYPE)
         self.timeout = self.config.get("timeout", self.DEFAULT_TIMEOUT)
 
     def get_metadata(self) -> PluginMetadata:
@@ -92,13 +101,12 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         )
 
     def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
-        """Verify GitHub attestation for the SBOM.
+        """Verify GitHub attestation for the SBOM file.
 
         This method:
-        1. Parses the SBOM to extract VCS information
-        2. Derives the GitHub org/repo from the VCS URL
-        3. Extracts the attestation target (container image) from the SBOM
-        4. Runs cosign verify-attestation
+        1. Parses the SBOM to extract VCS information (GitHub org/repo)
+        2. Downloads the attestation bundle from GitHub
+        3. Verifies the SBOM file using cosign verify-blob-attestation
 
         Args:
             sbom_id: The SBOM's primary key.
@@ -107,6 +115,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         Returns:
             AssessmentResult with pass/fail finding based on verification.
         """
+        bundle_path = None
         try:
             # Parse the SBOM
             sbom_data = json.loads(sbom_path.read_text())
@@ -118,16 +127,6 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
             github_org = vcs_info.get("org")
             github_repo = vcs_info.get("repo")
-            commit_sha = vcs_info.get("commit_sha")
-
-            # Extract attestation target (container image reference)
-            attestation_target = self._extract_attestation_target(sbom_data)
-            if not attestation_target:
-                return self._create_result_no_attestation_target(sbom_id, github_org, github_repo)
-
-            # Validate attestation target format
-            if not self._validate_attestation_target(attestation_target):
-                return self._create_result_error(sbom_id, f"Invalid attestation target format: {attestation_target}")
 
             # Build certificate identity pattern
             certificate_identity_regexp = self.config.get(
@@ -135,12 +134,28 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 f"^https://github.com/{github_org}/{github_repo}/.*",
             )
 
-            # Verify attestation using cosign
-            verification_result = self._verify_attestation(
-                attestation_target=attestation_target,
-                certificate_identity_regexp=certificate_identity_regexp,
+            # Download attestation bundle from GitHub
+            bundle_result = self._download_attestation_bundle(
+                sbom_path=sbom_path,
                 github_org=github_org,
                 github_repo=github_repo,
+            )
+
+            if not bundle_result.get("success"):
+                return self._create_result_no_attestation(
+                    sbom_id=sbom_id,
+                    github_org=github_org,
+                    github_repo=github_repo,
+                    error=bundle_result.get("error", "Unknown error"),
+                )
+
+            bundle_path = bundle_result.get("bundle_path")
+
+            # Verify attestation using cosign verify-blob-attestation
+            verification_result = self._verify_attestation(
+                sbom_path=sbom_path,
+                bundle_path=bundle_path,
+                certificate_identity_regexp=certificate_identity_regexp,
             )
 
             return self._create_result(
@@ -148,8 +163,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 verification_result=verification_result,
                 github_org=github_org,
                 github_repo=github_repo,
-                attestation_target=attestation_target,
-                commit_sha=commit_sha,
+                sbom_path=sbom_path,
             )
 
         except json.JSONDecodeError as e:
@@ -161,6 +175,13 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         except Exception as e:
             logger.exception(f"Unexpected error during attestation verification: {e}")
             return self._create_result_error(sbom_id, f"Unexpected error: {e}")
+        finally:
+            # Clean up temporary bundle file
+            if bundle_path and os.path.exists(bundle_path):
+                try:
+                    os.unlink(bundle_path)
+                except OSError as e:
+                    logger.debug(f"Failed to clean up temporary bundle file {bundle_path}: {e}")
 
     def _extract_vcs_info(self, sbom_data: dict) -> dict[str, str] | None:
         """Extract VCS (GitHub) information from SBOM.
@@ -169,20 +190,18 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
         CycloneDX:
         - metadata.component.externalReferences (type: vcs)
-        - metadata.component.pedigree.commits (for commit SHA)
         - Top-level externalReferences
         - components[*].externalReferences
 
         SPDX:
-        - packages[0].downloadLocation (git+url@sha format)
+        - packages[0].downloadLocation (git+url format)
         - packages[0].externalRefs (referenceType: vcs)
-        - creationInfo.creatorComment
 
         Args:
             sbom_data: Parsed SBOM JSON data.
 
         Returns:
-            Dict with 'org', 'repo', and optionally 'commit_sha' keys, or None if not found.
+            Dict with 'org' and 'repo' keys, or None if not found.
         """
         # Detect format based on structure
         if self._is_spdx_format(sbom_data):
@@ -208,10 +227,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             sbom_data: Parsed CycloneDX SBOM JSON data.
 
         Returns:
-            Dict with 'org', 'repo', and optionally 'commit_sha' keys, or None.
+            Dict with 'org' and 'repo' keys, or None.
         """
-        result = None
-
         # Check metadata.component.externalReferences first
         metadata = sbom_data.get("metadata", {})
         component = metadata.get("component", {})
@@ -220,36 +237,27 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         vcs_url = self._find_vcs_url_cyclonedx(external_refs)
         if vcs_url:
             result = self._parse_github_url(vcs_url)
+            if result:
+                return result
 
         # If not found, check top-level externalReferences
-        if not result:
-            external_refs = sbom_data.get("externalReferences", [])
+        external_refs = sbom_data.get("externalReferences", [])
+        vcs_url = self._find_vcs_url_cyclonedx(external_refs)
+        if vcs_url:
+            result = self._parse_github_url(vcs_url)
+            if result:
+                return result
+
+        # If not found, check components for VCS references
+        for comp in sbom_data.get("components", []):
+            external_refs = comp.get("externalReferences", [])
             vcs_url = self._find_vcs_url_cyclonedx(external_refs)
             if vcs_url:
                 result = self._parse_github_url(vcs_url)
+                if result:
+                    return result
 
-        # If not found, check components for VCS references
-        if not result:
-            for comp in sbom_data.get("components", []):
-                external_refs = comp.get("externalReferences", [])
-                vcs_url = self._find_vcs_url_cyclonedx(external_refs)
-                if vcs_url:
-                    result = self._parse_github_url(vcs_url)
-                    break
-
-        # Extract commit SHA from pedigree if available
-        if result:
-            pedigree = component.get("pedigree", {})
-            commits = pedigree.get("commits", [])
-            if commits:
-                # Get the first commit (most recent)
-                first_commit = commits[0] if isinstance(commits, list) else None
-                if first_commit:
-                    commit_sha = first_commit.get("uid", "")
-                    if commit_sha:
-                        result["commit_sha"] = commit_sha
-
-        return result
+        return None
 
     def _extract_vcs_info_spdx(self, sbom_data: dict) -> dict[str, str] | None:
         """Extract VCS info from SPDX format.
@@ -258,90 +266,58 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             sbom_data: Parsed SPDX SBOM JSON data.
 
         Returns:
-            Dict with 'org', 'repo', and optionally 'commit_sha' keys, or None.
+            Dict with 'org' and 'repo' keys, or None.
         """
         packages = sbom_data.get("packages", [])
         if not packages:
             return None
 
         main_pkg = packages[0]
-        result = None
-        commit_sha = None
 
-        # Check downloadLocation for git+url@sha format
+        # Check downloadLocation for git+url format
         download_location = main_pkg.get("downloadLocation", "")
         if download_location and download_location not in ("NOASSERTION", "NONE"):
-            vcs_url, commit_sha = self._parse_spdx_download_location(download_location)
+            vcs_url = self._parse_spdx_download_location(download_location)
             if vcs_url:
                 result = self._parse_github_url(vcs_url)
+                if result:
+                    return result
 
         # Check externalRefs for VCS reference
-        if not result:
-            external_refs = main_pkg.get("externalRefs", [])
-            for ref in external_refs:
-                ref_type = ref.get("referenceType", "").lower()
-                if ref_type == "vcs":
-                    locator = ref.get("referenceLocator", "")
-                    if locator:
-                        # Use _parse_github_url for proper URL validation
-                        result = self._parse_github_url(locator)
-                        if result:
-                            # Try to extract commit from comment
-                            comment = ref.get("comment", "")
-                            if comment and "commit:" in comment.lower():
-                                match = re.search(r"commit:\s*([a-f0-9]+)", comment, re.IGNORECASE)
-                                if match:
-                                    commit_sha = match.group(1)
-                            break
+        external_refs = main_pkg.get("externalRefs", [])
+        for ref in external_refs:
+            ref_type = ref.get("referenceType", "").lower()
+            if ref_type == "vcs":
+                locator = ref.get("referenceLocator", "")
+                if locator:
+                    result = self._parse_github_url(locator)
+                    if result:
+                        return result
 
-        # Try to extract commit from sourceInfo
-        if result and not commit_sha:
-            source_info = main_pkg.get("sourceInfo", "")
-            if source_info:
-                match = re.search(r"commit\s+([a-f0-9]{7,40})", source_info, re.IGNORECASE)
-                if match:
-                    commit_sha = match.group(1)
+        return None
 
-        # Try to extract from creatorComment
-        if result and not commit_sha:
-            creation_info = sbom_data.get("creationInfo", {})
-            creator_comment = creation_info.get("creatorComment", "")
-            if creator_comment:
-                # Pattern: "at {sha}" at the end
-                match = re.search(r"at\s+([a-f0-9]{7,40})$", creator_comment)
-                if match:
-                    commit_sha = match.group(1)
+    def _parse_spdx_download_location(self, download_location: str) -> str | None:
+        """Parse SPDX downloadLocation to extract VCS URL.
 
-        if result and commit_sha:
-            result["commit_sha"] = commit_sha
-
-        return result
-
-    def _parse_spdx_download_location(self, download_location: str) -> tuple[str | None, str | None]:
-        """Parse SPDX downloadLocation to extract VCS URL and commit SHA.
-
-        Handles format: git+https://github.com/org/repo@commit_sha
+        Handles format: git+https://github.com/org/repo[@commit_sha]
 
         Args:
             download_location: The downloadLocation string.
 
         Returns:
-            Tuple of (vcs_url, commit_sha) or (None, None).
+            VCS URL string or None.
         """
         if not download_location.startswith("git+"):
-            return None, None
+            return None
 
         # Remove git+ prefix
         url_part = download_location[4:]
 
-        # Split on @ to get URL and commit
+        # Split on @ to get URL (ignore commit part)
         if "@" in url_part:
-            parts = url_part.rsplit("@", 1)
-            vcs_url = parts[0]
-            commit_sha = parts[1] if len(parts) > 1 else None
-            return vcs_url, commit_sha
+            url_part = url_part.rsplit("@", 1)[0]
 
-        return url_part, None
+        return url_part
 
     def _find_vcs_url_cyclonedx(self, external_refs: list[dict]) -> str | None:
         """Find a VCS URL from CycloneDX external references.
@@ -431,253 +407,143 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
         return None
 
-    def _extract_attestation_target(self, sbom_data: dict) -> str | None:
-        """Extract the attestation target from SBOM.
-
-        Supports both CycloneDX and SPDX formats.
-
-        The attestation target is typically a container image reference
-        that can be found in:
-
-        CycloneDX:
-        - metadata.component with purl containing type=oci or type=docker
-        - externalReferences with type 'distribution' or 'distribution-intake'
-        - Component name + SHA-256 hash
-
-        SPDX:
-        - packages[0].downloadLocation (if it's a container image URL)
-        - packages[0].externalRefs with referenceType 'purl' containing OCI/Docker
-        - Package name if it looks like a container image
+    def _calculate_file_digest(self, file_path: Path) -> str:
+        """Calculate SHA256 digest of a file.
 
         Args:
-            sbom_data: Parsed SBOM JSON data.
+            file_path: Path to the file.
 
         Returns:
-            Attestation target string (e.g., "ghcr.io/org/repo@sha256:...")
-            or None if not found.
+            SHA256 digest as hex string.
         """
-        # Detect format and use appropriate extraction method
-        if self._is_spdx_format(sbom_data):
-            return self._extract_attestation_target_spdx(sbom_data)
-        else:
-            return self._extract_attestation_target_cyclonedx(sbom_data)
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
 
-    def _extract_attestation_target_cyclonedx(self, sbom_data: dict) -> str | None:
-        """Extract attestation target from CycloneDX format.
-
-        Args:
-            sbom_data: Parsed CycloneDX SBOM JSON data.
-
-        Returns:
-            Attestation target string or None.
-        """
-        metadata = sbom_data.get("metadata", {})
-        component = metadata.get("component", {})
-
-        # Check for purl in main component
-        purl = component.get("purl", "")
-        if purl:
-            target = self._purl_to_image_reference(purl)
-            if target:
-                return target
-
-        # Check externalReferences for distribution URLs
-        external_refs = component.get("externalReferences", [])
-        for ref in external_refs:
-            ref_type = ref.get("type", "").lower()
-            url = ref.get("url", "")
-
-            if ref_type in ("distribution", "distribution-intake"):
-                # Check if it looks like a container image reference
-                if self._is_container_image_url(url):
-                    return url
-
-        # Check for hashes that could be used with GitHub attestation
-        # GitHub attestation works with artifact digest
-        hashes = component.get("hashes", [])
-        for hash_entry in hashes:
-            if hash_entry.get("alg", "").upper() == "SHA-256":
-                digest = hash_entry.get("content", "")
-                if digest:
-                    # If we have the component name and digest, construct reference
-                    name = component.get("name", "")
-                    if name and "/" in name:
-                        return f"{name}@sha256:{digest}"
-
-        return None
-
-    def _extract_attestation_target_spdx(self, sbom_data: dict) -> str | None:
-        """Extract attestation target from SPDX format.
-
-        Args:
-            sbom_data: Parsed SPDX SBOM JSON data.
-
-        Returns:
-            Attestation target string or None.
-        """
-        packages = sbom_data.get("packages", [])
-        if not packages:
-            return None
-
-        main_pkg = packages[0]
-
-        # Check for purl in externalRefs
-        external_refs = main_pkg.get("externalRefs", [])
-        for ref in external_refs:
-            ref_type = ref.get("referenceType", "").lower()
-            if ref_type == "purl":
-                locator = ref.get("referenceLocator", "")
-                if locator:
-                    target = self._purl_to_image_reference(locator)
-                    if target:
-                        return target
-
-        # Check downloadLocation for container image URL
-        download_location = main_pkg.get("downloadLocation", "")
-        if download_location and download_location not in ("NOASSERTION", "NONE"):
-            # Check if it's a container image URL (not a git+ URL)
-            if not download_location.startswith("git+") and self._is_container_image_url(download_location):
-                return download_location
-
-        # Check if package name looks like a container image
-        name = main_pkg.get("name", "")
-        if name and self._is_container_image_url(name):
-            # Try to find a checksum to construct a full reference
-            checksums = main_pkg.get("checksums", [])
-            for checksum in checksums:
-                if checksum.get("algorithm", "").upper() == "SHA256":
-                    digest = checksum.get("checksumValue", "")
-                    if digest:
-                        return f"{name}@sha256:{digest}"
-            # Return just the name if no checksum
-            return name
-
-        return None
-
-    def _purl_to_image_reference(self, purl: str) -> str | None:
-        """Convert a Package URL to a container image reference.
-
-        Args:
-            purl: Package URL string.
-
-        Returns:
-            Container image reference or None.
-        """
-        # Check for OCI or Docker type purls
-        # Format: pkg:oci/image@sha256:digest or pkg:docker/image@digest
-        if not purl.startswith(("pkg:oci/", "pkg:docker/")):
-            return None
-
-        try:
-            # Remove the pkg:oci/ or pkg:docker/ prefix
-            if purl.startswith("pkg:oci/"):
-                remainder = purl[8:]
-            else:
-                remainder = purl[11:]
-
-            # Parse the purl format: namespace/name@version?qualifiers
-            # or just name@version
-            parts = remainder.split("?")[0]  # Remove qualifiers
-
-            # Handle version/digest
-            if "@" in parts:
-                name_part, version = parts.split("@", 1)
-                # Reconstruct the image reference
-                # The name_part may contain the registry
-                return f"{name_part}@{version}" if "sha256:" in version else f"{name_part}:{version}"
-
-            return None
-        except Exception as e:
-            logger.warning(f"Failed to parse purl '{purl}': {e}")
-            return None
-
-    def _is_container_image_url(self, url: str) -> bool:
-        """Check if a URL looks like a container image reference.
-
-        Args:
-            url: URL string to check.
-
-        Returns:
-            True if it looks like a container image reference.
-        """
-        container_registries = [
-            "ghcr.io",
-            "docker.io",
-            "gcr.io",
-            "registry.hub.docker.com",
-            "quay.io",
-            "ecr.aws",
-            ".dkr.ecr.",
-            "azurecr.io",
-        ]
-        return any(registry in url for registry in container_registries)
-
-    def _validate_attestation_target(self, target: str) -> bool:
-        """Validate that the attestation target is a valid container image reference.
-
-        This provides basic input validation to prevent malformed input
-        being passed to the cosign subprocess.
-
-        Valid formats:
-        - registry/repo@sha256:digest (e.g., ghcr.io/org/repo@sha256:abc123)
-        - registry/repo:tag (e.g., docker.io/library/nginx:latest)
-        - registry/repo (e.g., ghcr.io/org/repo)
-
-        Args:
-            target: The attestation target string to validate.
-
-        Returns:
-            True if the target appears to be a valid container image reference.
-        """
-        if not target or not isinstance(target, str):
-            return False
-
-        # Reject obviously dangerous patterns
-        dangerous_patterns = [";", "|", "&", "$", "`", "\n", "\r", "$(", "${"]
-        if any(pattern in target for pattern in dangerous_patterns):
-            logger.warning(f"Attestation target contains dangerous characters: {target}")
-            return False
-
-        # Must contain at least one slash (registry/repo format)
-        if "/" not in target:
-            return False
-
-        # Basic format validation: should match registry/path[@:version]
-        # Allow alphanumeric, dots, dashes, underscores, slashes, colons, and @
-        valid_pattern = re.compile(r"^[a-zA-Z0-9._\-/:@]+$")
-        if not valid_pattern.match(target):
-            logger.warning(f"Attestation target has invalid characters: {target}")
-            return False
-
-        # If it has @, it should be followed by sha256: or similar
-        if "@" in target:
-            parts = target.split("@", 1)
-            if len(parts) == 2:
-                # Version part should look like sha256:hex or a valid tag
-                version = parts[1]
-                if not (
-                    version.startswith("sha256:")
-                    or version.startswith("sha512:")
-                    or re.match(r"^[a-zA-Z0-9._\-]+$", version)
-                ):
-                    return False
-
-        return True
-
-    def _verify_attestation(
+    def _download_attestation_bundle(
         self,
-        attestation_target: str,
-        certificate_identity_regexp: str,
+        sbom_path: Path,
         github_org: str,
         github_repo: str,
     ) -> dict[str, Any]:
-        """Verify attestation using cosign.
+        """Download attestation bundle from GitHub's public API.
+
+        No authentication is required for public repositories.
 
         Args:
-            attestation_target: The artifact to verify (e.g., container image).
-            certificate_identity_regexp: Pattern for certificate identity.
+            sbom_path: Path to the SBOM file.
             github_org: GitHub organization name.
             github_repo: GitHub repository name.
+
+        Returns:
+            Dict with:
+                - success: bool
+                - bundle_path: Path to downloaded bundle (if successful)
+                - error: Error message (if failed)
+        """
+        # Calculate SHA256 digest of the SBOM file
+        try:
+            file_digest = self._calculate_file_digest(sbom_path)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to calculate file digest: {e}",
+            }
+
+        # GitHub Attestations API endpoint
+        # https://docs.github.com/en/rest/users/attestations
+        api_url = f"https://api.github.com/repos/{github_org}/{github_repo}/attestations/sha256:{file_digest}"
+
+        logger.info(f"Fetching attestation from {api_url}")
+
+        try:
+            response = requests.get(
+                api_url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": get_user_agent(),
+                },
+                timeout=self.timeout,
+            )
+
+            if response.status_code == 404:
+                return {
+                    "success": False,
+                    "error": f"No attestation found for this SBOM (digest: sha256:{file_digest})",
+                }
+
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "error": f"GitHub API error: {response.status_code} - {response.text}",
+                }
+
+            data = response.json()
+            attestations = data.get("attestations", [])
+
+            if not attestations:
+                return {
+                    "success": False,
+                    "error": "No attestations returned from GitHub API",
+                }
+
+            # Get the first attestation bundle
+            # The bundle is in the format expected by cosign
+            bundle = attestations[0].get("bundle")
+            if not bundle:
+                return {
+                    "success": False,
+                    "error": "Attestation response missing bundle data",
+                }
+
+            # Write bundle to temporary file
+            fd, bundle_path = tempfile.mkstemp(suffix=".json")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(bundle, f)
+                return {
+                    "success": True,
+                    "bundle_path": Path(bundle_path),
+                }
+            except Exception as e:
+                if os.path.exists(bundle_path):
+                    os.unlink(bundle_path)
+                return {
+                    "success": False,
+                    "error": f"Failed to write bundle file: {e}",
+                }
+
+        except requests.Timeout:
+            return {
+                "success": False,
+                "error": "Attestation bundle download timed out",
+            }
+        except requests.RequestException as e:
+            return {
+                "success": False,
+                "error": f"Error fetching attestation from GitHub: {e}",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Unexpected error downloading attestation: {e}",
+            }
+
+    def _verify_attestation(
+        self,
+        sbom_path: Path,
+        bundle_path: Path,
+        certificate_identity_regexp: str,
+    ) -> dict[str, Any]:
+        """Verify attestation using cosign verify-blob-attestation.
+
+        Args:
+            sbom_path: Path to the SBOM file to verify.
+            bundle_path: Path to the attestation bundle downloaded from GitHub.
+            certificate_identity_regexp: Pattern for certificate identity.
 
         Returns:
             Dict with verification result including:
@@ -690,20 +556,20 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         if not cosign_path:
             raise GitHubAttestationError("cosign binary not found. Please ensure cosign is installed.")
 
-        # Build cosign command
+        # Build cosign verify-blob-attestation command
         cmd = [
             cosign_path,
-            "verify-attestation",
-            "--type",
-            self.attestation_type,
+            "verify-blob-attestation",
+            "--bundle",
+            str(bundle_path),
             "--certificate-identity-regexp",
             certificate_identity_regexp,
             "--certificate-oidc-issuer",
             self.certificate_oidc_issuer,
-            attestation_target,
+            str(sbom_path),
         ]
 
-        logger.info(f"Running cosign verify-attestation for {attestation_target}")
+        logger.info(f"Running cosign verify-blob-attestation for {sbom_path}")
         logger.debug(f"Cosign command: {' '.join(cmd)}")
 
         try:
@@ -717,12 +583,11 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             if result.returncode == 0:
                 return {
                     "verified": True,
-                    "message": "Attestation verified successfully",
+                    "message": "SBOM attestation verified successfully",
                     "details": {
-                        "attestation_target": attestation_target,
+                        "sbom_file": str(sbom_path),
                         "certificate_identity": certificate_identity_regexp,
                         "oidc_issuer": self.certificate_oidc_issuer,
-                        "attestation_type": self.attestation_type,
                     },
                 }
             else:
@@ -731,7 +596,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                     "verified": False,
                     "message": f"Attestation verification failed: {error_msg}",
                     "details": {
-                        "attestation_target": attestation_target,
+                        "sbom_file": str(sbom_path),
                         "error": error_msg,
                         "exit_code": result.returncode,
                     },
@@ -741,13 +606,13 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             return {
                 "verified": False,
                 "message": "Attestation verification timed out",
-                "details": {"attestation_target": attestation_target, "error": "timeout"},
+                "details": {"sbom_file": str(sbom_path), "error": "timeout"},
             }
         except Exception as e:
             return {
                 "verified": False,
                 "message": f"Error running cosign: {e}",
-                "details": {"attestation_target": attestation_target, "error": str(e)},
+                "details": {"sbom_file": str(sbom_path), "error": str(e)},
             }
 
     def _create_result(
@@ -756,8 +621,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         verification_result: dict[str, Any],
         github_org: str,
         github_repo: str,
-        attestation_target: str,
-        commit_sha: str | None = None,
+        sbom_path: Path,
     ) -> AssessmentResult:
         """Create assessment result from verification outcome.
 
@@ -766,8 +630,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             verification_result: Result from _verify_attestation.
             github_org: GitHub organization.
             github_repo: GitHub repository.
-            attestation_target: The verified artifact.
-            commit_sha: Git commit SHA if available.
+            sbom_path: Path to the verified SBOM file.
 
         Returns:
             AssessmentResult with appropriate findings.
@@ -780,16 +643,14 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         base_metadata = {
             "github_org": github_org,
             "github_repo": github_repo,
-            "attestation_target": attestation_target,
+            "sbom_file": str(sbom_path),
         }
-        if commit_sha:
-            base_metadata["commit_sha"] = commit_sha
 
         if verified:
             finding = Finding(
                 id="github-attestation:verified",
                 title="GitHub Attestation Verified",
-                description=f"Successfully verified attestation for {attestation_target}",
+                description=f"Successfully verified SBOM attestation from {github_org}/{github_repo}",
                 status="pass",
                 severity="info",
                 metadata={
@@ -866,32 +727,38 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             metadata={"sbom_id": sbom_id},
         )
 
-    def _create_result_no_attestation_target(
-        self, sbom_id: str, github_org: str | None, github_repo: str | None
+    def _create_result_no_attestation(
+        self,
+        sbom_id: str,
+        github_org: str | None,
+        github_repo: str | None,
+        error: str,
     ) -> AssessmentResult:
-        """Create result when no attestation target is found.
+        """Create result when no attestation is found for the SBOM.
 
         Args:
             sbom_id: The SBOM ID.
             github_org: GitHub organization (if found).
             github_repo: GitHub repository (if found).
+            error: Error message from attestation download attempt.
 
         Returns:
-            AssessmentResult with warning finding.
+            AssessmentResult with fail finding.
         """
         finding = Finding(
-            id="github-attestation:no-target",
-            title="No Attestation Target Found",
+            id="github-attestation:no-attestation",
+            title="No GitHub Attestation Found",
             description=(
-                "Could not determine the attestation target from the SBOM. "
-                "Ensure the SBOM includes a container image reference (purl with type oci/docker) "
-                "or a distribution URL for the artifact to verify."
+                f"Could not download attestation from GitHub for this SBOM. "
+                f"Ensure the SBOM was generated by a GitHub Actions workflow with "
+                f"artifact attestations enabled. Error: {error}"
             ),
-            status="warning",
-            severity="info",
+            status="fail",
+            severity="high",
             metadata={
                 "github_org": github_org,
                 "github_repo": github_repo,
+                "error": error,
             },
         )
 
@@ -903,8 +770,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             summary=AssessmentSummary(
                 total_findings=1,
                 pass_count=0,
-                fail_count=0,
-                warning_count=1,
+                fail_count=1,
             ),
             findings=[finding],
             metadata={"sbom_id": sbom_id},

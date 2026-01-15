@@ -1,11 +1,14 @@
 """Utility functions for the plugin framework.
 
 This module provides helper functions used across the plugin framework,
-including configuration hashing for reproducibility tracking.
+including configuration hashing for reproducibility tracking and HTTP utilities.
 """
 
 import hashlib
 import json
+from importlib.metadata import version as get_package_version
+
+import requests
 
 
 def compute_config_hash(config: dict | None) -> str:
@@ -56,3 +59,56 @@ def compute_content_digest(content: bytes) -> str:
         64-character hexadecimal SHA256 hash string.
     """
     return hashlib.sha256(content).hexdigest()
+
+
+# HTTP Client Utilities
+SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"
+
+
+def get_sbomify_version() -> str:
+    """Get the current sbomify package version.
+
+    Returns:
+        Version string (e.g., "0.24").
+    """
+    try:
+        return get_package_version("sbomify")
+    except Exception:
+        # Fallback if package metadata is not available
+        return "0.0.0"
+
+
+def get_user_agent() -> str:
+    """Get the standard sbomify User-Agent string.
+
+    The User-Agent follows the format: sbomify/{version} ({contact_email})
+
+    This should be used for all external HTTP requests to properly
+    identify sbomify as the client.
+
+    Returns:
+        User-Agent string (e.g., "sbomify/0.24 (hello@sbomify.com)").
+
+    Example:
+        >>> get_user_agent()
+        'sbomify/0.24 (hello@sbomify.com)'
+    """
+    return f"sbomify/{get_sbomify_version()} ({SBOMIFY_CONTACT_EMAIL})"
+
+
+def get_http_session() -> requests.Session:
+    """Get a pre-configured requests Session with sbomify User-Agent.
+
+    Creates a new requests.Session with the standard sbomify User-Agent
+    header already set. Use this for making external HTTP requests.
+
+    Returns:
+        Configured requests.Session instance.
+
+    Example:
+        >>> session = get_http_session()
+        >>> response = session.get("https://api.example.com/data")
+    """
+    session = requests.Session()
+    session.headers["User-Agent"] = get_user_agent()
+    return session

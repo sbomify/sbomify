@@ -30,22 +30,20 @@ class TestGitHubAttestationPluginMetadata:
         """Test plugin has correct default configuration."""
         plugin = GitHubAttestationPlugin()
 
-        assert (
-            plugin.certificate_oidc_issuer == "https://token.actions.githubusercontent.com"
-        )
-        assert plugin.attestation_type == "https://slsa.dev/provenance/v1"
+        assert plugin.certificate_oidc_issuer == "https://token.actions.githubusercontent.com"
+        assert plugin.timeout == 60
 
     def test_custom_config(self):
         """Test plugin accepts custom configuration."""
         custom_config = {
             "certificate_oidc_issuer": "https://custom.issuer.com",
-            "attestation_type": "https://custom.type/v1",
             "certificate_identity_regexp": "^https://github.com/custom/.*",
+            "timeout": 120,
         }
         plugin = GitHubAttestationPlugin(config=custom_config)
 
         assert plugin.certificate_oidc_issuer == "https://custom.issuer.com"
-        assert plugin.attestation_type == "https://custom.type/v1"
+        assert plugin.timeout == 120
 
 
 class TestVCSInfoExtraction:
@@ -59,9 +57,7 @@ class TestVCSInfoExtraction:
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/sbomify/sbomify"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://github.com/sbomify/sbomify"}],
                 }
             },
         }
@@ -77,9 +73,7 @@ class TestVCSInfoExtraction:
         plugin = GitHubAttestationPlugin()
         sbom_data = {
             "bomFormat": "CycloneDX",
-            "externalReferences": [
-                {"type": "vcs", "url": "https://github.com/myorg/myrepo"}
-            ],
+            "externalReferences": [{"type": "vcs", "url": "https://github.com/myorg/myrepo"}],
         }
 
         result = plugin._extract_vcs_info(sbom_data)
@@ -96,9 +90,7 @@ class TestVCSInfoExtraction:
             "components": [
                 {
                     "name": "dependency",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/dep-org/dep-repo"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://github.com/dep-org/dep-repo"}],
                 }
             ],
         }
@@ -117,9 +109,7 @@ class TestVCSInfoExtraction:
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://gitlab.com/org/repo"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://gitlab.com/org/repo"}],
                 }
             },
         }
@@ -140,22 +130,15 @@ class TestVCSInfoExtraction:
 
         assert result is None
 
-    def test_extract_vcs_with_pedigree_commit(self):
-        """Test extracting commit SHA from CycloneDX pedigree."""
+    def test_extract_vcs_with_git_type(self):
+        """Test extracting VCS info with git type reference."""
         plugin = GitHubAttestationPlugin()
         sbom_data = {
             "bomFormat": "CycloneDX",
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/test-org/test-repo"}
-                    ],
-                    "pedigree": {
-                        "commits": [
-                            {"uid": "abc123def456789", "url": "https://github.com/test-org/test-repo/commit/abc123def456789"}
-                        ]
-                    },
+                    "externalReferences": [{"type": "git", "url": "https://github.com/test-org/test-repo"}],
                 }
             },
         }
@@ -165,7 +148,6 @@ class TestVCSInfoExtraction:
         assert result is not None
         assert result["org"] == "test-org"
         assert result["repo"] == "test-repo"
-        assert result["commit_sha"] == "abc123def456789"
 
 
 class TestSPDXVCSInfoExtraction:
@@ -190,7 +172,6 @@ class TestSPDXVCSInfoExtraction:
         assert result is not None
         assert result["org"] == "sbomify"
         assert result["repo"] == "sbomify"
-        assert result["commit_sha"] == "abc123def456"
 
     def test_extract_vcs_from_external_refs(self):
         """Test extracting VCS info from SPDX externalRefs."""
@@ -206,7 +187,6 @@ class TestSPDXVCSInfoExtraction:
                             "referenceCategory": "OTHER",
                             "referenceType": "vcs",
                             "referenceLocator": "https://github.com/test-org/test-repo",
-                            "comment": "Source repository (commit: abc1234)",
                         }
                     ],
                 }
@@ -218,65 +198,6 @@ class TestSPDXVCSInfoExtraction:
         assert result is not None
         assert result["org"] == "test-org"
         assert result["repo"] == "test-repo"
-        assert result["commit_sha"] == "abc1234"
-
-    def test_extract_vcs_from_source_info(self):
-        """Test extracting commit SHA from SPDX sourceInfo."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "test-app",
-                    "downloadLocation": "NOASSERTION",
-                    "sourceInfo": "Built from commit abc123def on main",
-                    "externalRefs": [
-                        {
-                            "referenceCategory": "OTHER",
-                            "referenceType": "vcs",
-                            "referenceLocator": "https://github.com/test-org/test-repo",
-                        }
-                    ],
-                }
-            ],
-        }
-
-        result = plugin._extract_vcs_info(sbom_data)
-
-        assert result is not None
-        assert result["org"] == "test-org"
-        assert result["repo"] == "test-repo"
-        assert result["commit_sha"] == "abc123def"
-
-    def test_extract_vcs_from_creator_comment(self):
-        """Test extracting commit SHA from SPDX creatorComment."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "creationInfo": {
-                "creatorComment": "Built from https://github.com/test-org/test-repo at abc1234",
-            },
-            "packages": [
-                {
-                    "name": "test-app",
-                    "downloadLocation": "NOASSERTION",
-                    "externalRefs": [
-                        {
-                            "referenceCategory": "OTHER",
-                            "referenceType": "vcs",
-                            "referenceLocator": "https://github.com/test-org/test-repo",
-                        }
-                    ],
-                }
-            ],
-        }
-
-        result = plugin._extract_vcs_info(sbom_data)
-
-        assert result is not None
-        assert result["org"] == "test-org"
-        assert result["repo"] == "test-repo"
-        assert result["commit_sha"] == "abc1234"
 
     def test_spdx_no_packages(self):
         """Test returns None when SPDX has no packages."""
@@ -339,9 +260,7 @@ class TestGitHubURLParsing:
         """Test parsing URL with extra path segments."""
         plugin = GitHubAttestationPlugin()
 
-        result = plugin._parse_github_url(
-            "https://github.com/org/repo/tree/main/src"
-        )
+        result = plugin._parse_github_url("https://github.com/org/repo/tree/main/src")
 
         assert result == {"org": "org", "repo": "repo"}
 
@@ -362,233 +281,106 @@ class TestGitHubURLParsing:
         assert result is None
 
 
-class TestAttestationTargetExtraction:
-    """Tests for attestation target extraction."""
+class TestAttestationBundleDownload:
+    """Tests for attestation bundle download from GitHub API."""
 
-    def test_extract_oci_purl(self):
-        """Test extracting attestation target from OCI purl."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "metadata": {
-                "component": {
-                    "name": "my-image",
-                    "purl": "pkg:oci/my-image@sha256:abc123def456",
-                }
-            }
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result == "my-image@sha256:abc123def456"
-
-    def test_extract_docker_purl(self):
-        """Test extracting attestation target from Docker purl."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "metadata": {
-                "component": {
-                    "name": "my-image",
-                    "purl": "pkg:docker/library/nginx@sha256:abc123",
-                }
-            }
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result == "library/nginx@sha256:abc123"
-
-    def test_extract_from_distribution_url(self):
-        """Test extracting from distribution external reference."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "metadata": {
-                "component": {
-                    "name": "my-image",
-                    "externalReferences": [
-                        {
-                            "type": "distribution",
-                            "url": "ghcr.io/sbomify/sbomify@sha256:abc123",
-                        }
-                    ],
-                }
-            }
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result == "ghcr.io/sbomify/sbomify@sha256:abc123"
-
-    def test_extract_from_hash_and_name(self):
-        """Test extracting from component name and hash."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "metadata": {
-                "component": {
-                    "name": "ghcr.io/org/image",
-                    "hashes": [{"alg": "SHA-256", "content": "abc123def456"}],
-                }
-            }
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result == "ghcr.io/org/image@sha256:abc123def456"
-
-    def test_extract_no_target_found(self):
-        """Test returns None when no attestation target is found."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "metadata": {
-                "component": {
-                    "name": "simple-library",
-                    "version": "1.0.0",
-                }
-            }
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result is None
-
-
-class TestSPDXAttestationTargetExtraction:
-    """Tests for attestation target extraction from SPDX format."""
-
-    def test_extract_target_from_purl_external_ref(self):
-        """Test extracting attestation target from SPDX externalRefs purl."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_bundle_download_success(self, mock_get, tmp_path):
+        """Test successful attestation bundle download."""
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "attestations": [
                 {
-                    "name": "test-app",
-                    "externalRefs": [
-                        {
-                            "referenceCategory": "PACKAGE-MANAGER",
-                            "referenceType": "purl",
-                            "referenceLocator": "pkg:oci/ghcr.io/sbomify/sbomify@sha256:abc123",
-                        }
-                    ],
+                    "bundle": {
+                        "mediaType": "application/vnd.dev.sigstore.bundle+json",
+                        "verificationMaterial": {},
+                        "dsseEnvelope": {},
+                    }
                 }
-            ],
+            ]
         }
+        mock_get.return_value = mock_response
 
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result == "ghcr.io/sbomify/sbomify@sha256:abc123"
-
-    def test_extract_target_from_download_location(self):
-        """Test extracting attestation target from SPDX downloadLocation."""
         plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "test-app",
-                    "downloadLocation": "ghcr.io/org/image@sha256:abc123def456",
-                }
-            ],
-        }
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"test": "data"}')
 
-        result = plugin._extract_attestation_target(sbom_data)
+        result = plugin._download_attestation_bundle(
+            sbom_path=sbom_path,
+            github_org="sbomify",
+            github_repo="sbomify",
+        )
 
-        assert result == "ghcr.io/org/image@sha256:abc123def456"
+        assert result["success"] is True
+        assert "bundle_path" in result
 
-    def test_extract_target_from_package_name_with_checksum(self):
-        """Test extracting attestation target from package name and checksum."""
+        # Verify API was called with correct URL pattern
+        mock_get.assert_called_once()
+        call_url = mock_get.call_args[0][0]
+        assert "api.github.com/repos/sbomify/sbomify/attestations/sha256:" in call_url
+
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_bundle_download_not_found(self, mock_get, tmp_path):
+        """Test when no attestation is found."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
         plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "ghcr.io/org/image",
-                    "downloadLocation": "NOASSERTION",
-                    "checksums": [
-                        {"algorithm": "SHA256", "checksumValue": "abc123def456"}
-                    ],
-                }
-            ],
-        }
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"test": "data"}')
 
-        result = plugin._extract_attestation_target(sbom_data)
+        result = plugin._download_attestation_bundle(
+            sbom_path=sbom_path,
+            github_org="org",
+            github_repo="repo",
+        )
 
-        assert result == "ghcr.io/org/image@sha256:abc123def456"
+        assert result["success"] is False
+        assert "No attestation found" in result["error"]
 
-    def test_extract_target_from_package_name_only(self):
-        """Test extracting attestation target from package name when it looks like a container image."""
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_bundle_download_api_error(self, mock_get, tmp_path):
+        """Test GitHub API error handling."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_get.return_value = mock_response
+
         plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "docker.io/library/nginx",
-                    "downloadLocation": "NOASSERTION",
-                }
-            ],
-        }
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"test": "data"}')
 
-        result = plugin._extract_attestation_target(sbom_data)
+        result = plugin._download_attestation_bundle(
+            sbom_path=sbom_path,
+            github_org="org",
+            github_repo="repo",
+        )
 
-        assert result == "docker.io/library/nginx"
+        assert result["success"] is False
+        assert "GitHub API error" in result["error"]
 
-    def test_spdx_no_target_found(self):
-        """Test returns None when no attestation target in SPDX."""
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_bundle_download_timeout(self, mock_get, tmp_path):
+        """Test attestation bundle download timeout."""
+        import requests
+
+        mock_get.side_effect = requests.Timeout()
+
         plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "simple-library",
-                    "downloadLocation": "NOASSERTION",
-                }
-            ],
-        }
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"test": "data"}')
 
-        result = plugin._extract_attestation_target(sbom_data)
+        result = plugin._download_attestation_bundle(
+            sbom_path=sbom_path,
+            github_org="org",
+            github_repo="repo",
+        )
 
-        assert result is None
-
-    def test_spdx_ignores_git_download_location(self):
-        """Test that git+ download locations are not treated as attestation targets."""
-        plugin = GitHubAttestationPlugin()
-        sbom_data = {
-            "spdxVersion": "SPDX-2.3",
-            "packages": [
-                {
-                    "name": "test-app",
-                    "downloadLocation": "git+https://github.com/org/repo@abc123",
-                }
-            ],
-        }
-
-        result = plugin._extract_attestation_target(sbom_data)
-
-        assert result is None
-
-
-class TestContainerImageURLDetection:
-    """Tests for container image URL detection."""
-
-    @pytest.mark.parametrize(
-        "url,expected",
-        [
-            ("ghcr.io/org/repo", True),
-            ("docker.io/library/nginx", True),
-            ("gcr.io/project/image", True),
-            ("quay.io/org/image", True),
-            ("123456789.dkr.ecr.us-east-1.amazonaws.com/repo", True),
-            ("myregistry.azurecr.io/image", True),
-            ("https://example.com/file.zip", False),
-            ("npm:package@1.0.0", False),
-        ],
-    )
-    def test_is_container_image_url(self, url, expected):
-        """Test container image URL detection."""
-        plugin = GitHubAttestationPlugin()
-
-        result = plugin._is_container_image_url(url)
-
-        assert result == expected
+        assert result["success"] is False
+        assert "timed out" in result["error"].lower()
 
 
 class TestCosignVerification:
@@ -602,10 +394,9 @@ class TestCosignVerification:
 
         with pytest.raises(GitHubAttestationError) as exc_info:
             plugin._verify_attestation(
-                attestation_target="ghcr.io/org/repo@sha256:abc",
+                sbom_path=Path("/tmp/sbom.json"),
+                bundle_path=Path("/tmp/bundle.jsonl"),
                 certificate_identity_regexp="^https://github.com/org/.*",
-                github_org="org",
-                github_repo="repo",
             )
 
         assert "cosign binary not found" in str(exc_info.value)
@@ -623,10 +414,9 @@ class TestCosignVerification:
         plugin = GitHubAttestationPlugin()
 
         result = plugin._verify_attestation(
-            attestation_target="ghcr.io/org/repo@sha256:abc",
+            sbom_path=Path("/tmp/sbom.json"),
+            bundle_path=Path("/tmp/bundle.jsonl"),
             certificate_identity_regexp="^https://github.com/org/.*",
-            github_org="org",
-            github_repo="repo",
         )
 
         assert result["verified"] is True
@@ -635,9 +425,10 @@ class TestCosignVerification:
         # Verify cosign was called with correct arguments
         mock_run.assert_called_once()
         call_args = mock_run.call_args[0][0]
-        assert "verify-attestation" in call_args
-        assert "--type" in call_args
-        assert "ghcr.io/org/repo@sha256:abc" in call_args
+        assert "verify-blob-attestation" in call_args
+        assert "--bundle" in call_args
+        assert "/tmp/bundle.jsonl" in call_args
+        assert "/tmp/sbom.json" in call_args
 
     @patch("shutil.which")
     @patch("subprocess.run")
@@ -652,10 +443,9 @@ class TestCosignVerification:
         plugin = GitHubAttestationPlugin()
 
         result = plugin._verify_attestation(
-            attestation_target="ghcr.io/org/repo@sha256:abc",
+            sbom_path=Path("/tmp/sbom.json"),
+            bundle_path=Path("/tmp/bundle.jsonl"),
             certificate_identity_regexp="^https://github.com/org/.*",
-            github_org="org",
-            github_repo="repo",
         )
 
         assert result["verified"] is False
@@ -670,10 +460,9 @@ class TestCosignVerification:
         plugin = GitHubAttestationPlugin()
 
         result = plugin._verify_attestation(
-            attestation_target="ghcr.io/org/repo@sha256:abc",
+            sbom_path=Path("/tmp/sbom.json"),
+            bundle_path=Path("/tmp/bundle.jsonl"),
             certificate_identity_regexp="^https://github.com/org/.*",
-            github_org="org",
-            github_repo="repo",
         )
 
         assert result["verified"] is False
@@ -700,8 +489,13 @@ class TestAssessMethod:
         assert result.summary.warning_count == 1
         assert result.findings[0].id == "github-attestation:no-vcs"
 
-    def test_assess_no_attestation_target(self, tmp_path):
-        """Test assessment when SBOM has no attestation target."""
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_assess_no_attestation_found(self, mock_get, tmp_path):
+        """Test assessment when no attestation is found on GitHub."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
         sbom_data = {
@@ -709,9 +503,7 @@ class TestAssessMethod:
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/org/repo"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://github.com/org/repo"}],
                 }
             },
         }
@@ -719,19 +511,23 @@ class TestAssessMethod:
 
         result = plugin.assess("sbom123", sbom_path)
 
-        assert result.summary.warning_count == 1
-        assert result.findings[0].id == "github-attestation:no-target"
+        assert result.summary.fail_count == 1
+        assert result.findings[0].id == "github-attestation:no-attestation"
 
     @patch("shutil.which")
     @patch("subprocess.run")
-    def test_assess_verification_pass(self, mock_run, mock_which, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_assess_verification_pass(self, mock_get, mock_run, mock_which, tmp_path):
         """Test full assessment with passing verification."""
+        # Mock GitHub API response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"attestations": [{"bundle": {"test": "bundle"}}]}
+        mock_get.return_value = mock_response
+
+        # Mock cosign
         mock_which.return_value = "/usr/local/bin/cosign"
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="Verified",
-            stderr="",
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout="Verified", stderr="")
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -740,10 +536,7 @@ class TestAssessMethod:
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "purl": "pkg:oci/ghcr.io/sbomify/sbomify@sha256:abc123",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/sbomify/sbomify"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://github.com/sbomify/sbomify"}],
                 }
             },
         }
@@ -758,14 +551,18 @@ class TestAssessMethod:
 
     @patch("shutil.which")
     @patch("subprocess.run")
-    def test_assess_verification_fail(self, mock_run, mock_which, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
+    def test_assess_verification_fail(self, mock_get, mock_run, mock_which, tmp_path):
         """Test full assessment with failing verification."""
+        # Mock GitHub API response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"attestations": [{"bundle": {"test": "bundle"}}]}
+        mock_get.return_value = mock_response
+
+        # Mock cosign failure
         mock_which.return_value = "/usr/local/bin/cosign"
-        mock_run.return_value = MagicMock(
-            returncode=1,
-            stdout="",
-            stderr="attestation not found",
-        )
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="signature mismatch")
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -774,10 +571,7 @@ class TestAssessMethod:
             "metadata": {
                 "component": {
                     "name": "test-app",
-                    "purl": "pkg:oci/ghcr.io/sbomify/sbomify@sha256:abc123",
-                    "externalReferences": [
-                        {"type": "vcs", "url": "https://github.com/sbomify/sbomify"}
-                    ],
+                    "externalReferences": [{"type": "vcs", "url": "https://github.com/sbomify/sbomify"}],
                 }
             },
         }
@@ -805,9 +599,10 @@ class TestAssessMethod:
 class TestResultCreation:
     """Tests for result creation methods."""
 
-    def test_create_result_pass(self):
+    def test_create_result_pass(self, tmp_path):
         """Test creating pass result."""
         plugin = GitHubAttestationPlugin()
+        sbom_path = tmp_path / "sbom.json"
 
         result = plugin._create_result(
             sbom_id="sbom123",
@@ -818,16 +613,18 @@ class TestResultCreation:
             },
             github_org="org",
             github_repo="repo",
-            attestation_target="ghcr.io/org/repo@sha256:abc",
+            sbom_path=sbom_path,
         )
 
         assert result.summary.pass_count == 1
         assert result.findings[0].status == "pass"
         assert result.findings[0].metadata["github_org"] == "org"
+        assert result.findings[0].metadata["sbom_file"] == str(sbom_path)
 
-    def test_create_result_fail(self):
+    def test_create_result_fail(self, tmp_path):
         """Test creating fail result."""
         plugin = GitHubAttestationPlugin()
+        sbom_path = tmp_path / "sbom.json"
 
         result = plugin._create_result(
             sbom_id="sbom123",
@@ -838,7 +635,7 @@ class TestResultCreation:
             },
             github_org="org",
             github_repo="repo",
-            attestation_target="ghcr.io/org/repo@sha256:abc",
+            sbom_path=sbom_path,
         )
 
         assert result.summary.fail_count == 1
@@ -854,6 +651,21 @@ class TestResultCreation:
         assert result.summary.error_count == 1
         assert result.findings[0].id == "github-attestation:error"
         assert "Something went wrong" in result.findings[0].description
+
+    def test_create_result_no_attestation(self):
+        """Test creating no attestation result."""
+        plugin = GitHubAttestationPlugin()
+
+        result = plugin._create_result_no_attestation(
+            sbom_id="sbom123",
+            github_org="org",
+            github_repo="repo",
+            error="no attestations found",
+        )
+
+        assert result.summary.fail_count == 1
+        assert result.findings[0].id == "github-attestation:no-attestation"
+        assert "no attestations found" in result.findings[0].description
 
 
 @pytest.mark.django_db
