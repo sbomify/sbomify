@@ -53,7 +53,15 @@ def pending_invitations_context(request):
     email = request.user.email or ""
     # Sanitize email for cache key: lowercase, strip, and limit length
     # This prevents cache key injection and excessively long keys
-    sanitized_email = email.lower().strip()[:254]  # Max email length per RFC 5321
+    sanitized_email = email.lower().strip()
+    if len(sanitized_email) > 254:
+        logger.warning(
+            "User email exceeds 254 characters; truncating for pending invitations cache key. "
+            "length=%d, user_id=%s",
+            len(sanitized_email),
+            getattr(getattr(request, "user", None), "id", None),
+        )
+        sanitized_email = sanitized_email[:254]  # Max email length per RFC 5321
     cache_key = f"pending_invitations:{sanitized_email}"
     cached = cache.get(cache_key)
     if cached is not None:
