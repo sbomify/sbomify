@@ -12,8 +12,9 @@ from importlib.metadata import version as get_package_version
 
 import requests
 
-# Version fallback when package metadata is unavailable
-FALLBACK_VERSION = "unknown"
+# Module-level constants
+FALLBACK_VERSION = "unknown"  # Version fallback when package metadata is unavailable
+SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"  # Contact email for User-Agent header
 
 
 def compute_config_hash(config: dict | None) -> str:
@@ -67,7 +68,6 @@ def compute_content_digest(content: bytes) -> str:
 
 
 # HTTP Client Utilities
-SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"
 
 
 def get_sbomify_version() -> str:
@@ -129,5 +129,5 @@ def get_http_session() -> requests.Session:
         >>> response = session.get("https://api.example.com/data")
     """
     session = requests.Session()
-    session.headers["User-Agent"] = get_user_agent()
+    session.headers.update({"User-Agent": get_user_agent()})
     return session

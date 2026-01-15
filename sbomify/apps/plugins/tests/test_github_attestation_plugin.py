@@ -284,8 +284,8 @@ class TestGitHubURLParsing:
 class TestAttestationBundleDownload:
     """Tests for attestation bundle download from GitHub API."""
 
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_bundle_download_success(self, mock_get, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_bundle_download_success(self, mock_get_session, tmp_path):
         """Test successful attestation bundle download."""
         # Mock successful API response
         mock_response = MagicMock()
@@ -301,7 +301,9 @@ class TestAttestationBundleDownload:
                 }
             ]
         }
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -317,16 +319,18 @@ class TestAttestationBundleDownload:
         assert "bundle_path" in result
 
         # Verify API was called with correct URL pattern
-        mock_get.assert_called_once()
-        call_url = mock_get.call_args[0][0]
+        mock_session.get.assert_called_once()
+        call_url = mock_session.get.call_args[0][0]
         assert "api.github.com/repos/sbomify/sbomify/attestations/sha256:" in call_url
 
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_bundle_download_not_found(self, mock_get, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_bundle_download_not_found(self, mock_get_session, tmp_path):
         """Test when no attestation is found."""
         mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -341,13 +345,15 @@ class TestAttestationBundleDownload:
         assert result["success"] is False
         assert "No attestation found" in result["error"]
 
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_bundle_download_api_error(self, mock_get, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_bundle_download_api_error(self, mock_get_session, tmp_path):
         """Test GitHub API error handling."""
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -362,12 +368,14 @@ class TestAttestationBundleDownload:
         assert result["success"] is False
         assert "GitHub API error" in result["error"]
 
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_bundle_download_timeout(self, mock_get, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_bundle_download_timeout(self, mock_get_session, tmp_path):
         """Test attestation bundle download timeout."""
         import requests
 
-        mock_get.side_effect = requests.Timeout()
+        mock_session = MagicMock()
+        mock_session.get.side_effect = requests.Timeout()
+        mock_get_session.return_value = mock_session
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -489,12 +497,14 @@ class TestAssessMethod:
         assert result.summary.warning_count == 1
         assert result.findings[0].id == "github-attestation:no-vcs"
 
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_assess_no_attestation_found(self, mock_get, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_assess_no_attestation_found(self, mock_get_session, tmp_path):
         """Test assessment when no attestation is found on GitHub."""
         mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         plugin = GitHubAttestationPlugin()
         sbom_path = tmp_path / "sbom.json"
@@ -516,14 +526,16 @@ class TestAssessMethod:
 
     @patch("shutil.which")
     @patch("subprocess.run")
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_assess_verification_pass(self, mock_get, mock_run, mock_which, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_assess_verification_pass(self, mock_get_session, mock_run, mock_which, tmp_path):
         """Test full assessment with passing verification."""
         # Mock GitHub API response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"attestations": [{"bundle": {"test": "bundle"}}]}
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         # Mock cosign
         mock_which.return_value = "/usr/local/bin/cosign"
@@ -551,14 +563,16 @@ class TestAssessMethod:
 
     @patch("shutil.which")
     @patch("subprocess.run")
-    @patch("sbomify.apps.plugins.builtins.github_attestation.requests.get")
-    def test_assess_verification_fail(self, mock_get, mock_run, mock_which, tmp_path):
+    @patch("sbomify.apps.plugins.builtins.github_attestation.get_http_session")
+    def test_assess_verification_fail(self, mock_get_session, mock_run, mock_which, tmp_path):
         """Test full assessment with failing verification."""
         # Mock GitHub API response
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"attestations": [{"bundle": {"test": "bundle"}}]}
-        mock_get.return_value = mock_response
+        mock_session = MagicMock()
+        mock_session.get.return_value = mock_response
+        mock_get_session.return_value = mock_session
 
         # Mock cosign failure
         mock_which.return_value = "/usr/local/bin/cosign"

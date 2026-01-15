@@ -28,12 +28,14 @@ from sbomify.apps.plugins.sdk.results import (
     Finding,
     PluginMetadata,
 )
-from sbomify.apps.plugins.utils import get_user_agent
+from sbomify.apps.plugins.utils import get_http_session
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-# File reading chunk size for digest calculation
+# File reading chunk size for digest calculation.
+# 8192 bytes (8 KiB) is a common default that aligns with typical OS
+# page/block sizes and standard I/O buffering.
 FILE_READ_CHUNK_SIZE = 8192
 
 
@@ -462,12 +464,12 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         logger.info(f"Fetching attestation from {api_url}")
 
         try:
-            response = requests.get(
+            session = get_http_session()
+            response = session.get(
                 api_url,
                 headers={
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
-                    "User-Agent": get_user_agent(),
                 },
                 timeout=self.timeout,
             )
@@ -506,6 +508,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             bundle_path = None
             try:
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+                    os.chmod(tmp.name, 0o600)  # Restrict access to owner only
                     json.dump(bundle, tmp)
                     bundle_path = tmp.name
                 return {
