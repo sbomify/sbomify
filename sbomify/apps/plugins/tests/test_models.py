@@ -57,7 +57,7 @@ def sample_component_sbom(test_team: Team) -> Component:
     component = Component.objects.create(
         team=test_team,
         name="Test Component",
-        component_type="sbom",
+        component_type=Component.ComponentType.SBOM,
     )
     yield component
     component.delete()
@@ -344,7 +344,7 @@ class TestTeamPluginSettingsSignal:
         plugin.delete()
 
     def test_signal_triggers_when_plugins_enabled_first_time(
-        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
     ) -> None:
         """Test that assessments are triggered when plugins are enabled for the first time."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
@@ -359,12 +359,12 @@ class TestTeamPluginSettingsSignal:
             assert mock_enqueue.called
             # Check that it was called with the correct parameters
             call_args = mock_enqueue.call_args
-            assert call_args[1]["sbom_id"] == str(sample_sbom_with_sbom_component.id)
+            assert call_args[1]["sbom_id"] == str(sample_sbom_for_sbom_component.id)
             assert call_args[1]["plugin_name"] == "checksum"
             assert call_args[1]["run_reason"] == RunReason.CONFIG_CHANGE
 
     def test_signal_does_not_trigger_when_no_plugins_enabled(
-        self, test_team: Team, sample_sbom_with_sbom_component
+        self, test_team: Team, sample_sbom_for_sbom_component
     ) -> None:
         """Test that the signal doesn't trigger when no plugins are enabled."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessment") as mock_enqueue:
@@ -378,12 +378,12 @@ class TestTeamPluginSettingsSignal:
             assert not mock_enqueue.called
 
     def test_signal_only_enqueues_for_sboms_without_existing_runs(
-        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
     ) -> None:
         """Test that assessments are only enqueued for SBOMs without existing runs for those plugins."""
         # Create an existing assessment run for this SBOM and plugin
         AssessmentRun.objects.create(
-            sbom=sample_sbom_with_sbom_component,
+            sbom=sample_sbom_for_sbom_component,
             plugin_name="checksum",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
@@ -402,12 +402,12 @@ class TestTeamPluginSettingsSignal:
             assert not mock_enqueue.called
 
     def test_signal_enqueues_for_re_enabled_plugins(
-        self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
     ) -> None:
         """Test that re-enabling plugins triggers new assessments."""
         # Create an existing assessment run for a different plugin
         AssessmentRun.objects.create(
-            sbom=sample_sbom_with_sbom_component,
+            sbom=sample_sbom_for_sbom_component,
             plugin_name="ntia",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
