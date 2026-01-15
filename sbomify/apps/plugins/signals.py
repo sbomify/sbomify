@@ -59,11 +59,14 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
         # Get all SBOMs for this team that don't have assessment runs yet
         # We'll check each SBOM to see if it needs assessments
-        # Use a more efficient single query to get SBOM IDs directly
-        sbom_ids = list(
-            SBOM.objects.filter(component__team=team).values_list("id", flat=True)
+        # Use a single query to get SBOM objects directly and derive their IDs
+        sboms = list(
+            SBOM.objects.filter(
+                component__team=team,
+                component__component_type="sbom",
+            ).select_related("component")
         )
-        sboms = list(SBOM.objects.filter(id__in=sbom_ids)) if sbom_ids else []
+        sbom_ids = [sbom.id for sbom in sboms]
 
         def _enqueue_for_existing_sboms():
             enqueued_count = 0
