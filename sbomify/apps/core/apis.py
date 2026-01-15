@@ -3622,7 +3622,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         try:
             team = component.team
             # Components are expected to always have an associated team; this check is defensive
-            # in case of legacy or inconsistent data where component.team could be missing.
+            # in case of legacy or inconsistent data where component.team may be None or otherwise falsy.
             if team:
                 plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
                 if plugin_settings:
