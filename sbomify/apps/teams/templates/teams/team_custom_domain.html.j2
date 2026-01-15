@@ -129,7 +129,7 @@
                             </div>
                             <div class="dns-record-item">
                                 <span class="dns-record-label">Target:</span>
-                                <code class="dns-record-value">{{ dcv_hostname }}</code>
+                                <code class="dns-record-value"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</code>
                             </div>
                         </div>
                         <p class="dns-instructions-note mt-2 mb-0">
