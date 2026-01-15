@@ -3,7 +3,12 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.transactions import run_on_commit
+from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.sdk.enums import RunReason
+from sbomify.apps.plugins.tasks import enqueue_assessment
+from sbomify.apps.sboms.models import SBOM
 from sbomify.logging import getLogger
 
 from .models import TeamPluginSettings
@@ -20,21 +25,29 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
     This ensures that when users enable plugins, their existing SBOMs
     get assessed without requiring re-upload.
+
+    To avoid unnecessary work, this handler only runs when:
+    - The instance is created with plugins enabled, or
+    - An update explicitly touches the ``enabled_plugins`` field.
     """
-    # Check if there are actually enabled plugins
+    # Determine the current set of enabled plugins
     enabled_plugins = instance.enabled_plugins or []
+
+    # Early return if no plugins are enabled to avoid unnecessary work
     if not enabled_plugins:
-        # No plugins enabled, nothing to do
         return
+
+    # On update, only proceed if enabled_plugins may have changed
+    if not created:
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "enabled_plugins" not in update_fields:
+            # enabled_plugins was not part of this update, nothing to do
+            return
 
     # Trigger assessments for all SBOMs that don't have runs yet
     # The task will check if runs already exist to avoid duplicates
 
     try:
-        from sbomify.apps.plugins.sdk.enums import RunReason
-        from sbomify.apps.plugins.tasks import enqueue_assessment
-        from sbomify.apps.sboms.models import SBOM
-
         team = instance.team
         logger.info(
             f"Plugins enabled for team {team.key} ({team.id}). "
@@ -43,8 +56,6 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
 
         # Get all SBOMs for this team that don't have assessment runs yet
         # We'll check each SBOM to see if it needs assessments
-        from sbomify.apps.core.models import Component
-        from sbomify.apps.plugins.models import AssessmentRun
 
         components = Component.objects.filter(team=team, component_type="sbom")
         sboms = list(SBOM.objects.filter(component__in=components))
@@ -87,7 +98,7 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
                         sbom_id=sbom.id,
                         plugin_name=plugin_name,
                         run_reason=RunReason.CONFIG_CHANGE,
-                        config=plugin_config or None,
+                        config=plugin_config,
                     )
                     enqueued_count += 1
                     logger.debug(f"Enqueued assessment for plugin {plugin_name} on SBOM {sbom.id}")
@@ -106,13 +117,24 @@ def trigger_assessments_for_existing_sboms(sender, instance, created, **kwargs):
         # Defer until transaction commits to ensure settings are saved
         run_on_commit(_enqueue_for_existing_sboms)
 
-    except (AttributeError, ImportError) as e:
+    except AttributeError as e:
+        # Missing required attribute (e.g., instance.team doesn't exist)
+        team_id = getattr(instance, "team_id", None) or "unknown"
         logger.error(
-            f"Failed to trigger assessments for existing SBOMs when plugins enabled for team {instance.team.id}: {e}",
+            f"Missing required attribute when triggering assessments for team {team_id}: {e}",
+            exc_info=True,
+        )
+    except ImportError as e:
+        # Failed to import required module
+        team_id = getattr(instance, "team_id", None) or "unknown"
+        logger.error(
+            f"Failed to import required module when triggering assessments for team {team_id}: {e}",
             exc_info=True,
         )
     except Exception as e:
+        # Unexpected error
+        team_id = getattr(instance, "team_id", None) or "unknown"
         logger.error(
-            f"Unexpected error triggering assessments for existing SBOMs for team {instance.team.id}: {e}",
+            f"Unexpected error triggering assessments for existing SBOMs for team {team_id}: {e}",
             exc_info=True,
         )
