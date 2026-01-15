@@ -6,7 +6,9 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
-from .config import is_billing_enabled
+from sbomify.task_utils import record_task_breadcrumb
+
+from ..config import is_billing_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,11 @@ def send_enterprise_inquiry_email(
     Send enterprise inquiry emails asynchronously.
     """
     try:
+        record_task_breadcrumb(
+            "send_enterprise_inquiry_email",
+            "start",
+            data={"company_name": form_data.get("company_name"), "is_public": is_public},
+        )
         company_name = form_data.get("company_name")
 
         # Construct subject
@@ -145,15 +152,22 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
         confirmation_email.send(fail_silently=True)
 
         logger.info(f"Successfully processed enterprise inquiry from {email} for {company_name}")
+        record_task_breadcrumb(
+            "send_enterprise_inquiry_email",
+            "sent",
+            data={"company_name": company_name, "email": email},
+        )
 
     except (SMTPException, ConnectionError, TimeoutError, OSError) as e:
         # Transient network/SMTP errors - let Dramatiq retry
         logger.warning(f"Transient error sending enterprise inquiry email: {e}")
+        record_task_breadcrumb("send_enterprise_inquiry_email", "retryable_error", level="warning")
         raise
     except Exception as e:
         # Permanent errors (e.g., invalid email format, configuration issues)
         # Log and don't retry to avoid infinite loops
         logger.error(f"Permanent error processing enterprise inquiry email: {e}", exc_info=True)
+        record_task_breadcrumb("send_enterprise_inquiry_email", "error", level="error", data={"error": str(e)})
 
 
 @dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
@@ -172,6 +186,7 @@ def check_stale_trials_task():
     from sbomify.apps.billing.stripe_client import StripeClient, StripeError
     from sbomify.apps.teams.models import Team
 
+    record_task_breadcrumb("check_stale_trials_task", "start")
     if not is_billing_enabled():
         logger.info("Billing is not enabled, skipping stale trials check")
         return

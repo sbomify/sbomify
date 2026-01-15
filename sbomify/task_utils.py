@@ -19,7 +19,32 @@ from tenacity import (
     wait_exponential,
 )
 
+from sbomify.apps.core.services.logging import log_error, log_info
+
 logger = logging.getLogger(__name__)
+
+try:  # Optional Sentry integration
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional dependency
+    sentry_sdk = None
+
+
+def record_task_breadcrumb(
+    task_name: str, message: str, level: str = "info", data: Dict[str, Any] | None = None
+) -> None:
+    """Add a Sentry breadcrumb for task execution when Sentry is configured."""
+    if sentry_sdk is None:
+        return
+    try:
+        sentry_sdk.add_breadcrumb(
+            category="tasks",
+            message=f"{task_name}: {message}",
+            level=level,
+            data=data or {},
+        )
+    except Exception:
+        # Breadcrumbs should never break task execution
+        return
 
 
 def sbom_processing_task(
@@ -64,11 +89,15 @@ def sbom_processing_task(
             with transaction.atomic():
                 connection.ensure_connection()
                 try:
+                    task_name = func.__name__
+                    log_info(logger, "task_start", task=task_name, args_count=len(args))
+                    record_task_breadcrumb(task_name, "start", data={"args_count": len(args)})
                     return func(*args, **kwargs)
                 except Exception as e:
                     # Log the error with task context
                     task_name = func.__name__
-                    logger.error(f"[TASK_{task_name}] Task failed with error: {e}", exc_info=True)
+                    log_error(logger, "task_failed", task=task_name, error=str(e))
+                    record_task_breadcrumb(task_name, "error", level="error", data={"error": str(e)})
                     # Re-raise to allow Dramatiq retry logic to handle it
                     raise
 
@@ -89,5 +118,5 @@ def format_task_error(task_name: str, sbom_id: str, error_msg: str) -> Dict[str,
     Returns:
         Standardized error response dictionary
     """
-    logger.error(f"[TASK_{task_name}] {error_msg}")
+    log_error(logger, "task_error", task=task_name, sbom_id=sbom_id, error=error_msg)
     return {"error": error_msg, "status": "failed", "sbom_id": sbom_id, "task": task_name}

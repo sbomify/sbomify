@@ -1,5 +1,6 @@
 {% load widget_tweaks %}
 <div class="profile-form mt-4"
+     x-cloak
      x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}', '{{ authors_formset.prefix|escapejs }}')"
      @update-counts.window="updateCounts()">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -15,7 +16,8 @@
     </div>
     <form hx-post="{% if is_create %}{% url 'teams:contact_profiles_form' team.key %}{% else %}{% url 'teams:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
           hx-target="#contact-profiles-content"
-          hx-swap="innerHTML"
+          hx-swap="morph"
+          hx-disabled-elt="find button[type='submit']"
           @submit="submitForm">
         {% csrf_token %}
         {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}

@@ -1,18 +1,20 @@
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/component-meta-info-display.css' %}">
-<div class="standard-card settings-card shadow-md">
+<div class="standard-card settings-card shadow-md"
+     x-data="{ expanded: true }">
     <div class="card-header d-flex justify-content-start align-items-center cursor-pointer"
-         data-bs-toggle="collapse"
-         data-bs-target="#componentMetadataCollapse"
-         aria-expanded="true"
-         aria-controls="componentMetadataCollapse">
+         @click="expanded = !expanded"
+         :class="{ 'collapsed': !expanded }"
+         :aria-expanded="expanded"
+         aria-controls="componentMetadataContent">
         <h5 class="card-title mb-0">
             Component Metadata
-            <i class="fas fa-chevron-down ms-2 transition-transform"></i>
+            <i class="fas fa-chevron-down ms-2 transition-transform"
+               :style="expanded ? '' : 'transform: rotate(-90deg)'"></i>
         </h5>
     </div>
-    <div id="componentMetadataCollapse" class="collapse show">
+    <div id="componentMetadataContent" x-show="expanded" x-collapse>
         <div class="card-body">
             <div class="info-notice mb-4">
                 <i class="fas fa-info-circle"></i>

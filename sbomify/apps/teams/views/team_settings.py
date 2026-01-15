@@ -223,7 +223,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 )
                 return self._redirect_with_tab(request, team_key)
 
-            owners_count = Member.objects.filter(team=membership.team, role="owner").count()
+            from sbomify.apps.teams.queries import count_team_owners
+
+            owners_count = count_team_owners(membership.team.id)
             if owners_count <= 1:
                 messages.warning(
                     request,

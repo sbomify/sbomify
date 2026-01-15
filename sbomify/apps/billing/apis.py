@@ -7,8 +7,9 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.sboms.models import Component, Product, Project
 from sbomify.apps.teams.models import Team
 
 from .models import BillingPlan
@@ -46,13 +47,12 @@ def get_usage(request: HttpRequest):
     try:
         team = Team.objects.get(key=team_key)
 
-        # Count components directly associated with the team
-        components_count = Component.objects.filter(team=team).count()
+        counts = get_team_asset_counts(team.id)
 
         return 200, UsageSchema(
-            products=Product.objects.filter(team=team).count(),
-            projects=Project.objects.filter(product__team=team).count(),
-            components=components_count,
+            products=counts["products"],
+            projects=counts["projects"],
+            components=counts["components"],
             current_plan=team.billing_plan if team.billing_plan else None,
         )
     except Team.DoesNotExist:

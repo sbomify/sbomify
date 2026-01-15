@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -17,6 +18,9 @@ import dj_database_url
 import sentry_sdk
 from django.contrib import messages
 from dotenv import find_dotenv, load_dotenv
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.dramatiq import DramatiqIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -65,6 +69,18 @@ else:
 
 # Local development mode (separate from DEBUG for security)
 LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
+
+
+def _env_bool(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.lower() in ("true", "1", "yes")
+
+
+# Request timing logging is disabled by default to avoid performance impact
+# Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
+REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
+PENDING_INVITATIONS_CACHE_TTL = int(os.environ.get("PENDING_INVITATIONS_CACHE_TTL", "60"))
 
 # ALLOWED_HOSTS set to wildcard - actual host validation done in middleware
 # Django 4.0+ requires ALLOWED_HOSTS to be a plain list/tuple
@@ -131,6 +147,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
+
+if REQUEST_TIMING_LOGGING_ENABLED:
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.common.CommonMiddleware") + 1,
+        "sbomify.apps.core.middleware.RequestTimingLoggingMiddleware",
+    )
 
 
 if DEBUG:
@@ -399,6 +421,11 @@ LOGGING = {
             "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        "sbomify.performance": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
@@ -504,15 +531,62 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@sbomify.com")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-generated emails
 EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
+
+logger = logging.getLogger(__name__)
+
+
+def _sentry_traces_sampler(sampling_context: dict) -> float:
+    """Sample traces for Sentry with fallback to default on invalid values."""
+    try:
+        base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    except (ValueError, TypeError):
+        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
+        base_rate = 0.1
+
+    if base_rate <= 0:
+        return 0.0
+
+    try:
+        api_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_API", base_rate))
+    except (ValueError, TypeError):
+        api_rate = base_rate
+
+    try:
+        htmx_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_HTMX", base_rate))
+    except (ValueError, TypeError):
+        htmx_rate = base_rate
+
+    try:
+        job_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE_JOBS", base_rate))
+    except (ValueError, TypeError):
+        job_rate = base_rate
+
+    wsgi_environ = sampling_context.get("wsgi_environ")
+    if wsgi_environ:
+        path = wsgi_environ.get("PATH_INFO", "")
+        if wsgi_environ.get("HTTP_HX_REQUEST"):
+            return htmx_rate
+        if path.startswith("/api/"):
+            return api_rate
+        return base_rate
+
+    transaction_context = sampling_context.get("transaction_context") or {}
+    op = transaction_context.get("op", "")
+    if op.startswith("dramatiq") or op in ("queue.process", "task"):
+        return job_rate
+
+    return base_rate
+
+
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
-    # Set traces_sample_rate to 1.0 to capture 100%
-    # of transactions for performance monitoring.
-    traces_sample_rate=1.0,
-    # Set profiles_sample_rate to 1.0 to profile 100%
-    # of sampled transactions.
-    # We recommend adjusting this value in production.
-    profiles_sample_rate=1.0,
+    integrations=[
+        DjangoIntegration(),
+        DramatiqIntegration(),
+        LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+    ],
+    traces_sampler=_sentry_traces_sampler,
+    profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
 )
 
 

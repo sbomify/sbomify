@@ -5,6 +5,7 @@
       href="{% static 'css/components/trust-center-settings.css' %}">
 <div class="standard-card">
     <div class="card settings-card shadow-md"
+         x-cloak
          x-data="customDomain({ teamKey: '{{ team.key }}', initialDomain: '{{ team.custom_domain|default:''|escapejs }}', isValidated: {{ team.custom_domain_validated|yesno:'true,false' }}, lastCheckedAt: '{{ team.custom_domain_last_checked_at|date:'c'|default:'' }}', hasAccess: {{ has_custom_domain_access|yesno:'true,false' }} })">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
