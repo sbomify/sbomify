@@ -13,7 +13,7 @@ from importlib.metadata import version as get_package_version
 import requests
 
 # Module-level constants
-FALLBACK_VERSION = "unknown"  # Version fallback when package metadata is unavailable
+UNKNOWN_VERSION = "unknown"  # Default version when package metadata is unavailable
 SBOMIFY_CONTACT_EMAIL = "hello@sbomify.com"  # Contact email for User-Agent header
 
 
@@ -77,7 +77,7 @@ def get_sbomify_version() -> str:
     1. Package metadata (from pyproject.toml via importlib.metadata)
     2. SBOMIFY_VERSION environment variable (set at Docker build time)
     3. SBOMIFY_GIT_COMMIT_SHORT environment variable (git hash fallback)
-    4. FALLBACK_VERSION constant
+    4. UNKNOWN_VERSION constant
 
     Returns:
         Version string (e.g., "0.24" or "abc1234").
@@ -94,7 +94,7 @@ def get_sbomify_version() -> str:
         if git_commit:
             return git_commit
 
-        return FALLBACK_VERSION
+        return UNKNOWN_VERSION
 
 
 def get_user_agent() -> str:

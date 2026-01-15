@@ -507,28 +507,22 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             # Write bundle to temporary file with secure permissions.
             # mkstemp creates files with 0o600 permissions by default, avoiding
             # the race condition of setting permissions after file creation.
-            bundle_path = None
-            fd = None
+            path = None
             try:
                 fd, path = tempfile.mkstemp(suffix=".json")
                 with os.fdopen(fd, "w") as f:
-                    fd = None  # fd is now owned by the file object
                     json.dump(bundle, f)
-                bundle_path = Path(path)
                 return {
                     "success": True,
-                    "bundle_path": bundle_path,
+                    "bundle_path": Path(path),
                 }
             except Exception as e:
-                # Clean up file descriptor if not yet transferred to file object
-                if fd is not None:
+                # Clean up temp file if it was created
+                if path:
                     try:
-                        os.close(fd)
+                        os.unlink(path)
                     except OSError:
                         pass
-                # Clean up temp file if it was created
-                if bundle_path and bundle_path.exists():
-                    bundle_path.unlink()
                 return {
                     "success": False,
                     "error": f"Failed to write bundle file: {e}",
