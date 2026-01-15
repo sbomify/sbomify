@@ -3683,13 +3683,9 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
                 )
                 latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
 
-                # Determine final status based on whether plugins are enabled and runs exist
-                # IMPORTANT: This logic determines whether to show "Checking..." or "No plugins enabled".
-                # When plugins are enabled but assessments haven't run yet (which can happen if the signal
-                # handler hasn't completed or if there's a delay), we show "Checking..." rather than
-                # "No plugins enabled" to avoid confusion. This distinguishes between:
-                # - "no_assessments": Plugins are enabled, assessments are pending/running
-                # - "no_plugins_enabled": No plugins configured, so no assessments will ever run
+                # Determine final status: if plugins are enabled but no runs exist yet, show "Checking..."
+                # ("no_assessments") instead of "No plugins enabled" ("no_plugins_enabled") to distinguish
+                # pending/running assessments from having no plugins configured at all.
                 if not latest_runs:
                     # No assessment runs exist yet
                     if team_has_enabled_plugins:
