@@ -470,7 +470,7 @@ class TestTeamPluginSettingsSignal:
                 error_calls = [str(call) for call in mock_logger.error.call_args_list]
                 assert any("Unexpected error" in call for call in error_calls)
 
-    def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom_with_sbom_component, registered_plugin) -> None:
+    def test_signal_uses_run_on_commit(self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin) -> None:
         """Test that the signal correctly uses run_on_commit to defer execution."""
         # Patch run_on_commit where it's used in the signals module
         with patch("sbomify.apps.plugins.signals.run_on_commit") as mock_run_on_commit:
