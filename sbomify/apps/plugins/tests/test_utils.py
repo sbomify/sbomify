@@ -109,7 +109,9 @@ class TestGetSbomifyVersion:
     @patch("sbomify.apps.plugins.utils.get_package_version")
     def test_fallback_on_error(self, mock_get_version) -> None:
         """Test fallback version when package metadata unavailable."""
-        mock_get_version.side_effect = Exception("Package not found")
+        from importlib.metadata import PackageNotFoundError
+
+        mock_get_version.side_effect = PackageNotFoundError("sbomify")
 
         version = get_sbomify_version()
 

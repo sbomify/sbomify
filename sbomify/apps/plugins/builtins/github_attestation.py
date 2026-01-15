@@ -499,17 +499,18 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                     "error": "Attestation response missing bundle data",
                 }
 
-            # Write bundle to temporary file
-            fd, bundle_path = tempfile.mkstemp(suffix=".json")
+            # Write bundle to temporary file with secure permissions
+            bundle_path = None
             try:
-                with os.fdopen(fd, "w") as f:
-                    json.dump(bundle, f)
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+                    json.dump(bundle, tmp)
+                    bundle_path = tmp.name
                 return {
                     "success": True,
                     "bundle_path": Path(bundle_path),
                 }
             except Exception as e:
-                if os.path.exists(bundle_path):
+                if bundle_path and os.path.exists(bundle_path):
                     os.unlink(bundle_path)
                 return {
                     "success": False,

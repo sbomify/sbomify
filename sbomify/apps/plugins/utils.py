@@ -6,6 +6,7 @@ including configuration hashing for reproducibility tracking and HTTP utilities.
 
 import hashlib
 import json
+from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
 
 import requests
@@ -73,7 +74,7 @@ def get_sbomify_version() -> str:
     """
     try:
         return get_package_version("sbomify")
-    except Exception:
+    except PackageNotFoundError:
         # Fallback if package metadata is not available
         return "0.0.0"
 
