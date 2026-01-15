@@ -18,7 +18,7 @@ permissions:
 jobs:
   code-quality:
     name: Code Quality
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -110,7 +110,7 @@ jobs:
 
   tests:
     name: Run Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -226,7 +226,7 @@ jobs:
   e2e-tests:
     name: E2E Tests
     if: false  # Temporarily disabled - tests are failing
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -324,7 +324,7 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
@@ -356,7 +356,7 @@ jobs:
 
   docker-build:
     name: Docker Build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       github-image: ${{ steps.meta.outputs.github_image_id }}
       docker-hub-image: ${{ steps.meta.outputs.docker_hub_image_id }}
@@ -514,7 +514,7 @@ jobs:
 
   generate-sboms:
     name: Generate SBOMs
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
     needs: [docker-build]
     permissions:
