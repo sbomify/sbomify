@@ -146,15 +146,16 @@ export function initHtmxLifecycle(): void {
         const target = event.detail.target as HTMLElement;
         const xhr = event.detail.xhr as XMLHttpRequest;
 
-        // Log error for debugging
-        // Note: In production, consider integrating with an error tracking service (e.g., Sentry)
-        // For now, console.error is appropriate for client-side debugging and browser dev tools
-        console.error('[HTMX Error]', {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            url: event.detail.pathInfo?.requestPath,
-            target: target
-        });
+        // Log error only in development to avoid polluting production logs
+        // TODO: Integrate with error tracking service (e.g., Sentry) for production
+        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+            console.error('[HTMX Error]', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                url: event.detail.pathInfo?.requestPath,
+                target: target
+            });
+        }
 
         // Show error toast if available
         if (typeof window.showToast === 'function') {
@@ -176,9 +177,11 @@ export function initHtmxLifecycle(): void {
     document.body.addEventListener('htmx:sendError', ((event: CustomEvent) => {
         const target = event.detail.elt as HTMLElement;
 
-        // Log network error for debugging
-        // Note: In production, consider integrating with an error tracking service (e.g., Sentry)
-        console.error('[HTMX Send Error]', event.detail);
+        // Log network error only in development to avoid polluting production logs
+        // TODO: Integrate with error tracking service (e.g., Sentry) for production
+        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+            console.error('[HTMX Send Error]', event.detail);
+        }
 
         // Show network error toast
         if (typeof window.showToast === 'function') {

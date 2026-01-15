@@ -532,12 +532,14 @@ SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-
 EMAIL_SUBJECT_PREFIX = "[sbomify] "
 
 
+logger = logging.getLogger(__name__)
+
+
 def _sentry_traces_sampler(sampling_context: dict) -> float:
     """Sample traces for Sentry with fallback to default on invalid values."""
     try:
         base_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
     except (ValueError, TypeError):
-        logger = logging.getLogger(__name__)
         logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE, using default 0.1")
         base_rate = 0.1
 
