@@ -454,15 +454,15 @@ class TestTeamPluginSettingsSignal:
             )
             
             # Make SBOM.objects.filter raise an exception to trigger error handling
-            # The exception will occur at line 64 in signals.py when querying for SBOMs,
-            # which is in the outer try-except block, so it will be caught and logged.
+            # The exception will occur in the SBOM.objects.filter block (lines 64–68)
+            # in signals.py, which is in the outer try-except block, so it will be caught and logged.
             from sbomify.apps.sboms.models import SBOM
             with patch.object(SBOM.objects, "filter", side_effect=Exception("Database error")):
                 # Import the signal handler
                 from sbomify.apps.plugins.signals import trigger_assessments_for_existing_sboms
 
                 # Call the signal handler as if the instance was just created
-                # The exception will occur during the SBOM query (line 64), before the
+                # The exception will occur during the SBOM query (lines 64–68), before the
                 # _enqueue_for_existing_sboms callback is created, and will be caught
                 # by the outer exception handler.
                 trigger_assessments_for_existing_sboms(
