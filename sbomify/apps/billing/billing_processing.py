@@ -3,6 +3,7 @@ Module for handling Stripe billing webhook events and related processing
 """
 
 import datetime
+from enum import Enum
 from functools import wraps
 
 import stripe
@@ -27,12 +28,39 @@ logger = getLogger(__name__)
 stripe_client = StripeClient()
 
 
+class BillingResourceType(str, Enum):
+    """Resource types that are subject to billing limits."""
+
+    PRODUCT = "product"
+    PROJECT = "project"
+    COMPONENT = "component"
+
+
+# Set of valid billing resource type values for quick validation
+BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
+
+# Mapping from resource type to BillingPlan field name for limits
+RESOURCE_TYPE_TO_LIMIT_FIELD = {
+    BillingResourceType.PRODUCT.value: "max_products",
+    BillingResourceType.PROJECT.value: "max_projects",
+    BillingResourceType.COMPONENT.value: "max_components",
+}
+
+
+def get_resource_limit(plan: "BillingPlan", resource_type: str) -> int | None:
+    """Get the limit for a resource type from a billing plan."""
+    field_name = RESOURCE_TYPE_TO_LIMIT_FIELD.get(resource_type)
+    if field_name:
+        return getattr(plan, field_name, None)
+    return None
+
+
 def check_billing_limits(resource_type: str):
     """
     Decorator to check if a team has reached their billing plan limits.
 
     Args:
-        resource_type: Type of resource being created ('product', 'project', or 'component')
+        resource_type: Type of resource being created. Must be one of: 'product', 'project', or 'component'
     """
 
     def decorator(view_func):
@@ -83,11 +111,7 @@ def check_billing_limits(resource_type: str):
                         except BillingPlan.DoesNotExist:
                             logger.warning("Target plan not found for scheduled downgrade, skipping check")
                         else:
-                            max_allowed = {
-                                "product": target_plan.max_products,
-                                "project": target_plan.max_projects,
-                                "component": target_plan.max_components,
-                            }.get(resource_type)
+                            max_allowed = get_resource_limit(target_plan, resource_type)
 
                             current_count = (
                                 get_team_asset_count(team.id, resource_type) if max_allowed is not None else 0
@@ -149,14 +173,10 @@ def check_billing_limits(resource_type: str):
             except BillingPlan.DoesNotExist:
                 return HttpResponseForbidden("Invalid billing plan")
 
-            max_allowed = {
-                "product": plan.max_products,
-                "project": plan.max_projects,
-                "component": plan.max_components,
-            }.get(resource_type)
-
-            if max_allowed is None:
+            if resource_type not in BILLING_RESOURCE_TYPES:
                 return HttpResponseForbidden("Invalid resource type")
+
+            max_allowed = get_resource_limit(plan, resource_type)
 
             current_count = get_team_asset_count(team.id, resource_type)
 
