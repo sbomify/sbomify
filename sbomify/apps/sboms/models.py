@@ -429,6 +429,12 @@ class SBOM(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["component", "created_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["component", "version", "format"],
+                name="unique_sbom_per_component_version_format",
+            )
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     name = models.CharField(max_length=255, blank=False)  # qualified sbom name like com.github.sbomify/backend
