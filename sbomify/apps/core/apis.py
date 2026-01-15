@@ -3615,7 +3615,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
 
-        # Check if team has any enabled plugins (only need to check once per component)
+        # Check if team has any enabled plugins (only need to check once per API call for this component)
         # We check plugin settings for all components to determine the correct assessment status
         team_has_enabled_plugins = False
         try:
