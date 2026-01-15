@@ -417,7 +417,7 @@ class TestTeamPluginSettingsSignal:
             run_reason=RunReason.ON_UPLOAD.value,
         )
 
-        # Create a registered plugin for checksum
+        # Create a registered plugin for NTIA
         RegisteredPlugin.objects.create(
             name="ntia",
             display_name="NTIA Plugin",
