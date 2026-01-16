@@ -76,23 +76,42 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
 
 
 def _list_public_products(team: Team) -> list[dict]:
-    """List public products that have at least one public project."""
-    products = (
+    """List public products that have at least one public project.
+
+    Includes passing assessments based on the latest SBOM of each component.
+    Uses batch query to avoid N+1 database queries.
+    """
+    from sbomify.apps.plugins.public_assessment_utils import (
+        get_products_latest_sbom_assessments_batch,
+        passing_assessments_to_dict,
+    )
+
+    products = list(
         Product.objects.filter(team=team, is_public=True)
         .annotate(public_project_count=Count("projects", filter=Q(projects__is_public=True), distinct=True))
         .filter(public_project_count__gt=0)  # Only show products with public projects
         .order_by("name")
     )
-    return [
-        {
-            "id": product.id,
-            "name": product.name,
-            "slug": product.slug,
-            "description": product.description,
-            "project_count": product.public_project_count,
-        }
-        for product in products
-    ]
+
+    # Batch-fetch assessment status for all products at once
+    assessments_by_product = get_products_latest_sbom_assessments_batch(products)
+
+    result = []
+    for product in products:
+        passing_assessments = passing_assessments_to_dict(assessments_by_product.get(str(product.id), []))
+
+        result.append(
+            {
+                "id": product.id,
+                "name": product.name,
+                "slug": product.slug,
+                "description": product.description,
+                "project_count": product.public_project_count,
+                "passing_assessments": passing_assessments,
+            }
+        )
+
+    return result
 
 
 def _list_public_global_components(team: Team) -> list[dict]:

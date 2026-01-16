@@ -24,12 +24,13 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ### Compliance Plugins
 
-| Plugin                                   | Type       | Standard                                                                                                                                         |
-|------------------------------------------|------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| NTIA Minimum Elements (2021)             | Compliance | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
-| CISA Minimum Elements (2025 Draft)       | Compliance | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) *(Public Comment Draft)* |
-| EU Cyber Resilience Act (CRA) (2024)     | Compliance | [EU CRA Regulation 2024/2847](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847)                                                |
-| FDA Medical Device Cybersecurity (2025)  | Compliance | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
+| Plugin                                   | Type        | Standard                                                                                                                                         |
+|------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| NTIA Minimum Elements (2021)             | Compliance  | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
+| CISA Minimum Elements (2025 Draft)       | Compliance  | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) *(Public Comment Draft)* |
+| EU Cyber Resilience Act (CRA) (2024)     | Compliance  | [EU CRA Regulation 2024/2847](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202402847)                                                |
+| FDA Medical Device Cybersecurity (2025)  | Compliance  | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
+| GitHub Artifact Attestation              | Attestation | [GitHub Artifact Attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)                       |
 
 ### Document Management
 

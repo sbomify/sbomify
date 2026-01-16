@@ -19,9 +19,25 @@ def build_sboms_table_context(request: HttpRequest, component_id: str, is_public
     if status_code != 200:
         return ServiceResult.failure(sboms.get("detail", "Failed to load SBOMs"))
 
+    sbom_items = sboms.get("items", [])
+
+    # Enrich each SBOM with passing assessments for compact icon display
+    from sbomify.apps.plugins.public_assessment_utils import (
+        get_sbom_passing_assessments,
+        passing_assessments_to_dict,
+    )
+
+    for item in sbom_items:
+        sbom_id = item.get("sbom", {}).get("id")
+        if sbom_id:
+            passing = get_sbom_passing_assessments(sbom_id)
+            item["passing_assessments"] = passing_assessments_to_dict(passing)
+        else:
+            item["passing_assessments"] = []
+
     context = {
         "component_id": component_id,
-        "sboms": sboms.get("items"),
+        "sboms": sbom_items,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions", False),
     }

@@ -39,6 +39,13 @@
                                                     <i class="fas {% if component.component_type == 'sbom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %}"></i>
                                                 </span>
                                                 <span class="component-name">{{ component.name }}</span>
+                                                {% if component.passing_assessments %}
+                                                    <span class="compliance-icons">
+                                                        {% for assessment in component.passing_assessments %}
+                                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                                        {% endfor %}
+                                                    </span>
+                                                {% endif %}
                                                 <span class="component-type">{{ component.component_type_display }}</span>
                                                 <i class="fas fa-chevron-right component-arrow"></i>
                                             </a>
