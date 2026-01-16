@@ -35,8 +35,24 @@
                 <div class="header-actions d-flex gap-2">
                     {% if item_type == 'sboms' %}
                         <a href="{% url 'sboms:sbom_download' item.id %}"
-                           class="btn btn-primary">
-                            <i class="fas fa-download me-2"></i>Download
+                           class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                           title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} SBOM">
+                            {% if item.format == 'cyclonedx' %}
+                                <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                     alt="CycloneDX"
+                                     height="16"
+                                     width="80"
+                                     style="height: 16px;
+                                            width: auto">
+                            {% elif item.format == 'spdx' %}
+                                <img src="{% static 'img/spdx-logo.svg' %}"
+                                     alt="SPDX"
+                                     height="16"
+                                     width="48"
+                                     style="height: 16px;
+                                            width: auto">
+                            {% endif %}
+                            <i class="fas fa-download"></i>
                         </a>
                         <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
                            class="btn btn-outline-warning">

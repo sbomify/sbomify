@@ -2244,13 +2244,30 @@ def get_dashboard_summary(
 
 @router.get(
     "/projects/{project_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public projects
     tags=["Projects"],
 )
 @decorate_view(optional_token_auth)
-def download_project_sbom(request: HttpRequest, project_id: str):
-    """Download the consolidated SBOM for a project."""
+def download_project_sbom(
+    request: HttpRequest,
+    project_id: str,
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
+):
+    """
+    Download the consolidated SBOM for a project.
+
+    Args:
+        output_format: Output format - "cyclonedx" (default) or "spdx"
+        version: Format version - e.g., "1.6", "1.7" for CycloneDX, "2.3" for SPDX.
+                 If not specified, uses the default version for the format.
+
+    Supported formats and versions:
+        - cyclonedx: 1.6 (default), 1.7
+
+    Note: SPDX format for project SBOMs is not yet supported.
+    """
     try:
         project = Project.objects.get(pk=project_id)
     except Project.DoesNotExist:
@@ -2263,15 +2280,28 @@ def download_project_sbom(request: HttpRequest, project_id: str):
         if not verify_item_access(request, project, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Pass the user to the SBOM builder for signed URL generation
-            sbom_path = get_project_sbom_package(project, Path(temp_dir), user=request.user)
+            sbom_path = get_project_sbom_package(
+                project, Path(temp_dir), user=request.user, output_format=format_lower, version=version
+            )
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
+            # Determine file extension based on format
+            extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
+            filename = f"{project.name}{extension}"
+
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
+    except ValueError as e:
+        # Format/version validation errors
+        return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
     except Exception as e:
         log.error(f"Error generating project SBOM {project_id}: {e}")
         return 500, {"detail": "Error generating project SBOM"}
@@ -2279,13 +2309,29 @@ def download_project_sbom(request: HttpRequest, project_id: str):
 
 @router.get(
     "/products/{product_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public products
     tags=["Products"],
 )
 @decorate_view(optional_token_auth)
-def download_product_sbom(request: HttpRequest, product_id: str):
-    """Download the consolidated SBOM for a product."""
+def download_product_sbom(
+    request: HttpRequest,
+    product_id: str,
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
+):
+    """
+    Download the consolidated SBOM for a product.
+
+    Args:
+        output_format: Output format - "cyclonedx" (default) or "spdx"
+        version: Format version - e.g., "1.6", "1.7" for CycloneDX, "2.3" for SPDX.
+                 If not specified, uses the default version for the format.
+
+    Supported formats and versions:
+        - cyclonedx: 1.6 (default), 1.7
+        - spdx: 2.3 (default)
+    """
     try:
         product = Product.objects.get(pk=product_id)
     except Product.DoesNotExist:
@@ -2298,15 +2344,28 @@ def download_product_sbom(request: HttpRequest, product_id: str):
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Pass the user to the SBOM builder for signed URL generation
-            sbom_path = get_product_sbom_package(product, Path(temp_dir), user=request.user)
+            sbom_path = get_product_sbom_package(
+                product, Path(temp_dir), user=request.user, output_format=format_lower, version=version
+            )
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
+            # Determine file extension based on format
+            extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
+            filename = f"{product.name}{extension}"
+
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
+    except ValueError as e:
+        # Format/version validation errors
+        return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
     except Exception as e:
         log.error(f"Error generating product SBOM {product_id}: {e}")
         return 500, {"detail": "Error generating product SBOM"}
@@ -2734,13 +2793,29 @@ def delete_release(request: HttpRequest, release_id: str):
 
 @router.get(
     "/releases/{release_id}/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def download_release(request: HttpRequest, release_id: str):
-    """Download release SBOM."""
+def download_release(
+    request: HttpRequest,
+    release_id: str,
+    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),
+    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),
+):
+    """
+    Download release SBOM.
+
+    Args:
+        output_format: Output format - "cyclonedx" (default) or "spdx"
+        version: Format version - e.g., "1.6", "1.7" for CycloneDX, "2.3" for SPDX.
+                 If not specified, uses the default version for the format.
+
+    Supported formats and versions:
+        - cyclonedx: 1.6 (default), 1.7
+        - spdx: 2.3 (default)
+    """
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
@@ -2762,21 +2837,33 @@ def download_release(request: HttpRequest, release_id: str):
             status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
         )
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         # Use the SBOM package generator with user for signed URLs
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            sbom_file_path = get_release_sbom_package(release, temp_path, user=request.user)
+            sbom_file_path = get_release_sbom_package(
+                release, temp_path, user=request.user, output_format=format_lower, version=version
+            )
 
             # Read the generated SBOM file
             with open(sbom_file_path, "r") as f:
                 sbom_content = f.read()
 
+            # Determine file extension based on format
+            extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
+            filename = f"{release.product.name}-{release.name}{extension}"
+
             response = HttpResponse(sbom_content, content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={release.product.name}-{release.name}.cdx.json"
+            response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
 
+    except ValueError as e:
+        # Format/version validation errors
+        return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
     except Exception as e:
         log.error(f"Error generating release SBOM: {str(e)}")
         return HttpResponse(

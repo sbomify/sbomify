@@ -59,10 +59,30 @@
                     <p class="text-muted mb-3">
                         Download the combined SBOM from the latest release containing all artifacts for this product
                     </p>
-                    <a class="btn btn-primary"
-                       href="{% url 'core:sbom_download_product' product.id %}">
-                        <i class="fas fa-download me-2"></i>Download Latest Release
-                    </a>
+                    <div class="d-flex justify-content-center gap-3 flex-wrap">
+                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                           href="{% url 'core:sbom_download_product' product.id %}"
+                           title="Download as CycloneDX">
+                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                 alt="CycloneDX"
+                                 height="18"
+                                 width="90"
+                                 style="height: 18px;
+                                        width: auto">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                           href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
+                           title="Download as SPDX">
+                            <img src="{% static 'img/spdx-logo.svg' %}"
+                                 alt="SPDX"
+                                 height="18"
+                                 width="54"
+                                 style="height: 18px;
+                                        width: auto">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
