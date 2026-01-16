@@ -1,27 +1,27 @@
-{# 
+{% comment %}
   HTMX Loading Indicator Partial
-  
+
   Usage - Inline spinner for buttons:
   {% include "core/components/_loading_indicator.html.j2" with indicator_id="btn-spinner" size="sm" %}
-  
+
   Usage - Section loading indicator:
-  {% include "core/components/_loading_indicator.html.j2" with 
-      indicator_id="section-loader" 
-      size="md" 
-      text="Loading..." 
-      block=true 
+  {% include "core/components/_loading_indicator.html.j2" with
+      indicator_id="section-loader"
+      size="md"
+      text="Loading..."
+      block=true
   %}
-  
+
   In the trigger element, use:
   hx-indicator="#btn-spinner"
-  
+
   Parameters:
   - indicator_id: Unique ID for the indicator (required for hx-indicator targeting)
   - size: "sm", "md", or "lg" (default: sm)
   - text: Optional loading text
   - block: Set to true for block-level centered display
   - sr_only_text: Screen reader text (default: "Loading")
-#}
+{% endcomment %}
 <span id="{{ indicator_id }}"
       class="htmx-indicator {% if block %}htmx-indicator-block{% endif %}">
     <span class="spinner-border spinner-border-{{ size|default:'sm' }}"

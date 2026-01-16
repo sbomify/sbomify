@@ -1,12 +1,12 @@
-{# 
+{% comment %}
   Form Field Wrapper Partial
-  
+
   Usage with Django form field:
-  {% include "core/components/_form_field.html.j2" with 
-      field=form.email 
+  {% include "core/components/_form_field.html.j2" with
+      field=form.email
       help_text="Enter your work email address"
   %}
-  
+
   Parameters:
   - field: Django form field object (required)
   - help_text: Optional help text (overrides field.help_text)
@@ -16,7 +16,7 @@
   - horizontal: Set to true for horizontal form layout
   - label_cols: Column width for label in horizontal layout (default: 3)
   - input_cols: Column width for input in horizontal layout (default: 9)
-#}
+{% endcomment %}
 {% load widget_tweaks %}
 {% if horizontal %}
     <div class="row mb-3">

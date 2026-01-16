@@ -1,21 +1,21 @@
-{# 
+{% comment %}
   Page Header Partial
-  
+
   Usage:
-  {% include "core/components/_page_header.html.j2" with 
-      icon="fa-users" 
-      title="Workspaces" 
-      subtitle="Manage your collaborative workspaces" 
+  {% include "core/components/_page_header.html.j2" with
+      icon="fa-users"
+      title="Workspaces"
+      subtitle="Manage your collaborative workspaces"
       icon_color="text-primary"
   %}
-  
+
   Parameters:
   - icon: FontAwesome icon class (e.g., "fa-users")
   - title: Main page title
   - subtitle: Optional subtitle/description
   - icon_color: Optional Bootstrap text color class (default: text-primary)
   - no_margin: Set to true to remove bottom margin
-#}
+{% endcomment %}
 <div class="page-header{% if not no_margin %} mb-4{% endif %}">
     <div class="header-main">
         <div class="title-section">

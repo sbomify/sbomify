@@ -1,16 +1,16 @@
-{# 
+{% comment %}
   Empty State Partial
-  
+
   Usage:
-  {% include "core/components/_empty_state.html.j2" with 
-      icon="fa-key" 
-      title="No personal access tokens" 
+  {% include "core/components/_empty_state.html.j2" with
+      icon="fa-key"
+      title="No personal access tokens"
       description="Generate a personal access token to access the sbomify API."
       action_url="/settings/"
       action_text="Generate Token"
       action_icon="fa-plus"
   %}
-  
+
   Parameters:
   - icon: FontAwesome icon class (required)
   - title: Empty state title (required)
@@ -19,7 +19,7 @@
   - action_text: Button text (optional, defaults to "Get Started")
   - action_icon: Button icon class (optional)
   - compact: Set to true for smaller padding
-#}
+{% endcomment %}
 <div class="empty-state text-center py-{% if compact %}3{% else %}5{% endif %} text-muted"
      role="status"
      aria-label="{{ title }}">
