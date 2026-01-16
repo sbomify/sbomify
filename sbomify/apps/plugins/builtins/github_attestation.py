@@ -572,7 +572,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             raise GitHubAttestationError("cosign binary not found. Please ensure cosign is installed.")
 
         # Build cosign verify-blob-attestation command
-        # --new-bundle-format is required for Sigstore bundle v0.2+ (GitHub uses v0.3)
+        # --new-bundle-format is required for Sigstore bundle v0.3 (used by GitHub)
         cmd = [
             cosign_path,
             "verify-blob-attestation",
