@@ -66,11 +66,30 @@ has_crud_permissions: Boolean indicating if user has CRUD permissions
                         </div>
                     </div>
                     <div class="card-body text-center">
-                        <p class="text-muted mb-3">Download all SBOMs associated with this project as a ZIP archive</p>
-                        <a class="btn btn-primary download-btn"
-                           href="{% url 'api-1:download_project_sbom' project.id %}">
-                            <i class="fas fa-download me-2"></i>Download Project SBOMs as Zip file
-                        </a>
+                        <p class="text-muted mb-3">Download aggregated SBOM containing all components in this project</p>
+                        <div class="d-flex justify-content-center gap-3 flex-wrap">
+                            <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                               href="{% url 'api-1:download_project_sbom' project.id %}"
+                               title="Download as CycloneDX">
+                                <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                     alt="CycloneDX"
+                                     height="18"
+                                     width="90"
+                                     style="height: 18px;
+                                            width: auto">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            <span class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2 disabled"
+                                  style="opacity: 0.5">
+                                <img src="{% static 'img/spdx-logo.svg' %}"
+                                     alt="SPDX"
+                                     height="18"
+                                     width="54"
+                                     style="height: 18px;
+                                            width: auto">
+                                <small>coming soon</small>
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

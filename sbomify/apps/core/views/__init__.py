@@ -532,6 +532,10 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
 def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse:
     """
     Download the aggregated SBOM file for all components in a project.
+
+    Query parameters:
+        format: Output format - "cyclonedx" (default) or "spdx"
+        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
     """
     try:
         project = Project.objects.get(pk=project_id)
@@ -542,18 +546,35 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
         if not verify_item_access(request, project, ["guest", "owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_path = get_project_sbom_package(project, Path(temp_dir), user=request.user)
+    # Get format parameters from query string
+    output_format = request.GET.get("format", "cyclonedx")
+    version = request.GET.get("version")
 
-        response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
-        response["Content-Disposition"] = f"attachment; filename={project.name}.cdx.json"
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sbom_path = get_project_sbom_package(
+                project, Path(temp_dir), user=request.user, output_format=output_format, version=version
+            )
 
-        return response
+            # Determine file extension based on format
+            extension = ".spdx.json" if output_format.lower() == "spdx" else ".cdx.json"
+            filename = f"{project.name}{extension}"
+
+            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={filename}"
+
+            return response
+    except ValueError as e:
+        return error_response(request, HttpResponseBadRequest(str(e)))
 
 
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
     """
     Download the aggregated SBOM file for all projects in a product.
+
+    Query parameters:
+        format: Output format - "cyclonedx" (default) or "spdx"
+        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
     """
     try:
         product = Product.objects.get(pk=product_id)
@@ -564,13 +585,26 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        sbom_path = get_product_sbom_package(product, Path(temp_dir), user=request.user)
+    # Get format parameters from query string
+    output_format = request.GET.get("format", "cyclonedx")
+    version = request.GET.get("version")
 
-        response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
-        response["Content-Disposition"] = f"attachment; filename={product.name}.cdx.json"
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sbom_path = get_product_sbom_package(
+                product, Path(temp_dir), user=request.user, output_format=output_format, version=version
+            )
 
-        return response
+            # Determine file extension based on format
+            extension = ".spdx.json" if output_format.lower() == "spdx" else ".cdx.json"
+            filename = f"{product.name}{extension}"
+
+            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            response["Content-Disposition"] = f"attachment; filename={filename}"
+
+            return response
+    except ValueError as e:
+        return error_response(request, HttpResponseBadRequest(str(e)))
 
 
 @login_required

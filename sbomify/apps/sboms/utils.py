@@ -341,6 +341,63 @@ def validate_api_endpoint(sbom_id: str) -> bool:
         return True  # Default to allowing the reference
 
 
+def select_sbom_by_format(
+    sboms: list["SBOM"],
+    preferred_format: str = "cyclonedx",
+    fallback: bool = True,
+) -> Optional["SBOM"]:
+    """
+    Select the best SBOM from a list based on the preferred format.
+
+    When generating aggregated SBOMs, we should prefer to link to component SBOMs
+    in the same format. If the preferred format isn't available, fall back to
+    any available format.
+
+    Args:
+        sboms: List of SBOM instances to choose from
+        preferred_format: Preferred format ("spdx" or "cyclonedx")
+        fallback: If True, return any format if preferred not found. If False, return None.
+
+    Returns:
+        The best matching SBOM, or None if no suitable SBOM found
+
+    Example:
+        >>> sboms = component.sbom_set.all()
+        >>> # For SPDX output, prefer SPDX sources
+        >>> sbom = select_sbom_by_format(sboms, preferred_format="spdx")
+        >>> # For CycloneDX output, prefer CDX sources
+        >>> sbom = select_sbom_by_format(sboms, preferred_format="cyclonedx")
+    """
+    if not sboms:
+        return None
+
+    # Normalize preferred format
+    preferred_format = preferred_format.lower()
+
+    # Separate SBOMs by format
+    preferred_sboms = []
+    other_sboms = []
+
+    for sbom in sboms:
+        sbom_format = getattr(sbom, "format", "").lower()
+        if sbom_format == preferred_format:
+            preferred_sboms.append(sbom)
+        else:
+            other_sboms.append(sbom)
+
+    # Return preferred format if available
+    if preferred_sboms:
+        # Prefer the most recent one
+        return sorted(preferred_sboms, key=lambda s: s.created_at or "", reverse=True)[0]
+
+    # Fall back to other format if allowed
+    if fallback and other_sboms:
+        log.debug(f"No {preferred_format} SBOM found, falling back to other format")
+        return sorted(other_sboms, key=lambda s: s.created_at or "", reverse=True)[0]
+
+    return None
+
+
 def create_component_type_mapping() -> Dict[str, Any]:
     """Create mapping for component type strings to CycloneDX enums."""
     cdx16 = _get_cyclonedx_model()
@@ -1451,7 +1508,13 @@ def get_download_url_for_document(document, user=None, base_url: str = "") -> st
         return f"{base_url}/api/v1/documents/{document.id}/download"
 
 
-def get_project_sbom_package(project: Project, target_folder: Path, user=None) -> Path:
+def get_project_sbom_package(
+    project: Project,
+    target_folder: Path,
+    user=None,
+    output_format: str = "cyclonedx",
+    version: str | None = None,
+) -> Path:
     """
     Generates the aggregated project SBOM file.
 
@@ -1464,27 +1527,57 @@ def get_project_sbom_package(project: Project, target_folder: Path, user=None) -
         project: The project to generate the SBOM for
         target_folder: The folder to save the SBOM to
         user: The user requesting the SBOM (for signed URL generation)
+        output_format: Output format - "cyclonedx" or "spdx" (default: "cyclonedx")
+        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
+                 If None, uses default version for the format
 
     Returns:
         Path to the generated SBOM file
+
+    Note:
+        Currently, project SBOM generation only supports CycloneDX format.
+        SPDX support for projects will be added in a future update.
     """
+    from sbomify.apps.sboms.builders import get_supported_output_formats
+
+    # Validate format
+    supported = get_supported_output_formats()
+    format_lower = output_format.lower()
+    if format_lower not in supported:
+        raise ValueError(f"Unsupported format: {output_format}. Supported: {list(supported.keys())}")
+
+    # Project SBOM currently only supports CycloneDX
+    if format_lower == "spdx":
+        raise ValueError("SPDX format for project SBOMs is not yet supported. Please use 'cyclonedx'.")
+
+    # Validate version if provided (for CycloneDX)
+    if version and version not in supported[format_lower]:
+        raise ValueError(f"Unsupported version {version} for {output_format}. Supported: {supported[format_lower]}")
+
+    # Use existing ProjectSBOMBuilder for CycloneDX
     builder = ProjectSBOMBuilder(project, user=user)
     sbom = builder(target_folder)
 
-    # Save project SBOM with clean serialization (exclude null values)
-    sbom_path = target_folder / f"{project.name}.cdx.json"
+    # Determine extension
+    extension = ".cdx.json"
+    sbom_path = target_folder / f"{project.name}{extension}"
     sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
     return sbom_path
 
 
-def get_product_sbom_package(product: Product, target_folder: Path, user=None) -> Path:
+def get_product_sbom_package(
+    product: Product,
+    target_folder: Path,
+    user=None,
+    output_format: str = "cyclonedx",
+    version: str | None = None,
+) -> Path:
     """
     Generates the aggregated product SBOM file using the latest release.
 
-    This function now delegates to the latest release instead of arbitrarily
-    selecting SBOMs. It ensures we get a consistent, curated set of artifacts
-    that represent the current state of the product.
+    This function delegates to the latest release, ensuring we get a consistent,
+    curated set of artifacts that represent the current state of the product.
 
     SECURITY: Authorization is handled at the API/view layer. This function
     generates SBOMs for both public and private products when called by
@@ -1495,6 +1588,9 @@ def get_product_sbom_package(product: Product, target_folder: Path, user=None) -
         product: The product to generate the SBOM for
         target_folder: The folder to save the SBOM to
         user: The user requesting the SBOM (for signed URL generation)
+        output_format: Output format - "cyclonedx" or "spdx" (default: "cyclonedx")
+        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
+                 If None, uses default version for the format
 
     Returns:
         Path to the generated SBOM file
@@ -1505,18 +1601,33 @@ def get_product_sbom_package(product: Product, target_folder: Path, user=None) -
     # Get or create the latest release for this product
     latest_release = Release.get_or_create_latest_release(product)
 
-    # Use ReleaseSBOMBuilder to create the SBOM from the latest release
-    builder = ReleaseSBOMBuilder(latest_release, user=user)
-    sbom = builder(target_folder)
+    # Delegate to release SBOM builder with format/version support
+    sbom_path = get_release_sbom_package(
+        release=latest_release,
+        target_folder=target_folder,
+        user=user,
+        output_format=output_format,
+        version=version,
+    )
 
-    # Save product SBOM with clean serialization (exclude null values)
-    sbom_path = target_folder / f"{product.name}.cdx.json"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
+    # Rename file to use product name instead of release name
+    format_lower = output_format.lower()
+    extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
+    product_sbom_path = target_folder / f"{product.name}{extension}"
 
-    return sbom_path
+    # Move the release SBOM to product SBOM path
+    sbom_path.rename(product_sbom_path)
+
+    return product_sbom_path
 
 
-def get_release_sbom_package(release, target_folder: Path, user=None) -> Path:
+def get_release_sbom_package(
+    release,
+    target_folder: Path,
+    user=None,
+    output_format: str = "cyclonedx",
+    version: str | None = None,
+) -> Path:
     """
     Generates the aggregated release SBOM file.
 
@@ -1529,15 +1640,43 @@ def get_release_sbom_package(release, target_folder: Path, user=None) -> Path:
         release: The release to generate the SBOM for
         target_folder: The folder to save the SBOM to
         user: The user requesting the SBOM (for signed URL generation)
+        output_format: Output format - "cyclonedx" or "spdx" (default: "cyclonedx")
+        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
+                 If None, uses default version for the format
 
     Returns:
         Path to the generated SBOM file
     """
-    builder = ReleaseSBOMBuilder(release, user=user)
+    from sbomify.apps.sboms.builders import get_sbom_builder, get_supported_output_formats
+
+    # Validate format
+    supported = get_supported_output_formats()
+    format_lower = output_format.lower()
+    if format_lower not in supported:
+        raise ValueError(f"Unsupported format: {output_format}. Supported: {list(supported.keys())}")
+
+    # Validate version if provided
+    if version and version not in supported[format_lower]:
+        raise ValueError(f"Unsupported version {version} for {output_format}. Supported: {supported[format_lower]}")
+
+    # Get the appropriate builder
+    builder = get_sbom_builder(
+        entity_type="release",
+        output_format=format_lower,
+        version=version,
+        entity=release,
+        user=user,
+    )
     sbom = builder(target_folder)
 
-    # Save release SBOM with clean serialization (exclude null values)
-    sbom_path = target_folder / f"{release.product.name}-{release.name}.cdx.json"
+    # Determine file extension based on format
+    # Both CDX and SPDX builders return Pydantic models for consistent serialization
+    if format_lower == "spdx":
+        extension = ".spdx.json"
+    else:
+        extension = ".cdx.json"
+
+    sbom_path = target_folder / f"{release.product.name}-{release.name}{extension}"
     sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
 
     return sbom_path

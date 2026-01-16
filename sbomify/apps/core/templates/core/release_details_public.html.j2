@@ -71,13 +71,30 @@
                     <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
                         Download consolidated SBOM containing all artifacts in this release
                     </p>
-                    <a href="{% url 'api-1:download_release' release.id %}"
-                       class="public-action-btn"
-                       style="padding: 0.75rem 1.5rem;
-                              font-size: 1rem">
-                        <i class="fas fa-download"></i>
-                        Download Release SBOM
-                    </a>
+                    <div class="d-flex justify-content-center gap-3 flex-wrap">
+                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                           href="{% url 'api-1:download_release' release.id %}"
+                           title="Download as CycloneDX">
+                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                 alt="CycloneDX"
+                                 height="18"
+                                 width="90"
+                                 style="height: 18px;
+                                        width: auto">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <a class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2"
+                           href="{% url 'api-1:download_release' release.id %}?format=spdx"
+                           title="Download as SPDX">
+                            <img src="{% static 'img/spdx-logo.svg' %}"
+                                 alt="SPDX"
+                                 height="18"
+                                 width="54"
+                                 style="height: 18px;
+                                        width: auto">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
