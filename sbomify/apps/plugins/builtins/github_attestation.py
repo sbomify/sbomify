@@ -380,6 +380,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         Handles various GitHub URL formats:
         - https://github.com/org/repo
         - https://github.com/org/repo.git
+        - https://github.com/org/repo@commit_hash
         - git@github.com:org/repo.git
 
         Args:
@@ -393,7 +394,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             path = url.replace("git@github.com:", "").rstrip(".git")
             parts = path.split("/")
             if len(parts) >= 2:
-                return {"org": parts[0], "repo": parts[1]}
+                repo = parts[1].split("@")[0]  # Strip commit reference
+                return {"org": parts[0], "repo": repo}
             return None
 
         # Handle HTTPS URLs
@@ -406,7 +408,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             path = parsed.path.strip("/").rstrip(".git")
             parts = path.split("/")
             if len(parts) >= 2:
-                return {"org": parts[0], "repo": parts[1]}
+                repo = parts[1].split("@")[0]  # Strip commit reference
+                return {"org": parts[0], "repo": repo}
         except Exception as e:
             logger.warning(f"Failed to parse GitHub URL '{url}': {e}")
 
@@ -569,11 +572,13 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             raise GitHubAttestationError("cosign binary not found. Please ensure cosign is installed.")
 
         # Build cosign verify-blob-attestation command
+        # --new-bundle-format is required for Sigstore bundle v0.3 (used by GitHub)
         cmd = [
             cosign_path,
             "verify-blob-attestation",
             "--bundle",
             str(bundle_path),
+            "--new-bundle-format",
             "--certificate-identity-regexp",
             certificate_identity_regexp,
             "--certificate-oidc-issuer",
