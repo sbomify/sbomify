@@ -8,7 +8,10 @@ from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.public_assessment_utils import (
     PassingAssessment,
     get_component_assessment_status,
+    get_component_latest_sbom_assessment_status,
+    get_latest_sbom_for_component,
     get_product_assessment_status,
+    get_product_latest_sbom_assessment_status,
     get_project_assessment_status,
     get_sbom_passing_assessments,
     passing_assessments_to_dict,
@@ -181,9 +184,7 @@ class TestGetSbomPassingAssessments:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={
-                "summary": {"fail_count": 5, "error_count": 0}
-            },
+            result={"summary": {"fail_count": 5, "error_count": 0}},
         )
 
         # Create a newer passing run
@@ -195,9 +196,7 @@ class TestGetSbomPassingAssessments:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.MANUAL.value,
             status=RunStatus.COMPLETED.value,
-            result={
-                "summary": {"fail_count": 0, "error_count": 0}
-            },
+            result={"summary": {"fail_count": 0, "error_count": 0}},
         )
 
         result = get_sbom_passing_assessments(str(sbom.id))
@@ -235,9 +234,7 @@ class TestGetComponentAssessmentStatus:
         assert result.all_pass is True
         assert len(result.passing_assessments) == 1
 
-    def test_component_with_multiple_sboms_requires_all_to_pass(
-        self, public_component, sbom, ntia_plugin
-    ):
+    def test_component_with_multiple_sboms_requires_all_to_pass(self, public_component, sbom, ntia_plugin):
         """All SBOMs in component must pass for component to pass."""
         # Create a second SBOM
         sbom2 = SBOM.objects.create(
@@ -281,9 +278,7 @@ class TestGetComponentAssessmentStatus:
 class TestGetProjectAssessmentStatus:
     """Tests for get_project_assessment_status function."""
 
-    def test_project_with_all_passing_components(
-        self, team, public_component, sbom, ntia_plugin
-    ):
+    def test_project_with_all_passing_components(self, team, public_component, sbom, ntia_plugin):
         """Project shows passing when all components pass."""
         project = Project.objects.create(
             name="Test Project",
@@ -312,9 +307,7 @@ class TestGetProjectAssessmentStatus:
 class TestGetProductAssessmentStatus:
     """Tests for get_product_assessment_status function."""
 
-    def test_product_with_all_passing_projects(
-        self, team, public_component, sbom, ntia_plugin
-    ):
+    def test_product_with_all_passing_projects(self, team, public_component, sbom, ntia_plugin):
         """Product shows passing when all projects pass."""
         product = Product.objects.create(
             name="Test Product",
@@ -371,3 +364,433 @@ class TestPassingAssessmentsToDictHelper:
         """Returns empty list for empty input."""
         result = passing_assessments_to_dict([])
         assert result == []
+
+
+class TestGetLatestSbomForComponent:
+    """Tests for get_latest_sbom_for_component function."""
+
+    def test_returns_none_for_component_without_sboms(self, public_component):
+        """Returns None when component has no SBOMs."""
+        SBOM.objects.filter(component=public_component).delete()
+        result = get_latest_sbom_for_component(public_component)
+        assert result is None
+
+    def test_returns_latest_sbom(self, public_component, sbom):
+        """Returns the most recent SBOM by created_at."""
+        # Create an older SBOM
+        older_sbom = SBOM.objects.create(
+            name="Older SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.5",
+        )
+        # Force older timestamp
+        SBOM.objects.filter(pk=older_sbom.pk).update(
+            created_at=sbom.created_at - __import__("datetime").timedelta(days=1)
+        )
+
+        # Create a newer SBOM
+        newer_sbom = SBOM.objects.create(
+            name="Newer SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+
+        result = get_latest_sbom_for_component(public_component)
+        assert result.id == newer_sbom.id
+
+
+class TestGetComponentLatestSbomAssessmentStatus:
+    """Tests for get_component_latest_sbom_assessment_status function."""
+
+    def test_component_without_sboms_has_no_assessments(self, public_component):
+        """Component with no SBOMs has no assessments."""
+        SBOM.objects.filter(component=public_component).delete()
+        result = get_component_latest_sbom_assessment_status(public_component)
+        assert result.has_assessments is False
+        assert result.all_pass is False
+        assert result.passing_assessments == []
+
+    def test_uses_only_latest_sbom(self, public_component, ntia_plugin):
+        """Only the latest SBOM's assessments are considered."""
+        # Create older SBOM that passes
+        older_sbom = SBOM.objects.create(
+            name="Older SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.5",
+        )
+        AssessmentRun.objects.create(
+            sbom=older_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        # Create newer SBOM that fails
+        newer_sbom = SBOM.objects.create(
+            name="Newer SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        AssessmentRun.objects.create(
+            sbom=newer_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 2, "error_count": 0}},
+        )
+
+        result = get_component_latest_sbom_assessment_status(public_component)
+        # Only latest (failing) SBOM should be considered
+        # has_assessments is True because assessments were run
+        # all_pass is False because the assessment failed
+        # passing_assessments is empty because no assessments passed
+        assert result.has_assessments is True
+        assert result.all_pass is False
+        assert len(result.passing_assessments) == 0
+
+    def test_latest_sbom_passing_returns_assessments(self, public_component, ntia_plugin):
+        """When latest SBOM passes, assessments are returned."""
+        # Create older SBOM that fails
+        older_sbom = SBOM.objects.create(
+            name="Older SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.5",
+        )
+        AssessmentRun.objects.create(
+            sbom=older_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 5, "error_count": 0}},
+        )
+
+        # Create newer SBOM that passes
+        newer_sbom = SBOM.objects.create(
+            name="Newer SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        AssessmentRun.objects.create(
+            sbom=newer_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        result = get_component_latest_sbom_assessment_status(public_component)
+        # Only latest (passing) SBOM should be considered
+        assert result.has_assessments is True
+        assert result.all_pass is True
+        assert len(result.passing_assessments) == 1
+
+
+class TestGetProductLatestSbomAssessmentStatus:
+    """Tests for get_product_latest_sbom_assessment_status function."""
+
+    def test_product_without_public_components_has_no_assessments(self, team):
+        """Product without public components has no assessments."""
+        product = Product.objects.create(
+            name="Empty Product",
+            team=team,
+            is_public=True,
+        )
+        result = get_product_latest_sbom_assessment_status(product)
+        assert result.has_assessments is False
+        assert result.all_pass is False
+        assert result.passing_assessments == []
+
+    def test_uses_only_latest_sbom_per_component(self, team, public_component, ntia_plugin):
+        """Only the latest SBOM of each component is considered."""
+        product = Product.objects.create(
+            name="Test Product",
+            team=team,
+            is_public=True,
+        )
+        project = Project.objects.create(
+            name="Test Project",
+            team=team,
+            is_public=True,
+        )
+        ProductProject.objects.create(product=product, project=project)
+        ProjectComponent.objects.create(project=project, component=public_component)
+
+        # Create older SBOM that fails
+        older_sbom = SBOM.objects.create(
+            name="Older SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.5",
+        )
+        AssessmentRun.objects.create(
+            sbom=older_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 3, "error_count": 0}},
+        )
+
+        # Create newer SBOM that passes
+        newer_sbom = SBOM.objects.create(
+            name="Newer SBOM",
+            component=public_component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        AssessmentRun.objects.create(
+            sbom=newer_sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        result = get_product_latest_sbom_assessment_status(product)
+        # Only latest (passing) SBOM should be considered
+        assert result.has_assessments is True
+        assert result.all_pass is True
+        assert len(result.passing_assessments) == 1
+
+    def test_all_components_latest_sbom_must_pass(self, team, ntia_plugin):
+        """All components' latest SBOMs must pass for product to pass."""
+        product = Product.objects.create(
+            name="Test Product",
+            team=team,
+            is_public=True,
+        )
+        project = Project.objects.create(
+            name="Test Project",
+            team=team,
+            is_public=True,
+        )
+        ProductProject.objects.create(product=product, project=project)
+
+        # Create first component with passing latest SBOM
+        component1 = Component.objects.create(
+            name="Component 1",
+            team=team,
+            is_public=True,
+            component_type="sbom",
+        )
+        ProjectComponent.objects.create(project=project, component=component1)
+        sbom1 = SBOM.objects.create(
+            name="SBOM 1",
+            component=component1,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom1,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        # Create second component with failing latest SBOM
+        component2 = Component.objects.create(
+            name="Component 2",
+            team=team,
+            is_public=True,
+            component_type="sbom",
+        )
+        ProjectComponent.objects.create(project=project, component=component2)
+        sbom2 = SBOM.objects.create(
+            name="SBOM 2",
+            component=component2,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom2,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 2, "error_count": 0}},
+        )
+
+        result = get_product_latest_sbom_assessment_status(product)
+        # One component passes, one fails - no common passing assessments
+        assert result.has_assessments is True
+        assert result.all_pass is False
+        assert len(result.passing_assessments) == 0
+
+    def test_multiple_plugins_all_must_pass(self, team, ntia_plugin, cisa_plugin):
+        """All plugins must pass on all components' latest SBOMs."""
+        product = Product.objects.create(
+            name="Test Product",
+            team=team,
+            is_public=True,
+        )
+        project = Project.objects.create(
+            name="Test Project",
+            team=team,
+            is_public=True,
+        )
+        ProductProject.objects.create(product=product, project=project)
+
+        component = Component.objects.create(
+            name="Component",
+            team=team,
+            is_public=True,
+            component_type="sbom",
+        )
+        ProjectComponent.objects.create(project=project, component=component)
+
+        sbom = SBOM.objects.create(
+            name="SBOM",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+        )
+
+        # Both plugins pass
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="cisa-minimum-elements-2025",
+            plugin_version="1.0.0",
+            plugin_config_hash="def456",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        result = get_product_latest_sbom_assessment_status(product)
+        assert result.has_assessments is True
+        assert result.all_pass is True
+        assert len(result.passing_assessments) == 2
+
+
+@pytest.mark.django_db
+class TestGetProductsLatestSbomAssessmentsBatch:
+    """Tests for get_products_latest_sbom_assessments_batch function."""
+
+    def test_empty_product_list_returns_empty_dict(self):
+        """Empty list of products returns empty dict."""
+        from sbomify.apps.plugins.public_assessment_utils import get_products_latest_sbom_assessments_batch
+
+        result = get_products_latest_sbom_assessments_batch([])
+        assert result == {}
+
+    def test_batch_matches_individual_results(self, team, ntia_plugin):
+        """Batch function returns same results as individual calls."""
+        from sbomify.apps.plugins.public_assessment_utils import (
+            get_product_latest_sbom_assessment_status,
+            get_products_latest_sbom_assessments_batch,
+        )
+
+        # Create two products with components and SBOMs
+        product1 = Product.objects.create(name="Product 1", team=team, is_public=True)
+        product2 = Product.objects.create(name="Product 2", team=team, is_public=True)
+
+        project1 = Project.objects.create(name="Project 1", team=team, is_public=True)
+        project2 = Project.objects.create(name="Project 2", team=team, is_public=True)
+
+        ProductProject.objects.create(product=product1, project=project1)
+        ProductProject.objects.create(product=product2, project=project2)
+
+        comp1 = Component.objects.create(name="Comp 1", team=team, is_public=True, component_type="sbom")
+        comp2 = Component.objects.create(name="Comp 2", team=team, is_public=True, component_type="sbom")
+
+        ProjectComponent.objects.create(project=project1, component=comp1)
+        ProjectComponent.objects.create(project=project2, component=comp2)
+
+        sbom1 = SBOM.objects.create(name="SBOM 1", component=comp1, format="cyclonedx", format_version="1.6")
+        sbom2 = SBOM.objects.create(name="SBOM 2", component=comp2, format="cyclonedx", format_version="1.6")
+
+        # Product 1 passes
+        AssessmentRun.objects.create(
+            sbom=sbom1,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        # Product 2 fails
+        AssessmentRun.objects.create(
+            sbom=sbom2,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 3, "error_count": 0}},
+        )
+
+        # Get individual results
+        individual_1 = get_product_latest_sbom_assessment_status(product1)
+        individual_2 = get_product_latest_sbom_assessment_status(product2)
+
+        # Get batch results
+        batch_result = get_products_latest_sbom_assessments_batch([product1, product2])
+
+        # Verify batch matches individual
+        assert str(product1.id) in batch_result
+        assert str(product2.id) in batch_result
+
+        batch_1_plugins = {a.plugin_name for a in batch_result[str(product1.id)]}
+        individual_1_plugins = {a.plugin_name for a in individual_1.passing_assessments}
+        assert batch_1_plugins == individual_1_plugins
+
+        batch_2_plugins = {a.plugin_name for a in batch_result[str(product2.id)]}
+        individual_2_plugins = {a.plugin_name for a in individual_2.passing_assessments}
+        assert batch_2_plugins == individual_2_plugins
+
+    def test_product_without_components_returns_empty_list(self, team):
+        """Product with no public components returns empty list of assessments."""
+        from sbomify.apps.plugins.public_assessment_utils import get_products_latest_sbom_assessments_batch
+
+        product = Product.objects.create(name="Empty Product", team=team, is_public=True)
+        # Create project but don't add any components
+        project = Project.objects.create(name="Empty Project", team=team, is_public=True)
+        ProductProject.objects.create(product=product, project=project)
+
+        result = get_products_latest_sbom_assessments_batch([product])
+        assert result[str(product.id)] == []

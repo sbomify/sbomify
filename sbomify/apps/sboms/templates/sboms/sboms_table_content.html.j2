@@ -14,7 +14,11 @@
                     <th scope="col">Name</th>
                     <th scope="col">Format</th>
                     <th scope="col">Version</th>
-                    {% if not is_public_view %}<th scope="col">Assessments</th>{% endif %}
+                    {% if is_public_view %}
+                        <th scope="col">Compliance</th>
+                    {% else %}
+                        <th scope="col">Assessments</th>
+                    {% endif %}
                     <th scope="col">Created</th>
                     <th scope="col">Releases</th>
                 </tr>
@@ -36,7 +40,19 @@
                             title="{{ sbom.sbom.version }}">
                             <span>{{ sbom.sbom.version|truncatechars:20 }}</span>
                         </td>
-                        {% if not is_public_view %}
+                        {% if is_public_view %}
+                            <td>
+                                {% if sbom.passing_assessments %}
+                                    <div class="compliance-icons">
+                                        {% for assessment in sbom.passing_assessments %}
+                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="compliance-empty">—</span>
+                                {% endif %}
+                            </td>
+                        {% else %}
                             <td data-label="Assessments">
                                 {% include 'plugins/components/assessment_badge.html.j2' with sbom_id=sbom.sbom.id component_id=component_id assessments_data=sbom.assessments team_billing_plan=team_billing_plan|default:'' team_key=team_key|default:'' %}
                             </td>

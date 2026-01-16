@@ -135,6 +135,59 @@
     color: #9d174d;
 }
 
+/* ===== COMPACT COMPLIANCE ICONS ===== */
+/* Small circular icons for table rows and compact displays */
+.compliance-icons {
+    display: flex;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.compliance-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: help;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.compliance-icon:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Category-specific colors matching existing badge styles */
+.compliance-icon--compliance {
+    background: rgba(var(--brand-success-rgb), 0.15);
+    color: #059669;
+}
+
+.compliance-icon--attestation {
+    background: rgba(59, 130, 246, 0.15);
+    color: #2563eb;
+}
+
+.compliance-icon--security {
+    background: rgba(139, 92, 246, 0.15);
+    color: #7c3aed;
+}
+
+.compliance-icon--license {
+    background: rgba(236, 72, 153, 0.15);
+    color: #db2777;
+}
+
+/* Empty state for compliance column */
+.compliance-empty {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+}
+
 /* ===== SECTION CARDS ===== */
 .public-section {
     margin-bottom: 1.5rem;

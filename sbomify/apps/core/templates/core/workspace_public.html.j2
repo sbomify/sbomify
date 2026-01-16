@@ -332,9 +332,18 @@
                             </div>
                             {% if product.description %}<p class="card-description">{{ product.description }}</p>{% endif %}
                             <div class="card-footer-section">
-                                <span class="badge badge-type">
-                                    <i class="fas fa-tag me-1"></i>Product
-                                </span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge badge-type">
+                                        <i class="fas fa-tag me-1"></i>Product
+                                    </span>
+                                    {% if product.passing_assessments %}
+                                        <div class="compliance-icons">
+                                            {% for assessment in product.passing_assessments %}
+                                                {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
                                 <a class="btn-view"
                                    href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
                                     View Details <i class="fas fa-arrow-right ms-1"></i>

@@ -17,7 +17,7 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.plugins.public_assessment_utils import (
-    get_product_assessment_status,
+    get_product_latest_sbom_assessment_status,
     passing_assessments_to_dict,
 )
 from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
@@ -184,7 +184,8 @@ class ProductDetailsPublicView(View):
             )
 
         # Get aggregated assessment status for this product (only passing assessments)
-        assessment_status = get_product_assessment_status(product_obj)
+        # Uses latest SBOM per component only (not all SBOMs)
+        assessment_status = get_product_latest_sbom_assessment_status(product_obj)
         passing_assessments = passing_assessments_to_dict(assessment_status.passing_assessments)
 
         context = {
