@@ -89,6 +89,12 @@ class Document(models.Model):
         null=True,
         help_text="SHA-256 hash of document content for verification",
     )
+    sha256_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="SHA-256 hash of the document file content",
+    )
     compliance_subcategory = models.CharField(
         max_length=50,
         choices=ComplianceSubcategory.choices,

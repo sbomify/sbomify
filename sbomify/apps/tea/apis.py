@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.http import HttpRequest
 from django.utils import timezone
 from ninja import Query, Router
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.sboms.utils import get_download_url_for_document
 from sbomify.apps.tea.mappers import (
     TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
@@ -27,6 +29,7 @@ from sbomify.apps.tea.mappers import (
 from sbomify.apps.tea.schemas import (
     TEAArtifact,
     TEAArtifactFormat,
+    TEAChecksum,
     TEACollection,
     TEACollectionUpdateReason,
     TEAComponent,
@@ -41,7 +44,7 @@ from sbomify.apps.tea.schemas import (
     TEARelease,
     TEAServerInfo,
 )
-from sbomify.apps.tea.utils import get_artifact_mime_type, get_workspace_from_request
+from sbomify.apps.tea.utils import get_artifact_mime_type, get_tea_artifact_type, get_workspace_from_request
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -145,6 +148,11 @@ def _build_artifact_response(artifact: ReleaseArtifact, team: "Team") -> TEAArti
         sbom = artifact.sbom
         download_url = _get_sbom_download_url(sbom.id, team.id)
 
+        # Build checksums list if SHA256 hash is available
+        checksums = []
+        if sbom.sha256_hash:
+            checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
+
         return TEAArtifact(
             uuid=sbom.id,
             name=sbom.name,
@@ -154,23 +162,29 @@ def _build_artifact_response(artifact: ReleaseArtifact, team: "Team") -> TEAArti
                     mimeType=get_artifact_mime_type(sbom.format),
                     description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
                     url=download_url,
-                    checksums=[],
+                    checksums=checksums,
                 )
             ],
         )
     elif artifact.document:
         doc = artifact.document
-        # Documents would need their own download URL logic
+        download_url = get_download_url_for_document(doc, base_url=settings.APP_BASE_URL)
+
+        # Build checksums list if SHA256 hash is available
+        checksums = []
+        if doc.sha256_hash:
+            checksums.append(TEAChecksum(algType="SHA-256", algValue=doc.sha256_hash))
+
         return TEAArtifact(
             uuid=doc.id,
             name=doc.name,
-            type="OTHER",  # Would need to map document types properly
+            type=get_tea_artifact_type(doc.document_type),
             formats=[
                 TEAArtifactFormat(
-                    mimeType="application/octet-stream",
+                    mimeType=doc.content_type or "application/octet-stream",
                     description=f"Document: {doc.document_type or 'unknown'}",
-                    url="",  # Would need document download URL
-                    checksums=[],
+                    url=download_url,
+                    checksums=checksums,
                 )
             ],
         )
@@ -210,6 +224,11 @@ def _build_sbom_collection_response(
     """Build TEA Collection response from a single SBOM."""
     download_url = _get_sbom_download_url(sbom.id, team.id)
 
+    # Build checksums list if SHA256 hash is available
+    checksums = []
+    if sbom.sha256_hash:
+        checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
+
     artifact = TEAArtifact(
         uuid=sbom.id,
         name=sbom.name,
@@ -219,7 +238,7 @@ def _build_sbom_collection_response(
                 mimeType=get_artifact_mime_type(sbom.format),
                 description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
                 url=download_url,
-                checksums=[],
+                checksums=checksums,
             )
         ],
     )
@@ -790,6 +809,11 @@ def get_artifact(
 
         download_url = _get_sbom_download_url(sbom.id, team.id)
 
+        # Build checksums list if SHA256 hash is available
+        checksums = []
+        if sbom.sha256_hash:
+            checksums.append(TEAChecksum(algType="SHA-256", algValue=sbom.sha256_hash))
+
         return 200, TEAArtifact(
             uuid=sbom.id,
             name=sbom.name,
@@ -799,7 +823,7 @@ def get_artifact(
                     mimeType=get_artifact_mime_type(sbom.format),
                     description=f"{sbom.format.upper()} SBOM ({sbom.format_version})",
                     url=download_url,
-                    checksums=[],
+                    checksums=checksums,
                 )
             ],
         )
@@ -816,16 +840,23 @@ def get_artifact(
             component__is_public=True,
         )
 
+        download_url = get_download_url_for_document(document, base_url=settings.APP_BASE_URL)
+
+        # Build checksums list if SHA256 hash is available
+        checksums = []
+        if document.sha256_hash:
+            checksums.append(TEAChecksum(algType="SHA-256", algValue=document.sha256_hash))
+
         return 200, TEAArtifact(
             uuid=document.id,
             name=document.name,
-            type="OTHER",
+            type=get_tea_artifact_type(document.document_type),
             formats=[
                 TEAArtifactFormat(
-                    mimeType="application/octet-stream",
+                    mimeType=document.content_type or "application/octet-stream",
                     description=f"Document: {document.document_type or 'unknown'}",
-                    url="",  # Would need document download URL
-                    checksums=[],
+                    url=download_url,
+                    checksums=checksums,
                 )
             ],
         )

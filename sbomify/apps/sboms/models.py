@@ -773,6 +773,12 @@ class SBOM(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     # Where the sbom came from (file-upload, api, github-action, etc)
     source = models.CharField(max_length=255, null=True)
+    sha256_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="SHA-256 hash of the SBOM file content",
+    )
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
 
     def __str__(self) -> str:

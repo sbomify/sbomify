@@ -4,6 +4,14 @@ TEA (Transparency Exchange API) mapper functions.
 This module provides helper functions for:
 - Parsing and resolving TEI (Transparency Exchange Identifier) URNs
 - Converting sbomify identifiers to TEA format
+- Building TEA server URLs for workspaces
+
+Key exports:
+- TEA_API_VERSION: Current TEA API version string (e.g., "0.3.0-beta.2")
+- build_tea_server_url: Constructs the TEA server root URL for a workspace
+- tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
+- tea_component_identifier_mapper: Converts sbomify ComponentIdentifier to TEA format
+- tea_tei_mapper: Resolves TEI URNs to sbomify entities
 """
 
 from __future__ import annotations

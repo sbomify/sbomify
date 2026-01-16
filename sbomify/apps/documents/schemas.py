@@ -26,6 +26,7 @@ class DocumentResponseSchema(BaseModel):
     content_type: str
     file_size: Optional[int]
     source_display: str
+    sha256_hash: Optional[str] = None
 
 
 class DocumentCreateSchema(BaseModel):
