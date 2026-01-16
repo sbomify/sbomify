@@ -280,6 +280,42 @@ class TestGitHubURLParsing:
 
         assert result is None
 
+    def test_parse_https_url_with_commit_hash(self):
+        """Test parsing HTTPS URL with @commit_hash suffix."""
+        plugin = GitHubAttestationPlugin()
+
+        result = plugin._parse_github_url(
+            "https://github.com/sbomify/github-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6"
+        )
+
+        assert result == {"org": "sbomify", "repo": "github-action"}
+
+    def test_parse_https_url_with_short_commit_hash(self):
+        """Test parsing HTTPS URL with short commit reference."""
+        plugin = GitHubAttestationPlugin()
+
+        result = plugin._parse_github_url("https://github.com/org/repo@abc123")
+
+        assert result == {"org": "org", "repo": "repo"}
+
+    def test_parse_ssh_url_with_commit_hash(self):
+        """Test parsing SSH URL with @commit_hash suffix."""
+        plugin = GitHubAttestationPlugin()
+
+        result = plugin._parse_github_url(
+            "git@github.com:sbomify/github-action@1d36b7b0c4d6fad5c3672aabb4f957b632c6a6a6.git"
+        )
+
+        assert result == {"org": "sbomify", "repo": "github-action"}
+
+    def test_parse_url_with_tag_reference(self):
+        """Test parsing URL with tag reference (e.g., @v1.0.0)."""
+        plugin = GitHubAttestationPlugin()
+
+        result = plugin._parse_github_url("https://github.com/org/repo@v1.0.0")
+
+        assert result == {"org": "org", "repo": "repo"}
+
 
 class TestFileDigestCalculation:
     """Tests for _calculate_file_digest method."""
@@ -519,6 +555,7 @@ class TestCosignVerification:
         call_args = mock_run.call_args[0][0]
         assert "verify-blob-attestation" in call_args
         assert "--bundle" in call_args
+        assert "--new-bundle-format" in call_args  # Required for Sigstore bundle v0.2+
         assert "/tmp/bundle.jsonl" in call_args
         assert "/tmp/sbom.json" in call_args
 
