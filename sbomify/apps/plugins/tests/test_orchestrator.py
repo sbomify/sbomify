@@ -13,7 +13,7 @@ from sbomify.apps.plugins.orchestrator import (
     PluginOrchestrator,
     PluginOrchestratorError,
 )
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -36,7 +36,12 @@ class MockPlugin(AssessmentPlugin):
             category=AssessmentCategory.COMPLIANCE,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        context: SBOMContext | None = None,
+    ) -> AssessmentResult:
         return AssessmentResult(
             plugin_name="mock-plugin",
             plugin_version="1.0.0",
@@ -64,7 +69,12 @@ class FailingPlugin(AssessmentPlugin):
             category=AssessmentCategory.SECURITY,
         )
 
-    def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
+    def assess(
+        self,
+        sbom_id: str,
+        sbom_path: Path,
+        context: SBOMContext | None = None,
+    ) -> AssessmentResult:
         raise ValueError("Plugin intentionally failed")
 
 
@@ -262,7 +272,8 @@ class TestPluginOrchestrator:
 
         assert run.status == RunStatus.COMPLETED.value
         assert run.plugin_name == "checksum"
-        assert "checksum:sha256" in str(run.result)
+        # Without a stored hash, the plugin produces a warning finding
+        assert "checksum:no-stored-hash" in str(run.result)
 
     def test_assessment_run_records_created(self, test_sbom, mock_sbom_data, mocker) -> None:
         """Test that AssessmentRun records are created in the database."""

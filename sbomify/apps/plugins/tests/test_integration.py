@@ -142,7 +142,7 @@ class TestChecksumPluginEndToEnd:
         # Verify the run completed successfully
         assert run.status == RunStatus.COMPLETED.value
         assert run.plugin_name == "checksum"
-        assert run.plugin_version == "1.0.0"
+        assert run.plugin_version == "1.1.0"
         assert run.category == "compliance"
         assert run.run_reason == RunReason.ON_UPLOAD.value
 
@@ -151,18 +151,20 @@ class TestChecksumPluginEndToEnd:
         assert run.result["schema_version"] == "1.0"
         assert run.result["plugin_name"] == "checksum"
         assert run.result["summary"]["total_findings"] == 1
-        assert run.result["summary"]["pass_count"] == 1
+        # Without a stored hash, the plugin produces a warning (not a pass)
+        assert run.result["summary"]["warning_count"] == 1
 
         # Verify the finding contains the checksum
         findings = run.result["findings"]
         assert len(findings) == 1
-        assert findings[0]["id"] == "checksum:sha256"
+        # Without a stored hash, the plugin produces a warning finding
+        assert findings[0]["id"] == "checksum:no-stored-hash"
         assert "SHA256:" in findings[0]["description"]
 
         # Verify checksum is correct
         expected_checksum = hashlib.sha256(sample_sbom_bytes).hexdigest()
         assert expected_checksum in findings[0]["description"]
-        assert findings[0]["metadata"]["digest"] == expected_checksum
+        assert findings[0]["metadata"]["computed_hash"] == expected_checksum
 
         # Verify input content digest matches
         assert run.input_content_digest == expected_checksum
