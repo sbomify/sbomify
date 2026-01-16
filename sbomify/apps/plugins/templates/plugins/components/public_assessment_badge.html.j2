@@ -1,12 +1,12 @@
 {# Public assessment badge - shows only PASSING assessments with category-aware icons #}
 {# Never displays failures on public pages #}
-{#
+{% comment %}
    Usage: {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-   
+
    Expected assessment dict:
    - display_name: str
    - category: str (attestation, compliance, security, license)
-#}
+{% endcomment %}
 {% if assessment %}
     {% if assessment.category == 'attestation' %}
         <span class="public-badge badge-attestation"
