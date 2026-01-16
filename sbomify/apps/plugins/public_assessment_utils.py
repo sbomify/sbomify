@@ -590,6 +590,90 @@ def get_products_latest_sbom_assessments_batch(
     return result
 
 
+def get_components_latest_sbom_assessments_batch(
+    components: list["Component"],
+) -> dict[str, list[PassingAssessment]]:
+    """Get latest SBOM assessments for multiple components in a single batch.
+
+    This is an optimized version of get_component_latest_sbom_assessment_status
+    for use when processing multiple components (e.g., product project listing).
+
+    Returns a dict mapping component_id -> list of PassingAssessment.
+    """
+    from sbomify.apps.sboms.models import SBOM
+
+    if not components:
+        return {}
+
+    component_ids = [str(c.id) for c in components]
+
+    # Step 1: Get latest SBOM for each component (single query)
+    latest_sboms = (
+        SBOM.objects.filter(component_id__in=component_ids)
+        .order_by("component_id", "-created_at")
+        .distinct("component_id")
+    )
+
+    # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
+    try:
+        latest_sbom_list = list(latest_sboms)
+    except NotSupportedError:
+        # Manual deduplication for SQLite which doesn't support DISTINCT ON
+        seen_components: set[str] = set()
+        latest_sbom_list = []
+        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
+            if str(sbom.component_id) not in seen_components:
+                seen_components.add(str(sbom.component_id))
+                latest_sbom_list.append(sbom)
+
+    if not latest_sbom_list:
+        return {cid: [] for cid in component_ids}
+
+    sbom_to_component = {str(sbom.id): str(sbom.component_id) for sbom in latest_sbom_list}
+    sbom_ids = list(sbom_to_component.keys())
+
+    # Step 2: Get all assessment runs for these SBOMs (batch query)
+    latest_run_ids = (
+        AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
+        .values("sbom_id", "plugin_name")
+        .annotate(
+            latest_id=Subquery(
+                AssessmentRun.objects.filter(sbom_id=OuterRef("sbom_id"), plugin_name=OuterRef("plugin_name"))
+                .order_by("-created_at")
+                .values("id")[:1]
+            )
+        )
+        .values_list("latest_id", flat=True)
+    )
+
+    all_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids).select_related())
+
+    # Step 3: Compute passing assessments per SBOM
+    plugin_info = _get_plugin_display_names()
+    sbom_passing: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
+
+    for run in all_runs:
+        sbom_id = str(run.sbom_id)
+        if _is_run_passing(run):
+            display_name, category = plugin_info.get(
+                run.plugin_name, (run.plugin_name, AssessmentCategory.COMPLIANCE.value)
+            )
+            sbom_passing[sbom_id].append(
+                PassingAssessment(
+                    plugin_name=run.plugin_name,
+                    plugin_display_name=display_name,
+                    category=category,
+                )
+            )
+
+    # Step 4: Map back to component IDs
+    result: dict[str, list[PassingAssessment]] = {cid: [] for cid in component_ids}
+    for sbom_id, component_id in sbom_to_component.items():
+        result[component_id] = sbom_passing.get(sbom_id, [])
+
+    return result
+
+
 def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[dict]:
     """Convert list of PassingAssessment to dictionaries for template context."""
     return [

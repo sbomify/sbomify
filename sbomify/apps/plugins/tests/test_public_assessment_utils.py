@@ -794,3 +794,81 @@ class TestGetProductsLatestSbomAssessmentsBatch:
 
         result = get_products_latest_sbom_assessments_batch([product])
         assert result[str(product.id)] == []
+
+
+@pytest.mark.django_db
+class TestGetComponentsLatestSbomAssessmentsBatch:
+    """Tests for get_components_latest_sbom_assessments_batch function."""
+
+    def test_empty_component_list_returns_empty_dict(self):
+        """Empty list of components returns empty dict."""
+        from sbomify.apps.plugins.public_assessment_utils import get_components_latest_sbom_assessments_batch
+
+        result = get_components_latest_sbom_assessments_batch([])
+        assert result == {}
+
+    def test_batch_matches_individual_results(self, team, ntia_plugin):
+        """Batch function returns same results as individual calls."""
+        from sbomify.apps.plugins.public_assessment_utils import (
+            get_component_latest_sbom_assessment_status,
+            get_components_latest_sbom_assessments_batch,
+        )
+
+        # Create two components with SBOMs
+        comp1 = Component.objects.create(name="Comp 1", team=team, is_public=True, component_type="sbom")
+        comp2 = Component.objects.create(name="Comp 2", team=team, is_public=True, component_type="sbom")
+
+        sbom1 = SBOM.objects.create(name="SBOM 1", component=comp1, format="cyclonedx", format_version="1.6")
+        sbom2 = SBOM.objects.create(name="SBOM 2", component=comp2, format="cyclonedx", format_version="1.6")
+
+        # Component 1 passes
+        AssessmentRun.objects.create(
+            sbom=sbom1,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        # Component 2 fails
+        AssessmentRun.objects.create(
+            sbom=sbom2,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 3, "error_count": 0}},
+        )
+
+        # Get individual results
+        individual_1 = get_component_latest_sbom_assessment_status(comp1)
+        individual_2 = get_component_latest_sbom_assessment_status(comp2)
+
+        # Get batch results
+        batch_result = get_components_latest_sbom_assessments_batch([comp1, comp2])
+
+        # Verify batch matches individual
+        assert str(comp1.id) in batch_result
+        assert str(comp2.id) in batch_result
+
+        batch_1_plugins = {a.plugin_name for a in batch_result[str(comp1.id)]}
+        individual_1_plugins = {a.plugin_name for a in individual_1.passing_assessments}
+        assert batch_1_plugins == individual_1_plugins
+
+        batch_2_plugins = {a.plugin_name for a in batch_result[str(comp2.id)]}
+        individual_2_plugins = {a.plugin_name for a in individual_2.passing_assessments}
+        assert batch_2_plugins == individual_2_plugins
+
+    def test_component_without_sboms_returns_empty_list(self, team):
+        """Component with no SBOMs returns empty list of assessments."""
+        from sbomify.apps.plugins.public_assessment_utils import get_components_latest_sbom_assessments_batch
+
+        component = Component.objects.create(name="Empty Component", team=team, is_public=True, component_type="sbom")
+
+        result = get_components_latest_sbom_assessments_batch([component])
+        assert result[str(component.id)] == []

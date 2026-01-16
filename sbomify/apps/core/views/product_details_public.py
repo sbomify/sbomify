@@ -29,26 +29,48 @@ BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
 
 
 def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list:
-    """Prepare project data with components for display on the product page."""
+    """Prepare project data with components for display on the product page.
+
+    Uses batch query for assessment status to avoid N+1 queries.
+    """
     from sbomify.apps.core.models import Project
     from sbomify.apps.core.url_utils import get_public_path
+    from sbomify.apps.plugins.public_assessment_utils import (
+        get_components_latest_sbom_assessments_batch,
+        passing_assessments_to_dict,
+    )
 
     # Get projects for this product with their components
     projects = (
         Project.objects.filter(products__id=product_id, is_public=True).prefetch_related("components").order_by("name")
     )
 
+    # Collect all public components across all projects for batch query
+    all_components = []
+    project_component_map: dict[str, list] = {}  # project_id -> list of components
+
+    for project in projects:
+        components_for_project = list(project.components.filter(is_public=True).order_by("name"))
+        project_component_map[str(project.id)] = components_for_project
+        all_components.extend(components_for_project)
+
+    # Batch fetch assessment status for all components at once
+    assessments_by_component = get_components_latest_sbom_assessments_batch(all_components)
+
+    # Build the response structure
     public_projects = []
     for project in projects:
-        # Get public components for this project
         public_components = []
-        for component in project.components.filter(is_public=True).order_by("name"):
+        for component in project_component_map.get(str(project.id), []):
+            passing_assessments = passing_assessments_to_dict(assessments_by_component.get(str(component.id), []))
+
             component_data = {
                 "id": component.id,
                 "name": component.name,
                 "slug": component.slug,
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
+                "passing_assessments": passing_assessments,
             }
             # Build component public URL
             component_data["public_url"] = get_public_path(
