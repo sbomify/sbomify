@@ -356,6 +356,7 @@ def add_artifact_to_release(release, sbom=None, document=None, allow_replacement
         return {
             "created": False,
             "replaced": False,
+            "already_exists": True,
             "artifact": existing,
             "error": "Artifact already exists in this release",
         }

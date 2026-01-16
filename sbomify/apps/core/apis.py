@@ -530,7 +530,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         if request.user and request.user.is_authenticated:
             team_id = _get_user_team_id(request)
             if not team_id:
-                return 403, {"detail": "No current team selected"}
+                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
             products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
@@ -609,7 +609,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update products"}
+        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -645,7 +645,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update products"}
+        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -665,7 +665,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 # Verify all projects exist and belong to the same team
                 projects = Project.objects.filter(id__in=project_ids, team_id=product.team_id)
                 if len(projects) != len(project_ids):
-                    return 400, {"detail": "Some projects were not found or don't belong to this team"}
+                    return 400, {"detail": "Some projects were not found or inaccessible"}
 
                 # Verify access to all projects
                 for project in projects:
@@ -704,7 +704,7 @@ def delete_product(request: HttpRequest, product_id: str):
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete products"}
+        return 403, {"detail": "Only owners and admins can delete products", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         product.delete()
@@ -731,7 +731,10 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+        return 403, {
+            "detail": "Only owners and admins can manage product identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Check billing plan restrictions - product identifiers only for business and enterprise
     if is_billing_enabled() and product.team.billing_plan == "community":
@@ -834,7 +837,10 @@ def update_product_identifier(
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+        return 403, {
+            "detail": "Only owners and admins can manage product identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Check billing plan restrictions - product identifiers only for business and enterprise
     if is_billing_enabled() and product.team.billing_plan == "community":
@@ -891,7 +897,10 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+        return 403, {
+            "detail": "Only owners and admins can manage product identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Check billing plan restrictions - product identifiers only for business and enterprise
     if is_billing_enabled() and product.team.billing_plan == "community":
@@ -931,7 +940,10 @@ def bulk_update_product_identifiers(request: HttpRequest, product_id: str, paylo
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product identifiers"}
+        return 403, {
+            "detail": "Only owners and admins can manage product identifiers",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Check billing plan restrictions - product identifiers only for business and enterprise
     if is_billing_enabled() and product.team.billing_plan == "community":
@@ -998,7 +1010,7 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product links"}
+        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1093,7 +1105,7 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product links"}
+        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         # Import here to avoid issues
@@ -1143,7 +1155,7 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str):
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product links"}
+        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         # Import here to avoid issues
@@ -1173,7 +1185,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage product links"}
+        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1282,7 +1294,7 @@ def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Q
         if request.user and request.user.is_authenticated:
             team_id = _get_user_team_id(request)
             if not team_id:
-                return 403, {"detail": "No current team selected"}
+                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
             projects_queryset = optimize_project_queryset(Project.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
@@ -1346,7 +1358,7 @@ def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdate
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update projects"}
+        return 403, {"detail": "Only owners and admins can update projects", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1383,7 +1395,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update projects"}
+        return 403, {"detail": "Only owners and admins can update projects", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1415,7 +1427,7 @@ def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSc
                 # Verify all components exist and belong to the same team
                 components = Component.objects.filter(id__in=component_ids, team_id=project.team_id)
                 if len(components) != len(component_ids):
-                    return 400, {"detail": "Some components were not found or don't belong to this team"}
+                    return 400, {"detail": "Some components were not found or inaccessible"}
 
                 # Verify access to all components
                 for component in components:
@@ -1461,7 +1473,7 @@ def delete_project(request: HttpRequest, project_id: str):
         return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete projects"}
+        return 403, {"detail": "Only owners and admins can delete projects", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         project.delete()
@@ -1544,7 +1556,7 @@ def list_components(request: HttpRequest, page: int = Query(1), page_size: int =
         if request.user and request.user.is_authenticated:
             team_id = _get_user_team_id(request)
             if not team_id:
-                return 403, {"detail": "No current team selected"}
+                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
             components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
             has_crud_permissions = _get_team_crud_permission(request, team_id)
@@ -1611,7 +1623,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update components"}
+        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1662,7 +1674,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update components"}
+        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1718,7 +1730,7 @@ def delete_component(request: HttpRequest, component_id: str):
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete components"}
+        return 403, {"detail": "Only owners and admins can delete components", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         # Delete associated SBOMs from S3 storage
@@ -1775,7 +1787,7 @@ def get_component_metadata(request, component_id: str):
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["guest", "owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     # Build supplier and manufacturer information from contact profile or component fields
     supplier = {"contacts": []}
@@ -1883,7 +1895,7 @@ def patch_component_metadata(request, component_id: str, metadata: ComponentMeta
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, component, ["owner", "admin"]):
-        return 403, {"detail": "Forbidden"}
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         # Convert incoming metadata to dict, excluding unset fields
@@ -2575,7 +2587,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update releases"}
+        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -2632,7 +2644,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update releases"}
+        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -2698,7 +2710,7 @@ def delete_release(request: HttpRequest, release_id: str):
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete releases"}
+        return 403, {"detail": "Only owners and admins can delete releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent deleting latest releases
     if release.is_latest:
@@ -2739,8 +2751,7 @@ def download_release(request: HttpRequest, release_id: str):
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(release.product.team_id):
+        if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all SBOM artifacts in the release
@@ -2809,8 +2820,7 @@ def list_release_artifacts(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(release.product.team_id):
+        if not verify_item_access(request, release.product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     if mode == "existing":
@@ -2973,7 +2983,13 @@ def list_release_artifacts(
 
 @router.post(
     "/releases/{release_id}/artifacts",
-    response={201: ReleaseArtifactAddResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        201: ReleaseArtifactAddResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
     auth=None,
     tags=["Releases"],
 )
@@ -2985,12 +3001,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(release.product.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
     if not verify_item_access(request, release.product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage release artifacts"}
+        return 403, {"detail": "Only owners and admins can manage release artifacts", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent adding artifacts to latest releases
     if release.is_latest:
@@ -3007,14 +3019,17 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             from sbomify.apps.sboms.models import SBOM
 
             sbom = SBOM.objects.get(pk=payload.sbom_id)
-            if str(sbom.component.team_id) != str(team_id):
-                return 403, {
-                    "detail": f"SBOM {sbom.name} does not belong to your team",
-                    "error_code": ErrorCode.TEAM_MISMATCH,
-                }
+            if str(sbom.component.team_id) != str(release.product.team_id):
+                return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
             result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
             if result.get("error"):
+                # Return 409 Conflict if artifact already exists (RESTful standard)
+                if result.get("already_exists"):
+                    return 409, {
+                        "detail": "Artifact already in this release",
+                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                    }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
 
@@ -3042,14 +3057,17 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             from sbomify.apps.documents.models import Document
 
             document = Document.objects.get(pk=payload.document_id)
-            if str(document.component.team_id) != str(team_id):
-                return 403, {
-                    "detail": f"Document {document.name} does not belong to your team",
-                    "error_code": ErrorCode.TEAM_MISMATCH,
-                }
+            if str(document.component.team_id) != str(release.product.team_id):
+                return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
             result = add_artifact_to_release(release, document=document, allow_replacement=False)
             if result.get("error"):
+                # Return 409 Conflict if artifact already exists (RESTful standard)
+                if result.get("already_exists"):
+                    return 409, {
+                        "detail": "Artifact already in this release",
+                        "error_code": ErrorCode.DUPLICATE_ARTIFACT,
+                    }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
 
@@ -3090,14 +3108,10 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
     try:
         artifact = ReleaseArtifact.objects.get(pk=artifact_id, release=release)
     except ReleaseArtifact.DoesNotExist:
-        return 404, {"detail": "Artifact not found in this release"}
-
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(release.product.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+        return 404, {"detail": "Artifact not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, release.product, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage release artifacts"}
+        return 403, {"detail": "Only owners and admins can manage release artifacts", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent removing artifacts from latest releases
     if release.is_latest:
@@ -3129,15 +3143,14 @@ def list_document_releases(request: HttpRequest, document_id: str, page: int = Q
 
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+        return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If component is public, allow unauthenticated access
     if not document.component.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(document.component.team_id):
+        if not verify_item_access(request, document.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this document
@@ -3179,14 +3192,10 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
-
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(document.component.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+        return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage document releases"}
+        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -3198,9 +3207,9 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
         try:
             release = Release.objects.select_related("product").get(pk=release_id)
 
-            # Verify release belongs to same team
-            if str(release.product.team_id) != str(team_id):
-                errors.append(f"Release {release.name} does not belong to your team")
+            # Verify release belongs to same team as the document's component
+            if str(release.product.team_id) != str(document.component.team_id):
+                errors.append("Access denied")
                 continue
 
             # Prevent adding to latest releases
@@ -3266,19 +3275,15 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
-        return 404, {"detail": "Document not found"}
+        return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
-
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(document.component.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, document.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage document releases"}
+        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent removing from latest releases
     if release.is_latest:
@@ -3309,15 +3314,14 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
 
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     # If component is public, allow unauthenticated access
     if not sbom.component.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(sbom.component.team_id):
+        if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Get all releases containing this SBOM
@@ -3359,14 +3363,10 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
-
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(sbom.component.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases"}
+        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -3378,9 +3378,9 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
         try:
             release = Release.objects.select_related("product").get(pk=release_id)
 
-            # Verify release belongs to same team
-            if str(release.product.team_id) != str(team_id):
-                errors.append(f"Release {release.name} does not belong to your team")
+            # Verify release belongs to same team as the SBOM's component
+            if str(release.product.team_id) != str(sbom.component.team_id):
+                errors.append("Access denied")
                 continue
 
             # Prevent adding to latest releases
@@ -3444,23 +3444,19 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
 
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
-        return 404, {"detail": "SBOM not found"}
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
         release = Release.objects.select_related("product").get(pk=release_id)
     except Release.DoesNotExist:
-        return 404, {"detail": "Release not found"}
-
-    team_id = _get_user_team_id(request)
-    if not team_id or str(team_id) != str(sbom.component.team_id):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    # Verify release belongs to same team
-    if str(release.product.team_id) != str(team_id):
-        return 403, {"detail": "Access denied"}
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not verify_item_access(request, sbom.component, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases"}
+        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
+
+    # Verify release belongs to same team as the SBOM's component
+    if str(release.product.team_id) != str(sbom.component.team_id):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent removing from latest releases
     if release.is_latest:
@@ -3530,8 +3526,7 @@ def list_component_sboms(request: HttpRequest, component_id: str, page: int = Qu
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(component.team.id):
+        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -3825,8 +3820,7 @@ def list_component_documents(request: HttpRequest, component_id: str, page: int 
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        team_id = _get_user_team_id(request)
-        if not team_id or str(team_id) != str(component.team.id):
+        if not verify_item_access(request, component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
