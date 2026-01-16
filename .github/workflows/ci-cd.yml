@@ -541,7 +541,7 @@ jobs:
         run: ./bin/generate_additional_packages.sh > dockerfile_packages.txt
 
       - name: Upload backend SBOM to Staging
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
           API_BASE_URL: https://stage.sbomify.com
@@ -561,7 +561,7 @@ jobs:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
       - name: Upload container SBOM to Staging
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
           API_BASE_URL: https://stage.sbomify.com
@@ -582,7 +582,7 @@ jobs:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
       - name: Upload frontend SBOM to Staging
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
           API_BASE_URL: https://stage.sbomify.com
@@ -624,7 +624,7 @@ jobs:
         run: ./bin/generate_additional_packages.sh > dockerfile_packages.txt
 
       - name: Upload backend SBOM to Production
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
@@ -644,7 +644,7 @@ jobs:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
       - name: Upload container SBOM to Production
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: iVajxXMIqqyi
@@ -665,7 +665,7 @@ jobs:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
       - name: Upload frontend SBOM to Production
-        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        uses: sbomify/github-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B

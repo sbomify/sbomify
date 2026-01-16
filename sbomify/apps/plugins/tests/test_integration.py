@@ -270,7 +270,7 @@ class TestEnqueueAssessmentTransactionSafety:
         commits. This prevents race conditions where workers try to fetch
         SBOMs that don't exist yet.
         """
-        mock_send = mocker.patch.object(run_assessment_task, "send")
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
 
         with transaction.atomic():
             enqueue_assessment(
@@ -283,7 +283,7 @@ class TestEnqueueAssessmentTransactionSafety:
 
         # After transaction commits, task should be sent
         mock_send.assert_called_once()
-        call_kwargs = mock_send.call_args.kwargs
+        call_kwargs = mock_send.call_args.kwargs["kwargs"]
         assert call_kwargs["sbom_id"] == "test-sbom-id"
         assert call_kwargs["plugin_name"] == "checksum"
         assert call_kwargs["run_reason"] == "on_upload"
@@ -294,7 +294,7 @@ class TestEnqueueAssessmentTransactionSafety:
         When not inside an explicit transaction (autocommit mode), the task
         should be dispatched immediately since data is already committed.
         """
-        mock_send = mocker.patch.object(run_assessment_task, "send")
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
 
         # Call outside any transaction block
         enqueue_assessment(
@@ -312,7 +312,7 @@ class TestEnqueueAssessmentTransactionSafety:
         If the transaction fails and rolls back, the on_commit callback
         should never execute, preventing orphaned tasks.
         """
-        mock_send = mocker.patch.object(run_assessment_task, "send")
+        mock_send = mocker.patch.object(run_assessment_task, "send_with_options")
 
         try:
             with transaction.atomic():

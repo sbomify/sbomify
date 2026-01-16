@@ -136,6 +136,7 @@ def enqueue_assessment(
     config: dict | None = None,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
+    delay_ms: int | None = None,
 ) -> None:
     """Enqueue an assessment to be run asynchronously.
 
@@ -153,6 +154,9 @@ def enqueue_assessment(
         config: Optional configuration overrides for the plugin.
         triggered_by_user: Optional user who triggered a manual run.
         triggered_by_token: Optional API token used to trigger the run.
+        delay_ms: Optional delay in milliseconds before the task runs.
+            Useful for plugins that depend on external systems (e.g., attestation
+            plugins that need to wait for GitHub to process attestations).
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -170,25 +174,37 @@ def enqueue_assessment(
     task_config = config
     task_user_id = triggered_by_user.id if triggered_by_user else None
     task_token_id = str(triggered_by_token.id) if triggered_by_token else None
+    task_delay_ms = delay_ms
 
     def _send_task():
         """Send the assessment task to the queue."""
-        run_assessment_task.send(
-            sbom_id=task_sbom_id,
-            plugin_name=task_plugin_name,
-            run_reason=task_run_reason,
-            config=task_config,
-            triggered_by_user_id=task_user_id,
-            triggered_by_token_id=task_token_id,
+        run_assessment_task.send_with_options(
+            args=(),
+            kwargs={
+                "sbom_id": task_sbom_id,
+                "plugin_name": task_plugin_name,
+                "run_reason": task_run_reason,
+                "config": task_config,
+                "triggered_by_user_id": task_user_id,
+                "triggered_by_token_id": task_token_id,
+            },
+            delay=task_delay_ms,
         )
+        delay_info = f", delay={task_delay_ms}ms" if task_delay_ms else ""
         logger.info(
             f"[PLUGIN] Enqueued assessment for SBOM {task_sbom_id} with plugin {task_plugin_name} "
-            f"(reason: {task_run_reason})"
+            f"(reason: {task_run_reason}{delay_info})"
         )
 
     # Defer task dispatch until after transaction commits to ensure SBOM is visible to workers.
     # If called outside a transaction (autocommit mode), the callback runs immediately.
     transaction.on_commit(_send_task)
+
+
+# Delay for attestation plugins in milliseconds (2 minutes)
+# This allows time for external systems (e.g., GitHub) to process attestations
+# before we attempt to verify them.
+ATTESTATION_DELAY_MS = 120_000
 
 
 def enqueue_assessments_for_sbom(
@@ -207,6 +223,9 @@ def enqueue_assessments_for_sbom(
     current transaction commits (via enqueue_assessment's on_commit wrapper),
     ensuring the SBOM is visible to workers when tasks run.
 
+    Attestation plugins are delayed by ATTESTATION_DELAY_MS to allow external
+    systems (e.g., GitHub) time to process attestations before verification.
+
     Args:
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
@@ -218,6 +237,7 @@ def enqueue_assessments_for_sbom(
         List of plugin names that were enqueued.
     """
     from ..models import RegisteredPlugin, TeamPluginSettings
+    from ..sdk.enums import AssessmentCategory
 
     # Get team settings
     try:
@@ -228,13 +248,14 @@ def enqueue_assessments_for_sbom(
         logger.debug(f"[PLUGIN] No settings for team {team_id}, skipping assessments")
         return []
 
-    # Filter to only enabled plugins in the registry
-    available_plugins = set(
-        RegisteredPlugin.objects.filter(
+    # Filter to only enabled plugins in the registry and get their categories
+    available_plugins = {
+        p.name: p.category
+        for p in RegisteredPlugin.objects.filter(
             is_enabled=True,
             name__in=enabled_plugins,
-        ).values_list("name", flat=True)
-    )
+        )
+    }
 
     enqueued = []
     for plugin_name in enabled_plugins:
@@ -245,6 +266,10 @@ def enqueue_assessments_for_sbom(
         # Get plugin-specific config if any
         plugin_config = settings.get_plugin_config(plugin_name)
 
+        # Apply delay for attestation plugins to allow external systems to process
+        plugin_category = available_plugins[plugin_name]
+        delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
+
         enqueue_assessment(
             sbom_id=sbom_id,
             plugin_name=plugin_name,
@@ -252,6 +277,7 @@ def enqueue_assessments_for_sbom(
             config=plugin_config or None,
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
+            delay_ms=delay_ms,
         )
         enqueued.append(plugin_name)
 
