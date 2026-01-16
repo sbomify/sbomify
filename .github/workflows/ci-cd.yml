@@ -512,10 +512,99 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All images have been attested with GitHub build provenance for supply chain security." >> $GITHUB_STEP_SUMMARY
 
-  generate-sboms:
-    name: Generate SBOMs
+  upload-sbom-staging:
+    name: Upload SBOM (Staging)
     runs-on: ubuntu-latest
-    if: ${{ success() && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    needs: [docker-build]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Determine version
+        id: version
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "version=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate additional packages from Dockerfile
+        run: ./bin/generate_additional_packages.sh > dockerfile_packages.txt
+
+      - name: Upload backend SBOM to Staging
+        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: FoKftlVn4uyq
+          COMPONENT_NAME: 'Python Stack'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: backend.cdx.json
+          LOCK_FILE: 'uv.lock'
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest backend SBOM
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/backend.cdx.json'
+
+      - name: Upload container SBOM to Staging
+        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: odzUCI8r2any
+          COMPONENT_NAME: 'Container'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: container.cdx.json
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:latest
+          ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest container SBOM
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/container.cdx.json'
+
+      - name: Upload frontend SBOM to Staging
+        uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          API_BASE_URL: https://stage.sbomify.com
+          COMPONENT_ID: Kpj3ZylyBDkb
+          COMPONENT_NAME: 'Frontend Stack'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          OUTPUT_FILE: frontend.cdx.json
+          LOCK_FILE: 'bun.lock'
+          AUGMENT: true
+          ENRICH: true
+          UPLOAD: true
+
+      - name: Attest frontend SBOM
+        if: ${{ success() }}
+        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        with:
+          subject-path: '${{ github.workspace }}/frontend.cdx.json'
+
+  upload-sbom-production:
+    name: Upload SBOM (Production)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs: [docker-build]
     permissions:
       contents: read
@@ -534,12 +623,12 @@ jobs:
       - name: Generate additional packages from Dockerfile
         run: ./bin/generate_additional_packages.sh > dockerfile_packages.txt
 
-      - name: Upload backend SBOM
+      - name: Upload backend SBOM to Production
         uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 2hg-dk8ixV
-          COMPONENT_NAME: 'sbomify-backend'
+          COMPONENT_NAME: 'Python Stack'
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           OUTPUT_FILE: backend.cdx.json
@@ -548,18 +637,18 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest
+      - name: Attest backend SBOM
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/backend.cdx.json'
 
-      - name: Upload container SBOM
+      - name: Upload container SBOM to Production
         uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: iVajxXMIqqyi
-          COMPONENT_NAME: 'sbomify-container'
+          COMPONENT_NAME: 'Container'
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           OUTPUT_FILE: container.cdx.json
@@ -569,27 +658,27 @@ jobs:
           ENRICH: true
           UPLOAD: true
 
-      - name: Attest
+      - name: Attest container SBOM
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
           subject-path: '${{ github.workspace }}/container.cdx.json'
 
-      - name: Upload frontend SBOM
+      - name: Upload frontend SBOM to Production
         uses: sbomify/github-action@57f1d33623e4774b7786af11c07fbf3fd9a8e8ac # master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: vKhyt5bLHk4B
-          COMPONENT_NAME: 'sbomify-frontend'
+          COMPONENT_NAME: 'Frontend Stack'
           COMPONENT_VERSION: ${{ github.ref_name }}
           PRODUCT_RELEASE: '["eP_4dk8ixV:${{ github.ref_name }}"]'
           OUTPUT_FILE: frontend.cdx.json
           LOCK_FILE: 'bun.lock'
-          ENRICH: true
           AUGMENT: true
+          ENRICH: true
           UPLOAD: true
 
-      - name: Attest
+      - name: Attest frontend SBOM
         if: ${{ success() }}
         uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
         with:
