@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
@@ -88,6 +89,10 @@ class PluginOrchestrator:
             PluginOrchestratorError: If the SBOM cannot be fetched or
                 other orchestration errors occur.
         """
+        # Verify SBOM exists before creating the run
+        if not SBOM.objects.filter(id=sbom_id).exists():
+            raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
+
         # Get plugin metadata
         metadata = plugin.get_metadata()
         config_hash = compute_config_hash(plugin.config)
