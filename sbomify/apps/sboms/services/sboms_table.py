@@ -21,20 +21,19 @@ def build_sboms_table_context(request: HttpRequest, component_id: str, is_public
 
     sbom_items = sboms.get("items", [])
 
-    # For public views, enrich each SBOM with passing assessments
-    if is_public_view:
-        from sbomify.apps.plugins.public_assessment_utils import (
-            get_sbom_passing_assessments,
-            passing_assessments_to_dict,
-        )
+    # Enrich each SBOM with passing assessments for compact icon display
+    from sbomify.apps.plugins.public_assessment_utils import (
+        get_sbom_passing_assessments,
+        passing_assessments_to_dict,
+    )
 
-        for item in sbom_items:
-            sbom_id = item.get("sbom", {}).get("id")
-            if sbom_id:
-                passing = get_sbom_passing_assessments(sbom_id)
-                item["passing_assessments"] = passing_assessments_to_dict(passing)
-            else:
-                item["passing_assessments"] = []
+    for item in sbom_items:
+        sbom_id = item.get("sbom", {}).get("id")
+        if sbom_id:
+            passing = get_sbom_passing_assessments(sbom_id)
+            item["passing_assessments"] = passing_assessments_to_dict(passing)
+        else:
+            item["passing_assessments"] = []
 
     context = {
         "component_id": component_id,

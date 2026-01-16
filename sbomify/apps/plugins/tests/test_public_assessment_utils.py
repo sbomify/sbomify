@@ -1,5 +1,7 @@
 """Tests for public assessment utilities."""
 
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
 
@@ -385,9 +387,7 @@ class TestGetLatestSbomForComponent:
             format_version="1.5",
         )
         # Force older timestamp
-        SBOM.objects.filter(pk=older_sbom.pk).update(
-            created_at=sbom.created_at - __import__("datetime").timedelta(days=1)
-        )
+        SBOM.objects.filter(pk=older_sbom.pk).update(created_at=sbom.created_at - timedelta(days=1))
 
         # Create a newer SBOM
         newer_sbom = SBOM.objects.create(

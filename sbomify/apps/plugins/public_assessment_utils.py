@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from django.db.models import OuterRef, Subquery
+from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
@@ -485,8 +486,8 @@ def get_products_latest_sbom_assessments_batch(
     # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
     try:
         latest_sbom_list = list(latest_sboms)
-    except Exception:
-        # Manual deduplication for SQLite
+    except NotSupportedError:
+        # Manual deduplication for SQLite which doesn't support DISTINCT ON
         seen_components: set[str] = set()
         latest_sbom_list = []
         for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
