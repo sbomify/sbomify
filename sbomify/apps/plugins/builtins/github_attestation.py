@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError
+from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
@@ -36,6 +36,8 @@ logger = getLogger(__name__)
 # File reading chunk size for SBOM digest calculation.
 # 8192 bytes (8 KiB) is a common default that aligns with typical OS
 # page/block sizes and standard I/O buffering.
+# NOTE: This is kept for backward compatibility but the plugin now prefers
+# using the pre-computed sha256_hash from SBOMContext when available.
 SBOM_FILE_READ_CHUNK_SIZE = 8192
 
 
@@ -68,11 +70,16 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
     The verification flow:
     1. Extract GitHub org/repo from the SBOM's VCS references
-    2. Calculate SHA256 digest of the SBOM file
+    2. Use pre-computed SHA256 hash from context (or calculate if not available)
     3. Download the attestation bundle from GitHub's public API
     4. Verify the SBOM file using `cosign verify-blob-attestation`
 
     No authentication is required for public repositories.
+
+    Performance optimization:
+        When called with an SBOMContext containing sha256_hash, the plugin
+        uses the pre-computed hash from the database instead of recalculating
+        from the file. This avoids redundant file I/O operations.
 
     Configuration options:
         certificate_identity_regexp: Pattern for certificate identity
@@ -82,7 +89,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
 
     Example:
         >>> plugin = GitHubAttestationPlugin()
-        >>> result = plugin.assess("sbom123", Path("/tmp/sbom.json"))
+        >>> context = SBOMContext(sha256_hash="abc123...")
+        >>> result = plugin.assess("sbom123", Path("/tmp/sbom.json"), context)
         >>> print(result.findings[0].status)
         'pass'
     """
@@ -124,18 +132,23 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         sbom_id: str,
         sbom_path: Path,
         dependency_status: dict | None = None,
+        context: SBOMContext | None = None,
     ) -> AssessmentResult:
         """Verify GitHub attestation for the SBOM file.
 
         This method:
         1. Parses the SBOM to extract VCS information (GitHub org/repo)
-        2. Downloads the attestation bundle from GitHub
-        3. Verifies the SBOM file using cosign verify-blob-attestation
+        2. Uses pre-computed SHA256 from context (or calculates from file)
+        3. Downloads the attestation bundle from GitHub
+        4. Verifies the SBOM file using cosign verify-blob-attestation
 
         Args:
             sbom_id: The SBOM's primary key.
             sbom_path: Path to the SBOM file on disk.
             dependency_status: Not used by this plugin.
+            context: Optional SBOMContext with pre-computed metadata.
+                When sha256_hash is available, it's used instead of
+                recalculating from the file.
 
         Returns:
             AssessmentResult with pass/fail finding based on verification.
@@ -161,10 +174,12 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             )
 
             # Download attestation bundle from GitHub
+            # Pass the pre-computed hash from context if available
             bundle_result = self._download_attestation_bundle(
                 sbom_path=sbom_path,
                 github_org=github_org,
                 github_repo=github_repo,
+                precomputed_hash=context.sha256_hash if context else None,
             )
 
             if not bundle_result.get("success"):
@@ -461,6 +476,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
         sbom_path: Path,
         github_org: str,
         github_repo: str,
+        precomputed_hash: str | None = None,
     ) -> dict[str, Any]:
         """Download attestation bundle from GitHub's public API.
 
@@ -470,6 +486,8 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             sbom_path: Path to the SBOM file.
             github_org: GitHub organization name.
             github_repo: GitHub repository name.
+            precomputed_hash: Optional pre-computed SHA256 hash from database.
+                When provided, skips file digest calculation for better performance.
 
         Returns:
             Dict with:
@@ -482,14 +500,20 @@ class GitHubAttestationPlugin(AssessmentPlugin):
                 expected when attestations haven't been processed yet by GitHub.
                 The calling task should handle this by scheduling a retry.
         """
-        # Calculate SHA256 digest of the SBOM file
-        try:
-            file_digest = self._calculate_file_digest(sbom_path)
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to calculate file digest: {e}",
-            }
+        # Use pre-computed hash if available, otherwise calculate from file
+        if precomputed_hash:
+            file_digest = precomputed_hash
+            logger.debug(f"Using pre-computed SHA256 hash from database: {file_digest[:16]}...")
+        else:
+            # Fall back to calculating from file (for backward compatibility)
+            try:
+                file_digest = self._calculate_file_digest(sbom_path)
+                logger.debug(f"Calculated SHA256 hash from file: {file_digest[:16]}...")
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Failed to calculate file digest: {e}",
+                }
 
         # GitHub Attestations API endpoint
         # https://docs.github.com/en/rest/users/attestations

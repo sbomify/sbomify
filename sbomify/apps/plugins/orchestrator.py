@@ -19,7 +19,7 @@ from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
-from .sdk.base import AssessmentPlugin, RetryLaterError
+from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import RunReason, RunStatus
 from .utils import compute_config_hash, compute_content_digest
 
@@ -183,6 +183,18 @@ class PluginOrchestrator:
             assessment_run.input_content_digest = content_digest
             assessment_run.save(update_fields=["input_content_digest"])
 
+            # Build SBOMContext with pre-computed metadata from database
+            # This allows plugins to skip redundant computations (e.g., sha256_hash)
+            sbom_context = SBOMContext(
+                sha256_hash=sbom_instance.sha256_hash,
+                sbom_format=sbom_instance.format,
+                format_version=sbom_instance.format_version,
+                sbom_name=sbom_instance.name,
+                sbom_version=sbom_instance.version,
+                component_id=sbom_instance.component_id,
+                team_id=sbom_instance.component.team_id if sbom_instance.component else None,
+            )
+
             # Write to temporary file and execute plugin
             with tempfile.NamedTemporaryFile(
                 mode="wb",
@@ -198,8 +210,8 @@ class PluginOrchestrator:
                 # Check dependencies and pass status to plugin
                 dependency_status = self._check_dependencies(sbom_id, metadata.name)
 
-                # Execute the plugin with dependency status
-                result = plugin.assess(sbom_id, temp_path, dependency_status)
+                # Execute the plugin with dependency status and context
+                result = plugin.assess(sbom_id, temp_path, dependency_status, context=sbom_context)
 
             # Update AssessmentRun with results
             assessment_run.result = result.to_dict()
