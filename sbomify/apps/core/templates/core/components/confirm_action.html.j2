@@ -1,4 +1,4 @@
-{#
+{% comment %}
 ConfirmAction Component - Attaches confirmation dialog to an existing element
 
 Usage:
@@ -8,6 +8,6 @@ Usage:
     item_type: 'project',
     confirmation_message: 'Are you sure?' (optional)
 } %}
-#}
+{% endcomment %}
 <div x-data="confirmAction({ targetElementId: '{{ target_element_id }}', itemName: '{{ item_name|escapejs }}', itemType: '{{ item_type }}', confirmationMessage: '{{ confirmation_message|default:""|escapejs }}' })"
      class="d-none"></div>

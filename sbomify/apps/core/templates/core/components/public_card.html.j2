@@ -1,4 +1,4 @@
-{#
+{% comment %}
 PublicCard Component - A wrapper around StandardCard for public-facing pages
 
 Usage:
@@ -20,7 +20,7 @@ Parameters:
 - size: 'sm' | 'md' | 'lg'
 - hoverable: Enable hover effect (default: false)
 - padded: Add body padding (default: true)
-#}
+{% endcomment %}
 {% load static %}
 <link rel="stylesheet"
       href="{% static 'css/components/standard-card.css' %}">
