@@ -509,7 +509,8 @@ class SPDXSupportedVersion(str, Enum):
 
     To add support for a new SPDX version (e.g., 3.0):
     1. Add the version here: v3_0 = "3.0"
-    2. Import the schema module at the top of this file: from sbomify.apps.sboms.sbom_format_schemas import spdxXY
+    2. Import the schema module at the top of this file, for example:
+       from sbomify.apps.sboms.sbom_format_schemas import spdx_3_0 as spdx30
     3. Add it to the module_map in get_spdx_module() below
     4. That's it! The API will automatically support the new version.
 

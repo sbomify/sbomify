@@ -546,8 +546,8 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
         if not verify_item_access(request, project, ["guest", "owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    # Get format parameters from query string
-    output_format = request.GET.get("format", "cyclonedx")
+    # Get format parameters from query string and normalize early
+    output_format = request.GET.get("format", "cyclonedx").lower()
     version = request.GET.get("version")
 
     try:
@@ -557,15 +557,17 @@ def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse
             )
 
             # Determine file extension based on format
-            extension = ".spdx.json" if output_format.lower() == "spdx" else ".cdx.json"
+            extension = ".spdx.json" if output_format == "spdx" else ".cdx.json"
             filename = f"{project.name}{extension}"
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
-    except ValueError as e:
-        return error_response(request, HttpResponseBadRequest(str(e)))
+    except ValueError:
+        # ValueError is raised for unsupported format/version combinations
+        return error_response(request, HttpResponseBadRequest("Invalid format or version specified"))
 
 
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
@@ -585,8 +587,8 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
-    # Get format parameters from query string
-    output_format = request.GET.get("format", "cyclonedx")
+    # Get format parameters from query string and normalize early
+    output_format = request.GET.get("format", "cyclonedx").lower()
     version = request.GET.get("version")
 
     try:
@@ -596,15 +598,17 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
             )
 
             # Determine file extension based on format
-            extension = ".spdx.json" if output_format.lower() == "spdx" else ".cdx.json"
+            extension = ".spdx.json" if output_format == "spdx" else ".cdx.json"
             filename = f"{product.name}{extension}"
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
-    except ValueError as e:
-        return error_response(request, HttpResponseBadRequest(str(e)))
+    except ValueError:
+        # ValueError is raised for unsupported format/version combinations
+        return error_response(request, HttpResponseBadRequest("Invalid format or version specified"))
 
 
 @login_required

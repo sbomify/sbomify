@@ -387,13 +387,17 @@ def select_sbom_by_format(
 
     # Return preferred format if available
     if preferred_sboms:
-        # Prefer the most recent one
-        return sorted(preferred_sboms, key=lambda s: s.created_at or "", reverse=True)[0]
+        # Prefer the most recent one - filter out None created_at to avoid TypeError
+        with_created_at = [s for s in preferred_sboms if s.created_at is not None]
+        candidates = with_created_at if with_created_at else preferred_sboms
+        return sorted(candidates, key=lambda s: s.created_at or s.id, reverse=True)[0]
 
     # Fall back to other format if allowed
     if fallback and other_sboms:
         log.debug(f"No {preferred_format} SBOM found, falling back to other format")
-        return sorted(other_sboms, key=lambda s: s.created_at or "", reverse=True)[0]
+        with_created_at = [s for s in other_sboms if s.created_at is not None]
+        candidates = with_created_at if with_created_at else other_sboms
+        return sorted(candidates, key=lambda s: s.created_at or s.id, reverse=True)[0]
 
     return None
 

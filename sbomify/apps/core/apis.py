@@ -2280,19 +2280,22 @@ def download_project_sbom(
         if not verify_item_access(request, project, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Pass the user to the SBOM builder for signed URL generation
             sbom_path = get_project_sbom_package(
-                project, Path(temp_dir), user=request.user, output_format=output_format, version=version
+                project, Path(temp_dir), user=request.user, output_format=format_lower, version=version
             )
 
             # Determine file extension based on format
-            format_lower = output_format.lower()
             extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
             filename = f"{project.name}{extension}"
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
@@ -2341,19 +2344,22 @@ def download_product_sbom(
         if not verify_item_access(request, product, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Pass the user to the SBOM builder for signed URL generation
             sbom_path = get_product_sbom_package(
-                product, Path(temp_dir), user=request.user, output_format=output_format, version=version
+                product, Path(temp_dir), user=request.user, output_format=format_lower, version=version
             )
 
             # Determine file extension based on format
-            format_lower = output_format.lower()
             extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
             filename = f"{product.name}{extension}"
 
-            response = HttpResponse(open(sbom_path, "rb").read(), content_type="application/json")
+            with open(sbom_path, "rb") as f:
+                response = HttpResponse(f.read(), content_type="application/json")
             response["Content-Disposition"] = f"attachment; filename={filename}"
 
             return response
@@ -2831,12 +2837,15 @@ def download_release(
             status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
         )
 
+    # Normalize format early
+    format_lower = output_format.lower()
+
     try:
         # Use the SBOM package generator with user for signed URLs
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             sbom_file_path = get_release_sbom_package(
-                release, temp_path, user=request.user, output_format=output_format, version=version
+                release, temp_path, user=request.user, output_format=format_lower, version=version
             )
 
             # Read the generated SBOM file
@@ -2844,7 +2853,6 @@ def download_release(
                 sbom_content = f.read()
 
             # Determine file extension based on format
-            format_lower = output_format.lower()
             extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
             filename = f"{release.product.name}-{release.name}{extension}"
 
