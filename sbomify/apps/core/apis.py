@@ -3209,7 +3209,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 
             # Verify release belongs to same team as the document's component
             if str(release.product.team_id) != str(document.component.team_id):
-                errors.append(f"Access denied for release {release_id}")
+                errors.append("Access denied")
                 continue
 
             # Prevent adding to latest releases
@@ -3380,7 +3380,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 
             # Verify release belongs to same team as the SBOM's component
             if str(release.product.team_id) != str(sbom.component.team_id):
-                errors.append(f"Access denied for release {release_id}")
+                errors.append("Access denied")
                 continue
 
             # Prevent adding to latest releases
