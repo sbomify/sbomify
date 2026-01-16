@@ -555,7 +555,7 @@ class TestCosignVerification:
         call_args = mock_run.call_args[0][0]
         assert "verify-blob-attestation" in call_args
         assert "--bundle" in call_args
-        assert "--new-bundle-format" in call_args  # Required for Sigstore bundle v0.2+
+        assert "--new-bundle-format" in call_args  # Required for Sigstore bundle v0.2+ (GitHub uses v0.3)
         assert "/tmp/bundle.jsonl" in call_args
         assert "/tmp/sbom.json" in call_args
 
